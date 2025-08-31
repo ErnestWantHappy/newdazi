@@ -42,3 +42,13 @@ export function delStudent(studentId) {
     method: 'delete'
   })
 }
+
+// 重置学生密码 (支持批量)
+export function resetStudentPwd(userIds) {
+  // 后端接收的是一个 Long[] 数组
+  return request({
+    url: '/business/student/resetPwd',
+    method: 'put',
+    data: userIds // 直接将ID数组作为请求体发送
+  })
+}

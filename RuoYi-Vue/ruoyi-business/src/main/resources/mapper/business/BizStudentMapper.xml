@@ -1,67 +1,66 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
-PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.BizStudentMapper">
-    
+
     <resultMap type="BizStudent" id="BizStudentResult">
         <result property="studentId"    column="student_id"    />
-        <result property="userId"    column="user_id"    />
-        <result property="schoolId"    column="school_id"    />
+        <result property="userId"       column="user_id"       />
         <result property="studentNo"    column="student_no"    />
         <result property="entryYear"    column="entry_year"    />
         <result property="classCode"    column="class_code"    />
+        <!-- 关联查询出的字段 -->
+        <result property="studentName"  column="student_name"  />
+        <result property="userName"     column="user_name"     />
     </resultMap>
 
     <sql id="selectBizStudentVo">
-        select student_id, user_id, school_id, student_no, entry_year, class_code from biz_student
+        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code,
+               u.nick_name as student_name, u.user_name, u.dept_id
+        from biz_student s
+                 left join sys_user u on s.user_id = u.user_id
     </sql>
 
     <select id="selectBizStudentList" parameterType="BizStudent" resultMap="BizStudentResult">
         <include refid="selectBizStudentVo"/>
-        <where>  
-            <if test="userId != null "> and user_id = #{userId}</if>
-            <if test="schoolId != null "> and school_id = #{schoolId}</if>
-            <if test="studentName != null  and studentName != ''">
-                AND student_name like concat('%', #{studentName}, '%')
-            </if>
-            <if test="studentNo != null  and studentNo != ''"> and student_no = #{studentNo}</if>
-            <if test="entryYear != null  and entryYear != ''"> and entry_year = #{entryYear}</if>
-            <if test="classCode != null  and classCode != ''"> and class_code = #{classCode}</if>
+        <where>
+            <!-- 数据权限过滤：通过关联的sys_user表的dept_id进行筛选 -->
+            <if test="deptId != null and deptId != 0"> and u.dept_id = #{deptId}</if>
+            <!-- 搜索条件 -->
+            <if test="studentName != null  and studentName != ''"> and u.nick_name like concat('%', #{studentName}, '%')</if>
+            <if test="entryYear != null and entryYear != ''"> and s.entry_year = #{entryYear}</if>
+            <if test="classCode != null and classCode != ''"> and s.class_code = #{classCode}</if>
         </where>
     </select>
-    
+
     <select id="selectBizStudentByStudentId" parameterType="Long" resultMap="BizStudentResult">
         <include refid="selectBizStudentVo"/>
-        where student_id = #{studentId}
+        where s.student_id = #{studentId}
     </select>
 
     <insert id="insertBizStudent" parameterType="BizStudent" useGeneratedKeys="true" keyProperty="studentId">
         insert into biz_student
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="userId != null">user_id,</if>
-            <if test="schoolId != null">school_id,</if>
-            <if test="studentNo != null">student_no,</if>
-            <if test="entryYear != null">entry_year,</if>
-            <if test="classCode != null">class_code,</if>
-         </trim>
+            <if test="studentNo != null and studentNo != ''">student_no,</if>
+            <if test="entryYear != null and entryYear != ''">entry_year,</if>
+            <if test="classCode != null and classCode != ''">class_code,</if>
+        </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="userId != null">#{userId},</if>
-            <if test="schoolId != null">#{schoolId},</if>
-            <if test="studentNo != null">#{studentNo},</if>
-            <if test="entryYear != null">#{entryYear},</if>
-            <if test="classCode != null">#{classCode},</if>
-         </trim>
+            <if test="studentNo != null and studentNo != ''">#{studentNo},</if>
+            <if test="entryYear != null and entryYear != ''">#{entryYear},</if>
+            <if test="classCode != null and classCode != ''">#{classCode},</if>
+        </trim>
     </insert>
 
     <update id="updateBizStudent" parameterType="BizStudent">
         update biz_student
         <trim prefix="SET" suffixOverrides=",">
-            <if test="userId != null">user_id = #{userId},</if>
-            <if test="schoolId != null">school_id = #{schoolId},</if>
-            <if test="studentNo != null">student_no = #{studentNo},</if>
-            <if test="entryYear != null">entry_year = #{entryYear},</if>
-            <if test="classCode != null">class_code = #{classCode},</if>
+            <if test="studentNo != null and studentNo != ''">student_no = #{studentNo},</if>
+            <if test="entryYear != null and entryYear != ''">entry_year = #{entryYear},</if>
+            <if test="classCode != null and classCode != ''">class_code = #{classCode},</if>
         </trim>
         where student_id = #{studentId}
     </update>
@@ -71,9 +70,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <delete id="deleteBizStudentByStudentIds" parameterType="String">
-        delete from biz_student where student_id in 
+        delete from biz_student where student_id in
         <foreach item="studentId" collection="array" open="(" separator="," close=")">
             #{studentId}
         </foreach>
     </delete>
+    <resultMap id="YearAndClassResult" type="com.ruoyi.business.domain.BizStudent">
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+    </resultMap>
+    <select id="selectDistinctYearAndClassByDeptId" parameterType="Long" resultMap="YearAndClassResult">
+        SELECT DISTINCT
+            s.entry_year,
+            s.class_code
+        FROM
+            biz_student s
+                LEFT JOIN sys_user u ON s.user_id = u.user_id
+        WHERE
+            u.dept_id = #{deptId}
+    </select>
+
 </mapper>

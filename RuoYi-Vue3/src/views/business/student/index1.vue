@@ -7,19 +7,9 @@
           v-model="queryParams.studentName"
           placeholder="请输入学生姓名"
           clearable
-          style="width: 200px"
+          style="width: 240px"
           @keyup.enter="handleQuery"
         />
-      </el-form-item>
-      <el-form-item label="入学年份" prop="entryYear">
-         <el-select v-model="queryParams.entryYear" placeholder="请选择年份" clearable style="width: 200px">
-            <el-option v-for="year in entryYearOptions" :key="year" :label="year" :value="year" />
-         </el-select>
-      </el-form-item>
-      <el-form-item label="班级" prop="classCode">
-         <el-select v-model="queryParams.classCode" placeholder="请选择班级" clearable style="width: 200px">
-           <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
-         </el-select>
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -47,50 +37,25 @@
           v-hasPermi="['business:student:import']"
         >批量导入</el-button>
       </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="danger"
-          plain
-          icon="Delete"
-          :disabled="multiple"
-          @click="handleDelete"
-          v-hasPermi="['business:student:remove']"
-        >批量删除</el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="warning"
-          plain
-          icon="Key"
-          :disabled="multiple"
-          @click="handleResetPwd"
-          v-hasPermi="['business:student:edit']"
-        >批量重置密码</el-button>
-      </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
     <!-- 数据表格 -->
-    <el-table v-loading="loading" :data="studentList" @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="55" align="center" />
+    <el-table v-loading="loading" :data="studentList">
       <el-table-column label="学生姓名" align="center" prop="studentName" />
       <el-table-column label="登录账号" align="center" prop="userName" />
-      <el-table-column label="班级" align="center" prop="classCode">
-        <template #default="scope">
-          <span>{{ scope.row.classCode }}班</span>
-        </template>
-      </el-table-column>
+      <el-table-column label="班级编号" align="center" prop="classCode" />
       <el-table-column label="学号" align="center" prop="studentNo" />
       <el-table-column label="入学年份" align="center" prop="entryYear" />
       <el-table-column label="操作" align="center" width="220" class-name="small-padding fixed-width">
         <template #default="scope">
-          <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)">修改</el-button>
-          <el-button link type="primary" icon="Key" @click="handleResetPwd(scope.row)">重置密码</el-button>
-          <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)">删除</el-button>
+          <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['business:student:edit']">修改</el-button>
+          <el-button link type="primary" icon="Key" @click="handleResetPwd(scope.row)" v-hasPermi="['business:student:edit']">重置密码</el-button>
+          <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['business:student:remove']">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
-
+    
     <pagination
       v-show="total>0"
       :total="total"
@@ -126,7 +91,8 @@
         </div>
       </template>
     </el-dialog>
-
+    
+    <!-- 学生导入对话框 (代码不变，省略) -->
     <el-dialog :title="upload.title" v-model="upload.open" width="400px" append-to-body>
       <el-upload
         ref="uploadRef"
@@ -170,13 +136,14 @@ const open = ref(false);
 const loading = ref(true);
 const showSearch = ref(true);
 const ids = ref([]);
-const userIds = ref([]); // 新增：用于存放选中学生的userId
 const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
 const title = ref("");
 
+// --- 新增的逻辑和变量 ---
 const entryYearOptions = ref([]);
+// 动态生成最近10年的入学年份选项
 const currentYear = new Date().getFullYear();
 for (let i = 0; i < 10; i++) {
   entryYearOptions.value.push(String(currentYear - i));
@@ -187,9 +154,7 @@ const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 10,
-    studentName: null,
-    entryYear: null,
-    classCode: null,
+    studentName: null, // 搜索条件改为studentName
   },
   rules: {
     studentName: [ { required: true, message: "学生姓名不能为空", trigger: "blur" } ],
@@ -201,7 +166,7 @@ const data = reactive({
 
 const { queryParams, form, rules } = toRefs(data);
 
-// ... upload 参数省略，保持不变 ...
+/*** 学生导入参数 */
 const upload = reactive({
   open: false,
   title: "",
@@ -209,6 +174,7 @@ const upload = reactive({
   headers: { Authorization: "Bearer " + getToken() },
   url: import.meta.env.VITE_APP_BASE_API + "/business/student/importData"
 });
+
 /** 查询学生管理列表 */
 function getList() {
   loading.value = true;
@@ -218,8 +184,6 @@ function getList() {
     loading.value = false;
   });
 }
-
-// ... cancel, reset, handleQuery, resetQuery 函数省略，保持不变 ...
 
 // 取消按钮
 function cancel() {
@@ -254,12 +218,10 @@ function resetQuery() {
 // 多选框选中数据
 function handleSelectionChange(selection) {
   ids.value = selection.map(item => item.studentId);
-  userIds.value = selection.map(item => item.userId); // 关键：同时获取userId
   single.value = selection.length != 1;
   multiple.value = !selection.length;
 }
 
-// ... handleAdd, handleUpdate, submitForm 函数省略，保持不变 ...
 /** 新增按钮操作 */
 function handleAdd() {
   reset();
@@ -304,27 +266,13 @@ function submitForm() {
 /** 删除按钮操作 */
 function handleDelete(row) {
   const studentIds = row.studentId || ids.value;
-  const studentNames = row.studentName || studentList.value.filter(item => ids.value.includes(item.studentId)).map(item => item.studentName).join(',');
-  proxy.$modal.confirm('是否确认删除学生姓名为"' + studentNames + '"的数据项？').then(function() {
+  proxy.$modal.confirm('是否确认删除选中的学生数据项？').then(function() {
     return delStudent(studentIds);
   }).then(() => {
     getList();
     proxy.$modal.msgSuccess("删除成功");
   }).catch(() => {});
 }
-
-/** 重置密码按钮操作 */
-function handleResetPwd(row) {
-  const uIds = row.userId ? [row.userId] : userIds.value;
-  const studentNames = row.studentName || studentList.value.filter(item => userIds.value.includes(item.userId)).map(item => item.studentName).join(',');
-  proxy.$modal.confirm('确认要重置学生"' + studentNames + '"的密码为“123456”吗？').then(function () {
-    return resetStudentPwd(uIds);
-  }).then(() => {
-    proxy.$modal.msgSuccess("重置成功");
-  }).catch(() => {});
-}
-
-// ... 导入相关函数省略，保持不变 ...
 
 /** 导出按钮操作 */
 function handleExport() {
@@ -357,6 +305,15 @@ const handleFileSuccess = (response, file, fileList) => {
 function submitFileForm() {
   proxy.$refs["uploadRef"].submit();
 };
+
+/** 重置密码按钮操作 */
+function handleResetPwd(row) {
+  proxy.$modal.confirm('确认要重置学生"' + row.studentName + '"的密码为“123456”吗？').then(function () {
+    return resetStudentPwd(row.userId);
+  }).then(() => {
+    proxy.$modal.msgSuccess("重置成功");
+  }).catch(() => {});
+}
 
 getList();
 </script>

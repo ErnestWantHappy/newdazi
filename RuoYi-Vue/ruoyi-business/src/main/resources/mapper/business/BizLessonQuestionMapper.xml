@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizLessonQuestionMapper">
+    
+    <resultMap type="BizLessonQuestion" id="BizLessonQuestionResult">
+        <result property="id"    column="id"    />
+        <result property="lessonId"    column="lesson_id"    />
+        <result property="questionId"    column="question_id"    />
+        <result property="questionScore"    column="question_score"    />
+        <result property="orderNum"    column="order_num"    />
+        <result property="questionContent" column="question_content" />
+        <result property="questionType"    column="question_type"    />
+    </resultMap>
+
+    <sql id="selectBizLessonQuestionVo">
+        select lq.id, lq.lesson_id, lq.question_id, lq.question_score, lq.order_num, q.question_content, q.question_type
+        from biz_lesson_question lq
+                 left join biz_question q on lq.question_id = q.question_id
+    </sql>
+
+    <select id="selectBizLessonQuestionList" parameterType="BizLessonQuestion" resultMap="BizLessonQuestionResult">
+        <include refid="selectBizLessonQuestionVo"/>
+        <where>
+            <if test="lessonId != null "> and lq.lesson_id = #{lessonId}</if>
+        </where>
+        order by lq.order_num asc
+    </select>
+    
+    <select id="selectBizLessonQuestionById" parameterType="Long" resultMap="BizLessonQuestionResult">
+        <include refid="selectBizLessonQuestionVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertBizLessonQuestion" parameterType="BizLessonQuestion" useGeneratedKeys="true" keyProperty="id">
+        insert into biz_lesson_question
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="lessonId != null">lesson_id,</if>
+            <if test="questionId != null">question_id,</if>
+            <if test="questionScore != null">question_score,</if>
+            <if test="orderNum != null">order_num,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="lessonId != null">#{lessonId},</if>
+            <if test="questionId != null">#{questionId},</if>
+            <if test="questionScore != null">#{questionScore},</if>
+            <if test="orderNum != null">#{orderNum},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBizLessonQuestion" parameterType="BizLessonQuestion">
+        update biz_lesson_question
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="lessonId != null">lesson_id = #{lessonId},</if>
+            <if test="questionId != null">question_id = #{questionId},</if>
+            <if test="questionScore != null">question_score = #{questionScore},</if>
+            <if test="orderNum != null">order_num = #{orderNum},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBizLessonQuestionById" parameterType="Long">
+        delete from biz_lesson_question where id = #{id}
+    </delete>
+
+    <delete id="deleteBizLessonQuestionByIds" parameterType="String">
+        delete from biz_lesson_question where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteBizLessonQuestionByLessonId" parameterType="Long">
+        delete from biz_lesson_question where lesson_id = #{lessonId}
+    </delete>
+
+    <insert id="batchBizLessonQuestion">
+        insert into biz_lesson_question(lesson_id, question_id, question_score, order_num) values
+        <foreach item="item" index="index" collection="list" separator=",">
+            (#{item.lessonId}, #{item.questionId}, #{item.questionScore}, #{item.orderNum})
+        </foreach>
+    </insert>
+    <!-- 新增：根据课程ID查询所有关联的题目信息 -->
+    <select id="selectByLessonId" parameterType="java.lang.Long" resultMap="BizLessonQuestionResult">
+        SELECT
+            lesson_id,
+            question_id,
+            question_score,
+            order_num
+        FROM
+            biz_lesson_question
+        WHERE
+            lesson_id = #{lessonId}
+        ORDER BY
+            order_num ASC
+    </select>
+    <!-- 新增：根据课程ID删除所有关联题目 -->
+    <delete id="deleteByLessonId" parameterType="java.lang.Long">
+        DELETE FROM biz_lesson_question WHERE lesson_id = #{lessonId}
+    </delete>
+    <!-- 新增：批量新增课程题目关联 -->
+    <!-- 批量新增课程题目关联 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO biz_lesson_question (lesson_id, question_id, question_score, order_num) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.lessonId}, #{item.questionId}, #{item.questionScore}, #{item.orderNum})
+        </foreach>
+    </insert>
+    <!-- 为课程题目详情创建一个明确的结果映射 -->
+    <resultMap id="BizLessonQuestionDetailResult" type="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        <result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="questionScore" column="question_score"/>
+        <result property="orderNum" column="order_num"/>
+        <result property="questionContent" column="question_content"/>
+        <result property="questionType" column="question_type"/>
+    </resultMap>
+    <!-- 查询题目完整信息 -->
+    <select id="selectDetailsByLessonId" parameterType="java.lang.Long" resultMap="BizLessonQuestionDetailResult">
+        SELECT
+            lq.lesson_id,
+            lq.question_id,
+            lq.question_score,
+            lq.order_num,
+            q.question_content,
+            q.question_type
+        FROM
+            biz_lesson_question lq
+                LEFT JOIN biz_question q ON lq.question_id = q.question_id
+        WHERE
+            lq.lesson_id = #{lessonId}
+        ORDER BY
+            lq.order_num ASC
+    </select>
+
+</mapper>

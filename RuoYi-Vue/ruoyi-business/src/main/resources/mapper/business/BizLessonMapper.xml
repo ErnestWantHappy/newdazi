@@ -1,38 +1,34 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
-PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.BizLessonMapper">
-    
+
     <resultMap type="BizLesson" id="BizLessonResult">
         <result property="lessonId"    column="lesson_id"    />
-        <result property="lessonName"    column="lesson_name"    />
-        <result property="lessonType"    column="lesson_type"    />
-        <result property="schoolId"    column="school_id"    />
-        <result property="gradeLevel"    column="grade_level"    />
-        <result property="classIds"    column="class_ids"    />
-        <result property="creatorId"    column="creator_id"    />
+        <result property="lessonTitle"    column="lesson_title"    />
+        <result property="grade"    column="grade"    />
+        <result property="semester"    column="semester"    />
+        <result property="lessonNum"    column="lesson_num"    />
+        <result property="createBy"    column="create_by"    />
         <result property="createTime"    column="create_time"    />
-        <result property="status"    column="status"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
     </resultMap>
 
     <sql id="selectBizLessonVo">
-        select lesson_id, lesson_name, lesson_type, school_id, grade_level, class_ids, creator_id, create_time, status from biz_lesson
+        select lesson_id, lesson_title, grade, semester, lesson_num, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
 
     <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
         <include refid="selectBizLessonVo"/>
-        <where>  
-            <if test="lessonName != null  and lessonName != ''"> and lesson_name like concat('%', #{lessonName}, '%')</if>
-            <if test="lessonType != null  and lessonType != ''"> and lesson_type = #{lessonType}</if>
-            <if test="schoolId != null "> and school_id = #{schoolId}</if>
-            <if test="gradeLevel != null "> and grade_level = #{gradeLevel}</if>
-            <if test="classIds != null  and classIds != ''"> and class_ids = #{classIds}</if>
-            <if test="creatorId != null "> and creator_id = #{creatorId}</if>
-            <if test="status != null  and status != ''"> and status = #{status}</if>
+        <where>
+            <if test="lessonTitle != null  and lessonTitle != ''"> and lesson_title like concat('%', #{lessonTitle}, '%')</if>
+            <if test="grade != null "> and grade = #{grade}</if>
+            <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
         </where>
     </select>
-    
+
     <select id="selectBizLessonByLessonId" parameterType="Long" resultMap="BizLessonResult">
         <include refid="selectBizLessonVo"/>
         where lesson_id = #{lessonId}
@@ -41,38 +37,38 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertBizLesson" parameterType="BizLesson" useGeneratedKeys="true" keyProperty="lessonId">
         insert into biz_lesson
         <trim prefix="(" suffix=")" suffixOverrides=",">
-            <if test="lessonName != null and lessonName != ''">lesson_name,</if>
-            <if test="lessonType != null">lesson_type,</if>
-            <if test="schoolId != null">school_id,</if>
-            <if test="gradeLevel != null">grade_level,</if>
-            <if test="classIds != null">class_ids,</if>
-            <if test="creatorId != null">creator_id,</if>
+            <if test="lessonTitle != null and lessonTitle != ''">lesson_title,</if>
+            <if test="grade != null">grade,</if>
+            <if test="semester != null and semester != ''">semester,</if>
+            <if test="lessonNum != null">lesson_num,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
             <if test="createTime != null">create_time,</if>
-            <if test="status != null">status,</if>
-         </trim>
+            <if test="updateBy != null and updateBy != ''">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
-            <if test="lessonName != null and lessonName != ''">#{lessonName},</if>
-            <if test="lessonType != null">#{lessonType},</if>
-            <if test="schoolId != null">#{schoolId},</if>
-            <if test="gradeLevel != null">#{gradeLevel},</if>
-            <if test="classIds != null">#{classIds},</if>
-            <if test="creatorId != null">#{creatorId},</if>
+            <if test="lessonTitle != null and lessonTitle != ''">#{lessonTitle},</if>
+            <if test="grade != null">#{grade},</if>
+            <if test="semester != null and semester != ''">#{semester},</if>
+            <if test="lessonNum != null">#{lessonNum},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
             <if test="createTime != null">#{createTime},</if>
-            <if test="status != null">#{status},</if>
-         </trim>
+            <if test="updateBy != null and updateBy != ''">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
     </insert>
 
     <update id="updateBizLesson" parameterType="BizLesson">
         update biz_lesson
         <trim prefix="SET" suffixOverrides=",">
-            <if test="lessonName != null and lessonName != ''">lesson_name = #{lessonName},</if>
-            <if test="lessonType != null">lesson_type = #{lessonType},</if>
-            <if test="schoolId != null">school_id = #{schoolId},</if>
-            <if test="gradeLevel != null">grade_level = #{gradeLevel},</if>
-            <if test="classIds != null">class_ids = #{classIds},</if>
-            <if test="creatorId != null">creator_id = #{creatorId},</if>
+            <if test="lessonTitle != null and lessonTitle != ''">lesson_title = #{lessonTitle},</if>
+            <if test="grade != null">grade = #{grade},</if>
+            <if test="semester != null and semester != ''">semester = #{semester},</if>
+            <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
+            <if test="createBy != null and createBy != ''">create_by = #{createBy},</if>
             <if test="createTime != null">create_time = #{createTime},</if>
-            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
         </trim>
         where lesson_id = #{lessonId}
     </update>
@@ -82,9 +78,31 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <delete id="deleteBizLessonByLessonIds" parameterType="String">
-        delete from biz_lesson where lesson_id in 
+        delete from biz_lesson where lesson_id in
         <foreach item="lessonId" collection="array" open="(" separator="," close=")">
             #{lessonId}
         </foreach>
     </delete>
+
+    <!-- 新增：为LessonInfoVo创建一个明确的结果映射 -->
+    <resultMap type="com.ruoyi.business.domain.vo.LessonInfoVo" id="LessonInfoVoResult">
+        <result property="lessonId"    column="lesson_id"    />
+        <result property="lessonTitle"    column="lesson_title"    />
+        <result property="lessonNum"    column="lesson_num"    />
+    </resultMap>
+
+    <!-- 核心修复：使用 resultMap 替代 resultType -->
+    <select id="selectLessonsByGradeAndCreator" resultMap="LessonInfoVoResult">
+        SELECT
+            lesson_id,
+            lesson_title,
+            lesson_num
+        FROM
+            biz_lesson
+        WHERE
+            grade = #{grade}
+          AND create_by = #{creatorName}
+        ORDER BY
+            lesson_num ASC
+    </select>
 </mapper>

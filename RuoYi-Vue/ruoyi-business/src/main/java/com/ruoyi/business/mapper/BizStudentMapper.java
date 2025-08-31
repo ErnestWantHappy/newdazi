@@ -2,7 +2,6 @@ package com.ruoyi.business.mapper;
 
 import java.util.List;
 import com.ruoyi.business.domain.BizStudent;
-
 /**
  * 学生管理Mapper接口
  * 
@@ -58,4 +57,11 @@ public interface BizStudentMapper
      * @return 结果
      */
     public int deleteBizStudentByStudentIds(Long[] studentIds);
+
+    /**
+     * 根据学校ID查询所有不重复的入学年份和班级组合
+     * @param deptId 学校ID
+     * @return 学生信息列表，每个对象只包含entryYear和classCode
+     */
+    public List<BizStudent> selectDistinctYearAndClassByDeptId(Long deptId);
 }

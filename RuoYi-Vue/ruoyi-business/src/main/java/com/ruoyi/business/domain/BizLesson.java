@@ -1,15 +1,14 @@
 package com.ruoyi.business.domain;
 
+import java.util.List;
+import com.ruoyi.common.core.domain.BaseEntity;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
-import com.ruoyi.common.annotation.Excel;
-import com.ruoyi.common.core.domain.BaseEntity;
 
 /**
- * 课程/主题对象 biz_lesson
- * 
- * @author ruoyi
- * @date 2025-06-23
+ * 课程/作业信息表对象 biz_lesson
+ * * @author ruoyi
+ * @date 2025-08-18
  */
 public class BizLesson extends BaseEntity
 {
@@ -18,126 +17,98 @@ public class BizLesson extends BaseEntity
     /** 课程ID */
     private Long lessonId;
 
-    /** 课程/主题名称 */
-    @Excel(name = "课程/主题名称")
-    private String lessonName;
+    /** 课程/作业标题 */
+    private String lessonTitle;
 
-    /** 类型 (daily日常, exam考试, regional区域检测) */
-    @Excel(name = "类型 (daily日常, exam考试, regional区域检测)")
-    private String lessonType;
+    /** 年级 (例如: 1, 2, 3, 4, 5, 6) */
+    private Long grade;
 
-    /** 所属学校ID */
-    @Excel(name = "所属学校ID")
-    private Long schoolId;
+    /** 学期 (0上册, 1下册) */
+    private String semester;
 
-    /** 年级 (如: 3, 7) */
-    @Excel(name = "年级 (如: 3, 7)")
-    private Long gradeLevel;
-
-    /** 适用的班级ID列表 (逗号分隔, 如: 101,102) */
-    @Excel(name = "适用的班级ID列表 (逗号分隔, 如: 101,102)")
-    private String classIds;
+    /** 第几课 (例如: 1, 2, 3) */
+    private Integer lessonNum;
 
     /** 创建教师ID */
-    @Excel(name = "创建教师ID")
     private Long creatorId;
 
-    /** 状态 (0草稿 1已发布) */
-    @Excel(name = "状态 (0草稿 1已发布)")
-    private String status;
+    /** 课程包含的题目列表 (非数据库字段) */
+    private List<BizLessonQuestion> questions;
 
-    public void setLessonId(Long lessonId) 
-    {
-        this.lessonId = lessonId;
-    }
+    // --- Getter and Setter methods ---
 
-    public Long getLessonId() 
-    {
+    public Long getLessonId() {
         return lessonId;
     }
 
-    public void setLessonName(String lessonName) 
-    {
-        this.lessonName = lessonName;
+    public void setLessonId(Long lessonId) {
+        this.lessonId = lessonId;
     }
 
-    public String getLessonName() 
-    {
-        return lessonName;
+    public String getLessonTitle() {
+        return lessonTitle;
     }
 
-    public void setLessonType(String lessonType) 
-    {
-        this.lessonType = lessonType;
+    public void setLessonTitle(String lessonTitle) {
+        this.lessonTitle = lessonTitle;
     }
 
-    public String getLessonType() 
-    {
-        return lessonType;
+    public Long getGrade() {
+        return grade;
     }
 
-    public void setSchoolId(Long schoolId) 
-    {
-        this.schoolId = schoolId;
+    public void setGrade(Long grade) {
+        this.grade = grade;
     }
 
-    public Long getSchoolId() 
-    {
-        return schoolId;
+    public String getSemester() {
+        return semester;
     }
 
-    public void setGradeLevel(Long gradeLevel) 
-    {
-        this.gradeLevel = gradeLevel;
+    public void setSemester(String semester) {
+        this.semester = semester;
     }
 
-    public Long getGradeLevel() 
-    {
-        return gradeLevel;
+    public Integer getLessonNum() {
+        return lessonNum;
     }
 
-    public void setClassIds(String classIds) 
-    {
-        this.classIds = classIds;
+    public void setLessonNum(Integer lessonNum) {
+        this.lessonNum = lessonNum;
     }
 
-    public String getClassIds() 
-    {
-        return classIds;
-    }
-
-    public void setCreatorId(Long creatorId) 
-    {
-        this.creatorId = creatorId;
-    }
-
-    public Long getCreatorId() 
-    {
+    public Long getCreatorId() {
         return creatorId;
     }
 
-    public void setStatus(String status) 
-    {
-        this.status = status;
+    public void setCreatorId(Long creatorId) {
+        this.creatorId = creatorId;
     }
 
-    public String getStatus() 
+    public List<BizLessonQuestion> getQuestions()
     {
-        return status;
+        return questions;
+    }
+
+    public void setQuestions(List<BizLessonQuestion> questions)
+    {
+        this.questions = questions;
     }
 
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
-            .append("lessonId", getLessonId())
-            .append("lessonName", getLessonName())
-            .append("lessonType", getLessonType())
-            .append("schoolId", getSchoolId())
-            .append("gradeLevel", getGradeLevel())
-            .append("classIds", getClassIds())
-            .append("creatorId", getCreatorId())
-            .append("createTime", getCreateTime())
-            .append("status", getStatus())
-            .toString();
+                .append("lessonId", getLessonId())
+                .append("lessonTitle", getLessonTitle())
+                .append("grade", getGrade())
+                .append("semester", getSemester())
+                .append("lessonNum", getLessonNum())
+                .append("creatorId", getCreatorId())
+                .append("createBy", getCreateBy())
+                .append("createTime", getCreateTime())
+                .append("updateBy", getUpdateBy())
+                .append("updateTime", getUpdateTime())
+                .append("questions", getQuestions()) // 补充 questions
+                .toString();
     }
 }

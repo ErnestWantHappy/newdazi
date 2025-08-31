@@ -20,12 +20,16 @@ import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.service.IBizStudentService;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.page.TableDataInfo;
-import org.springframework.web.multipart.MultipartFile; // 确保在文件顶部有这个import
-import com.ruoyi.common.utils.SecurityUtils; // 确保在文件顶部有这个import
+import org.springframework.web.multipart.MultipartFile;
+import com.ruoyi.common.utils.SecurityUtils;
+// --- 新增的import ---
+import com.ruoyi.common.core.domain.entity.SysUser;
+import com.ruoyi.system.service.ISysUserService;
+// --------------------
+
 /**
  * 学生管理Controller
- * 
- * @author zdx
+ * * @author zdx
  * @date 2025-06-25
  */
 @RestController
@@ -34,6 +38,11 @@ public class BizStudentController extends BaseController
 {
     @Autowired
     private IBizStudentService bizStudentService;
+
+    // --- 新注入的依赖 ---
+    @Autowired
+    private ISysUserService userService;
+    // --------------------
 
     /**
      * 查询学生管理列表
@@ -78,7 +87,7 @@ public class BizStudentController extends BaseController
     @PostMapping
     public AjaxResult add(@RequestBody BizStudent bizStudent)
     {
-        bizStudent.setSchoolId(getLoginUser().getUser().getDeptId()); // 我们仍然从deptId获取
+        // 注意：设置schoolId的逻辑已移入Service层，此处不再需要
         return toAjax(bizStudentService.insertBizStudent(bizStudent));
     }
 
@@ -90,7 +99,7 @@ public class BizStudentController extends BaseController
     @PutMapping
     public AjaxResult edit(@RequestBody BizStudent bizStudent)
     {
-        bizStudent.setSchoolId(getLoginUser().getUser().getDeptId());
+        // 注意：设置schoolId的逻辑已移入Service层，此处不再需要
         return toAjax(bizStudentService.updateBizStudent(bizStudent));
     }
 
@@ -99,7 +108,7 @@ public class BizStudentController extends BaseController
      */
     @PreAuthorize("@ss.hasPermi('business:student:remove')")
     @Log(title = "学生管理", businessType = BusinessType.DELETE)
-	@DeleteMapping("/{studentIds}")
+    @DeleteMapping("/{studentIds}")
     public AjaxResult remove(@PathVariable Long[] studentIds)
     {
         return toAjax(bizStudentService.deleteBizStudentByStudentIds(studentIds));
@@ -132,5 +141,21 @@ public class BizStudentController extends BaseController
         return AjaxResult.success(message);
     }
 
-
+    /**
+     * 重置密码
+     */
+    /**
+     * 重置密码
+     */
+    @PreAuthorize("@ss.hasPermi('business:student:edit')")
+    @Log(title = "学生管理", businessType = BusinessType.UPDATE)
+    @PutMapping("/resetPwd")
+    public AjaxResult resetPwd(@RequestBody Long[] userIds) // 参数从SysUser改为Long[]
+    {
+        if (userIds == null || userIds.length == 0) {
+            return AjaxResult.error("参数不能为空！");
+        }
+        bizStudentService.resetStudentPwd(userIds);
+        return AjaxResult.success();
+    }
 }

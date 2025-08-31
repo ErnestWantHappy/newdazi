@@ -53,6 +53,9 @@ public class SysDept extends BaseEntity
     private String parentName;
     /** 学校编码 */
     private String schoolCode;
+
+    /** 新增：学校类型 */
+    private String schoolType;
     /** 子部门 */
     private List<SysDept> children = new ArrayList<SysDept>();
 
@@ -200,6 +203,7 @@ public class SysDept extends BaseEntity
             .append("updateBy", getUpdateBy())
             .append("updateTime", getUpdateTime())
                 .append("schoolCode", getSchoolCode())
+                .append("schoolType", getSchoolType())
             .toString();
     }
 
@@ -209,5 +213,13 @@ public class SysDept extends BaseEntity
 
     public void setSchoolCode(String schoolCode) {
         this.schoolCode = schoolCode;
+    }
+
+    public String getSchoolType() {
+        return schoolType;
+    }
+
+    public void setSchoolType(String schoolType) {
+        this.schoolType = schoolType;
     }
 }

@@ -66,4 +66,12 @@ public interface IBizStudentService
      * @return 结果
      */
     public String importStudent(List<BizStudent> studentList, String operName);
+
+    /**
+     * 批量重置学生密码
+     *
+     * @param userIds 需要重置密码的用户ID数组
+     * @return 结果
+     */
+    public int resetStudentPwd(Long[] userIds);
 }

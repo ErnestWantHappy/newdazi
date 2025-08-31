@@ -5,10 +5,10 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 import com.ruoyi.common.annotation.Excel;
 import com.ruoyi.common.core.domain.BaseEntity;
 
-
 /**
  * 学生业务对象 biz_student
- * * @author ruoyi
+ *
+ * @author ruoyi
  * @date 2025-07-01
  */
 public class BizStudent extends BaseEntity
@@ -20,9 +20,6 @@ public class BizStudent extends BaseEntity
 
     /** 关联的用户ID (sys_user.user_id) */
     private Long userId;
-
-    /** 所属学校ID */
-    private Long schoolId;
 
     /** 学号 */
     @Excel(name = "学号")
@@ -36,12 +33,18 @@ public class BizStudent extends BaseEntity
     @Excel(name = "班级编号")
     private String classCode;
 
-    /** 真实姓名 (用于导入) */
+    /** 真实姓名 (用于导入和列表展示) */
     @Excel(name = "真实姓名")
-    private String studentName; // 我们使用这个字段来接收Excel中的“真实姓名”
+    private String studentName;
 
-    // a non-persistent field for class name, which is not in the biz_student table
-    private String className;
+    /** 登录账号 (用于列表展示, 非数据库字段) */
+    private String userName;
+
+    /** 部门ID (仅用于数据权限查询, 非数据库字段) */
+    private Long deptId;
+
+
+    // --- Getter and Setter methods ---
 
     public void setStudentId(Long studentId)
     {
@@ -60,15 +63,6 @@ public class BizStudent extends BaseEntity
     public Long getUserId()
     {
         return userId;
-    }
-    public void setSchoolId(Long schoolId)
-    {
-        this.schoolId = schoolId;
-    }
-
-    public Long getSchoolId()
-    {
-        return schoolId;
     }
     public void setStudentNo(String studentNo)
     {
@@ -106,11 +100,33 @@ public class BizStudent extends BaseEntity
         this.studentName = studentName;
     }
 
-    public String getClassName() {
-        return className;
+    public String getUserName() {
+        return userName;
     }
 
-    public void setClassName(String className) {
-        this.className = className;
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
+
+    public Long getDeptId() {
+        return deptId;
+    }
+
+    public void setDeptId(Long deptId) {
+        this.deptId = deptId;
+    }
+
+    @Override
+    public String toString() {
+        return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
+                .append("studentId", getStudentId())
+                .append("userId", getUserId())
+                .append("studentNo", getStudentNo())
+                .append("entryYear", getEntryYear())
+                .append("classCode", getClassCode())
+                .append("studentName", getStudentName())
+                .append("userName", getUserName())
+                .append("deptId", getDeptId())
+                .toString();
     }
 }

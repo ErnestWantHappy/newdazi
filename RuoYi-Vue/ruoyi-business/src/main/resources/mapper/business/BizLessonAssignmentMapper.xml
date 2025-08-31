@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizLessonAssignmentMapper">
+    
+    <resultMap type="BizLessonAssignment" id="BizLessonAssignmentResult">
+        <result property="assignmentId"    column="assignment_id"    />
+        <result property="lessonId"    column="lesson_id"    />
+        <result property="entryYear"    column="entry_year"    />
+        <result property="classCode"    column="class_code"    />
+        <result property="assignerId"    column="assigner_id"    />
+        <result property="assignTime"    column="assign_time"    />
+    </resultMap>
+
+    <sql id="selectBizLessonAssignmentVo">
+        select assignment_id, lesson_id, entry_year, class_code, assigner_id, assign_time from biz_lesson_assignment
+    </sql>
+
+    <select id="selectBizLessonAssignmentList" parameterType="BizLessonAssignment" resultMap="BizLessonAssignmentResult">
+        <include refid="selectBizLessonAssignmentVo"/>
+        <where>  
+            <if test="lessonId != null "> and lesson_id = #{lessonId}</if>
+            <if test="entryYear != null  and entryYear != ''"> and entry_year = #{entryYear}</if>
+            <if test="classCode != null  and classCode != ''"> and class_code = #{classCode}</if>
+            <if test="assignTime != null "> and assign_time = #{assignTime}</if>
+        </where>
+    </select>
+    
+    <select id="selectBizLessonAssignmentByAssignmentId" parameterType="Long" resultMap="BizLessonAssignmentResult">
+        <include refid="selectBizLessonAssignmentVo"/>
+        where assignment_id = #{assignmentId}
+    </select>
+
+    <insert id="insertBizLessonAssignment" parameterType="BizLessonAssignment" useGeneratedKeys="true" keyProperty="assignmentId">
+        insert into biz_lesson_assignment
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="lessonId != null">lesson_id,</if>
+            <if test="entryYear != null and entryYear != ''">entry_year,</if>
+            <if test="classCode != null and classCode != ''">class_code,</if>
+            <if test="assignerId != null">assigner_id,</if>
+            <if test="assignTime != null">assign_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="lessonId != null">#{lessonId},</if>
+            <if test="entryYear != null and entryYear != ''">#{entryYear},</if>
+            <if test="classCode != null and classCode != ''">#{classCode},</if>
+            <if test="assignerId != null">#{assignerId},</if>
+            <if test="assignTime != null">#{assignTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBizLessonAssignment" parameterType="BizLessonAssignment">
+        update biz_lesson_assignment
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="lessonId != null">lesson_id = #{lessonId},</if>
+            <if test="entryYear != null and entryYear != ''">entry_year = #{entryYear},</if>
+            <if test="classCode != null and classCode != ''">class_code = #{classCode},</if>
+            <if test="assignerId != null">assigner_id = #{assignerId},</if>
+            <if test="assignTime != null">assign_time = #{assignTime},</if>
+        </trim>
+        where assignment_id = #{assignmentId}
+    </update>
+
+    <delete id="deleteBizLessonAssignmentByAssignmentId" parameterType="Long">
+        delete from biz_lesson_assignment where assignment_id = #{assignmentId}
+    </delete>
+
+    <delete id="deleteBizLessonAssignmentByAssignmentIds" parameterType="String">
+        delete from biz_lesson_assignment where assignment_id in 
+        <foreach item="assignmentId" collection="array" open="(" separator="," close=")">
+            #{assignmentId}
+        </foreach>
+    </delete>
+
+    <!-- 新增：根据课程ID查询所有被指派的班级编号 -->
+    <select id="selectClassCodesByLessonId" parameterType="java.lang.Long" resultType="java.lang.String">
+        SELECT class_code FROM biz_lesson_assignment WHERE lesson_id = #{lessonId}
+    </select>
+
+    <!-- 新增：根据课程ID删除所有指派记录 -->
+    <delete id="deleteByLessonId" parameterType="java.lang.Long">
+        DELETE FROM biz_lesson_assignment WHERE lesson_id = #{lessonId}
+    </delete>
+
+    <!-- 新增：批量新增课程指派记录 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO biz_lesson_assignment (lesson_id, entry_year, class_code, assigner_id, assign_time) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.assignTime})
+        </foreach>
+    </insert>
+
+</mapper>

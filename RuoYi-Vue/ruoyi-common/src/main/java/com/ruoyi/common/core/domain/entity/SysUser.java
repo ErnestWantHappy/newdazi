@@ -14,8 +14,7 @@ import com.ruoyi.common.xss.Xss;
 
 /**
  * 用户对象 sys_user
- * 
- * @author ruoyi
+ * * @author ruoyi
  */
 public class SysUser extends BaseEntity
 {
@@ -32,8 +31,6 @@ public class SysUser extends BaseEntity
     /** 所属学校ID */
     private Long schoolId;
 
-    // --- 从这里开始是我们需要新增的代码 ---
-
     /** 班级编号 (用于导入) */
     @Excel(name = "班级编号")
     private String classCode;
@@ -45,8 +42,6 @@ public class SysUser extends BaseEntity
     /** 学号 (用于导入) */
     @Excel(name = "学号")
     private String studentNo;
-
-    // --- 新增代码结束 ---
 
     /** 用户账号 */
     @Excel(name = "登录名称")
@@ -94,8 +89,8 @@ public class SysUser extends BaseEntity
 
     /** 部门对象 */
     @Excels({
-        @Excel(name = "部门名称", targetAttr = "deptName", type = Type.EXPORT),
-        @Excel(name = "部门负责人", targetAttr = "leader", type = Type.EXPORT)
+            @Excel(name = "部门名称", targetAttr = "deptName", type = Type.EXPORT),
+            @Excel(name = "部门负责人", targetAttr = "leader", type = Type.EXPORT)
     })
     private SysDept dept;
 
@@ -110,6 +105,8 @@ public class SysUser extends BaseEntity
 
     /** 角色ID */
     private Long roleId;
+
+    // --- Getter and Setter methods ---
 
     public SysUser()
     {
@@ -149,6 +146,38 @@ public class SysUser extends BaseEntity
     public void setDeptId(Long deptId)
     {
         this.deptId = deptId;
+    }
+
+    public Long getSchoolId() {
+        return schoolId;
+    }
+
+    public void setSchoolId(Long schoolId) {
+        this.schoolId = schoolId;
+    }
+
+    public String getClassCode() {
+        return classCode;
+    }
+
+    public void setClassCode(String classCode) {
+        this.classCode = classCode;
+    }
+
+    public String getEntryYear() {
+        return entryYear;
+    }
+
+    public void setEntryYear(String entryYear) {
+        this.entryYear = entryYear;
+    }
+
+    public String getStudentNo() {
+        return studentNo;
+    }
+
+    public void setStudentNo(String studentNo) {
+        this.studentNo = studentNo;
     }
 
     @Xss(message = "用户昵称不能包含脚本字符")
@@ -332,58 +361,27 @@ public class SysUser extends BaseEntity
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
-            .append("userId", getUserId())
-            .append("deptId", getDeptId())
-            .append("userName", getUserName())
-            .append("nickName", getNickName())
-            .append("email", getEmail())
-            .append("phonenumber", getPhonenumber())
-            .append("sex", getSex())
-            .append("avatar", getAvatar())
-            .append("password", getPassword())
-            .append("status", getStatus())
-            .append("delFlag", getDelFlag())
-            .append("loginIp", getLoginIp())
-            .append("loginDate", getLoginDate())
-            .append("pwdUpdateDate", getPwdUpdateDate())
-            .append("createBy", getCreateBy())
-            .append("createTime", getCreateTime())
-            .append("updateBy", getUpdateBy())
-            .append("updateTime", getUpdateTime())
-            .append("remark", getRemark())
-            .append("dept", getDept())
-            .toString();
-    }
-
-    public Long getSchoolId() {
-        return schoolId;
-    }
-
-    public void setSchoolId(Long schoolId) {
-        this.schoolId = schoolId;
-    }
-
-    public String getClassCode() {
-        return classCode;
-    }
-
-    public void setClassCode(String classCode) {
-        this.classCode = classCode;
-    }
-
-    public String getEntryYear() {
-        return entryYear;
-    }
-
-    public void setEntryYear(String entryYear) {
-        this.entryYear = entryYear;
-    }
-
-    public String getStudentNo() {
-        return studentNo;
-    }
-
-    public void setStudentNo(String studentNo) {
-        this.studentNo = studentNo;
+                .append("userId", getUserId())
+                .append("deptId", getDeptId())
+                .append("schoolId", getSchoolId()) // 补充schoolId
+                .append("userName", getUserName())
+                .append("nickName", getNickName())
+                .append("email", getEmail())
+                .append("phonenumber", getPhonenumber())
+                .append("sex", getSex())
+                .append("avatar", getAvatar())
+                .append("password", getPassword())
+                .append("status", getStatus())
+                .append("delFlag", getDelFlag())
+                .append("loginIp", getLoginIp())
+                .append("loginDate", getLoginDate())
+                .append("pwdUpdateDate", getPwdUpdateDate())
+                .append("createBy", getCreateBy())
+                .append("createTime", getCreateTime())
+                .append("updateBy", getUpdateBy())
+                .append("updateTime", getUpdateTime())
+                .append("remark", getRemark())
+                .append("dept", getDept())
+                .toString();
     }
 }

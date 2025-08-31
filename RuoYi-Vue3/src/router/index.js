@@ -171,7 +171,21 @@ export const dynamicRoutes = [
         meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
       }
     ]
-  }
+  },
+  {
+    path: '/business/lesson-auth',
+    component: Layout,
+    hidden: true,
+    permissions: ['business:lesson:edit', 'business:lesson:add'],
+    children: [
+      {
+        path: 'designer/:lessonId(\\d+)?', // lessonId是可选的
+        component: () => import('@/views/business/lesson/designer'),
+        name: 'LessonDesigner',
+        meta: { title: '课程设计', activeMenu: '/business/lesson' }
+      }
+    ]
+}
 ]
 
 const router = createRouter({
