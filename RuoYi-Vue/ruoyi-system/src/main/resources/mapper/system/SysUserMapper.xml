@@ -7,7 +7,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <resultMap type="SysUser" id="SysUserResult">
         <id     property="userId"        column="user_id"         />
         <result property="deptId"        column="dept_id"         />
-		<result property="schoolId"      column="school_id"       />
         <result property="userName"      column="user_name"       />
         <result property="nickName"      column="nick_name"       />
         <result property="email"         column="email"           />
@@ -81,7 +80,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 			AND date_format(u.create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
 		</if>
 		<if test="deptId != null and deptId != 0">
-			AND (u.dept_id = #{deptId} OR u.dept_id IN ( SELECT t.dept_id FROM sys_dept t WHERE find_in_set(#{deptId}, ancestors) ))
+			AND (
+				u.dept_id = #{deptId}
+				OR u.dept_id IN ( SELECT t.dept_id FROM sys_dept t WHERE find_in_set(#{deptId}, t.ancestors) )
+				OR EXISTS (
+					SELECT 1
+					FROM sys_user_dept sud
+					WHERE sud.user_id = u.user_id
+					  AND (sud.dept_id = #{deptId}
+					       OR sud.dept_id IN ( SELECT t.dept_id FROM sys_dept t WHERE find_in_set(#{deptId}, t.ancestors) ))
+				)
+			)
 		</if>
 		<!-- 数据范围过滤 -->
 		${params.dataScope}
@@ -148,7 +157,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
  		insert into sys_user(
  			<if test="userId != null and userId != 0">user_id,</if>
  			<if test="deptId != null and deptId != 0">dept_id,</if>
-		<if test="schoolId != null">school_id,</if>
  			<if test="userName != null and userName != ''">user_name,</if>
  			<if test="nickName != null and nickName != ''">nick_name,</if>
  			<if test="email != null and email != ''">email,</if>
@@ -164,7 +172,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
  		)values(
  			<if test="userId != null and userId != ''">#{userId},</if>
  			<if test="deptId != null and deptId != ''">#{deptId},</if>
-		<if test="schoolId != null">#{schoolId},</if>
  			<if test="userName != null and userName != ''">#{userName},</if>
  			<if test="nickName != null and nickName != ''">#{nickName},</if>
  			<if test="email != null and email != ''">#{email},</if>
@@ -185,7 +192,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
  		<set>
  			<if test="deptId != null and deptId != 0">dept_id = #{deptId},</if>
  			<if test="nickName != null and nickName != ''">nick_name = #{nickName},</if>
-			<if test="schoolId != null">school_id = #{schoolId},</if>
  			<if test="email != null ">email = #{email},</if>
  			<if test="phonenumber != null ">phonenumber = #{phonenumber},</if>
  			<if test="sex != null and sex != ''">sex = #{sex},</if>

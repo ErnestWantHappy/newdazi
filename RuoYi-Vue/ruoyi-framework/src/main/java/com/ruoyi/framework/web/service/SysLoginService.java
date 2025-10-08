@@ -1,5 +1,8 @@
 package com.ruoyi.framework.web.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -10,6 +13,7 @@ import org.springframework.stereotype.Component;
 import com.ruoyi.common.constant.CacheConstants;
 import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.constant.UserConstants;
+import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.core.redis.RedisCache;
@@ -26,6 +30,7 @@ import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.framework.manager.AsyncManager;
 import com.ruoyi.framework.manager.factory.AsyncFactory;
 import com.ruoyi.framework.security.context.AuthenticationContextHolder;
+import com.ruoyi.framework.web.domain.LoginResult;
 import com.ruoyi.system.service.ISysConfigService;
 import com.ruoyi.system.service.ISysUserService;
 
@@ -61,7 +66,7 @@ public class SysLoginService
      * @param uuid 唯一标识
      * @return 结果
      */
-    public String login(String username, String password, String code, String uuid)
+    public LoginResult login(String username, String password, String code, String uuid)
     {
         // 验证码校验
         validateCaptcha(username, code, uuid);
@@ -95,9 +100,43 @@ public class SysLoginService
         }
         AsyncManager.me().execute(AsyncFactory.recordLogininfor(username, Constants.LOGIN_SUCCESS, MessageUtils.message("user.login.success")));
         LoginUser loginUser = (LoginUser) authentication.getPrincipal();
+        populateUserSchoolInfo(loginUser);
         recordLoginInfo(loginUser.getUserId());
-        // 生成token
-        return tokenService.createToken(loginUser);
+        String token = tokenService.createToken(loginUser);
+        LoginResult result = new LoginResult();
+        result.setToken(token);
+        List<SysDept> schools = loginUser.getManageDepts();
+        result.setSchools(schools);
+        result.setNeedsSchoolSelection(schools != null && schools.size() > 1);
+        return result;
+    }
+
+    private void populateUserSchoolInfo(LoginUser loginUser)
+    {
+        List<SysDept> schools = userService.selectDeptsByUserId(loginUser.getUserId());
+        if (schools == null)
+        {
+            schools = new ArrayList<>();
+        }
+        loginUser.setManageDepts(schools);
+        List<Long> deptIds = schools.stream()
+                .map(SysDept::getDeptId)
+                .collect(Collectors.toList());
+        loginUser.setDeptIds(deptIds);
+        SysUser user = loginUser.getUser();
+        if (user != null)
+        {
+            user.setDeptIds(deptIds);
+            if (user.getDeptId() == null && !deptIds.isEmpty())
+            {
+                user.setDeptId(deptIds.get(0));
+            }
+            loginUser.setDeptId(user.getDeptId());
+        }
+        if (loginUser.getDeptId() == null && !deptIds.isEmpty())
+        {
+            loginUser.setDeptId(deptIds.get(0));
+        }
     }
 
     /**

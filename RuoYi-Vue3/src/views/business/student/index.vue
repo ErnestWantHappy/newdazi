@@ -160,9 +160,12 @@
 </template>
 
 <script setup name="Student">
+import { getCurrentInstance, reactive, ref, toRefs, watch } from "vue";
+import useUserStore from "@/store/modules/user";
 import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd } from "@/api/business/student";
 import { getToken } from "@/utils/auth";
 
+const userStore = useUserStore();
 const { proxy } = getCurrentInstance();
 
 const studentList = ref([]);
@@ -190,6 +193,7 @@ const data = reactive({
     studentName: null,
     entryYear: null,
     classCode: null,
+    deptId: userStore.currentDeptId || null,
   },
   rules: {
     studentName: [ { required: true, message: "学生姓名不能为空", trigger: "blur" } ],
@@ -212,6 +216,7 @@ const upload = reactive({
 /** 查询学生管理列表 */
 function getList() {
   loading.value = true;
+  queryParams.value.deptId = userStore.currentDeptId || null;
   listStudent(queryParams.value).then(response => {
     studentList.value = response.rows;
     total.value = response.total;
@@ -335,13 +340,14 @@ function handleExport() {
 
 /** 导入按钮操作 */
 function handleImport() {
+  upload.headers.Authorization = "Bearer " + getToken();
   upload.title = "学生导入";
   upload.open = true;
 };
 
 /** 下载模板操作 */
 function importTemplate() {
-  proxy.download("business/student/importTemplate", {}, `student_template_${new Date().getTime()}.xlsx`);
+  proxy.download("business/student/importTemplate", { deptId: userStore.currentDeptId || null }, `student_template_${new Date().getTime()}.xlsx`);
 };
 
 /** 文件上传成功处理 */
@@ -359,4 +365,9 @@ function submitFileForm() {
 };
 
 getList();
+
+watch(() => userStore.currentDeptId, (deptId) => {
+  queryParams.value.deptId = deptId || null;
+  handleQuery();
+});
 </script>

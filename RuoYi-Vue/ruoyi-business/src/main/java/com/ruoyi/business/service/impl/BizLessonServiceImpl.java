@@ -102,8 +102,17 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Override
     public List<GradeGroupVo> getTeacherDashboardData() {
         LoginUser loginUser = SecurityUtils.getLoginUser();
-        Long deptId = loginUser.getDeptId();
-        String username = loginUser.getUsername();
+        Long deptId = null;
+        if (loginUser != null && loginUser.getUser() != null)
+        {
+            deptId = loginUser.getUser().getDeptId();
+        }
+        if (deptId == null)
+        {
+            log.warn("【教师首页数据】当前教师未绑定校区，无法加载首页数据");
+            return new ArrayList<>();
+        }
+        String username = loginUser != null ? loginUser.getUsername() : "unknown";
         log.info("【教师首页数据】开始获取数据，教师: {}, 学校ID: {}", username, deptId);
 
         SysDept school = deptMapper.selectDeptById(deptId);
@@ -161,7 +170,16 @@ public class BizLessonServiceImpl implements IBizLessonService
     public LessonDetailVo selectLessonDetailsByLessonId(Long lessonId) {
         LessonDetailVo detailVo = new LessonDetailVo();
         LoginUser loginUser = SecurityUtils.getLoginUser();
-        Long deptId = loginUser.getDeptId();
+        Long deptId = null;
+        if (loginUser != null && loginUser.getUser() != null)
+        {
+            deptId = loginUser.getUser().getDeptId();
+        }
+        if (deptId == null)
+        {
+            log.warn("【课程详情】当前教师未绑定校区，无法查询课程详情");
+            return null;
+        }
 
         BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null) return null;

@@ -1,6 +1,6 @@
 package com.ruoyi.business.service.impl;
 
-import java.util.Arrays; // 核心修复：添加必要的 import
+import java.util.Arrays;
 import java.util.List;
 import com.ruoyi.system.service.ISysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,9 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 学生管理Service业务层处理 (重构版)
- * * @author zdx
- * @date 2025-06-25
+ * 学生管理Service业务层处理 (编译修复版)
  */
 @Service
 public class BizStudentServiceImpl implements IBizStudentService
@@ -53,9 +51,20 @@ public class BizStudentServiceImpl implements IBizStudentService
     public List<BizStudent> selectBizStudentList(BizStudent bizStudent)
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
-        // 如果不是超级管理员，则强制只能查询自己学校的学生
-        if (!loginUser.getUser().isAdmin()) {
-            // 此处不再需要设置任何ID，因为Mapper的查询将直接使用当前用户的dept_id进行关联查询
+        Long currentDeptId = null;
+        if (loginUser != null && loginUser.getUser() != null)
+        {
+            currentDeptId = loginUser.getUser().getDeptId();
+        }
+        // 非超级管理员只能查看当前校区的学生
+        if (loginUser != null && loginUser.getUser() != null && !loginUser.getUser().isAdmin())
+        {
+            bizStudent.setDeptId(currentDeptId);
+        }
+        else if (bizStudent.getDeptId() == null && currentDeptId != null)
+        {
+            // 管理员未指定校区时默认沿用当前选中的校区
+            bizStudent.setDeptId(currentDeptId);
         }
         return bizStudentMapper.selectBizStudentList(bizStudent);
     }
@@ -77,8 +86,10 @@ public class BizStudentServiceImpl implements IBizStudentService
         }
         String schoolCode = school.getSchoolCode();
 
-        String formattedClassCode = StringUtils.leftPad(bizStudent.getClassCode(), 2, "0");
-        String formattedStudentNo = StringUtils.leftPad(bizStudent.getStudentNo(), 2, "0");
+        // 核心编译错误修复：方法名 padl 应为 leftPad
+        String formattedClassCode = StringUtils.leftPad(bizStudent.getClassCode(), 2, '0');
+        // 核心编译错误修复：方法名 padl 应为 leftPad
+        String formattedStudentNo = StringUtils.leftPad(bizStudent.getStudentNo(), 2, '0');
         String generatedUserName = bizStudent.getEntryYear() + schoolCode + formattedClassCode + formattedStudentNo;
 
         if (userMapper.checkUserNameUnique(generatedUserName) != null)
@@ -87,7 +98,7 @@ public class BizStudentServiceImpl implements IBizStudentService
         }
 
         SysUser newUser = new SysUser();
-        newUser.setDeptId(teacherDeptId); // 用户的部门ID就是学校的内部ID
+        newUser.setDeptId(teacherDeptId);
         newUser.setUserName(generatedUserName);
         newUser.setNickName(bizStudent.getStudentName());
         newUser.setPassword(SecurityUtils.encryptPassword("123456"));
@@ -96,12 +107,10 @@ public class BizStudentServiceImpl implements IBizStudentService
 
         SysUserRole ur = new SysUserRole();
         ur.setUserId(newUser.getUserId());
-        ur.setRoleId(4L); // 确认学生角色ID
-        // 核心修复：使用 Arrays.asList 替代 List.of，以兼容旧版Java
+        ur.setRoleId(4L);
         userRoleMapper.batchUserRole(Arrays.asList(ur));
 
         bizStudent.setUserId(newUser.getUserId());
-        // 注意：此处不再需要 setSchoolId
         return bizStudentMapper.insertBizStudent(bizStudent);
     }
 
@@ -124,13 +133,10 @@ public class BizStudentServiceImpl implements IBizStudentService
         for (Long studentId : studentIds) {
             BizStudent student = bizStudentMapper.selectBizStudentByStudentId(studentId);
             if (student != null && student.getUserId() != null) {
-                // 先删除关联的sys_user账号
                 userMapper.deleteUserById(student.getUserId());
-                // 再删除关联的用户角色信息
                 userRoleMapper.deleteUserRoleByUserId(student.getUserId());
             }
         }
-        // 最后批量删除学生业务表信息
         return bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
     }
 
@@ -138,7 +144,6 @@ public class BizStudentServiceImpl implements IBizStudentService
     @Transactional
     public int deleteBizStudentByStudentId(Long studentId)
     {
-        // 完善删除逻辑：先删除关联的sys_user账号
         BizStudent student = bizStudentMapper.selectBizStudentByStudentId(studentId);
         if (student != null && student.getUserId() != null) {
             userMapper.deleteUserById(student.getUserId());
@@ -175,14 +180,16 @@ public class BizStudentServiceImpl implements IBizStudentService
         {
             try
             {
-                String formattedClassCode = StringUtils.leftPad(student.getClassCode(), 2, "0");
-                String formattedStudentNo = StringUtils.leftPad(student.getStudentNo(), 2, "0");
+                // 核心编译错误修复：方法名 padl 应为 leftPad
+                String formattedClassCode = StringUtils.leftPad(student.getClassCode(), 2, '0');
+                // 核心编译错误修复：方法名 padl 应为 leftPad
+                String formattedStudentNo = StringUtils.leftPad(student.getStudentNo(), 2, '0');
                 String generatedUserName = student.getEntryYear() + schoolCode + formattedClassCode + formattedStudentNo;
 
                 if (userMapper.checkUserNameUnique(generatedUserName) != null)
                 {
                     failureNum++;
-                    failureMsg.append("<br/>" + failureNum + "、学生 " + student.getStudentName() + " 生成的登录账号 " + generatedUserName + " 已存在");
+                    failureMsg.append("<br/>").append(failureNum).append("、学生 ").append(student.getStudentName()).append(" 生成的登录账号 ").append(generatedUserName).append(" 已存在");
                     continue;
                 }
 
@@ -196,22 +203,20 @@ public class BizStudentServiceImpl implements IBizStudentService
 
                 SysUserRole ur = new SysUserRole();
                 ur.setUserId(newUser.getUserId());
-                ur.setRoleId(4L); // 确认学生角色ID
-                // 核心修复：使用 Arrays.asList 替代 List.of，以兼容旧版Java
+                ur.setRoleId(4L);
                 userRoleMapper.batchUserRole(Arrays.asList(ur));
 
                 student.setUserId(newUser.getUserId());
-                // 注意：此处不再需要 setSchoolId
                 bizStudentMapper.insertBizStudent(student);
 
                 successNum++;
-                successMsg.append("<br/>" + successNum + "、学生 " + student.getStudentName() + " 导入成功，登录账号为 " + generatedUserName);
+                successMsg.append("<br/>").append(successNum).append("、学生 ").append(student.getStudentName()).append(" 导入成功，登录账号为 ").append(generatedUserName);
             }
             catch (Exception e)
             {
                 failureNum++;
                 String msg = "<br/>" + failureNum + "、学生 " + student.getStudentName() + " 导入失败：";
-                failureMsg.append(msg + e.getMessage());
+                failureMsg.append(msg).append(e.getMessage());
                 log.error(msg, e);
             }
         }
@@ -227,12 +232,6 @@ public class BizStudentServiceImpl implements IBizStudentService
         return successMsg.toString();
     }
 
-    /**
-     * 批量重置学生密码
-     *
-     * @param userIds 需要重置密码的用户ID数组
-     * @return 结果
-     */
     @Override
     public int resetStudentPwd(Long[] userIds) {
         int successCount = 0;

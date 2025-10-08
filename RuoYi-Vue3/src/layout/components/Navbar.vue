@@ -30,6 +30,30 @@
         </el-tooltip>
       </template>
 
+      <el-dropdown
+        v-if="userStore.schools && userStore.schools.length"
+        class="right-menu-item hover-effect school-switcher"
+        @command="handleSchoolSwitch"
+        trigger="hover"
+      >
+        <div class="school-display">
+          <span class="school-name">{{ currentSchoolName }}</span>
+          <span class="school-arrow">▼</span>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-for="item in userStore.schools"
+              :key="item.deptId"
+              :disabled="Number(item.deptId) === Number(userStore.currentDeptId)"
+              :command="item.deptId"
+            >
+              {{ item.deptName }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
       <el-dropdown @command="handleCommand" class="avatar-container right-menu-item hover-effect" trigger="hover">
         <div class="avatar-wrapper">
           <img :src="userStore.avatar" class="user-avatar" />
@@ -54,6 +78,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import Breadcrumb from '@/components/Breadcrumb'
 import TopNav from '@/components/TopNav'
@@ -71,6 +96,15 @@ const appStore = useAppStore()
 const userStore = useUserStore()
 const settingsStore = useSettingsStore()
 
+const currentSchoolName = computed(() => {
+  const schools = userStore.schools || []
+  if (!schools.length) {
+    return ''
+  }
+  const current = schools.find(item => Number(item.deptId) === Number(userStore.currentDeptId))
+  return current ? current.deptName : '选择校区'
+})
+
 function toggleSideBar() {
   appStore.toggleSideBar()
 }
@@ -86,6 +120,16 @@ function handleCommand(command) {
     default:
       break
   }
+}
+
+function handleSchoolSwitch(command) {
+  const targetDeptId = Number(command)
+  if (!targetDeptId || targetDeptId === Number(userStore.currentDeptId)) {
+    return
+  }
+  userStore.selectSchool(targetDeptId).then(() => {
+    location.reload()
+  }).catch(() => {})
 }
 
 function logout() {
@@ -215,6 +259,26 @@ function toggleTheme() {
           position: absolute;
           right: -20px;
           top: 25px;
+          font-size: 12px;
+        }
+      }
+    }
+
+    .school-switcher {
+      display: flex;
+      align-items: center;
+
+      .school-display {
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+        color: #5a5e66;
+
+        .school-name {
+          margin-right: 4px;
+        }
+
+        .school-arrow {
           font-size: 12px;
         }
       }

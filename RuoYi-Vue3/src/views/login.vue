@@ -61,6 +61,29 @@
     <div class="el-login-footer">
       <span>Copyright © 2018-2025 ruoyi.vip All Rights Reserved.</span>
     </div>
+    <el-dialog
+      v-model="schoolDialogVisible"
+      title="选择校区"
+      width="400px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+      append-to-body
+    >
+      <el-form>
+        <el-form-item label="校区">
+          <el-radio-group v-model="selectedSchoolId">
+            <el-radio v-for="item in schoolOptions" :key="item.deptId" :label="item.deptId">
+              {{ item.deptName }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="cancelSchoolSelection">取 消</el-button>
+        <el-button type="primary" @click="confirmSchoolSelection">确 定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -97,6 +120,9 @@ const captchaEnabled = ref(true)
 // 注册开关
 const register = ref(false)
 const redirect = ref(undefined)
+const schoolDialogVisible = ref(false)
+const schoolOptions = ref([])
+const selectedSchoolId = ref()
 
 watch(route, (newRoute) => {
     redirect.value = newRoute.query && newRoute.query.redirect
@@ -118,15 +144,15 @@ function handleLogin() {
         Cookies.remove("rememberMe")
       }
       // 调用action的登录方法
-      userStore.login(loginForm.value).then(() => {
-        const query = route.query
-        const otherQueryParams = Object.keys(query).reduce((acc, cur) => {
-          if (cur !== "redirect") {
-            acc[cur] = query[cur]
-          }
-          return acc
-        }, {})
-        router.push({ path: redirect.value || "/", query: otherQueryParams })
+      userStore.login(loginForm.value).then(res => {
+        if (res && res.needsSchoolSelection) {
+          schoolOptions.value = Array.isArray(res.schools) ? res.schools : []
+          selectedSchoolId.value = schoolOptions.value[0]?.deptId
+          schoolDialogVisible.value = true
+          loading.value = false
+          return
+        }
+        continueAfterLogin()
       }).catch(() => {
         loading.value = false
         // 重新获取验证码
@@ -136,6 +162,41 @@ function handleLogin() {
       })
     }
   })
+}
+
+function continueAfterLogin() {
+  const query = route.query
+  const otherQueryParams = Object.keys(query).reduce((acc, cur) => {
+    if (cur !== "redirect") {
+      acc[cur] = query[cur]
+    }
+    return acc
+  }, {})
+  loading.value = false
+  router.push({ path: redirect.value || "/", query: otherQueryParams })
+}
+
+function confirmSchoolSelection() {
+  if (!selectedSchoolId.value) {
+    proxy.$message.warning("请先选择校区")
+    return
+  }
+  loading.value = true
+  userStore.selectSchool(selectedSchoolId.value).then(() => {
+    schoolDialogVisible.value = false
+    continueAfterLogin()
+  }).catch(() => {
+    loading.value = false
+  })
+}
+
+function cancelSchoolSelection() {
+  schoolDialogVisible.value = false
+  loading.value = false
+  userStore.logOut().catch(() => {})
+  if (captchaEnabled.value) {
+    getCode()
+  }
 }
 
 function getCode() {

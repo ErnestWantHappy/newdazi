@@ -20,6 +20,14 @@ public interface SysDeptMapper
     public List<SysDept> selectDeptList(SysDept dept);
 
     /**
+     * 查询用户关联的部门集合
+     *
+     * @param userId 用户ID
+     * @return 部门信息集合
+     */
+    public List<SysDept> selectDeptListByUserId(Long userId);
+
+    /**
      * 根据角色ID查询部门树信息
      * 
      * @param roleId 角色ID

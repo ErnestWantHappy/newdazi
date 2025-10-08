@@ -94,6 +94,9 @@ public class SysUser extends BaseEntity
     })
     private SysDept dept;
 
+    /** 管理的部门ID集合 */
+    private List<Long> deptIds;
+
     /** 角色对象 */
     private List<SysRole> roles;
 
@@ -146,6 +149,16 @@ public class SysUser extends BaseEntity
     public void setDeptId(Long deptId)
     {
         this.deptId = deptId;
+    }
+
+    public List<Long> getDeptIds()
+    {
+        return deptIds;
+    }
+
+    public void setDeptIds(List<Long> deptIds)
+    {
+        this.deptIds = deptIds;
     }
 
     public Long getSchoolId() {

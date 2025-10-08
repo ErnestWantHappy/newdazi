@@ -1,7 +1,10 @@
 package com.ruoyi.system.service.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import javax.validation.Validator;
 
@@ -23,6 +26,7 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.bean.BeanValidators;
 import com.ruoyi.common.utils.spring.SpringUtils;
 import com.ruoyi.system.domain.SysPost;
+import com.ruoyi.system.domain.SysUserDept;
 import com.ruoyi.system.domain.SysUserPost;
 import com.ruoyi.system.domain.SysUserRole;
 import com.ruoyi.system.service.ISysConfigService;
@@ -53,6 +57,9 @@ public class SysUserServiceImpl implements ISysUserService
 
     @Autowired
     private SysUserPostMapper userPostMapper;
+
+    @Autowired
+    private SysUserDeptMapper userDeptMapper;
 
     @Autowired
     private ISysConfigService configService;
@@ -112,7 +119,12 @@ public class SysUserServiceImpl implements ISysUserService
     @Override
     public SysUser selectUserByUserName(String userName)
     {
-        return userMapper.selectUserByUserName(userName);
+        SysUser user = userMapper.selectUserByUserName(userName);
+        if (StringUtils.isNotNull(user))
+        {
+            fillUserDeptInfo(user);
+        }
+        return user;
     }
 
     /**
@@ -124,7 +136,22 @@ public class SysUserServiceImpl implements ISysUserService
     @Override
     public SysUser selectUserById(Long userId)
     {
-        return userMapper.selectUserById(userId);
+        SysUser user = userMapper.selectUserById(userId);
+        if (StringUtils.isNotNull(user))
+        {
+            fillUserDeptInfo(user);
+        }
+        return user;
+    }
+
+    @Override
+    public List<SysDept> selectDeptsByUserId(Long userId)
+    {
+        if (StringUtils.isNull(userId))
+        {
+            return new ArrayList<>();
+        }
+        return deptMapper.selectDeptListByUserId(userId);
     }
 
     /**
@@ -259,27 +286,32 @@ public class SysUserServiceImpl implements ISysUserService
     @Transactional
     public int insertUser(SysUser user)
     {
-        // --- 新增逻辑开始 ---
-        // 如果用户被分配了一个部门（即学校）
-        if (user.getDeptId() != null)
+        List<Long> resolvedDeptIds = CollectionUtils.isEmpty(user.getDeptIds())
+                ? new ArrayList<>()
+                : new ArrayList<>(user.getDeptIds());
+        resolvedDeptIds.removeIf(Objects::isNull);
+        resolvedDeptIds = new ArrayList<>(new LinkedHashSet<>(resolvedDeptIds));
+        if (StringUtils.isNotNull(user.getDeptId()))
         {
-            // 根据deptId查询出完整的部门（学校）信息
-            SysDept dept = deptMapper.selectDeptById(user.getDeptId());
-            if (dept != null && StringUtils.isNotEmpty(dept.getSchoolCode()))
+            if (!resolvedDeptIds.contains(user.getDeptId()))
             {
-                // 将部门的school_code设置到用户的schoolId字段中
-                // 注意：我们的schoolId是Long类型，schoolCode是String，需要转换
-                user.setSchoolId(Long.parseLong(dept.getSchoolCode()));
+                resolvedDeptIds.add(0, user.getDeptId());
             }
         }
-        // --- 新增逻辑结束 ---
+        else if (!resolvedDeptIds.isEmpty())
+        {
+            user.setDeptId(resolvedDeptIds.get(0));
+        }
+        if (resolvedDeptIds.isEmpty() && StringUtils.isNotNull(user.getDeptId()))
+        {
+            resolvedDeptIds.add(user.getDeptId());
+        }
+        user.setDeptIds(resolvedDeptIds);
 
-        // 新增用户信息
         int rows = userMapper.insertUser(user);
-        // 新增用户岗位信息
         insertUserPost(user);
-        // 新增用户与角色管理
         insertUserRole(user);
+        insertUserDept(user);
         return rows;
     }
 
@@ -306,6 +338,28 @@ public class SysUserServiceImpl implements ISysUserService
     public int updateUser(SysUser user)
     {
         Long userId = user.getUserId();
+        List<Long> resolvedDeptIds = CollectionUtils.isEmpty(user.getDeptIds())
+                ? new ArrayList<>()
+                : new ArrayList<>(user.getDeptIds());
+        resolvedDeptIds.removeIf(Objects::isNull);
+        resolvedDeptIds = new ArrayList<>(new LinkedHashSet<>(resolvedDeptIds));
+        if (StringUtils.isNotNull(user.getDeptId()))
+        {
+            if (!resolvedDeptIds.contains(user.getDeptId()))
+            {
+                resolvedDeptIds.add(0, user.getDeptId());
+            }
+        }
+        else if (!resolvedDeptIds.isEmpty())
+        {
+            user.setDeptId(resolvedDeptIds.get(0));
+        }
+        if (resolvedDeptIds.isEmpty() && StringUtils.isNotNull(user.getDeptId()))
+        {
+            resolvedDeptIds.add(user.getDeptId());
+        }
+        user.setDeptIds(resolvedDeptIds);
+
         // 删除用户与角色关联
         userRoleMapper.deleteUserRoleByUserId(userId);
         // 新增用户与角色管理
@@ -317,16 +371,18 @@ public class SysUserServiceImpl implements ISysUserService
 
         // --- 新增逻辑开始 ---
         log.info("zdx, user为: {}",user);
-            SysDept dept = deptMapper.selectDeptById(user.getDeptId());
+        SysDept dept = null;
+        if (user.getDeptId() != null)
+        {
+            dept = deptMapper.selectDeptById(user.getDeptId());
+        }
         log.info("即将更新到数据库的用户信息, dept为: {}",dept);
-            if (dept != null && StringUtils.isNotEmpty(dept.getSchoolCode()))
-            {
-                user.setSchoolId(Long.parseLong(dept.getSchoolCode()));
-            }
 
         // --- 新增逻辑结束 ---
-
-        return userMapper.updateUser(user);
+        int rows = userMapper.updateUser(user);
+        userDeptMapper.deleteUserDeptByUserId(userId);
+        insertUserDept(user);
+        return rows;
     }
 
     /**
@@ -415,6 +471,36 @@ public class SysUserServiceImpl implements ISysUserService
         this.insertUserRole(user.getUserId(), user.getRoleIds());
     }
 
+    private void fillUserDeptInfo(SysUser user)
+    {
+        if (StringUtils.isNull(user) || StringUtils.isNull(user.getUserId()))
+        {
+            return;
+        }
+        List<Long> deptIds = userDeptMapper.selectDeptIdsByUserId(user.getUserId());
+        user.setDeptIds(deptIds);
+        if (user.getDeptId() == null && !CollectionUtils.isEmpty(deptIds))
+        {
+            user.setDeptId(deptIds.get(0));
+        }
+        if (!CollectionUtils.isEmpty(deptIds))
+        {
+            SysDept firstDept = deptMapper.selectDeptById(deptIds.get(0));
+            if (firstDept != null && StringUtils.isNotEmpty(firstDept.getSchoolCode()))
+            {
+                try
+                {
+                    // 使用部门中的school_code作为用户关联学校ID，仅用于前端展示
+                    user.setSchoolId(Long.parseLong(firstDept.getSchoolCode()));
+                }
+                catch (NumberFormatException ignored)
+                {
+                    // 编码非数字时不设置schoolId，避免格式异常
+                }
+            }
+        }
+    }
+
     /**
      * 新增用户岗位信息
      * 
@@ -435,6 +521,35 @@ public class SysUserServiceImpl implements ISysUserService
                 list.add(up);
             }
             userPostMapper.batchUserPost(list);
+        }
+    }
+
+    private void insertUserDept(SysUser user)
+    {
+        List<Long> deptIds = user.getDeptIds();
+        if (CollectionUtils.isEmpty(deptIds) && StringUtils.isNotNull(user.getDeptId()))
+        {
+            deptIds = Collections.singletonList(user.getDeptId());
+        }
+        if (CollectionUtils.isEmpty(deptIds))
+        {
+            return;
+        }
+        List<SysUserDept> list = new ArrayList<>(deptIds.size());
+        for (Long deptId : deptIds)
+        {
+            if (deptId == null)
+            {
+                continue;
+            }
+            SysUserDept ud = new SysUserDept();
+            ud.setUserId(user.getUserId());
+            ud.setDeptId(deptId);
+            list.add(ud);
+        }
+        if (!list.isEmpty())
+        {
+            userDeptMapper.batchUserDept(list);
         }
     }
 
@@ -475,6 +590,7 @@ public class SysUserServiceImpl implements ISysUserService
         userRoleMapper.deleteUserRoleByUserId(userId);
         // 删除用户与岗位表
         userPostMapper.deleteUserPostByUserId(userId);
+        userDeptMapper.deleteUserDeptByUserId(userId);
         return userMapper.deleteUserById(userId);
     }
 
@@ -497,6 +613,7 @@ public class SysUserServiceImpl implements ISysUserService
         userRoleMapper.deleteUserRole(userIds);
         // 删除用户与岗位关联
         userPostMapper.deleteUserPost(userIds);
+        userDeptMapper.deleteUserDept(userIds);
         return userMapper.deleteUserByIds(userIds);
     }
 

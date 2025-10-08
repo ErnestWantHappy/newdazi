@@ -111,8 +111,18 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="归属部门" prop="deptId">
-              <el-tree-select v-model="form.deptId" :data="enabledDeptOptions" :props="{ value: 'id', label: 'label', children: 'children' }" value-key="id" placeholder="请选择归属部门" check-strictly />
+            <el-form-item label="归属校区" prop="deptIds">
+              <el-tree-select
+                v-model="form.deptIds"
+                :data="enabledDeptOptions"
+                :props="{ value: 'id', label: 'label', children: 'children' }"
+                value-key="id"
+                placeholder="请选择归属校区"
+                multiple
+                check-strictly
+                collapse-tags
+                collapse-tags-tooltip
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -282,7 +292,8 @@ const data = reactive({
     nickName: [{ required: true, message: "用户昵称不能为空", trigger: "blur" }],
     password: [{ required: true, message: "用户密码不能为空", trigger: "blur" }, { min: 5, max: 20, message: "用户密码长度必须介于 5 和 20 之间", trigger: "blur" }, { pattern: /^[^<>"'|\\]+$/, message: "不能包含非法字符：< > \" ' \\\ |", trigger: "blur" }],
     email: [{ type: "email", message: "请输入正确的邮箱地址", trigger: ["blur", "change"] }],
-    phonenumber: [{ pattern: /^1[3|4|5|6|7|8|9][0-9]\d{8}$/, message: "请输入正确的手机号码", trigger: "blur" }]
+    phonenumber: [{ pattern: /^1[3|4|5|6|7|8|9][0-9]\d{8}$/, message: "请输入正确的手机号码", trigger: "blur" }],
+    deptIds: [{ required: true, message: "归属校区不能为空", trigger: "change" }]
   }
 })
 
@@ -297,6 +308,14 @@ const filterNode = (value, data) => {
 /** 根据名称筛选部门树 */
 watch(deptName, val => {
   proxy.$refs["deptTreeRef"].filter(val)
+})
+
+watch(() => form.value.deptIds, val => {
+  if (Array.isArray(val) && val.length > 0) {
+    form.value.deptId = val[0]
+  } else {
+    form.value.deptId = undefined
+  }
 })
 
 /** 查询用户列表 */
@@ -464,6 +483,7 @@ function reset() {
   form.value = {
     userId: undefined,
     deptId: undefined,
+    deptIds: [],
     userName: undefined,
     nickName: undefined,
     password: undefined,
@@ -502,6 +522,7 @@ function handleUpdate(row) {
   const userId = row.userId || ids.value
   getUser(userId).then(response => {
     form.value = response.data
+    form.value.deptIds = response.deptIds || response.data?.deptIds || []
     postOptions.value = response.posts
     roleOptions.value = response.roles
     form.value.postIds = response.postIds
@@ -516,6 +537,9 @@ function handleUpdate(row) {
 function submitForm() {
   proxy.$refs["userRef"].validate(valid => {
     if (valid) {
+      if (Array.isArray(form.value.deptIds) && form.value.deptIds.length > 0) {
+        form.value.deptId = form.value.deptIds[0]
+      }
       if (form.value.userId != undefined) {
         updateUser(form.value).then(response => {
           proxy.$modal.msgSuccess("修改成功")

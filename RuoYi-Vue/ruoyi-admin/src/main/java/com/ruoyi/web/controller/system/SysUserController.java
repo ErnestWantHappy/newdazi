@@ -9,6 +9,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,6 +58,24 @@ public class SysUserController extends BaseController
 
     @Autowired
     private com.ruoyi.business.service.IBizSchoolService bizSchoolService;
+
+    private void validateDeptScope(SysUser user)
+    {
+        if (!CollectionUtils.isEmpty(user.getDeptIds()))
+        {
+            for (Long deptId : user.getDeptIds())
+            {
+                if (deptId != null)
+                {
+                    deptService.checkDeptDataScope(deptId);
+                }
+            }
+        }
+        else if (user.getDeptId() != null)
+        {
+            deptService.checkDeptDataScope(user.getDeptId());
+        }
+    }
 
     /**
      * 获取用户列表
@@ -114,6 +133,7 @@ public class SysUserController extends BaseController
             ajax.put(AjaxResult.DATA_TAG, sysUser);
             ajax.put("postIds", postService.selectPostListByUserId(userId));
             ajax.put("roleIds", sysUser.getRoles().stream().map(SysRole::getRoleId).collect(Collectors.toList()));
+            ajax.put("deptIds", sysUser.getDeptIds());
         }
         List<SysRole> roles = roleService.selectRoleAll();
         ajax.put("roles", SysUser.isAdmin(userId) ? roles : roles.stream().filter(r -> !r.isAdmin()).collect(Collectors.toList()));
@@ -129,7 +149,7 @@ public class SysUserController extends BaseController
     @PostMapping
     public AjaxResult add(@Validated @RequestBody SysUser user)
     {
-        deptService.checkDeptDataScope(user.getDeptId());
+        validateDeptScope(user);
         roleService.checkRoleDataScope(user.getRoleIds());
         if (!userService.checkUserNameUnique(user))
         {
@@ -158,7 +178,7 @@ public class SysUserController extends BaseController
     {
         userService.checkUserAllowed(user);
         userService.checkUserDataScope(user.getUserId());
-        deptService.checkDeptDataScope(user.getDeptId());
+        validateDeptScope(user);
         roleService.checkRoleDataScope(user.getRoleIds());
         if (!userService.checkUserNameUnique(user))
         {

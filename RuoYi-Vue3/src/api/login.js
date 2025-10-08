@@ -39,6 +39,14 @@ export function getInfo() {
   })
 }
 
+export function selectSchool(deptId) {
+  return request({
+    url: '/auth/select-school',
+    method: 'post',
+    data: { deptId }
+  })
+}
+
 // 退出方法
 export function logout() {
   return request({

@@ -22,10 +22,6 @@ import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.page.TableDataInfo;
 import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.common.utils.SecurityUtils;
-// --- 新增的import ---
-import com.ruoyi.common.core.domain.entity.SysUser;
-import com.ruoyi.system.service.ISysUserService;
-// --------------------
 
 /**
  * 学生管理Controller
@@ -38,11 +34,6 @@ public class BizStudentController extends BaseController
 {
     @Autowired
     private IBizStudentService bizStudentService;
-
-    // --- 新注入的依赖 ---
-    @Autowired
-    private ISysUserService userService;
-    // --------------------
 
     /**
      * 查询学生管理列表

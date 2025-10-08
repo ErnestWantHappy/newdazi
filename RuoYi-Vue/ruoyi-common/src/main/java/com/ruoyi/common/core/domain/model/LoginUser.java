@@ -1,10 +1,12 @@
 package com.ruoyi.common.core.domain.model;
 
 import com.alibaba.fastjson2.annotation.JSONField;
+import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -25,6 +27,16 @@ public class LoginUser implements UserDetails
      * 部门ID
      */
     private Long deptId;
+
+    /**
+     * 管理的部门ID集合
+     */
+    private List<Long> deptIds;
+
+    /**
+     * 管理的部门信息
+     */
+    private List<SysDept> manageDepts;
 
     /**
      * 用户唯一标识
@@ -107,6 +119,26 @@ public class LoginUser implements UserDetails
     public void setDeptId(Long deptId)
     {
         this.deptId = deptId;
+    }
+
+    public List<Long> getDeptIds()
+    {
+        return deptIds;
+    }
+
+    public void setDeptIds(List<Long> deptIds)
+    {
+        this.deptIds = deptIds;
+    }
+
+    public List<SysDept> getManageDepts()
+    {
+        return manageDepts;
+    }
+
+    public void setManageDepts(List<SysDept> manageDepts)
+    {
+        this.manageDepts = manageDepts;
     }
 
     public String getToken()
