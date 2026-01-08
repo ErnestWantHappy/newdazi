@@ -115,6 +115,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="orderNum" column="order_num"/>
         <result property="questionContent" column="question_content"/>
         <result property="questionType" column="question_type"/>
+        <result property="optionA" column="option_a"/>
+        <result property="optionB" column="option_b"/>
+        <result property="optionC" column="option_c"/>
+        <result property="optionD" column="option_d"/>
+        <result property="answer" column="answer"/>
+        <result property="typingDuration" column="typing_duration"/>
+        <result property="wordCount" column="word_count"/>
+        <result property="previewPath" column="preview_path"/>
+        <result property="filePath" column="file_path"/>
     </resultMap>
     <!-- 查询题目完整信息 -->
     <select id="selectDetailsByLessonId" parameterType="java.lang.Long" resultMap="BizLessonQuestionDetailResult">
@@ -124,7 +133,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             lq.question_score,
             lq.order_num,
             q.question_content,
-            q.question_type
+            q.question_type,
+            q.option_a,
+            q.option_b,
+            q.option_c,
+            q.option_d,
+            q.answer,
+            q.typing_duration,
+            q.word_count,
+            q.preview_path,
+            q.file_path
         FROM
             biz_lesson_question lq
                 LEFT JOIN biz_question q ON lq.question_id = q.question_id

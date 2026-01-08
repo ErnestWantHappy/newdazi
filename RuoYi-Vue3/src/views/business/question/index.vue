@@ -12,6 +12,11 @@
           <el-option v-for="dict in biz_semester" :key="dict.value" :label="dict.label" :value="dict.value"/>
         </el-select>
       </el-form-item>
+      <el-form-item label="第几课" prop="lessonNum">
+        <el-select v-model="queryParams.lessonNum" placeholder="请选择" clearable style="width: 120px">
+          <el-option v-for="n in 20" :key="n" :label="'第' + n + '课'" :value="n"/>
+        </el-select>
+      </el-form-item>
       <el-form-item label="题目类型" prop="questionType">
         <el-select v-model="queryParams.questionType" placeholder="请选择类型" clearable style="width: 200px">
           <el-option v-for="dict in biz_question_type" :key="dict.value" :label="dict.label" :value="dict.value"/>
@@ -64,6 +69,12 @@
       <el-table-column label="学期" align="center" prop="semester" width="100">
         <template #default="scope"><dict-tag :options="biz_semester" :value="String(scope.row.semester)"/></template>
       </el-table-column>
+      <el-table-column label="第几课" align="center" prop="lessonNum" width="80">
+        <template #default="scope">
+          <span v-if="scope.row.lessonNum">第{{ scope.row.lessonNum }}课</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="是否公开" align="center" prop="isPublic" width="100">
         <template #default="scope"><dict-tag :options="sys_yes_no" :value="scope.row.isPublic"/></template>
       </el-table-column>
@@ -113,7 +124,15 @@
             </el-form-item>
           </el-col>
         </el-row>
-        
+        <el-row>
+          <el-col :span="12">
+            <el-form-item label="第几课" prop="lessonNum">
+              <el-select v-model="form.lessonNum" placeholder="请选择第几课" clearable>
+                <el-option v-for="n in 20" :key="n" :label="'第' + n + '课'" :value="n"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item :label="questionContentLabel" prop="questionContent">
           <el-input v-model="form.questionContent" :rows="questionContentRows" type="textarea" placeholder="请输入内容" />
         </el-form-item>
@@ -172,6 +191,37 @@
              <!-- 核心修复：限制文件类型为.docx -->
             <file-upload v-model="form.filePath" :file-type="['docx']" />
           </el-form-item>
+          
+          <el-divider content-position="left">评分项配置（比例分配）</el-divider>
+          <el-form-item label-width="0">
+            <el-table :data="form.scoringItems" border style="width: 100%">
+               <el-table-column type="index" width="50" align="center" />
+               <el-table-column label="评分项名称" prop="itemName">
+                  <template #default="scope">
+                     <el-input v-model="scope.row.itemName" placeholder="如：界面设计" maxlength="50" />
+                  </template>
+               </el-table-column>
+               <el-table-column label="比例值 (建议合计100)" prop="itemScore" width="180" align="center">
+                  <template #default="scope">
+                     <el-input-number v-model="scope.row.itemScore" :min="1" :max="100" controls-position="right" style="width: 100px" />
+                  </template>
+               </el-table-column>
+               <el-table-column label="操作" width="80" align="center">
+                  <template #default="scope">
+                     <el-button link type="danger" icon="Delete" @click="removeScoringItem(scope.$index)"></el-button>
+                  </template>
+               </el-table-column>
+            </el-table>
+            <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+               <div>
+                  <el-button type="primary" plain icon="Plus" size="small" @click="addScoringItem">添加评分项</el-button>
+                  <span style="margin-left: 10px; color: #909399; font-size: 12px">提示：比例值合计应为100，系统会按课程设置的总分自动折算。</span>
+               </div>
+               <div style="font-weight: bold; color: #606266;">
+                  当前合计: <span :style="{ color: scoringItemsSum === 100 ? '#67c23a' : '#f56c6c' }">{{ scoringItemsSum }}</span> / 100
+               </div>
+            </div>
+          </el-form-item>
         </div>
 
       </el-form>
@@ -220,6 +270,7 @@
 import { listQuestion, getQuestion, delQuestion, addQuestion, updateQuestion } from "@/api/business/question";
 import { getToken } from "@/utils/auth";
 import { computed } from 'vue';
+import { ElLoading, ElMessage } from 'element-plus'; // P6 import
 
 const { proxy } = getCurrentInstance();
 const { biz_question_type, sys_yes_no, biz_grade, biz_semester } = proxy.useDict('biz_question_type', 'sys_yes_no', 'biz_grade', 'biz_semester');
@@ -244,6 +295,7 @@ const data = reactive({
     isPublic: null,
     grade: null,
     semester: null,
+    lessonNum: null,
   },
 });
 
@@ -354,13 +406,37 @@ function reset() {
     isPublic: "Y",
     typingDuration: null,
     wordCount: null,
+    lessonNum: null,
     creatorId: null,
     createBy: null,
     createTime: null,
     updateBy: null,
-    updateTime: null
+    updateTime: null,
+    scoringItems: [] // P6
   };
   proxy.resetForm("questionRef");
+}
+
+/** P6.1: 计算评分项比例合计 */
+const scoringItemsSum = computed(() => {
+   if (!form.value.scoringItems || form.value.scoringItems.length === 0) return 0;
+   return form.value.scoringItems.reduce((sum, i) => sum + (i.itemScore || 0), 0);
+});
+
+/** P6: 添加评分项 */
+function addScoringItem() {
+  if (!form.value.scoringItems) {
+    form.value.scoringItems = [];
+  }
+  form.value.scoringItems.push({
+    itemName: '',
+    itemScore: 10
+  });
+}
+
+/** P6: 删除评分项 */
+function removeScoringItem(index) {
+  form.value.scoringItems.splice(index, 1);
 }
 
 /** 搜索按钮操作 */
@@ -407,17 +483,39 @@ function handleUpdate(row) {
 function submitForm() {
   proxy.$refs["questionRef"].validate(valid => {
     if (valid) {
+      // P6.1: 操作题设置了评分项时，比例值必须合计为100
+      if (form.value.questionType === 'practical' && 
+          form.value.scoringItems && form.value.scoringItems.length > 0) {
+         if (scoringItemsSum.value !== 100) {
+            ElMessage.warning('评分项比例值合计必须为100，当前为 ' + scoringItemsSum.value);
+            return;
+         }
+      }
+      
+      // P6: 添加Loading效果
+      const loadingInstance = ElLoading.service({
+         lock: true,
+         text: '正在保存数据...（操作题若包含文件转换可能需要较长时间，请耐心等待）',
+         background: 'rgba(0, 0, 0, 0.7)',
+      });
+      
       if (form.value.questionId != null) {
         updateQuestion(form.value).then(response => {
+          loadingInstance.close();
           proxy.$modal.msgSuccess("修改成功");
           open.value = false;
           getList();
+        }).catch(() => {
+          loadingInstance.close();
         });
       } else {
         addQuestion(form.value).then(response => {
+          loadingInstance.close();
           proxy.$modal.msgSuccess("新增成功");
           open.value = false;
           getList();
+        }).catch(() => {
+          loadingInstance.close();
         });
       }
     }

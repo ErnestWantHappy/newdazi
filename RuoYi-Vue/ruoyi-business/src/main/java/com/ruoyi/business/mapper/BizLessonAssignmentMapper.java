@@ -2,6 +2,7 @@ package com.ruoyi.business.mapper;
 
 import java.util.List;
 import com.ruoyi.business.domain.BizLessonAssignment;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 课程班级指派Mapper接口
@@ -77,4 +78,23 @@ public interface BizLessonAssignmentMapper
      * @param assignments 指派记录列表
      */
     void batchInsert(List<BizLessonAssignment> assignments);
+
+    /**
+     * 班级互斥 - 删除其他课程中该班级的指派
+     * @param entryYear 入学年份
+     * @param classCode 班级编号
+     * @param currentLessonId 当前课程ID（不删除）
+     */
+    void deleteOtherAssignmentsByClass(@Param("entryYear") String entryYear, 
+                                        @Param("classCode") String classCode, 
+                                        @Param("currentLessonId") Long currentLessonId);
+
+    /**
+     * 根据学生的入学年份和班级查询当前被指派的课程ID
+     * @param entryYear 入学年份
+     * @param classCode 班级编号
+     * @return 课程ID
+     */
+    Long selectCurrentLessonByClass(@Param("entryYear") String entryYear, 
+                                     @Param("classCode") String classCode);
 }

@@ -26,6 +26,10 @@ public class BizQuestion extends BaseEntity
     @Excel(name = "学期", readConverterExp = "0=上册,1=下册")
     private String semester;
 
+    /** 第几课 (1-15) */
+    @Excel(name = "第几课")
+    private Integer lessonNum;
+
     @Excel(name = "选项A")
     private String optionA;
 
@@ -58,6 +62,9 @@ public class BizQuestion extends BaseEntity
     private Integer typingDuration;
 
     private Integer wordCount;
+
+    /** P6: 评分项列表 */
+    private java.util.List<BizScoringItem> scoringItems;
 
     // --- Getter and Setter methods ---
     public Long getQuestionId() {
@@ -98,6 +105,14 @@ public class BizQuestion extends BaseEntity
 
     public void setSemester(String semester) {
         this.semester = semester;
+    }
+
+    public Integer getLessonNum() {
+        return lessonNum;
+    }
+
+    public void setLessonNum(Integer lessonNum) {
+        this.lessonNum = lessonNum;
     }
 
     public String getOptionA() {
@@ -196,6 +211,14 @@ public class BizQuestion extends BaseEntity
         this.wordCount = wordCount;
     }
 
+    public java.util.List<BizScoringItem> getScoringItems() {
+        return scoringItems;
+    }
+
+    public void setScoringItems(java.util.List<BizScoringItem> scoringItems) {
+        this.scoringItems = scoringItems;
+    }
+
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
@@ -204,6 +227,7 @@ public class BizQuestion extends BaseEntity
                 .append("questionContent", getQuestionContent())
                 .append("grade", getGrade())
                 .append("semester", getSemester())
+                .append("lessonNum", getLessonNum())
                 .append("optionA", getOptionA())
                 .append("optionB", getOptionB())
                 .append("optionC", getOptionC())

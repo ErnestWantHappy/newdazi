@@ -43,6 +43,9 @@ public class BizStudent extends BaseEntity
     /** 部门ID (仅用于数据权限查询, 非数据库字段) */
     private Long deptId;
 
+    /** 教师用户ID (仅用于数据权限查询, 非数据库字段) */
+    private Long teacherUserId;
+
 
     // --- Getter and Setter methods ---
 
@@ -114,6 +117,14 @@ public class BizStudent extends BaseEntity
 
     public void setDeptId(Long deptId) {
         this.deptId = deptId;
+    }
+
+    public Long getTeacherUserId() {
+        return teacherUserId;
+    }
+
+    public void setTeacherUserId(Long teacherUserId) {
+        this.teacherUserId = teacherUserId;
     }
 
     @Override

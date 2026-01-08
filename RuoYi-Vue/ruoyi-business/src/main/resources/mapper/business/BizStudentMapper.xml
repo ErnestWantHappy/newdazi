@@ -23,10 +23,18 @@
     </sql>
 
     <select id="selectBizStudentList" parameterType="BizStudent" resultMap="BizStudentResult">
-        <include refid="selectBizStudentVo"/>
+        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code,
+               u.nick_name as student_name, u.user_name, u.dept_id
+        from biz_student s
+        left join sys_user u on s.user_id = u.user_id
+        <!-- 关联教师班级表，只显示教师管理的班级中的学生 -->
+        inner join biz_teacher_class tc 
+            on s.entry_year = tc.entry_year 
+            and s.class_code = tc.class_code
         <where>
-            <!-- 数据权限过滤：通过关联的sys_user表的dept_id进行筛选 -->
-            <if test="deptId != null and deptId != 0"> and u.dept_id = #{deptId}</if>
+            <!-- 必须是当前教师管理的班级 -->
+            <if test="teacherUserId != null"> and tc.user_id = #{teacherUserId}</if>
+            <if test="deptId != null and deptId != 0"> and tc.dept_id = #{deptId}</if>
             <!-- 搜索条件 -->
             <if test="studentName != null  and studentName != ''"> and u.nick_name like concat('%', #{studentName}, '%')</if>
             <if test="entryYear != null and entryYear != ''"> and s.entry_year = #{entryYear}</if>
@@ -88,6 +96,12 @@
                 LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE
             u.dept_id = #{deptId}
+    </select>
+
+    <!-- 根据用户ID查询学生信息 -->
+    <select id="selectBizStudentByUserId" parameterType="Long" resultMap="BizStudentResult">
+        <include refid="selectBizStudentVo"/>
+        where s.user_id = #{userId}
     </select>
 
 </mapper>

@@ -10,6 +10,7 @@
         <result property="questionContent"    column="question_content"    />
         <result property="grade"    column="grade"    />
         <result property="semester"    column="semester"    />
+        <result property="lessonNum"    column="lesson_num"    />
         <result property="optionA"    column="option_a"    />
         <result property="optionB"    column="option_b"    />
         <result property="optionC"    column="option_c"    />
@@ -29,7 +30,7 @@
     </resultMap>
 
     <sql id="selectBizQuestionVo">
-        select question_id, question_type, question_content, grade, semester, option_a, option_b, option_c, option_d, answer, analysis, file_path, preview_path, is_public, typing_duration, word_count, creator_id, create_by, create_time, update_by, update_time from biz_question
+        select question_id, question_type, question_content, grade, semester, lesson_num, option_a, option_b, option_c, option_d, answer, analysis, file_path, preview_path, is_public, typing_duration, word_count, creator_id, create_by, create_time, update_by, update_time from biz_question
     </sql>
 
     <select id="selectBizQuestionList" parameterType="BizQuestion" resultMap="BizQuestionResult">
@@ -40,6 +41,7 @@
             <if test="isPublic != null  and isPublic != ''"> and is_public = #{isPublic}</if>
             <if test="grade != null "> and grade = #{grade}</if>
             <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
+            <if test="lessonNum != null "> and lesson_num = #{lessonNum}</if>
         </where>
     </select>
 
@@ -55,6 +57,7 @@
             <if test="questionContent != null and questionContent != ''">question_content,</if>
             <if test="grade != null">grade,</if>
             <if test="semester != null and semester != ''">semester,</if>
+            <if test="lessonNum != null">lesson_num,</if>
             <if test="optionA != null">option_a,</if>
             <if test="optionB != null">option_b,</if>
             <if test="optionC != null">option_c,</if>
@@ -77,6 +80,7 @@
             <if test="questionContent != null and questionContent != ''">#{questionContent},</if>
             <if test="grade != null">#{grade},</if>
             <if test="semester != null and semester != ''">#{semester},</if>
+            <if test="lessonNum != null">#{lessonNum},</if>
             <if test="optionA != null">#{optionA},</if>
             <if test="optionB != null">#{optionB},</if>
             <if test="optionC != null">#{optionC},</if>
@@ -103,6 +107,7 @@
             <if test="questionContent != null and questionContent != ''">question_content = #{questionContent},</if>
             <if test="grade != null">grade = #{grade},</if>
             <if test="semester != null and semester != ''">semester = #{semester},</if>
+            <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
             <if test="optionA != null">option_a = #{optionA},</if>
             <if test="optionB != null">option_b = #{optionB},</if>
             <if test="optionC != null">option_c = #{optionC},</if>

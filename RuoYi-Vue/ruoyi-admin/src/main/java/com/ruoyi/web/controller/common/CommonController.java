@@ -159,4 +159,57 @@ public class CommonController
             log.error("下载文件失败", e);
         }
     }
+
+    /**
+     * 本地资源通用预览
+     */
+    @GetMapping("/resource/view")
+    public void resourceView(String resource, HttpServletRequest request, HttpServletResponse response)
+            throws Exception
+    {
+        try
+        {
+            if (!FileUtils.checkAllowDownload(resource))
+            {
+                throw new Exception(StringUtils.format("资源文件({})非法，不允许预览。 ", resource));
+            }
+            // 本地资源路径
+            String localPath = RuoYiConfig.getProfile();
+            // 数据库资源地址
+            String downloadPath = localPath + FileUtils.stripPrefix(resource);
+            
+            // 调试日志
+            log.info("【预览】请求资源: {} -> 实际路径: {}", resource, downloadPath);
+            
+            java.io.File file = new java.io.File(downloadPath);
+            if (!file.exists()) {
+                log.error("【预览】文件不存在: {}", file.getAbsolutePath());
+                response.sendError(404, "文件不存在");
+                return;
+            }
+            
+            // 设置Content-Type
+            String contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+            String lowerRes = resource.toLowerCase();
+            if (lowerRes.endsWith(".pdf")) {
+                contentType = MediaType.APPLICATION_PDF_VALUE;
+            } else if (lowerRes.endsWith(".jpg") || lowerRes.endsWith(".jpeg")) {
+                contentType = MediaType.IMAGE_JPEG_VALUE;
+            } else if (lowerRes.endsWith(".png")) {
+                contentType = MediaType.IMAGE_PNG_VALUE;
+            }
+            
+            response.setContentType(contentType);
+            // P6 Fix: 使用percentEncode编码文件名以支持中文
+            String fileName = FileUtils.getName(resource);
+            String encodedFileName = FileUtils.percentEncode(fileName);
+            // inline 表示在浏览器中打开，而不是下载
+            response.setHeader("Content-Disposition", "inline; filename=" + encodedFileName + "; filename*=utf-8''" + encodedFileName);
+            FileUtils.writeBytes(downloadPath, response.getOutputStream());
+        }
+        catch (Exception e)
+        {
+            log.error("预览文件失败", e);
+        }
+    }
 }

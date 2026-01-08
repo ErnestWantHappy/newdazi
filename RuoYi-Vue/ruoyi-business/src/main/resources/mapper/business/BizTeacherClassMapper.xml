@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizTeacherClassMapper">
+    
+    <resultMap type="BizTeacherClass" id="BizTeacherClassResult">
+        <result property="id"            column="id"            />
+        <result property="userId"        column="user_id"       />
+        <result property="deptId"        column="dept_id"       />
+        <result property="entryYear"     column="entry_year"    />
+        <result property="classCode"     column="class_code"    />
+        <result property="createTime"    column="create_time"   />
+        <result property="deptName"      column="dept_name"     />
+        <result property="userName"      column="user_name"     />
+        <result property="studentCount"  column="student_count" />
+    </resultMap>
+
+    <sql id="selectBizTeacherClassVo">
+        select id, user_id, dept_id, entry_year, class_code, create_time from biz_teacher_class
+    </sql>
+
+    <select id="selectBizTeacherClassList" parameterType="BizTeacherClass" resultMap="BizTeacherClassResult">
+        <include refid="selectBizTeacherClassVo"/>
+        <where>  
+            <if test="userId != null "> and user_id = #{userId}</if>
+            <if test="deptId != null "> and dept_id = #{deptId}</if>
+            <if test="entryYear != null  and entryYear != ''"> and entry_year = #{entryYear}</if>
+            <if test="classCode != null  and classCode != ''"> and class_code = #{classCode}</if>
+        </where>
+        order by entry_year desc, class_code asc
+    </select>
+    
+    <select id="selectBizTeacherClassById" parameterType="Long" resultMap="BizTeacherClassResult">
+        <include refid="selectBizTeacherClassVo"/>
+        where id = #{id}
+    </select>
+
+    <!-- 查询指定教师管理的班级列表（带学生人数和学校名称） -->
+    <select id="selectTeacherClassListWithCount" resultMap="BizTeacherClassResult">
+        select 
+            tc.id,
+            tc.user_id,
+            tc.dept_id,
+            tc.entry_year,
+            tc.class_code,
+            tc.create_time,
+            d.dept_name,
+            (select count(*) from biz_student s 
+             where s.entry_year = tc.entry_year and s.class_code = tc.class_code) as student_count
+        from biz_teacher_class tc
+        left join sys_dept d on tc.dept_id = d.dept_id
+        where tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        order by tc.entry_year desc, tc.class_code asc
+    </select>
+
+    <!-- 查询学校内所有可选班级（从学生表中提取去重） -->
+    <select id="selectAvailableClasses" parameterType="Long" resultMap="BizTeacherClassResult">
+        select 
+            null as id,
+            null as user_id,
+            #{deptId} as dept_id,
+            s.entry_year,
+            s.class_code,
+            null as create_time,
+            count(*) as student_count
+        from biz_student s
+        inner join sys_user u on s.user_id = u.user_id
+        where u.dept_id = #{deptId}
+        group by s.entry_year, s.class_code
+        order by s.entry_year desc, s.class_code asc
+    </select>
+
+    <insert id="insertBizTeacherClass" parameterType="BizTeacherClass" useGeneratedKeys="true" keyProperty="id">
+        insert into biz_teacher_class
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="deptId != null">dept_id,</if>
+            <if test="entryYear != null">entry_year,</if>
+            <if test="classCode != null">class_code,</if>
+            <if test="createTime != null">create_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="entryYear != null">#{entryYear},</if>
+            <if test="classCode != null">#{classCode},</if>
+            <if test="createTime != null">#{createTime},</if>
+         </trim>
+    </insert>
+
+    <insert id="batchInsertBizTeacherClass">
+        insert into biz_teacher_class (user_id, dept_id, entry_year, class_code, create_time) values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.userId}, #{item.deptId}, #{item.entryYear}, #{item.classCode}, #{item.createTime})
+        </foreach>
+    </insert>
+
+    <update id="updateBizTeacherClass" parameterType="BizTeacherClass">
+        update biz_teacher_class
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
+            <if test="entryYear != null">entry_year = #{entryYear},</if>
+            <if test="classCode != null">class_code = #{classCode},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBizTeacherClassById" parameterType="Long">
+        delete from biz_teacher_class where id = #{id}
+    </delete>
+
+    <delete id="deleteBizTeacherClassByIds" parameterType="String">
+        delete from biz_teacher_class where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="checkTeacherClassExists" parameterType="BizTeacherClass" resultType="int">
+        select count(*) from biz_teacher_class
+        where user_id = #{userId} and dept_id = #{deptId} and entry_year = #{entryYear} and class_code = #{classCode}
+    </select>
+</mapper>

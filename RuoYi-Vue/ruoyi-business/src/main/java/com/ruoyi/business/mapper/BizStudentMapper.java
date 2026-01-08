@@ -64,4 +64,11 @@ public interface BizStudentMapper
      * @return 学生信息列表，每个对象只包含entryYear和classCode
      */
     public List<BizStudent> selectDistinctYearAndClassByDeptId(Long deptId);
+
+    /**
+     * 根据用户ID查询学生信息
+     * @param userId 用户ID
+     * @return 学生信息
+     */
+    public BizStudent selectBizStudentByUserId(Long userId);
 }

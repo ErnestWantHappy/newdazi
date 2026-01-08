@@ -96,6 +96,19 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/business/teacher',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'grading',
+        component: () => import('@/views/business/teacher/grading'),
+        name: 'TeacherGrading',
+        meta: { title: '批改操作题', activeMenu: '/business/teacher' }
+      }
+    ]
   }
   
 ]

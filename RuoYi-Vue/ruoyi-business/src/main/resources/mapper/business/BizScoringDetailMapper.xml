@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizScoringDetailMapper">
+    
+    <resultMap type="BizScoringDetail" id="BizScoringDetailResult">
+        <result property="detailId"    column="detail_id"    />
+        <result property="answerId"    column="answer_id"    />
+        <result property="itemId"      column="item_id"      />
+        <result property="score"       column="score"        />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateTime"  column="update_time"  />
+    </resultMap>
+
+    <sql id="selectBizScoringDetailVo">
+        select detail_id, answer_id, item_id, score, create_time, update_time 
+        from biz_scoring_detail
+    </sql>
+
+    <select id="selectBizScoringDetailByDetailId" parameterType="Long" resultMap="BizScoringDetailResult">
+        <include refid="selectBizScoringDetailVo"/>
+        where detail_id = #{detailId}
+    </select>
+
+    <select id="selectDetailsByAnswerId" parameterType="Long" resultMap="BizScoringDetailResult">
+        <include refid="selectBizScoringDetailVo"/>
+        where answer_id = #{answerId}
+    </select>
+
+    <insert id="insertBizScoringDetail" parameterType="BizScoringDetail" useGeneratedKeys="true" keyProperty="detailId">
+        insert into biz_scoring_detail
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="answerId != null">answer_id,</if>
+            <if test="itemId != null">item_id,</if>
+            <if test="score != null">score,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="answerId != null">#{answerId},</if>
+            <if test="itemId != null">#{itemId},</if>
+            <if test="score != null">#{score},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBizScoringDetail" parameterType="BizScoringDetail">
+        update biz_scoring_detail
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="score != null">score = #{score},</if>
+        </trim>
+        where detail_id = #{detailId}
+    </update>
+
+    <!-- 批量保存/更新分项得分 -->
+    <insert id="batchSaveOrUpdate" parameterType="java.util.List">
+        INSERT INTO biz_scoring_detail (answer_id, item_id, score)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.answerId}, #{item.itemId}, #{item.score})
+        </foreach>
+        ON DUPLICATE KEY UPDATE score = VALUES(score)
+    </insert>
+
+    <delete id="deleteBizScoringDetailByDetailId" parameterType="Long">
+        delete from biz_scoring_detail where detail_id = #{detailId}
+    </delete>
+
+    <delete id="deleteBizScoringDetailByAnswerId" parameterType="Long">
+        delete from biz_scoring_detail where answer_id = #{answerId}
+    </delete>
+</mapper>

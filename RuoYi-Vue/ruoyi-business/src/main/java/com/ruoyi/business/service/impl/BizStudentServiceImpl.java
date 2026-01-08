@@ -52,19 +52,23 @@ public class BizStudentServiceImpl implements IBizStudentService
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
         Long currentDeptId = null;
+        Long currentUserId = null;
         if (loginUser != null && loginUser.getUser() != null)
         {
             currentDeptId = loginUser.getUser().getDeptId();
+            currentUserId = loginUser.getUserId();
         }
-        // 非超级管理员只能查看当前校区的学生
+        // 非超级管理员需要关联教师班级表过滤
         if (loginUser != null && loginUser.getUser() != null && !loginUser.getUser().isAdmin())
         {
             bizStudent.setDeptId(currentDeptId);
+            bizStudent.setTeacherUserId(currentUserId);
         }
         else if (bizStudent.getDeptId() == null && currentDeptId != null)
         {
             // 管理员未指定校区时默认沿用当前选中的校区
             bizStudent.setDeptId(currentDeptId);
+            bizStudent.setTeacherUserId(currentUserId);
         }
         return bizStudentMapper.selectBizStudentList(bizStudent);
     }

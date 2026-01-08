@@ -44,4 +44,15 @@ public class LessonInfoVo {
     public void setLessonNum(Integer lessonNum) {
         this.lessonNum = lessonNum;
     }
+
+    /** 课程类型: self=自建, shared=共享 */
+    private String courseType;
+
+    public String getCourseType() {
+        return courseType;
+    }
+
+    public void setCourseType(String courseType) {
+        this.courseType = courseType;
+    }
 }

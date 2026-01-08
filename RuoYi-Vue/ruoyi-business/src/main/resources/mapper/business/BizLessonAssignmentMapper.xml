@@ -91,4 +91,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </insert>
 
+    <!-- 新增：班级互斥 - 删除其他课程中该班级的指派（保证一个班级只对应一个当前课程） -->
+    <delete id="deleteOtherAssignmentsByClass">
+        DELETE FROM biz_lesson_assignment 
+        WHERE entry_year = #{entryYear} 
+          AND class_code = #{classCode}
+          AND lesson_id != #{currentLessonId}
+    </delete>
+
+    <!-- 新增：根据学生的入学年份和班级查询当前被指派的课程 -->
+    <select id="selectCurrentLessonByClass" resultType="java.lang.Long">
+        SELECT la.lesson_id 
+        FROM biz_lesson_assignment la
+        WHERE la.entry_year = #{entryYear} 
+          AND la.class_code = #{classCode}
+        LIMIT 1
+    </select>
+
 </mapper>

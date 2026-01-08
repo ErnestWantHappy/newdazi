@@ -89,14 +89,16 @@
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
         <result property="lessonNum"    column="lesson_num"    />
+        <result property="courseType"    column="course_type"    />
     </resultMap>
 
-    <!-- 核心修复：使用 resultMap 替代 resultType -->
+    <!-- 查询我创建的课程 -->
     <select id="selectLessonsByGradeAndCreator" resultMap="LessonInfoVoResult">
         SELECT
             lesson_id,
             lesson_title,
-            lesson_num
+            lesson_num,
+            'self' as course_type
         FROM
             biz_lesson
         WHERE
@@ -104,5 +106,26 @@
           AND create_by = #{creatorName}
         ORDER BY
             lesson_num ASC
+    </select>
+
+    <!-- 查询共享给我的课程（指派给我管理班级的、非我创建的课程） -->
+    <select id="selectSharedLessonsByGradeAndUser" resultMap="LessonInfoVoResult">
+        SELECT DISTINCT
+            l.lesson_id,
+            l.lesson_title,
+            l.lesson_num,
+            'shared' as course_type
+        FROM biz_lesson l
+        INNER JOIN biz_lesson_assignment la ON l.lesson_id = la.lesson_id
+        INNER JOIN biz_teacher_class tc 
+            ON la.entry_year = tc.entry_year 
+            AND la.class_code = tc.class_code
+        WHERE
+            tc.user_id = #{userId}
+            AND tc.dept_id = #{deptId}
+            AND l.grade = #{grade}
+            AND l.create_by != #{creatorName}
+        ORDER BY
+            l.lesson_num ASC
     </select>
 </mapper>

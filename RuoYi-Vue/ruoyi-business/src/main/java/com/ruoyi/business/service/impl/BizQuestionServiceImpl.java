@@ -1,7 +1,9 @@
 package com.ruoyi.business.service.impl;
 
 import com.ruoyi.business.domain.BizQuestion;
+import com.ruoyi.business.domain.BizScoringItem; // P6 import
 import com.ruoyi.business.mapper.BizQuestionMapper;
+import com.ruoyi.business.mapper.BizScoringItemMapper; // P6 import
 import com.ruoyi.business.service.IBizQuestionService;
 import com.ruoyi.business.utils.FileConversionUtils;
 import com.ruoyi.common.config.RuoYiConfig;
@@ -15,10 +17,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.List;
 
 /**
@@ -33,9 +31,17 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Autowired
     private BizQuestionMapper bizQuestionMapper;
 
+    @Autowired
+    private BizScoringItemMapper bizScoringItemMapper; // P6 mapper
+
     @Override
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
-        return bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+        BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+        // P6: 查询评分项 (仅操作题)
+        if (question != null && "practical".equals(question.getQuestionType())) {
+            question.setScoringItems(bizScoringItemMapper.selectItemsByQuestion(questionId));
+        }
+        return question;
     }
 
     @Override
@@ -52,7 +58,12 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
         processQuestionByType(bizQuestion);
 
-        return bizQuestionMapper.insertBizQuestion(bizQuestion);
+        int rows = bizQuestionMapper.insertBizQuestion(bizQuestion);
+        
+        // P6: 保存评分项
+        insertScoringItems(bizQuestion);
+        
+        return rows;
     }
 
     @Override
@@ -63,7 +74,27 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
         processQuestionByType(bizQuestion);
 
-        return bizQuestionMapper.updateBizQuestion(bizQuestion);
+        int rows = bizQuestionMapper.updateBizQuestion(bizQuestion);
+        
+        // P6: 更新评分项 (先删后增)
+        bizScoringItemMapper.deleteBizScoringItemByQuestion(bizQuestion.getQuestionId());
+        insertScoringItems(bizQuestion);
+        
+        return rows;
+    }
+
+    /**
+     * P6: 自定义辅助方法：批量保存评分项
+     */
+    private void insertScoringItems(BizQuestion bizQuestion) {
+        if ("practical".equals(bizQuestion.getQuestionType()) && bizQuestion.getScoringItems() != null) {
+            int order = 0;
+            for (BizScoringItem item : bizQuestion.getScoringItems()) {
+                item.setQuestionId(bizQuestion.getQuestionId());
+                item.setOrderNum(order++);
+                bizScoringItemMapper.insertBizScoringItem(item);
+            }
+        }
     }
 
     @Override
@@ -139,7 +170,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     }
 
     /**
-     * 处理操作题的文件转换 (核心修复)
+     * 处理操作题的文件转换 (使用LibreOffice进行高质量转换)
      */
     private void handlePracticalQuestionFile(BizQuestion bizQuestion) {
         if (StringUtils.isEmpty(bizQuestion.getFilePath())) {
@@ -150,34 +181,34 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         // 1. 获取URL相对路径
         String urlPath = bizQuestion.getFilePath();
 
-        // 2. 核心修复：将URL相对路径转换为文件系统相对路径
+        // 2. 将URL相对路径转换为文件系统相对路径
         // 例如，从 "/profile/upload/file.docx" 转换为 "/upload/file.docx"
         String fileSystemRelativePath = urlPath.replaceFirst(Constants.RESOURCE_PREFIX, "");
 
-        // 3. 构造PDF预览文件的相对路径和绝对路径
-        String previewFileSystemRelativePath = fileSystemRelativePath.toLowerCase().endsWith(".docx")
-                ? fileSystemRelativePath.substring(0, fileSystemRelativePath.length() - 5) + ".pdf"
-                : fileSystemRelativePath + ".pdf";
-
+        // 3. 构造源文件的绝对路径和输出目录
         String originalFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
-        String previewFullPath = RuoYiConfig.getProfile() + previewFileSystemRelativePath;
+        java.io.File originalFile = new java.io.File(originalFullPath);
+        String outputDir = originalFile.getParent();
 
-        // 4. 创建目录（如果不存在）
-        java.io.File previewFile = new java.io.File(previewFullPath);
-        previewFile.getParentFile().mkdirs();
+        // 4. 检查LibreOffice是否已安装
+        if (!FileConversionUtils.isLibreOfficeInstalled()) {
+            log.error("LibreOffice未安装或路径不正确，无法转换文件");
+            bizQuestion.setPreviewPath(null);
+            return;
+        }
 
-        // 5. 执行转换
-        try (InputStream in = new FileInputStream(originalFullPath);
-             OutputStream out = new FileOutputStream(previewFullPath)) {
+        // 5. 使用LibreOffice进行转换
+        String pdfFullPath = FileConversionUtils.convertDocxToPdfWithLibreOffice(originalFullPath, outputDir);
 
-            FileConversionUtils.convertDocxToPdf(in, out);
-            // 6. 存储URL相对路径到数据库
-            String previewUrlPath = Constants.RESOURCE_PREFIX + previewFileSystemRelativePath;
+        if (pdfFullPath != null) {
+            // 6. 直接基于fileSystemRelativePath计算PDF的URL路径
+            // 将 /upload/xxx.docx 转换为 /upload/xxx.pdf
+            String pdfRelativePath = fileSystemRelativePath.replaceAll("(?i)\\.docx?$", ".pdf");
+            String previewUrlPath = Constants.RESOURCE_PREFIX + pdfRelativePath;
             bizQuestion.setPreviewPath(previewUrlPath);
-            log.info("Successfully converted {} to {}", originalFullPath, previewFullPath);
-
-        } catch (Exception e) {
-            log.error("Failed to convert docx to pdf for file: {}", originalFullPath, e);
+            log.info("LibreOffice转换成功: {} -> {}", originalFullPath, previewUrlPath);
+        } else {
+            log.error("LibreOffice转换失败: {}", originalFullPath);
             bizQuestion.setPreviewPath(null);
         }
     }

@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.service.IBizLessonService;
+import org.apache.commons.lang3.StringUtils; // 新增：引入字符串工具类，便于班级编码清洗
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
@@ -150,9 +151,26 @@ public class BizLessonServiceImpl implements IBizLessonService
             gradeGroup.setAllClassesInGrade(yearClassMap.get(entryYear));
 
             if (currentGradeId > 0) {
-                List<LessonInfoVo> lessons = bizLessonMapper.selectLessonsByGradeAndCreator(currentGradeId, username);
-                gradeGroup.setLessons(lessons);
-                log.info("【教师首页数据】为该年级查询到 {} 门课程。", lessons.size());
+                // 查询我创建的课程
+                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByGradeAndCreator(currentGradeId, username);
+                log.info("【教师首页数据】为该年级查询到 {} 门自建课程。", selfLessons.size());
+
+                // 查询共享给我的课程
+                List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByGradeAndUser(
+                        currentGradeId, loginUser.getUserId(), deptId, username);
+                log.info("【教师首页数据】为该年级查询到 {} 门共享课程。", sharedLessons.size());
+
+                // 合并并按lesson_num排序
+                List<LessonInfoVo> allLessons = new ArrayList<>();
+                allLessons.addAll(selfLessons);
+                allLessons.addAll(sharedLessons);
+                allLessons.sort((a, b) -> {
+                    if (a.getLessonNum() == null) return 1;
+                    if (b.getLessonNum() == null) return -1;
+                    return a.getLessonNum().compareTo(b.getLessonNum());
+                });
+
+                gradeGroup.setLessons(allLessons);
             } else {
                 gradeGroup.setLessons(new ArrayList<>());
             }
@@ -186,6 +204,16 @@ public class BizLessonServiceImpl implements IBizLessonService
 
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         List<String> assignedClassCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lessonId);
+        if (CollectionUtils.isEmpty(assignedClassCodes)) {
+            assignedClassCodes = new ArrayList<>();
+        } else {
+            // 新增：为班级编码补充“班”字，保持与前端复选框一致
+            assignedClassCodes = assignedClassCodes.stream()
+                    .filter(StringUtils::isNotBlank)
+                    .map(code -> code.endsWith("班") ? code : code + "班")
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
 
         List<String> allClassesInGrade = new ArrayList<>();
         if (lesson.getGrade() != null) {
@@ -193,12 +221,16 @@ public class BizLessonServiceImpl implements IBizLessonService
             List<BizStudent> students = bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId);
             for (BizStudent student : students) {
                 Map<String, Long> gradeInfo = calculateGradeInfo(student.getEntryYear(), school.getSchoolType());
-                Long currentGradeId = gradeInfo.values().iterator().next();
-                if (lesson.getGrade().equals(currentGradeId)) {
+                Long currentGradeId = gradeInfo.values().stream().findFirst().orElse(null);
+                if (currentGradeId != null && currentGradeId >= 0 && lesson.getGrade().equals(currentGradeId)) {
                     allClassesInGrade.add(student.getClassCode() + "班");
                 }
             }
-            allClassesInGrade = allClassesInGrade.stream().distinct().collect(Collectors.toList());
+            allClassesInGrade = allClassesInGrade.stream()
+                    .filter(StringUtils::isNotBlank)
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList()); // 新增：班级列表去重排序，保证展示稳定
         }
 
         detailVo.setLessonId(lesson.getLessonId());
@@ -254,17 +286,28 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonAssignmentMapper.deleteByLessonId(lessonId);
         List<String> classCodes = lessonDetailVo.getAssignedClassCodes();
         if (!CollectionUtils.isEmpty(classCodes)) {
+            String entryYear = calculateEntryYearFromGrade(lessonDetailVo.getGrade());
             List<BizLessonAssignment> assignments = new ArrayList<>();
             for (String classCode : classCodes) {
+                if (StringUtils.isBlank(classCode)) {
+                    continue;
+                }
+                String pureClassCode = classCode.replace("班", "").trim();
+                
+                // 【核心】班级互斥：删除该班级在其他课程的指派
+                lessonAssignmentMapper.deleteOtherAssignmentsByClass(entryYear, pureClassCode, lessonId);
+                
                 BizLessonAssignment assignment = new BizLessonAssignment();
                 assignment.setLessonId(lessonId);
-                assignment.setClassCode(classCode.replace("班", ""));
-                assignment.setEntryYear(calculateEntryYearFromGrade(lessonDetailVo.getGrade()));
+                assignment.setClassCode(pureClassCode);
+                assignment.setEntryYear(entryYear);
                 assignment.setAssignerId(userId);
                 assignment.setAssignTime(new Date());
                 assignments.add(assignment);
             }
-            lessonAssignmentMapper.batchInsert(assignments);
+            if (!assignments.isEmpty()) {
+                lessonAssignmentMapper.batchInsert(assignments);
+            }
         }
         return lessonDetailVo;
     }
@@ -342,10 +385,13 @@ public class BizLessonServiceImpl implements IBizLessonService
             gradeNum = grade.intValue() - 6;
         }
 
-        int entryYear = currentYear - gradeNum;
+        // 入学年份 = 当前学年起始年 - (学段内年级序号 - 1)
+        // 例如：2025学年，七年级(gradeNum=1)的入学年份是 2025 - (1-1) = 2025
+        int academicStartYear = currentYear;
         if (currentMonth < 7 || (currentMonth == 7 && currentDay < 20)) {
-            entryYear++;
+            academicStartYear = currentYear - 1;
         }
+        int entryYear = academicStartYear - gradeNum + 1;
         return String.valueOf(entryYear);
     }
 }

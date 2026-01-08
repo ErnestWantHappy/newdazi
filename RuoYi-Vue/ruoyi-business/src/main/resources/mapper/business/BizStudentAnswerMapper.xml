@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizStudentAnswerMapper">
+
+    <resultMap type="com.ruoyi.business.domain.BizStudentAnswer" id="BizStudentAnswerResult">
+        <result property="answerId" column="answer_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="studentAnswer" column="student_answer"/>
+        <result property="isCorrect" column="is_correct"/>
+        <result property="score" column="score"/>
+        <result property="answerTime" column="answer_time"/>
+        <result property="submitTime" column="submit_time"/>
+    </resultMap>
+
+    <resultMap type="com.ruoyi.business.domain.vo.LessonRankingVo" id="LessonRankingVoResult">
+        <result property="studentId" column="student_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="classCode" column="class_code"/>
+        <result property="totalScore" column="total_score"/>
+        <result property="totalTime" column="total_time"/>
+        <result property="correctCount" column="correct_count"/>
+        <result property="totalCount" column="total_count"/>
+    </resultMap>
+
+    <!-- 批量插入答题记录 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO biz_student_answer 
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time) 
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.studentId}, #{item.lessonId}, #{item.questionId}, #{item.studentAnswer}, 
+             #{item.isCorrect}, #{item.score}, #{item.answerTime}, #{item.submitTime})
+        </foreach>
+    </insert>
+
+    <!-- 查询学生某课程的答题记录 -->
+    <select id="selectByStudentAndLesson" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer 
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+
+    <!-- 删除学生某课程的旧答题记录 -->
+    <delete id="deleteByStudentAndLesson">
+        DELETE FROM biz_student_answer 
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </delete>
+
+    <!-- 查询课程排行榜（按总分降序，总时间升序） -->
+    <select id="selectLessonRanking" resultMap="LessonRankingVoResult">
+        SELECT 
+            a.student_id,
+            s.student_name,
+            s.student_no,
+            s.class_code,
+            SUM(a.score) as total_score,
+            SUM(a.answer_time) as total_time,
+            SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_count,
+            COUNT(*) as total_count
+        FROM biz_student_answer a
+        LEFT JOIN biz_student s ON a.student_id = s.student_id
+        WHERE a.lesson_id = #{lessonId}
+        GROUP BY a.student_id, s.student_name, s.student_no, s.class_code
+        ORDER BY total_score DESC, total_time ASC
+    </select>
+
+    <!-- 查询学生是否已提交过该课程 -->
+    <select id="countByStudentAndLesson" resultType="int">
+        SELECT COUNT(*) FROM biz_student_answer 
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+
+    <!-- 删除学生某课程指定题目的旧答题记录 -->
+    <delete id="deleteByStudentLessonAndQuestions">
+        DELETE FROM biz_student_answer 
+        WHERE student_id = #{studentId} 
+          AND lesson_id = #{lessonId}
+          AND question_id IN
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
+    </delete>
+
+    <!-- 查询学生有答题记录的所有课程ID -->
+    <select id="selectDistinctLessonIdsByStudent" resultType="java.lang.Long">
+        SELECT a.lesson_id 
+        FROM biz_student_answer a
+        WHERE a.student_id = #{studentId}
+          AND YEAR(a.submit_time) = #{year}
+        GROUP BY a.lesson_id
+        ORDER BY MAX(a.submit_time) DESC
+    </select>
+
+    <select id="selectWrongQuestions" resultType="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        SELECT 
+            lq.lesson_id AS lessonId, 
+            lq.question_id AS questionId, 
+            COALESCE(lq.question_score, 0) AS questionScore, 
+            lq.order_num AS orderNum,
+            q.question_content AS questionContent, 
+            q.question_type AS questionType, 
+            q.option_a AS optionA, 
+            q.option_b AS optionB, 
+            q.option_c AS optionC, 
+            q.option_d AS optionD, 
+            q.answer,
+            q.analysis,
+            q.typing_duration AS typingDuration, 
+            q.word_count AS wordCount, 
+            q.preview_path AS previewPath, 
+            q.file_path AS filePath,
+            a.student_answer AS studentAnswer
+        FROM biz_student_answer a
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
+        WHERE a.student_id = #{studentId}
+          AND a.is_correct = 0
+          AND q.question_type IN ('choice', 'judgment')
+          <if test="lessonId != null">
+             AND a.lesson_id = #{lessonId}
+          </if>
+        ORDER BY a.submit_time DESC
+    </select>
+
+    <!-- P5: 查询班级所有学生的操作题提交情况（含未提交） -->
+    <select id="selectPracticalSubmissions" resultType="com.ruoyi.business.domain.vo.PracticalSubmissionVo">
+        SELECT 
+            a.answer_id AS answerId,
+            s.student_id AS studentId,
+            u.nick_name AS studentName,
+            s.student_no AS studentNo,
+            s.class_code AS classCode,
+            #{questionId} AS questionId,
+            q.question_content AS questionContent,
+            a.student_answer AS studentAnswer,
+            CASE 
+                WHEN a.student_answer LIKE '%.docx' THEN REPLACE(a.student_answer, '.docx', '.pdf')
+                WHEN a.student_answer LIKE '%.doc' THEN REPLACE(a.student_answer, '.doc', '.pdf')
+                ELSE a.student_answer
+            END AS previewPath,
+            IFNULL(a.score, 0) AS score,
+            lq.question_score AS maxScore,
+            a.submit_time AS submitTime,
+            CASE WHEN a.answer_id IS NOT NULL THEN 1 ELSE 0 END AS submitted
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN biz_student_answer a ON s.student_id = a.student_id 
+            AND a.lesson_id = #{lessonId}
+            <if test="questionId != null">
+                AND a.question_id = #{questionId}
+            </if>
+        LEFT JOIN biz_question q ON a.question_id = q.question_id OR q.question_id = #{questionId}
+        LEFT JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
+        WHERE s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+        ORDER BY s.student_no
+    </select>
+
+    <!-- 更新答题记录分数（批改打分） -->
+    <update id="updateScore">
+        UPDATE biz_student_answer 
+        SET score = #{score}
+        WHERE answer_id = #{answerId}
+    </update>
+    
+    <!-- P2: 查询学生成绩汇总（按课程分组） -->
+    <select id="selectScoreSummaryByStudent" resultType="java.util.HashMap">
+        SELECT 
+            a.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            l.lesson_num AS lessonNum,
+            SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
+            SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
+            SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(IFNULL(a.score, 0)) AS totalScore
+        FROM biz_student_answer a
+        LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        WHERE a.student_id = #{studentId}
+        <if test="lessonId != null">
+            AND a.lesson_id = #{lessonId}
+        </if>
+        GROUP BY a.lesson_id, l.lesson_title, l.lesson_num
+        ORDER BY l.lesson_num
+    </select>
+</mapper>
