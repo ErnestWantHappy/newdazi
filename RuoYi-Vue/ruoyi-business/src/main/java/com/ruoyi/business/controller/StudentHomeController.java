@@ -59,6 +59,9 @@ public class StudentHomeController extends BaseController
     @Autowired
     private SysDeptMapper deptMapper;
 
+    @Autowired
+    private com.ruoyi.business.service.AsyncConversionService asyncConversionService;
+
     /**
      * 获取学生当前课程信息
      * 根据学生的入学年份和班级，查询被指派的当前课程及其题目
@@ -333,35 +336,23 @@ public class StudentHomeController extends BaseController
                     // isCorrect 标记（60%及格线）
                     isCorrect = question.getQuestionScore() != null 
                              && score >= question.getQuestionScore() * 0.6;
+                    
+                    // 存储前端传来的打字统计数据
+                    if (request.getTypingStats() != null && request.getTypingStats().containsKey(questionId)) {
+                        TypingStatItem stat = request.getTypingStats().get(questionId);
+                        if (stat != null) {
+                            answer.setTypingSpeed(stat.getTypingSpeed());
+                            answer.setAccuracyRate(stat.getAccuracyRate());
+                            answer.setCompletionRate(stat.getCompletionRate());
+                        }
+                    }
                 }
             } else if ("practical".equals(question.getQuestionType())) {
-                // 操作题：保存文件路径，如果是docx则转换为PDF供预览
+                // 操作题：保存文件路径，异步转换为PDF
                 if (studentAnswer != null && !studentAnswer.trim().isEmpty()) {
-                    // 检查是否为docx文件，如果是则进行PDF转换
+                    // 检查是否为docx文件，标记为待转换
                     if (studentAnswer.toLowerCase().endsWith(".docx") || studentAnswer.toLowerCase().endsWith(".doc")) {
-                        try {
-                            // 构建文件绝对路径
-                            String fileSystemRelativePath = studentAnswer.replaceFirst(com.ruoyi.common.constant.Constants.RESOURCE_PREFIX, "");
-                            String docxFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
-                            java.io.File docxFile = new java.io.File(docxFullPath);
-                            
-                            if (docxFile.exists() && FileConversionUtils.isLibreOfficeInstalled()) {
-                                String outputDir = docxFile.getParent();
-                                String pdfFullPath = FileConversionUtils.convertDocxToPdfWithLibreOffice(docxFullPath, outputDir);
-                                if (pdfFullPath != null) {
-                                    java.io.File pdfFile = new java.io.File(pdfFullPath);
-                                    if (pdfFile.exists()) {
-                                        log.info("【操作题】PDF转换成功 | 文件大小: {} 字节 | 绝对路径: {}", pdfFile.length(), pdfFile.getAbsolutePath());
-                                    } else {
-                                        log.error("【操作题】转换命令执行完成但文件不存在: {}", pdfFullPath);
-                                    }
-                                }
-                            } else {
-                                log.warn("【操作题】无法转换: 源文件不存在({}) 或 LibreOffice未安装", docxFullPath);
-                            }
-                        } catch (Exception e) {
-                            log.error("【操作题】学生作品PDF转换异常", e);
-                        }
+                        answer.setPreviewStatus("pending");
                     }
                     // 操作题不自动评分，score保持null由教师批改
                     answer.setScore(null);
@@ -377,6 +368,22 @@ public class StudentHomeController extends BaseController
 
         if (!answerList.isEmpty()) {
             studentAnswerMapper.batchInsert(answerList);
+            
+            // 异步转换操作题的 docx 文件
+            for (BizStudentAnswer answer : answerList) {
+                if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
+                    String studentAnswer = answer.getStudentAnswer();
+                    String fileSystemRelativePath = studentAnswer.replaceFirst(com.ruoyi.common.constant.Constants.RESOURCE_PREFIX, "");
+                    String docxFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
+                    String outputDir = new java.io.File(docxFullPath).getParent();
+                    
+                    // 计算预览URL前缀
+                    String previewUrlPrefix = studentAnswer.substring(0, studentAnswer.lastIndexOf('/') + 1);
+                    
+                    asyncConversionService.convertAsync(answer.getAnswerId(), docxFullPath, outputDir, previewUrlPrefix);
+                    log.info("【操作题】已触发异步转换 answerId={}", answer.getAnswerId());
+                }
+            }
         }
 
         log.info("【学生答题】学生 {} 提交课程 {} 答案，得分: {}", student.getStudentId(), lessonId, totalScore);
@@ -545,7 +552,8 @@ public class StudentHomeController extends BaseController
     public static class SubmitAnswerRequest {
         private Long lessonId;
         private Map<Long, String> answers;
-        private Map<Long, Integer> answerTimes; // 新增：题目ID -> 答题用时(秒)
+        private Map<Long, Integer> answerTimes; // 题目ID -> 答题用时(秒)
+        private Map<Long, TypingStatItem> typingStats; // 打字题统计数据
 
         public Long getLessonId() { return lessonId; }
         public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
@@ -555,5 +563,26 @@ public class StudentHomeController extends BaseController
         
         public Map<Long, Integer> getAnswerTimes() { return answerTimes; }
         public void setAnswerTimes(Map<Long, Integer> answerTimes) { this.answerTimes = answerTimes; }
+        
+        public Map<Long, TypingStatItem> getTypingStats() { return typingStats; }
+        public void setTypingStats(Map<Long, TypingStatItem> typingStats) { this.typingStats = typingStats; }
+    }
+    
+    /**
+     * 打字统计项
+     */
+    public static class TypingStatItem {
+        private Integer typingSpeed;    // 字符/分钟
+        private Double accuracyRate;    // 正确率 %
+        private Double completionRate;  // 完成率 %
+        
+        public Integer getTypingSpeed() { return typingSpeed; }
+        public void setTypingSpeed(Integer typingSpeed) { this.typingSpeed = typingSpeed; }
+        
+        public Double getAccuracyRate() { return accuracyRate; }
+        public void setAccuracyRate(Double accuracyRate) { this.accuracyRate = accuracyRate; }
+        
+        public Double getCompletionRate() { return completionRate; }
+        public void setCompletionRate(Double completionRate) { this.completionRate = completionRate; }
     }
 }

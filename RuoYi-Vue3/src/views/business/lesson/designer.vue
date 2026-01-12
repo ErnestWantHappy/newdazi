@@ -55,7 +55,11 @@
                   {{ cls.classCode }}班
                 </el-checkbox>
               </el-checkbox-group>
-              <div v-if="form.grade && filteredManagedClasses.length === 0" style="color: #909399; font-size: 12px;">
+              <!-- 提示语 -->
+              <div v-if="form.assignedClasses.length === 0 && form.grade && filteredManagedClasses.length > 0" style="color: #E6A23C; font-size: 12px; margin-top: 5px;">
+                请选择要上课的班级（支持多选）
+              </div>
+              <div v-else-if="form.grade && filteredManagedClasses.length === 0" style="color: #909399; font-size: 12px;">
                 您没有管理该年级对应的班级，请先在"班级管理"中添加
               </div>
               <div v-else-if="!form.grade" style="color: #909399; font-size: 12px;">
@@ -66,7 +70,27 @@
           </el-form>
 
           <el-divider />
-          <h4>已选题目列表 (总分: {{ totalScore }})</h4>
+          <h4 :style="{ color: totalScore === 100 ? '#67C23A' : '#F56C6C' }">
+            已选题目列表 (当前总分: {{ totalScore }} / 100)
+            <span v-if="totalScore !== 100" style="font-size: 12px; font-weight: normal; margin-left: 10px;">
+              (还差 {{ 100 - totalScore }} 分)
+            </span>
+            <span v-else style="font-size: 12px; font-weight: normal; margin-left: 10px;">
+              (已达标)
+            </span>
+          </h4>
+          
+          <!-- 批量改分工具栏 -->
+          <div class="batch-toolbar" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+            <span style="font-size: 14px; font-weight: bold; color: #606266;">批量设置分数：</span>
+            <el-select v-model="batchScoreType" placeholder="选择题型" style="width: 140px" size="small">
+              <el-option :label="`选择题 (${choiceCount}题)`" value="choice" />
+              <el-option :label="`判断题 (${judgmentCount}题)`" value="judgment" />
+            </el-select>
+            <el-input-number v-model="batchScoreValue" :min="0" :max="100" size="small" controls-position="right" style="width: 100px" />
+            <span style="font-size: 14px; color: #606266;">分</span>
+            <el-button type="primary" size="small" @click="applyBatchScore">应 用</el-button>
+          </div>
           <el-table :data="selectedQuestions" row-key="questionId" style="width: 100%">
             <el-table-column label="题干" prop="questionContent" :show-overflow-tooltip="true">
               <template #default="scope">
@@ -76,6 +100,7 @@
                   <p>B. {{ scope.row.optionB || '未配置' }}</p>
                   <p>C. {{ scope.row.optionC || '未配置' }}</p>
                   <p>D. {{ scope.row.optionD || '未配置' }}</p>
+                  <p class="correct-answer">正确答案：{{ scope.row.answer }}</p>
                 </div>
                 <!-- 新增：判断题在已选列表中回显正确答案 -->
                 <div v-else-if="scope.row.questionType === 'judgment'" class="judge-info">
@@ -84,6 +109,16 @@
                 <div v-else-if="scope.row.questionType === 'typing'" class="typing-info">
                   <span>总字数：{{ scope.row.wordCount || 0 }}</span>
                   <span style="margin-left: 15px;">时长：{{ scope.row.typingDuration || 0 }} 分钟</span>
+                </div>
+                <!-- 操作题显示评分标准 -->
+                <div v-else-if="scope.row.questionType === 'practical'" class="scoring-info">
+                  <div v-if="scope.row.scoringItems && scope.row.scoringItems.length > 0">
+                    <span class="scoring-label">评分标准：</span>
+                    <span v-for="(item, idx) in scope.row.scoringItems" :key="idx" class="scoring-item">
+                      {{ item.itemName }}({{ item.itemScore }}%){{ idx < scope.row.scoringItems.length - 1 ? ' / ' : '' }}
+                    </span>
+                  </div>
+                  <div v-else class="no-scoring">暂无评分标准</div>
                 </div>
               </template>
             </el-table-column>
@@ -126,27 +161,27 @@
               <el-input v-model="queryParams.questionContent" placeholder="请输入题干关键词" clearable @keyup.enter="handleQuery"/>
             </el-form-item>
             <el-form-item label="年级" prop="grade">
-              <el-select v-model="queryParams.grade" placeholder="年级" clearable>
+              <el-select v-model="queryParams.grade" placeholder="年级" clearable style="width: 120px">
                 <el-option v-for="dict in biz_grade" :key="dict.value" :label="dict.label" :value="dict.value"/>
               </el-select>
             </el-form-item>
             <el-form-item label="学期" prop="semester">
-              <el-select v-model="queryParams.semester" placeholder="学期" clearable>
+              <el-select v-model="queryParams.semester" placeholder="学期" clearable style="width: 100px">
                 <el-option v-for="dict in biz_semester" :key="dict.value" :label="dict.label" :value="dict.value"/>
               </el-select>
             </el-form-item>
             <el-form-item label="题型" prop="questionType">
-              <el-select v-model="queryParams.questionType" placeholder="题目类型" clearable>
+              <el-select v-model="queryParams.questionType" placeholder="题目类型" clearable style="width: 120px">
                 <el-option v-for="dict in biz_question_type" :key="dict.value" :label="dict.label" :value="dict.value"/>
               </el-select>
             </el-form-item>
             <el-form-item label="课时" prop="lessonNum">
-              <el-select v-model="queryParams.lessonNum" placeholder="第几课" clearable style="width: 100px">
+              <el-select v-model="queryParams.lessonNum" placeholder="第几课" clearable style="width: 140px">
                 <el-option v-for="n in 20" :key="n" :label="'第' + n + '课'" :value="n"/>
               </el-select>
             </el-form-item>
              <el-form-item label="来源" prop="isPublic">
-               <el-select v-model="queryParams.isPublic" placeholder="题目来源" clearable>
+               <el-select v-model="queryParams.isPublic" placeholder="题目来源" clearable style="width: 120px">
                  <el-option label="公共题库" value="Y" />
                  <el-option label="我的私有" value="N" />
                </el-select>
@@ -166,14 +201,24 @@
                   <p>B. {{ scope.row.optionB || '未配置' }}</p>
                   <p>C. {{ scope.row.optionC || '未配置' }}</p>
                   <p>D. {{ scope.row.optionD || '未配置' }}</p>
+                  <p class="correct-answer">正确答案：{{ scope.row.answer }}</p>
                 </div>
-                <!-- 新增：判断题在题库列表中直观展示正确答案 -->
                 <div v-else-if="scope.row.questionType === 'judgment'" class="judge-info">
                   正确答案：{{ formatJudgeAnswer(scope.row.answer) }}
                 </div>
                 <div v-else-if="scope.row.questionType === 'typing'" class="typing-info">
                   <span>总字数：{{ scope.row.wordCount || 0 }}</span>
                   <span style="margin-left: 15px;">时长：{{ scope.row.typingDuration || 0 }} 分钟</span>
+                </div>
+                <!-- 操作题显示评分标准 -->
+                <div v-else-if="scope.row.questionType === 'practical'" class="scoring-info">
+                  <div v-if="scope.row.scoringItems && scope.row.scoringItems.length > 0">
+                    <span class="scoring-label">评分标准：</span>
+                    <span v-for="(item, idx) in scope.row.scoringItems" :key="idx" class="scoring-item">
+                      {{ item.itemName }}({{ item.itemScore }}%){{ idx < scope.row.scoringItems.length - 1 ? ' / ' : '' }}
+                    </span>
+                  </div>
+                  <div v-else class="no-scoring">暂无评分标准</div>
                 </div>
               </template>
             </el-table-column>
@@ -225,6 +270,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
 import { listQuestion } from "@/api/business/question";
 import { getMyClasses } from "@/api/business/teacherClass";
+import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
 
 const { proxy } = getCurrentInstance();
@@ -336,10 +382,44 @@ watch(() => form.value.grade, (newVal, oldVal) => {
 
 // ... (省略中间代码)
 
+// 排序权重映射
+const TYPE_WEIGHT = {
+  'typing': 0,
+  'practical': 1,
+  'choice': 2,
+  'judgment': 3
+};
+
+function sortQuestions() {
+  selectedQuestions.value.sort((a, b) => {
+    const wA = TYPE_WEIGHT[a.questionType] ?? 99;
+    const wB = TYPE_WEIGHT[b.questionType] ?? 99;
+    if (wA !== wB) {
+      return wA - wB;
+    }
+    // 同类型保持相对顺序 (或按 orderNum 可能更好，这里暂保持添加顺序)
+    return 0;
+  });
+  
+  // 重新计算 orderNum 以保持连续（可选，视后端需求而定）
+  selectedQuestions.value.forEach((q, index) => {
+    q.orderNum = index + 1;
+  });
+}
+
 // 提交表单
 function submitForm() {
   proxy.$refs["lessonRef"].validate(valid => {
     if (valid) {
+      // 校验总分必须为100
+      if (totalScore.value !== 100) {
+        proxy.$modal.msgError(`当前总分为 ${totalScore.value} 分，必须凑满 100 分才能保存！`);
+        return;
+      }
+
+      // 提交前确保排序
+      sortQuestions();
+      
       // 构造提交数据
       const data = {
         ...form.value,
@@ -400,6 +480,7 @@ function initialize() {
         questionScore: item.questionScore != null ? item.questionScore : 0,
         orderNum: item.orderNum != null ? item.orderNum : index + 1,
       }));
+      sortQuestions(); // 加载详情后排序
       getQuestionList();
     });
   } else {
@@ -466,9 +547,21 @@ function stripHtml(html) {
 
 function getQuestionList() {
   loading.value = true;
-  queryParams.value.grade = form.value.grade;
-  listQuestion(queryParams.value).then(response => {
-    questionBankList.value = response.rows;
+  // queryParams.value.grade = form.value.grade; // Removed to prevent auto-reset
+  listQuestion(queryParams.value).then(async response => {
+    const rows = response.rows || [];
+    // 为操作题加载评分项
+    for (const q of rows) {
+      if (q.questionType === 'practical') {
+        try {
+          const res = await listScoringItems(null, q.questionId);
+          q.scoringItems = res.data || [];
+        } catch (e) {
+          q.scoringItems = [];
+        }
+      }
+    }
+    questionBankList.value = rows;
     total.value = response.total;
     loading.value = false;
   });
@@ -519,8 +612,11 @@ function handleAddQuestion(row) {
             previewPath: row.previewPath,
             typingDuration: row.typingDuration,
             wordCount: row.wordCount,
+            scoringItems: row.scoringItems || [],
         };
         selectedQuestions.value.push(newQuestion);
+        sortQuestions(); // 添加后自动排序
+        proxy.$modal.msgSuccess("已添加");
     }
 }
 
@@ -542,6 +638,34 @@ function handlePreviewFile(row) {
 }
 
 
+
+// 批量设置分数
+const batchScoreType = ref('choice');
+const batchScoreValue = ref(5);
+
+const choiceCount = computed(() => selectedQuestions.value.filter(q => q.questionType === 'choice').length);
+const judgmentCount = computed(() => selectedQuestions.value.filter(q => q.questionType === 'judgment').length);
+
+function applyBatchScore() {
+  if (!batchScoreType.value) {
+    proxy.$modal.msgWarning("请先选择要批量设置的题型");
+    return;
+  }
+  
+  let count = 0;
+  selectedQuestions.value.forEach(q => {
+    if (q.questionType === batchScoreType.value) {
+      q.questionScore = batchScoreValue.value;
+      count++;
+    }
+  });
+  
+  if (count > 0) {
+    proxy.$modal.msgSuccess(`已批量更新 ${count} 道${batchScoreType.value === 'choice' ? '选择题' : '判断题'}的分数`);
+  } else {
+    proxy.$modal.msgInfo(`当前已选列表中没有${batchScoreType.value === 'choice' ? '选择题' : '判断题'}`);
+  }
+}
 
 // 加载教师管理的班级
 function loadMyManagedClasses() {
@@ -598,6 +722,30 @@ onMounted(() => {
   margin-top: 8px;
   font-size: 13px;
   color: #606266;
+}
+.correct-answer {
+  color: #67C23A;
+  font-weight: bold;
+  margin-top: 5px;
+}
+.scoring-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+.scoring-label {
+  color: #409EFF;
+  font-weight: bold;
+}
+.scoring-item {
+  color: #606266;
+}
+.no-scoring {
+  color: #909399;
+  font-style: italic;
+}
+.app-container {
+  padding-bottom: 80px; /* Prevent footer from obscuring content */
 }
 </style>
 

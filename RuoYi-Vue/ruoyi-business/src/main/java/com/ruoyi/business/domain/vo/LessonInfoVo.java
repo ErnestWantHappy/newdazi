@@ -48,11 +48,33 @@ public class LessonInfoVo {
     /** 课程类型: self=自建, shared=共享 */
     private String courseType;
 
+    /** 是否包含操作题 */
+    private boolean hasPractical;
+
     public String getCourseType() {
         return courseType;
     }
 
     public void setCourseType(String courseType) {
         this.courseType = courseType;
+    }
+
+    public boolean isHasPractical() {
+        return hasPractical;
+    }
+
+    public void setHasPractical(boolean hasPractical) {
+        this.hasPractical = hasPractical;
+    }
+
+    /** 已指派的班级列表, 例如: ["1班", "5班"] */
+    private java.util.List<String> assignedClasses;
+
+    public java.util.List<String> getAssignedClasses() {
+        return assignedClasses;
+    }
+
+    public void setAssignedClasses(java.util.List<String> assignedClasses) {
+        this.assignedClasses = assignedClasses;
     }
 }

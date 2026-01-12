@@ -90,6 +90,7 @@
         <result property="lessonTitle"    column="lesson_title"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="courseType"    column="course_type"    />
+        <result property="hasPractical"  column="has_practical"  />
     </resultMap>
 
     <!-- 查询我创建的课程 -->
@@ -98,14 +99,17 @@
             lesson_id,
             lesson_title,
             lesson_num,
-            'self' as course_type
+            'self' as course_type,
+            (SELECT count(1) FROM biz_lesson_question lq 
+             LEFT JOIN biz_question q ON lq.question_id = q.question_id 
+             WHERE lq.lesson_id = biz_lesson.lesson_id AND q.question_type = 'practical') > 0 as has_practical
         FROM
             biz_lesson
         WHERE
             grade = #{grade}
           AND create_by = #{creatorName}
         ORDER BY
-            lesson_num ASC
+            lesson_id DESC
     </select>
 
     <!-- 查询共享给我的课程（指派给我管理班级的、非我创建的课程） -->
@@ -114,7 +118,11 @@
             l.lesson_id,
             l.lesson_title,
             l.lesson_num,
-            'shared' as course_type
+            l.create_time,
+            'shared' as course_type,
+            (SELECT count(1) FROM biz_lesson_question lq 
+             LEFT JOIN biz_question q ON lq.question_id = q.question_id 
+             WHERE lq.lesson_id = l.lesson_id AND q.question_type = 'practical') > 0 as has_practical
         FROM biz_lesson l
         INNER JOIN biz_lesson_assignment la ON l.lesson_id = la.lesson_id
         INNER JOIN biz_teacher_class tc 
@@ -126,6 +134,6 @@
             AND l.grade = #{grade}
             AND l.create_by != #{creatorName}
         ORDER BY
-            l.lesson_num ASC
+            l.lesson_id DESC
     </select>
 </mapper>

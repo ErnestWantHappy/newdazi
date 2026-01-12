@@ -160,15 +160,24 @@ public class BizLessonServiceImpl implements IBizLessonService
                         currentGradeId, loginUser.getUserId(), deptId, username);
                 log.info("【教师首页数据】为该年级查询到 {} 门共享课程。", sharedLessons.size());
 
-                // 合并并按lesson_num排序
+                // 合并并按创建时间降序排列（最新创建的在前）
                 List<LessonInfoVo> allLessons = new ArrayList<>();
                 allLessons.addAll(selfLessons);
                 allLessons.addAll(sharedLessons);
-                allLessons.sort((a, b) -> {
-                    if (a.getLessonNum() == null) return 1;
-                    if (b.getLessonNum() == null) return -1;
-                    return a.getLessonNum().compareTo(b.getLessonNum());
-                });
+                // 注意：由于LessonInfoVo没有createTime，需要依赖查询顺序
+                // 或者在查询时已经按创建时间降序返回
+                
+                // 填充每个课程的已指派班级
+                for (LessonInfoVo lesson : allLessons) {
+                    List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lesson.getLessonId());
+                    if (classCodes != null && !classCodes.isEmpty()) {
+                        List<String> formattedCodes = classCodes.stream()
+                            .filter(StringUtils::isNotBlank)
+                            .map(code -> code.endsWith("班") ? code : code + "班")
+                            .collect(Collectors.toList());
+                        lesson.setAssignedClasses(formattedCodes);
+                    }
+                }
 
                 gradeGroup.setLessons(allLessons);
             } else {

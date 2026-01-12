@@ -1,5 +1,6 @@
 <template>
   <div class="app-container">
+    <!-- 筛选区域 -->
     <el-card class="filter-card">
       <div class="filter-row">
         <span class="filter-label">入学年份：</span>
@@ -17,6 +18,10 @@
           <el-option v-for="item in lessonOptions" :key="item.lessonId" :label="item.lessonTitle" :value="item.lessonId" />
         </el-select>
         
+        <!-- 学生搜索 -->
+        <span class="filter-label">搜索学生：</span>
+        <el-input v-model="searchKeyword" placeholder="姓名或学号" clearable style="width: 150px" @input="filterStudents" />
+        
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
         <el-button type="success" icon="Download" @click="handleExport" :disabled="!tableData.length">导出 Excel</el-button>
         
@@ -28,11 +33,63 @@
       </div>
     </el-card>
 
+    <!-- 图表区域 -->
+    <el-row :gutter="15" v-if="tableData.length > 0" class="chart-row">
+      <!-- 班级平均分对比：仅在未选择具体班级时显示 -->
+      <el-col :span="12" v-if="!queryParams.classCode">
+        <el-card class="chart-card">
+          <template #header>
+            <span>📊 班级平均分对比</span>
+          </template>
+          <div ref="classChartRef" class="chart-container"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="queryParams.classCode ? 24 : 12">
+        <el-card class="chart-card">
+          <template #header>
+            <span>📈 成绩分布（按总分排名）</span>
+          </template>
+          <div ref="rankChartRef" class="chart-container"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+    
+    <!-- 打字题专属图表区域 -->
+    <el-row :gutter="15" v-if="tableData.length > 0 && hasTypingData" class="chart-row">
+      <el-col :span="24">
+        <el-card class="chart-card typing-chart-card">
+          <template #header>
+            <div class="typing-chart-header">
+              <span>⌨️ 打字数据分布</span>
+              <div class="typing-chart-controls">
+                <el-select v-model="typingChartLesson" placeholder="全部课程" clearable size="small" style="width: 160px; margin-right: 10px" @change="renderTypingChart">
+                  <el-option label="全部课程" :value="null" />
+                  <el-option v-for="l in lessonOptions" :key="l.lessonId" :label="l.lessonTitle" :value="l.lessonId" />
+                </el-select>
+                <el-radio-group v-model="typingChartMetric" size="small" @change="renderTypingChart">
+                  <el-radio-button label="speed">打字速度</el-radio-button>
+                  <el-radio-button label="accuracy">正确率</el-radio-button>
+                  <el-radio-button label="completion">完成率</el-radio-button>
+                  <el-radio-button label="score">得分</el-radio-button>
+                </el-radio-group>
+              </div>
+            </div>
+          </template>
+          <div ref="typingChartRef" class="chart-container" style="height: 320px"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 数据表格 -->
     <el-card class="data-card">
-      <el-table :data="tableData" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
+      <el-table :data="displayData" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
         <el-table-column prop="className" label="班级" width="80" align="center" sortable />
         <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable />
-        <el-table-column prop="studentName" label="姓名" width="100" align="center" />
+        <el-table-column prop="studentName" label="姓名" width="100" align="center">
+          <template #default="scope">
+            <el-button link type="primary" @click="showStudentProfile(scope.row)">{{ scope.row.studentName }}</el-button>
+          </template>
+        </el-table-column>
         
         <!-- 各课程成绩：带复选框 -->
         <el-table-column label="各课程成绩（点击勾选参与统计）" align="center" min-width="300">
@@ -45,7 +102,7 @@
                   size="small"
                 />
                 <span class="lesson-name">{{ score.lessonTitle }}</span>
-                <el-popover placement="bottom" :width="200" trigger="hover">
+                <el-popover placement="bottom" :width="240" trigger="hover">
                   <template #reference>
                     <el-tag 
                       :type="getScoreType(score.totalScore)" 
@@ -57,6 +114,12 @@
                     <p><b>打字：</b>{{ score.typingScore }} 分</p>
                     <p><b>理论：</b>{{ score.theoryScore }} 分</p>
                     <p><b>操作：</b>{{ score.practicalScore }} 分</p>
+                    <el-divider v-if="score.avgTypingSpeed" style="margin: 8px 0" />
+                    <template v-if="score.avgTypingSpeed">
+                      <p><b>打字速度：</b>{{ score.avgTypingSpeed }} 字/分</p>
+                      <p><b>正确率：</b>{{ score.avgAccuracyRate }}%</p>
+                      <p><b>完成率：</b>{{ score.avgCompletionRate }}%</p>
+                    </template>
                   </div>
                 </el-popover>
               </div>
@@ -67,6 +130,27 @@
         <el-table-column prop="avgTyping" label="打字平均" width="95" align="center" sortable>
           <template #default="scope">
             <span class="gray-text">{{ scope.row.avgTyping }}</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="overallTypingSpeed" label="打字速度" width="100" align="center" sortable>
+          <template #default="scope">
+            <span v-if="scope.row.overallTypingSpeed" class="typing-speed">{{ scope.row.overallTypingSpeed }} <small>字/分</small></span>
+            <span v-else class="gray-text">-</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="overallAccuracy" label="打字正确率" width="100" align="center" sortable>
+          <template #default="scope">
+            <span v-if="scope.row.overallAccuracy" class="typing-accuracy">{{ scope.row.overallAccuracy }}%</span>
+            <span v-else class="gray-text">-</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="overallCompletion" label="打字完成率" width="100" align="center" sortable>
+          <template #default="scope">
+            <span v-if="scope.row.overallCompletion" class="typing-completion">{{ scope.row.overallCompletion }}%</span>
+            <span v-else class="gray-text">-</span>
           </template>
         </el-table-column>
         
@@ -82,15 +166,21 @@
           </template>
         </el-table-column>
         
-        <el-table-column prop="filteredTotal" label="总分" width="80" align="center" sortable>
+        <el-table-column prop="filteredTotal" label="总分" width="100" align="center" sortable>
           <template #default="scope">
-            <span class="total-score">{{ scope.row.filteredTotal }}</span>
+            <div class="data-bar-cell">
+              <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredTotal, maxTotal) + '%' }"></div>
+              <span class="data-bar-value total-score">{{ scope.row.filteredTotal }}</span>
+            </div>
           </template>
         </el-table-column>
         
-        <el-table-column prop="filteredAverage" label="平均分" width="90" align="center" sortable>
+        <el-table-column prop="filteredAverage" label="平均分" width="100" align="center" sortable>
           <template #default="scope">
-            <span class="avg-score">{{ scope.row.filteredAverage }}</span>
+            <div class="data-bar-cell avg-bar">
+              <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredAverage, 100) + '%' }"></div>
+              <span class="data-bar-value avg-score">{{ scope.row.filteredAverage }}</span>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -99,34 +189,161 @@
         请选择入学年份后点击查询
       </div>
     </el-card>
+
+    <!-- 学生画像弹窗 -->
+    <el-dialog v-model="profileDialogVisible" :title="currentStudent?.studentName + ' 的成绩画像'" width="850px">
+      <div v-if="currentStudent" class="profile-content">
+        <div class="profile-header">
+          <span>学号: {{ currentStudent.studentNo }}</span>
+          <span>班级: {{ currentStudent.className }}</span>
+          <span>总分: {{ currentStudent.filteredTotal }}</span>
+          <span>平均分: {{ currentStudent.filteredAverage }}</span>
+        </div>
+        
+        <!-- 筛选控件 -->
+        <div class="profile-filters">
+          <el-select v-model="profileLesson" placeholder="全部课程" clearable size="small" style="width: 160px; margin-right: 10px" @change="updateProfileChart">
+            <el-option label="全部课程" :value="null" />
+            <el-option v-for="s in currentStudent.scores" :key="s.lessonId" :label="s.lessonTitle || '课程' + s.lessonId" :value="s.lessonId" />
+          </el-select>
+          <el-radio-group v-model="profileScoreType" size="small" @change="updateProfileChart">
+            <el-radio-button label="total">总分</el-radio-button>
+            <el-radio-button label="typingSpeed">打字速度</el-radio-button>
+            <el-radio-button label="theoryAccuracy">理论正确率</el-radio-button>
+          </el-radio-group>
+        </div>
+        
+        <div ref="profileChartRef" class="profile-chart"></div>
+        
+        <!-- 详细数据表格 -->
+        <el-table :data="profileTableData" border stripe size="small" style="margin-top: 15px" max-height="200">
+          <el-table-column prop="lessonTitle" label="课程" width="120" />
+          <el-table-column prop="typingScore" label="打字" width="80" align="center" />
+          <el-table-column prop="theoryScore" label="理论" width="80" align="center" />
+          <el-table-column prop="practicalScore" label="操作" width="80" align="center" />
+          <el-table-column prop="totalScore" label="总分" width="80" align="center" />
+        </el-table>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ScoreQuery">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, nextTick, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel } from '@/api/business/score';
 import { ElMessage } from 'element-plus';
+import * as echarts from 'echarts';
 
+const route = useRoute();
 const loading = ref(false);
 const yearOptions = ref([]);
 const classOptions = ref([]);
-const lessonOptions = ref([]); // 课程下拉选项
-const dropdownLessonIds = ref([]); // 顶部下拉选中的课程
-const rawData = ref([]); // 原始数据
-const tableData = ref([]); // 处理后的数据
-const selectedLessonIds = ref([]); // 表格内勾选的课程ID
+const lessonOptions = ref([]);
+const dropdownLessonIds = ref([]);
+const rawData = ref([]);
+const tableData = ref([]);
+const selectedLessonIds = ref([]);
+const searchKeyword = ref('');
+
+// 图表相关
+const classChartRef = ref(null);
+const rankChartRef = ref(null);
+const profileChartRef = ref(null);
+const typingChartRef = ref(null);  // 打字题专属图表
+let classChartInstance = null;
+let rankChartInstance = null;
+let profileChartInstance = null;
+let typingChartInstance = null;  // 打字题专属图表实例
+
+// 打字图表控制
+const typingChartMetric = ref('speed');  // speed | accuracy | completion | score
+const typingChartLesson = ref(null);  // 课程筛选
+
+// 学生画像弹窗
+const profileDialogVisible = ref(false);
+const currentStudent = ref(null);
+const profileLesson = ref(null);  // 学生画像课程筛选
+const profileScoreType = ref('total');  // total | typing | theory | practical
+
+// 学生画像详细表格数据
+const profileTableData = computed(() => {
+  if (!currentStudent.value || !currentStudent.value.scores) return [];
+  return currentStudent.value.scores
+    .filter(s => s.lessonTitle)  // 过滤掉没有课程名的记录
+    .map(s => ({
+      lessonTitle: s.lessonTitle || '未知课程',
+      typingScore: s.typingScore || '-',
+      theoryScore: s.theoryScore || '-',
+      practicalScore: s.practicalScore || '-',
+      totalScore: s.totalScore || '-'
+    }));
+});
 
 const queryParams = ref({
   entryYear: null,
   classCode: null
 });
 
-onMounted(() => {
-  loadClasses();
+// 搜索过滤后的数据
+const displayData = computed(() => {
+  if (!searchKeyword.value.trim()) {
+    return tableData.value;
+  }
+  const kw = searchKeyword.value.trim().toLowerCase();
+  return tableData.value.filter(s => 
+    s.studentName?.toLowerCase().includes(kw) || 
+    String(s.studentNo).includes(kw)
+  );
+});
+
+// 计算最大总分（用于 Data Bar 比例）
+const maxTotal = computed(() => {
+  if (tableData.value.length === 0) return 100;
+  return Math.max(...tableData.value.map(s => s.filteredTotal || 0), 1);
+});
+
+// 计算 Data Bar 宽度百分比
+function getBarWidth(value, max) {
+  if (!value || !max) return 0;
+  return Math.min(100, Math.round((value / max) * 100));
+}
+
+onMounted(async () => {
+  await loadClasses();
+  
+  const urlLessonId = route.query.lessonId;
+  const urlEntryYear = route.query.entryYear;
+  const urlClassCode = route.query.classCode;
+  
+  if (urlEntryYear) {
+    queryParams.value.entryYear = urlEntryYear;
+    if (urlClassCode) {
+      queryParams.value.classCode = urlClassCode;
+    }
+    
+    if (window._allClasses) {
+      classOptions.value = window._allClasses
+        .filter(c => (c.entry_year || c.entryYear) === urlEntryYear)
+        .map(c => ({ classCode: c.class_code || c.classCode }))
+        .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
+    }
+    
+    const lessonRes = await getScoreLessons(urlEntryYear);
+    lessonOptions.value = lessonRes.data || [];
+    
+    if (urlLessonId) {
+      const lessonIdNum = Number(urlLessonId);
+      selectedLessonIds.value = [lessonIdNum];
+      dropdownLessonIds.value = [lessonIdNum];
+    }
+    
+    handleQuery();
+  }
 });
 
 function loadClasses() {
-  getScoreClasses().then(res => {
+  return getScoreClasses().then(res => {
     const data = res.data || [];
     const yearSet = new Set();
     data.forEach(item => yearSet.add(item.entry_year || item.entryYear));
@@ -150,7 +367,6 @@ function onYearChange(val) {
       .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
   }
   
-  // 加载该年级的课程
   if (val) {
     getScoreLessons(val).then(res => {
       lessonOptions.value = res.data || [];
@@ -158,7 +374,7 @@ function onYearChange(val) {
   }
 }
 
-function onClassChange(val) {
+function onClassChange() {
   tableData.value = [];
   rawData.value = [];
 }
@@ -170,19 +386,23 @@ function handleQuery() {
   }
   
   loading.value = true;
-  selectedLessonIds.value = []; // 重置选择
   
   getScoreSummary(queryParams.value.entryYear, queryParams.value.classCode, null)
     .then(res => {
       rawData.value = res.data || [];
       processData();
+      // 使用延时确保 DOM 完全渲染后再初始化图表
+      nextTick(() => {
+        setTimeout(() => {
+          renderCharts();
+        }, 100);
+      });
     })
     .finally(() => {
       loading.value = false;
     });
 }
 
-// 切换课程选择（表格内复选框）
 function toggleLesson(lessonId, checked) {
   if (checked) {
     if (!selectedLessonIds.value.includes(lessonId)) {
@@ -191,29 +411,32 @@ function toggleLesson(lessonId, checked) {
   } else {
     selectedLessonIds.value = selectedLessonIds.value.filter(id => id !== lessonId);
   }
-  // 同步到顶部下拉框
   dropdownLessonIds.value = [...selectedLessonIds.value];
   processData();
+  nextTick(() => renderCharts());
 }
 
-// 清除选择
 function clearSelection() {
   selectedLessonIds.value = [];
   dropdownLessonIds.value = [];
   processData();
+  nextTick(() => setTimeout(() => renderCharts(), 100));
 }
 
-// 顶部下拉框选择变化时同步到表格选择
 function onDropdownChange(val) {
   selectedLessonIds.value = [...val];
   processData();
+  nextTick(() => setTimeout(() => renderCharts(), 100));
 }
 
-// 计算年级（与后端一致，使用8月15日分界）
+function filterStudents() {
+  // 使用 computed displayData 自动过滤
+}
+
 function calculateGrade(entryYear) {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 0-indexed
+  const currentMonth = now.getMonth() + 1;
   const currentDay = now.getDate();
   
   const afterAug15 = (currentMonth > 8) || (currentMonth === 8 && currentDay >= 15);
@@ -222,43 +445,53 @@ function calculateGrade(entryYear) {
   return schoolYear - entryYear + 7;
 }
 
-// 根据选中的课程筛选并计算
 function processData() {
   const selectedIds = selectedLessonIds.value;
   const entryYear = parseInt(queryParams.value.entryYear);
   const grade = calculateGrade(entryYear);
   
   tableData.value = rawData.value.map(student => {
-    // 1. 计算班级名 (如 705)
     let className = '';
     if (student.classCode) {
       const code = String(student.classCode).padStart(2, '0');
       className = `${grade}${code}`;
     }
 
-    // 2. 筛选课程（如果有选中则按选中过滤，否则显示全部）
     let filteredScores = student.scores || [];
     if (selectedIds && selectedIds.length > 0) {
       filteredScores = filteredScores.filter(s => selectedIds.includes(s.lessonId));
     }
     
     const count = filteredScores.length;
-
-    // 3. 计算各项总和
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
+    
+    // 打字统计：累加有效记录
+    let typingSpeedSum = 0, accuracySum = 0, completionSum = 0, typingCount = 0;
     
     filteredScores.forEach(s => {
       sumTyping += (s.typingScore || 0);
       sumTheory += (s.theoryScore || 0);
       sumPractical += (s.practicalScore || 0);
       sumTotal += (s.totalScore || 0);
+      
+      // 累加打字统计（只统计有数据的记录）
+      if (s.avgTypingSpeed) {
+        typingSpeedSum += Number(s.avgTypingSpeed);
+        accuracySum += Number(s.avgAccuracyRate || 0);
+        completionSum += Number(s.avgCompletionRate || 0);
+        typingCount++;
+      }
     });
     
-    // 4. 计算平均分
     const avgTyping = count > 0 ? (sumTyping / count).toFixed(1) : '0.0';
     const avgTheory = count > 0 ? (sumTheory / count).toFixed(1) : '0.0';
     const avgPractical = count > 0 ? (sumPractical / count).toFixed(1) : '0.0';
     const filteredAverage = count > 0 ? (sumTotal / count).toFixed(1) : '0.0';
+    
+    // 计算整体打字指标
+    const overallTypingSpeed = typingCount > 0 ? Math.round(typingSpeedSum / typingCount) : null;
+    const overallAccuracy = typingCount > 0 ? (accuracySum / typingCount).toFixed(1) : null;
+    const overallCompletion = typingCount > 0 ? (completionSum / typingCount).toFixed(1) : null;
     
     return {
       ...student,
@@ -267,12 +500,344 @@ function processData() {
       filteredAverage: Number(filteredAverage),
       avgTyping: Number(avgTyping),
       avgTheory: Number(avgTheory),
-      avgPractical: Number(avgPractical)
+      avgPractical: Number(avgPractical),
+      overallTypingSpeed,
+      overallAccuracy,
+      overallCompletion
     };
   });
 }
 
-// 监听课程选择变化
+// 渲染图表
+function renderCharts() {
+  renderClassChart();
+  renderRankChart();
+  renderTypingChart();  // 打字题专属图表
+}
+
+// 计算是否有打字数据
+const hasTypingData = computed(() => {
+  return tableData.value.some(s => s.overallTypingSpeed !== null && s.overallTypingSpeed !== undefined);
+});
+
+// 打字统计表格数据
+const typingTableData = computed(() => {
+  return tableData.value
+    .filter(s => s.overallTypingSpeed)
+    .map(s => ({
+      className: s.className,
+      studentNo: s.studentNo,
+      studentName: s.studentName,
+      speed: Number(s.overallTypingSpeed) || 0,
+      accuracy: Number(s.overallAccuracy) || 0,
+      completion: Number(s.overallCompletion) || 0,
+      score: Number(s.avgTyping) || 0
+    }))
+    .sort((a, b) => b.speed - a.speed);
+});
+
+function renderClassChart() {
+  if (!classChartRef.value) return;
+  
+  if (!classChartInstance) {
+    classChartInstance = echarts.init(classChartRef.value);
+  }
+  
+  // 按班级分组计算平均分
+  const classMap = new Map();
+  tableData.value.forEach(s => {
+    const cls = s.className;
+    if (!classMap.has(cls)) {
+      classMap.set(cls, { total: 0, count: 0 });
+    }
+    classMap.get(cls).total += s.filteredTotal;
+    classMap.get(cls).count += 1;
+  });
+  
+  const classNames = [];
+  const avgScores = [];
+  
+  Array.from(classMap.entries())
+    .sort((a, b) => a[0] - b[0])
+    .forEach(([cls, data]) => {
+      classNames.push(cls + '班');
+      avgScores.push((data.total / data.count).toFixed(1));
+    });
+  
+  const option = {
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: classNames,
+      axisLabel: { rotate: 0 }
+    },
+    yAxis: { type: 'value', name: '平均分' },
+    series: [{
+      type: 'bar',
+      data: avgScores,
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: '#409EFF' },
+          { offset: 1, color: '#67C23A' }
+        ])
+      },
+      label: { show: true, position: 'top' }
+    }],
+    grid: { left: '10%', right: '10%', bottom: '15%', top: '15%' }
+  };
+  
+  classChartInstance.setOption(option);
+}
+
+function renderRankChart() {
+  if (!rankChartRef.value) return;
+  
+  if (!rankChartInstance) {
+    rankChartInstance = echarts.init(rankChartRef.value);
+  }
+  
+  // 按总分排序取前20
+  const sorted = [...tableData.value]
+    .sort((a, b) => b.filteredTotal - a.filteredTotal)
+    .slice(0, 20);
+  
+  const names = sorted.map(s => s.studentName);
+  const scores = sorted.map(s => s.filteredTotal);
+  
+  const option = {
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: names,
+      axisLabel: { rotate: 45, fontSize: 10 }
+    },
+    yAxis: { type: 'value', name: '总分' },
+    series: [{
+      type: 'bar',
+      data: scores,
+      itemStyle: {
+        color: (params) => {
+          const colors = ['#F56C6C', '#E6A23C', '#67C23A'];
+          if (params.dataIndex < 3) return colors[params.dataIndex];
+          return '#409EFF';
+        }
+      },
+      label: { show: true, position: 'top', fontSize: 10 }
+    }],
+    grid: { left: '10%', right: '5%', bottom: '25%', top: '15%' }
+  };
+  
+  rankChartInstance.setOption(option);
+}
+
+// 打字题专属图表：多指标切换
+function renderTypingChart() {
+  if (!typingChartRef.value) return;
+  
+  if (!typingChartInstance) {
+    typingChartInstance = echarts.init(typingChartRef.value);
+  }
+  
+  // 获取打字数据
+  let typingData = [];
+  const metric = typingChartMetric.value;
+  const selectedLesson = typingChartLesson.value;
+  
+  // 根据课程筛选获取打字数据
+  if (selectedLesson) {
+    // 从特定课程获取打字数据
+    tableData.value.forEach(student => {
+      const lessonScore = student.scores?.find(s => s.lessonId === selectedLesson);
+      if (lessonScore && lessonScore.avgTypingSpeed) {
+        typingData.push({
+          name: student.studentName,
+          speed: Number(lessonScore.avgTypingSpeed) || 0,
+          accuracy: Number(lessonScore.avgAccuracyRate) || 0,
+          completion: Number(lessonScore.avgCompletionRate) || 0,
+          score: Number(lessonScore.typingScore) || 0
+        });
+      }
+    });
+  } else {
+    // 使用总体数据
+    tableData.value.forEach(student => {
+      if (student.overallTypingSpeed) {
+        typingData.push({
+          name: student.studentName,
+          speed: Number(student.overallTypingSpeed) || 0,
+          accuracy: Number(student.overallAccuracy) || 0,
+          completion: Number(student.overallCompletion) || 0,
+          score: Number(student.avgTyping) || 0
+        });
+      }
+    });
+  }
+  
+  // 按当前指标排序取前30
+  typingData.sort((a, b) => b[metric] - a[metric]);
+  typingData = typingData.slice(0, 30);
+  
+  if (typingData.length === 0) {
+    typingChartInstance.setOption({
+      title: { text: '暂无打字数据', left: 'center', top: 'center' },
+      xAxis: { show: false },
+      yAxis: { show: false },
+      series: []
+    }, true);
+    return;
+  }
+  
+  const names = typingData.map(s => s.name);
+  const values = typingData.map(s => s[metric]);
+  
+  // 根据指标设置标签和颜色
+  const metricConfig = {
+    speed: { name: '打字速度', unit: '字/分', color: ['#E6A23C', '#F56C6C'] },
+    accuracy: { name: '正确率', unit: '%', color: ['#67C23A', '#409EFF'] },
+    completion: { name: '完成率', unit: '%', color: ['#409EFF', '#67C23A'] },
+    score: { name: '得分', unit: '分', color: ['#F56C6C', '#E6A23C'] }
+  };
+  
+  const config = metricConfig[metric];
+  
+  const option = {
+    tooltip: { 
+      trigger: 'axis',
+      formatter: (params) => {
+        const idx = params[0].dataIndex;
+        const data = typingData[idx];
+        return `${data.name}<br/>` +
+          `打字速度: ${data.speed} 字/分<br/>` +
+          `正确率: ${data.accuracy}%<br/>` +
+          `完成率: ${data.completion}%<br/>` +
+          `得分: ${data.score} 分`;
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: names,
+      axisLabel: { rotate: 45, fontSize: 10 }
+    },
+    yAxis: { 
+      type: 'value', 
+      name: `${config.name}(${config.unit})`
+    },
+    series: [{
+      name: config.name,
+      type: 'bar',
+      data: values,
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: config.color[0] },
+          { offset: 1, color: config.color[1] }
+        ])
+      },
+      label: { show: true, position: 'top', fontSize: 10 }
+    }],
+    grid: { left: '8%', right: '5%', bottom: '20%', top: '15%' }
+  };
+  
+  typingChartInstance.setOption(option, true);
+}
+
+// 学生画像
+function showStudentProfile(student) {
+  currentStudent.value = student;
+  profileLesson.value = null;  // 重置筛选
+  profileScoreType.value = 'total';
+  profileDialogVisible.value = true;
+  
+  nextTick(() => {
+    renderProfileChart(student);
+  });
+}
+
+// 更新学生画像图表
+function updateProfileChart() {
+  if (currentStudent.value) {
+    renderProfileChart(currentStudent.value);
+  }
+}
+
+function renderProfileChart(student) {
+  if (!profileChartRef.value) return;
+  
+  if (!profileChartInstance) {
+    profileChartInstance = echarts.init(profileChartRef.value);
+  }
+  
+  // 过滤有效课程数据（修复 undefined 问题）
+  let scores = (student.scores || []).filter(s => s.lessonTitle);
+  
+  // 如果选择了特定课程，只显示该课程
+  if (profileLesson.value) {
+    scores = scores.filter(s => s.lessonId === profileLesson.value);
+  }
+  
+  if (scores.length === 0) {
+    profileChartInstance.setOption({
+      title: { text: '暂无成绩数据', left: 'center', top: 'center' },
+      xAxis: { show: false },
+      yAxis: { show: false },
+      series: []
+    }, true);
+    return;
+  }
+  
+  const scoreType = profileScoreType.value;
+  const lessonNames = scores.map(s => s.lessonTitle);
+  
+  // 根据指标获取对应数据
+  let scoreValues;
+  let typeName;
+  let yAxisName = '分数';
+  
+  if (scoreType === 'total') {
+    scoreValues = scores.map(s => s.totalScore || 0);
+    typeName = '总分';
+  } else if (scoreType === 'typingSpeed') {
+    scoreValues = scores.map(s => s.avgTypingSpeed || 0);
+    typeName = '打字速度';
+    yAxisName = '字/分';
+  } else if (scoreType === 'theoryAccuracy') {
+    scoreValues = scores.map(s => s.theoryAccuracy || 0);
+    typeName = '理论正确率';
+    yAxisName = '%';
+  } else {
+    scoreValues = scores.map(s => s.totalScore || 0);
+    typeName = '总分';
+  }
+  
+  const colorMap = {
+    total: '#409EFF',
+    typingSpeed: '#E6A23C',
+    theoryAccuracy: '#67C23A'
+  };
+  
+  const option = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: [typeName] },
+    xAxis: {
+      type: 'category',
+      data: lessonNames,
+      axisLabel: { rotate: 30 }
+    },
+    yAxis: { type: 'value', name: yAxisName },
+    series: [{
+      name: typeName,
+      type: 'line',
+      data: scoreValues,
+      smooth: true,
+      lineStyle: { width: 3 },
+      itemStyle: { color: colorMap[scoreType] },
+      areaStyle: { color: colorMap[scoreType] + '33' }
+    }],
+    grid: { left: '10%', right: '5%', bottom: '20%', top: '15%' }
+  };
+  
+  profileChartInstance.setOption(option, true);
+}
+
 watch(() => selectedLessonIds.value, () => {
   if (rawData.value.length > 0) {
     processData();
@@ -290,7 +855,7 @@ function handleExport() {
   exportScoreExcel(
     queryParams.value.entryYear, 
     queryParams.value.classCode, 
-    selectedLessonIds.value // 传递表格内选中的课程
+    selectedLessonIds.value
   ).then(res => {
     const blob = new Blob([res]);
     const link = document.createElement('a');
@@ -332,6 +897,16 @@ function getScoreType(score) {
     margin-left: 15px;
     color: #67C23A;
     font-size: 13px;
+  }
+}
+
+.chart-row {
+  margin-bottom: 15px;
+}
+
+.chart-card {
+  .chart-container {
+    height: 280px;
   }
 }
 
@@ -382,10 +957,112 @@ function getScoreType(score) {
     color: #606266;
   }
   
+  .typing-speed {
+    font-weight: bold;
+    color: #E6A23C;
+    
+    small {
+      font-size: 10px;
+      font-weight: normal;
+      color: #909399;
+    }
+  }
+  
+  .typing-detail {
+    p {
+      margin: 5px 0;
+    }
+    b {
+      color: #606266;
+    }
+  }
+  
+  .typing-accuracy {
+    font-weight: bold;
+    color: #67C23A;
+  }
+  
+  .typing-completion {
+    font-weight: bold;
+    color: #409EFF;
+  }
+  
+  // Data Bar 样式
+  .data-bar-cell {
+    position: relative;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    .data-bar {
+      position: absolute;
+      left: 0;
+      top: 2px;
+      bottom: 2px;
+      background: linear-gradient(90deg, #e6f4ff, #bae0ff);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    
+    .data-bar-value {
+      position: relative;
+      z-index: 1;
+    }
+    
+    &.avg-bar .data-bar {
+      background: linear-gradient(90deg, #f0f9eb, #c6e6b8);
+    }
+  }
+  
   .empty-tip {
     text-align: center;
     padding: 40px;
     color: #909399;
   }
+}
+
+.profile-content {
+  .profile-header {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    
+    span {
+      font-size: 14px;
+      color: #606266;
+    }
+  }
+  
+  .profile-filters {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #ebeef5;
+  }
+  
+  .profile-chart {
+    height: 280px;
+  }
+}
+
+// 打字图表头部样式
+.typing-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.typing-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 </style>

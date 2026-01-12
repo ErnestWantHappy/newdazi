@@ -63,6 +63,9 @@ public class BizQuestion extends BaseEntity
 
     private Integer wordCount;
 
+    /** 预览状态：pending/converting/success/failed */
+    private String previewStatus;
+
     /** P6: 评分项列表 */
     private java.util.List<BizScoringItem> scoringItems;
 
@@ -217,6 +220,14 @@ public class BizQuestion extends BaseEntity
 
     public void setScoringItems(java.util.List<BizScoringItem> scoringItems) {
         this.scoringItems = scoringItems;
+    }
+
+    public String getPreviewStatus() {
+        return previewStatus;
+    }
+
+    public void setPreviewStatus(String previewStatus) {
+        this.previewStatus = previewStatus;
     }
 
     @Override

@@ -42,6 +42,21 @@ public class BizStudentAnswer extends BaseEntity
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date submitTime;
 
+    /** 打字速度(字符/分钟) */
+    private Integer typingSpeed;
+
+    /** 正确率(%) */
+    private Double accuracyRate;
+
+    /** 完成率(%) */
+    private Double completionRate;
+
+    /** 预览状态：pending/converting/success/failed */
+    private String previewStatus;
+
+    /** 预览文件路径 (PDF) */
+    private String previewPath;
+
     // --- 非数据库字段，用于查询展示 ---
     private String studentName;
     private String studentNo;
@@ -83,4 +98,19 @@ public class BizStudentAnswer extends BaseEntity
 
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
+
+    public Integer getTypingSpeed() { return typingSpeed; }
+    public void setTypingSpeed(Integer typingSpeed) { this.typingSpeed = typingSpeed; }
+
+    public Double getAccuracyRate() { return accuracyRate; }
+    public void setAccuracyRate(Double accuracyRate) { this.accuracyRate = accuracyRate; }
+
+    public Double getCompletionRate() { return completionRate; }
+    public void setCompletionRate(Double completionRate) { this.completionRate = completionRate; }
+
+    public String getPreviewStatus() { return previewStatus; }
+    public void setPreviewStatus(String previewStatus) { this.previewStatus = previewStatus; }
+
+    public String getPreviewPath() { return previewPath; }
+    public void setPreviewPath(String previewPath) { this.previewPath = previewPath; }
 }

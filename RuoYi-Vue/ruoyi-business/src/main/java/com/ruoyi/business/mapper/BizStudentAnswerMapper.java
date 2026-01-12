@@ -71,4 +71,14 @@ public interface BizStudentAnswerMapper
     List<java.util.Map<String, Object>> selectScoreSummaryByStudent(
         @Param("studentId") Long studentId, 
         @Param("lessonId") Long lessonId);
+
+    /**
+     * 更新答题记录的预览状态
+     */
+    int updatePreviewStatus(BizStudentAnswer answer);
+
+    /**
+     * 根据ID查询答题记录
+     */
+    BizStudentAnswer selectById(@Param("answerId") Long answerId);
 }

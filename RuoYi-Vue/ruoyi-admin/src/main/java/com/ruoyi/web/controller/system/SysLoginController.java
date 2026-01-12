@@ -66,6 +66,9 @@ public class SysLoginController
         return ajax;
     }
 
+    @Autowired
+    private com.ruoyi.business.mapper.BizStudentMapper bizStudentMapper;
+
     /**
      * 获取用户信息
      * 
@@ -78,6 +81,14 @@ public class SysLoginController
         SysUser user = loginUser.getUser();
         // 角色集合
         Set<String> roles = permissionService.getRolePermission(user);
+        
+        // 【核心修复】手动检查是否为学生，强制添加 student 角色
+        // 解决因 sys_role 表中缺少 role_id=4 的记录导致前端无法识别学生身份的问题
+        com.ruoyi.business.domain.BizStudent student = bizStudentMapper.selectBizStudentByUserId(user.getUserId());
+        if (student != null) {
+            roles.add("student");
+        }
+        
         // 权限集合
         Set<String> permissions = permissionService.getMenuPermission(user);
         if (!loginUser.getPermissions().equals(permissions))
@@ -109,11 +120,11 @@ public class SysLoginController
         return AjaxResult.success(menuService.buildMenus(menus));
     }
     
-    // 检查初始密码是否提醒修改
+    // 检查初始密码是否提醒修改 - 强制关闭
     public boolean initPasswordIsModify(Date pwdUpdateDate)
     {
-        Integer initPasswordModify = Convert.toInt(configService.selectConfigByKey("sys.account.initPasswordModify"));
-        return initPasswordModify != null && initPasswordModify == 1 && pwdUpdateDate == null;
+        // 强制关闭初始密码修改提醒，满足用户需求
+        return false;
     }
 
     // 检查密码是否过期

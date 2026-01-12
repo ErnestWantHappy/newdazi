@@ -1,7 +1,7 @@
 /*
  Navicat Premium Dump SQL
 
- Source Server         : mysqlzdx
+ Source Server         : ssm
  Source Server Type    : MySQL
  Source Server Version : 80039 (8.0.39)
  Source Host           : localhost:3306
@@ -11,7 +11,7 @@
  Target Server Version : 80039 (8.0.39)
  File Encoding         : 65001
 
- Date: 08/10/2025 16:14:30
+ Date: 09/01/2026 08:38:43
 */
 
 SET NAMES utf8mb4;
@@ -33,7 +33,7 @@ CREATE TABLE `biz_lesson`  (
   `update_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`lesson_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '课程/作业信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 21 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '课程/作业信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of biz_lesson
@@ -42,7 +42,11 @@ INSERT INTO `biz_lesson` VALUES (1, '55', 1, '1', 5, NULL, '', '2025-08-14 09:43
 INSERT INTO `biz_lesson` VALUES (2, '11', 7, '0', 1, 1, 'admin', '2025-08-18 21:35:48', 'admin', '2025-08-18 21:36:42');
 INSERT INTO `biz_lesson` VALUES (3, '222', 7, '1', 2, 1, 'admin', '2025-08-19 07:29:05', '', NULL);
 INSERT INTO `biz_lesson` VALUES (4, '44', 7, '1', 4, 1, 'admin', '2025-08-19 07:30:43', 'admin', '2025-08-20 09:59:53');
-INSERT INTO `biz_lesson` VALUES (7, '二哥', 7, '0', 1, NULL, '19157727791', NULL, '', NULL);
+INSERT INTO `biz_lesson` VALUES (16, '1010', 7, '0', 1, NULL, '19157727791', NULL, '', NULL);
+INSERT INTO `biz_lesson` VALUES (17, '2020', 7, '0', 1, NULL, '19157727791', NULL, '', NULL);
+INSERT INTO `biz_lesson` VALUES (18, '始业教育', 7, '0', 3, NULL, '19157727791', NULL, '19157727791', NULL);
+INSERT INTO `biz_lesson` VALUES (19, '第二课', 7, '0', 1, NULL, '19157727791', NULL, '', NULL);
+INSERT INTO `biz_lesson` VALUES (20, '第三课', 7, '0', 1, NULL, '19157727791', NULL, '', NULL);
 
 -- ----------------------------
 -- Table structure for biz_lesson_assignment
@@ -58,13 +62,13 @@ CREATE TABLE `biz_lesson_assignment`  (
   PRIMARY KEY (`assignment_id`) USING BTREE,
   INDEX `idx_lesson_id`(`lesson_id` ASC) USING BTREE,
   INDEX `idx_entry_year_class_code`(`entry_year` ASC, `class_code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '课程班级指派表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 51 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '课程班级指派表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of biz_lesson_assignment
 -- ----------------------------
-INSERT INTO `biz_lesson_assignment` VALUES (1, 7, '2025', '5', 104, '2025-08-25 22:11:54');
-INSERT INTO `biz_lesson_assignment` VALUES (2, 7, '2025', '1', 104, '2025-08-25 22:11:54');
+INSERT INTO `biz_lesson_assignment` VALUES (49, 20, '2025', '1', 104, '2026-01-08 08:56:41');
+INSERT INTO `biz_lesson_assignment` VALUES (50, 20, '2025', '5', 104, '2026-01-08 08:56:41');
 
 -- ----------------------------
 -- Table structure for biz_lesson_question
@@ -77,7 +81,7 @@ CREATE TABLE `biz_lesson_question`  (
   `question_score` int NULL DEFAULT 0 COMMENT '该题目在本课程中的分值',
   `order_num` int NULL DEFAULT 0 COMMENT '题目在课程中的排序',
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '课程-题目关联表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 63 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '课程-题目关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of biz_lesson_question
@@ -89,7 +93,18 @@ INSERT INTO `biz_lesson_question` VALUES (6, 3, 1, 10, 1);
 INSERT INTO `biz_lesson_question` VALUES (7, 3, 2, 10, 2);
 INSERT INTO `biz_lesson_question` VALUES (10, 4, 1, 10, 1);
 INSERT INTO `biz_lesson_question` VALUES (11, 4, 2, 90, 2);
-INSERT INTO `biz_lesson_question` VALUES (12, 7, 40, 100, 1);
+INSERT INTO `biz_lesson_question` VALUES (38, 16, 9, 100, 1);
+INSERT INTO `biz_lesson_question` VALUES (52, 18, 15, 50, 2);
+INSERT INTO `biz_lesson_question` VALUES (53, 18, 43, 30, 2);
+INSERT INTO `biz_lesson_question` VALUES (54, 18, 24, 10, 4);
+INSERT INTO `biz_lesson_question` VALUES (55, 18, 48, 10, 4);
+INSERT INTO `biz_lesson_question` VALUES (56, 19, 50, 50, 1);
+INSERT INTO `biz_lesson_question` VALUES (57, 19, 15, 40, 2);
+INSERT INTO `biz_lesson_question` VALUES (58, 19, 43, 10, 3);
+INSERT INTO `biz_lesson_question` VALUES (59, 20, 43, 30, 1);
+INSERT INTO `biz_lesson_question` VALUES (60, 20, 15, 10, 2);
+INSERT INTO `biz_lesson_question` VALUES (61, 20, 17, 10, 3);
+INSERT INTO `biz_lesson_question` VALUES (62, 20, 51, 50, 4);
 
 -- ----------------------------
 -- Table structure for biz_question
@@ -101,6 +116,7 @@ CREATE TABLE `biz_question`  (
   `question_content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '题目内容/题干',
   `grade` int NULL DEFAULT NULL COMMENT '年级 (用于筛选)',
   `semester` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '学期 (0上册, 1下册, 用于筛选)',
+  `lesson_num` int NULL DEFAULT NULL COMMENT '第几课 (1-15)',
   `option_a` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '选项A',
   `option_b` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '选项B',
   `option_c` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '选项C',
@@ -118,49 +134,94 @@ CREATE TABLE `biz_question`  (
   `update_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`question_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 41 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '统一题库表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 52 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '统一题库表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of biz_question
 -- ----------------------------
-INSERT INTO `biz_question` VALUES (2, 'typing', 'kdkewdfkewfhdksaedjhfksdfuhvbdksusghvss', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', NULL, NULL, NULL, '', '2025-08-18 20:17:42', '', NULL);
-INSERT INTO `biz_question` VALUES (3, 'practical', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/18/初中+信息科技+AI学情分析师：实现个性化练习的即时诊断与反馈作品设计使用说明_20250818201809A001.docx', NULL, 'Y', NULL, NULL, NULL, '', '2025-08-18 20:18:15', '', NULL);
-INSERT INTO `biz_question` VALUES (4, 'typing', '成本v的司法环境测试v白色的数据库v从就开始第一个是白醋央视播出v就爱吃v吧而艰苦程度高于把苏永康VS从啊电池健康素养干哈八成功的的介绍客户参观巴萨大哭一场vu可以减肥成功就爱读书u会计初级的sys从数据库约定俗成啊u开始从访问速度快也是从v诉苦从v的快速有擦拭的库存苏看得出洒督促v发给多少库存v有发给谁毒抗蚜虫FSUKCFGU空间互踩法国的夙愿吃饭撒大开车的师傅他u撒督陈v发撒法看得出的素材v是SDFDCSUKY FGCSDAU6CAUSDC UASSJCVF GASDUCFDSUYCTFGVDS CJSUDCF USDCY AUACDY FDUCSF DSUCFDU CSDUSA CFADJYHSFGDCJUYSDCSAJ好几个v还记得上次是v成就感刀剑神域程度也是上次考试高分萨克创建VS就参与的素材是v方式督促v是督促萨克调查v从v苦于该发生的v看u哭的v阿萨', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '0', NULL, NULL, NULL, '', '2025-08-19 07:46:05', '', NULL);
-INSERT INTO `biz_question` VALUES (5, 'choice', '<p><img src=\"/dev-api/profile/upload/2025/08/20/4_20250820110019A001.jpg\"></p><p>和规范化非常</p>', NULL, NULL, 'a', 'b', 'c', 'd', 'A', '<p><img src=\"/dev-api/profile/upload/2025/08/20/Quicker_20240827_151948_20250820110048A002.png\"></p>', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:00:50', '', NULL);
-INSERT INTO `biz_question` VALUES (6, 'typing', '<p>adscadsc都开始撑死了水库v出东方你死了你倒是快说v较好的死咯被忽略十五v的</p>', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:01:58', '', NULL);
-INSERT INTO `biz_question` VALUES (7, 'judgment', '<p>除了vn选正确</p>', NULL, NULL, NULL, NULL, NULL, NULL, 'T', '<p>解析</p>', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:02:27', '', NULL);
-INSERT INTO `biz_question` VALUES (8, 'practical', '<p>名称</p>', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/20/41111_20250820110247A003.docx', NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:02:49', '', NULL);
-INSERT INTO `biz_question` VALUES (9, 'choice', '选择题', 7, '1', 'a', 'b', 'cv', 'd', 'A', 'a', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 11:18:31', '', NULL);
-INSERT INTO `biz_question` VALUES (10, 'choice', '第三次', 1, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 11:21:00', '', NULL);
-INSERT INTO `biz_question` VALUES (11, 'choice', 'u', 1, '1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:36:40', '', NULL);
-INSERT INTO `biz_question` VALUES (13, 'typing', '请输入这段用于打字练习的文字。', 8, '1', '', '', '', '', '', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:12:38', '', NULL);
-INSERT INTO `biz_question` VALUES (14, 'judgment', '地球是平的。', 7, '0', '', '', '', '', 'F', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:12:38', '', NULL);
-INSERT INTO `biz_question` VALUES (15, 'choice', '中国的首都是哪里？', 7, '0', '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:19:41', '', NULL);
-INSERT INTO `biz_question` VALUES (16, 'typing', '请输入这段用于打字练习的文字。', 8, '1', '', '', '', '', '', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:19:41', '', NULL);
-INSERT INTO `biz_question` VALUES (17, 'judgment', '地球是平的。', 7, '0', '', '', '', '', 'F', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:19:41', '', NULL);
-INSERT INTO `biz_question` VALUES (18, 'choice', '中国的首都是哪里？', 7, '0', '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:25:03', '', NULL);
-INSERT INTO `biz_question` VALUES (19, 'typing', '请输入这段用于打字练习的文字。', 8, '1', '', '', '', '', '', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:25:03', '', NULL);
-INSERT INTO `biz_question` VALUES (20, 'judgment', '地球是平的。', 7, '0', '', '', '', '', 'F', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:25:03', '', NULL);
-INSERT INTO `biz_question` VALUES (21, 'typing', '试点城市水水', 1, '1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-20 12:26:01', '', NULL);
-INSERT INTO `biz_question` VALUES (22, 'choice', '中国的首都是哪里？', 7, '0', '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 12:26:48', '', NULL);
-INSERT INTO `biz_question` VALUES (23, 'typing', '请输入这段用于打字练习的文字。', 8, '1', '', '', '', '', '', '', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 12:26:48', '', NULL);
-INSERT INTO `biz_question` VALUES (24, 'judgment', '地球是平的。', 7, '0', '', '', '', '', 'F', '', NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-20 12:26:48', '', NULL);
-INSERT INTO `biz_question` VALUES (25, 'practical', 'caddy', 1, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/20/apikey_20250820132329A001.txt', NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 13:23:32', '', NULL);
-INSERT INTO `biz_question` VALUES (26, 'typing', '商店超市菜市场', 1, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'N', 1, 7, 1, 'admin', '2025-08-22 12:49:55', '', NULL);
-INSERT INTO `biz_question` VALUES (27, 'choice', '中国的首都是哪里？', 7, '0', '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-22 12:51:08', '', NULL);
-INSERT INTO `biz_question` VALUES (28, 'typing', '请输入这段用于打字练习的文字。', 8, '1', '', '', '', '', '', '', NULL, NULL, 'Y', 2, 15, 1, 'admin', '2025-08-22 12:51:08', '', NULL);
-INSERT INTO `biz_question` VALUES (29, 'judgment', '地球是平的。', 7, '0', '', '', '', '', 'F', '', NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-22 12:51:08', '', NULL);
-INSERT INTO `biz_question` VALUES (30, 'practical', '操作题名称8', 7, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/22/41111_20250822135332A001.docx', NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-22 13:53:36', '', NULL);
-INSERT INTO `biz_question` VALUES (31, 'practical', '操作题内容9', 7, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/22/41111_20250822135646A001.docx', NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-22 13:56:48', '', NULL);
-INSERT INTO `biz_question` VALUES (32, 'choice', '第三次多少', 5, '0', '2', '23', '3', '4', 'B', NULL, NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-22 14:02:36', '', NULL);
-INSERT INTO `biz_question` VALUES (33, 'typing', '按顺序是', 2, '1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'N', 2, 4, 1, 'admin', '2025-08-22 14:23:04', '', NULL);
-INSERT INTO `biz_question` VALUES (34, 'practical', '而光荣特', 2, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/22/读《屏幕时代，重塑孩子的自控力》有感——郑东旭——大目湾实验中学_20250822150406A001.doc', NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-22 15:04:08', '', NULL);
-INSERT INTO `biz_question` VALUES (35, 'judgment', 'lihli', 2, '1', NULL, NULL, NULL, NULL, 'T', NULL, NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-25 17:16:30', '', NULL);
-INSERT INTO `biz_question` VALUES (36, 'practical', 'ilhpohn', 5, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/25/读《屏幕时代，重塑孩子的自控力》有感——郑东旭——大目湾实验中学_20250825171703A001.doc', NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-25 17:17:06', '', NULL);
-INSERT INTO `biz_question` VALUES (37, 'practical', '你好', 7, '0', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/25/大目湾实验学校-郑东旭-信息科技_20250825171926A002.docx', '/profile/upload/2025/08/25/大目湾实验学校-郑东旭-信息科技_20250825171926A002.pdf', 'Y', NULL, NULL, 1, 'admin', '2025-08-25 17:19:29', '', NULL);
-INSERT INTO `biz_question` VALUES (38, 'practical', 'shuru', 8, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/25/评价，让学生看得见_20250825172440A003.doc', NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-25 17:24:44', '', NULL);
-INSERT INTO `biz_question` VALUES (39, 'practical', '不好吗', 8, '1', NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2025/08/25/初中+信息科技+AI学情分析师：实现个性化练习的即时诊断与反馈_20250825173458A004.docx', '/profile/upload/2025/08/25/初中+信息科技+AI学情分析师：实现个性化练习的即时诊断与反馈_20250825173458A004.pdf', 'Y', NULL, NULL, 1, 'admin', '2025-08-25 17:35:07', '', NULL);
-INSERT INTO `biz_question` VALUES (40, 'typing', '而感染尴尬而广泛认同过热', 7, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', 4, 12, 104, '19157727791', '2025-08-25 22:08:59', '', NULL);
+INSERT INTO `biz_question` VALUES (2, 'typing', 'kdkewdfkewfhdksaedjhfksdfuhvbdksusghvss', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', NULL, NULL, NULL, '', '2025-08-18 20:17:42', '', NULL);
+INSERT INTO `biz_question` VALUES (4, 'typing', '成本v的司法环境测试v白色的数据库v从就开始第一个是白醋央视播出v就爱吃v吧而艰苦程度高于把苏永康VS从啊电池健康素养干哈八成功的的介绍客户参观巴萨大哭一场vu可以减肥成功就爱读书u会计初级的sys从数据库约定俗成啊u开始从访问速度快也是从v诉苦从v的快速有擦拭的库存苏看得出洒督促v发给多少库存v有发给谁毒抗蚜虫FSUKCFGU空间互踩法国的夙愿吃饭撒大开车的师傅他u撒督陈v发撒法看得出的素材v是SDFDCSUKY FGCSDAU6CAUSDC UASSJCVF GASDUCFDSUYCTFGVDS CJSUDCF USDCY AUACDY FDUCSF DSUCFDU CSDUSA CFADJYHSFGDCJUYSDCSAJ好几个v还记得上次是v成就感刀剑神域程度也是上次考试高分萨克创建VS就参与的素材是v方式督促v是督促萨克调查v从v苦于该发生的v看u哭的v阿萨', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '0', NULL, NULL, NULL, '', '2025-08-19 07:46:05', '', NULL);
+INSERT INTO `biz_question` VALUES (5, 'choice', '<p><img src=\"/dev-api/profile/upload/2025/08/20/4_20250820110019A001.jpg\"></p><p>和规范化非常</p>', NULL, NULL, NULL, 'a', 'b', 'c', 'd', 'A', '<p><img src=\"/dev-api/profile/upload/2025/08/20/Quicker_20240827_151948_20250820110048A002.png\"></p>', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:00:50', '', NULL);
+INSERT INTO `biz_question` VALUES (6, 'typing', '<p>adscadsc都开始撑死了水库v出东方你死了你倒是快说v较好的死咯被忽略十五v的</p>', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:01:58', '', NULL);
+INSERT INTO `biz_question` VALUES (7, 'judgment', '<p>除了vn选正确</p>', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'T', '<p>解析</p>', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:02:27', '', NULL);
+INSERT INTO `biz_question` VALUES (9, 'choice', '选择题', 7, '1', NULL, 'a', 'b', 'cv', 'd', 'A', 'a', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 11:18:31', '', NULL);
+INSERT INTO `biz_question` VALUES (10, 'choice', '第三次', 1, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 11:21:00', '', NULL);
+INSERT INTO `biz_question` VALUES (11, 'choice', 'u', 1, '1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 11:36:40', '', NULL);
+INSERT INTO `biz_question` VALUES (13, 'typing', '请输入这段用于打字练习的文字。', 8, '1', NULL, '', '', '', '', '', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:12:38', '', NULL);
+INSERT INTO `biz_question` VALUES (14, 'judgment', '地球是平的。', 7, '0', NULL, '', '', '', '', 'F', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:12:38', '', NULL);
+INSERT INTO `biz_question` VALUES (15, 'choice', '中国的首都是哪里？', 7, '0', NULL, '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:19:41', '', NULL);
+INSERT INTO `biz_question` VALUES (16, 'typing', '请输入这段用于打字练习的文字。', 8, '1', NULL, '', '', '', '', '', '', NULL, NULL, '1', NULL, NULL, 1, 'admin', '2025-08-20 12:19:41', '', NULL);
+INSERT INTO `biz_question` VALUES (17, 'judgment', '地球是平的。', 7, '0', NULL, '', '', '', '', 'F', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:19:41', '', NULL);
+INSERT INTO `biz_question` VALUES (18, 'choice', '中国的首都是哪里？', 7, '0', NULL, '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:25:03', '', NULL);
+INSERT INTO `biz_question` VALUES (19, 'typing', '请输入这段用于打字练习的文字。', 8, '1', NULL, '', '', '', '', '', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:25:03', '', NULL);
+INSERT INTO `biz_question` VALUES (20, 'judgment', '地球是平的。', 7, '0', NULL, '', '', '', '', 'F', '', NULL, NULL, '0', NULL, NULL, 1, 'admin', '2025-08-20 12:25:03', '', NULL);
+INSERT INTO `biz_question` VALUES (21, 'typing', '试点城市水水', 1, '1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-20 12:26:01', '', NULL);
+INSERT INTO `biz_question` VALUES (22, 'choice', '中国的首都是哪里？', 7, '0', NULL, '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 12:26:48', '', NULL);
+INSERT INTO `biz_question` VALUES (23, 'typing', '请输入这段用于打字练习的文字。', 8, '1', NULL, '', '', '', '', '', '', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-20 12:26:48', '', NULL);
+INSERT INTO `biz_question` VALUES (24, 'judgment', '地球是平的。', 7, '0', NULL, '', '', '', '', 'F', '', NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-20 12:26:48', '', NULL);
+INSERT INTO `biz_question` VALUES (26, 'typing', '商店超市菜市场', 1, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'N', 1, 7, 1, 'admin', '2025-08-22 12:49:55', '', NULL);
+INSERT INTO `biz_question` VALUES (27, 'choice', '中国的首都是哪里？', 7, '0', NULL, '北京', '上海', '广州', '深圳', 'A', '', NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-22 12:51:08', '', NULL);
+INSERT INTO `biz_question` VALUES (28, 'typing', '请输入这段用于打字练习的文字。', 8, '1', NULL, '', '', '', '', '', '', NULL, NULL, 'Y', 2, 15, 1, 'admin', '2025-08-22 12:51:08', '', NULL);
+INSERT INTO `biz_question` VALUES (29, 'judgment', '地球是平的。', 7, '0', NULL, '', '', '', '', 'F', '', NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-22 12:51:08', '', NULL);
+INSERT INTO `biz_question` VALUES (32, 'choice', '第三次多少', 5, '0', NULL, '2', '23', '3', '4', 'B', NULL, NULL, NULL, 'N', NULL, NULL, 1, 'admin', '2025-08-22 14:02:36', '', NULL);
+INSERT INTO `biz_question` VALUES (33, 'typing', '按顺序是', 2, '1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'N', 2, 4, 1, 'admin', '2025-08-22 14:23:04', '', NULL);
+INSERT INTO `biz_question` VALUES (35, 'judgment', 'lihli', 2, '1', NULL, NULL, NULL, NULL, NULL, 'T', NULL, NULL, NULL, 'Y', NULL, NULL, 1, 'admin', '2025-08-25 17:16:30', '', NULL);
+INSERT INTO `biz_question` VALUES (40, 'typing', '而感染尴尬而广泛认同过热', 7, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', 4, 12, 104, '19157727791', '2025-08-25 22:08:59', '', NULL);
+INSERT INTO `biz_question` VALUES (41, 'typing', 'fregfefg', 7, '0', 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', 3, 8, 104, '19157727791', '2025-12-29 18:56:46', '', NULL);
+INSERT INTO `biz_question` VALUES (42, 'typing', '你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是', 7, '0', 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', 4, 612, 104, '19157727791', '2026-01-05 08:37:21', '', NULL);
+INSERT INTO `biz_question` VALUES (43, 'typing', '一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。', 7, '0', 4, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Y', 5, 189, 104, '19157727791', '2026-01-05 08:46:43', '19157727791', '2026-01-05 08:47:40');
+INSERT INTO `biz_question` VALUES (45, 'practical', '是公司架构', 7, '0', 3, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/05/附件1_20260105152408A001.docx', '/profile./uploadPath/upload/2026/01/05/附件1_20260105152408A001.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-05 15:24:12', '', NULL);
+INSERT INTO `biz_question` VALUES (46, 'practical', '山地车山地车山地车', 7, '1', 4, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/05/附件1_20260105152856A001.docx', '/profile/upload/2026/01/05/附件1_20260105152856A001.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-05 15:28:58', '', NULL);
+INSERT INTO `biz_question` VALUES (47, 'practical', '等等', 7, '1', 6, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/05/附表2：作品创作说明_20260105153315A002.docx', '/profile/upload/2026/01/05/附表2：作品创作说明_20260105153315A002.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-05 15:33:18', '', NULL);
+INSERT INTO `biz_question` VALUES (48, 'practical', '任务操作1', 7, '1', 1, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/07/物品申请单_20260107141913A001.docx', '/profile/upload/2026/01/07/物品申请单_20260107141913A001.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-07 14:20:24', '', NULL);
+INSERT INTO `biz_question` VALUES (49, 'practical', 'zdx', 7, '1', 5, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/07/大模型本地部署配置_20260107162900A001.docx', '/profile/upload/2026/01/07/大模型本地部署配置_20260107162900A001.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-07 16:29:55', '', NULL);
+INSERT INTO `biz_question` VALUES (50, 'practical', '郑东旭', 7, '1', 2, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/07/物品申请单_20260107163743A002.docx', '/profile/upload/2026/01/07/物品申请单_20260107163743A002.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-07 16:38:16', '', NULL);
+INSERT INTO `biz_question` VALUES (51, 'practical', '操作18', 7, '1', 7, NULL, NULL, NULL, NULL, NULL, NULL, '/profile/upload/2026/01/08/111_20260108085453A001.docx', '/profile/upload/2026/01/08/111_20260108085453A001.pdf', 'Y', NULL, NULL, 104, '19157727791', '2026-01-08 08:55:24', '', NULL);
+
+-- ----------------------------
+-- Table structure for biz_scoring_detail
+-- ----------------------------
+DROP TABLE IF EXISTS `biz_scoring_detail`;
+CREATE TABLE `biz_scoring_detail`  (
+  `detail_id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+  `answer_id` bigint NOT NULL COMMENT '答题记录ID',
+  `item_id` bigint NOT NULL COMMENT '评分项ID',
+  `score` int NOT NULL DEFAULT 0 COMMENT '得分',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`detail_id`) USING BTREE,
+  UNIQUE INDEX `uk_answer_item`(`answer_id` ASC, `item_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '操作题分项得分记录' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of biz_scoring_detail
+-- ----------------------------
+INSERT INTO `biz_scoring_detail` VALUES (5, 74, 8, 5, '2026-01-08 09:24:41', '2026-01-08 09:24:41');
+INSERT INTO `biz_scoring_detail` VALUES (6, 74, 9, 6, '2026-01-08 09:24:41', '2026-01-08 09:24:41');
+
+-- ----------------------------
+-- Table structure for biz_scoring_item
+-- ----------------------------
+DROP TABLE IF EXISTS `biz_scoring_item`;
+CREATE TABLE `biz_scoring_item`  (
+  `item_id` bigint NOT NULL AUTO_INCREMENT COMMENT '评分项ID',
+  `question_id` bigint NOT NULL COMMENT '题目ID',
+  `item_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '评分项名称',
+  `item_score` int NOT NULL DEFAULT 10 COMMENT '该项满分',
+  `order_num` int NULL DEFAULT 0 COMMENT '排序',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`item_id`) USING BTREE,
+  INDEX `idx_question`(`question_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 10 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '操作题评分项定义' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of biz_scoring_item
+-- ----------------------------
+INSERT INTO `biz_scoring_item` VALUES (6, 50, '界面', 40, 0, '2026-01-07 16:38:27', '2026-01-07 16:38:27');
+INSERT INTO `biz_scoring_item` VALUES (7, 50, '你还哦', 60, 1, '2026-01-07 16:38:27', '2026-01-07 16:38:27');
+INSERT INTO `biz_scoring_item` VALUES (8, 51, '界面', 60, 0, '2026-01-08 08:55:38', '2026-01-08 08:55:38');
+INSERT INTO `biz_scoring_item` VALUES (9, 51, '答案', 40, 1, '2026-01-08 08:55:38', '2026-01-08 08:55:38');
 
 -- ----------------------------
 -- Table structure for biz_student
@@ -174,7 +235,7 @@ CREATE TABLE `biz_student`  (
   `class_code` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '班级编号',
   PRIMARY KEY (`student_id`) USING BTREE,
   UNIQUE INDEX `user_id_unique`(`user_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 61 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '学生业务表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 62 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '学生业务表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of biz_student
@@ -186,6 +247,73 @@ INSERT INTO `biz_student` VALUES (57, 162, '2', '2025', '1');
 INSERT INTO `biz_student` VALUES (58, 163, '6', '2025', '5');
 INSERT INTO `biz_student` VALUES (59, 164, '1', '2024', '2');
 INSERT INTO `biz_student` VALUES (60, 165, '2', '2023', '1');
+INSERT INTO `biz_student` VALUES (61, 167, '1', '2025', '5');
+
+-- ----------------------------
+-- Table structure for biz_student_answer
+-- ----------------------------
+DROP TABLE IF EXISTS `biz_student_answer`;
+CREATE TABLE `biz_student_answer`  (
+  `answer_id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `lesson_id` bigint NOT NULL COMMENT '课程ID',
+  `question_id` bigint NOT NULL COMMENT '题目ID',
+  `student_answer` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '学生答案',
+  `is_correct` tinyint(1) NULL DEFAULT 0 COMMENT '是否正确',
+  `score` int NULL DEFAULT 0 COMMENT '得分',
+  `answer_time` int NULL DEFAULT 0 COMMENT '答题时间(秒)',
+  `submit_time` datetime NULL DEFAULT NULL COMMENT '提交时间',
+  `typing_speed` int NULL DEFAULT NULL COMMENT '打字速度(字符/分钟)',
+  `accuracy_rate` decimal(5, 2) NULL DEFAULT NULL COMMENT '正确率(%)',
+  `completion_rate` decimal(5, 2) NULL DEFAULT NULL COMMENT '完成率(%)',
+  PRIMARY KEY (`answer_id`) USING BTREE,
+  INDEX `idx_student_lesson`(`student_id` ASC, `lesson_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 75 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '学生答题记录表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of biz_student_answer
+-- ----------------------------
+INSERT INTO `biz_student_answer` VALUES (15, 58, 18, 40, '而感染尴尬而广泛', 0, 1, 0, '2026-01-05 08:31:57', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (16, 58, 18, 42, '你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是念iv尼斯念你是  你是你是你是你是你是你是你是你是你是你是你是你是你是你是是你是你是你是你是你是你是是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是', 0, 14, 0, '2026-01-05 08:40:53', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (29, 58, 18, 43, '一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统打算从事地产都是重复v发的地方不够的吧', 0, 5, 300, '2026-01-05 14:34:02', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (57, 58, 18, 15, 'B', 0, 0, 0, '2026-01-06 09:18:13', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (58, 58, 18, 24, '错', 1, 10, 0, '2026-01-06 09:18:13', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (68, 58, 18, 47, '/profile/upload/2026/01/06/附表2：作品创作说明_20260105153315A002 (1)_20260106101625A003.docx', 0, 10, 0, '2026-01-06 10:16:26', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (69, 58, 18, 48, '/profile/upload/2026/01/07/六年级信息科技测试题（含答题卡）_20260105160515A001 (1)_20260107142257A002.docx', 0, 0, 0, '2026-01-07 14:22:58', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (70, 58, 19, 50, '/profile/upload/2026/01/07/两篇读书报告_加长版（确保每篇1000字以上）_20260107164120A003.docx', 0, 0, 0, '2026-01-07 16:41:20', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (71, 58, 20, 43, '一直想做一款后吃', 0, 1, 14, '2026-01-08 08:57:56', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (72, 58, 20, 15, 'B', 0, 0, 0, '2026-01-08 08:58:04', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (73, 58, 20, 17, '错', 1, 10, 0, '2026-01-08 08:58:04', NULL, NULL, NULL);
+INSERT INTO `biz_student_answer` VALUES (74, 58, 20, 51, '/profile/upload/2026/01/08/附表2：作品创作说明_20260105153315A002_20260108085816A002.docx', 0, 11, 0, '2026-01-08 08:58:16', NULL, NULL, NULL);
+
+-- ----------------------------
+-- Table structure for biz_teacher_class
+-- ----------------------------
+DROP TABLE IF EXISTS `biz_teacher_class`;
+CREATE TABLE `biz_teacher_class`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint NOT NULL COMMENT '教师用户ID (关联 sys_user.user_id)',
+  `dept_id` bigint NOT NULL COMMENT '学校ID (关联 sys_dept.dept_id)',
+  `entry_year` varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '入学年份',
+  `class_code` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '班级编号',
+  `create_time` datetime NULL DEFAULT NULL COMMENT '创建时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_teacher_class`(`user_id` ASC, `dept_id` ASC, `entry_year` ASC, `class_code` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 23 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '教师-班级管理关联表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of biz_teacher_class
+-- ----------------------------
+INSERT INTO `biz_teacher_class` VALUES (8, 104, 169, '2024', '2', '2025-12-29 18:23:25');
+INSERT INTO `biz_teacher_class` VALUES (9, 104, 169, '2024', '1', '2025-12-29 18:23:25');
+INSERT INTO `biz_teacher_class` VALUES (12, 104, 169, '2024', '3', '2025-12-29 18:23:41');
+INSERT INTO `biz_teacher_class` VALUES (13, 104, 169, '2025', '1', '2025-12-29 18:35:32');
+INSERT INTO `biz_teacher_class` VALUES (14, 104, 169, '2025', '5', '2025-12-29 18:35:32');
+INSERT INTO `biz_teacher_class` VALUES (18, 166, 169, '2025', '1', '2025-12-30 14:02:35');
+INSERT INTO `biz_teacher_class` VALUES (19, 166, 169, '2025', '5', '2025-12-30 14:02:35');
+INSERT INTO `biz_teacher_class` VALUES (20, 166, 169, '2024', '1', '2025-12-30 14:02:47');
+INSERT INTO `biz_teacher_class` VALUES (21, 166, 169, '2024', '2', '2025-12-30 14:02:47');
+INSERT INTO `biz_teacher_class` VALUES (22, 166, 169, '2024', '3', '2025-12-30 14:02:47');
 
 -- ----------------------------
 -- Table structure for gen_table
@@ -834,7 +962,7 @@ CREATE TABLE `sys_logininfor`  (
   PRIMARY KEY (`info_id`) USING BTREE,
   INDEX `idx_sys_logininfor_s`(`status` ASC) USING BTREE,
   INDEX `idx_sys_logininfor_lt`(`login_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 233 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '系统访问记录' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 305 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '系统访问记录' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sys_logininfor
@@ -972,6 +1100,78 @@ INSERT INTO `sys_logininfor` VALUES (229, '19157727791', '127.0.0.1', '内网IP'
 INSERT INTO `sys_logininfor` VALUES (230, 'admin', '127.0.0.1', '内网IP', 'Chrome 12', 'Windows 10', '0', '登录成功', '2025-10-08 13:13:45');
 INSERT INTO `sys_logininfor` VALUES (231, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-10-08 13:14:16');
 INSERT INTO `sys_logininfor` VALUES (232, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-10-08 14:32:37');
+INSERT INTO `sys_logininfor` VALUES (233, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2025-10-09 16:26:04');
+INSERT INTO `sys_logininfor` VALUES (234, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-10-09 16:26:17');
+INSERT INTO `sys_logininfor` VALUES (235, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-11-21 16:12:00');
+INSERT INTO `sys_logininfor` VALUES (236, 'dmwxinli', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2025-12-17 08:44:40');
+INSERT INTO `sys_logininfor` VALUES (237, 'dmwxinli', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2025-12-17 08:45:22');
+INSERT INTO `sys_logininfor` VALUES (238, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-17 08:45:39');
+INSERT INTO `sys_logininfor` VALUES (239, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-26 15:47:01');
+INSERT INTO `sys_logininfor` VALUES (240, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-29 14:24:12');
+INSERT INTO `sys_logininfor` VALUES (241, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-29 14:24:42');
+INSERT INTO `sys_logininfor` VALUES (242, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-29 14:24:57');
+INSERT INTO `sys_logininfor` VALUES (243, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-29 14:28:55');
+INSERT INTO `sys_logininfor` VALUES (244, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-29 14:28:59');
+INSERT INTO `sys_logininfor` VALUES (245, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-29 14:29:35');
+INSERT INTO `sys_logininfor` VALUES (246, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-29 14:29:49');
+INSERT INTO `sys_logininfor` VALUES (247, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-29 15:39:05');
+INSERT INTO `sys_logininfor` VALUES (248, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-29 18:10:43');
+INSERT INTO `sys_logininfor` VALUES (249, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 09:55:20');
+INSERT INTO `sys_logininfor` VALUES (250, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-30 10:44:59');
+INSERT INTO `sys_logininfor` VALUES (251, 'yelaoshi', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 10:45:14');
+INSERT INTO `sys_logininfor` VALUES (252, 'yelaoshi', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 13:59:50');
+INSERT INTO `sys_logininfor` VALUES (253, 'yelaoshi', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-30 14:03:36');
+INSERT INTO `sys_logininfor` VALUES (254, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 14:03:49');
+INSERT INTO `sys_logininfor` VALUES (255, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 15:03:16');
+INSERT INTO `sys_logininfor` VALUES (256, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-30 15:04:31');
+INSERT INTO `sys_logininfor` VALUES (257, 'yelaoshi', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 15:04:44');
+INSERT INTO `sys_logininfor` VALUES (258, 'yelaoshi', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2025-12-30 15:05:06');
+INSERT INTO `sys_logininfor` VALUES (259, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 15:05:22');
+INSERT INTO `sys_logininfor` VALUES (260, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 15:53:14');
+INSERT INTO `sys_logininfor` VALUES (261, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-30 16:41:20');
+INSERT INTO `sys_logininfor` VALUES (262, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '验证码已失效', '2025-12-31 10:34:49');
+INSERT INTO `sys_logininfor` VALUES (263, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-31 10:34:53');
+INSERT INTO `sys_logininfor` VALUES (264, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-31 10:37:03');
+INSERT INTO `sys_logininfor` VALUES (265, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-31 11:32:22');
+INSERT INTO `sys_logininfor` VALUES (266, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2025-12-31 11:32:43');
+INSERT INTO `sys_logininfor` VALUES (267, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-04 16:30:05');
+INSERT INTO `sys_logininfor` VALUES (268, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-04 16:30:42');
+INSERT INTO `sys_logininfor` VALUES (269, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 08:23:57');
+INSERT INTO `sys_logininfor` VALUES (270, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 08:25:15');
+INSERT INTO `sys_logininfor` VALUES (271, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 11:20:55');
+INSERT INTO `sys_logininfor` VALUES (272, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 11:21:22');
+INSERT INTO `sys_logininfor` VALUES (273, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 13:11:56');
+INSERT INTO `sys_logininfor` VALUES (274, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 13:12:18');
+INSERT INTO `sys_logininfor` VALUES (275, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 14:07:03');
+INSERT INTO `sys_logininfor` VALUES (276, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 14:50:49');
+INSERT INTO `sys_logininfor` VALUES (277, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-05 15:35:28');
+INSERT INTO `sys_logininfor` VALUES (278, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 08:36:40');
+INSERT INTO `sys_logininfor` VALUES (279, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 08:37:09');
+INSERT INTO `sys_logininfor` VALUES (280, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 10:15:54');
+INSERT INTO `sys_logininfor` VALUES (281, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 11:32:13');
+INSERT INTO `sys_logininfor` VALUES (282, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2026-01-06 11:45:26');
+INSERT INTO `sys_logininfor` VALUES (283, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 11:45:44');
+INSERT INTO `sys_logininfor` VALUES (284, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2026-01-06 14:44:36');
+INSERT INTO `sys_logininfor` VALUES (285, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2026-01-06 14:44:41');
+INSERT INTO `sys_logininfor` VALUES (286, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 14:44:56');
+INSERT INTO `sys_logininfor` VALUES (287, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2026-01-06 15:11:57');
+INSERT INTO `sys_logininfor` VALUES (288, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 15:12:07');
+INSERT INTO `sys_logininfor` VALUES (289, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '验证码已失效', '2026-01-06 16:53:19');
+INSERT INTO `sys_logininfor` VALUES (290, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-06 16:53:24');
+INSERT INTO `sys_logininfor` VALUES (291, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-07 08:58:52');
+INSERT INTO `sys_logininfor` VALUES (292, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-07 14:17:55');
+INSERT INTO `sys_logininfor` VALUES (293, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-07 14:22:45');
+INSERT INTO `sys_logininfor` VALUES (294, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-07 16:28:05');
+INSERT INTO `sys_logininfor` VALUES (295, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '1', '用户不存在/密码错误', '2026-01-07 16:40:23');
+INSERT INTO `sys_logininfor` VALUES (296, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-07 16:40:42');
+INSERT INTO `sys_logininfor` VALUES (297, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-08 08:53:55');
+INSERT INTO `sys_logininfor` VALUES (298, '2025720506', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-08 08:57:35');
+INSERT INTO `sys_logininfor` VALUES (299, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2026-01-08 09:48:14');
+INSERT INTO `sys_logininfor` VALUES (300, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-08 09:48:20');
+INSERT INTO `sys_logininfor` VALUES (301, 'admin', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '退出成功', '2026-01-08 09:53:23');
+INSERT INTO `sys_logininfor` VALUES (302, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-08 09:53:41');
+INSERT INTO `sys_logininfor` VALUES (303, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-08 12:54:39');
+INSERT INTO `sys_logininfor` VALUES (304, '19157727791', '127.0.0.1', '内网IP', 'Chrome 14', 'Windows 10', '0', '登录成功', '2026-01-08 16:22:17');
 
 -- ----------------------------
 -- Table structure for sys_menu
@@ -999,7 +1199,7 @@ CREATE TABLE `sys_menu`  (
   `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '备注',
   PRIMARY KEY (`menu_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2038 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '菜单权限表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 2043 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '菜单权限表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sys_menu
@@ -1114,6 +1314,10 @@ INSERT INTO `sys_menu` VALUES (2034, '题库管理修改', 2031, 3, '#', '', NUL
 INSERT INTO `sys_menu` VALUES (2035, '题库管理删除', 2031, 4, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'business:question:remove', '#', 'admin', '2025-08-18 20:03:35', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2036, '题库管理导出', 2031, 5, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'business:question:export', '#', 'admin', '2025-08-18 20:03:35', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2037, '教师首页', 0, 0, 'teacher-dashboard', 'business/teacher/index', NULL, '', 1, 0, 'C', '0', '0', 'business:teacher:list', 'theme', 'admin', '2025-08-25 20:05:44', '', NULL, '');
+INSERT INTO `sys_menu` VALUES (2038, '班级管理', 0, 5, 'teacherClass', 'business/teacherClass/index', NULL, '', 1, 0, 'C', '0', '0', 'business:teacherClass:list', 'peoples', 'admin', '2025-12-29 14:22:28', '', NULL, '');
+INSERT INTO `sys_menu` VALUES (2039, '添加班级', 2038, 1, '', NULL, NULL, '', 1, 0, 'F', '0', '0', 'business:teacherClass:add', '#', 'admin', '2025-12-29 14:22:28', '', NULL, '');
+INSERT INTO `sys_menu` VALUES (2040, '移除班级', 2038, 2, '', NULL, NULL, '', 1, 0, 'F', '0', '0', 'business:teacherClass:remove', '#', 'admin', '2025-12-29 14:22:28', '', NULL, '');
+INSERT INTO `sys_menu` VALUES (2042, '成绩查询', 0, 5, 'score', 'business/score/index', NULL, '', 1, 0, 'C', '0', '0', 'business:score:list', 'job', '19157727791', '2026-01-08 09:44:00', '', NULL, '');
 
 -- ----------------------------
 -- Table structure for sys_notice
@@ -1165,7 +1369,7 @@ CREATE TABLE `sys_oper_log`  (
   INDEX `idx_sys_oper_log_bt`(`business_type` ASC) USING BTREE,
   INDEX `idx_sys_oper_log_s`(`status` ASC) USING BTREE,
   INDEX `idx_sys_oper_log_ot`(`oper_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 331 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '操作日志记录' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 407 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '操作日志记录' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sys_oper_log
@@ -1401,6 +1605,82 @@ INSERT INTO `sys_oper_log` VALUES (327, '用户管理', 2, 'com.ruoyi.web.contro
 INSERT INTO `sys_oper_log` VALUES (328, '学生管理', 6, 'com.ruoyi.business.controller.BizStudentController.importTemplate()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/student/importTemplate', '127.0.0.1', '内网IP', '{\"deptId\":\"169\"}', NULL, 0, NULL, '2025-10-08 14:59:35', 939);
 INSERT INTO `sys_oper_log` VALUES (329, '学生管理', 6, 'com.ruoyi.business.controller.BizStudentController.importTemplate()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/student/importTemplate', '127.0.0.1', '内网IP', '{\"deptId\":\"107\"}', NULL, 0, NULL, '2025-10-08 14:59:49', 23);
 INSERT INTO `sys_oper_log` VALUES (330, '学生管理', 6, 'com.ruoyi.business.controller.BizStudentController.importData()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/student/importData', '127.0.0.1', '内网IP', '', '{\"msg\":\"恭喜您，数据已全部导入成功！共 2 条，数据如下：<br/>1、学生 ksj 导入成功，登录账号为 202470201<br/>2、学生 oj 导入成功，登录账号为 202370102\",\"code\":200}', 0, NULL, '2025-10-08 15:01:11', 343);
+INSERT INTO `sys_oper_log` VALUES (331, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"allClassesInGrade\":[\"1班\",\"5班\"],\"assignedClassCodes\":[\"5\",\"1\",\"5班\"],\"grade\":7,\"lessonId\":7,\"lessonNum\":1,\"lessonTitle\":\"二哥\",\"params\":{},\"questions\":[{\"lessonId\":7,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":100,\"questionType\":\"typing\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"allClassesInGrade\":[\"1班\",\"5班\"],\"assignedClassCodes\":[\"5\",\"1\",\"5班\"],\"grade\":7,\"lessonId\":7,\"lessonNum\":1,\"lessonTitle\":\"二哥\",\"params\":{},\"questions\":[{\"lessonId\":7,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":100,\"questionType\":\"typing\"}],\"semester\":\"0\"}}', 0, NULL, '2025-10-09 16:30:40', 112);
+INSERT INTO `sys_oper_log` VALUES (332, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"allClassesInGrade\":[\"1班\",\"5班\"],\"assignedClassCodes\":[\"5\",\"1\",\"5\"],\"grade\":7,\"lessonId\":7,\"lessonNum\":1,\"lessonTitle\":\"二哥\",\"params\":{},\"questions\":[{\"lessonId\":7,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":50,\"questionType\":\"typing\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":50,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"allClassesInGrade\":[\"1班\",\"5班\"],\"assignedClassCodes\":[\"5\",\"1\",\"5\"],\"grade\":7,\"lessonId\":7,\"lessonNum\":1,\"lessonTitle\":\"二哥\",\"params\":{},\"questions\":[{\"lessonId\":7,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":50,\"questionType\":\"typing\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":50,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-10-09 16:34:46', 32);
+INSERT INTO `sys_oper_log` VALUES (333, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":9,\"lessonNum\":1,\"lessonTitle\":\"第二课\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":9,\"lessonNum\":1,\"lessonTitle\":\"第二课\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-10-09 17:09:32', 51);
+INSERT INTO `sys_oper_log` VALUES (334, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/9', '127.0.0.1', '内网IP', '[9]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-10-09 17:09:47', 41);
+INSERT INTO `sys_oper_log` VALUES (335, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":10,\"lessonNum\":1,\"lessonTitle\":\"33\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":10,\"lessonNum\":1,\"lessonTitle\":\"33\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-10-09 17:10:04', 30);
+INSERT INTO `sys_oper_log` VALUES (336, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"5\",\"5班\"],\"grade\":7,\"lessonId\":10,\"lessonNum\":1,\"lessonTitle\":\"33\",\"params\":{},\"questions\":[{\"lessonId\":10,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"5\",\"5班\"],\"grade\":7,\"lessonId\":10,\"lessonNum\":1,\"lessonTitle\":\"33\",\"params\":{},\"questions\":[{\"lessonId\":10,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-10-09 17:11:35', 204);
+INSERT INTO `sys_oper_log` VALUES (337, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":11,\"lessonNum\":1,\"lessonTitle\":\"说说说\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":11,\"lessonNum\":1,\"lessonTitle\":\"说说说\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-10-09 17:11:51', 33);
+INSERT INTO `sys_oper_log` VALUES (338, '角色管理', 2, 'com.ruoyi.web.controller.system.SysRoleController.edit()', 'PUT', 1, 'admin', '高中', '/system/role', '127.0.0.1', '内网IP', '{\"admin\":false,\"createTime\":\"2025-06-17 18:39:24\",\"dataScope\":\"1\",\"delFlag\":\"0\",\"deptCheckStrictly\":true,\"flag\":false,\"menuCheckStrictly\":true,\"menuIds\":[2037,1,100,1000,1001,1002,1003,1004,1005,1006,101,1007,1008,1009,1010,1011,102,1012,1013,1014,1015,103,1016,1017,1018,1019,104,1020,1021,1022,1023,1024,105,1025,1026,1027,1028,1029,106,1030,1031,1032,1033,1034,107,1035,1036,1037,1038,108,500,1039,1040,1041,501,1042,1043,1044,1045,2018,2019,2020,2021,2022,2023,2024,2031,2032,2033,2034,2035,2036,2,109,1046,1047,1048,110,1049,1050,1051,1052,1053,1054,111,112,113,114,2006,2007,2008,2009,2010,2011,3,115,116,1055,1056,1057,1058,1059,1060,117,4,2038,2039,2040,2026,2027,2028,2029,2030],\"params\":{},\"roleId\":100,\"roleKey\":\"teacher\",\"roleName\":\"教师\",\"roleSort\":0,\"status\":\"0\",\"updateBy\":\"admin\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 14:29:08', 96);
+INSERT INTO `sys_oper_log` VALUES (339, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-29 14:30:05\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104},{\"classCode\":\"1\",\"createTime\":\"2025-12-29 14:30:05\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 14:30:05', 20);
+INSERT INTO `sys_oper_log` VALUES (340, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"5\",\"createTime\":\"2025-12-29 14:39:38\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 14:39:38', 12);
+INSERT INTO `sys_oper_log` VALUES (341, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"2\",\"createTime\":\"2025-12-29 15:51:31\",\"deptId\":107,\"entryYear\":\"2024\",\"params\":{},\"userId\":104},{\"classCode\":\"1\",\"createTime\":\"2025-12-29 15:51:31\",\"deptId\":107,\"entryYear\":\"2023\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 15:51:31', 14);
+INSERT INTO `sys_oper_log` VALUES (342, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/5', '127.0.0.1', '内网IP', '[5]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 16:07:21', 35);
+INSERT INTO `sys_oper_log` VALUES (343, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/4', '127.0.0.1', '内网IP', '[4]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 16:07:23', 8);
+INSERT INTO `sys_oper_log` VALUES (344, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/2', '127.0.0.1', '内网IP', '[2]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 16:07:25', 7);
+INSERT INTO `sys_oper_log` VALUES (345, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/3', '127.0.0.1', '内网IP', '[3]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 16:07:28', 10);
+INSERT INTO `sys_oper_log` VALUES (346, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/1', '127.0.0.1', '内网IP', '[1]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 16:07:30', 7);
+INSERT INTO `sys_oper_log` VALUES (347, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-29 16:07:35\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104},{\"classCode\":\"5\",\"createTime\":\"2025-12-29 16:07:35\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 16:07:35', 8);
+INSERT INTO `sys_oper_log` VALUES (348, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/7', '127.0.0.1', '内网IP', '[7]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:23:12', 43);
+INSERT INTO `sys_oper_log` VALUES (349, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/6', '127.0.0.1', '内网IP', '[6]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:23:14', 13);
+INSERT INTO `sys_oper_log` VALUES (350, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"2\",\"createTime\":\"2025-12-29 18:23:24\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":104},{\"classCode\":\"1\",\"createTime\":\"2025-12-29 18:23:24\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:23:24', 21);
+INSERT INTO `sys_oper_log` VALUES (351, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-29 18:23:41\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104},{\"classCode\":\"5\",\"createTime\":\"2025-12-29 18:23:41\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104},{\"classCode\":\"3\",\"createTime\":\"2025-12-29 18:23:41\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:23:41', 15);
+INSERT INTO `sys_oper_log` VALUES (352, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/10', '127.0.0.1', '内网IP', '[10]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:35:20', 47);
+INSERT INTO `sys_oper_log` VALUES (353, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/11', '127.0.0.1', '内网IP', '[11]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:35:21', 12);
+INSERT INTO `sys_oper_log` VALUES (354, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-29 18:35:31\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104},{\"classCode\":\"5\",\"createTime\":\"2025-12-29 18:35:31\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":104}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:35:31', 23);
+INSERT INTO `sys_oper_log` VALUES (355, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2025-12-29 18:56:46\",\"creatorId\":104,\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":1,\"params\":{},\"questionContent\":\"fregfefg\",\"questionId\":41,\"questionType\":\"typing\",\"semester\":\"0\",\"typingDuration\":3,\"wordCount\":8}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-29 18:56:46', 48);
+INSERT INTO `sys_oper_log` VALUES (356, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 10:37:53', 270);
+INSERT INTO `sys_oper_log` VALUES (357, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 10:38:10', 31);
+INSERT INTO `sys_oper_log` VALUES (358, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 10:38:21', 32);
+INSERT INTO `sys_oper_log` VALUES (359, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 10:42:03', 29);
+INSERT INTO `sys_oper_log` VALUES (360, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":12,\"lessonNum\":1,\"lessonTitle\":\"2w22w2w2\",\"params\":{},\"questions\":[{\"lessonId\":12,\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"lessonId\":12,\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 10:42:09', 29);
+INSERT INTO `sys_oper_log` VALUES (361, '用户管理', 1, 'com.ruoyi.web.controller.system.SysUserController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/system/user', '127.0.0.1', '内网IP', '{\"admin\":false,\"createBy\":\"19157727791\",\"deptId\":169,\"deptIds\":[169],\"nickName\":\"叶\",\"params\":{},\"postIds\":[],\"roleIds\":[100],\"sex\":\"1\",\"status\":\"0\",\"userId\":166,\"userName\":\"yelaoshi\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 10:44:53', 115);
+INSERT INTO `sys_oper_log` VALUES (362, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-30 10:45:29\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":166},{\"classCode\":\"5\",\"createTime\":\"2025-12-30 10:45:29\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":166},{\"classCode\":\"1\",\"createTime\":\"2025-12-30 10:45:29\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":166}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 10:45:29', 19);
+INSERT INTO `sys_oper_log` VALUES (363, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/teacherClass/17', '127.0.0.1', '内网IP', '[17]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 14:02:20', 27);
+INSERT INTO `sys_oper_log` VALUES (364, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/teacherClass/16', '127.0.0.1', '内网IP', '[16]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 14:02:22', 8);
+INSERT INTO `sys_oper_log` VALUES (365, '教师班级管理', 3, 'com.ruoyi.business.controller.BizTeacherClassController.remove()', 'DELETE', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/teacherClass/15', '127.0.0.1', '内网IP', '[15]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 14:02:24', 8);
+INSERT INTO `sys_oper_log` VALUES (366, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-30 14:02:34\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":166},{\"classCode\":\"5\",\"createTime\":\"2025-12-30 14:02:34\",\"deptId\":169,\"entryYear\":\"2025\",\"params\":{},\"userId\":166}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 14:02:34', 15);
+INSERT INTO `sys_oper_log` VALUES (367, '教师班级管理', 1, 'com.ruoyi.business.controller.BizTeacherClassController.batchAdd()', 'POST', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/teacherClass/batch', '127.0.0.1', '内网IP', '[{\"classCode\":\"1\",\"createTime\":\"2025-12-30 14:02:46\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":166},{\"classCode\":\"2\",\"createTime\":\"2025-12-30 14:02:46\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":166},{\"classCode\":\"3\",\"createTime\":\"2025-12-30 14:02:46\",\"deptId\":169,\"entryYear\":\"2024\",\"params\":{},\"userId\":166}]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 14:02:46', 10);
+INSERT INTO `sys_oper_log` VALUES (368, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":13,\"lessonNum\":1,\"lessonTitle\":\"3333333333333\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":17,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":13,\"lessonNum\":1,\"lessonTitle\":\"3333333333333\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":17,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 14:03:07', 84);
+INSERT INTO `sys_oper_log` VALUES (369, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/7', '127.0.0.1', '内网IP', '[7]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 15:03:23', 52);
+INSERT INTO `sys_oper_log` VALUES (370, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/10', '127.0.0.1', '内网IP', '[10]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 15:03:26', 674);
+INSERT INTO `sys_oper_log` VALUES (371, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/11', '127.0.0.1', '内网IP', '[11]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 15:03:28', 22);
+INSERT INTO `sys_oper_log` VALUES (372, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/12', '127.0.0.1', '内网IP', '[12]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 15:03:30', 15);
+INSERT INTO `sys_oper_log` VALUES (373, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/13', '127.0.0.1', '内网IP', '[13]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 15:03:32', 13);
+INSERT INTO `sys_oper_log` VALUES (374, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":14,\"lessonNum\":1,\"lessonTitle\":\"11111111\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"answer\":\"F\",\"optionA\":\"\",\"optionB\":\"\",\"optionC\":\"\",\"optionD\":\"\",\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":14,\"lessonNum\":1,\"lessonTitle\":\"11111111\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":10,\"questionType\":\"choice\"},{\"answer\":\"F\",\"orderNum\":2,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":14,\"questionScore\":90,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 15:04:13', 46);
+INSERT INTO `sys_oper_log` VALUES (375, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, 'yelaoshi', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":15,\"lessonNum\":1,\"lessonTitle\":\"222222\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":15,\"lessonNum\":1,\"lessonTitle\":\"222222\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 15:04:59', 30);
+INSERT INTO `sys_oper_log` VALUES (376, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":15,\"lessonNum\":1,\"lessonTitle\":\"222222\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":15,\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":15,\"lessonNum\":1,\"lessonTitle\":\"222222\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":15,\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 16:09:37', 87);
+INSERT INTO `sys_oper_log` VALUES (377, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/14', '127.0.0.1', '内网IP', '[14]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 16:09:49', 40);
+INSERT INTO `sys_oper_log` VALUES (378, '课程管理', 3, 'com.ruoyi.business.controller.BizLessonController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/15', '127.0.0.1', '内网IP', '[15]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2025-12-30 16:09:52', 23);
+INSERT INTO `sys_oper_log` VALUES (379, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":16,\"lessonNum\":1,\"lessonTitle\":\"1010\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":16,\"lessonNum\":1,\"lessonTitle\":\"1010\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"optionA\":\"a\",\"optionB\":\"b\",\"optionC\":\"cv\",\"optionD\":\"d\",\"orderNum\":1,\"params\":{},\"questionContent\":\"选择题\",\"questionId\":9,\"questionScore\":100,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 16:13:59', 315);
+INSERT INTO `sys_oper_log` VALUES (380, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":17,\"lessonNum\":1,\"lessonTitle\":\"2020\",\"params\":{},\"questions\":[],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"5班\"],\"grade\":7,\"lessonId\":17,\"lessonNum\":1,\"lessonTitle\":\"2020\",\"params\":{},\"questions\":[],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 16:14:19', 36);
+INSERT INTO `sys_oper_log` VALUES (381, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":100,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":12}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":100,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":12}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 16:32:09', 37);
+INSERT INTO `sys_oper_log` VALUES (382, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"lessonId\":18,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":12},{\"answer\":\"A\",\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"lessonId\":18,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":12},{\"answer\":\"A\",\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-30 16:32:34', 41);
+INSERT INTO `sys_oper_log` VALUES (383, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"lessonId\":18,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":12},{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"lessonId\":18,\"orderNum\":1,\"params\":{},\"questionContent\":\"而感染尴尬而广泛认同过热\",\"questionId\":40,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":12},{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"}],\"semester\":\"0\"}}', 0, NULL, '2025-12-31 10:37:45', 102);
+INSERT INTO `sys_oper_log` VALUES (384, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 08:37:20\",\"creatorId\":104,\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":1,\"params\":{},\"questionContent\":\"你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是\",\"questionId\":42,\"questionType\":\"typing\",\"semester\":\"0\",\"typingDuration\":4,\"wordCount\":612}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 08:37:20', 63);
+INSERT INTO `sys_oper_log` VALUES (385, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是\",\"questionId\":42,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":612}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是你是\",\"questionId\":42,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":4,\"wordCount\":612}],\"semester\":\"0\"}}', 0, NULL, '2026-01-05 08:37:52', 73);
+INSERT INTO `sys_oper_log` VALUES (386, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 08:46:42\",\"creatorId\":104,\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":4,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionType\":\"typing\",\"semester\":\"0\",\"typingDuration\":3,\"wordCount\":189}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 08:46:42', 13);
+INSERT INTO `sys_oper_log` VALUES (387, '题库管理', 2, 'com.ruoyi.business.controller.BizQuestionController.edit()', 'PUT', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 08:46:43\",\"creatorId\":104,\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":4,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionType\":\"typing\",\"semester\":\"0\",\"typingDuration\":5,\"updateBy\":\"19157727791\",\"updateTime\":\"2026-01-05 08:47:39\",\"wordCount\":189}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 08:47:39', 11);
+INSERT INTO `sys_oper_log` VALUES (388, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"orderNum\":2,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":50,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189}],\"semester\":\"0\"}}', 0, NULL, '2026-01-05 08:48:18', 38);
+INSERT INTO `sys_oper_log` VALUES (389, '题库管理', 3, 'com.ruoyi.business.controller.BizQuestionController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/question/3,8,25,30,31,34,36,37,38,39', '127.0.0.1', '内网IP', '[3,8,25,30,31,34,36,37,38,39]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 15:01:01', 34);
+INSERT INTO `sys_oper_log` VALUES (390, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 15:01:31\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/05/附表2：作品创作说明_20260105150125A001.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":1,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/05/附表2：作品创作说明_20260105150125A001.pdf\",\"questionContent\":\"吱吱吱吱\",\"questionId\":44,\"questionType\":\"practical\",\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 15:01:32', 1050);
+INSERT INTO `sys_oper_log` VALUES (391, '题库管理', 3, 'com.ruoyi.business.controller.BizQuestionController.remove()', 'DELETE', 1, '19157727791', '大目湾学校(初中部)', '/business/question/44', '127.0.0.1', '内网IP', '[44]', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 15:23:51', 52);
+INSERT INTO `sys_oper_log` VALUES (392, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 15:24:11\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/05/附件1_20260105152408A001.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":3,\"params\":{},\"previewPath\":\"/profile./uploadPath/upload/2026/01/05/附件1_20260105152408A001.pdf\",\"questionContent\":\"是公司架构\",\"questionId\":45,\"questionType\":\"practical\",\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 15:24:27', 15616);
+INSERT INTO `sys_oper_log` VALUES (393, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 15:28:58\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/05/附件1_20260105152856A001.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":4,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/05/附件1_20260105152856A001.pdf\",\"questionContent\":\"山地车山地车山地车\",\"questionId\":46,\"questionType\":\"practical\",\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 15:29:09', 11446);
+INSERT INTO `sys_oper_log` VALUES (394, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-05 15:33:17\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/05/附表2：作品创作说明_20260105153315A002.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":6,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/05/附表2：作品创作说明_20260105153315A002.pdf\",\"questionContent\":\"等等\",\"questionId\":47,\"questionType\":\"practical\",\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-05 15:33:29', 11943);
+INSERT INTO `sys_oper_log` VALUES (395, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"lessonId\":18,\"orderNum\":2,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":30,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189},{\"orderNum\":3,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/05/附表2：作品创作说明_20260105153315A002.pdf\",\"questionContent\":\"等等\",\"questionId\":47,\"questionScore\":10,\"questionType\":\"practical\"},{\"answer\":\"F\",\"optionA\":\"\",\"optionB\":\"\",\"optionC\":\"\",\"optionD\":\"\",\"orderNum\":4,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":24,\"questionScore\":10,\"questionType\":\"judgment\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"lessonId\":18,\"orderNum\":2,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":30,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189},{\"orderNum\":3,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/05/附表2：作品创作说明_20260105153315A002.pdf\",\"questionContent\":\"等等\",\"questionId\":47,\"questionScore\":10,\"questionType\":\"practical\"},{\"answer\":\"F\",\"orderNum\":4,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":24,\"questionScore\":10,\"questionType\":\"judgment\"}],\"semester\":\"0\"}}', 0, NULL, '2026-01-05 15:35:06', 105);
+INSERT INTO `sys_oper_log` VALUES (396, '个人信息', 2, 'com.ruoyi.web.controller.system.SysProfileController.updatePwd()', 'PUT', 1, '2025720506', '大目湾学校(初中部)', '/system/user/profile/updatePwd', '127.0.0.1', '内网IP', '{}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-06 11:45:26', 263);
+INSERT INTO `sys_oper_log` VALUES (397, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-07 14:20:24\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/07/物品申请单_20260107141913A001.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":1,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/物品申请单_20260107141913A001.pdf\",\"questionContent\":\"任务操作1\",\"questionId\":48,\"questionType\":\"practical\",\"scoringItems\":[{\"itemId\":1,\"itemName\":\"界面设计\",\"itemScore\":10,\"orderNum\":0,\"params\":{},\"questionId\":48},{\"itemId\":2,\"itemName\":\"答案是否正确\",\"itemScore\":10,\"orderNum\":1,\"params\":{},\"questionId\":48},{\"itemId\":3,\"itemName\":\"合理吗\",\"itemScore\":10,\"orderNum\":2,\"params\":{},\"questionId\":48}],\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-07 14:20:40', 15609);
+INSERT INTO `sys_oper_log` VALUES (398, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"lessonId\":18,\"orderNum\":2,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":30,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189},{\"answer\":\"F\",\"lessonId\":18,\"optionA\":\"\",\"optionB\":\"\",\"optionC\":\"\",\"optionD\":\"\",\"orderNum\":4,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":24,\"questionScore\":10,\"questionType\":\"judgment\"},{\"orderNum\":4,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/物品申请单_20260107141913A001.pdf\",\"questionContent\":\"任务操作1\",\"questionId\":48,\"questionScore\":10,\"questionType\":\"practical\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":18,\"lessonNum\":3,\"lessonTitle\":\"始业教育\",\"params\":{},\"questions\":[{\"answer\":\"A\",\"lessonId\":18,\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":50,\"questionType\":\"choice\"},{\"lessonId\":18,\"orderNum\":2,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":30,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189},{\"answer\":\"F\",\"lessonId\":18,\"orderNum\":4,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":24,\"questionScore\":10,\"questionType\":\"judgment\"},{\"orderNum\":4,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/物品申请单_20260107141913A001.pdf\",\"questionContent\":\"任务操作1\",\"questionId\":48,\"questionScore\":10,\"questionType\":\"practical\"}],\"semester\":\"0\"}}', 0, NULL, '2026-01-07 14:21:45', 122);
+INSERT INTO `sys_oper_log` VALUES (399, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-07 16:29:55\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/07/大模型本地部署配置_20260107162900A001.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":5,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/大模型本地部署配置_20260107162900A001.pdf\",\"questionContent\":\"zdx\",\"questionId\":49,\"questionType\":\"practical\",\"scoringItems\":[{\"itemId\":4,\"itemName\":\"界面\",\"itemScore\":50,\"orderNum\":0,\"params\":{},\"questionId\":49},{\"itemId\":5,\"itemName\":\"是否正确\",\"itemScore\":10,\"orderNum\":1,\"params\":{},\"questionId\":49}],\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-07 16:30:10', 15596);
+INSERT INTO `sys_oper_log` VALUES (400, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-07 16:38:15\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/07/物品申请单_20260107163743A002.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":2,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/物品申请单_20260107163743A002.pdf\",\"questionContent\":\"郑东旭\",\"questionId\":50,\"questionType\":\"practical\",\"scoringItems\":[{\"itemId\":6,\"itemName\":\"界面\",\"itemScore\":40,\"orderNum\":0,\"params\":{},\"questionId\":50},{\"itemId\":7,\"itemName\":\"你还哦\",\"itemScore\":60,\"orderNum\":1,\"params\":{},\"questionId\":50}],\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-07 16:38:27', 11413);
+INSERT INTO `sys_oper_log` VALUES (401, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":19,\"lessonNum\":1,\"lessonTitle\":\"第二课\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/物品申请单_20260107163743A002.pdf\",\"questionContent\":\"郑东旭\",\"questionId\":50,\"questionScore\":50,\"questionType\":\"practical\"},{\"answer\":\"A\",\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":40,\"questionType\":\"choice\"},{\"orderNum\":3,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":10,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":19,\"lessonNum\":1,\"lessonTitle\":\"第二课\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/07/物品申请单_20260107163743A002.pdf\",\"questionContent\":\"郑东旭\",\"questionId\":50,\"questionScore\":50,\"questionType\":\"practical\"},{\"answer\":\"A\",\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":40,\"questionType\":\"choice\"},{\"orderNum\":3,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":10,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189}],\"semester\":\"0\"}}', 0, NULL, '2026-01-07 16:39:58', 88);
+INSERT INTO `sys_oper_log` VALUES (402, '学生管理', 1, 'com.ruoyi.business.controller.BizStudentController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/student', '127.0.0.1', '内网IP', '{\"classCode\":\"5\",\"entryYear\":\"2025\",\"params\":{},\"studentId\":61,\"studentName\":\"真实姓名呢\",\"studentNo\":\"1\",\"userId\":167}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-07 16:42:09', 105);
+INSERT INTO `sys_oper_log` VALUES (403, '题库管理', 1, 'com.ruoyi.business.controller.BizQuestionController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/question', '127.0.0.1', '内网IP', '{\"createBy\":\"19157727791\",\"createTime\":\"2026-01-08 08:55:24\",\"creatorId\":104,\"filePath\":\"/profile/upload/2026/01/08/111_20260108085453A001.docx\",\"grade\":7,\"isPublic\":\"Y\",\"lessonNum\":7,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/08/111_20260108085453A001.pdf\",\"questionContent\":\"操作18\",\"questionId\":51,\"questionType\":\"practical\",\"scoringItems\":[{\"itemId\":8,\"itemName\":\"界面\",\"itemScore\":60,\"orderNum\":0,\"params\":{},\"questionId\":51},{\"itemId\":9,\"itemName\":\"答案\",\"itemScore\":40,\"orderNum\":1,\"params\":{},\"questionId\":51}],\"semester\":\"1\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-08 08:55:38', 14384);
+INSERT INTO `sys_oper_log` VALUES (404, '课程设计与指派', 1, 'com.ruoyi.business.controller.BizLessonController.saveAll()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/business/lesson/save-all', '127.0.0.1', '内网IP', '{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":20,\"lessonNum\":1,\"lessonTitle\":\"第三课\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":30,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189},{\"answer\":\"A\",\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":10,\"questionType\":\"choice\"},{\"answer\":\"F\",\"optionA\":\"\",\"optionB\":\"\",\"optionC\":\"\",\"optionD\":\"\",\"orderNum\":3,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":17,\"questionScore\":10,\"questionType\":\"judgment\"},{\"orderNum\":4,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/08/111_20260108085453A001.pdf\",\"questionContent\":\"操作18\",\"questionId\":51,\"questionScore\":50,\"questionType\":\"practical\"}],\"semester\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200,\"data\":{\"assignedClassCodes\":[\"1班\",\"5班\"],\"grade\":7,\"lessonId\":20,\"lessonNum\":1,\"lessonTitle\":\"第三课\",\"params\":{},\"questions\":[{\"orderNum\":1,\"params\":{},\"questionContent\":\"一直想做一款后台管理系统，看了很多优秀的开源项目但是发现没有合适自己的。于是利用空闲休息时间开始自己写一套后台系统。如此有了若依管理系统，她可以用于所有的Web应用程序，如网站管理后台，网站会员中心，CMS，CRM，OA等等，当然，您也可以对她进行深度定制，以做出更强系统。所有前端后台代码封装过后十分精简易上手，出错概率低。同时支持移动客户端访问。系统会陆续更新一些实用功能。\",\"questionId\":43,\"questionScore\":30,\"questionType\":\"typing\",\"typingDuration\":5,\"wordCount\":189},{\"answer\":\"A\",\"optionA\":\"北京\",\"optionB\":\"上海\",\"optionC\":\"广州\",\"optionD\":\"深圳\",\"orderNum\":2,\"params\":{},\"questionContent\":\"中国的首都是哪里？\",\"questionId\":15,\"questionScore\":10,\"questionType\":\"choice\"},{\"answer\":\"F\",\"orderNum\":3,\"params\":{},\"questionContent\":\"地球是平的。\",\"questionId\":17,\"questionScore\":10,\"questionType\":\"judgment\"},{\"orderNum\":4,\"params\":{},\"previewPath\":\"/profile/upload/2026/01/08/111_20260108085453A001.pdf\",\"questionContent\":\"操作18\",\"questionId\":51,\"questionScore\":50,\"questionType\":\"practical\"}],\"semester\":\"0\"}}', 0, NULL, '2026-01-08 08:56:40', 109);
+INSERT INTO `sys_oper_log` VALUES (405, '菜单管理', 1, 'com.ruoyi.web.controller.system.SysMenuController.add()', 'POST', 1, '19157727791', '大目湾学校(初中部)', '/system/menu', '127.0.0.1', '内网IP', '{\"children\":[],\"component\":\"business/score/index\",\"createBy\":\"19157727791\",\"icon\":\"job\",\"isCache\":\"0\",\"isFrame\":\"1\",\"menuName\":\"成绩查询\",\"menuType\":\"C\",\"orderNum\":5,\"params\":{},\"parentId\":0,\"path\":\"score\",\"perms\":\"business:score:list\",\"routeName\":\"\",\"status\":\"0\",\"visible\":\"0\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-08 09:44:00', 90);
+INSERT INTO `sys_oper_log` VALUES (406, '角色管理', 2, 'com.ruoyi.web.controller.system.SysRoleController.edit()', 'PUT', 1, 'admin', '高中', '/system/role', '127.0.0.1', '内网IP', '{\"admin\":false,\"createTime\":\"2025-06-17 18:39:24\",\"dataScope\":\"1\",\"delFlag\":\"0\",\"deptCheckStrictly\":true,\"flag\":false,\"menuCheckStrictly\":true,\"menuIds\":[2037,1,100,1000,1001,1002,1003,1004,1005,1006,101,1007,1008,1009,1010,1011,102,1012,1013,1014,1015,103,1016,1017,1018,1019,104,1020,1021,1022,1023,1024,105,1025,1026,1027,1028,1029,106,1030,1031,1032,1033,1034,107,1035,1036,1037,1038,108,500,1039,1040,1041,501,1042,1043,1044,1045,2018,2019,2020,2021,2022,2023,2024,2031,2032,2033,2034,2035,2036,2,109,1046,1047,1048,110,1049,1050,1051,1052,1053,1054,111,112,113,114,2006,2007,2008,2009,2010,2011,3,115,116,1055,1056,1057,1058,1059,1060,117,4,2038,2039,2040,2042,2026,2027,2028,2029,2030],\"params\":{},\"roleId\":100,\"roleKey\":\"teacher\",\"roleName\":\"教师\",\"roleSort\":0,\"status\":\"0\",\"updateBy\":\"admin\"}', '{\"msg\":\"操作成功\",\"code\":200}', 0, NULL, '2026-01-08 09:53:20', 98);
 
 -- ----------------------------
 -- Table structure for sys_post
@@ -1454,7 +1734,7 @@ CREATE TABLE `sys_role`  (
 -- ----------------------------
 INSERT INTO `sys_role` VALUES (1, '超级管理员', 'admin', 1, '1', 1, 1, '0', '0', 'admin', '2025-06-12 14:49:21', '', NULL, '超级管理员');
 INSERT INTO `sys_role` VALUES (2, '普通角色', 'common', 2, '2', 1, 1, '0', '2', 'admin', '2025-06-12 14:49:21', 'admin', '2025-06-17 18:36:30', '普通角色');
-INSERT INTO `sys_role` VALUES (100, '教师', 'teacher', 0, '1', 1, 1, '0', '0', 'admin', '2025-06-17 18:39:24', 'admin', '2025-08-25 20:05:51', NULL);
+INSERT INTO `sys_role` VALUES (100, '教师', 'teacher', 0, '1', 1, 1, '0', '0', 'admin', '2025-06-17 18:39:24', 'admin', '2026-01-08 09:53:20', NULL);
 INSERT INTO `sys_role` VALUES (101, '学生', 'student', 2, '1', 1, 1, '0', '0', 'admin', '2025-06-19 09:45:57', '', NULL, NULL);
 
 -- ----------------------------
@@ -1594,6 +1874,10 @@ INSERT INTO `sys_role_menu` VALUES (100, 2034);
 INSERT INTO `sys_role_menu` VALUES (100, 2035);
 INSERT INTO `sys_role_menu` VALUES (100, 2036);
 INSERT INTO `sys_role_menu` VALUES (100, 2037);
+INSERT INTO `sys_role_menu` VALUES (100, 2038);
+INSERT INTO `sys_role_menu` VALUES (100, 2039);
+INSERT INTO `sys_role_menu` VALUES (100, 2040);
+INSERT INTO `sys_role_menu` VALUES (100, 2042);
 INSERT INTO `sys_role_menu` VALUES (101, 4);
 
 -- ----------------------------
@@ -1622,13 +1906,13 @@ CREATE TABLE `sys_user`  (
   `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '备注',
   PRIMARY KEY (`user_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 166 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户信息表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 168 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sys_user
 -- ----------------------------
-INSERT INTO `sys_user` VALUES (1, 103, 'admin', '若依', '00', 'ry@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', '127.0.0.1', '2025-10-08 13:13:45', '2025-06-12 14:49:21', 'admin', '2025-06-12 14:49:21', '', '2025-10-08 13:13:45', '管理员');
-INSERT INTO `sys_user` VALUES (104, 169, '19157727791', '郑东旭', '00', '', '', '0', '', '$2a$10$PWHYbxojQaQh4Pi5ugZyjeXMMszlf621A5KRFASQIIc8.iwYmuAR6', '0', '0', '127.0.0.1', '2025-10-08 14:32:38', '2025-07-02 10:14:56', 'admin', '2025-06-25 10:28:28', 'admin', '2025-10-08 14:32:37', NULL);
+INSERT INTO `sys_user` VALUES (1, 103, 'admin', '若依', '00', 'ry@163.com', '15888888888', '1', '', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '0', '0', '127.0.0.1', '2026-01-08 09:48:20', '2025-06-12 14:49:21', 'admin', '2025-06-12 14:49:21', '', '2026-01-08 09:48:20', '管理员');
+INSERT INTO `sys_user` VALUES (104, 169, '19157727791', '郑东旭', '00', '', '', '0', '', '$2a$10$PWHYbxojQaQh4Pi5ugZyjeXMMszlf621A5KRFASQIIc8.iwYmuAR6', '0', '0', '127.0.0.1', '2026-01-08 16:22:17', '2025-07-02 10:14:56', 'admin', '2025-06-25 10:28:28', 'admin', '2026-01-08 16:22:17', NULL);
 INSERT INTO `sys_user` VALUES (105, 146, 'erzhong', '二中老师', '00', '', '', '0', '', '$2a$10$q9v/zjtdfhfRW2ja3EhPgOQYhBlYG/c8a08MSh2QZ/5gNFCcLUD9.', '0', '0', '', NULL, NULL, '19157727791', '2025-07-02 11:04:24', '19157727791', '2025-07-02 14:18:30', NULL);
 INSERT INTO `sys_user` VALUES (106, NULL, '2024720401', '黄睿2', '00', '', '', '0', '', '$2a$10$TvywvPgim5EZBT3oPaEWxu9PLqsWF7U5h/WvQfXPZBzyanO2xjrOi', '0', '2', '127.0.0.1', '2025-08-07 15:54:21', '2025-08-07 15:51:26', '19157727791', '2025-07-02 14:59:34', 'admin', '2025-08-07 15:54:21', NULL);
 INSERT INTO `sys_user` VALUES (107, NULL, '2024720402', '宋子旭', '00', '', '', '0', '', '$2a$10$jx3l0vNkuDrOCPlrkpdnfeTwoAbzs6y59HE8lzMD64yj5D.b.97Qu', '0', '2', '', NULL, NULL, '19157727791', '2025-07-02 14:59:34', '', '2025-08-12 15:58:27', NULL);
@@ -1687,9 +1971,11 @@ INSERT INTO `sys_user` VALUES (159, 169, '2024720101', '张1', '00', '', '', '0'
 INSERT INTO `sys_user` VALUES (160, 169, '2024720202', '张2', '00', '', '', '0', '', '$2a$10$StZI.lwI2TKVTkdVt5OxpObeO933kGfZkRaCZcQhhTtPHbRUBzdAq', '0', '0', '', NULL, NULL, '19157727791', '2025-08-25 20:07:20', '', NULL, NULL);
 INSERT INTO `sys_user` VALUES (161, 169, '2024720304', '张3', '00', '', '', '0', '', '$2a$10$P/mRbsBacmHXROWUDtdO6e/c53jocFr5SgSO90bFJ2e75ZnnF/4C2', '0', '0', '', NULL, NULL, '19157727791', '2025-08-25 20:07:30', '', NULL, NULL);
 INSERT INTO `sys_user` VALUES (162, 169, '2025720102', '张2025', '00', '', '', '0', '', '$2a$10$R4ijU2CazRVn1sXK2qDrCu4k3RyFlZ2BsOYz/mPndAsLhmx/Xs1Gy', '0', '0', '', NULL, NULL, '19157727791', '2025-08-25 20:07:41', '', NULL, NULL);
-INSERT INTO `sys_user` VALUES (163, 169, '2025720506', '张20255', '00', '', '', '0', '', '$2a$10$AcDm.QhFIyKtT.Dx1SnAR.sI02sXn4ZUqFwuVncQ.P5umOZpfqXAS', '0', '0', '', NULL, NULL, '19157727791', '2025-08-25 20:07:57', '', NULL, NULL);
+INSERT INTO `sys_user` VALUES (163, 169, '2025720506', '张20255', '00', '', '', '0', '', '$2a$10$iS4FTMfcQgc7y5QVDx4Jrui7j4l0aEB/7NokcdaAbYwWac7Hi2VJq', '0', '0', '127.0.0.1', '2026-01-08 08:57:35', '2026-01-06 11:45:26', '19157727791', '2025-08-25 20:07:57', '', '2026-01-08 08:57:35', NULL);
 INSERT INTO `sys_user` VALUES (164, 107, '202470201', 'ksj', '00', '', '', '0', '', '$2a$10$wDgjLAgL3U14mT0BqSQkK.8YIRCJkTe.Lxdz6Q5/VFXaJBnTeoRC.', '0', '0', '', NULL, NULL, '19157727791', '2025-10-08 15:01:11', '', NULL, NULL);
 INSERT INTO `sys_user` VALUES (165, 107, '202370102', 'oj', '00', '', '', '0', '', '$2a$10$QSBbMzU23cJhJ6DdFdl0ruV77odxwAxJVOugDpwRQK8odDv6kBik2', '0', '0', '', NULL, NULL, '19157727791', '2025-10-08 15:01:11', '', NULL, NULL);
+INSERT INTO `sys_user` VALUES (166, 169, 'yelaoshi', '叶', '00', '', '', '1', '', '$2a$10$eeTvwISIB/H9hmDrrWuKAu4Ot01x4GBvWokQm2papUg44a7DeckFe', '0', '0', '127.0.0.1', '2025-12-30 15:04:44', NULL, '19157727791', '2025-12-30 10:44:53', '', '2025-12-30 15:04:44', NULL);
+INSERT INTO `sys_user` VALUES (167, 169, '2025720501', '真实姓名呢', '00', '', '', '0', '', '$2a$10$poNw5f1XTXzFcoK7iSCFDOKnWQGhBl6iDYPnwfJAf7f7ctL4rmUDa', '0', '0', '', NULL, NULL, '19157727791', '2026-01-07 16:42:09', '', NULL, NULL);
 
 -- ----------------------------
 -- Table structure for sys_user_dept
@@ -1700,13 +1986,14 @@ CREATE TABLE `sys_user_dept`  (
   `dept_id` bigint NOT NULL COMMENT '部门ID',
   PRIMARY KEY (`user_id`, `dept_id`) USING BTREE,
   INDEX `idx_sys_user_dept_dept_id`(`dept_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户与部门关联' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户与部门关联' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sys_user_dept
 -- ----------------------------
 INSERT INTO `sys_user_dept` VALUES (104, 107);
 INSERT INTO `sys_user_dept` VALUES (104, 169);
+INSERT INTO `sys_user_dept` VALUES (166, 169);
 
 -- ----------------------------
 -- Table structure for sys_user_post
@@ -1746,5 +2033,7 @@ INSERT INTO `sys_user_role` VALUES (162, 4);
 INSERT INTO `sys_user_role` VALUES (163, 4);
 INSERT INTO `sys_user_role` VALUES (164, 4);
 INSERT INTO `sys_user_role` VALUES (165, 4);
+INSERT INTO `sys_user_role` VALUES (166, 100);
+INSERT INTO `sys_user_role` VALUES (167, 4);
 
 SET FOREIGN_KEY_CHECKS = 1;

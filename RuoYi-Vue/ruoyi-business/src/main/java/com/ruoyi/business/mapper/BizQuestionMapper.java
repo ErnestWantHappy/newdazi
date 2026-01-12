@@ -58,4 +58,11 @@ public interface BizQuestionMapper
      * @return 结果
      */
     public int deleteBizQuestionByQuestionIds(Long[] questionIds);
+
+    /**
+     * 更新题目预览状态
+     */
+    public int updatePreviewStatus(@org.apache.ibatis.annotations.Param("questionId") Long questionId, 
+                                   @org.apache.ibatis.annotations.Param("previewStatus") String previewStatus,
+                                   @org.apache.ibatis.annotations.Param("previewPath") String previewPath);
 }

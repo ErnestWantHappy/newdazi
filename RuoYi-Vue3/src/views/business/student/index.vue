@@ -82,7 +82,7 @@
       </el-table-column>
       <el-table-column label="学号" align="center" prop="studentNo" />
       <el-table-column label="入学年份" align="center" prop="entryYear" />
-      <el-table-column label="操作" align="center" width="220" class-name="small-padding fixed-width">
+      <el-table-column label="操作" align="center" width="280" class-name="small-padding fixed-width">
         <template #default="scope">
           <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)">修改</el-button>
           <el-button link type="primary" icon="Key" @click="handleResetPwd(scope.row)">重置密码</el-button>
@@ -137,6 +137,7 @@
         :disabled="upload.isUploading"
         :on-progress="handleFileUploadProgress"
         :on-success="handleFileSuccess"
+        :on-error="handleFileError"
         :auto-upload="false"
         drag
       >
@@ -350,13 +351,35 @@ function importTemplate() {
   proxy.download("business/student/importTemplate", { deptId: userStore.currentDeptId || null }, `student_template_${new Date().getTime()}.xlsx`);
 };
 
+import { ElLoading } from 'element-plus';
+
+let uploadLoadingInstance;
+
+/** 文件上传中处理 */
+const handleFileUploadProgress = (event, file, fileList) => {
+  upload.isUploading = true;
+  uploadLoadingInstance = ElLoading.service({ text: "正在导入数据，请稍候", background: "rgba(0, 0, 0, 0.7)" });
+};
+
 /** 文件上传成功处理 */
 const handleFileSuccess = (response, file, fileList) => {
   upload.open = false;
   upload.isUploading = false;
   proxy.$refs["uploadRef"].handleRemove(file);
+  if (uploadLoadingInstance) {
+    uploadLoadingInstance.close();
+  }
   proxy.$alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + "</div>", "导入结果", { dangerouslyUseHTMLString: true });
   getList();
+};
+
+/** 文件上传失败处理 */
+const handleFileError = (err, file, fileList) => {
+  upload.isUploading = false;
+  if (uploadLoadingInstance) {
+    uploadLoadingInstance.close();
+  }
+  proxy.$modal.msgError("上传失败");
 };
 
 /** 提交上传文件 */

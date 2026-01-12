@@ -81,6 +81,13 @@
             <artifactId>commons-codec</artifactId>
             <version>1.15</version>
         </dependency>
+
+        <!-- JODConverter for LibreOffice service mode conversion -->
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-local</artifactId>
+            <version>4.4.6</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -4,6 +4,7 @@ import com.ruoyi.business.domain.BizQuestion;
 import com.ruoyi.business.domain.BizScoringItem; // P6 import
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizScoringItemMapper; // P6 import
+import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.IBizQuestionService;
 import com.ruoyi.business.utils.FileConversionUtils;
 import com.ruoyi.common.config.RuoYiConfig;
@@ -34,6 +35,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Autowired
     private BizScoringItemMapper bizScoringItemMapper; // P6 mapper
 
+    @Autowired
+    private AsyncConversionService asyncConversionService;
+
     @Override
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
@@ -63,6 +67,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         // P6: 保存评分项
         insertScoringItems(bizQuestion);
         
+        // 操作题异步转换
+        triggerAsyncConversionIfNeeded(bizQuestion);
+        
         return rows;
     }
 
@@ -79,6 +86,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         // P6: 更新评分项 (先删后增)
         bizScoringItemMapper.deleteBizScoringItemByQuestion(bizQuestion.getQuestionId());
         insertScoringItems(bizQuestion);
+        
+        // 操作题异步转换
+        triggerAsyncConversionIfNeeded(bizQuestion);
         
         return rows;
     }
@@ -122,6 +132,22 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         {
             try
             {
+                // P6.1: 数据规范化 (导入时处理)
+                if ("judgment".equals(question.getQuestionType())) {
+                    String ans = question.getAnswer();
+                    if (StringUtils.isNotEmpty(ans)) {
+                         if ("正确".equals(ans) || "对".equals(ans) || "1".equals(ans) || "T".equalsIgnoreCase(ans)) {
+                             question.setAnswer("T");
+                         } else if ("错误".equals(ans) || "错".equals(ans) || "0".equals(ans) || "F".equalsIgnoreCase(ans)) {
+                             question.setAnswer("F");
+                         }
+                    }
+                } else if ("choice".equals(question.getQuestionType())) {
+                    if (StringUtils.isNotEmpty(question.getAnswer())) {
+                        question.setAnswer(question.getAnswer().toUpperCase());
+                    }
+                }
+                
                 this.insertBizQuestion(question);
                 successNum++;
                 String plainTextContent = question.getQuestionContent().replaceAll("<[^>]*>", "");
@@ -170,47 +196,24 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     }
 
     /**
-     * 处理操作题的文件转换 (使用LibreOffice进行高质量转换)
+     * 处理操作题的文件转换 (异步模式)
      */
     private void handlePracticalQuestionFile(BizQuestion bizQuestion) {
         if (StringUtils.isEmpty(bizQuestion.getFilePath())) {
             bizQuestion.setPreviewPath(null);
+            bizQuestion.setPreviewStatus(null);
             return;
         }
 
-        // 1. 获取URL相对路径
+        // 设置为待转换状态，稍后在 insert 之后触发异步转换
+        bizQuestion.setPreviewStatus("pending");
+        
+        // 预先计算 previewPath（PDF URL路径）
         String urlPath = bizQuestion.getFilePath();
-
-        // 2. 将URL相对路径转换为文件系统相对路径
-        // 例如，从 "/profile/upload/file.docx" 转换为 "/upload/file.docx"
         String fileSystemRelativePath = urlPath.replaceFirst(Constants.RESOURCE_PREFIX, "");
-
-        // 3. 构造源文件的绝对路径和输出目录
-        String originalFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
-        java.io.File originalFile = new java.io.File(originalFullPath);
-        String outputDir = originalFile.getParent();
-
-        // 4. 检查LibreOffice是否已安装
-        if (!FileConversionUtils.isLibreOfficeInstalled()) {
-            log.error("LibreOffice未安装或路径不正确，无法转换文件");
-            bizQuestion.setPreviewPath(null);
-            return;
-        }
-
-        // 5. 使用LibreOffice进行转换
-        String pdfFullPath = FileConversionUtils.convertDocxToPdfWithLibreOffice(originalFullPath, outputDir);
-
-        if (pdfFullPath != null) {
-            // 6. 直接基于fileSystemRelativePath计算PDF的URL路径
-            // 将 /upload/xxx.docx 转换为 /upload/xxx.pdf
-            String pdfRelativePath = fileSystemRelativePath.replaceAll("(?i)\\.docx?$", ".pdf");
-            String previewUrlPath = Constants.RESOURCE_PREFIX + pdfRelativePath;
-            bizQuestion.setPreviewPath(previewUrlPath);
-            log.info("LibreOffice转换成功: {} -> {}", originalFullPath, previewUrlPath);
-        } else {
-            log.error("LibreOffice转换失败: {}", originalFullPath);
-            bizQuestion.setPreviewPath(null);
-        }
+        String pdfRelativePath = fileSystemRelativePath.replaceAll("(?i)\\.docx?$", ".pdf");
+        String previewUrlPath = Constants.RESOURCE_PREFIX + pdfRelativePath;
+        bizQuestion.setPreviewPath(previewUrlPath);
     }
 
     private void calculateWordCount(BizQuestion bizQuestion) {
@@ -220,6 +223,29 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             bizQuestion.setWordCount(denseText.length());
         } else {
             bizQuestion.setWordCount(0);
+        }
+    }
+
+    /**
+     * 触发操作题异步转换（如果需要）
+     */
+    private void triggerAsyncConversionIfNeeded(BizQuestion bizQuestion) {
+        if ("practical".equals(bizQuestion.getQuestionType()) 
+            && "pending".equals(bizQuestion.getPreviewStatus())
+            && bizQuestion.getQuestionId() != null) {
+            
+            String urlPath = bizQuestion.getFilePath();
+            String fileSystemRelativePath = urlPath.replaceFirst(Constants.RESOURCE_PREFIX, "");
+            String originalFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
+            String outputDir = new java.io.File(originalFullPath).getParent();
+            
+            asyncConversionService.convertQuestionAsync(
+                bizQuestion.getQuestionId(), 
+                originalFullPath, 
+                outputDir, 
+                bizQuestion.getPreviewPath()
+            );
+            log.info("【题库】已触发异步转换 questionId={}", bizQuestion.getQuestionId());
         }
     }
 }

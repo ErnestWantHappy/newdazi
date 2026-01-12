@@ -260,8 +260,14 @@ function onLessonChange(val) {
     // 加载班级列表
     getClassesByLesson(val).then(res => {
         classes.value = res.data;
-        // 如果只有一个班级，自动选中
-        if (classes.value.length === 1) {
+        
+        // 检查URL参数中的 classCode，自动选中
+        const queryClassCode = route.query.classCode;
+        if (queryClassCode && classes.value.some(c => c.classCode === queryClassCode)) {
+            selectedClassCode.value = queryClassCode;
+            onClassChange(selectedClassCode.value);
+        } else if (classes.value.length === 1) {
+            // 如果只有一个班级，自动选中
             selectedClassCode.value = classes.value[0].classCode;
             onClassChange(selectedClassCode.value);
         }

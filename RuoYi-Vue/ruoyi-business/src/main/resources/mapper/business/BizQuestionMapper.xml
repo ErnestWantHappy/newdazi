@@ -151,4 +151,14 @@
             (#{item.lessonId}, #{item.questionId}, #{item.questionScore}, #{item.orderNum})
         </foreach>
     </insert>
+
+    <!-- 更新题目预览状态 -->
+    <update id="updatePreviewStatus">
+        UPDATE biz_question 
+        SET preview_status = #{previewStatus}
+        <if test="previewPath != null">
+            , preview_path = #{previewPath}
+        </if>
+        WHERE question_id = #{questionId}
+    </update>
 </mapper>

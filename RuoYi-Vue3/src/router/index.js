@@ -109,6 +109,19 @@ export const constantRoutes = [
         meta: { title: '批改操作题', activeMenu: '/business/teacher' }
       }
     ]
+  },
+  {
+    path: '/business/score',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/score/index'),
+        name: 'ScoreQuery',
+        meta: { title: '成绩查询', activeMenu: '/business/teacher' }
+      }
+    ]
   }
   
 ]

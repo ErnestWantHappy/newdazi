@@ -14,6 +14,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="score" column="score"/>
         <result property="answerTime" column="answer_time"/>
         <result property="submitTime" column="submit_time"/>
+        <result property="typingSpeed" column="typing_speed"/>
+        <result property="accuracyRate" column="accuracy_rate"/>
+        <result property="completionRate" column="completion_rate"/>
+        <result property="previewStatus" column="preview_status"/>
+        <result property="previewPath" column="preview_path"/>
     </resultMap>
 
     <resultMap type="com.ruoyi.business.domain.vo.LessonRankingVo" id="LessonRankingVoResult">
@@ -28,13 +33,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <!-- 批量插入答题记录 -->
-    <insert id="batchInsert" parameterType="java.util.List">
+    <insert id="batchInsert" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="answerId">
         INSERT INTO biz_student_answer 
-        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time) 
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path) 
         VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.studentId}, #{item.lessonId}, #{item.questionId}, #{item.studentAnswer}, 
-             #{item.isCorrect}, #{item.score}, #{item.answerTime}, #{item.submitTime})
+             #{item.isCorrect}, #{item.score}, #{item.answerTime}, #{item.submitTime},
+             #{item.typingSpeed}, #{item.accuracyRate}, #{item.completionRate}, #{item.previewStatus}, #{item.previewPath})
         </foreach>
     </insert>
 
@@ -176,7 +182,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
             SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
-            SUM(IFNULL(a.score, 0)) AS totalScore
+            SUM(IFNULL(a.score, 0)) AS totalScore,
+            -- 打字统计（只取打字题的平均值）
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
         FROM biz_student_answer a
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
         LEFT JOIN biz_question q ON a.question_id = q.question_id
@@ -186,5 +196,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </if>
         GROUP BY a.lesson_id, l.lesson_title, l.lesson_num
         ORDER BY l.lesson_num
+    </select>
+
+    <!-- 更新答题记录的预览状态 -->
+    <update id="updatePreviewStatus">
+        UPDATE biz_student_answer 
+        SET preview_status = #{previewStatus}
+        <if test="previewPath != null">
+            , preview_path = #{previewPath}
+        </if>
+        WHERE answer_id = #{answerId}
+    </update>
+
+    <!-- 根据ID查询答题记录 -->
+    <select id="selectById" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer WHERE answer_id = #{answerId}
     </select>
 </mapper>
