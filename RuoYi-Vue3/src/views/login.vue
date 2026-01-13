@@ -173,7 +173,18 @@ function continueAfterLogin() {
     return acc
   }, {})
   loading.value = false
-  router.push({ path: redirect.value || "/", query: otherQueryParams })
+  
+  // 根据角色决定默认跳转路径
+  let defaultPath = "/"
+  const roles = userStore.roles || []
+  if (roles.includes('student')) {
+    defaultPath = "/student"
+  } else if (roles.includes('teacher')) {
+    defaultPath = "/teacher-dashboard"
+  }
+  // admin 或其他角色保持默认 "/" → "/index"
+  
+  router.push({ path: redirect.value || defaultPath, query: otherQueryParams })
 }
 
 function confirmSchoolSelection() {

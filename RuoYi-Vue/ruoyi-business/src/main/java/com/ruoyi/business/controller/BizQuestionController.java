@@ -122,40 +122,98 @@ public class BizQuestionController extends BaseController
         ExcelUtil<BizQuestion> util = new ExcelUtil<BizQuestion>(BizQuestion.class);
         List<BizQuestion> exampleList = new ArrayList<>();
 
-        BizQuestion choiceExample = new BizQuestion();
-        choiceExample.setQuestionType("choice");
-        choiceExample.setQuestionContent("中国的首都是哪里？");
-        choiceExample.setGrade(7L);
-        choiceExample.setSemester("0");
-        choiceExample.setOptionA("北京");
-        choiceExample.setOptionB("上海");
-        choiceExample.setOptionC("广州");
-        choiceExample.setOptionD("深圳");
-        choiceExample.setAnswer("A");
-        choiceExample.setIsPublic("Y"); // 核心修正：使用 "Y"
-        choiceExample.setRemark("选择题示例：请填写 题目类型(choice), 题干, 年级(数字), 学期(0上册/1下册), 4个选项, 标准答案(A/B/C/D), 是否公开(Y是/N否)。");
-        exampleList.add(choiceExample);
+        // ========== 选择题示例 (2条) ==========
+        BizQuestion choiceExample1 = new BizQuestion();
+        choiceExample1.setQuestionType("choice");
+        choiceExample1.setQuestionContent("【选择题】中国的首都是哪里？");
+        choiceExample1.setGrade(6L);
+        choiceExample1.setSemester("0");
+        choiceExample1.setOptionA("北京");
+        choiceExample1.setOptionB("上海");
+        choiceExample1.setOptionC("广州");
+        choiceExample1.setOptionD("深圳");
+        choiceExample1.setAnswer("A");
+        choiceExample1.setIsPublic("Y");
+        choiceExample1.setTypingDuration(null);
+        choiceExample1.setRemark("★选择题必填：题目类型写choice，填4个选项，答案填A/B/C/D");
+        exampleList.add(choiceExample1);
 
-        BizQuestion typingExample = new BizQuestion();
-        typingExample.setQuestionType("typing");
-        typingExample.setQuestionContent("请输入这段用于打字练习的文字。");
-        typingExample.setGrade(8L);
-        typingExample.setSemester("1");
-        typingExample.setIsPublic("Y"); // 核心修正：使用 "Y"
-        typingExample.setRemark("打字题示例：请填写 题目类型(typing), 打字题内容, 年级, 学期, 是否公开(Y是/N否)。其他项可留空。");
-        exampleList.add(typingExample);
+        BizQuestion choiceExample2 = new BizQuestion();
+        choiceExample2.setQuestionType("choice");
+        choiceExample2.setQuestionContent("下列哪个不是编程语言？");
+        choiceExample2.setGrade(6L);
+        choiceExample2.setSemester("1");
+        choiceExample2.setOptionA("Python");
+        choiceExample2.setOptionB("Java");
+        choiceExample2.setOptionC("Word");
+        choiceExample2.setOptionD("Scratch");
+        choiceExample2.setAnswer("C");
+        choiceExample2.setIsPublic("N");
+        choiceExample2.setTypingDuration(null);
+        choiceExample2.setRemark("");
+        exampleList.add(choiceExample2);
 
-        BizQuestion judgmentExample = new BizQuestion();
-        judgmentExample.setQuestionType("judgment");
-        judgmentExample.setQuestionContent("地球是平的。");
-        judgmentExample.setGrade(7L);
-        judgmentExample.setSemester("0");
-        judgmentExample.setAnswer("F");
-        judgmentExample.setIsPublic("N"); // 核心修正：使用 "N"
-        judgmentExample.setRemark("判断题示例：请填写 题目类型(judgment), 题干, 年级, 学期, 标准答案(T正确/F错误), 是否公开(Y是/N否)。");
-        exampleList.add(judgmentExample);
+        // ========== 判断题示例 (2条) ==========
+        BizQuestion judgmentExample1 = new BizQuestion();
+        judgmentExample1.setQuestionType("judgment");
+        judgmentExample1.setQuestionContent("【判断题】计算机病毒可以通过网络传播。");
+        judgmentExample1.setGrade(5L);
+        judgmentExample1.setSemester("0");
+        judgmentExample1.setOptionA("");
+        judgmentExample1.setOptionB("");
+        judgmentExample1.setOptionC("");
+        judgmentExample1.setOptionD("");
+        judgmentExample1.setAnswer("T");
+        judgmentExample1.setIsPublic("Y");
+        judgmentExample1.setTypingDuration(null);
+        judgmentExample1.setRemark("★判断题必填：题目类型写judgment，答案填T(正确)或F(错误)，选项留空");
+        exampleList.add(judgmentExample1);
 
+        BizQuestion judgmentExample2 = new BizQuestion();
+        judgmentExample2.setQuestionType("judgment");
+        judgmentExample2.setQuestionContent("CPU是计算机的存储器。");
+        judgmentExample2.setGrade(5L);
+        judgmentExample2.setSemester("1");
+        judgmentExample2.setOptionA("");
+        judgmentExample2.setOptionB("");
+        judgmentExample2.setOptionC("");
+        judgmentExample2.setOptionD("");
+        judgmentExample2.setAnswer("F");
+        judgmentExample2.setIsPublic("N");
+        judgmentExample2.setTypingDuration(null);
+        judgmentExample2.setRemark("");
+        exampleList.add(judgmentExample2);
 
+        // ========== 打字题示例 (2条) ==========
+        BizQuestion typingExample1 = new BizQuestion();
+        typingExample1.setQuestionType("typing");
+        typingExample1.setQuestionContent("【打字题】春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。");
+        typingExample1.setGrade(4L);
+        typingExample1.setSemester("0");
+        typingExample1.setOptionA("");
+        typingExample1.setOptionB("");
+        typingExample1.setOptionC("");
+        typingExample1.setOptionD("");
+        typingExample1.setAnswer("");
+        typingExample1.setIsPublic("Y");
+        typingExample1.setTypingDuration(3);
+        typingExample1.setRemark("★打字题必填：题目类型写typing，题目内容填打字文章，打字时长(分钟)必填，选项和答案留空");
+        exampleList.add(typingExample1);
+
+        BizQuestion typingExample2 = new BizQuestion();
+        typingExample2.setQuestionType("typing");
+        typingExample2.setQuestionContent("信息技术是指利用计算机和网络对信息进行获取、处理、存储和传递的技术。");
+        typingExample2.setGrade(4L);
+        typingExample2.setSemester("1");
+        typingExample2.setOptionA("");
+        typingExample2.setOptionB("");
+        typingExample2.setOptionC("");
+        typingExample2.setOptionD("");
+        typingExample2.setAnswer("");
+        typingExample2.setIsPublic("N");
+        typingExample2.setTypingDuration(5);
+        typingExample2.setRemark("");
+        exampleList.add(typingExample2);
 
         util.exportExcel(response, exampleList, "题目导入模板");
     }

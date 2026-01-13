@@ -247,6 +247,9 @@ public class BizLessonServiceImpl implements IBizLessonService
         detailVo.setGrade(lesson.getGrade());
         detailVo.setSemester(lesson.getSemester());
         detailVo.setLessonNum(lesson.getLessonNum());
+        detailVo.setShuffleMode(lesson.getShuffleMode() != null ? lesson.getShuffleMode() : 0);
+        detailVo.setRandomChoiceCount(lesson.getRandomChoiceCount() != null ? lesson.getRandomChoiceCount() : 0);
+        detailVo.setRandomJudgmentCount(lesson.getRandomJudgmentCount() != null ? lesson.getRandomJudgmentCount() : 0);
         detailVo.setQuestions(questions);
         detailVo.setAssignedClassCodes(assignedClassCodes);
         detailVo.setAllClassesInGrade(allClassesInGrade);
@@ -267,6 +270,9 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonToSave.setGrade(lessonDetailVo.getGrade());
         lessonToSave.setSemester(lessonDetailVo.getSemester());
         lessonToSave.setLessonNum(lessonDetailVo.getLessonNum());
+        lessonToSave.setShuffleMode(lessonDetailVo.getShuffleMode() != null ? lessonDetailVo.getShuffleMode() : 0);
+        lessonToSave.setRandomChoiceCount(lessonDetailVo.getRandomChoiceCount() != null ? lessonDetailVo.getRandomChoiceCount() : 0);
+        lessonToSave.setRandomJudgmentCount(lessonDetailVo.getRandomJudgmentCount() != null ? lessonDetailVo.getRandomJudgmentCount() : 0);
 
         if (lessonToSave.getLessonId() == null) {
             lessonToSave.setCreateBy(username);

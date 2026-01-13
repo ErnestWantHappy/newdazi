@@ -35,3 +35,11 @@ export function exportScoreExcel(entryYear, classCode, lessonIds) {
     responseType: 'blob'
   })
 }
+
+// 获取题目分析数据
+export function getQuestionAnalysis(lessonId) {
+  return request({
+    url: '/business/score/analysis/' + lessonId,
+    method: 'get'
+  })
+}

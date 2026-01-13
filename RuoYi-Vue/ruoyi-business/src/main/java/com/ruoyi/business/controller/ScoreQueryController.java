@@ -35,6 +35,9 @@ public class ScoreQueryController extends BaseController {
     @Autowired
     private BizLessonMapper lessonMapper;
 
+    @Autowired
+    private com.ruoyi.business.mapper.BizLessonQuestionMapper lessonQuestionMapper;
+
     /**
      * 获取班级列表（用于筛选下拉框）
      */
@@ -297,5 +300,72 @@ public class ScoreQueryController extends BaseController {
         response.setHeader("Content-Disposition", "attachment; filename=scores.xlsx");
         wb.write(response.getOutputStream());
         wb.close();
+    }
+
+    /**
+     * 获取题目分析数据 (选择题和判断题)
+     */
+    @GetMapping("/analysis/{lessonId}")
+    public AjaxResult getQuestionAnalysis(@PathVariable Long lessonId) {
+        // 1. 查询课程的所有题目详情
+        List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+        
+        // 2. 查询该课程的所有答题记录
+        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers = studentAnswerMapper.selectByLessonId(lessonId);
+        
+        // 3. 按题目ID分组答题记录
+        Map<Long, List<com.ruoyi.business.domain.BizStudentAnswer>> answerMap = new HashMap<>();
+        for (com.ruoyi.business.domain.BizStudentAnswer ans : allAnswers) {
+            answerMap.computeIfAbsent(ans.getQuestionId(), k -> new ArrayList<>()).add(ans);
+        }
+        
+        // 4. 计算每道题的统计数据
+        List<com.ruoyi.business.domain.vo.QuestionAnalysisDetailVo> analysisList = new ArrayList<>();
+        
+        for (com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo q : questions) {
+            // 只分析选择题和判断题
+            if (!"choice".equals(q.getQuestionType()) && !"judgment".equals(q.getQuestionType())) {
+                continue;
+            }
+            
+            com.ruoyi.business.domain.vo.QuestionAnalysisDetailVo vo = new com.ruoyi.business.domain.vo.QuestionAnalysisDetailVo();
+            vo.setQuestionId(q.getQuestionId());
+            vo.setQuestionContent(q.getQuestionContent());
+            vo.setQuestionType(q.getQuestionType());
+            vo.setAnswer(q.getAnswer());
+            
+            List<com.ruoyi.business.domain.BizStudentAnswer> qAnswers = answerMap.getOrDefault(q.getQuestionId(), new ArrayList<>());
+            vo.setStudentCount(qAnswers.size());
+            
+            int correctCount = 0;
+            Map<String, Integer> dist = new HashMap<>();
+            
+            // 初始化选项分布
+            if ("choice".equals(q.getQuestionType())) {
+                dist.put("A", 0); dist.put("B", 0); dist.put("C", 0); dist.put("D", 0);
+            } else {
+                dist.put("T", 0); dist.put("F", 0);
+            }
+            
+            for (com.ruoyi.business.domain.BizStudentAnswer ans : qAnswers) {
+                if (Boolean.TRUE.equals(ans.getIsCorrect())) {
+                    correctCount++;
+                }
+                String userAns = ans.getStudentAnswer();
+                if (userAns != null) {
+                    dist.put(userAns, dist.getOrDefault(userAns, 0) + 1);
+                }
+            }
+            
+            vo.setCorrectCount(correctCount);
+            vo.setAnswerDistribution(dist);
+            
+            double accuracy = qAnswers.isEmpty() ? 0.0 : (double) correctCount / qAnswers.size() * 100;
+            vo.setAccuracy(Math.round(accuracy * 10.0) / 10.0); // 保留1位小数
+            
+            analysisList.add(vo);
+        }
+        
+        return AjaxResult.success(analysisList);
     }
 }

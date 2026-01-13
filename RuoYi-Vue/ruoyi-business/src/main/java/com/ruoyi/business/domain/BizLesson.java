@@ -32,6 +32,15 @@ public class BizLesson extends BaseEntity
     /** 创建教师ID */
     private Long creatorId;
 
+    /** 出题模式: 0=固定顺序, 1=随机排序, 2=随机抽取 */
+    private Integer shuffleMode;
+
+    /** 随机抽取选择题数量 (模式2时有效) */
+    private Integer randomChoiceCount;
+
+    /** 随机抽取判断题数量 (模式2时有效) */
+    private Integer randomJudgmentCount;
+
     /** 课程包含的题目列表 (非数据库字段) */
     private List<BizLessonQuestion> questions;
 
@@ -83,6 +92,30 @@ public class BizLesson extends BaseEntity
 
     public void setCreatorId(Long creatorId) {
         this.creatorId = creatorId;
+    }
+
+    public Integer getShuffleMode() {
+        return shuffleMode;
+    }
+
+    public void setShuffleMode(Integer shuffleMode) {
+        this.shuffleMode = shuffleMode;
+    }
+
+    public Integer getRandomChoiceCount() {
+        return randomChoiceCount;
+    }
+
+    public void setRandomChoiceCount(Integer randomChoiceCount) {
+        this.randomChoiceCount = randomChoiceCount;
+    }
+
+    public Integer getRandomJudgmentCount() {
+        return randomJudgmentCount;
+    }
+
+    public void setRandomJudgmentCount(Integer randomJudgmentCount) {
+        this.randomJudgmentCount = randomJudgmentCount;
     }
 
     public List<BizLessonQuestion> getQuestions()

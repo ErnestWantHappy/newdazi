@@ -805,7 +805,60 @@ const hasLesson = ref(false);
 const lessonId = ref(null);
 const lessonTitle = ref("");
 const allQuestions = ref([]);
+const lessonConfig = ref({
+  shuffleMode: 0,
+  randomChoiceCount: 0,
+  randomJudgmentCount: 0,
+});
 const studentInfo = ref({});
+
+// 确定性随机：使用 seed 生成固定随机序列
+function seededRandom(seed) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+function seededShuffle(array, seed) {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    seed = seed * 1103515245 + 12345;
+    const j = Math.floor(Math.abs(seed % (i + 1)));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+// 应用随机逻辑到题目列表
+function applyRandomShuffle(questions, config, studentId, lessonIdVal) {
+  const { shuffleMode, randomChoiceCount, randomJudgmentCount } = config;
+  if (shuffleMode === 0) return questions; // 固定顺序
+  
+  // 生成唯一种子：studentId + lessonId
+  const seed = (studentId || 0) * 10000 + (lessonIdVal || 0);
+  
+  // 分类
+  const typing = questions.filter(q => q.questionType === 'typing');
+  const practical = questions.filter(q => q.questionType === 'practical');
+  let choice = questions.filter(q => q.questionType === 'choice');
+  let judgment = questions.filter(q => q.questionType === 'judgment');
+  
+  // 对选择题和判断题应用随机
+  choice = seededShuffle(choice, seed);
+  judgment = seededShuffle(judgment, seed + 1);
+  
+  // 模式2：随机抽题
+  if (shuffleMode === 2) {
+    if (randomChoiceCount > 0 && randomChoiceCount < choice.length) {
+      choice = choice.slice(0, randomChoiceCount);
+    }
+    if (randomJudgmentCount > 0 && randomJudgmentCount < judgment.length) {
+      judgment = judgment.slice(0, randomJudgmentCount);
+    }
+  }
+  
+  // 合并：打字 > 操作 > 选择 > 判断
+  return [...typing, ...practical, ...choice, ...judgment];
+}
 const answers = ref({});
 const pwdDialogVisible = ref(false);
 const pwdFormRef = ref(null);
@@ -1110,7 +1163,24 @@ async function fetchData() {
     if (res.hasLesson) {
       lessonId.value = res.lessonId;
       lessonTitle.value = res.lessonTitle;
-      allQuestions.value = res.questions || [];
+      
+      // 保存课程随机配置
+      lessonConfig.value = {
+        shuffleMode: res.shuffleMode ?? 0,
+        randomChoiceCount: res.randomChoiceCount ?? 0,
+        randomJudgmentCount: res.randomJudgmentCount ?? 0,
+      };
+      
+      // 应用随机逻辑
+      const rawQuestions = res.questions || [];
+      const studentId = res.studentInfo?.studentId || 0;
+      allQuestions.value = applyRandomShuffle(
+        rawQuestions, 
+        lessonConfig.value, 
+        studentId, 
+        res.lessonId
+      );
+      
       studentInfo.value = res.studentInfo || {};
       submittedAnswers.value = res.submittedAnswers || {};
       initTypingStates();

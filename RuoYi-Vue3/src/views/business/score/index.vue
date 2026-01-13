@@ -24,6 +24,7 @@
         
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
         <el-button type="success" icon="Download" @click="handleExport" :disabled="!tableData.length">导出 Excel</el-button>
+        <el-button type="warning" icon="DataAnalysis" @click="handleAnalysis" :disabled="selectedLessonIds.length !== 1">答题分析</el-button>
         
         <!-- 选中课程提示 -->
         <span v-if="selectedLessonIds.length > 0" class="selected-tip">
@@ -225,13 +226,62 @@
         </el-table>
       </div>
     </el-dialog>
+
+    <!-- 答题分析弹窗 -->
+    <el-dialog v-model="analysisDialogVisible" title="答题情况分析" width="900px" top="5vh">
+      <div v-loading="analysisLoading">
+        <!-- 易错题图表 -->
+        <div class="chart-header" style="margin-bottom: 10px; font-weight: bold; border-left: 4px solid #409EFF; padding-left: 10px;">
+          📊 易错题统计
+        </div>
+        <div ref="analysisChartRef" style="width: 100%; height: 350px;"></div>
+        
+        <el-divider />
+        
+        <!-- 详细数据表格 -->
+        <div class="chart-header" style="margin-bottom: 10px; font-weight: bold; border-left: 4px solid #67C23A; padding-left: 10px;">
+          📋 详细分析
+        </div>
+        <el-table :data="analysisData" border stripe height="400">
+          <el-table-column label="题目内容" prop="questionContent" min-width="300">
+            <template #default="scope">
+              <span v-if="scope.row.questionType === 'choice'" class="question-type-tag choice">[选择]</span>
+              <span v-else class="question-type-tag judgment">[判断]</span>
+              {{ scope.row.questionContent }}
+            </template>
+          </el-table-column>
+          <el-table-column label="正确答案" prop="answer" width="80" align="center" />
+          <el-table-column label="正确率" prop="accuracy" width="100" align="center" sortable>
+            <template #default="scope">
+              <el-tag :type="scope.row.accuracy >= 60 ? 'success' : 'danger'">
+                {{ scope.row.accuracy }}%
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="答题人数" prop="studentCount" width="80" align="center" />
+          <el-table-column label="选项分布" min-width="200">
+            <template #default="scope">
+              <div class="dist-bar-container">
+                <div v-for="(count, opt) in scope.row.answerDistribution" :key="opt" class="dist-item">
+                  <span class="dist-label" :class="{ correct: opt === scope.row.answer }">{{ opt }}</span>
+                  <div class="dist-bar-bg">
+                    <div class="dist-bar" :style="{ width: (count / scope.row.studentCount * 100) + '%' }"></div>
+                  </div>
+                  <span class="dist-count">{{ count }}人</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel } from '@/api/business/score';
+import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis } from '@/api/business/score';
 import { ElMessage } from 'element-plus';
 import * as echarts from 'echarts';
 
@@ -263,6 +313,13 @@ const typingChartLesson = ref(null);  // 课程筛选
 // 学生画像弹窗
 const profileDialogVisible = ref(false);
 const currentStudent = ref(null);
+
+// 答题分析弹窗
+const analysisDialogVisible = ref(false);
+const analysisData = ref([]);
+const analysisLoading = ref(false);
+const analysisChartRef = ref(null);
+let analysisChartInstance = null;
 const profileLesson = ref(null);  // 学生画像课程筛选
 const profileScoreType = ref('total');  // total | typing | theory | practical
 
@@ -870,6 +927,85 @@ function handleExport() {
   });
 }
 
+// 处理答题分析
+function handleAnalysis() {
+  if (selectedLessonIds.value.length !== 1) {
+    ElMessage.warning("请选择一门课程进行分析");
+    return;
+  }
+  
+  const lessonId = selectedLessonIds.value[0];
+  
+  analysisDialogVisible.value = true;
+  analysisLoading.value = true;
+  analysisData.value = [];
+  
+  getQuestionAnalysis(lessonId).then(res => {
+    analysisData.value = res.data || [];
+    analysisLoading.value = false;
+    nextTick(() => {
+      renderAnalysisChart();
+    });
+  }).catch(() => {
+     analysisLoading.value = false;
+  });
+}
+
+// 渲染易错题图表
+function renderAnalysisChart() {
+  if (!analysisChartRef.value) return;
+  if (!analysisChartInstance) {
+    analysisChartInstance = echarts.init(analysisChartRef.value);
+  }
+  
+  // 取前10个正确率最低的题目（易错题）
+  // 过滤掉没有人答的题
+  const validData = analysisData.value.filter(d => d.studentCount > 0);
+  // 按正确率升序排列（最容易错的在前）
+  const sorted = [...validData].sort((a, b) => a.accuracy - b.accuracy).slice(0, 10);
+  
+  const option = {
+    tooltip: {
+       trigger: 'axis',
+        formatter: function(params) {
+          const item = sorted[params[0].dataIndex];
+          return `<div style="max-width:300px; white-space:normal">
+                  <b>题目：</b>${item.questionContent}<br/>
+                  <b>类型：</b>${item.questionType === 'choice' ? '选择题' : '判断题'}<br/>
+                  <b>正确率：</b>${item.accuracy}%<br/>
+                  <b>答题人数：</b>${item.studentCount}人
+                  </div>`;
+       }
+    },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { 
+      type: 'category', 
+      data: sorted.map((_, idx) => `TOP ${idx+1}`),
+      axisLabel: { interval: 0 }
+    },
+    yAxis: { type: 'value', name: '正确率(%)', max: 100 },
+    series: [
+      {
+        data: sorted.map(item => item.accuracy),
+        type: 'bar',
+        barWidth: '40%',
+        itemStyle: {
+           color: function(params) {
+              const val = params.value;
+              if (val < 60) return '#F56C6C'; // 红色
+              if (val < 80) return '#E6A23C'; // 橙色
+              return '#67C23A'; // 绿色
+           },
+           borderRadius: [4, 4, 0, 0]
+        },
+        label: { show: true, position: 'top', formatter: '{c}%' }
+      }
+    ]
+  };
+  
+  analysisChartInstance.setOption(option);
+}
+
 function getScoreType(score) {
   if (score >= 90) return 'success';
   if (score >= 60) return '';
@@ -1008,6 +1144,61 @@ function getScoreType(score) {
     .data-bar-value {
       position: relative;
       z-index: 1;
+    }
+    
+    // 答题分析弹窗样式
+    .question-type-tag {
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 5px;
+      
+      &.choice { color: #409EFF; }
+      &.judgment { color: #E6A23C; }
+    }
+    
+    .dist-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      
+      .dist-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        
+        .dist-label {
+          width: 20px;
+          text-align: center;
+          font-weight: bold;
+          margin-right: 5px;
+          color: #909399;
+          
+          &.correct {
+            color: #67C23A;
+            text-decoration: underline;
+          }
+        }
+        
+        .dist-bar-bg {
+          flex: 1;
+          height: 10px;
+          background-color: #f0f2f5;
+          border-radius: 5px;
+          margin-right: 8px;
+          overflow: hidden;
+          
+          .dist-bar {
+            height: 100%;
+            background-color: #409EFF;
+          }
+        }
+        
+        .dist-count {
+          font-size: 12px;
+          color: #606266;
+          width: 40px;
+        }
+      }
     }
     
     &.avg-bar .data-bar {

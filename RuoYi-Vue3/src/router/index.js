@@ -48,19 +48,6 @@ export const constantRoutes = [
     hidden: true
   },
   {
-    path: '/student',
-    component: () => import('@/layout/StudentLayout'), // 使用我们为学生创建的专属布局
-    redirect: '/student/index',
-    children: [
-      {
-        path: 'index',
-        component: () => import('@/views/student/index'),
-        name: 'StudentDashboard',
-        meta: { title: '学生首页', icon: 'dashboard' }
-      }
-    ]
-  },
-  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true
@@ -74,6 +61,7 @@ export const constantRoutes = [
     path: '',
     component: Layout,
     redirect: '/index',
+    hidden: true, // 隐藏若依默认首页，教师/学生各有专属首页
     children: [
       {
         path: '/index',
@@ -128,6 +116,21 @@ export const constantRoutes = [
 
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
+  // 学生首页 - 仅学生角色可见
+  {
+    path: '/student',
+    component: () => import('@/layout/StudentLayout'),
+    redirect: '/student/index',
+    roles: ['student'],
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/student/index'),
+        name: 'StudentDashboard',
+        meta: { title: '学生首页', icon: 'dashboard' }
+      }
+    ]
+  },
   {
     path: '/system/user-auth',
     component: Layout,

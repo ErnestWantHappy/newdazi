@@ -99,6 +99,7 @@ public class StudentHomeController extends BaseController
 
         // 构建学生信息
         Map<String, Object> studentInfo = new HashMap<>();
+        studentInfo.put("studentId", student.getStudentId());  // 用于随机种子
         studentInfo.put("studentName", student.getStudentName());
         studentInfo.put("entryYear", entryYear);
         studentInfo.put("classCode", classCode);
@@ -141,6 +142,9 @@ public class StudentHomeController extends BaseController
                 .put("hasLesson", true)
                 .put("lessonId", lessonId)
                 .put("lessonTitle", lesson != null ? lesson.getLessonTitle() : "")
+                .put("shuffleMode", lesson != null ? lesson.getShuffleMode() : 0)
+                .put("randomChoiceCount", lesson != null ? lesson.getRandomChoiceCount() : 0)
+                .put("randomJudgmentCount", lesson != null ? lesson.getRandomJudgmentCount() : 0)
                 .put("questions", questions)
                 .put("submittedAnswers", answersMap)  // 新增：学生已提交的答案
                 .put("studentInfo", studentInfo);

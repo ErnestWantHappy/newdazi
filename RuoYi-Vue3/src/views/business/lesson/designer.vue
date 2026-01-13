@@ -67,6 +67,45 @@
               </div>
             </el-form-item>
 
+            <!-- 出题模式设置 -->
+            <el-divider content-position="left">出题设置</el-divider>
+            <el-form-item label="出题模式">
+              <el-radio-group v-model="form.shuffleMode">
+                <el-radio :label="0">固定顺序</el-radio>
+                <el-radio :label="1">随机排序</el-radio>
+                <el-radio :label="2">随机抽题</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            
+            <!-- 随机抽题数量设置 (仅模式2时显示) -->
+            <el-row v-if="form.shuffleMode === 2" :gutter="10">
+              <el-col :span="12">
+                <el-form-item label="选择题">
+                  <el-input-number 
+                    v-model="form.randomChoiceCount" 
+                    :min="0" 
+                    :max="choiceCount"
+                    :disabled="choiceCount === 0"
+                  />
+                  <span style="margin-left: 8px; color: #909399; font-size: 12px;">/ {{ choiceCount }} 道</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="判断题">
+                  <el-input-number 
+                    v-model="form.randomJudgmentCount" 
+                    :min="0" 
+                    :max="judgmentCount"
+                    :disabled="judgmentCount === 0"
+                  />
+                  <span style="margin-left: 8px; color: #909399; font-size: 12px;">/ {{ judgmentCount }} 道</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <div v-if="form.shuffleMode === 2" style="color: #E6A23C; font-size: 12px; margin-bottom: 10px;">
+              💡 提示：设置为0表示不限制（使用全部题目）
+            </div>
+
           </el-form>
 
           <el-divider />
@@ -79,6 +118,9 @@
               (已达标)
             </span>
           </h4>
+          <div v-if="hasInconsistentScores" style="color: #E6A23C; font-size: 12px; margin-bottom: 10px;">
+            ⚠️ 注意：检测到同类题目分值不一致。随机抽题模式下，建议保持同题型分值相同，否则学生试卷总分可能浮动。当前预览总分仅供参考。
+          </div>
           
           <!-- 批量改分工具栏 -->
           <div class="batch-toolbar" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 4px;">
@@ -292,6 +334,9 @@ const form = ref({
   semester: null,
   lessonNum: 1,
   assignedClasses: [], // 改为存储 "entryYear-classCode" 格式
+  shuffleMode: 0,      // 出题模式: 0=固定, 1=随机排序, 2=随机抽取
+  randomChoiceCount: 0,   // 随机抽取选择题数
+  randomJudgmentCount: 0, // 随机抽取判断题数
 });
 const selectedQuestions = ref([]);
 const myManagedClasses = ref([]); // 教师管理的班级列表
@@ -306,6 +351,8 @@ const queryParams = ref({
   isPublic: null,
   questionType: null,
   lessonNum: null,
+  orderByColumn: 'createTime',  // 按创建时间排序
+  isAsc: 'desc',                 // 降序，最新的在前
 });
 
 const rules = {
@@ -316,9 +363,55 @@ const rules = {
 };
 
 const totalScore = computed(() => {
-  return selectedQuestions.value.reduce((sum, question) => {
-    return sum + (question.questionScore || 0);
-  }, 0);
+  // 1. 分离题目类型
+  const choices = selectedQuestions.value.filter(q => q.questionType === 'choice');
+  const judgments = selectedQuestions.value.filter(q => q.questionType === 'judgment');
+  const others = selectedQuestions.value.filter(q => q.questionType !== 'choice' && q.questionType !== 'judgment');
+
+  let score = 0;
+
+  // 2. 其他题目（打字、操作）：全部计入
+  score += others.reduce((sum, q) => sum + (q.questionScore || 0), 0);
+
+  // 3. 选择题：根据 shuffleMode 和 randomChoiceCount 决定
+  if (form.value.shuffleMode === 2 && form.value.randomChoiceCount > 0) {
+    // 随机抽题：取前 N 题计算预计总分
+    const count = Math.min(form.value.randomChoiceCount, choices.length);
+    score += choices.slice(0, count).reduce((sum, q) => sum + (q.questionScore || 0), 0);
+  } else {
+    // 固定/全量：全部计入
+    score += choices.reduce((sum, q) => sum + (q.questionScore || 0), 0);
+  }
+
+  // 4. 判断题：同上
+  if (form.value.shuffleMode === 2 && form.value.randomJudgmentCount > 0) {
+    const count = Math.min(form.value.randomJudgmentCount, judgments.length);
+    score += judgments.slice(0, count).reduce((sum, q) => sum + (q.questionScore || 0), 0);
+  } else {
+    score += judgments.reduce((sum, q) => sum + (q.questionScore || 0), 0);
+  }
+
+  return score;
+});
+
+// 检查随机模式下分值是否一致
+const hasInconsistentScores = computed(() => {
+  if (form.value.shuffleMode !== 2) return false;
+  
+  const choices = selectedQuestions.value.filter(q => q.questionType === 'choice');
+  const judgments = selectedQuestions.value.filter(q => q.questionType === 'judgment');
+
+  const isConsistent = (arr) => {
+    if (arr.length <= 1) return true;
+    const first = arr[0].questionScore || 0;
+    return arr.every(q => (q.questionScore || 0) === first);
+  };
+  
+  // 只有当启用了随机抽题（count > 0）且题目列表不为空时才检查
+  if (form.value.randomChoiceCount > 0 && choices.length > 0 && !isConsistent(choices)) return true;
+  if (form.value.randomJudgmentCount > 0 && judgments.length > 0 && !isConsistent(judgments)) return true;
+  
+  return false;
 });
 
 // 根据年级数字(1-12)计算对应的入学年份
@@ -474,6 +567,9 @@ function initialize() {
         semester: detail.semester ?? getDefaultSemester(),
         lessonNum: detail.lessonNum,
         assignedClasses: assignedClasses,
+        shuffleMode: detail.shuffleMode ?? 0,
+        randomChoiceCount: detail.randomChoiceCount ?? 0,
+        randomJudgmentCount: detail.randomJudgmentCount ?? 0,
       };
       selectedQuestions.value = (detail.questions || []).map((item, index) => ({
         ...item,
@@ -492,6 +588,9 @@ function initialize() {
       semester: getDefaultSemester(),
       lessonNum: 1,
       assignedClasses: [],
+      shuffleMode: 0,
+      randomChoiceCount: 0,
+      randomJudgmentCount: 0,
     };
     
     // 如果URL有预设班级 (e.g. ["1班"])，尝试设置

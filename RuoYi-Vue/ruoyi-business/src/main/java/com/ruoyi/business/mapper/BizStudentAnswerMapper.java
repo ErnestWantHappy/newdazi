@@ -24,6 +24,11 @@ public interface BizStudentAnswerMapper
      * 查询学生某课程的答题记录
      */
     List<BizStudentAnswer> selectByStudentAndLesson(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId);
+    
+    /**
+     * 查询某课程的所有答题记录
+     */
+    List<BizStudentAnswer> selectByLessonId(@Param("lessonId") Long lessonId);
 
     /**
      * 删除学生某课程的旧答题记录（用于重新提交）

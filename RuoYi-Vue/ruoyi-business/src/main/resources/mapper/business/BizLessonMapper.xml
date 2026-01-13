@@ -10,6 +10,9 @@
         <result property="grade"    column="grade"    />
         <result property="semester"    column="semester"    />
         <result property="lessonNum"    column="lesson_num"    />
+        <result property="shuffleMode"    column="shuffle_mode"    />
+        <result property="randomChoiceCount"    column="random_choice_count"    />
+        <result property="randomJudgmentCount"    column="random_judgment_count"    />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
@@ -17,7 +20,7 @@
     </resultMap>
 
     <sql id="selectBizLessonVo">
-        select lesson_id, lesson_title, grade, semester, lesson_num, create_by, create_time, update_by, update_time from biz_lesson
+        select lesson_id, lesson_title, grade, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
 
     <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
@@ -41,6 +44,9 @@
             <if test="grade != null">grade,</if>
             <if test="semester != null and semester != ''">semester,</if>
             <if test="lessonNum != null">lesson_num,</if>
+            <if test="shuffleMode != null">shuffle_mode,</if>
+            <if test="randomChoiceCount != null">random_choice_count,</if>
+            <if test="randomJudgmentCount != null">random_judgment_count,</if>
             <if test="createBy != null and createBy != ''">create_by,</if>
             <if test="createTime != null">create_time,</if>
             <if test="updateBy != null and updateBy != ''">update_by,</if>
@@ -51,6 +57,9 @@
             <if test="grade != null">#{grade},</if>
             <if test="semester != null and semester != ''">#{semester},</if>
             <if test="lessonNum != null">#{lessonNum},</if>
+            <if test="shuffleMode != null">#{shuffleMode},</if>
+            <if test="randomChoiceCount != null">#{randomChoiceCount},</if>
+            <if test="randomJudgmentCount != null">#{randomJudgmentCount},</if>
             <if test="createBy != null and createBy != ''">#{createBy},</if>
             <if test="createTime != null">#{createTime},</if>
             <if test="updateBy != null and updateBy != ''">#{updateBy},</if>
@@ -65,6 +74,9 @@
             <if test="grade != null">grade = #{grade},</if>
             <if test="semester != null and semester != ''">semester = #{semester},</if>
             <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
+            <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
+            <if test="randomChoiceCount != null">random_choice_count = #{randomChoiceCount},</if>
+            <if test="randomJudgmentCount != null">random_judgment_count = #{randomJudgmentCount},</if>
             <if test="createBy != null and createBy != ''">create_by = #{createBy},</if>
             <if test="createTime != null">create_time = #{createTime},</if>
             <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>

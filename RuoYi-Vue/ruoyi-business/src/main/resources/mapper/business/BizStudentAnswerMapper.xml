@@ -50,6 +50,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
     </select>
 
+    <select id="selectByLessonId" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer 
+        WHERE lesson_id = #{lessonId}
+    </select>
+
     <!-- 删除学生某课程的旧答题记录 -->
     <delete id="deleteByStudentAndLesson">
         DELETE FROM biz_student_answer 

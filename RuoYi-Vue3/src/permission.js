@@ -50,7 +50,19 @@ router.beforeEach((to, from, next) => {
                       router.addRoute(route);
                     }
                   });
-                  next({ ...to, replace: true });
+                  
+                  // 登录后跳转逻辑：教师跳转到教师首页，其他跳原目标
+                  const isTeacher = roles.includes("teacher");
+                  if (to.path === "/" || to.path === "/index") {
+                    // 如果目标是默认首页，根据角色重定向
+                    if (isTeacher) {
+                      next({ path: "/teacher-dashboard", replace: true });
+                    } else {
+                      next({ ...to, replace: true });
+                    }
+                  } else {
+                    next({ ...to, replace: true });
+                  }
                 });
             }
           })

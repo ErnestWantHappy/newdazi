@@ -14,16 +14,16 @@ public class BizQuestion extends BaseEntity
 
     private Long questionId;
 
-    @Excel(name = "题目类型", readConverterExp = "choice=选择题,typing=打字题,judgment=判断题")
+    @Excel(name = "题目类型", readConverterExp = "choice=选择题,typing=打字题,judgment=判断题,选择题=choice,打字题=typing,判断题=judgment", combo = {"选择题", "判断题", "打字题"})
     private String questionType;
 
     @Excel(name = "题目内容")
     private String questionContent;
 
-    @Excel(name = "年级", readConverterExp = "1=一年级,2=二年级,3=三年级,4=四年级,5=五年级,6=六年级,7=七年级,8=八年级,9=九年级")
+    @Excel(name = "年级", readConverterExp = "1=一年级,2=二年级,3=三年级,4=四年级,5=五年级,6=六年级,7=七年级,8=八年级,9=九年级,一年级=1,二年级=2,三年级=3,四年级=4,五年级=5,六年级=6,七年级=7,八年级=8,九年级=9", combo = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "七年级", "八年级", "九年级"})
     private Long grade;
 
-    @Excel(name = "学期", readConverterExp = "0=上册,1=下册")
+    @Excel(name = "学期", readConverterExp = "0=上册,1=下册,上册=0,下册=1", combo = {"上册", "下册"})
     private String semester;
 
     /** 第几课 (1-15) */
@@ -53,7 +53,7 @@ public class BizQuestion extends BaseEntity
     /** 新增：预览文件路径 (由系统生成，无需Excel注解) */
     private String previewPath;
 
-    @Excel(name = "是否公开", dictType = "sys_yes_no")
+    @Excel(name = "是否公开", readConverterExp = "Y=是,N=否,是=Y,否=N", combo = {"是", "否"})
     private String isPublic;
 
     private Long creatorId;

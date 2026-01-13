@@ -15,6 +15,13 @@ public class LessonDetailVo extends BaseEntity {
     private Long grade;
     private String semester;
     private Integer lessonNum;
+    
+    /** 出题模式: 0=固定顺序, 1=随机排序, 2=随机抽取 */
+    private Integer shuffleMode;
+    /** 随机抽取选择题数量 */
+    private Integer randomChoiceCount;
+    /** 随机抽取判断题数量 */
+    private Integer randomJudgmentCount;
 
     // --- LessonDetailVo 自己特有的字段 ---
     /** 课程包含的题目列表（包含题干等完整信息） */
@@ -66,6 +73,30 @@ public class LessonDetailVo extends BaseEntity {
 
     public void setLessonNum(Integer lessonNum) {
         this.lessonNum = lessonNum;
+    }
+
+    public Integer getShuffleMode() {
+        return shuffleMode;
+    }
+
+    public void setShuffleMode(Integer shuffleMode) {
+        this.shuffleMode = shuffleMode;
+    }
+
+    public Integer getRandomChoiceCount() {
+        return randomChoiceCount;
+    }
+
+    public void setRandomChoiceCount(Integer randomChoiceCount) {
+        this.randomChoiceCount = randomChoiceCount;
+    }
+
+    public Integer getRandomJudgmentCount() {
+        return randomJudgmentCount;
+    }
+
+    public void setRandomJudgmentCount(Integer randomJudgmentCount) {
+        this.randomJudgmentCount = randomJudgmentCount;
     }
 
     public List<BizLessonQuestionDetailVo> getQuestions() {
