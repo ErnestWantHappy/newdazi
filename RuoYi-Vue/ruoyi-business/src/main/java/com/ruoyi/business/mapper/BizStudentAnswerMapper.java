@@ -31,6 +31,11 @@ public interface BizStudentAnswerMapper
     List<BizStudentAnswer> selectByLessonId(@Param("lessonId") Long lessonId);
 
     /**
+     * 查询某课程指定班级的答题记录
+     */
+    List<BizStudentAnswer> selectByLessonAndClass(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear);
+
+    /**
      * 删除学生某课程的旧答题记录（用于重新提交）
      */
     void deleteByStudentAndLesson(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId);
@@ -86,4 +91,8 @@ public interface BizStudentAnswerMapper
      * 根据ID查询答题记录
      */
     BizStudentAnswer selectById(@Param("answerId") Long answerId);
+    /**
+     * 查询学生答题矩阵详情
+     */
+    List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> selectStudentAnswerMatrix(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear);
 }

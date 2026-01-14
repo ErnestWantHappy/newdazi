@@ -73,13 +73,13 @@
           <div class="banner-right">
             <div class="course-score-box">
               <div class="score-label">课程总分</div>
-              <div class="score-value total">{{ courseTotalScore }}</div>
+              <div class="score-value total score-num">{{ courseTotalScore }}</div>
             </div>
             <div class="score-divider"></div>
             <div class="course-score-box">
               <div class="score-label">我的得分</div>
               <div
-                class="score-value my"
+                class="score-value my score-num"
                 :class="{ pending: courseMyScore === null }"
               >
                 {{ courseMyScore !== null ? courseMyScore : "待完成" }}
@@ -93,15 +93,20 @@
       <el-empty v-if="!hasLesson" description="暂无课程，请休息一下吧~" />
 
       <div v-else class="task-container">
+        <!-- 空状态提示 -->
+        <el-empty 
+          v-if="typingQuestions.length === 0 && theoryQuestions.length === 0 && practicalQuestions.length === 0" 
+          description="本课程暂无练习题目" 
+        />
         <!-- 1. 打字练习区域 -->
         <div v-if="typingQuestions.length > 0" class="section-block">
           <div class="section-title">
             <el-icon><Monitor /></el-icon> 打字练习
             <span class="section-score-info">
-              总分: {{ typingTotalScore }}分
+              总分: <span class="score-num">{{ typingTotalScore }}</span>分
               <template v-if="typingMyScore !== null">
                 | 得分:
-                <span class="section-score-value">{{ typingMyScore }}分</span>
+                <span class="section-score-value score-num">{{ typingMyScore }}分</span>
               </template>
             </span>
           </div>
@@ -274,10 +279,10 @@
           <div class="section-title">
             <el-icon><EditPen /></el-icon> 理论测试
             <span class="section-score-info">
-              总分: {{ theoryTotalScore }}分
+              总分: <span class="score-num">{{ theoryTotalScore }}</span>分
               <template v-if="theorySubmitted">
                 | 得分:
-                <span class="section-score-value">{{ theoryScore }}分</span>
+                <span class="section-score-value score-num">{{ theoryScore }}分</span>
               </template>
             </span>
           </div>
@@ -345,11 +350,11 @@
         <div v-if="practicalQuestions.length > 0" class="section-block">
           <div class="section-title">
             <el-icon><FolderOpened /></el-icon> 操作题
-            <span class="section-score-info">
-              总分: {{ practicalTotalScore }}分
+            <span class="section-score-info" v-if="practicalQuestions.length > 1">
+              总分: <span class="score-num">{{ practicalTotalScore }}</span>分
               <template v-if="practicalMyScore !== null">
                 | 得分:
-                <span class="section-score-value"
+                <span class="section-score-value score-num"
                   >{{ practicalMyScore }}分</span
                 >
               </template>
@@ -374,7 +379,7 @@
                         practicalScores[q.questionId] !== undefined
                       "
                     >
-                      <span class="scored"
+                      <span class="scored score-num"
                         >{{ practicalScores[q.questionId] }}/{{
                           q.questionScore
                         }}分</span
@@ -394,7 +399,16 @@
 
               <!-- 题目描述 -->
               <div class="question-stem">
-                {{ index + 1 }}. {{ q.questionContent }}
+                <span v-if="practicalQuestions.length > 1">{{ index + 1 }}. </span>
+                {{ q.questionContent }}
+              </div>
+
+              <!-- 评分标准展示 -->
+              <div v-if="q.scoringItems && q.scoringItems.length > 0" class="scoring-standards" style="margin: 10px 0; padding: 10px; background: #fdf6ec; border-radius: 4px;">
+                 <div style="font-weight: bold; color: #e6a23c; margin-bottom: 5px; font-size: 13px;">评分标准：</div>
+                 <div v-for="(item, idx) in q.scoringItems" :key="item?.itemId || idx" style="font-size: 13px; color: #606266; line-height: 1.6;">
+                    <template v-if="item">• {{ item.itemName }} <span style="color: #909399">({{ item.itemScore }}%)</span></template>
+                 </div>
               </div>
 
               <!-- 素材文件下载 -->
@@ -820,9 +834,15 @@ function seededRandom(seed) {
 
 function seededShuffle(array, seed) {
   const result = [...array];
+  // 使用 Park-Miller 算法（Minimal Standard LCG）避免整数溢出
+  const m = 2147483647; // 2^31 - 1 (梅森素数)
+  const a = 16807;      // 乘数
+  let s = Math.abs(seed) % m;
+  if (s === 0) s = 1;   // 避免种子为0
+  
   for (let i = result.length - 1; i > 0; i--) {
-    seed = seed * 1103515245 + 12345;
-    const j = Math.floor(Math.abs(seed % (i + 1)));
+    s = (s * a) % m;
+    const j = s % (i + 1);
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
@@ -835,6 +855,7 @@ function applyRandomShuffle(questions, config, studentId, lessonIdVal) {
   
   // 生成唯一种子：studentId + lessonId
   const seed = (studentId || 0) * 10000 + (lessonIdVal || 0);
+  console.log('🎲 随机出题 seed计算:', { studentId, lessonIdVal, seed, shuffleMode, randomChoiceCount, randomJudgmentCount });
   
   // 分类
   const typing = questions.filter(q => q.questionType === 'typing');
@@ -1173,6 +1194,17 @@ async function fetchData() {
       
       // 应用随机逻辑
       const rawQuestions = res.questions || [];
+      
+      // Debug: 打印操作题评分标准
+      rawQuestions.filter(q => q.questionType === 'practical').forEach(q => {
+        console.log('📋 操作题评分标准 Debug:', {
+          questionId: q.questionId,
+          questionContent: q.questionContent?.substring(0, 30),
+          scoringItems: q.scoringItems,
+          scoringItemsLength: q.scoringItems?.length
+        });
+      });
+      
       const studentId = res.studentInfo?.studentId || 0;
       allQuestions.value = applyRandomShuffle(
         rawQuestions, 

@@ -132,6 +132,21 @@ export const dynamicRoutes = [
     ]
   },
   {
+    path: '/teacher-dashboard',
+    component: Layout,
+    roles: ['teacher'],
+    hidden: true,
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/business/teacher/index'),
+        name: 'TeacherDashboard',
+        meta: { title: '教师首页', icon: 'dashboard', affix: true }
+      }
+    ],
+    redirect: '/teacher-dashboard/index'
+  },
+  {
     path: '/system/user-auth',
     component: Layout,
     hidden: true,

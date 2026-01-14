@@ -37,9 +37,19 @@ export function exportScoreExcel(entryYear, classCode, lessonIds) {
 }
 
 // 获取题目分析数据
-export function getQuestionAnalysis(lessonId) {
+export function getQuestionAnalysis(lessonId, classCode, entryYear) {
   return request({
     url: '/business/score/analysis/' + lessonId,
-    method: 'get'
+    method: 'get',
+    params: { classCode, entryYear }
+  })
+}
+
+// 获取学生答题详情矩阵
+export function getStudentAnswerMatrix(lessonId, classCode, entryYear) {
+  return request({
+    url: '/business/score/studentAnswerMatrix',
+    method: 'get',
+    params: { lessonId, classCode, entryYear }
   })
 }

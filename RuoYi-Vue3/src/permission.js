@@ -35,26 +35,29 @@ router.beforeEach((to, from, next) => {
           .then(() => {
             isRelogin.show = false;
             const roles = userStore.roles;
-            const isStudent = roles.includes("student");
 
-            if (isStudent) {
-              // 如果是学生，直接放行到学生首页
-              next({ path: "/student/index", replace: true });
-            } else {
-              // 非学生角色，正常生成动态路由
-              usePermissionStore()
-                .generateRoutes()
-                .then((accessRoutes) => {
-                  accessRoutes.forEach((route) => {
-                    if (!isHttp(route.path)) {
-                      router.addRoute(route);
-                    }
-                  });
-                  
-                  // 登录后跳转逻辑：教师跳转到教师首页，其他跳原目标
-                  const isTeacher = roles.includes("teacher");
+            usePermissionStore()
+              .generateRoutes()
+              .then((accessRoutes) => {
+                accessRoutes.forEach((route) => {
+                  if (!isHttp(route.path)) {
+                    router.addRoute(route);
+                  }
+                });
+                
+                const isStudent = roles.includes("student");
+                const isTeacher = roles.includes("teacher");
+
+                if (isStudent) {
+                  // 学生登录后或刷新，强制跳转到学生首页 (除非已经在路径下)
+                  if (!to.path.startsWith("/student")) {
+                    next({ path: "/student/index", replace: true });
+                  } else {
+                    next({ ...to, replace: true });
+                  }
+                } else {
+                  // 教师/管理员 登录后跳转逻辑
                   if (to.path === "/" || to.path === "/index") {
-                    // 如果目标是默认首页，根据角色重定向
                     if (isTeacher) {
                       next({ path: "/teacher-dashboard", replace: true });
                     } else {
@@ -63,8 +66,8 @@ router.beforeEach((to, from, next) => {
                   } else {
                     next({ ...to, replace: true });
                   }
-                });
-            }
+                }
+              });
           })
           .catch((err) => {
             userStore.logOut().then(() => {

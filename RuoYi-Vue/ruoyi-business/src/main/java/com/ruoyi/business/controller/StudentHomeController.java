@@ -125,6 +125,16 @@ public class StudentHomeController extends BaseController
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
 
         log.info("【学生首页】课程 {} 包含 {} 道题目", lessonId, questions.size());
+        
+        // Debug: 打印操作题的评分标准
+        for (BizLessonQuestionDetailVo q : questions) {
+            if ("practical".equals(q.getQuestionType())) {
+                log.info("【Debug】操作题 ID:{}, 评分标准数量: {}, 内容: {}", 
+                    q.getQuestionId(), 
+                    q.getScoringItems() != null ? q.getScoringItems().size() : "null",
+                    q.getScoringItems());
+            }
+        }
 
         // 5. 查询学生已提交的答题记录
         List<BizStudentAnswer> submittedAnswers = studentAnswerMapper.selectByStudentAndLesson(student.getStudentId(), lessonId);

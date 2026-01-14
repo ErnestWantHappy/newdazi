@@ -16,7 +16,12 @@
         </el-select>
         
         <span class="filter-label" style="margin-left: 16px">操作题：</span>
-        <el-select v-model="selectedQuestionId" placeholder="请选择操作题" @change="onQuestionChange" :disabled="!selectedClassCode" style="width: 280px">
+        <!-- 只有一道操作题时直接显示题目名称 -->
+        <span v-if="questions.length === 1" class="single-question-name" style="font-weight: 500; color: #303133; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; line-height: 32px; height: 32px; padding: 0 11px; border: 1px solid #dcdfe6; border-radius: 4px; background: #f5f7fa;">
+          {{ questions[0].questionContent }}
+        </span>
+        <!-- 多道操作题时显示下拉框 -->
+        <el-select v-else v-model="selectedQuestionId" placeholder="请选择操作题" @change="onQuestionChange" :disabled="!selectedClassCode" style="width: 280px">
           <el-option v-for="q in questions" :key="q.questionId" :label="q.questionContent" :value="q.questionId" />
         </el-select>
       </div>
@@ -35,9 +40,9 @@
          <div class="panel-title">
             <span>学生列表</span>
             <span class="grading-stats" v-if="selectedClassCode">
-               已交: <b>{{ submissions.length }}</b> / {{ currentClassTotalStudents }}
+               已交: <b class="score-num">{{ submissions.length }}</b> / <span class="score-num">{{ currentClassTotalStudents }}</span>
                <span style="margin: 0 6px; color: #dcdfe6">|</span>
-               已批: <b>{{ gradedCount }}</b> / {{ submissions.length }}
+               已批: <b class="score-num">{{ gradedCount }}</b> / <span class="score-num">{{ submissions.length }}</span>
             </span>
          </div>
          <div class="student-list-scroll">
@@ -57,7 +62,7 @@
                    <div class="s-no">{{ s.studentNo }}</div>
                </div>
                <div class="s-status" v-if="!s.submitted">未交</div>
-               <div class="s-status" v-else-if="s.score != null">{{ s.score }}分</div>
+               <div class="s-status score-num" v-else-if="s.score != null">{{ s.score }}分</div>
                <div class="s-status ungrad" v-else>未批</div>
             </div>
             <el-empty v-if="submissions.length === 0" description="暂无学生" image-size="60" />
@@ -111,6 +116,7 @@
                    v-model="currentScore" 
                    :min="0" 
                    :max="currentStudent.maxScore" 
+                   :precision="0"
                    controls-position="right"
                    size="large"
                    ref="scoreInputRef"
@@ -127,16 +133,17 @@
                            :ref="el => setItemInputRef(el, index)"
                            v-model="itemScores[item.itemId]" 
                            :min="0" 
-                           :max="Number((item.itemScore * scalingRatio).toFixed(1))" 
+                           :max="Math.round(item.itemScore * scalingRatio)" 
+                           :precision="0"
                            size="small"
                            @change="onItemScoreChange"
                            @keydown.enter="onItemEnter(index)"
                         />
-                        <span class="item-max">/ {{ (item.itemScore * scalingRatio).toFixed(1) }} 分</span>
+                        <span class="item-max">/ {{ Math.round(item.itemScore * scalingRatio) }} 分</span>
                      </div>
                   </div>
                   <div class="item-total">
-                     分项合计: <span class="total-score">{{ itemTotalScore }}</span> / {{ currentQuestionScore }} 分
+                     分项合计: <span class="total-score score-num">{{ itemTotalScore }}</span> / <span class="score-num">{{ currentQuestionScore }}</span> 分
                   </div>
             </div>
             
@@ -178,7 +185,7 @@ const selectedQuestionId = ref(null);
 
 const currentStudent = ref(null);
 const currentIndex = ref(-1);
-const currentScore = ref(0);
+const currentScore = ref(undefined);
 const previewUrl = ref('');
 
 const isFullscreen = ref(false);
@@ -248,7 +255,7 @@ function fetchDashboardData() {
 }
 
 // P3.5: 选择课程后加载班级列表
-function onLessonChange(val) {
+async function onLessonChange(val) {
   selectedClassCode.value = null;
   selectedQuestionId.value = null;
   classes.value = [];
@@ -257,6 +264,10 @@ function onLessonChange(val) {
   currentStudent.value = null;
   
   if (val) {
+    // 先加载操作题列表（需要在班级选择前完成，以便自动选择）
+    const questionsRes = await getPracticalQuestions(val);
+    questions.value = questionsRes.data || [];
+    
     // 加载班级列表
     getClassesByLesson(val).then(res => {
         classes.value = res.data;
@@ -271,10 +282,6 @@ function onLessonChange(val) {
             selectedClassCode.value = classes.value[0].classCode;
             onClassChange(selectedClassCode.value);
         }
-    });
-    // 加载操作题列表
-    getPracticalQuestions(val).then(res => {
-        questions.value = res.data;
     });
   }
 }
@@ -364,13 +371,16 @@ function onItemEnter(index) {
 // P6: 聚焦第一个评分项输入框
 function focusFirstItem() {
     nextTick(() => {
-        if (itemInputRefs.value.length > 0 && itemInputRefs.value[0]) {
-            const input = itemInputRefs.value[0].$el?.querySelector('input');
-            if (input) {
-                input.focus();
-                input.select(); // 自动选中内容
+        // 增加延时确保 itemInputRefs 已更新
+        setTimeout(() => {
+            if (itemInputRefs.value.length > 0 && itemInputRefs.value[0]) {
+                const input = itemInputRefs.value[0].$el?.querySelector('input');
+                if (input) {
+                    input.focus();
+                    input.select(); // 自动选中内容
+                }
             }
-        }
+        }, 50);
     });
 }
 
@@ -439,7 +449,7 @@ function getPreviewUrl(relativePath) {
 function selectStudent(student, index) {
     currentStudent.value = student;
     currentIndex.value = index;
-    currentScore.value = student.score != null ? student.score : student.maxScore; // 默认为满分方便打分
+    currentScore.value = student.score != null ? student.score : null; // 默认为空，方便直接输入
     
     // 生成预览URL
     if (student.previewPath) {
@@ -448,8 +458,8 @@ function selectStudent(student, index) {
         previewUrl.value = '';
     }
     
-    // P6: 加载已保存的分项得分
-    if (useItemScoring.value && student.answerId && student.score != null) {
+    // P6: 加载已保存的分项得分（如果学生已被批改）
+    if (student.answerId && student.score != null) {
         loadScoringDetailsForStudent(student.answerId);
     } else {
         // 重置分项得分为0
@@ -458,9 +468,19 @@ function selectStudent(student, index) {
         });
     }
     
-    // 聚焦输入框
+    // 聚焦输入框 (根据评分模式选择对应输入框)
     nextTick(() => {
-        if(scoreInputRef.value) scoreInputRef.value.focus();
+        setTimeout(() => {
+            if (useItemScoring.value && scoringItems.value.length > 0) {
+                // 分项评分模式：聚焦第一个评分项输入框
+                focusFirstItem();
+            } else if (scoreInputRef.value) {
+                // 直接打分模式：聚焦总分输入框
+                scoreInputRef.value.focus();
+                const input = scoreInputRef.value.$el?.querySelector('input');
+                if (input) input.select();
+            }
+        }, 100); // 增加延时确保DOM更新完成
     });
 }
 
@@ -542,19 +562,40 @@ function submitScore() {
     });
 }
 
-// P6: 跳转到下一个已提交的学生
+// P6: 跳转到下一个已提交的学生 (P1: 优先跳转未批改)
 function nextSubmittedStudent() {
+    // 1. 优先寻找尚未批改(分数为空)的已提交学生
+    // 从当前位置向后找
     for (let i = currentIndex.value + 1; i < submissions.value.length; i++) {
-        if (submissions.value[i].submitted) {
+        if (submissions.value[i].submitted && submissions.value[i].score == null) {
             selectStudent(submissions.value[i], i);
-            // P6: 如果使用分项评分，自动聚焦第一个评分项
-            if (useItemScoring.value && scoringItems.value.length > 0) {
-                focusFirstItem();
-            }
+            autoFocusItem();
             return;
         }
     }
+    // 从头向当前位置找
+    for (let i = 0; i < currentIndex.value; i++) {
+        if (submissions.value[i].submitted && submissions.value[i].score == null) {
+            selectStudent(submissions.value[i], i);
+            autoFocusItem();
+            return;
+        }
+    }
+    
+    // 2. 如果都批改了，则寻找下一个已提交的学生(无论是否批改)
+    for (let i = currentIndex.value + 1; i < submissions.value.length; i++) {
+        if (submissions.value[i].submitted) {
+            selectStudent(submissions.value[i], i);
+            autoFocusItem();
+            return;
+        }
+    }
+    
     ElMessage.info('已经是最后一位已提交学生了');
+    // 如果是全屏状态，自动退出
+    if (isFullscreen.value) {
+        toggleFullscreen();
+    }
 }
 
 function prevStudent() {
@@ -585,6 +626,12 @@ function toggleFullscreen() {
 document.addEventListener('fullscreenchange', () => {
     isFullscreen.value = !!document.fullscreenElement;
 });
+
+function autoFocusItem() {
+    if (useItemScoring.value && scoringItems.value.length > 0) {
+        focusFirstItem();
+    }
+}
 
 </script>
 

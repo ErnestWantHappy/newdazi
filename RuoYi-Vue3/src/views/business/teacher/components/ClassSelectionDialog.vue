@@ -38,7 +38,12 @@ const resolvePromise = ref(null);
  * @returns {Promise<String|null>} 返回选中的班级名称，未选中返回null
  */
 function open(classList) {
-  classes.value = classList || [];
+  // 对班级进行数字排序（如 "1班", "2班", "7班"）
+  classes.value = (classList || []).slice().sort((a, b) => {
+    const numA = parseInt(a.replace(/[^\d]/g, '')) || 0;
+    const numB = parseInt(b.replace(/[^\d]/g, '')) || 0;
+    return numA - numB;
+  });
   visible.value = true;
   return new Promise((resolve) => {
     resolvePromise.value = resolve;

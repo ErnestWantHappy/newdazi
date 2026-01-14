@@ -55,6 +55,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE lesson_id = #{lessonId}
     </select>
 
+    <select id="selectByLessonAndClass" resultMap="BizStudentAnswerResult">
+        SELECT a.* 
+        FROM biz_student_answer a
+        JOIN biz_student s ON a.student_id = s.student_id
+        WHERE a.lesson_id = #{lessonId}
+        <if test="classCode != null and classCode != ''">
+            AND s.class_code = #{classCode}
+        </if>
+        <if test="entryYear != null and entryYear != ''">
+            AND s.entry_year = #{entryYear}
+        </if>
+    </select>
+
     <!-- 删除学生某课程的旧答题记录 -->
     <delete id="deleteByStudentAndLesson">
         DELETE FROM biz_student_answer 
@@ -216,5 +229,42 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 根据ID查询答题记录 -->
     <select id="selectById" resultMap="BizStudentAnswerResult">
         SELECT * FROM biz_student_answer WHERE answer_id = #{answerId}
+    </select>
+
+    <resultMap id="StudentAnswerMatrixResult" type="com.ruoyi.business.domain.vo.StudentAnswerMatrixVo">
+        <id property="studentId" column="student_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="className" column="class_name"/>
+        <collection property="results" ofType="com.ruoyi.business.domain.vo.StudentQuestionResult">
+            <result property="questionId" column="question_id"/>
+            <result property="orderNum" column="order_num"/>
+            <result property="userAnswer" column="student_answer"/>
+            <result property="isCorrect" column="is_correct"/>
+            <result property="score" column="score"/>
+            <result property="questionContent" column="question_content"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectStudentAnswerMatrix" resultMap="StudentAnswerMatrixResult">
+        SELECT 
+            s.student_id, 
+            u.nick_name as student_name, 
+            s.student_no, 
+            s.class_code as class_name,
+            a.question_id,
+            lq.order_num,
+            a.student_answer,
+            a.is_correct,
+            a.score,
+            q.question_content
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN biz_student_answer a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
+        LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND lq.lesson_id = #{lessonId}
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        WHERE s.class_code = #{classCode} 
+          AND s.entry_year = #{entryYear}
+        ORDER BY s.student_no ASC, lq.order_num ASC
     </select>
 </mapper>

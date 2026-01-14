@@ -17,6 +17,9 @@ public class BizLessonQuestionDetailVo extends BizLessonQuestion {
     private String optionD;
     private String answer;
     
+    // 评分项列表
+    private java.util.List<com.ruoyi.business.domain.BizScoringItem> scoringItems;
+    
     // 打字题字段
     private Integer typingDuration;
     private Integer wordCount;
@@ -131,5 +134,13 @@ public class BizLessonQuestionDetailVo extends BizLessonQuestion {
 
     public void setAnalysis(String analysis) {
         this.analysis = analysis;
+    }
+
+    public java.util.List<com.ruoyi.business.domain.BizScoringItem> getScoringItems() {
+        return scoringItems;
+    }
+
+    public void setScoringItems(java.util.List<com.ruoyi.business.domain.BizScoringItem> scoringItems) {
+        this.scoringItems = scoringItems;
     }
 }

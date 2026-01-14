@@ -124,6 +124,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="wordCount" column="word_count"/>
         <result property="previewPath" column="preview_path"/>
         <result property="filePath" column="file_path"/>
+        <collection property="scoringItems" ofType="com.ruoyi.business.domain.BizScoringItem" column="question_id" select="selectScoringItemsByQuestionId"/>
     </resultMap>
     <!-- 查询题目完整信息 -->
     <select id="selectDetailsByLessonId" parameterType="java.lang.Long" resultMap="BizLessonQuestionDetailResult">
@@ -150,6 +151,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             lq.lesson_id = #{lessonId}
         ORDER BY
             lq.order_num ASC
+    </select>
+
+    <select id="selectScoringItemsByQuestionId" resultType="com.ruoyi.business.domain.BizScoringItem">
+        SELECT item_id AS itemId, question_id AS questionId, item_name AS itemName, item_score AS itemScore, order_num AS orderNum
+        FROM biz_scoring_item
+        WHERE question_id = #{questionId}
+        ORDER BY order_num ASC
     </select>
 
 </mapper>

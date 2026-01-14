@@ -14,6 +14,7 @@ public class QuestionAnalysisDetailVo {
     private Integer correctCount; // 正确人数
     private Double accuracy; // 正确率 (%)
     private Map<String, Integer> answerDistribution; // 答案分布 {A: 10, B: 2, ...}
+    private Map<String, String> optionContents; // 选项内容 {A: "content", B: "content"}
 
     public Long getQuestionId() {
         return questionId;
@@ -77,5 +78,13 @@ public class QuestionAnalysisDetailVo {
 
     public void setAnswerDistribution(Map<String, Integer> answerDistribution) {
         this.answerDistribution = answerDistribution;
+    }
+
+    public Map<String, String> getOptionContents() {
+        return optionContents;
+    }
+
+    public void setOptionContents(Map<String, String> optionContents) {
+        this.optionContents = optionContents;
     }
 }

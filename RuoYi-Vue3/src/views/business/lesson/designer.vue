@@ -134,6 +134,12 @@
             <el-button type="primary" size="small" @click="applyBatchScore">应 用</el-button>
           </div>
           <el-table :data="selectedQuestions" row-key="questionId" style="width: 100%">
+            <!-- Debug: 显示实际题目数量 -->
+            <template #header v-if="selectedQuestions.length === 0 || selectedQuestions.length > 1">
+              <div style="padding: 5px; background: #e6f7ff; color: #0050b3; font-size: 12px;">
+                当前已选 {{ selectedQuestions.length }} 道题目
+              </div>
+            </template>
             <el-table-column label="题干" prop="questionContent" :show-overflow-tooltip="true">
               <template #default="scope">
                 <div class="question-content-text">{{ stripHtml(scope.row.questionContent) }}</div>
@@ -156,11 +162,15 @@
                 <div v-else-if="scope.row.questionType === 'practical'" class="scoring-info">
                   <div v-if="scope.row.scoringItems && scope.row.scoringItems.length > 0">
                     <span class="scoring-label">评分标准：</span>
-                    <span v-for="(item, idx) in scope.row.scoringItems" :key="idx" class="scoring-item">
-                      {{ item.itemName }}({{ item.itemScore }}%){{ idx < scope.row.scoringItems.length - 1 ? ' / ' : '' }}
+                    <span v-for="(item, idx) in scope.row.scoringItems" :key="item?.itemId || idx" class="scoring-item">
+                      <template v-if="item">{{ item.itemName }}({{ item.itemScore }}%){{ idx < scope.row.scoringItems.length - 1 ? ' / ' : '' }}</template>
                     </span>
                   </div>
                   <div v-else class="no-scoring">暂无评分标准</div>
+                </div>
+                <!-- 异常处理：未知题型 -->
+                <div v-else class="unknown-type-error" style="color: #F56C6C; background: #fef0f0; padding: 5px; margin-top: 5px; border-radius: 4px;">
+                   ⚠️ 题目数据异常或原题已被删除 (ID: {{ scope.row.questionId }})
                 </div>
               </template>
             </el-table-column>
@@ -529,14 +539,14 @@ function submitForm() {
           if (route.query.redirect) {
              router.push(route.query.redirect);
           } else {
-             router.push('/index'); // 默认回首页
+             router.push('/teacher-dashboard'); // 默认回教师首页
           }
         });
       } else {
         // 新增模式
         saveAllLessonDetails(data).then(response => {
           proxy.$modal.msgSuccess("新增成功");
-          router.push('/index'); 
+          router.push('/teacher-dashboard');
         });
       }
     }
@@ -576,6 +586,10 @@ function initialize() {
         questionScore: item.questionScore != null ? item.questionScore : 0,
         orderNum: item.orderNum != null ? item.orderNum : index + 1,
       }));
+      console.log('🔍 课程设计器加载题目数据:', {
+        totalQuestions: selectedQuestions.value.length,
+        questions: selectedQuestions.value.map(q => ({ id: q.questionId, type: q.questionType, score: q.questionScore, content: q.questionContent?.substring(0, 30) }))
+      });
       sortQuestions(); // 加载详情后排序
       getQuestionList();
     });

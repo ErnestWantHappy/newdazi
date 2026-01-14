@@ -306,12 +306,19 @@ public class ScoreQueryController extends BaseController {
      * 获取题目分析数据 (选择题和判断题)
      */
     @GetMapping("/analysis/{lessonId}")
-    public AjaxResult getQuestionAnalysis(@PathVariable Long lessonId) {
+    public AjaxResult getQuestionAnalysis(@PathVariable Long lessonId, 
+                                        @RequestParam(required = false) String classCode,
+                                        @RequestParam(required = false) String entryYear) {
         // 1. 查询课程的所有题目详情
         List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         
-        // 2. 查询该课程的所有答题记录
-        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers = studentAnswerMapper.selectByLessonId(lessonId);
+        // 2. 查询该课程的答题记录 (根据筛选条件)
+        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers;
+        if ((classCode != null && !classCode.isEmpty()) || (entryYear != null && !entryYear.isEmpty())) {
+            allAnswers = studentAnswerMapper.selectByLessonAndClass(lessonId, classCode, entryYear);
+        } else {
+            allAnswers = studentAnswerMapper.selectByLessonId(lessonId);
+        }
         
         // 3. 按题目ID分组答题记录
         Map<Long, List<com.ruoyi.business.domain.BizStudentAnswer>> answerMap = new HashMap<>();
@@ -333,6 +340,19 @@ public class ScoreQueryController extends BaseController {
             vo.setQuestionContent(q.getQuestionContent());
             vo.setQuestionType(q.getQuestionType());
             vo.setAnswer(q.getAnswer());
+            
+            // 设置选项内容
+            Map<String, String> optionContents = new HashMap<>();
+            if ("choice".equals(q.getQuestionType())) {
+                optionContents.put("A", q.getOptionA());
+                optionContents.put("B", q.getOptionB());
+                optionContents.put("C", q.getOptionC());
+                optionContents.put("D", q.getOptionD());
+            } else {
+                optionContents.put("T", "正确");
+                optionContents.put("F", "错误");
+            }
+            vo.setOptionContents(optionContents);
             
             List<com.ruoyi.business.domain.BizStudentAnswer> qAnswers = answerMap.getOrDefault(q.getQuestionId(), new ArrayList<>());
             vo.setStudentCount(qAnswers.size());
@@ -367,5 +387,13 @@ public class ScoreQueryController extends BaseController {
         }
         
         return AjaxResult.success(analysisList);
+    }
+
+    /**
+     * 获取学生答题详情矩阵
+     */
+    @GetMapping("/studentAnswerMatrix")
+    public List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> getStudentAnswerMatrix(Long lessonId, String classCode, String entryYear) {
+        return studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear);
     }
 }
