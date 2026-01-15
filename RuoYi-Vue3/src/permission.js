@@ -78,11 +78,16 @@ router.beforeEach((to, from, next) => {
       } else {
         // 已有roles信息，处理刷新或直接访问URL的情况
         const isStudent = userStore.roles.includes("student");
+        const isTeacher = userStore.roles.includes("teacher");
+
         if (isStudent && !to.path.startsWith("/student")) {
           // 如果是学生，但目标路径不是以/student开头，则强制送回学生首页
           next({ path: "/student/index" });
+        } else if (isTeacher && (to.path === "/" || to.path === "/index")) {
+          // 如果是教师，访问首页时强制跳转到教师工作台
+          next({ path: "/teacher-dashboard" });
         } else {
-          // 如果是学生访问学生路径，或非学生访问任何路径，则直接放行
+          // 其他情况直接放行
           next();
         }
       }

@@ -13,6 +13,8 @@ import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.core.domain.entity.SysDept;
+import com.ruoyi.system.mapper.SysDeptMapper;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
@@ -37,6 +39,9 @@ public class ScoreQueryController extends BaseController {
 
     @Autowired
     private com.ruoyi.business.mapper.BizLessonQuestionMapper lessonQuestionMapper;
+    
+    @Autowired
+    private SysDeptMapper deptMapper;
 
     /**
      * 获取班级列表（用于筛选下拉框）
@@ -49,35 +54,72 @@ public class ScoreQueryController extends BaseController {
     }
     
     /**
-     * 获取课程列表（按年级）
+     * 获取课程列表（按年级和学校类型）
      */
     @GetMapping("/lessons")
     public AjaxResult getLessons(@RequestParam String entryYear) {
-        // 根据入学年份计算年级（以8月15日为学年分界）
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear));
+        // 获取当前用户的学校类型
+        Long deptId = SecurityUtils.getDeptId();
+        SysDept dept = deptMapper.selectDeptById(deptId);
+        String schoolType = dept != null ? dept.getSchoolType() : "1"; // 默认小学
+        
+        // 根据入学年份和学校类型计算年级
+        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         
         String creator = SecurityUtils.getUsername();
-        return AjaxResult.success(lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator));
+        
+        System.out.println("[课程下拉DEBUG] entryYear: " + entryYear);
+        System.out.println("[课程下拉DEBUG] schoolType: " + schoolType + " (1=小学, 2=初中, 3=高中)");
+        System.out.println("[课程下拉DEBUG] 计算的年级 gradeNum: " + gradeNum);
+        System.out.println("[课程下拉DEBUG] creator: " + creator);
+        
+        List<?> lessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator);
+        System.out.println("[课程下拉DEBUG] 查询结果数量: " + (lessons != null ? lessons.size() : "null"));
+        if (lessons != null && !lessons.isEmpty()) {
+            System.out.println("[课程下拉DEBUG] 第一个课程: " + lessons.get(0));
+        }
+        
+        return AjaxResult.success(lessons);
     }
     
     /**
-     * 计算年级（以8月15日为分界点）
-     * 2025年入学的学生在 2025-08-15 ~ 2026-08-15 期间为7年级
+     * 计算年级（基于入学年份和学校类型）
+     * 小学: 入学对应1年级，到6年级
+     * 初中: 入学对应7年级，到9年级
+     * 高中: 入学对应10年级，到12年级
      */
-    private int calculateGrade(int entryYear) {
+    private int calculateGrade(int entryYear, String schoolType) {
         java.time.LocalDate now = java.time.LocalDate.now();
         int currentYear = now.getYear();
         int currentMonth = now.getMonthValue();
         int currentDay = now.getDayOfMonth();
         
-        // 判断是否已过8月15日
+        // 判断是否已过8月15日（学年分界）
         boolean afterAug15 = (currentMonth > 8) || (currentMonth == 8 && currentDay >= 15);
         
-        // 如果已过8月15日，学年为 currentYear，否则学年为 currentYear - 1
-        int schoolYear = afterAug15 ? currentYear : currentYear - 1;
+        // 计算在校年数（不含入学年）
+        int yearsInSchool = currentYear - entryYear;
+        if (afterAug15) {
+            yearsInSchool += 1;
+        }
         
-        // 年级 = 学年 - 入学年份 + 7
-        return schoolYear - entryYear + 7;
+        // 根据学校类型计算年级
+        int gradeOffset;
+        switch (schoolType) {
+            case "1": // 小学
+                gradeOffset = 0; // 1年级入学
+                break;
+            case "2": // 初中
+                gradeOffset = 6; // 7年级入学
+                break;
+            case "3": // 高中
+                gradeOffset = 9; // 10年级入学
+                break;
+            default:
+                gradeOffset = 0;
+        }
+        
+        return yearsInSchool + gradeOffset;
     }
 
     /**
@@ -91,6 +133,11 @@ public class ScoreQueryController extends BaseController {
         
         Long deptId = SecurityUtils.getDeptId();
         Long userId = SecurityUtils.getUserId();
+        
+        // 获取学校类型并计算年级
+        SysDept dept = deptMapper.selectDeptById(deptId);
+        String schoolType = dept != null ? dept.getSchoolType() : "1";
+        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         
         // 查询学生列表
         BizStudent query = new BizStudent();
@@ -108,6 +155,7 @@ public class ScoreQueryController extends BaseController {
             row.put("studentName", student.getStudentName());
             row.put("studentNo", student.getStudentNo());
             row.put("classCode", student.getClassCode()); // P2: 添加班级代码用于显示
+            row.put("grade", gradeNum); // P3: 添加计算好的年级
             
             // 查询该学生的成绩汇总
             List<Map<String, Object>> scores = studentAnswerMapper.selectScoreSummaryByStudent(
@@ -394,6 +442,22 @@ public class ScoreQueryController extends BaseController {
      */
     @GetMapping("/studentAnswerMatrix")
     public List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> getStudentAnswerMatrix(Long lessonId, String classCode, String entryYear) {
-        return studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear);
+        // 获取学校类型并计算年级
+        Long deptId = SecurityUtils.getDeptId();
+        SysDept dept = deptMapper.selectDeptById(deptId);
+        String schoolType = dept != null ? dept.getSchoolType() : "1";
+        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        
+        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear);
+        
+        // 格式化 className 为 年级+班级号 (如 "601")
+        for (com.ruoyi.business.domain.vo.StudentAnswerMatrixVo vo : result) {
+            if (vo.getClassName() != null && !vo.getClassName().isEmpty()) {
+                String code = String.format("%02d", Integer.parseInt(vo.getClassName()));
+                vo.setClassName(gradeNum + code);
+            }
+        }
+        
+        return result;
     }
 }

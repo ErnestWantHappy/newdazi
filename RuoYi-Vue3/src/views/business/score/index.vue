@@ -34,57 +34,64 @@
     </el-card>
 
     <!-- 图表区域 -->
-    <el-row :gutter="15" v-if="tableData.length > 0" class="chart-row">
-      <!-- 班级平均分对比：仅在未选择具体班级时显示 -->
-      <el-col :span="12" v-if="!queryParams.classCode">
-        <el-card class="chart-card" ref="classChartCard">
-          <template #header>
-            <span>📊 班级平均分对比</span>
-            <el-icon class="fullscreen-btn" title="全屏查看" @click="toggleFullscreen('classChartCard')"><FullScreen /></el-icon>
-          </template>
-          <div ref="classChartRef" class="chart-container"></div>
-        </el-card>
-      </el-col>
-      <el-col :span="queryParams.classCode ? 24 : 12">
-        <el-card class="chart-card" ref="rankChartCard">
-          <template #header>
-            <span>📈 成绩分布（按总分排名）</span>
-            <el-icon class="fullscreen-btn" title="全屏查看" @click="toggleFullscreen('rankChartCard')"><FullScreen /></el-icon>
-          </template>
-          <div ref="rankChartRef" class="chart-container"></div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div v-if="tableData.length > 0">
+      <!-- 1. 年级概览模式 (全选班级) -->
+      <div v-if="isGradeMode">
+        <el-row :gutter="15" class="chart-row">
+          <el-col :span="24">
+            <class-score-chart :data="tableData" />
+          </el-col>
+        </el-row>
+        
+        <!-- 红榜与潜力榜 -->
+        <el-row :gutter="20" style="margin-top: 20px; margin-bottom: 20px;">
+          <el-col :xs="24" :sm="24" :md="12" style="margin-bottom: 10px;">
+            <student-rank-list 
+              :data="displayData" 
+              title="🏆 年级红榜 (Top 50)" 
+              type="top" 
+              :limit="50" 
+            />
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="12" style="margin-bottom: 10px;">
+            <student-rank-list 
+              :data="displayData" 
+              title="💡 潜力榜 (Bottom 50)" 
+              type="bottom" 
+              :limit="50" 
+            />
+          </el-col>
+        </el-row>
+      </div>
+
+      <!-- 2. 班级详细模式 (单选班级) -->
+      <div v-else>
+         <el-row :gutter="15" class="chart-row">
+          <!-- 单选课程或无选择时，显示总分分布 -->
+          <el-col :span="24" v-if="selectedLessonIds.length <= 1">
+            <rank-chart :data="tableData" />
+          </el-col>
+          <!-- 多选课程时，显示课程对比图 -->
+          <el-col :span="24" v-else>
+            <course-comparison-chart 
+              :data="tableData" 
+              :lesson-options="lessonOptions" 
+              :selected-lesson-ids="selectedLessonIds" 
+            />
+          </el-col>
+        </el-row>
+      </div>
+    </div>
     
-    <!-- 打字题专属图表区域 -->
-    <el-row :gutter="15" v-if="tableData.length > 0 && hasTypingData" class="chart-row">
+    <!-- 打字题专属图表区域 (仅班级模式显示) -->
+    <el-row :gutter="15" v-if="!isGradeMode && tableData.length > 0 && hasTypingData" class="chart-row">
       <el-col :span="24">
-        <el-card class="chart-card typing-chart-card" ref="typingChartCard">
-          <template #header>
-            <div class="typing-chart-header">
-              <span>⌨️ 打字数据分布</span>
-              <el-icon class="fullscreen-btn" title="全屏查看" @click="toggleFullscreen('typingChartCard')"><FullScreen /></el-icon>
-              <div class="typing-chart-controls">
-                <el-select v-model="typingChartLesson" placeholder="全部课程" clearable size="small" style="width: 160px; margin-right: 10px" @change="renderTypingChart">
-                  <el-option label="全部课程" :value="null" />
-                  <el-option v-for="l in lessonOptions" :key="l.lessonId" :label="l.lessonTitle" :value="l.lessonId" />
-                </el-select>
-                <el-radio-group v-model="typingChartMetric" size="small" @change="renderTypingChart">
-                  <el-radio-button label="speed">打字速度</el-radio-button>
-                  <el-radio-button label="accuracy">正确率</el-radio-button>
-                  <el-radio-button label="completion">完成率</el-radio-button>
-                  <el-radio-button label="score">得分</el-radio-button>
-                </el-radio-group>
-              </div>
-            </div>
-          </template>
-          <div ref="typingChartRef" class="chart-container" style="height: 320px"></div>
-        </el-card>
+         <typing-chart :data="tableData" :lesson-options="lessonOptions" />
       </el-col>
     </el-row>
 
-    <!-- 答题分析区域 - 放在成绩表上方 -->
-    <el-card v-if="selectedLessonIds.length === 1 && analysisData.length > 0" class="analysis-card" style="margin-bottom: 15px;">
+    <!-- 答题分析区域 - 放在成绩表上方 (仅班级模式显示) -->
+    <el-card v-if="!isGradeMode && selectedLessonIds.length === 1 && analysisData.length > 0" class="analysis-card" style="margin-bottom: 15px;">
       <template #header>
         <div class="chart-header">
           📊 答题情况分析 - {{ lessonOptions.find(l => l.lessonId === selectedLessonIds[0])?.lessonTitle || '当前课程' }}
@@ -153,34 +160,22 @@
     </el-card>
 
     <!-- 学生答题详情矩阵 -->
-    <el-card v-if="selectedLessonIds.length === 1 && matrixData.length > 0" class="analysis-matrix-card" style="margin-bottom: 15px;">
-      <template #header>
-        <div class="card-header">
-           <span style="font-weight: bold; font-size: 16px;">📋 学生理论测试详情</span>
-        </div>
-      </template>
-      <el-table :data="matrixData" border stripe height="500" v-loading="matrixLoading">
-        <el-table-column prop="className" label="班级" width="100" fixed />
-        <el-table-column prop="studentNo" label="学号" width="120" fixed sortable />
-        <el-table-column prop="studentName" label="姓名" width="100" fixed />
-        
-        <el-table-column v-for="(q, index) in analysisData" :key="q.questionId" width="70" align="center">
-            <template #header>
-                <el-tooltip :content="q.questionContent" placement="top" :show-after="200" max-width="300">
-                    <span style="cursor: help; text-decoration: underline dashed;">第{{ index + 1 }}题</span>
-                </el-tooltip>
-            </template>
-            <template #default="scope">
-                <div v-html="renderMatrixCell(scope.row, q.questionId)"></div>
-            </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <analysis-matrix 
+      v-if="!isGradeMode && selectedLessonIds.length === 1 && matrixData.length > 0" 
+      :matrix-data="matrixData"
+      :questions="analysisData"
+      :loading="matrixLoading"
+    />
 
     <!-- 数据表格 -->
     <el-card class="data-card">
+      <template #header>
+        <div class="card-header">
+          <span style="font-weight: bold; font-size: 16px;">📊 学生成绩汇总表</span>
+        </div>
+      </template>
       <el-table :data="displayData" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
-        <el-table-column prop="className" label="班级" width="80" align="center" sortable />
+        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
         <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable />
         <el-table-column prop="studentName" label="姓名" width="100" align="center">
           <template #default="scope">
@@ -188,8 +183,32 @@
           </template>
         </el-table-column>
         
-        <!-- 各课程成绩：带复选框 -->
-        <el-table-column label="各课程成绩（点击勾选参与统计）" align="center" min-width="300">
+        <!-- 动态课程列 (当选中课程数 <= 5 时显示) -->
+        <template v-if="selectedLessonIds.length > 1 && selectedLessonIds.length <= 5">
+            <el-table-column 
+                v-for="lessonId in selectedLessonIds" 
+                :key="lessonId"
+                :label="getLessonName(lessonId)" 
+                align="center"
+                sortable
+                :sort-method="(a, b) => getLessonScore(a, lessonId) - getLessonScore(b, lessonId)"
+                width="120"
+            >
+                <template #default="scope">
+                    <span class="score-num" :class="getScoreClass(getLessonScore(scope.row, lessonId))">
+                        {{ getLessonScore(scope.row, lessonId) }}
+                    </span>
+                </template>
+            </el-table-column>
+        </template>
+
+        <!-- 各课程成绩：带复选框 (仅当选中课程 > 5 或 <= 1 时显示，或者没有选中任何课程时显示所有) -->
+        <el-table-column 
+            v-if="selectedLessonIds.length > 5 || selectedLessonIds.length <= 1"
+            label="各课程成绩（点击勾选参与统计）" 
+            align="center" 
+            min-width="300"
+        >
           <template #default="scope">
             <div class="score-list">
               <div v-for="score in scope.row.scores" :key="score.lessonId" class="score-item">
@@ -289,40 +308,11 @@
     </el-card>
 
     <!-- 学生画像弹窗 -->
-    <el-dialog v-model="profileDialogVisible" :title="currentStudent?.studentName + ' 的成绩画像'" width="850px">
-      <div v-if="currentStudent" class="profile-content">
-        <div class="profile-header">
-          <span>学号: <span class="score-num">{{ currentStudent.studentNo }}</span></span>
-          <span>班级: {{ currentStudent.className }}</span>
-          <span>总分: <span class="score-num">{{ currentStudent.filteredTotal }}</span></span>
-          <span>平均分: <span class="score-num">{{ currentStudent.filteredAverage }}</span></span>
-        </div>
-        
-        <!-- 筛选控件 -->
-        <div class="profile-filters">
-          <el-select v-model="profileLesson" placeholder="全部课程" clearable size="small" style="width: 160px; margin-right: 10px" @change="updateProfileChart">
-            <el-option label="全部课程" :value="null" />
-            <el-option v-for="s in currentStudent.scores" :key="s.lessonId" :label="s.lessonTitle || '课程' + s.lessonId" :value="s.lessonId" />
-          </el-select>
-          <el-radio-group v-model="profileScoreType" size="small" @change="updateProfileChart">
-            <el-radio-button label="total">总分</el-radio-button>
-            <el-radio-button label="typingSpeed">打字速度</el-radio-button>
-            <el-radio-button label="theoryAccuracy">理论正确率</el-radio-button>
-          </el-radio-group>
-        </div>
-        
-        <div ref="profileChartRef" class="profile-chart"></div>
-        
-        <!-- 详细数据表格 -->
-        <el-table :data="profileTableData" border stripe size="small" style="margin-top: 15px" max-height="200">
-          <el-table-column prop="lessonTitle" label="课程" width="120" />
-          <el-table-column prop="typingScore" label="打字" width="80" align="center" class-name="score-num" />
-          <el-table-column prop="theoryScore" label="理论" width="80" align="center" class-name="score-num" />
-          <el-table-column prop="practicalScore" label="操作" width="80" align="center" class-name="score-num" />
-          <el-table-column prop="totalScore" label="总分" width="80" align="center" class-name="score-num" />
-        </el-table>
-      </div>
-    </el-dialog>
+    <!-- 学生画像弹窗 -->
+    <student-profile-dialog 
+      v-model="profileDialogVisible" 
+      :student="currentStudent"
+    />
   </div>
 </template>
 
@@ -332,7 +322,17 @@ import { useRoute } from 'vue-router';
 import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix } from '@/api/business/score';
 import { ElMessage } from 'element-plus';
 import { FullScreen, Search, Download } from '@element-plus/icons-vue';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts'; // 答题分析图表仍需要直接引入 echarts
+
+import StudentRankList from './components/GradeOverview/StudentRankList.vue';
+import ClassScoreChart from './components/charts/ClassScoreChart.vue';
+import RankChart from './components/charts/RankChart.vue';
+import TypingChart from './components/charts/TypingChart.vue';
+import CourseComparisonChart from './components/charts/CourseComparisonChart.vue';
+import StudentProfileDialog from './components/StudentProfileDialog.vue';
+import AnalysisMatrix from './components/AnalysisMatrix.vue';
+
+
 
 const route = useRoute();
 const loading = ref(false);
@@ -347,23 +347,11 @@ const tableData = ref([]);
 const selectedLessonIds = ref([]);
 const searchKeyword = ref('');
 
-// 图表相关
-const classChartRef = ref(null);
-const rankChartRef = ref(null);
-const profileChartRef = ref(null);
-const typingChartRef = ref(null);  // 打字题专属图表
-// 卡片 ref (用于全屏)
-const classChartCard = ref(null);
-const rankChartCard = ref(null);
-const typingChartCard = ref(null);
-let classChartInstance = null;
-let rankChartInstance = null;
-let profileChartInstance = null;
-let typingChartInstance = null;  // 打字题专属图表实例
+// 图表相关 - 仅保留答题分析图表
+const analysisChartRef = ref(null);
+let analysisChartInstance = null;
 
-// 打字图表控制
-const typingChartMetric = ref('speed');  // speed | accuracy | completion | score
-const typingChartLesson = ref(null);  // 课程筛选
+
 
 // 学生画像弹窗
 const profileDialogVisible = ref(false);
@@ -372,29 +360,16 @@ const currentStudent = ref(null);
 // 答题分析相关
 const analysisData = ref([]);
 const analysisLoading = ref(false);
-const analysisChartRef = ref(null);
-let analysisChartInstance = null;
-const profileLesson = ref(null);  // 学生画像课程筛选
-const profileScoreType = ref('total');  // total | typing | theory | practical
 
-// 学生画像详细表格数据
-const profileTableData = computed(() => {
-  if (!currentStudent.value || !currentStudent.value.scores) return [];
-  return currentStudent.value.scores
-    .filter(s => s.lessonTitle)  // 过滤掉没有课程名的记录
-    .map(s => ({
-      lessonTitle: s.lessonTitle || '未知课程',
-      typingScore: s.typingScore || '-',
-      theoryScore: s.theoryScore || '-',
-      practicalScore: s.practicalScore || '-',
-      totalScore: s.totalScore || '-'
-    }));
-});
+
 
 const queryParams = ref({
   entryYear: null,
   classCode: null
 });
+
+// 计算属性：是否为年级概览模式（未选择特定班级）
+const isGradeMode = computed(() => !queryParams.value.classCode);
 
 // 搜索过滤后的数据
 const displayData = computed(() => {
@@ -481,6 +456,12 @@ function onYearChange(val) {
   if (val) {
     getScoreLessons(val).then(res => {
       lessonOptions.value = res.data || [];
+      
+      // 如果课程列表为空，清空已选择的课程（避免显示ID而非名称）
+      if (lessonOptions.value.length === 0) {
+        dropdownLessonIds.value = [];
+        selectedLessonIds.value = [];
+      }
     });
   }
 }
@@ -583,6 +564,8 @@ function processData() {
   tableData.value = rawData.value.map(student => {
     let className = '';
     if (student.classCode) {
+      // 使用后端返回的年级 + 班级号，格式如 "601"
+      const grade = student.grade || calculateGrade(entryYear);
       const code = String(student.classCode).padStart(2, '0');
       className = `${grade}${code}`;
     }
@@ -640,10 +623,12 @@ function processData() {
 }
 
 // 渲染图表
+// 渲染图表
 function renderCharts() {
-  renderClassChart();
-  renderRankChart();
-  renderTypingChart();  // 打字题专属图表
+  // 只渲染分析图表（如果需要）
+  if (selectedLessonIds.value.length === 1 && analysisData.value.length > 0) {
+      renderAnalysisChart();
+  }
 }
 
 // 计算是否有打字数据
@@ -667,368 +652,18 @@ const typingTableData = computed(() => {
     .sort((a, b) => b.speed - a.speed);
 });
 
-function renderClassChart() {
-  if (!classChartRef.value) return;
-  
-  if (!classChartInstance) {
-    classChartInstance = echarts.init(classChartRef.value);
-  }
-  
-  // 按班级分组计算平均分
-  const classMap = new Map();
-  tableData.value.forEach(s => {
-    const cls = s.className;
-    if (!classMap.has(cls)) {
-      classMap.set(cls, { total: 0, count: 0 });
-    }
-    classMap.get(cls).total += s.filteredTotal;
-    classMap.get(cls).count += 1;
-  });
-  
-  const classNames = [];
-  const avgScores = [];
-  
-  Array.from(classMap.entries())
-    .sort((a, b) => a[0] - b[0])
-    .forEach(([cls, data]) => {
-      classNames.push(cls + '班');
-      avgScores.push((data.total / data.count).toFixed(1));
-    });
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-      type: 'category',
-      data: classNames,
-      axisLabel: { rotate: 0 }
-    },
-    yAxis: { type: 'value', name: '平均分' },
-    series: [{
-      type: 'bar',
-      data: avgScores,
-      itemStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: '#409EFF' },
-          { offset: 1, color: '#67C23A' }
-        ])
-      },
-      label: { show: true, position: 'top' }
-    }],
-    grid: { left: '10%', right: '10%', bottom: '15%', top: '15%' }
-  };
-  
-  classChartInstance.setOption(option);
-}
 
-function renderRankChart() {
-  if (!rankChartRef.value) return;
-  
-  if (!rankChartInstance) {
-    rankChartInstance = echarts.init(rankChartRef.value);
-  }
-  
-  // 按总分排序显示所有学生
-  const sorted = [...tableData.value]
-    .sort((a, b) => b.filteredTotal - a.filteredTotal);
-  
-  const names = sorted.map(s => s.studentName);
-  // P0: 存储详细数据供 Tooltip 使用
-  const detailMap = {};
-  sorted.forEach((s, idx) => {
-      detailMap[s.studentName] = {
-          total: Math.round(s.filteredTotal || 0),
-          theory: Math.round(s.theoryScore || 0),
-          practical: Math.round(s.practicalScore || 0),
-          typing: Math.round(s.avgTyping || 0),
-          studentNo: s.studentNo
-      };
-  });
-  
-  const scores = sorted.map(s => Math.round(s.filteredTotal || 0));
-  
-  const option = {
-    tooltip: { 
-        trigger: 'axis',
-        formatter: function(params) {
-            const name = params[0].name;
-            const score = params[0].value;
-            const detail = detailMap[name] || {};
-            // P0: 详细成绩 Tooltip 增强
-            return `
-                <div style="font-weight:bold; margin-bottom:5px;">${name} (${detail.studentNo}号)</div>
-                <div>总分：<b>${score}</b></div>
-                <hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;">
-                <div>⌨️ 打字：${detail.typing}</div>
-                <div>📝 理论：${detail.theory}</div>
-                <div>🖥️ 操作：${detail.practical}</div>
-            `;
-        }
-    },
-    xAxis: {
-      type: 'category',
-      data: names,
-      axisLabel: { 
-          rotate: 45, 
-          fontSize: 10,
-          formatter: function(value) {
-               // 可选：显示学号 (value 是名字，如果有重名可能需要 index)
-               //但在大数据量下，名字更直观
-               return value;
-          }
-      }
-    },
-    yAxis: { type: 'value', name: '总分' },
-    dataZoom: [
-      {
-        type: 'slider',
-        show: names.length > 25,
-        start: 0,
-        end: names.length > 25 ? Math.min(100, 25 / names.length * 100) : 100,
-        height: 20,
-        bottom: 5
-      }
-    ],
-    series: [{
-      type: 'bar',
-      data: scores,
-      itemStyle: {
-        color: (params) => {
-          const colors = ['#F56C6C', '#E6A23C', '#67C23A'];
-          if (params.dataIndex < 3) return colors[params.dataIndex];
-          return '#409EFF';
-        }
-      },
-      label: { show: true, position: 'top', fontSize: 10 }
-    }],
-    grid: { left: '10%', right: '5%', bottom: '20%', top: '15%' }
-  };
-  
-  rankChartInstance.setOption(option, true);
-}
-
-// 打字题专属图表：多指标切换
-function renderTypingChart() {
-  if (!typingChartRef.value) return;
-  
-  if (!typingChartInstance) {
-    typingChartInstance = echarts.init(typingChartRef.value);
-  }
-  
-  // 获取打字数据
-  let typingData = [];
-  const metric = typingChartMetric.value;
-  const selectedLesson = typingChartLesson.value;
-  
-  // 根据课程筛选获取打字数据
-  if (selectedLesson) {
-    // 从特定课程获取打字数据
-    tableData.value.forEach(student => {
-      const lessonScore = student.scores?.find(s => s.lessonId === selectedLesson);
-      if (lessonScore && lessonScore.avgTypingSpeed) {
-        typingData.push({
-          name: student.studentName,
-          speed: Number(lessonScore.avgTypingSpeed) || 0,
-          accuracy: Number(lessonScore.avgAccuracyRate) || 0,
-          completion: Number(lessonScore.avgCompletionRate) || 0,
-          score: Number(lessonScore.typingScore) || 0
-        });
-      }
-    });
-  } else {
-    // 使用总体数据
-    tableData.value.forEach(student => {
-      if (student.overallTypingSpeed) {
-        typingData.push({
-          name: student.studentName,
-          speed: Number(student.overallTypingSpeed) || 0,
-          accuracy: Number(student.overallAccuracy) || 0,
-          completion: Number(student.overallCompletion) || 0,
-          score: Number(student.avgTyping) || 0
-        });
-      }
-    });
-  }
-  
-  // 按当前指标排序显示所有学生
-  typingData.sort((a, b) => b[metric] - a[metric]);
-  
-  if (typingData.length === 0) {
-    typingChartInstance.setOption({
-      title: { text: '暂无打字数据', left: 'center', top: 'center' },
-      xAxis: { show: false },
-      yAxis: { show: false },
-      series: []
-    }, true);
-    return;
-  }
-  
-  const names = typingData.map(s => s.name);
-  const values = typingData.map(s => s[metric]);
-  
-  // 根据指标设置标签和颜色
-  const metricConfig = {
-    speed: { name: '打字速度', unit: '字/分', color: ['#E6A23C', '#F56C6C'] },
-    accuracy: { name: '正确率', unit: '%', color: ['#67C23A', '#409EFF'] },
-    completion: { name: '完成率', unit: '%', color: ['#409EFF', '#67C23A'] },
-    score: { name: '得分', unit: '分', color: ['#F56C6C', '#E6A23C'] }
-  };
-  
-  const config = metricConfig[metric];
-  
-  const option = {
-    tooltip: { 
-      trigger: 'axis',
-      formatter: (params) => {
-        const idx = params[0].dataIndex;
-        const data = typingData[idx];
-        return `${data.name}<br/>` +
-          `打字速度: ${data.speed} 字/分<br/>` +
-          `正确率: ${data.accuracy}%<br/>` +
-          `完成率: ${data.completion}%<br/>` +
-          `得分: ${data.score} 分`;
-      }
-    },
-    xAxis: {
-      type: 'category',
-      data: names,
-      axisLabel: { rotate: 45, fontSize: 10 }
-    },
-    yAxis: { 
-      type: 'value', 
-      name: `${config.name}(${config.unit})`
-    },
-    dataZoom: [
-      {
-        type: 'slider',
-        show: names.length > 25,
-        start: 0,
-        end: names.length > 25 ? Math.min(100, 25 / names.length * 100) : 100,
-        height: 20,
-        bottom: 5
-      }
-    ],
-    series: [{
-      name: config.name,
-      type: 'bar',
-      data: values,
-      itemStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: config.color[0] },
-          { offset: 1, color: config.color[1] }
-        ])
-      },
-      label: { show: true, position: 'top', fontSize: 10 }
-    }],
-    grid: { left: '8%', right: '5%', bottom: '18%', top: '15%' }
-  };
-  
-  typingChartInstance.setOption(option, true);
-}
-
-// 学生画像
-function showStudentProfile(student) {
-  currentStudent.value = student;
-  profileLesson.value = null;  // 重置筛选
-  profileScoreType.value = 'total';
-  profileDialogVisible.value = true;
-  
-  nextTick(() => {
-    renderProfileChart(student);
-  });
-}
-
-// 更新学生画像图表
-function updateProfileChart() {
-  if (currentStudent.value) {
-    renderProfileChart(currentStudent.value);
-  }
-}
-
-function renderProfileChart(student) {
-  if (!profileChartRef.value) return;
-  
-  if (!profileChartInstance) {
-    profileChartInstance = echarts.init(profileChartRef.value);
-  }
-  
-  // 过滤有效课程数据（修复 undefined 问题）
-  let scores = (student.scores || []).filter(s => s.lessonTitle);
-  
-  // 如果选择了特定课程，只显示该课程
-  if (profileLesson.value) {
-    scores = scores.filter(s => s.lessonId === profileLesson.value);
-  }
-  
-  if (scores.length === 0) {
-    profileChartInstance.setOption({
-      title: { text: '暂无成绩数据', left: 'center', top: 'center' },
-      xAxis: { show: false },
-      yAxis: { show: false },
-      series: []
-    }, true);
-    return;
-  }
-  
-  const scoreType = profileScoreType.value;
-  const lessonNames = scores.map(s => s.lessonTitle);
-  
-  // 根据指标获取对应数据
-  let scoreValues;
-  let typeName;
-  let yAxisName = '分数';
-  
-  if (scoreType === 'total') {
-    scoreValues = scores.map(s => s.totalScore || 0);
-    typeName = '总分';
-  } else if (scoreType === 'typingSpeed') {
-    scoreValues = scores.map(s => s.avgTypingSpeed || 0);
-    typeName = '打字速度';
-    yAxisName = '字/分';
-  } else if (scoreType === 'theoryAccuracy') {
-    scoreValues = scores.map(s => s.theoryAccuracy || 0);
-    typeName = '理论正确率';
-    yAxisName = '%';
-  } else {
-    scoreValues = scores.map(s => s.totalScore || 0);
-    typeName = '总分';
-  }
-  
-  const colorMap = {
-    total: '#409EFF',
-    typingSpeed: '#E6A23C',
-    theoryAccuracy: '#67C23A'
-  };
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    legend: { data: [typeName] },
-    xAxis: {
-      type: 'category',
-      data: lessonNames,
-      axisLabel: { rotate: 30 }
-    },
-    yAxis: { type: 'value', name: yAxisName },
-    series: [{
-      name: typeName,
-      type: 'line',
-      data: scoreValues,
-      smooth: true,
-      lineStyle: { width: 3 },
-      itemStyle: { color: colorMap[scoreType] },
-      areaStyle: { color: colorMap[scoreType] + '33' }
-    }],
-    grid: { left: '10%', right: '5%', bottom: '20%', top: '15%' }
-  };
-  
-  profileChartInstance.setOption(option, true);
-}
 
 watch(() => selectedLessonIds.value, (newIds) => {
   if (rawData.value.length > 0) {
     processData();
     // 单课程时自动加载分析
     if (newIds.length === 1) {
-        loadAnalysis(newIds[0]);
+        if (!isGradeMode.value) {
+            loadAnalysis(newIds[0]);
+        } else {
+             // console.log('[DEBUG] Single lesson but Grade Mode -> Skipping Analysis');
+        }
     } else {
         analysisData.value = [];
     }
@@ -1036,6 +671,14 @@ watch(() => selectedLessonIds.value, (newIds) => {
     analysisData.value = [];
   }
 }, { deep: true });
+
+watch(() => queryParams.value.classCode, (cod) => {
+    // console.log('[DEBUG] Class Code Changed:', cod);
+});
+
+watch(analysisData, (val) => {
+    // console.log('[DEBUG] Analysis Data updated, length:', val?.length);
+});
 
 function handleExport() {
   if (!rawData.value.length) return;
@@ -1070,8 +713,14 @@ function loadAnalysis(lessonId) {
   analysisData.value = [];
   
   // 传入班级和年份进行过滤
+  const params = {
+      lessonId,
+      classCode: queryParams.value.classCode,
+      entryYear: queryParams.value.entryYear
+  };
+  
+  
   getQuestionAnalysis(lessonId, queryParams.value.classCode, queryParams.value.entryYear).then(res => {
-    console.log('=== 分析数据接收 ===', res.data);
     analysisData.value = res.data || [];
     analysisLoading.value = false;
     nextTick(() => {
@@ -1089,7 +738,51 @@ function loadMatrix(lessonId) {
     matrixLoading.value = true;
     matrixData.value = [];
     getStudentAnswerMatrix(lessonId, queryParams.value.classCode, queryParams.value.entryYear).then(res => {
-        matrixData.value = res || [];
+        // 数据转换：将 results 数组转换为 component 需要的 answersMap 对象列表
+        // 同时处理班级显示名称 "601"
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        // 计算年级：如果当前月份 >= 9，则年级 = 当前年份 - 入学年份 + 1; 否则 = 当前年份 - 入学年份
+        // 或者是：当前系统通常认定9月1日升级。
+        // FIXME: 简单按年计算，如果需要更精确的逻辑（比如考虑学期），这里可能需要调整。
+        // 这里假设 queryParams.value.entryYear 是准确的入学年份
+        const entryYear = parseInt(queryParams.value.entryYear || 0);
+        let grade = 0;
+        if (entryYear > 0) {
+             grade = currentYear - entryYear + (currentMonth >= 9 ? 1 : 0);
+        }
+
+        const processedData = (res || []).map(student => {
+            const answersMap = {};
+            if (student.results && Array.isArray(student.results)) {
+                student.results.forEach(r => {
+                    answersMap[r.questionId] = {
+                        studentAnswer: r.userAnswer,
+                        // 兼容多种 boolean 表示："1", 1, "T", true
+                        isCorrect: r.isCorrect == 1 || r.isCorrect === '1' || r.isCorrect === 'T' || r.isCorrect === true
+                    };
+                });
+            }
+            
+            // 格式化班级名
+            let formattedClassName = String(student.className || '');
+            if (grade > 0 && student.className) {
+                // 如果班级名只是数字（如 "1"），则拼接成 "601"
+                if (!isNaN(student.className)) {
+                    const classNum = parseInt(student.className);
+                    formattedClassName = `${grade}${classNum < 10 ? '0' + classNum : classNum}`;
+                }
+            }
+            
+            return {
+                ...student,
+                answersMap,
+                formattedClassName
+            };
+        });
+        
+        matrixData.value = processedData;
     }).catch(e => {
         console.error('加载矩阵失败', e);
     }).finally(() => {
@@ -1098,25 +791,26 @@ function loadMatrix(lessonId) {
 }
 
 // 渲染矩阵单元格
-function renderMatrixCell(student, questionId) {
-    if (!student.results) return '<span style="color:#dedfe0; font-weight: bold;">/</span>';
-    const res = student.results.find(r => r.questionId === questionId);
-    if (!res) return '<span style="color:#dedfe0; font-weight: bold;">/</span>';
-    
-    // Check type: assuming "1" or 1.
-    if (String(res.isCorrect) === '1') {
-        return '<span style="color:#67C23A; font-weight:bold; font-size: 16px;">✔</span>';
-    } else if (String(res.isCorrect) === '0') {
-         const ans = res.userAnswer || '未答';
-        return `<span style="color:#F56C6C; font-weight:bold; cursor:pointer; font-size: 16px;" title="学生答案：${ans}">✖</span>`;
-    } else {
-        return '<span style="color:#dedfe0; font-weight: bold;">/</span>';
-    }
-}
+
 
 // 渲染易错题图表
 function renderAnalysisChart() {
   if (!analysisChartRef.value) return;
+  
+  // 检查实例是否已被销毁（DOM被v-if移除后），需要重新初始化
+  if (analysisChartInstance) {
+    try {
+      // 尝试获取实例的DOM，如果抛出异常或返回null说明实例已失效
+      const dom = analysisChartInstance.getDom();
+      if (!dom || !document.body.contains(dom)) {
+        analysisChartInstance.dispose();
+        analysisChartInstance = null;
+      }
+    } catch (e) {
+      analysisChartInstance = null;
+    }
+  }
+  
   if (!analysisChartInstance) {
     analysisChartInstance = echarts.init(analysisChartRef.value);
   }
@@ -1267,52 +961,33 @@ function renderAnalysisChart() {
   analysisChartInstance.setOption(option);
 }
 
-// 全屏切换功能
-function toggleFullscreen(cardRefName) {
-  // 通过 ref 名称获取对应的卡片元素
-  const cardRefMap = {
-    'classChartCard': classChartCard,
-    'rankChartCard': rankChartCard,
-    'typingChartCard': typingChartCard
-  };
-  
-  const cardRef = cardRefMap[cardRefName];
-  if (!cardRef || !cardRef.value) return;
-  
-  // 获取 el-card 的 DOM 元素
-  const element = cardRef.value.$el || cardRef.value;
-  
-  if (!document.fullscreenElement) {
-    if (element.requestFullscreen) {
-       element.requestFullscreen();
-    } else if (element.webkitRequestFullscreen) {
-       element.webkitRequestFullscreen();
-    } else if (element.msRequestFullscreen) {
-       element.msRequestFullscreen();
-    }
-    // 全屏后重新调整图表大小
-    setTimeout(() => {
-        if (classChartInstance) classChartInstance.resize();
-        if (rankChartInstance) rankChartInstance.resize();
-        if (typingChartInstance) typingChartInstance.resize();
-    }, 300);
-  } else {
-    if (document.exitFullscreen) {
-       document.exitFullscreen();
-    }
-    // 退出全屏后重新调整图表大小
-    setTimeout(() => {
-        if (classChartInstance) classChartInstance.resize();
-        if (rankChartInstance) rankChartInstance.resize();
-        if (typingChartInstance) typingChartInstance.resize();
-    }, 300);
-  }
+
+
+function getLessonName(lessonId) {
+    const l = lessonOptions.value.find(item => item.lessonId === lessonId);
+    return l ? l.lessonTitle : `课程${lessonId}`;
 }
+
+function getLessonScore(student, lessonId) {
+    if (!student.scores) return 0;
+    const s = student.scores.find(item => item.lessonId === lessonId);
+    return s ? (s.totalScore || 0) : 0;
+}
+
+function getScoreClass(score) {
+    if (score >= 90) return 'text-success';
+    if (score < 60) return 'text-danger';
+    return '';
+}
+
 function getScoreType(score) {
   if (score >= 90) return 'success';
-  if (score >= 60) return '';
+  if (score >= 60) return 'primary';
   return 'danger';
 }
+
+
+
 </script>
 
 <style lang="scss" scoped>
@@ -1346,7 +1021,7 @@ function getScoreType(score) {
   position: relative;
   
   .chart-container {
-    height: 280px;
+    height: 560px;  // 原来280px，增高2倍
     background: #fff;
     padding: 10px;
   }
@@ -1359,46 +1034,11 @@ function getScoreType(score) {
   }
 }
 
-// 全屏模式下的图表卡片样式
-.chart-card:fullscreen,
-.chart-card:-webkit-full-screen,
-.chart-card:-moz-full-screen {
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  
-  :deep(.el-card__header) {
-      flex-shrink: 0;
-      padding: 15px 20px;
-      border-bottom: 1px solid #ebeef5;
-      font-size: 18px;
-  }
-  
-  :deep(.el-card__body) {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-  }
-  
-  .chart-container {
-      width: 100%;
-      height: 100% !important;
-      max-height: calc(100vh - 100px);
-  }
-}
 
-.fullscreen-btn {
-    cursor: pointer;
-    font-size: 18px;
-    color: #909399;
-    transition: color 0.2s;
-    &:hover {
-        color: #409EFF;
-    }
-}
+
+
+
+
 
 .data-card {
   .score-list {
@@ -1611,3 +1251,12 @@ function getScoreType(score) {
   gap: 10px;
 }
 </style>
+
+.text-success {
+  color: #67C23A;
+  font-weight: bold;
+}
+.text-danger {
+  color: #F56C6C;
+  font-weight: bold;
+}
