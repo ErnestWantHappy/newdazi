@@ -8,7 +8,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.service.IBizStudentService;
+import com.ruoyi.business.service.IBizTeacherClassService;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -40,6 +42,9 @@ public class BizStudentServiceImpl implements IBizStudentService
 
     @Autowired
     private ISysUserService userService;
+
+    @Autowired
+    private IBizTeacherClassService teacherClassService;
 
     @Override
     public BizStudent selectBizStudentByStudentId(Long studentId)
@@ -115,7 +120,12 @@ public class BizStudentServiceImpl implements IBizStudentService
         userRoleMapper.batchUserRole(Arrays.asList(ur));
 
         bizStudent.setUserId(newUser.getUserId());
-        return bizStudentMapper.insertBizStudent(bizStudent);
+        int result = bizStudentMapper.insertBizStudent(bizStudent);
+        
+        // 自动将该班级添加到教师的管理班级中
+        autoAssignTeacherClass(loginUser.getUserId(), teacherDeptId, bizStudent.getEntryYear(), bizStudent.getClassCode());
+        
+        return result;
     }
 
     @Override
@@ -215,6 +225,9 @@ public class BizStudentServiceImpl implements IBizStudentService
 
                 successNum++;
                 successMsg.append("<br/>").append(successNum).append("、学生 ").append(student.getStudentName()).append(" 导入成功，登录账号为 ").append(generatedUserName);
+                
+                // 自动将该班级添加到教师的管理班级中
+                autoAssignTeacherClass(loginUser.getUserId(), teacherDeptId, student.getEntryYear(), student.getClassCode());
             }
             catch (Exception e)
             {
@@ -247,5 +260,32 @@ public class BizStudentServiceImpl implements IBizStudentService
             successCount += userService.resetPwd(user);
         }
         return successCount;
+    }
+
+    /**
+     * 自动将班级添加到教师的管理班级中（如果尚未管理）
+     */
+    private void autoAssignTeacherClass(Long userId, Long deptId, String entryYear, String classCode) {
+        try {
+            // 检查是否已存在关联
+            BizTeacherClass query = new BizTeacherClass();
+            query.setUserId(userId);
+            query.setEntryYear(entryYear);
+            query.setClassCode(classCode);
+            List<BizTeacherClass> existing = teacherClassService.selectBizTeacherClassList(query);
+            
+            // 如果不存在，自动添加
+            if (existing == null || existing.isEmpty()) {
+                BizTeacherClass tc = new BizTeacherClass();
+                tc.setUserId(userId);
+                tc.setDeptId(deptId);
+                tc.setEntryYear(entryYear);
+                tc.setClassCode(classCode);
+                teacherClassService.insertBizTeacherClass(tc);
+                log.info("自动添加教师管理班级: userId={}, entryYear={}, classCode={}", userId, entryYear, classCode);
+            }
+        } catch (Exception e) {
+            log.warn("自动添加教师管理班级失败: {}", e.getMessage());
+        }
     }
 }

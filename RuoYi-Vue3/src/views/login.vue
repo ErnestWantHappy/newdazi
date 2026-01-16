@@ -59,7 +59,7 @@
     </el-form>
     <!--  底部  -->
     <div class="el-login-footer">
-      <span>Copyright © 2018-2025 ruoyi.vip All Rights Reserved.</span>
+      <span>开发支持：象山县-郑东旭</span>
     </div>
     <el-dialog
       v-model="schoolDialogVisible"

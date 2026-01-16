@@ -23,10 +23,6 @@
         <el-input v-model="searchKeyword" placeholder="姓名或学号" clearable style="width: 150px" @input="filterStudents" />
         
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
-        <el-button type="info" @click="ratioDialogVisible = true" :disabled="!tableData.length">
-          <el-icon><Setting /></el-icon> 设置比例
-        </el-button>
-        <el-button type="success" icon="Download" @click="exportDialogVisible = true" :disabled="!tableData.length">导出 Excel</el-button>
         
         <!-- 选中课程提示 -->
         <span v-if="selectedLessonIds.length > 0" class="selected-tip">
@@ -175,12 +171,25 @@
       <template #header>
         <div class="card-header">
           <span style="font-weight: bold; font-size: 16px;">📊 学生成绩汇总表</span>
+          <div class="header-actions">
+            <el-switch
+              v-model="excludeZeroScore"
+              active-text="排除0分"
+              inactive-text=""
+              size="small"
+              style="margin-right: 10px;"
+            />
+            <el-button type="info" size="small" @click="ratioDialogVisible = true" :disabled="!tableData.length">
+              <el-icon><Setting /></el-icon> 设置比例
+            </el-button>
+            <el-button type="success" size="small" icon="Download" @click="exportDialogVisible = true" :disabled="!tableData.length">导出 Excel</el-button>
+          </div>
         </div>
       </template>
       <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
         <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
         <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable />
-        <el-table-column prop="studentName" label="姓名" width="100" align="center">
+        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => a.studentName.localeCompare(b.studentName, 'zh-CN')">
           <template #default="scope">
             <el-button link type="primary" @click="showStudentProfile(scope.row)">{{ scope.row.studentName }}</el-button>
           </template>
@@ -403,6 +412,9 @@ const gradeRatios = ref({ excellent: 25, good: 40, pass: 30, fail: 5 });
 // 导出对话框
 const exportDialogVisible = ref(false);
 
+// 排除0分学生开关
+const excludeZeroScore = ref(true);
+
 // 导出列配置
 const exportColumnOptions = computed(() => [
   { key: 'className', label: '班级', required: true },
@@ -430,60 +442,72 @@ const displayDataWithGrade = computed(() => {
   const data = displayData.value;
   if (data.length === 0) return [];
   
+  // 过滤出参与排名计算的学生（0分学生不参与排名）
+  const validStudents = data.filter(s => s.filteredTotal > 0);
+  const zeroStudents = data.filter(s => s.filteredTotal <= 0);
+  
   // 按总分排名计算等级
-  const sortedByTotal = [...data].sort((a, b) => b.filteredTotal - a.filteredTotal);
+  const sortedByTotal = [...validStudents].sort((a, b) => b.filteredTotal - a.filteredTotal);
   const totalCount = sortedByTotal.length;
   
-  // 计算各等级的人数边界
-  const excellentCount = Math.ceil(totalCount * gradeRatios.value.excellent / 100);
-  const goodCount = Math.ceil(totalCount * gradeRatios.value.good / 100);
-  const passCount = Math.ceil(totalCount * gradeRatios.value.pass / 100);
-  
-  // 为每个学生分配等级
   const gradeMap = new Map();
-  sortedByTotal.forEach((student, index) => {
-    let grade;
-    if (index < excellentCount) {
-      grade = '优秀';
-    } else if (index < excellentCount + goodCount) {
-      grade = '良好';
-    } else if (index < excellentCount + goodCount + passCount) {
-      grade = '及格';
-    } else {
-      grade = '不及格';
-    }
-    gradeMap.set(student.studentNo, grade);
-  });
-  
-  // 按平均分排名计算赋分（并列名次赋相同分数）
-  const sortedByAvg = [...data].sort((a, b) => b.filteredAverage - a.filteredAverage);
   const scoreMap = new Map();
   
-  if (totalCount === 1) {
-    // 只有一个学生时赋100分
-    scoreMap.set(sortedByAvg[0].studentNo, 100);
-  } else {
-    let currentRank = 0;
-    let prevAvg = null;
+  if (totalCount > 0) {
+    // 计算各等级的人数边界
+    const excellentCount = Math.ceil(totalCount * gradeRatios.value.excellent / 100);
+    const goodCount = Math.ceil(totalCount * gradeRatios.value.good / 100);
+    const passCount = Math.ceil(totalCount * gradeRatios.value.pass / 100);
     
-    sortedByAvg.forEach((student, index) => {
-      // 如果分数与前一个不同，更新排名
-      if (prevAvg === null || student.filteredAverage !== prevAvg) {
-        currentRank = index;
+    // 为每个学生分配等级
+    sortedByTotal.forEach((student, index) => {
+      let grade;
+      if (index < excellentCount) {
+        grade = '优秀';
+      } else if (index < excellentCount + goodCount) {
+        grade = '良好';
+      } else if (index < excellentCount + goodCount + passCount) {
+        grade = '及格';
+      } else {
+        grade = '不及格';
       }
-      prevAvg = student.filteredAverage;
-      
-      // 线性插值计算赋分: 100 - (rank / (total-1)) * (100-55)
-      const scaledScore = Math.round(100 - (currentRank / (totalCount - 1)) * 45);
-      scoreMap.set(student.studentNo, scaledScore);
+      gradeMap.set(student.studentId, grade);
     });
+    
+    // 按平均分排名计算赋分（并列名次赋相同分数）
+    const sortedByAvg = [...validStudents].sort((a, b) => b.filteredAverage - a.filteredAverage);
+    
+    if (totalCount === 1) {
+      scoreMap.set(sortedByAvg[0].studentId, 100);
+    } else {
+      let currentRank = 0;
+      let prevAvg = null;
+      
+      sortedByAvg.forEach((student, index) => {
+        if (prevAvg === null || student.filteredAverage !== prevAvg) {
+          currentRank = index;
+        }
+        prevAvg = student.filteredAverage;
+        
+        const scaledScore = Math.round(100 - (currentRank / (totalCount - 1)) * 45);
+        scoreMap.set(student.studentId, scaledScore);
+      });
+    }
   }
   
-  // 返回带等级和赋分的数据
-  return data.map(student => ({
+  // 0分学生标记为未评级
+  zeroStudents.forEach(student => {
+    gradeMap.set(student.studentId, '-');
+    scoreMap.set(student.studentId, '-');
+  });
+  
+  // 根据开关决定是否排除0分学生
+  const resultData = excludeZeroScore.value ? validStudents : data;
+  
+  return resultData.map(student => ({
     ...student,
-    gradeLevel: gradeMap.get(student.studentNo) || '-',
-    scaledScore: scoreMap.get(student.studentNo) || 55
+    gradeLevel: gradeMap.get(student.studentId) || '-',
+    scaledScore: scoreMap.get(student.studentId) || '-'
   }));
 });
 
@@ -1211,6 +1235,18 @@ async function handleExportWithColumns(selectedColumns) {
 
 .chart-row {
   margin-bottom: 15px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  
+  .header-actions {
+    display: flex;
+    gap: 10px;
+  }
 }
 
 .chart-card {
