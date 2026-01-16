@@ -23,7 +23,10 @@
         <el-input v-model="searchKeyword" placeholder="姓名或学号" clearable style="width: 150px" @input="filterStudents" />
         
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
-        <el-button type="success" icon="Download" @click="handleExport" :disabled="!tableData.length">导出 Excel</el-button>
+        <el-button type="info" @click="ratioDialogVisible = true" :disabled="!tableData.length">
+          <el-icon><Setting /></el-icon> 设置比例
+        </el-button>
+        <el-button type="success" icon="Download" @click="exportDialogVisible = true" :disabled="!tableData.length">导出 Excel</el-button>
         
         <!-- 选中课程提示 -->
         <span v-if="selectedLessonIds.length > 0" class="selected-tip">
@@ -174,7 +177,7 @@
           <span style="font-weight: bold; font-size: 16px;">📊 学生成绩汇总表</span>
         </div>
       </template>
-      <el-table :data="displayData" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
+      <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
         <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
         <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable />
         <el-table-column prop="studentName" label="姓名" width="100" align="center">
@@ -300,6 +303,21 @@
             </div>
           </template>
         </el-table-column>
+        
+        <el-table-column prop="gradeLevel" label="等级" width="90" align="center" sortable>
+          <template #default="scope">
+            <el-tag 
+              :type="getGradeTagType(scope.row.gradeLevel)" 
+              size="small"
+            >{{ scope.row.gradeLevel }}</el-tag>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="scaledScore" label="赋分" width="80" align="center" sortable>
+          <template #default="scope">
+            <span class="score-num" style="font-weight: bold; color: #E6A23C;">{{ scope.row.scaledScore }}</span>
+          </template>
+        </el-table-column>
       </el-table>
       
       <div v-if="!tableData.length && !loading" class="empty-tip">
@@ -313,6 +331,20 @@
       v-model="profileDialogVisible" 
       :student="currentStudent"
     />
+    
+    <!-- 等级比例设置对话框 -->
+    <grade-ratio-dialog
+      v-model="ratioDialogVisible"
+      :ratios="gradeRatios"
+      @confirm="handleRatioConfirm"
+    />
+    
+    <!-- 导出选项对话框 -->
+    <export-dialog
+      v-model="exportDialogVisible"
+      :columns="exportColumnOptions"
+      @export="handleExportWithColumns"
+    />
   </div>
 </template>
 
@@ -321,8 +353,9 @@ import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix } from '@/api/business/score';
 import { ElMessage } from 'element-plus';
-import { FullScreen, Search, Download } from '@element-plus/icons-vue';
-import * as echarts from 'echarts'; // 答题分析图表仍需要直接引入 echarts
+import { FullScreen, Search, Download, Setting } from '@element-plus/icons-vue';
+import * as echarts from 'echarts';
+import * as XLSX from 'xlsx';
 
 import StudentRankList from './components/GradeOverview/StudentRankList.vue';
 import ClassScoreChart from './components/charts/ClassScoreChart.vue';
@@ -331,6 +364,8 @@ import TypingChart from './components/charts/TypingChart.vue';
 import CourseComparisonChart from './components/charts/CourseComparisonChart.vue';
 import StudentProfileDialog from './components/StudentProfileDialog.vue';
 import AnalysisMatrix from './components/AnalysisMatrix.vue';
+import GradeRatioDialog from './components/GradeRatioDialog.vue';
+import ExportDialog from './components/ExportDialog.vue';
 
 
 
@@ -360,6 +395,97 @@ const currentStudent = ref(null);
 // 答题分析相关
 const analysisData = ref([]);
 const analysisLoading = ref(false);
+
+// 等级比例设置
+const ratioDialogVisible = ref(false);
+const gradeRatios = ref({ excellent: 25, good: 40, pass: 30, fail: 5 });
+
+// 导出对话框
+const exportDialogVisible = ref(false);
+
+// 导出列配置
+const exportColumnOptions = computed(() => [
+  { key: 'className', label: '班级', required: true },
+  { key: 'studentNo', label: '学号', required: true },
+  { key: 'studentName', label: '姓名', required: true },
+  { key: 'avgTyping', label: '打字平均', required: false },
+  { key: 'overallTypingSpeed', label: '打字速度', required: false },
+  { key: 'overallAccuracy', label: '打字正确率', required: false },
+  { key: 'overallCompletion', label: '打字完成率', required: false },
+  { key: 'avgTheory', label: '理论平均', required: false },
+  { key: 'avgPractical', label: '操作平均', required: false },
+  { key: 'filteredTotal', label: '总分', required: false },
+  { key: 'filteredAverage', label: '平均分', required: false },
+  { key: 'gradeLevel', label: '等级', required: false },
+  { key: 'scaledScore', label: '赋分', required: false }
+]);
+
+// 处理等级比例确认
+function handleRatioConfirm(newRatios) {
+  gradeRatios.value = newRatios;
+}
+
+// 计算等级和赋分的数据
+const displayDataWithGrade = computed(() => {
+  const data = displayData.value;
+  if (data.length === 0) return [];
+  
+  // 按总分排名计算等级
+  const sortedByTotal = [...data].sort((a, b) => b.filteredTotal - a.filteredTotal);
+  const totalCount = sortedByTotal.length;
+  
+  // 计算各等级的人数边界
+  const excellentCount = Math.ceil(totalCount * gradeRatios.value.excellent / 100);
+  const goodCount = Math.ceil(totalCount * gradeRatios.value.good / 100);
+  const passCount = Math.ceil(totalCount * gradeRatios.value.pass / 100);
+  
+  // 为每个学生分配等级
+  const gradeMap = new Map();
+  sortedByTotal.forEach((student, index) => {
+    let grade;
+    if (index < excellentCount) {
+      grade = '优秀';
+    } else if (index < excellentCount + goodCount) {
+      grade = '良好';
+    } else if (index < excellentCount + goodCount + passCount) {
+      grade = '及格';
+    } else {
+      grade = '不及格';
+    }
+    gradeMap.set(student.studentNo, grade);
+  });
+  
+  // 按平均分排名计算赋分（并列名次赋相同分数）
+  const sortedByAvg = [...data].sort((a, b) => b.filteredAverage - a.filteredAverage);
+  const scoreMap = new Map();
+  
+  if (totalCount === 1) {
+    // 只有一个学生时赋100分
+    scoreMap.set(sortedByAvg[0].studentNo, 100);
+  } else {
+    let currentRank = 0;
+    let prevAvg = null;
+    
+    sortedByAvg.forEach((student, index) => {
+      // 如果分数与前一个不同，更新排名
+      if (prevAvg === null || student.filteredAverage !== prevAvg) {
+        currentRank = index;
+      }
+      prevAvg = student.filteredAverage;
+      
+      // 线性插值计算赋分: 100 - (rank / (total-1)) * (100-55)
+      const scaledScore = Math.round(100 - (currentRank / (totalCount - 1)) * 45);
+      scoreMap.set(student.studentNo, scaledScore);
+    });
+  }
+  
+  // 返回带等级和赋分的数据
+  return data.map(student => ({
+    ...student,
+    gradeLevel: gradeMap.get(student.studentNo) || '-',
+    scaledScore: scoreMap.get(student.studentNo) || 55
+  }));
+});
 
 
 
@@ -984,6 +1110,76 @@ function getScoreType(score) {
   if (score >= 90) return 'success';
   if (score >= 60) return 'primary';
   return 'danger';
+}
+
+// 等级标签颜色
+function getGradeTagType(grade) {
+  const typeMap = {
+    '优秀': 'success',
+    '良好': 'primary',
+    '及格': 'warning',
+    '不及格': 'danger'
+  };
+  return typeMap[grade] || 'info';
+}
+
+// 前端生成Excel导出
+async function handleExportWithColumns(selectedColumns) {
+  if (!displayDataWithGrade.value.length) {
+    ElMessage.warning('暂无数据可导出');
+    return;
+  }
+  
+  
+  try {
+    // 获取列配置
+    const columnConfig = exportColumnOptions.value.filter(c => selectedColumns.includes(c.key));
+    
+    // 构建表头
+    const headers = columnConfig.map(c => c.label);
+    
+    // 构建数据行
+    const rows = displayDataWithGrade.value.map(student => {
+      return columnConfig.map(col => {
+        let value = student[col.key];
+        // 特殊处理：打字速度添加单位
+        if (col.key === 'overallTypingSpeed' && value) {
+          return value + ' 字/分';
+        }
+        // 特殊处理：百分比字段
+        if (['overallAccuracy', 'overallCompletion'].includes(col.key) && value) {
+          return value + '%';
+        }
+        return value ?? '-';
+      });
+    });
+    
+    // 创建工作表
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // 设置列宽
+    const colWidths = columnConfig.map(col => {
+      if (col.key === 'studentName') return { wch: 10 };
+      if (col.key === 'className') return { wch: 8 };
+      return { wch: 12 };
+    });
+    ws['!cols'] = colWidths;
+    
+    // 创建工作簿
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '成绩汇总');
+    
+    // 生成文件名
+    const fileName = `成绩汇总_${queryParams.value.entryYear}级${queryParams.value.classCode ? '_' + queryParams.value.classCode + '班' : ''}.xlsx`;
+    
+    // 下载
+    XLSX.writeFile(wb, fileName);
+    
+    ElMessage.success('导出成功');
+  } catch (e) {
+    ElMessage.error('导出失败：' + e.message);
+  }
 }
 
 
