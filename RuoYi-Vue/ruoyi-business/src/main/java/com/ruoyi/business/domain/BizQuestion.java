@@ -69,6 +69,18 @@ public class BizQuestion extends BaseEntity
     /** P6: 评分项列表 */
     private java.util.List<BizScoringItem> scoringItems;
 
+    /** 创建人昵称 */
+    @Excel(name = "创建人")
+    private String nickName;
+
+    public String getNickName() {
+        return nickName;
+    }
+
+    public void setNickName(String nickName) {
+        this.nickName = nickName;
+    }
+
     // --- Getter and Setter methods ---
     public Long getQuestionId() {
         return questionId;

@@ -25,6 +25,9 @@
             <el-table-column label="添加时间" align="center" prop="createTime" width="160" />
             <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
               <template #default="scope">
+                <el-button link type="primary" icon="User" @click="handleStudentManage(scope.row)">
+                  学生管理
+                </el-button>
                 <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['business:teacherClass:remove']">
                   移除管理
                 </el-button>
@@ -85,9 +88,11 @@
 
 <script setup name="TeacherClass">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { listTeacherClass, getAvailableClasses, addTeacherClass, batchAddTeacherClass, delTeacherClass } from '@/api/business/teacherClass'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+const router = useRouter()
 const loading = ref(false)
 const availableLoading = ref(false)
 const classList = ref([])
@@ -183,6 +188,17 @@ function handleBatchDelete() {
       getList()
       getAvailableList()
     })
+  })
+}
+
+/** 跳转到学生管理 */
+function handleStudentManage(row) {
+  router.push({
+    path: '/studentguanli',
+    query: {
+      entryYear: row.entryYear,
+      classCode: row.classCode
+    }
   })
 }
 

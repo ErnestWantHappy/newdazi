@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CountyExamClassMapper">
+    
+    <resultMap type="CountyExamClass" id="CountyExamClassResult">
+        <id     property="id"         column="id"         />
+        <result property="examId"     column="exam_id"    />
+        <result property="deptId"     column="dept_id"    />
+        <result property="type"       column="type"       />
+        <result property="entryYear"  column="entry_year" />
+        <result property="classCode"  column="class_code" />
+    </resultMap>
+
+    <select id="selectByExamId" parameterType="Long" resultMap="CountyExamClassResult">
+        select id, exam_id, dept_id, type, entry_year, class_code
+        from biz_county_exam_class
+        where exam_id = #{examId}
+    </select>
+
+    <select id="selectByStudentInfo" resultMap="CountyExamClassResult">
+        select c.id, c.exam_id, c.dept_id, c.type, c.entry_year, c.class_code
+        from biz_county_exam_class c
+        inner join biz_county_exam e on c.exam_id = e.exam_id
+        where c.dept_id = #{deptId}
+          and c.entry_year = #{entryYear}
+          and c.class_code = #{classCode}
+          and e.status = '1'
+          and e.del_flag = '0'
+    </select>
+
+    <insert id="insert" parameterType="CountyExamClass" useGeneratedKeys="true" keyProperty="id">
+        insert into biz_county_exam_class (exam_id, dept_id, type, entry_year, class_code)
+        values (#{examId}, #{deptId}, #{type}, #{entryYear}, #{classCode})
+    </insert>
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        insert into biz_county_exam_class (exam_id, dept_id, type, entry_year, class_code)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.examId}, #{item.deptId}, #{item.type}, #{item.entryYear}, #{item.classCode})
+        </foreach>
+    </insert>
+
+    <delete id="deleteByExamId" parameterType="Long">
+        delete from biz_county_exam_class where exam_id = #{examId}
+    </delete>
+
+</mapper>

@@ -39,10 +39,10 @@
       <div class="student-list-panel">
          <div class="panel-title">
             <span>学生列表</span>
-            <span class="grading-stats" v-if="selectedClassCode">
-               已交: <b class="score-num">{{ submissions.length }}</b> / <span class="score-num">{{ currentClassTotalStudents }}</span>
+             <span class="grading-stats" v-if="selectedClassCode">
+               已交: <b class="score-num">{{ submittedCount }}</b> / <span class="score-num">{{ currentClassTotalStudents }}</span>
                <span style="margin: 0 6px; color: #dcdfe6">|</span>
-               已批: <b class="score-num">{{ gradedCount }}</b> / <span class="score-num">{{ submissions.length }}</span>
+               已批: <b class="score-num">{{ gradedCount }}</b> / <span class="score-num">{{ submittedCount }}</span>
             </span>
          </div>
          <div class="student-list-scroll">
@@ -407,7 +407,10 @@ function loadSubmissions() {
     });
 }
 
-const gradedCount = computed(() => submissions.value.filter(s => s.score != null).length);
+const gradedCount = computed(() => submissions.value.filter(s => s.submitted && s.score != null).length);
+
+// 已提交学生数量
+const submittedCount = computed(() => submissions.value.filter(s => s.submitted).length);
 
 // P4: 获取当前选中班级的学生总人数
 const currentClassTotalStudents = computed(() => {

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CountyExamStudentMapper">
+    
+    <resultMap type="CountyExamStudent" id="CountyExamStudentResult">
+        <id     property="id"           column="id"           />
+        <result property="examId"       column="exam_id"      />
+        <result property="studentId"    column="student_id"   />
+        <result property="deptId"       column="dept_id"      />
+        <result property="classInfo"    column="class_info"   />
+        <result property="totalScore"   column="total_score"  />
+        <result property="theoryScore"  column="theory_score" />
+        <result property="techScore"    column="tech_score"   />
+        <result property="status"       column="status"       />
+        <result property="submitTime"   column="submit_time"  />
+    </resultMap>
+
+    <select id="selectByExamAndStudent" resultMap="CountyExamStudentResult">
+        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, submit_time
+        from biz_county_exam_student
+        where exam_id = #{examId} and student_id = #{studentId}
+    </select>
+
+    <select id="selectByExamId" parameterType="Long" resultMap="CountyExamStudentResult">
+        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, submit_time
+        from biz_county_exam_student
+        where exam_id = #{examId}
+    </select>
+
+    <select id="selectStatsByDept" parameterType="Long" resultMap="CountyExamStudentResult">
+        select dept_id, count(*) as studentCount, avg(total_score) as avgScore, max(total_score) as maxScore, min(total_score) as minScore
+        from biz_county_exam_student
+        where exam_id = #{examId} and status = '1'
+        group by dept_id
+    </select>
+
+    <insert id="insert" parameterType="CountyExamStudent" useGeneratedKeys="true" keyProperty="id">
+        insert into biz_county_exam_student (exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, submit_time)
+        values (#{examId}, #{studentId}, #{deptId}, #{classInfo}, #{totalScore}, #{theoryScore}, #{techScore}, #{status}, #{submitTime})
+    </insert>
+
+    <update id="update" parameterType="CountyExamStudent">
+        update biz_county_exam_student
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="totalScore != null">total_score = #{totalScore},</if>
+            <if test="theoryScore != null">theory_score = #{theoryScore},</if>
+            <if test="techScore != null">tech_score = #{techScore},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="submitTime != null">submit_time = #{submitTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+</mapper>

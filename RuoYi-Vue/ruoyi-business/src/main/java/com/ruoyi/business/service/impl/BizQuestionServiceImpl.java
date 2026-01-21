@@ -50,6 +50,10 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
     @Override
     public List<BizQuestion> selectBizQuestionList(BizQuestion bizQuestion) {
+        // 权限过滤：非管理员只能看到公共题目和自己的私有题目
+        if (!SecurityUtils.isAdmin(SecurityUtils.getUserId())) {
+            bizQuestion.setCreatorId(SecurityUtils.getUserId());
+        }
         return bizQuestionMapper.selectBizQuestionList(bizQuestion);
     }
 
@@ -76,6 +80,18 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Override
     public int updateBizQuestion(BizQuestion bizQuestion)
     {
+        // 权限校验：非管理员只能编辑自己创建的题目
+        Long currentUserId = SecurityUtils.getUserId();
+        boolean isAdmin = SecurityUtils.isAdmin(currentUserId);
+        
+        if (!isAdmin) {
+            BizQuestion existing = bizQuestionMapper.selectBizQuestionByQuestionId(bizQuestion.getQuestionId());
+            if (existing != null && !currentUserId.equals(existing.getCreatorId())) {
+                // 返回-1表示无权限，由Controller层处理
+                return -1;
+            }
+        }
+        
         bizQuestion.setUpdateTime(DateUtils.getNowDate());
         bizQuestion.setUpdateBy(SecurityUtils.getUsername());
 
@@ -109,6 +125,19 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
     @Override
     public int deleteBizQuestionByQuestionIds(Long[] questionIds) {
+        // 权限校验：非管理员只能删除自己创建的题目
+        Long currentUserId = SecurityUtils.getUserId();
+        boolean isAdmin = SecurityUtils.isAdmin(currentUserId);
+        
+        if (!isAdmin) {
+            for (Long questionId : questionIds) {
+                BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+                if (question != null && !currentUserId.equals(question.getCreatorId())) {
+                    // 返回-1表示无权限，由Controller层处理
+                    return -1;
+                }
+            }
+        }
         return bizQuestionMapper.deleteBizQuestionByQuestionIds(questionIds);
     }
 

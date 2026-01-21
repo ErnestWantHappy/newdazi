@@ -152,6 +152,7 @@ public class ScoreQueryController extends BaseController {
         for (BizStudent student : students) {
             Map<String, Object> row = new HashMap<>();
             row.put("studentId", student.getStudentId());
+            row.put("userName", student.getUserName()); // 账号（唯一标识）
             row.put("studentName", student.getStudentName());
             row.put("studentNo", student.getStudentNo());
             row.put("classCode", student.getClassCode()); // P2: 添加班级代码用于显示
@@ -235,7 +236,7 @@ public class ScoreQueryController extends BaseController {
         // 5. 表头
         org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
         int colIdx = 0;
-        String[] fixedHeaders = {"班级", "学号", "姓名"};
+        String[] fixedHeaders = {"账号", "班级", "学号", "姓名"};
         for (String h : fixedHeaders) {
             org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(colIdx++);
             cell.setCellValue(h);
@@ -278,6 +279,9 @@ public class ScoreQueryController extends BaseController {
         for (Map<String, Object> student : students) {
             org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
             colIdx = 0;
+            
+            // 账号
+            row.createCell(colIdx++).setCellValue((String) student.get("userName"));
             
             // 班级
             String studentClassCode = (String) student.get("classCode");

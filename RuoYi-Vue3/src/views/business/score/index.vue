@@ -187,6 +187,7 @@
         </div>
       </template>
       <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
+        <el-table-column prop="userName" label="账号" width="120" align="center" sortable />
         <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
         <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => a.studentName.localeCompare(b.studentName, 'zh-CN')">
@@ -417,6 +418,7 @@ const excludeZeroScore = ref(true);
 
 // 导出列配置
 const exportColumnOptions = computed(() => [
+  { key: 'userName', label: '账号', required: true },
   { key: 'className', label: '班级', required: true },
   { key: 'studentNo', label: '学号', required: true },
   { key: 'studentName', label: '姓名', required: true },
@@ -918,8 +920,10 @@ function loadMatrix(lessonId) {
             // 格式化班级名
             let formattedClassName = String(student.className || '');
             if (grade > 0 && student.className) {
-                // 如果班级名只是数字（如 "1"），则拼接成 "601"
-                if (!isNaN(student.className)) {
+                // 如果班级名只是1-2位数字（如 "1" 或 "04"），则拼接成 "601" 或 "604"
+                // 如果班级名已经是3位以上（如 "604"），则认为已格式化，直接使用
+                const classNameStr = String(student.className);
+                if (!isNaN(student.className) && classNameStr.length <= 2) {
                     const classNum = parseInt(student.className);
                     formattedClassName = `${grade}${classNum < 10 ? '0' + classNum : classNum}`;
                 }

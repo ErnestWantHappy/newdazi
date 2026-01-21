@@ -90,7 +90,11 @@ public class BizQuestionController extends BaseController
     @PutMapping
     public AjaxResult edit(@RequestBody BizQuestion bizQuestion)
     {
-        return toAjax(bizQuestionService.updateBizQuestion(bizQuestion));
+        int result = bizQuestionService.updateBizQuestion(bizQuestion);
+        if (result == -1) {
+            return AjaxResult.error("无权编辑他人创建的题目");
+        }
+        return toAjax(result);
     }
 
     /**
@@ -101,7 +105,11 @@ public class BizQuestionController extends BaseController
 	@DeleteMapping("/{questionIds}")
     public AjaxResult remove(@PathVariable Long[] questionIds)
     {
-        return toAjax(bizQuestionService.deleteBizQuestionByQuestionIds(questionIds));
+        int result = bizQuestionService.deleteBizQuestionByQuestionIds(questionIds);
+        if (result == -1) {
+            return AjaxResult.error("无权删除他人创建的题目");
+        }
+        return toAjax(result);
     }
 
     @Log(title = "题库管理", businessType = BusinessType.IMPORT)

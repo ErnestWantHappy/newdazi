@@ -161,11 +161,13 @@
 </template>
 
 <script setup name="Student">
-import { getCurrentInstance, reactive, ref, toRefs, watch } from "vue";
+import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import useUserStore from "@/store/modules/user";
 import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd } from "@/api/business/student";
 import { getToken } from "@/utils/auth";
 
+const route = useRoute();
 const userStore = useUserStore();
 const { proxy } = getCurrentInstance();
 
@@ -387,7 +389,20 @@ function submitFileForm() {
   proxy.$refs["uploadRef"].submit();
 };
 
-getList();
+// 页面加载时读取URL参数，自动设置筛选条件
+onMounted(() => {
+  const urlEntryYear = route.query.entryYear;
+  const urlClassCode = route.query.classCode;
+  
+  if (urlEntryYear) {
+    queryParams.value.entryYear = urlEntryYear;
+  }
+  if (urlClassCode) {
+    queryParams.value.classCode = urlClassCode;
+  }
+  
+  getList();
+});
 
 watch(() => userStore.currentDeptId, (deptId) => {
   queryParams.value.deptId = deptId || null;

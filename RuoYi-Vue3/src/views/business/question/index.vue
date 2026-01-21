@@ -92,6 +92,15 @@
           @keyup.enter="handleQuery"
         />
       </el-form-item>
+      <el-form-item label="创建人" prop="createBy">
+        <el-input
+          v-model="queryParams.createBy"
+          placeholder="请输入创建人"
+          clearable
+          style="width: 160px"
+          @keyup.enter="handleQuery"
+        />
+      </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="Search" @click="handleQuery"
           >搜索</el-button
@@ -142,6 +151,16 @@
           @click="handleDelete"
           v-hasPermi="['business:question:remove']"
           >删除</el-button
+        >
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="warning"
+          plain
+          icon="Download"
+          @click="handleExport"
+          v-hasPermi="['business:question:export']"
+          >导出</el-button
         >
       </el-col>
       <right-toolbar
@@ -227,12 +246,29 @@
         /></template>
       </el-table-column>
       <el-table-column
+        label="创建人"
+        align="center"
+        width="120"
+      >
+        <template #default="scope">
+          {{ scope.row.nickName || scope.row.createBy }}
+        </template>
+      </el-table-column>
+      <el-table-column
         label="操作"
         align="center"
         class-name="small-padding fixed-width"
-        width="150"
+        width="200"
       >
         <template #default="scope">
+          <el-button
+            v-if="scope.row.questionType === 'practical' && scope.row.previewPath"
+            link
+            type="success"
+            icon="View"
+            @click="handlePreview(scope.row)"
+            >预览</el-button
+          >
           <el-button
             link
             type="primary"
@@ -602,6 +638,7 @@ const data = reactive({
     grade: null,
     semester: null,
     lessonNum: null,
+    createBy: null,
   },
 });
 
@@ -856,6 +893,11 @@ function handleDelete(row) {
 
 /** 导出按钮操作 */
 function handleExport() {
+  // 检查是否筛选了操作题
+  if (queryParams.value.questionType === 'practical') {
+    proxy.$modal.msgWarning("操作题包含附件文件，无法导出到Excel。请选择其他题型进行导出。");
+    return;
+  }
   proxy.download(
     "business/question/export",
     {
@@ -918,6 +960,17 @@ const handleFileError = (err, file, fileList) => {
 /** 提交上传文件 */
 function submitFileForm() {
   proxy.$refs["uploadRef"].submit();
+}
+
+/** 预览操作题附件 */
+function handlePreview(row) {
+  if (row.previewPath) {
+    const baseUrl = import.meta.env.VITE_APP_BASE_API;
+    const fullUrl = baseUrl + row.previewPath;
+    window.open(fullUrl, "_blank");
+  } else {
+    proxy.$modal.msgWarning("该题目没有可预览的附件");
+  }
 }
 
 getList();

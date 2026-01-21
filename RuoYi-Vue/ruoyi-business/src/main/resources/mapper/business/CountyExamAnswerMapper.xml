@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CountyExamAnswerMapper">
+    
+    <resultMap type="CountyExamAnswer" id="CountyExamAnswerResult">
+        <id     property="answerId"       column="answer_id"       />
+        <result property="examId"         column="exam_id"         />
+        <result property="studentId"      column="student_id"      />
+        <result property="questionId"     column="question_id"     />
+        <result property="studentAnswer"  column="student_answer"  />
+        <result property="score"          column="score"           />
+        <result property="isCorrect"      column="is_correct"      />
+        <result property="graderId"       column="grader_id"       />
+        <result property="gradingStatus"  column="grading_status"  />
+        <result property="answerTime"     column="answer_time"     />
+        <result property="filePath"       column="file_path"       />
+    </resultMap>
+
+    <select id="selectByExamAndStudent" resultMap="CountyExamAnswerResult">
+        select answer_id, exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status, answer_time, file_path
+        from biz_county_exam_answer
+        where exam_id = #{examId} and student_id = #{studentId}
+    </select>
+
+    <select id="selectByGraderId" resultMap="CountyExamAnswerResult">
+        select answer_id, exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status, answer_time, file_path
+        from biz_county_exam_answer
+        where grader_id = #{graderId}
+        <if test="gradingStatus != null and gradingStatus != ''">
+            and grading_status = #{gradingStatus}
+        </if>
+    </select>
+
+    <insert id="insert" parameterType="CountyExamAnswer" useGeneratedKeys="true" keyProperty="answerId">
+        insert into biz_county_exam_answer (exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status, answer_time, file_path)
+        values (#{examId}, #{studentId}, #{questionId}, #{studentAnswer}, #{score}, #{isCorrect}, #{graderId}, #{gradingStatus}, #{answerTime}, #{filePath})
+    </insert>
+
+    <update id="update" parameterType="CountyExamAnswer">
+        update biz_county_exam_answer
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="studentAnswer != null">student_answer = #{studentAnswer},</if>
+            <if test="score != null">score = #{score},</if>
+            <if test="isCorrect != null">is_correct = #{isCorrect},</if>
+            <if test="graderId != null">grader_id = #{graderId},</if>
+            <if test="gradingStatus != null">grading_status = #{gradingStatus},</if>
+            <if test="answerTime != null">answer_time = #{answerTime},</if>
+            <if test="filePath != null">file_path = #{filePath},</if>
+        </trim>
+        where answer_id = #{answerId}
+    </update>
+
+    <update id="batchUpdateGrader">
+        update biz_county_exam_answer set grader_id = #{graderId}
+        where answer_id in
+        <foreach collection="answerIds" item="answerId" open="(" separator="," close=")">
+            #{answerId}
+        </foreach>
+    </update>
+
+</mapper>

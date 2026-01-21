@@ -84,7 +84,7 @@
 </template>
 
 <script setup name="TeacherDashboard">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
 import { delLesson } from '@/api/business/lesson';
@@ -184,6 +184,11 @@ function handleDeleteLesson(lessonId) {
 }
 
 onMounted(() => {
+  fetchDashboardData();
+});
+
+// 从其他页面返回时（如课程设计页），重新加载数据
+onActivated(() => {
   fetchDashboardData();
 });
 </script>

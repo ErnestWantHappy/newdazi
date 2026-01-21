@@ -27,27 +27,38 @@
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
         <result property="updateTime"    column="update_time"    />
+        <result property="nickName"    column="nick_name"    />
     </resultMap>
 
     <sql id="selectBizQuestionVo">
-        select question_id, question_type, question_content, grade, semester, lesson_num, option_a, option_b, option_c, option_d, answer, analysis, file_path, preview_path, is_public, typing_duration, word_count, creator_id, create_by, create_time, update_by, update_time from biz_question
+        select q.question_id, q.question_type, q.question_content, q.grade, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name 
+        from biz_question q
+        left join sys_user u on q.creator_id = u.user_id
     </sql>
 
     <select id="selectBizQuestionList" parameterType="BizQuestion" resultMap="BizQuestionResult">
         <include refid="selectBizQuestionVo"/>
         <where>
-            <if test="questionType != null  and questionType != ''"> and question_type = #{questionType}</if>
-            <if test="questionContent != null  and questionContent != ''"> and question_content like concat('%', #{questionContent}, '%')</if>
-            <if test="isPublic != null  and isPublic != ''"> and is_public = #{isPublic}</if>
-            <if test="grade != null "> and grade = #{grade}</if>
-            <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
-            <if test="lessonNum != null "> and lesson_num = #{lessonNum}</if>
+            <if test="questionType != null  and questionType != ''"> and q.question_type = #{questionType}</if>
+            <if test="questionContent != null  and questionContent != ''"> and q.question_content like concat('%', #{questionContent}, '%')</if>
+            <if test="isPublic != null  and isPublic != ''"> and q.is_public = #{isPublic}</if>
+            <if test="grade != null "> and q.grade = #{grade}</if>
+            <if test="semester != null  and semester != ''"> and q.semester = #{semester}</if>
+            <if test="lessonNum != null "> and q.lesson_num = #{lessonNum}</if>
+            <!-- 创建人模糊查询 (用昵称搜) -->
+            <if test="createBy != null and createBy != ''"> 
+                and (u.nick_name like concat('%', #{createBy}, '%') or q.create_by like concat('%', #{createBy}, '%'))
+            </if>
+            <!-- 权限过滤：私有题目仅创建人和管理员可见 -->
+            <if test="creatorId != null">
+                and (q.is_public = 'Y' OR q.creator_id = #{creatorId})
+            </if>
         </where>
     </select>
 
     <select id="selectBizQuestionByQuestionId" parameterType="Long" resultMap="BizQuestionResult">
         <include refid="selectBizQuestionVo"/>
-        where question_id = #{questionId}
+        where q.question_id = #{questionId}
     </select>
 
     <insert id="insertBizQuestion" parameterType="BizQuestion" useGeneratedKeys="true" keyProperty="questionId">

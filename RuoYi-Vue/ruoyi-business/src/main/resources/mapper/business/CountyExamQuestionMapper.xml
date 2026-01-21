@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CountyExamQuestionMapper">
+    
+    <resultMap type="CountyExamQuestion" id="CountyExamQuestionResult">
+        <id     property="id"             column="id"             />
+        <result property="examId"         column="exam_id"        />
+        <result property="questionId"     column="question_id"    />
+        <result property="questionScore"  column="question_score" />
+        <result property="orderNum"       column="order_num"      />
+    </resultMap>
+
+    <select id="selectByExamId" parameterType="Long" resultMap="CountyExamQuestionResult">
+        select id, exam_id, question_id, question_score, order_num
+        from biz_county_exam_question
+        where exam_id = #{examId}
+        order by order_num
+    </select>
+
+    <insert id="insert" parameterType="CountyExamQuestion" useGeneratedKeys="true" keyProperty="id">
+        insert into biz_county_exam_question (exam_id, question_id, question_score, order_num)
+        values (#{examId}, #{questionId}, #{questionScore}, #{orderNum})
+    </insert>
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        insert into biz_county_exam_question (exam_id, question_id, question_score, order_num)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.examId}, #{item.questionId}, #{item.questionScore}, #{item.orderNum})
+        </foreach>
+    </insert>
+
+    <delete id="deleteById" parameterType="Long">
+        delete from biz_county_exam_question where id = #{id}
+    </delete>
+
+    <delete id="deleteByExamId" parameterType="Long">
+        delete from biz_county_exam_question where exam_id = #{examId}
+    </delete>
+
+    <update id="update" parameterType="CountyExamQuestion">
+        update biz_county_exam_question
+        set question_score = #{questionScore}, order_num = #{orderNum}
+        where id = #{id}
+    </update>
+
+</mapper>
