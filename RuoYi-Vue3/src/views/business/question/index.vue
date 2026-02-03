@@ -391,27 +391,42 @@
         <!-- 动态表单项: 打字题专属 -->
         <div v-if="form.questionType === 'typing'">
           <el-row>
-            <el-col :span="12">
-              <el-form-item label="打字时长(分钟)" prop="typingDuration">
-                <el-input-number
-                  v-model="form.typingDuration"
-                  :min="1"
-                  placeholder="请输入时长"
-                  controls-position="right"
+            <el-col :span="8">
+              <el-form-item label="总字数">
+                <el-input
+                  :value="form.wordCount || 0"
+                  disabled
+                  style="width: 100%"
+                >
+                  <template #suffix>字</template>
+                </el-input>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="打字时长">
+                <el-input
+                  :value="form.typingDuration || '-'"
+                  disabled
+                  style="width: 100%"
+                >
+                  <template #suffix>分钟</template>
+                </el-input>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="基准速度">
+                <el-input
+                  :value="typingBaseSpeed + ' 字/分'"
+                  disabled
                   style="width: 100%"
                 />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
-              <el-form-item label="总字数" prop="wordCount">
-                <el-input
-                  v-model="form.wordCount"
-                  placeholder="由题目内容自动计算"
-                  :disabled="true"
-                />
-              </el-form-item>
-            </el-col>
           </el-row>
+          <div style="color: #909399; font-size: 12px; margin-bottom: 18px; line-height: 1.6;">
+            <span>时长 = 字数 ÷ 基准速度（向上取整），仅作为答题时间限制。</span><br/>
+            <span>评分公式：得分 = 满分 × (正确字数 ÷ 总字数) × 正确率</span>
+          </div>
         </div>
 
         <!-- 动态表单项: 选择题专属 -->
@@ -767,6 +782,45 @@ const scoringItemsSum = computed(() => {
     0
   );
 });
+
+/** 打字题基准速度：小学 20 字/分，初中及以上 40 字/分 */
+const typingBaseSpeed = computed(() => {
+  const grade = form.value.grade;
+  if (grade && grade >= 1 && grade <= 6) {
+    return 20; // 小学
+  }
+  return 40; // 初中及以上
+});
+
+/** 推荐打字时长（分钟，向上取整） */
+const recommendedDuration = computed(() => {
+  const wordCount = form.value.wordCount || 0;
+  if (wordCount <= 0) return 1;
+  return Math.ceil(wordCount / typingBaseSpeed.value);
+});
+
+/** 监听打字题内容变化，自动计算字数和推荐时长 */
+watch(
+  () => form.value.questionContent,
+  (newContent) => {
+    if (form.value.questionType === "typing" && newContent) {
+      // 计算字数（排除空白字符）
+      form.value.wordCount = newContent.replace(/\s/g, "").length;
+      // 自动设置推荐时长
+      form.value.typingDuration = recommendedDuration.value;
+    }
+  }
+);
+
+/** 监听年级变化，重新计算推荐时长 */
+watch(
+  () => form.value.grade,
+  () => {
+    if (form.value.questionType === "typing" && form.value.wordCount > 0) {
+      form.value.typingDuration = recommendedDuration.value;
+    }
+  }
+);
 
 /** P6: 添加评分项 */
 function addScoringItem() {

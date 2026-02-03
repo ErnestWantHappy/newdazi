@@ -54,6 +54,7 @@
                 and (q.is_public = 'Y' OR q.creator_id = #{creatorId})
             </if>
         </where>
+        order by q.create_time desc
     </select>
 
     <select id="selectBizQuestionByQuestionId" parameterType="Long" resultMap="BizQuestionResult">

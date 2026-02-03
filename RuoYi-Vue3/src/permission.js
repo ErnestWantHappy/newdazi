@@ -47,6 +47,7 @@ router.beforeEach((to, from, next) => {
                 
                 const isStudent = roles.includes("student");
                 const isTeacher = roles.includes("teacher");
+                const isResearcher = roles.includes("researcher");
 
                 if (isStudent) {
                   // 学生登录后或刷新，强制跳转到学生首页 (除非已经在路径下)
@@ -56,9 +57,12 @@ router.beforeEach((to, from, next) => {
                     next({ ...to, replace: true });
                   }
                 } else {
-                  // 教师/管理员 登录后跳转逻辑
+                  // 教师/教研员/管理员 登录后跳转逻辑
                   if (to.path === "/" || to.path === "/index") {
-                    if (isTeacher) {
+                    if (isResearcher) {
+                      // 教研员登录后默认进入用户管理页面
+                      next({ path: "/system/user", replace: true });
+                    } else if (isTeacher) {
                       next({ path: "/teacher-dashboard", replace: true });
                     } else {
                       next({ ...to, replace: true });
@@ -79,10 +83,14 @@ router.beforeEach((to, from, next) => {
         // 已有roles信息，处理刷新或直接访问URL的情况
         const isStudent = userStore.roles.includes("student");
         const isTeacher = userStore.roles.includes("teacher");
+        const isResearcher = userStore.roles.includes("researcher");
 
         if (isStudent && !to.path.startsWith("/student")) {
           // 如果是学生，但目标路径不是以/student开头，则强制送回学生首页
           next({ path: "/student/index" });
+        } else if (isResearcher && (to.path === "/" || to.path === "/index")) {
+          // 如果是教研员，访问首页时强制跳转到用户管理页面
+          next({ path: "/system/user" });
         } else if (isTeacher && (to.path === "/" || to.path === "/index")) {
           // 如果是教师，访问首页时强制跳转到教师工作台
           next({ path: "/teacher-dashboard" });

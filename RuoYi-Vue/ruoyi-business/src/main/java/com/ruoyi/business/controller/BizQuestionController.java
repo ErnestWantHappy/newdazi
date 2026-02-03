@@ -49,7 +49,7 @@ public class BizQuestionController extends BaseController
     }
 
     /**
-     * 导出题库管理列表
+     * 导出题库管理列表（自动过滤操作题，操作题包含附件无法导出）
      */
     @PreAuthorize("@ss.hasPermi('business:question:export')")
     @Log(title = "题库管理", businessType = BusinessType.EXPORT)
@@ -57,8 +57,21 @@ public class BizQuestionController extends BaseController
     public void export(HttpServletResponse response, BizQuestion bizQuestion)
     {
         List<BizQuestion> list = bizQuestionService.selectBizQuestionList(bizQuestion);
+        // 过滤掉操作题（操作题包含附件无法导出）
+        int practicalCount = 0;
+        List<BizQuestion> exportList = new ArrayList<>();
+        for (BizQuestion q : list) {
+            if ("practical".equals(q.getQuestionType())) {
+                practicalCount++;
+            } else {
+                exportList.add(q);
+            }
+        }
         ExcelUtil<BizQuestion> util = new ExcelUtil<BizQuestion>(BizQuestion.class);
-        util.exportExcel(response, list, "题库管理数据");
+        String sheetName = practicalCount > 0 
+            ? "题库数据（已过滤" + practicalCount + "道操作题）" 
+            : "题库管理数据";
+        util.exportExcel(response, exportList, sheetName);
     }
 
     /**
@@ -205,7 +218,7 @@ public class BizQuestionController extends BaseController
         typingExample1.setAnswer("");
         typingExample1.setIsPublic("Y");
         typingExample1.setTypingDuration(3);
-        typingExample1.setRemark("★打字题必填：题目类型写typing，题目内容填打字文章，打字时长(分钟)必填，选项和答案留空");
+        typingExample1.setRemark("★打字题必填：题目类型写typing，题目内容填打字文章，选项和答案留空（时长由系统自动计算）");
         exampleList.add(typingExample1);
 
         BizQuestion typingExample2 = new BizQuestion();

@@ -135,9 +135,6 @@ public class BizStudentController extends BaseController
     /**
      * 重置密码
      */
-    /**
-     * 重置密码
-     */
     @PreAuthorize("@ss.hasPermi('business:student:edit')")
     @Log(title = "学生管理", businessType = BusinessType.UPDATE)
     @PutMapping("/resetPwd")
@@ -148,5 +145,30 @@ public class BizStudentController extends BaseController
         }
         bizStudentService.resetStudentPwd(userIds);
         return AjaxResult.success();
+    }
+
+    /**
+     * 查询学生锁定状态
+     */
+    @PreAuthorize("@ss.hasPermi('business:student:list')")
+    @GetMapping("/lockStatus")
+    public AjaxResult getLockStatus(@org.springframework.web.bind.annotation.RequestParam(value = "userNames") String userNames)
+    {
+        if (userNames == null || userNames.isEmpty()) {
+            return AjaxResult.success(new java.util.HashMap<>());
+        }
+        
+        com.ruoyi.common.core.redis.RedisCache redisCache = 
+            com.ruoyi.common.utils.spring.SpringUtils.getBean(com.ruoyi.common.core.redis.RedisCache.class);
+        
+        java.util.Map<String, Boolean> lockStatusMap = new java.util.HashMap<>();
+        String[] names = userNames.split(",");
+        for (String userName : names) {
+            String cacheKey = com.ruoyi.common.constant.CacheConstants.PWD_ERR_CNT_KEY + userName.trim();
+            Integer retryCount = redisCache.getCacheObject(cacheKey);
+            // 达到5次则锁定
+            lockStatusMap.put(userName.trim(), retryCount != null && retryCount >= 5);
+        }
+        return AjaxResult.success(lockStatusMap);
     }
 }

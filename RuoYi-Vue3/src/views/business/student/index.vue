@@ -21,6 +21,13 @@
            <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
          </el-select>
       </el-form-item>
+      <el-form-item label="账号状态" prop="lockStatus">
+         <el-select v-model="queryParams.lockStatus" placeholder="全部" clearable style="width: 120px">
+           <el-option label="全部" value="" />
+           <el-option label="正常" value="normal" />
+           <el-option label="锁定" value="locked" />
+         </el-select>
+      </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
         <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -71,10 +78,10 @@
     </el-row>
 
     <!-- 数据表格 -->
-    <el-table v-loading="loading" :data="studentList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="filteredStudentList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
-      <el-table-column label="学生姓名" align="center" prop="studentName" />
       <el-table-column label="登录账号" align="center" prop="userName" />
+      <el-table-column label="学生姓名" align="center" prop="studentName" />
       <el-table-column label="班级" align="center" prop="classCode">
         <template #default="scope">
           <span>{{ scope.row.classCode }}班</span>
@@ -82,10 +89,38 @@
       </el-table-column>
       <el-table-column label="学号" align="center" prop="studentNo" />
       <el-table-column label="入学年份" align="center" prop="entryYear" />
+      <el-table-column label="状态" align="center" width="80">
+        <template #default="scope">
+          <span v-if="lockStatusMap[scope.row.userName]" style="color: #F56C6C; font-weight: 500;">锁定</span>
+          <span v-else>正常</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="备注" align="center" prop="remark" min-width="100" show-overflow-tooltip>
+        <template #default="scope">
+          <el-input
+            v-if="editingRemarkId === scope.row.studentId"
+            v-model="scope.row.remark"
+            size="small"
+            @blur="saveRemark(scope.row)"
+            @keyup.enter="saveRemark(scope.row)"
+            ref="remarkInputRef"
+            style="width: 100%"
+          />
+          <span 
+            v-else 
+            @click="startEditRemark(scope.row)"
+            style="cursor: pointer; display: inline-block; min-width: 50px; color: #909399;"
+          >
+            {{ scope.row.remark || '-' }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" align="center" width="280" class-name="small-padding fixed-width">
         <template #default="scope">
           <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)">修改</el-button>
-          <el-button link type="primary" icon="Key" @click="handleResetPwd(scope.row)">重置密码</el-button>
+          <el-button link :type="lockStatusMap[scope.row.userName] ? 'warning' : 'primary'" icon="Key" @click="handleResetPwd(scope.row)">
+            {{ lockStatusMap[scope.row.userName] ? '重置密码并解锁' : '重置密码' }}
+          </el-button>
           <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
@@ -117,6 +152,9 @@
         </el-form-item>
         <el-form-item label="学号" prop="studentNo">
           <el-input v-model="form.studentNo" placeholder="请输入学生在本班的学号(1-99)" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="form.remark" placeholder="如：转班、转校、休学等" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -161,10 +199,10 @@
 </template>
 
 <script setup name="Student">
-import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted } from "vue";
+import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import useUserStore from "@/store/modules/user";
-import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd } from "@/api/business/student";
+import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus } from "@/api/business/student";
 import { getToken } from "@/utils/auth";
 
 const route = useRoute();
@@ -181,6 +219,8 @@ const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
 const title = ref("");
+const lockStatusMap = ref({});
+const editingRemarkId = ref(null); // 当前正在编辑备注的学生ID
 
 const entryYearOptions = ref([]);
 const currentYear = new Date().getFullYear();
@@ -196,6 +236,7 @@ const data = reactive({
     studentName: null,
     entryYear: null,
     classCode: null,
+    lockStatus: null,
     deptId: userStore.currentDeptId || null,
   },
   rules: {
@@ -207,6 +248,22 @@ const data = reactive({
 });
 
 const { queryParams, form, rules } = toRefs(data);
+
+// 根据锁定状态筛选的学生列表
+const filteredStudentList = computed(() => {
+  if (!queryParams.value.lockStatus) {
+    return studentList.value;
+  }
+  return studentList.value.filter(s => {
+    const isLocked = lockStatusMap.value[s.userName] === true;
+    if (queryParams.value.lockStatus === 'locked') {
+      return isLocked;
+    } else if (queryParams.value.lockStatus === 'normal') {
+      return !isLocked;
+    }
+    return true;
+  });
+});
 
 // ... upload 参数省略，保持不变 ...
 const upload = reactive({
@@ -224,6 +281,24 @@ function getList() {
     studentList.value = response.rows;
     total.value = response.total;
     loading.value = false;
+    // 加载锁定状态
+    loadLockStatus();
+  });
+}
+
+/** 加载学生锁定状态 */
+function loadLockStatus() {
+  if (!studentList.value || studentList.value.length === 0) {
+    lockStatusMap.value = {};
+    return;
+  }
+  const userNames = studentList.value.map(s => s.userName).filter(u => u);
+  if (userNames.length === 0) return;
+  
+  getLockStatus(userNames).then(res => {
+    lockStatusMap.value = res.data || {};
+  }).catch(() => {
+    lockStatusMap.value = {};
   });
 }
 
@@ -243,6 +318,7 @@ function reset() {
     entryYear: null,
     classCode: null,
     studentNo: null,
+    remark: null,
   };
   proxy.resetForm("studentRef");
 }
@@ -316,9 +392,29 @@ function handleDelete(row) {
   proxy.$modal.confirm('是否确认删除学生姓名为"' + studentNames + '"的数据项？').then(function() {
     return delStudent(studentIds);
   }).then(() => {
-    getList();
+  getList();
     proxy.$modal.msgSuccess("删除成功");
   }).catch(() => {});
+}
+
+/** 开始编辑备注 */
+function startEditRemark(row) {
+  editingRemarkId.value = row.studentId;
+  // 延迟聚焦
+  setTimeout(() => {
+    const input = document.querySelector('.el-table .el-input__inner');
+    if (input) input.focus();
+  }, 50);
+}
+
+/** 保存备注 */
+function saveRemark(row) {
+  editingRemarkId.value = null;
+  if (row.studentId) {
+    updateStudent({ studentId: row.studentId, remark: row.remark || '' }).catch(() => {
+      proxy.$modal.msgError("备注保存失败");
+    });
+  }
 }
 
 /** 重置密码按钮操作 */
@@ -329,6 +425,8 @@ function handleResetPwd(row) {
     return resetStudentPwd(uIds);
   }).then(() => {
     proxy.$modal.msgSuccess("重置成功");
+    // 刷新锁定状态
+    loadLockStatus();
   }).catch(() => {});
 }
 

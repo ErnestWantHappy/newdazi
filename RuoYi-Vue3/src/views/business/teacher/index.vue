@@ -130,7 +130,8 @@ function handleEditLesson(lessonId) {
 /** 跳转批改 */
 async function goToGrading(lesson, group) {
   // 1. 选择班级
-  const selectedClass = await classDialogRef.value.open(group.allClassesInGrade);
+  // 1. 选择班级 (传入 lessonId 以获取批改状态)
+  const selectedClass = await classDialogRef.value.open(null, lesson.lessonId);
   if (!selectedClass) return; // 用户取消
 
   // 2. 跳转

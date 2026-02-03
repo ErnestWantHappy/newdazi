@@ -109,6 +109,9 @@ public class SysUser extends BaseEntity
     /** 角色ID */
     private Long roleId;
 
+    /** 所有归属校区名称（逗号分隔，用于列表展示） */
+    private String allDeptNames;
+
     // --- Getter and Setter methods ---
 
     public SysUser()
@@ -369,6 +372,16 @@ public class SysUser extends BaseEntity
     public void setRoleId(Long roleId)
     {
         this.roleId = roleId;
+    }
+
+    public String getAllDeptNames()
+    {
+        return allDeptNames;
+    }
+
+    public void setAllDeptNames(String allDeptNames)
+    {
+        this.allDeptNames = allDeptNames;
     }
 
     @Override

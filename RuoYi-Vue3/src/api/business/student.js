@@ -52,3 +52,12 @@ export function resetStudentPwd(userIds) {
     data: userIds // 直接将ID数组作为请求体发送
   })
 }
+
+// 查询学生锁定状态
+export function getLockStatus(userNames) {
+  return request({
+    url: '/business/student/lockStatus',
+    method: 'get',
+    params: { userNames: userNames.join(',') }
+  })
+}

@@ -10,27 +10,30 @@
         <result property="studentNo"    column="student_no"    />
         <result property="entryYear"    column="entry_year"    />
         <result property="classCode"    column="class_code"    />
+        <result property="remark"       column="remark"        />
         <!-- 关联查询出的字段 -->
         <result property="studentName"  column="student_name"  />
         <result property="userName"     column="user_name"     />
     </resultMap>
 
     <sql id="selectBizStudentVo">
-        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code,
+        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
                u.nick_name as student_name, u.user_name, u.dept_id
         from biz_student s
                  left join sys_user u on s.user_id = u.user_id
     </sql>
 
     <select id="selectBizStudentList" parameterType="BizStudent" resultMap="BizStudentResult">
-        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code,
+        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
                u.nick_name as student_name, u.user_name, u.dept_id
         from biz_student s
         left join sys_user u on s.user_id = u.user_id
         <!-- 关联教师班级表，只显示教师管理的班级中的学生 -->
+        <!-- 修复：必须同时匹配 dept_id + entry_year + class_code，避免跨学校数据混合 -->
         inner join biz_teacher_class tc 
             on s.entry_year = tc.entry_year 
             and s.class_code = tc.class_code
+            and u.dept_id = tc.dept_id
         <where>
             <!-- 必须是当前教师管理的班级 -->
             <if test="teacherUserId != null"> and tc.user_id = #{teacherUserId}</if>
@@ -69,6 +72,7 @@
             <if test="studentNo != null and studentNo != ''">student_no = #{studentNo},</if>
             <if test="entryYear != null and entryYear != ''">entry_year = #{entryYear},</if>
             <if test="classCode != null and classCode != ''">class_code = #{classCode},</if>
+            <if test="remark != null">remark = #{remark},</if>
         </trim>
         where student_id = #{studentId}
     </update>

@@ -166,6 +166,15 @@
       :loading="matrixLoading"
     />
 
+    <!-- 课堂表现管理区域（仅单选课程时显示） -->
+    <performance-section
+      v-if="!isGradeMode && selectedLessonIds.length === 1"
+      :lesson-id="selectedLessonIds[0]"
+      :class-code="queryParams.classCode"
+      :entry-year="queryParams.entryYear"
+      @saved="handleQuery"
+    />
+
     <!-- 数据表格 -->
     <el-card class="data-card">
       <template #header>
@@ -183,16 +192,40 @@
               <el-icon><Setting /></el-icon> 设置比例
             </el-button>
             <el-button type="success" size="small" icon="Download" @click="exportDialogVisible = true" :disabled="!tableData.length">导出 Excel</el-button>
+            
+            <!-- 列设置 -->
+            <el-popover placement="bottom-end" :width="200" trigger="click">
+              <template #reference>
+                <el-button size="small">
+                  <el-icon><Setting /></el-icon> 列设置
+                </el-button>
+              </template>
+              <div class="column-settings">
+                <el-checkbox 
+                  v-for="col in columnOptions" 
+                  :key="col.key" 
+                  v-model="visibleColumns[col.key]"
+                  style="display: block; margin: 5px 0;"
+                >{{ col.label }}</el-checkbox>
+              </div>
+            </el-popover>
           </div>
         </div>
       </template>
-      <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }">
-        <el-table-column prop="userName" label="账号" width="120" align="center" sortable />
-        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
-        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable />
-        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => a.studentName.localeCompare(b.studentName, 'zh-CN')">
+      <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }" max-height="600" style="width: 100%">
+        <el-table-column prop="userName" label="账号" width="120" align="center" sortable fixed="left" />
+        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" fixed="left" />
+        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable fixed="left" />
+        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => a.studentName.localeCompare(b.studentName, 'zh-CN')" fixed="left">
           <template #default="scope">
             <el-button link type="primary" @click="showStudentProfile(scope.row)">{{ scope.row.studentName }}</el-button>
+          </template>
+        </el-table-column>
+        
+        <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip fixed="left">
+          <template #default="scope">
+            <span v-if="scope.row.remark" style="color: #E6A23C;">{{ scope.row.remark }}</span>
+            <span v-else style="color: #C0C4CC;">-</span>
           </template>
         </el-table-column>
         
@@ -257,46 +290,47 @@
           </template>
         </el-table-column>
         
-        <el-table-column prop="avgTyping" label="打字平均" width="95" align="center" sortable>
+        <el-table-column v-if="visibleColumns.avgTyping" prop="avgTyping" label="打字平均" width="95" align="center" sortable>
           <template #default="scope">
             <span class="gray-text score-num">{{ scope.row.avgTyping }}</span>
           </template>
         </el-table-column>
         
-        <el-table-column prop="overallTypingSpeed" label="打字速度" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.overallTypingSpeed" prop="overallTypingSpeed" label="打字速度" width="100" align="center" sortable>
           <template #default="scope">
             <span v-if="scope.row.overallTypingSpeed" class="typing-speed score-num">{{ scope.row.overallTypingSpeed }} <small>字/分</small></span>
             <span v-else class="gray-text">-</span>
           </template>
         </el-table-column>
         
-        <el-table-column prop="overallAccuracy" label="打字正确率" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.overallAccuracy" prop="overallAccuracy" label="打字正确率" width="100" align="center" sortable>
           <template #default="scope">
             <span v-if="scope.row.overallAccuracy" class="typing-accuracy score-num">{{ scope.row.overallAccuracy }}%</span>
             <span v-else class="gray-text">-</span>
           </template>
         </el-table-column>
         
-        <el-table-column prop="overallCompletion" label="打字完成率" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.overallCompletion" prop="overallCompletion" label="打字完成率" width="100" align="center" sortable>
           <template #default="scope">
             <span v-if="scope.row.overallCompletion" class="typing-completion score-num">{{ scope.row.overallCompletion }}%</span>
             <span v-else class="gray-text">-</span>
           </template>
         </el-table-column>
         
-        <el-table-column prop="avgTheory" label="理论平均" width="95" align="center" sortable>
+        <el-table-column v-if="visibleColumns.avgTheory" prop="avgTheory" label="理论平均" width="95" align="center" sortable>
           <template #default="scope">
             <span class="gray-text score-num">{{ scope.row.avgTheory }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="avgPractical" label="操作平均" width="95" align="center" sortable>
+        <el-table-column v-if="visibleColumns.avgPractical" prop="avgPractical" label="操作平均" width="95" align="center" sortable>
           <template #default="scope">
             <span class="gray-text score-num">{{ scope.row.avgPractical }}</span>
           </template>
         </el-table-column>
         
-        <el-table-column prop="filteredTotal" label="总分" width="100" align="center" sortable>
+        <!-- 作业总分 -->
+        <el-table-column v-if="visibleColumns.filteredTotal" prop="filteredTotal" label="作业总分" width="100" align="center" sortable>
           <template #default="scope">
             <div class="data-bar-cell">
               <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredTotal, maxTotal) + '%' }"></div>
@@ -305,7 +339,27 @@
           </template>
         </el-table-column>
         
-        <el-table-column prop="filteredAverage" label="平均分" width="100" align="center" sortable>
+        <!-- 课堂表现分 -->
+        <el-table-column v-if="visibleColumns.totalPerformance" prop="totalPerformance" label="课堂表现分" width="100" align="center" sortable>
+          <template #default="scope">
+            <span 
+              class="score-num" 
+              :style="{ 
+                color: scope.row.totalPerformance > 0 ? '#67C23A' : (scope.row.totalPerformance < 0 ? '#F56C6C' : '#909399'),
+                fontWeight: 'bold'
+              }"
+            >{{ scope.row.totalPerformance > 0 ? '+' : '' }}{{ scope.row.totalPerformance || 0 }}</span>
+          </template>
+        </el-table-column>
+        
+        <!-- 课程总分 -->
+        <el-table-column v-if="visibleColumns.finalTotal" prop="finalTotal" label="课程总分" width="100" align="center" sortable>
+          <template #default="scope">
+            <span class="score-num" style="font-weight: bold; color: #409EFF;">{{ scope.row.finalTotal }}</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column v-if="visibleColumns.filteredAverage" prop="filteredAverage" label="平均分" width="100" align="center" sortable>
           <template #default="scope">
             <div class="data-bar-cell avg-bar">
               <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredAverage, 100) + '%' }"></div>
@@ -314,7 +368,7 @@
           </template>
         </el-table-column>
         
-        <el-table-column prop="gradeLevel" label="等级" width="90" align="center" sortable>
+        <el-table-column v-if="visibleColumns.gradeLevel" prop="gradeLevel" label="等级" width="90" align="center" sortable>
           <template #default="scope">
             <el-tag 
               :type="getGradeTagType(scope.row.gradeLevel)" 
@@ -323,7 +377,7 @@
           </template>
         </el-table-column>
         
-        <el-table-column prop="scaledScore" label="赋分" width="80" align="center" sortable>
+        <el-table-column v-if="visibleColumns.scaledScore" prop="scaledScore" label="赋分" width="80" align="center" sortable>
           <template #default="scope">
             <span class="score-num" style="font-weight: bold; color: #E6A23C;">{{ scope.row.scaledScore }}</span>
           </template>
@@ -355,12 +409,21 @@
       :columns="exportColumnOptions"
       @export="handleExportWithColumns"
     />
+    
+    <!-- 课堂表现弹窗 -->
+    <performance-dialog
+      v-model="performanceDialogVisible"
+      :lesson-id="performanceLessonId"
+      :class-code="queryParams.classCode"
+      :entry-year="queryParams.entryYear"
+      @saved="onPerformanceSaved"
+    />
   </div>
 </template>
 
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix } from '@/api/business/score';
 import { ElMessage } from 'element-plus';
 import { FullScreen, Search, Download, Setting } from '@element-plus/icons-vue';
@@ -376,10 +439,12 @@ import StudentProfileDialog from './components/StudentProfileDialog.vue';
 import AnalysisMatrix from './components/AnalysisMatrix.vue';
 import GradeRatioDialog from './components/GradeRatioDialog.vue';
 import ExportDialog from './components/ExportDialog.vue';
+import PerformanceSection from './components/PerformanceSection.vue';
 
 
 
 const route = useRoute();
+const router = useRouter();
 const loading = ref(false);
 const matrixLoading = ref(false);
 const matrixData = ref([]);
@@ -413,8 +478,47 @@ const gradeRatios = ref({ excellent: 25, good: 40, pass: 30, fail: 5 });
 // 导出对话框
 const exportDialogVisible = ref(false);
 
-// 排除0分学生开关
-const excludeZeroScore = ref(true);
+// 课堂表现弹窗
+const performanceDialogVisible = ref(false);
+const performanceLessonId = ref(null);
+
+// 排除0分学生开关（默认不排除）
+const excludeZeroScore = ref(false);
+
+// 列显示配置
+const columnSettingsVisible = ref(false);
+const visibleColumns = ref({
+  remark: true,
+  avgTyping: true,
+  overallTypingSpeed: true,
+  overallAccuracy: true,
+  overallCompletion: true,
+  avgTheory: true,
+  avgPractical: true,
+  filteredTotal: true,
+  totalPerformance: true,
+  finalTotal: true,
+  filteredAverage: true,
+  gradeLevel: true,
+  scaledScore: true
+});
+
+// 列配置选项
+const columnOptions = [
+  { key: 'remark', label: '备注' },
+  { key: 'avgTyping', label: '打字平均' },
+  { key: 'overallTypingSpeed', label: '打字速度' },
+  { key: 'overallAccuracy', label: '打字正确率' },
+  { key: 'overallCompletion', label: '打字完成率' },
+  { key: 'avgTheory', label: '理论平均' },
+  { key: 'avgPractical', label: '操作平均' },
+  { key: 'filteredTotal', label: '作业总分' },
+  { key: 'totalPerformance', label: '课堂表现分' },
+  { key: 'finalTotal', label: '课程总分' },
+  { key: 'filteredAverage', label: '平均分' },
+  { key: 'gradeLevel', label: '等级' },
+  { key: 'scaledScore', label: '赋分' }
+];
 
 // 导出列配置
 const exportColumnOptions = computed(() => [
@@ -422,6 +526,7 @@ const exportColumnOptions = computed(() => [
   { key: 'className', label: '班级', required: true },
   { key: 'studentNo', label: '学号', required: true },
   { key: 'studentName', label: '姓名', required: true },
+  { key: 'remark', label: '备注', required: false },
   { key: 'avgTyping', label: '打字平均', required: false },
   { key: 'overallTypingSpeed', label: '打字速度', required: false },
   { key: 'overallAccuracy', label: '打字正确率', required: false },
@@ -437,6 +542,26 @@ const exportColumnOptions = computed(() => [
 // 处理等级比例确认
 function handleRatioConfirm(newRatios) {
   gradeRatios.value = newRatios;
+}
+
+// 打开课堂表现弹窗
+function openPerformanceDialog() {
+  if (selectedLessonIds.value.length !== 1) {
+    ElMessage.warning('请先选择单个课程');
+    return;
+  }
+  if (!queryParams.value.classCode) {
+    ElMessage.warning('请先选择班级');
+    return;
+  }
+  performanceLessonId.value = selectedLessonIds.value[0];
+  performanceDialogVisible.value = true;
+}
+
+// 课堂表现保存后刷新数据
+function onPerformanceSaved() {
+  // 保存后可刷新成绩数据（如果需要显示平时分）
+  handleQuery();
 }
 
 // 计算等级和赋分的数据
@@ -583,10 +708,12 @@ onMounted(async () => {
 function loadClasses() {
   return getScoreClasses().then(res => {
     const data = res.data || [];
+    // 防御性过滤：排除 entry_year 或 class_code 为空的无效记录
+    const validData = data.filter(item => item && (item.entry_year || item.entryYear) && (item.class_code || item.classCode));
     const yearSet = new Set();
-    data.forEach(item => yearSet.add(item.entry_year || item.entryYear));
+    validData.forEach(item => yearSet.add(item.entry_year || item.entryYear));
     yearOptions.value = Array.from(yearSet).map(y => ({ entryYear: y })).sort((a, b) => b.entryYear - a.entryYear);
-    window._allClasses = data;
+    window._allClasses = validData;
   });
 }
 
@@ -600,7 +727,7 @@ function onYearChange(val) {
   
   if (val && window._allClasses) {
     classOptions.value = window._allClasses
-      .filter(c => (c.entry_year || c.entryYear) === val)
+      .filter(c => c && (c.entry_year || c.entryYear) === val && (c.class_code || c.classCode))
       .map(c => ({ classCode: c.class_code || c.classCode }))
       .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
   }
@@ -729,6 +856,7 @@ function processData() {
     
     const count = filteredScores.length;
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
+    let sumPerformance = 0, sumFinal = 0; // 平时分和课程总分
     
     // 打字统计：累加有效记录
     let typingSpeedSum = 0, accuracySum = 0, completionSum = 0, typingCount = 0;
@@ -738,6 +866,8 @@ function processData() {
       sumTheory += (s.theoryScore || 0);
       sumPractical += (s.practicalScore || 0);
       sumTotal += (s.totalScore || 0);
+      sumPerformance += (s.performanceScore || 0); // 平时分
+      sumFinal += (s.finalScore || s.totalScore || 0); // 课程总分
       
       // 累加打字统计（只统计有数据的记录）
       if (s.avgTypingSpeed) {
@@ -769,7 +899,10 @@ function processData() {
       avgPractical: avgPractical,
       overallTypingSpeed,
       overallAccuracy,
-      overallCompletion
+      overallCompletion,
+      totalPerformance: sumPerformance, // 课堂表现分合计
+      // 课程总分 = max(作业总分 + 课堂表现分, 0)，上限100
+      finalTotal: Math.min(Math.max(Math.round(sumTotal) + sumPerformance, 0), 100)
     };
   });
 }
@@ -831,6 +964,14 @@ watch(() => queryParams.value.classCode, (cod) => {
 watch(analysisData, (val) => {
     // console.log('[DEBUG] Analysis Data updated, length:', val?.length);
 });
+
+// 跳转到学生个人画像页面
+function showStudentProfile(row) {
+  router.push({
+    path: '/business/student-profile',
+    query: { studentId: row.studentId }
+  });
+}
 
 function handleExport() {
   if (!rawData.value.length) return;

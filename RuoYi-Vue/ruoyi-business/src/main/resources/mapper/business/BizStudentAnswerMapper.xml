@@ -267,4 +267,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND s.entry_year = #{entryYear}
         ORDER BY s.student_no ASC, lq.order_num ASC
     </select>
+
+    <!-- 查询某课程有答题记录的班级列表（用于批改页面班级选择） -->
+    <select id="selectClassesByLessonAnswers" resultType="java.util.HashMap">
+        SELECT 
+            s.class_code AS classCode,
+            s.entry_year AS entryYear,
+            COUNT(DISTINCT s.student_id) AS totalStudents,
+            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL THEN a.student_id END) AS practicalSubmitted,
+            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL AND a.score IS NULL THEN a.student_id END) AS practicalUngraded
+        FROM biz_student_answer a
+        JOIN biz_student s ON a.student_id = s.student_id
+        JOIN biz_question q ON a.question_id = q.question_id
+        WHERE a.lesson_id = #{lessonId}
+        GROUP BY s.class_code, s.entry_year
+        ORDER BY s.entry_year DESC, s.class_code ASC
+    </select>
 </mapper>

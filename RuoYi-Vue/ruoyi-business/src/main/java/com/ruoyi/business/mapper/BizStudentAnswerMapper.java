@@ -95,4 +95,9 @@ public interface BizStudentAnswerMapper
      * 查询学生答题矩阵详情
      */
     List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> selectStudentAnswerMatrix(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear);
+
+    /**
+     * 查询某课程有答题记录的班级列表（用于批改页面班级选择）
+     */
+    List<java.util.Map<String, Object>> selectClassesByLessonAnswers(@Param("lessonId") Long lessonId);
 }

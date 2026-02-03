@@ -11,11 +11,24 @@
         </el-select>
         
         <span class="filter-label" style="margin-left: 16px">班级：</span>
-        <el-select v-model="selectedClassCode" placeholder="请选择班级" @change="onClassChange" :disabled="!selectedLessonId || classes.length === 0" style="width: 120px">
-          <el-option v-for="c in classes" :key="c.classCode" :label="c.classCode + '班'" :value="c.classCode" />
+        <el-select v-model="selectedClassCode" placeholder="请选择班级" @change="onClassChange" :disabled="!selectedLessonId || classes.length === 0" style="width: 180px">
+          <el-option v-for="c in classes" :key="c.classCode" :value="c.classCode">
+            <div class="class-option" :class="getClassOptionClass(c)">
+              <span>{{ c.classCode }}班</span>
+              <span v-if="c.practicalUngraded > 0" class="ungraded-badge">{{ c.practicalUngraded }}人未批</span>
+              <span v-else-if="c.practicalSubmitted > 0" class="graded-badge">✓</span>
+              <span v-else class="no-submit-badge">暂无提交</span>
+            </div>
+          </el-option>
         </el-select>
         
+        <!-- 无班级提示 -->
+        <el-tag v-if="selectedLessonId && classes.length === 0 && !loading" type="warning" style="margin-left: 8px">
+          暂无学生提交作业
+        </el-tag>
+        
         <span class="filter-label" style="margin-left: 16px">操作题：</span>
+
         <!-- 只有一道操作题时直接显示题目名称 -->
         <span v-if="questions.length === 1" class="single-question-name" style="font-weight: 500; color: #303133; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; line-height: 32px; height: 32px; padding: 0 11px; border: 1px solid #dcdfe6; border-radius: 4px; background: #f5f7fa;">
           {{ questions[0].questionContent }}
@@ -252,6 +265,16 @@ function fetchDashboardData() {
   getDashboardData().then(res => {
     gradeGroups.value = res.data;
   });
+}
+
+// 根据班级批改状态返回样式类
+function getClassOptionClass(classItem) {
+  if (classItem.practicalUngraded > 0) {
+    return 'has-ungraded';
+  } else if (classItem.practicalSubmitted > 0) {
+    return 'all-graded';
+  }
+  return 'no-submit';
 }
 
 // P3.5: 选择课程后加载班级列表
@@ -924,6 +947,35 @@ function autoFocusItem() {
            font-weight: bold;
         }
      }
+  }
+  
+  // 班级选项样式
+  .class-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    
+    .ungraded-badge {
+      background: #F56C6C;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    
+    .graded-badge {
+      color: #67C23A;
+      font-weight: bold;
+      margin-left: 8px;
+    }
+    
+    .no-submit-badge {
+      color: #909399;
+      font-size: 12px;
+      margin-left: 8px;
+    }
   }
 }
 </style>

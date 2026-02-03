@@ -210,6 +210,12 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
         if ("typing".equals(questionType)) {
             calculateWordCount(bizQuestion);
+            // 自动计算打字时长：字数 ÷ 基准速度（小学20，初中及以上40）
+            if (bizQuestion.getWordCount() != null && bizQuestion.getWordCount() > 0) {
+                int baseSpeed = (bizQuestion.getGrade() != null && bizQuestion.getGrade() <= 6) ? 20 : 40;
+                int duration = (int) Math.ceil((double) bizQuestion.getWordCount() / baseSpeed);
+                bizQuestion.setTypingDuration(duration);
+            }
             bizQuestion.setFilePath(null);
             bizQuestion.setPreviewPath(null);
         } else if ("practical".equals(questionType)) {

@@ -35,11 +35,15 @@ public class TeacherGradingController extends BaseController {
     private com.ruoyi.business.mapper.BizStudentMapper studentMapper;
 
     /**
-     * 获取课程分配的班级列表（用于班级选择下拉框）
-     * P4: 同时返回每个班级的学生人数
+     * 获取课程的班级列表（用于批改页面班级选择下拉框）
+     * 优先从答题记录获取有提交的班级，再合并当前指派的班级
      */
     @GetMapping("/classes/{lessonId}")
     public AjaxResult getClassesByLesson(@PathVariable Long lessonId) {
+        // 1. 从答题记录中查询有提交的班级（核心修复：即使指派关系变更，只要有答题记录就能显示）
+        List<java.util.Map<String, Object>> classesFromAnswers = studentAnswerMapper.selectClassesByLessonAnswers(lessonId);
+        
+        // 2. 从指派表中查询当前指派的班级
         BizLessonAssignment query = new BizLessonAssignment();
         query.setLessonId(lessonId);
         List<BizLessonAssignment> assignments = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
@@ -48,23 +52,57 @@ public class TeacherGradingController extends BaseController {
         Long userId = com.ruoyi.common.utils.SecurityUtils.getUserId();
         Long deptId = com.ruoyi.common.utils.SecurityUtils.getDeptId();
         
-        // P4: 为每个班级查询学生人数
+        // 3. 合并去重：用 Set 记录已添加的班级 (entryYear + classCode)
+        java.util.Set<String> addedClasses = new java.util.HashSet<>();
         List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
-        for (BizLessonAssignment assignment : assignments) {
-            java.util.Map<String, Object> item = new java.util.HashMap<>();
-            item.put("classCode", assignment.getClassCode());
-            item.put("entryYear", assignment.getEntryYear());
-            item.put("assignmentId", assignment.getAssignmentId());
-            // 查询该班级的学生总数
-            com.ruoyi.business.domain.BizStudent studentQuery = new com.ruoyi.business.domain.BizStudent();
-            studentQuery.setClassCode(assignment.getClassCode());
-            studentQuery.setEntryYear(assignment.getEntryYear());
-            studentQuery.setTeacherUserId(userId);  // 设置教师用户ID
-            studentQuery.setDeptId(deptId);          // 设置部门ID
-            List<?> students = studentMapper.selectBizStudentList(studentQuery);
-            item.put("totalStudents", students.size());
-            result.add(item);
+        
+        // 3.1 先添加有答题记录的班级（这些班级一定有学生提交过）
+        for (java.util.Map<String, Object> classInfo : classesFromAnswers) {
+            String classCode = (String) classInfo.get("classCode");
+            String entryYear = (String) classInfo.get("entryYear");
+            String key = entryYear + "_" + classCode;
+            if (!addedClasses.contains(key)) {
+                addedClasses.add(key);
+                
+                // 重新查询真实的班级总人数（覆盖原统计的“提交人数”）
+                com.ruoyi.business.domain.BizStudent studentQuery = new com.ruoyi.business.domain.BizStudent();
+                studentQuery.setClassCode(classCode);
+                studentQuery.setEntryYear(entryYear);
+                studentQuery.setTeacherUserId(userId);
+                studentQuery.setDeptId(deptId);
+                List<?> students = studentMapper.selectBizStudentList(studentQuery);
+                classInfo.put("totalStudents", students.size());
+                
+                result.add(classInfo);
+            }
         }
+        
+        // 3.2 再添加指派表中的班级（可能尚无提交，但也需要显示）
+        for (BizLessonAssignment assignment : assignments) {
+            String classCode = assignment.getClassCode();
+            String entryYear = assignment.getEntryYear();
+            String key = entryYear + "_" + classCode;
+            if (!addedClasses.contains(key)) {
+                addedClasses.add(key);
+                java.util.Map<String, Object> item = new java.util.HashMap<>();
+                item.put("classCode", classCode);
+                item.put("entryYear", entryYear);
+                item.put("assignmentId", assignment.getAssignmentId());
+                // 查询该班级的学生总数
+                com.ruoyi.business.domain.BizStudent studentQuery = new com.ruoyi.business.domain.BizStudent();
+                studentQuery.setClassCode(classCode);
+                studentQuery.setEntryYear(entryYear);
+                studentQuery.setTeacherUserId(userId);
+                studentQuery.setDeptId(deptId);
+                List<?> students = studentMapper.selectBizStudentList(studentQuery);
+                item.put("totalStudents", students.size());
+                // 补充默认统计值
+                item.put("practicalSubmitted", 0);
+                item.put("practicalUngraded", 0);
+                result.add(item);
+            }
+        }
+        
         return AjaxResult.success(result);
     }
 

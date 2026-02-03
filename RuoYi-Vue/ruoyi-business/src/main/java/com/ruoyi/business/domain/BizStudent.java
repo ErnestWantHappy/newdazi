@@ -46,6 +46,10 @@ public class BizStudent extends BaseEntity
     /** 教师用户ID (仅用于数据权限查询, 非数据库字段) */
     private Long teacherUserId;
 
+    /** 教师备注 */
+    @Excel(name = "备注")
+    private String remark;
+
 
     // --- Getter and Setter methods ---
 
@@ -125,6 +129,16 @@ public class BizStudent extends BaseEntity
 
     public void setTeacherUserId(Long teacherUserId) {
         this.teacherUserId = teacherUserId;
+    }
+
+    @Override
+    public String getRemark() {
+        return remark;
+    }
+
+    @Override
+    public void setRemark(String remark) {
+        this.remark = remark;
     }
 
     @Override

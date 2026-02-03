@@ -42,6 +42,9 @@ public class ScoreQueryController extends BaseController {
     
     @Autowired
     private SysDeptMapper deptMapper;
+    
+    @Autowired
+    private com.ruoyi.business.mapper.BizClassroomPerformanceMapper performanceMapper;
 
     /**
      * 获取班级列表（用于筛选下拉框）
@@ -157,21 +160,47 @@ public class ScoreQueryController extends BaseController {
             row.put("studentNo", student.getStudentNo());
             row.put("classCode", student.getClassCode()); // P2: 添加班级代码用于显示
             row.put("grade", gradeNum); // P3: 添加计算好的年级
+            row.put("remark", student.getRemark()); // 教师备注
             
             // 查询该学生的成绩汇总
             List<Map<String, Object>> scores = studentAnswerMapper.selectScoreSummaryByStudent(
                 student.getStudentId(), lessonId);
+            
+            // 查询该学生的平时分（所有课程的平时分记录）
+            List<com.ruoyi.business.domain.BizClassroomPerformance> performanceList = 
+                performanceMapper.selectByStudentId(student.getStudentId());
+            
+            // 将平时分添加到每个课程成绩中
+            Map<Long, Integer> performanceMap = new HashMap<>();
+            for (com.ruoyi.business.domain.BizClassroomPerformance p : performanceList) {
+                performanceMap.put(p.getLessonId(), p.getScore());
+            }
+            for (Map<String, Object> score : scores) {
+                Long lid = ((Number) score.get("lessonId")).longValue();
+                Integer performanceScore = performanceMap.getOrDefault(lid, 0);
+                score.put("performanceScore", performanceScore);
+                // 计算课程总分 = 作业分 + 平时分，上限100
+                int homeworkScore = ((Number) score.get("totalScore")).intValue();
+                int finalScore = Math.min(homeworkScore + performanceScore, 100);
+                score.put("finalScore", finalScore);
+            }
             row.put("scores", scores);
             
             // 计算总分
             int totalScore = 0;
+            int totalPerformance = 0;
             for (Map<String, Object> score : scores) {
                 Object ts = score.get("totalScore");
                 if (ts != null) {
                     totalScore += ((Number) ts).intValue();
                 }
+                Object ps = score.get("performanceScore");
+                if (ps != null) {
+                    totalPerformance += ((Number) ps).intValue();
+                }
             }
             row.put("totalScore", totalScore);
+            row.put("totalPerformance", totalPerformance);
             
             result.add(row);
         }
@@ -251,7 +280,7 @@ public class ScoreQueryController extends BaseController {
         }
         
         // 统计表头
-        String[] statHeaders = {"打字平均", "理论平均", "操作平均", "总分", "平均分"};
+        String[] statHeaders = {"打字平均", "理论平均", "操作平均", "总分", "平均分", "备注"};
         for (String h : statHeaders) {
             org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(colIdx++);
             cell.setCellValue(h);
@@ -344,6 +373,7 @@ public class ScoreQueryController extends BaseController {
             row.createCell(colIdx++).setCellValue(String.format("%.1f", avgPractical)); // 操作平均
             row.createCell(colIdx++).setCellValue((int) sumTotal); // 总分
             row.createCell(colIdx++).setCellValue(String.format("%.1f", avgTotal)); // 平均分
+            row.createCell(colIdx++).setCellValue(student.get("remark") != null ? (String) student.get("remark") : ""); // 备注
         }
         
         // 输出

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizClassroomPerformanceMapper">
+    
+    <resultMap type="com.ruoyi.business.domain.BizClassroomPerformance" id="BizClassroomPerformanceResult">
+        <result property="performanceId" column="performance_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="score" column="score"/>
+        <result property="reason" column="reason"/>
+        <result property="teacherId" column="teacher_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <!-- 非数据库字段 -->
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="classCode" column="class_code"/>
+        <result property="entryYear" column="entry_year"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="BizClassroomPerformanceResult">
+        SELECT * FROM biz_classroom_performance WHERE performance_id = #{performanceId}
+    </select>
+
+    <select id="selectByStudentAndLesson" resultMap="BizClassroomPerformanceResult">
+        SELECT * FROM biz_classroom_performance 
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+
+    <!-- 查询课程的班级课堂表现列表（带学生信息） -->
+    <select id="selectListByLessonAndClass" resultMap="BizClassroomPerformanceResult">
+        SELECT 
+            p.performance_id,
+            s.student_id,
+            p.lesson_id,
+            p.score,
+            p.reason,
+            p.teacher_id,
+            p.create_time,
+            p.update_time,
+            u.nick_name AS student_name,
+            s.student_no,
+            s.class_code,
+            s.entry_year
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN biz_classroom_performance p ON s.student_id = p.student_id AND p.lesson_id = #{lessonId}
+        WHERE s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+        ORDER BY s.student_no
+    </select>
+
+    <insert id="insert" parameterType="com.ruoyi.business.domain.BizClassroomPerformance" useGeneratedKeys="true" keyProperty="performanceId">
+        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, create_time)
+        VALUES (#{studentId}, #{lessonId}, #{score}, #{reason}, #{teacherId}, NOW())
+    </insert>
+
+    <update id="update" parameterType="com.ruoyi.business.domain.BizClassroomPerformance">
+        UPDATE biz_classroom_performance
+        SET score = #{score},
+            reason = #{reason},
+            update_time = NOW()
+        WHERE performance_id = #{performanceId}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM biz_classroom_performance WHERE performance_id = #{performanceId}
+    </delete>
+
+    <!-- 插入或更新（如果存在则更新，不存在则插入） -->
+    <insert id="insertOrUpdate" parameterType="com.ruoyi.business.domain.BizClassroomPerformance">
+        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, create_time)
+        VALUES (#{studentId}, #{lessonId}, #{score}, #{reason}, #{teacherId}, NOW())
+        ON DUPLICATE KEY UPDATE
+            score = #{score},
+            reason = #{reason},
+            update_time = NOW()
+    </insert>
+
+    <!-- 查询学生的所有课程平时分记录 -->
+    <select id="selectByStudentId" resultMap="BizClassroomPerformanceResult">
+        SELECT * FROM biz_classroom_performance WHERE student_id = #{studentId}
+    </select>
+
+</mapper>

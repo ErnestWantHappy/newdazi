@@ -64,7 +64,11 @@
               <!-- <el-table-column label="用户编号" align="center" key="userId" prop="userId" v-if="columns[0].visible" /> -->
               <el-table-column label="用户账号" align="center" key="userName" prop="userName" v-if="columns[1].visible" :show-overflow-tooltip="true" />
               <el-table-column label="用户姓名" align="center" key="nickName" prop="nickName" v-if="columns[2].visible" :show-overflow-tooltip="true" />
-              <el-table-column label="归属校区" align="center" key="deptName" prop="dept.deptName" v-if="columns[3].visible" :show-overflow-tooltip="true" />
+              <el-table-column label="归属校区" align="center" key="deptName" v-if="columns[3].visible" :show-overflow-tooltip="true">
+                <template #default="scope">
+                  {{ scope.row.allDeptNames || scope.row.dept?.deptName || '-' }}
+                </template>
+              </el-table-column>
               <!-- 手机号码列已隐藏 -->
               <!-- <el-table-column label="手机号码" align="center" key="phonenumber" prop="phonenumber" v-if="columns[4].visible" width="120" /> -->
               <el-table-column label="状态" align="center" key="status" v-if="columns[5].visible">

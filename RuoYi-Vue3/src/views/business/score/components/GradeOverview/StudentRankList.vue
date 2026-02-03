@@ -57,7 +57,11 @@
 
       <el-table-column prop="studentNo" label="学号" width="100" align="center" sortable :sort-method="(a, b) => Number(a.studentNo) - Number(b.studentNo)" />
       
-      <el-table-column prop="studentName" label="姓名" width="90" align="center" show-overflow-tooltip sortable />
+      <el-table-column prop="studentName" label="姓名" width="90" align="center" show-overflow-tooltip sortable>
+        <template #default="scope">
+          <span class="student-link" @click="goToProfile(scope.row)">{{ scope.row.studentName }}</span>
+        </template>
+      </el-table-column>
       
       <el-table-column prop="filteredTotal" label="总分" align="center" width="80" sortable>
         <template #default="scope">
@@ -70,12 +74,20 @@
         <el-table-column prop="avgTheory" label="理论" align="center" width="70" sortable />
         <el-table-column prop="avgPractical" label="操作" align="center" width="70" sortable />
       </el-table-column>
+      
+      <el-table-column prop="remark" label="备注" align="center" min-width="100" show-overflow-tooltip>
+        <template #default="scope">
+          <span v-if="scope.row.remark" style="color: #E6A23C;">{{ scope.row.remark }}</span>
+          <span v-else style="color: #C0C4CC;">-</span>
+        </template>
+      </el-table-column>
     </el-table>
   </el-card>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { DataLine } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 
@@ -98,6 +110,8 @@ const props = defineProps({
     default: 50
   }
 });
+
+const router = useRouter();
 
 const displayLimit = ref(props.limit);
 const excludeZero = ref(false);
@@ -255,6 +269,14 @@ function tableRowClassName({ row, rowIndex }) {
   if (rowIndex < 3) return 'success-row';
   return '';
 }
+
+// 跳转到学生个人画像页面
+function goToProfile(row) {
+  router.push({
+    path: '/business/student-profile',
+    query: { studentId: row.studentId }
+  });
+}
 </script>
 
 <style scoped>
@@ -314,5 +336,16 @@ function tableRowClassName({ row, rowIndex }) {
   font-weight: bold;
   font-family: 'Roboto Mono', monospace;
   font-size: 14px;
+}
+
+.student-link {
+  color: #409EFF;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.student-link:hover {
+  text-decoration: underline;
+  color: #66b1ff;
 }
 </style>

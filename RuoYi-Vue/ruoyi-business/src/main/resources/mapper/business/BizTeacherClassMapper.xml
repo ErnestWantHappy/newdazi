@@ -37,6 +37,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <!-- 查询指定教师管理的班级列表（带学生人数和学校名称） -->
+    <!-- 修复：统计学生数时必须加 dept_id 条件，避免统计到其他学校同年级班级的学生 -->
     <select id="selectTeacherClassListWithCount" resultMap="BizTeacherClassResult">
         select 
             tc.id,
@@ -47,7 +48,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             tc.create_time,
             d.dept_name,
             (select count(*) from biz_student s 
-             where s.entry_year = tc.entry_year and s.class_code = tc.class_code) as student_count
+             inner join sys_user u on s.user_id = u.user_id
+             where s.entry_year = tc.entry_year 
+               and s.class_code = tc.class_code 
+               and u.dept_id = tc.dept_id) as student_count
         from biz_teacher_class tc
         left join sys_dept d on tc.dept_id = d.dept_id
         where tc.user_id = #{userId} and tc.dept_id = #{deptId}

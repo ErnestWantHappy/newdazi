@@ -110,6 +110,19 @@ export const constantRoutes = [
         meta: { title: '成绩查询', activeMenu: '/business/teacher' }
       }
     ]
+  },
+  {
+    path: '/business/student-profile',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/student-profile/index'),
+        name: 'StudentProfile',
+        meta: { title: '学生画像', icon: 'user' }
+      }
+    ]
   }
   
 ]

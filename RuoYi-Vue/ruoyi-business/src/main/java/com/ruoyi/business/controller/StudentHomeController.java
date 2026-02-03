@@ -300,52 +300,39 @@ public class StudentHomeController extends BaseController
                     double accuracyRate = completedCount > 0 ? (double) correctCount / completedCount : 0;  // 正确率 = 正确字数/完成字数
                     
                     Integer duration = question.getTypingDuration();
+                        if (duration == null || duration <= 0) duration = 5; // 默认5分钟
 
-                    // 获取实际答题用时（秒），如果前端未传则默认使用1秒防止除以零，或者使用题目设定时长作为兜底
-                    Integer timeSpent = request.getAnswerTimes() != null ? request.getAnswerTimes().get(questionId) : null;
-                    if (timeSpent == null || timeSpent <= 0) {
-                        // 兜底：如果没有传时间，可能是在后端逻辑修改前的前端提交，暂且用设定时长
-                         timeSpent = duration != null ? duration : 60;
-                    }
-                    
-                    // 记录答题时间到数据库
-                    answer.setAnswerTime(timeSpent);
-                    
-                    // 应用新公式计算得分
-                    if (question.getQuestionScore() != null) {
-                        // 将实际用时转换为分钟
-                        double durationInMinutes = (double) timeSpent / 60.0;
-                        if (durationInMinutes <= 0) durationInMinutes = 0.016; // 防止除以0（1秒）
+                        // 获取实际答题用时（秒），如果前端未传则使用题目设定时长
+                        Integer timeSpent = request.getAnswerTimes() != null ? request.getAnswerTimes().get(questionId) : null;
+                        if (timeSpent == null || timeSpent <= 0) {
+                            timeSpent = duration * 60; // 兜底：使用设定时长
+                        }
                         
-                        // 实际速度 = 正确字数 / 用时（分钟）
-                        double actualSpeed = (double) correctCount / durationInMinutes;
+                        // 记录答题时间到数据库
+                        answer.setAnswerTime(timeSpent);
                         
-                        // 速度系数 = 实际速度 / 基准速度（不封顶，支持超速加分）
-                        double speedFactor = actualSpeed / baseSpeed;
-                        
-                        // 得分 = 满分 × 速度系数 × 正确率 × 完成率
-                        double rawScore = question.getQuestionScore() 
-                                        * speedFactor 
-                                        * accuracyRate 
-                                        * completionRate;
-                        
-                        score = (int) Math.round(rawScore);
-                        
-                        // 打印调试日志
-                        log.info("=== 打字评分调试 Start ===");
-                        log.info("题目ID: {}, 满分: {}, 实际用时: {}秒 ({}分), 基准速度: {}字/分", 
-                                question.getQuestionId(), question.getQuestionScore(), timeSpent, String.format("%.2f", durationInMinutes), baseSpeed);
-                        log.info("数据统计 - 原文: {}, 完成: {}, 正确: {}", 
-                                originalLength, completedCount, correctCount);
-                        log.info("比率计算 - 完成率: {}, 正确率: {}", completionRate, accuracyRate);
-                        log.info("速度计算 - 实际速度(正确/实际用时): {}, 速度系数: {}", actualSpeed, speedFactor);
-                        log.info("得分计算 - 原始得分: {}, 取整后: {}, 最终得分(封顶): {}", 
-                                rawScore, score, Math.min(score, question.getQuestionScore().intValue()));
-                        log.info("=== 打字评分调试 End ===");
-                        
-                        // 最终得分封顶在满分
-                        score = Math.min(score, question.getQuestionScore().intValue());
-                    }
+                        // === 新公式 v4.1 (方案B) ===
+                        // 目标字数 = 原文字数（不依赖时长，时长仅作为答题时间限制）
+                        // 速度系数 = 正确字数 / 原文字数（封顶1.0）
+                        // 得分 = 满分 × 速度系数 × 正确率
+                        if (question.getQuestionScore() != null) {
+                            double speedFactor = (double) correctCount / originalLength;
+                            speedFactor = Math.min(speedFactor, 1.0); // 封顶，不超过满分
+                            
+                            double rawScore = question.getQuestionScore() * speedFactor * accuracyRate;
+                            score = (int) Math.round(rawScore);
+                            
+                            // 打印调试日志
+                            log.info("=== 打字评分调试 (v4.1) Start ===");
+                            log.info("题目ID: {}, 满分: {}, 原文字数: {}", 
+                                    question.getQuestionId(), question.getQuestionScore(), originalLength);
+                            log.info("正确字数: {}, 速度系数: {}, 正确率: {}", correctCount, speedFactor, accuracyRate);
+                            log.info("得分: {} (原始: {})", score, rawScore);
+                            log.info("=== 打字评分调试 (v4.1) End ===");
+                            
+                            // 确保不超过满分
+                            score = Math.min(score, question.getQuestionScore().intValue());
+                        }
                     
                     // isCorrect 标记（60%及格线）
                     isCorrect = question.getQuestionScore() != null 
@@ -361,21 +348,24 @@ public class StudentHomeController extends BaseController
                         }
                     }
                 }
-            } else if ("practical".equals(question.getQuestionType())) {
+            }
+            
+            if ("practical".equals(question.getQuestionType())) {
                 // 操作题：保存文件路径，异步转换为PDF
                 if (studentAnswer != null && !studentAnswer.trim().isEmpty()) {
                     // 检查是否为docx文件，标记为待转换
                     if (studentAnswer.toLowerCase().endsWith(".docx") || studentAnswer.toLowerCase().endsWith(".doc")) {
                         answer.setPreviewStatus("pending");
                     }
-                    // 操作题不自动评分，score保持null由教师批改
-                    answer.setScore(null);
                 }
+                // 操作题不自动评分，score必须为null
+                answer.setIsCorrect(false); // 均视为未判
+                answer.setScore(null);
+            } else {
+                answer.setIsCorrect(isCorrect);
+                answer.setScore(score);
+                totalScore += answer.getScore();
             }
-            
-            answer.setIsCorrect(isCorrect);
-            answer.setScore(score);
-            totalScore += answer.getScore();
             
             answerList.add(answer);
         }

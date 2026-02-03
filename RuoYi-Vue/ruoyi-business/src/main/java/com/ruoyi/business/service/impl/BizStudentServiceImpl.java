@@ -2,7 +2,10 @@ package com.ruoyi.business.service.impl;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.ArrayList;
 import com.ruoyi.system.service.ISysUserService;
+import com.ruoyi.common.constant.CacheConstants;
+import com.ruoyi.common.core.redis.RedisCache;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +48,9 @@ public class BizStudentServiceImpl implements IBizStudentService
 
     @Autowired
     private IBizTeacherClassService teacherClassService;
+
+    @Autowired
+    private RedisCache redisCache;
 
     @Override
     public BizStudent selectBizStudentByStudentId(Long studentId)
@@ -190,13 +196,40 @@ public class BizStudentServiceImpl implements IBizStudentService
         }
         String schoolCode = school.getSchoolCode();
 
+        int rowIndex = 0;
         for (BizStudent student : studentList)
         {
+            rowIndex++;
             try
             {
-                // 核心编译错误修复：方法名 padl 应为 leftPad
+                // 1. 校验必填字段
+                if (StringUtils.isEmpty(student.getStudentName()))
+                {
+                    failureNum++;
+                    failureMsg.append("<br/>").append(failureNum).append("、第 ").append(rowIndex).append(" 行：学生姓名不能为空");
+                    continue;
+                }
+                if (StringUtils.isEmpty(student.getEntryYear()))
+                {
+                    failureNum++;
+                    failureMsg.append("<br/>").append(failureNum).append("、学生 ").append(student.getStudentName()).append(" 导入失败：入学年份不能为空");
+                    continue;
+                }
+                if (StringUtils.isEmpty(student.getClassCode()))
+                {
+                    failureNum++;
+                    failureMsg.append("<br/>").append(failureNum).append("、学生 ").append(student.getStudentName()).append(" 导入失败：班级不能为空");
+                    continue;
+                }
+                if (StringUtils.isEmpty(student.getStudentNo()))
+                {
+                    failureNum++;
+                    failureMsg.append("<br/>").append(failureNum).append("、学生 ").append(student.getStudentName()).append(" 导入失败：学号不能为空");
+                    continue;
+                }
+
+                // 2. 生成登录账号
                 String formattedClassCode = StringUtils.leftPad(student.getClassCode(), 2, '0');
-                // 核心编译错误修复：方法名 padl 应为 leftPad
                 String formattedStudentNo = StringUtils.leftPad(student.getStudentNo(), 2, '0');
                 String generatedUserName = student.getEntryYear() + schoolCode + formattedClassCode + formattedStudentNo;
 
@@ -237,16 +270,28 @@ public class BizStudentServiceImpl implements IBizStudentService
                 log.error(msg, e);
             }
         }
+        
+        // 构建结果消息：失败记录置顶显示
+        StringBuilder resultMsg = new StringBuilder();
         if (failureNum > 0)
         {
-            failureMsg.insert(0, "很抱歉，导入失败！共 " + failureNum + " 条数据格式不正确，错误如下：");
-            throw new ServiceException(failureMsg.toString());
+            resultMsg.append("<b style='color:#F56C6C'>导入失败 ").append(failureNum).append(" 条：</b>");
+            resultMsg.append(failureMsg);
         }
-        else
+        if (successNum > 0)
         {
-            successMsg.insert(0, "恭喜您，数据已全部导入成功！共 " + successNum + " 条，数据如下：");
+            if (failureNum > 0)
+            {
+                resultMsg.append("<br/><br/>");
+            }
+            resultMsg.append("<b style='color:#67C23A'>导入成功 ").append(successNum).append(" 条：</b>");
+            resultMsg.append(successMsg);
         }
-        return successMsg.toString();
+        if (successNum == 0 && failureNum == 0)
+        {
+            resultMsg.append("没有可导入的数据");
+        }
+        return resultMsg.toString();
     }
 
     @Override
@@ -254,10 +299,24 @@ public class BizStudentServiceImpl implements IBizStudentService
         int successCount = 0;
         String password = SecurityUtils.encryptPassword("123456");
         for(Long userId : userIds) {
+            // 查询用户信息获取用户名
+            SysUser existingUser = userMapper.selectUserById(userId);
+            if (existingUser == null) {
+                continue;
+            }
+            
+            // 重置密码
             SysUser user = new SysUser();
             user.setUserId(userId);
             user.setPassword(password);
             successCount += userService.resetPwd(user);
+            
+            // 清除登录失败次数缓存（解锁账号）
+            String cacheKey = CacheConstants.PWD_ERR_CNT_KEY + existingUser.getUserName();
+            if (redisCache.hasKey(cacheKey)) {
+                redisCache.deleteObject(cacheKey);
+                log.info("已解锁学生账号: {}", existingUser.getUserName());
+            }
         }
         return successCount;
     }

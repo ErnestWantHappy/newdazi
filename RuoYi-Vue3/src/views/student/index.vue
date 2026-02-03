@@ -235,7 +235,14 @@
               <!-- 原文展示区 -->
               <div class="original-text-box">
                 <div class="box-label">文章段落：</div>
-                <div class="text-content">
+                <div 
+                  class="text-content"
+                  @copy.prevent 
+                  @paste.prevent 
+                  @cut.prevent 
+                  @dragstart.prevent 
+                  @contextmenu.prevent
+                >
                   <span
                     v-for="(char, idx) in q.questionContent || ''"
                     :key="idx"
@@ -259,6 +266,7 @@
                   :rows="6"
                   placeholder="在此输入上方文字...（禁止复制粘贴）"
                   resize="none"
+                  class="typing-input"
                   @input="handleTypingInput(q.questionId, $event)"
                   @paste.prevent="handlePasteBlock"
                   @copy.prevent
@@ -298,7 +306,17 @@
                   <span class="badge">{{
                     getQuestionTypeLabel(q.questionType)
                   }}</span>
-                  <span class="score">{{ q.questionScore }}分</span>
+                  <span class="header-right-info">
+                    <template v-if="theorySubmitted && q.answer">
+                      <span v-if="answers[q.questionId] === q.answer" class="result-tag correct">
+                        <el-icon><Check /></el-icon> 正确
+                      </span>
+                      <span v-else class="result-tag wrong">
+                        <el-icon><Close /></el-icon> 错误
+                      </span>
+                    </template>
+                    <span class="score">{{ q.questionScore }}分</span>
+                  </span>
                 </div>
               </template>
 
@@ -313,7 +331,7 @@
                   :key="opt"
                   class="option-radio"
                   :class="{ active: answers[q.questionId] === opt }"
-                  @click="answers[q.questionId] = opt"
+                  @click="!theorySubmitted && (answers[q.questionId] = opt)"
                 >
                   <span class="opt-label">{{ opt }}</span>
                   <span class="opt-text">{{
@@ -327,7 +345,7 @@
                 v-else-if="q.questionType === 'judgment'"
                 class="audit-group"
               >
-                <el-radio-group v-model="answers[q.questionId]">
+                <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted">
                   <el-radio label="对" border>正确</el-radio>
                   <el-radio label="错" border>错误</el-radio>
                 </el-radio-group>
@@ -1748,7 +1766,7 @@ onUnmounted(() => {
   padding: 0 32px;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 2000;
 }
 
 .header-left {
@@ -2013,6 +2031,22 @@ onUnmounted(() => {
   line-height: 2;
   letter-spacing: 1px;
   color: #c00;
+  /* 防止学生选中、复制、拖拽原文 */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+  pointer-events: none;
+  font-family: Consolas, "Courier New", monospace, "Microsoft YaHei"; /* 使用等宽字体确保对齐 */
+  word-break: break-all; /* 强制换行策略一致 */
+  white-space: pre-wrap; /* 保留空白符 */
+  
+  /* 盒模型与输入框完全一致 */
+  box-sizing: border-box;
+  padding: 5px 15px; /* 与el-textarea默认一致 */
+  border: 1px solid transparent; 
+  width: 100%;
 }
 
 .char-pending {
@@ -2030,10 +2064,23 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 补偿 .original-text-box 的 padding(16px) + border(1px) = 17px，确保宽度一致 */
+  padding: 0 17px;
 }
 .input-box label {
   font-weight: bold;
   color: #303133;
+}
+
+/* 打字输入框与原文字体对齐 */
+.typing-input :deep(textarea) {
+  font-size: 18px !important;
+  line-height: 2 !important;
+  letter-spacing: 1px !important;
+  font-family: Consolas, "Courier New", monospace, "Microsoft YaHei" !important;
+  word-break: break-all !important;
+  padding: 5px 15px !important; /* 统一 Padding */
+  box-sizing: border-box !important;
 }
 
 /* 理论测试 */
@@ -2115,6 +2162,46 @@ onUnmounted(() => {
 .opt-label {
   font-weight: bold;
   margin-right: 10px;
+}
+
+.header-right-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.result-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+.result-tag.correct {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+.result-tag.wrong {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+/* 判断题禁用状态下保持选中高亮 - 增强选择器权重 */
+.audit-group :deep(.el-radio.is-disabled.is-checked .el-radio__inner) {
+  background-color: #409eff !important;
+  border-color: #409eff !important;
+}
+.audit-group :deep(.el-radio.is-disabled.is-checked .el-radio__label) {
+  color: #409eff !important;
+}
+.audit-group :deep(.el-radio.is-disabled.is-bordered.is-checked) {
+  border-color: #409eff !important;
+  background-color: #ecf5ff !important;
+}
+.audit-group :deep(.el-radio.is-disabled.is-bordered.is-checked::after) {
+  display: none !important; /* 移除可能存在的禁用遮罩 */
 }
 
 .submit-theory-bar {

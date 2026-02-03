@@ -58,7 +58,7 @@ public class BizQuestion extends BaseEntity
 
     private Long creatorId;
 
-    @Excel(name = "打字时长(分钟)")
+    /** 打字时长(分钟) - 系统自动计算，无需导入 */
     private Integer typingDuration;
 
     private Integer wordCount;
