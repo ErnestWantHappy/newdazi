@@ -1083,6 +1083,32 @@ public class ExcelUtil<T>
     /**
      * 创建表格样式
      */
+    /**
+     * 动态设置的下拉列表数据 Map<字段名, 字符串数组>
+     */
+    private Map<String, String[]> comboMap;
+    
+    /**
+     * 设置动态下拉列表
+     */
+    public void setComboMap(Map<String, String[]> comboMap) {
+        this.comboMap = comboMap;
+    }
+
+    /**
+     * 对list数据源将其里面的数据导入到excel表单 (支持动态下拉框)
+     *
+     * @param sheetName 工作表的名称
+     * @param title 标题
+     * @param comboMap 动态下拉框 map
+     * @return 结果
+     */
+    public void importTemplateExcel(HttpServletResponse response, String sheetName, Map<String, String[]> comboMap)
+    {
+        this.comboMap = comboMap;
+        importTemplateExcel(response, sheetName, StringUtils.EMPTY);
+    }
+
     public void setDataValidation(Excel attr, Row row, int column)
     {
         if (attr.name().indexOf("注：") >= 0)
@@ -1094,9 +1120,18 @@ public class ExcelUtil<T>
             // 设置列宽
             sheet.setColumnWidth(column, (int) ((attr.width() + 0.72) * 256));
         }
-        if (StringUtils.isNotEmpty(attr.prompt()) || attr.combo().length > 0 || attr.comboReadDict())
+        String[] comboArray = attr.combo();
+        boolean isDynamicCombo = false; // 标记是否来自动态 comboMap
+        
+        // --- 动态下拉框处理 START ---
+        if (this.comboMap != null && this.comboMap.containsKey(attr.name())) {
+            comboArray = this.comboMap.get(attr.name());
+            isDynamicCombo = true; // 来自动态配置，允许自由输入
+        }
+        // --- 动态下拉框处理 END ---
+
+        if (StringUtils.isNotEmpty(attr.prompt()) || comboArray.length > 0 || attr.comboReadDict())
         {
-            String[] comboArray = attr.combo();
             if (attr.comboReadDict())
             {
                 if (!sysDictMap.containsKey("combo_" + attr.dictType()))
@@ -1110,12 +1145,12 @@ public class ExcelUtil<T>
             if (comboArray.length > 15 || StringUtils.join(comboArray).length() > 255)
             {
                 // 如果下拉数大于15或字符串长度大于255，则使用一个新sheet存储，避免生成的模板下拉值获取不到
-                setXSSFValidationWithHidden(sheet, comboArray, attr.prompt(), 1, 100, column, column);
+                setXSSFValidationWithHidden(sheet, comboArray, attr.prompt(), 1, 100, column, column, isDynamicCombo);
             }
             else
             {
                 // 提示信息或只能选择不能输入的列内容.
-                setPromptOrValidation(sheet, comboArray, attr.prompt(), 1, 100, column, column);
+                setPromptOrValidation(sheet, comboArray, attr.prompt(), 1, 100, column, column, isDynamicCombo);
             }
         }
     }
@@ -1201,9 +1236,10 @@ public class ExcelUtil<T>
      * @param endRow 结束行
      * @param firstCol 开始列
      * @param endCol 结束列
+     * @param allowFreeInput 是否允许自由输入（不强制校验）
      */
     public void setPromptOrValidation(Sheet sheet, String[] textlist, String promptContent, int firstRow, int endRow,
-            int firstCol, int endCol)
+            int firstCol, int endCol, boolean allowFreeInput)
     {
         DataValidationHelper helper = sheet.getDataValidationHelper();
         DataValidationConstraint constraint = textlist.length > 0 ? helper.createExplicitListConstraint(textlist) : helper.createCustomConstraint("DD1");
@@ -1219,13 +1255,21 @@ public class ExcelUtil<T>
         if (dataValidation instanceof XSSFDataValidation)
         {
             dataValidation.setSuppressDropDownArrow(true);
-            dataValidation.setShowErrorBox(true);
+            // 如果允许自由输入，则不显示错误框
+            dataValidation.setShowErrorBox(!allowFreeInput);
         }
         else
         {
             dataValidation.setSuppressDropDownArrow(false);
         }
         sheet.addValidationData(dataValidation);
+    }
+    
+    // 保留旧方法签名以兼容
+    public void setPromptOrValidation(Sheet sheet, String[] textlist, String promptContent, int firstRow, int endRow,
+            int firstCol, int endCol)
+    {
+        setPromptOrValidation(sheet, textlist, promptContent, firstRow, endRow, firstCol, endCol, false);
     }
 
     /**
@@ -1238,8 +1282,9 @@ public class ExcelUtil<T>
      * @param endRow 结束行
      * @param firstCol 开始列
      * @param endCol 结束列
+     * @param allowFreeInput 是否允许自由输入（不强制校验）
      */
-    public void setXSSFValidationWithHidden(Sheet sheet, String[] textlist, String promptContent, int firstRow, int endRow, int firstCol, int endCol)
+    public void setXSSFValidationWithHidden(Sheet sheet, String[] textlist, String promptContent, int firstRow, int endRow, int firstCol, int endCol, boolean allowFreeInput)
     {
         String hideSheetName = "combo_" + firstCol + "_" + endCol;
         Sheet hideSheet = wb.createSheet(hideSheetName); // 用于存储 下拉菜单数据
@@ -1268,7 +1313,8 @@ public class ExcelUtil<T>
         if (dataValidation instanceof XSSFDataValidation)
         {
             dataValidation.setSuppressDropDownArrow(true);
-            dataValidation.setShowErrorBox(true);
+            // 如果允许自由输入，则不显示错误框
+            dataValidation.setShowErrorBox(!allowFreeInput);
         }
         else
         {
@@ -1278,6 +1324,12 @@ public class ExcelUtil<T>
         sheet.addValidationData(dataValidation);
         // 设置hiddenSheet隐藏
         wb.setSheetHidden(wb.getSheetIndex(hideSheet), true);
+    }
+
+    // 保留旧方法签名以兼容
+    public void setXSSFValidationWithHidden(Sheet sheet, String[] textlist, String promptContent, int firstRow, int endRow, int firstCol, int endCol)
+    {
+        setXSSFValidationWithHidden(sheet, textlist, promptContent, firstRow, endRow, firstCol, endCol, false);
     }
 
     /**

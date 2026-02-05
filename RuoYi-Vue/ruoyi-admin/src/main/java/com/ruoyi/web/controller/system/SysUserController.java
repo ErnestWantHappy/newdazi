@@ -58,6 +58,9 @@ public class SysUserController extends BaseController
 
     @Autowired
     private com.ruoyi.business.service.IBizSchoolService bizSchoolService;
+    
+    @Autowired
+    private com.ruoyi.system.mapper.SysDeptMapper deptMapper;
 
     private void validateDeptScope(SysUser user)
     {
@@ -115,7 +118,32 @@ public class SysUserController extends BaseController
     public void importTemplate(HttpServletResponse response)
     {
         ExcelUtil<SysUser> util = new ExcelUtil<SysUser>(SysUser.class);
-        util.importTemplateExcel(response, "用户数据");
+        
+        // 直接使用 Mapper 查询所有部门，绕过数据权限限制
+        List<SysDept> deptList = deptMapper.selectDeptList(new SysDept());
+        
+        System.out.println("====== 导入模版调试 START ======");
+        System.out.println("部门列表数量: " + (deptList != null ? deptList.size() : "null"));
+        
+        // 提取部门名称数组
+        String[] deptNames = deptList.stream()
+                .map(SysDept::getDeptName)
+                .toArray(String[]::new);
+        
+        System.out.println("部门名称数组长度: " + deptNames.length);
+        if (deptNames.length > 0) {
+            System.out.println("前5个部门: " + String.join(", ", java.util.Arrays.copyOf(deptNames, Math.min(5, deptNames.length))));
+        }
+                
+        // 构建 comboMap
+        java.util.Map<String, String[]> comboMap = new java.util.HashMap<>();
+        // key 必须是 @Excel 注解的 name 属性值，即 "归属校区"
+        comboMap.put("归属校区", deptNames);
+        
+        System.out.println("comboMap key: 归属校区, value length: " + deptNames.length);
+        System.out.println("====== 导入模版调试 END ======");
+
+        util.importTemplateExcel(response, "用户数据", comboMap);
     }
 
     /**

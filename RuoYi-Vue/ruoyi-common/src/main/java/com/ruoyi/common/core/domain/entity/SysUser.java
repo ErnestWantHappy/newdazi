@@ -25,52 +25,53 @@ public class SysUser extends BaseEntity
     private Long userId;
 
     /** 部门ID */
-    @Excel(name = "部门编号", type = Type.IMPORT)
+    @Excel(name = "部门编号", type = Type.EXPORT)
     private Long deptId;
 
     /** 所属学校ID */
     private Long schoolId;
 
     /** 班级编号 (用于导入) */
-    @Excel(name = "班级编号")
+    @Excel(name = "班级编号", type = Type.EXPORT)
     private String classCode;
 
     /** 入学年份 (用于导入) */
-    @Excel(name = "入学年份")
+    @Excel(name = "入学年份", type = Type.EXPORT)
     private String entryYear;
 
     /** 学号 (用于导入) */
-    @Excel(name = "学号")
+    @Excel(name = "学号", type = Type.EXPORT)
     private String studentNo;
 
     /** 用户账号 */
-    @Excel(name = "登录名称")
+    @Excel(name = "用户账号")
     private String userName;
 
     /** 用户昵称 */
-    @Excel(name = "用户名称")
+    @Excel(name = "用户姓名")
     private String nickName;
 
     /** 用户邮箱 */
-    @Excel(name = "用户邮箱")
+    @Excel(name = "用户邮箱", type = Type.EXPORT)
     private String email;
 
     /** 手机号码 */
-    @Excel(name = "手机号码", cellType = ColumnType.TEXT)
+    @Excel(name = "手机号码", cellType = ColumnType.TEXT, type = Type.EXPORT)
     private String phonenumber;
 
     /** 用户性别 */
-    @Excel(name = "用户性别", readConverterExp = "0=男,1=女,2=未知")
+    @Excel(name = "用户性别", readConverterExp = "0=男,1=女,2=未知", type = Type.EXPORT)
     private String sex;
 
     /** 用户头像 */
     private String avatar;
 
     /** 密码 */
+    @Excel(name = "用户密码", type = Type.EXPORT)
     private String password;
 
     /** 账号状态（0正常 1停用） */
-    @Excel(name = "账号状态", readConverterExp = "0=正常,1=停用")
+    @Excel(name = "账号状态", readConverterExp = "0=正常,1=停用", type = Type.EXPORT)
     private String status;
 
     /** 删除标志（0代表存在 2代表删除） */
@@ -109,7 +110,8 @@ public class SysUser extends BaseEntity
     /** 角色ID */
     private Long roleId;
 
-    /** 所有归属校区名称（逗号分隔，用于列表展示） */
+    /** 所有归属校区名称（逗号分隔，用于列表展示，也用于导入） */
+    @Excel(name = "归属校区", type = Type.IMPORT, prompt = "支持填写多个学校，用逗号分隔，如：实验小学,中学部")
     private String allDeptNames;
 
     // --- Getter and Setter methods ---
