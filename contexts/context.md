@@ -1,7 +1,7 @@
 # 信息科技学业测评平台 (Context)
 
-> **版本**：v2.5
-> **更新时间**：2026-01-09
+> **版本**：v2.7
+> **更新时间**：2026-02-05
 > **核心定位**：服务于中小学信息科技课程的综合性教学与评价平台，集课程管理、多维度测评（选择/判断/操作/打字）、智能评分、学情分析与可视化于一体。
 
 ---
@@ -20,7 +20,119 @@
 
 ## 🧩 2. 系统核心功能与业务流程 (System Core & Workflows)
 
-### 2.0 2026-01-14 更新摘要 (Chart Fullscreen & Visualization)
+### 2.0 2026-01-21/22 更新摘要 (学生管理功能增强)
+
+#### 🔧 学生导入验证逻辑修复
+
+- **问题背景**：导入学生时，如果 Excel 中缺少入学年份、班级等必填字段，系统仍会创建记录，导致成绩查询页面报错 `TypeError: Cannot read properties of null (reading 'entry_year')`
+- **修复内容** (`BizStudentServiceImpl.importStudent`)：
+  - 添加必填字段校验：`studentName`, `entryYear`, `classCode`, `studentNo`
+  - 校验失败的记录不会创建用户和学生记录
+  - **导入结果消息优化**：失败记录**置顶显示**（红色），成功记录在下方（绿色）
+- **前端防御性过滤** (`score/index.vue`)：
+  - `loadClasses` 函数过滤掉 `entry_year` 或 `class_code` 为空的无效记录
+  - 防止数据库孤儿记录导致页面崩溃
+
+#### 🔐 学生账号锁定状态管理
+
+- **业务场景**：学生连续5次输错密码后账号被锁定（Redis 缓存 `pwd_err_cnt:username`），教师需要能够查看和解锁
+- **后端实现**：
+  - `BizStudentServiceImpl.resetStudentPwd`：重置密码后**自动清除锁定缓存**，实现解锁
+  - `BizStudentController.getLockStatus`：新增接口批量查询学生锁定状态
+- **前端实现** (`student/index.vue`)：
+  - 表格新增「状态」列（操作列左边），锁定显示红色文字
+  - 搜索栏新增「账号状态」下拉筛选器（全部/正常/锁定）
+  - 锁定学生的重置按钮显示「重置密码并解锁」
+  - 重置成功后自动刷新锁定状态，无需手动刷新页面
+- **表格列顺序调整**：登录账号 → 学生姓名 → 班级 → 学号 → 入学年份 → 状态 → 操作
+
+### 2.0.1 2026-01-20 更新摘要 (题库管理与成绩查询优化)
+
+#### 📤 题库导出功能
+
+- **导出按钮**：题库管理页面新增"导出"按钮，调用后端 `/business/question/export` 接口
+- **操作题限制**：当筛选条件选择"操作题"时，点击导出会提示"操作题包含附件文件，无法导出到Excel"
+- **预览按钮**：操作题新增"预览"按钮，点击在新标签页打开 `previewPath`（PDF预览）
+
+#### 📊 成绩查询页面增强
+
+- **账号列新增**：成绩汇总表最左侧新增"账号"列（`userName`），因账号具有唯一性且不可修改
+- **Excel导出同步**：后端 `ScoreQueryController.exportScoreExcel` 表头和数据行均新增账号列
+- **班级显示修复**：修复班级显示重复拼接年级的Bug（如 `6604` → `604`），逻辑改为：仅对1-2位数班号拼接年级
+- **前端导出配置**：`exportColumnOptions` 新增 `userName` 必选列
+
+#### 🔧 操作题批改页面修复
+
+- **统计数据修正**：
+  - **已交人数**：修改为统计 `submitted === true` 的学生数量（原错误统计所有学生）
+  - **已批改人数**：修改为统计 `submitted === true && score != null` 的学生数量
+- **新增计算属性**：`submittedCount` 精确统计已提交学生数
+
+#### 🔐 系统优化
+
+- **登录错误日志**：`GlobalExceptionHandler.handleServiceException` 日志级别从 `log.error` 改为 `log.warn`，减少登录失败时的日志噪音
+- **学生管理URL筛选**：从班级管理跳转到学生管理时，自动读取URL参数 `entryYear` 和 `classCode` 并设置筛选条件
+- **个人中心页面**：
+  - 左侧卡片"用户名称"改为"用户账号"
+  - 隐藏手机号码、用户邮箱字段
+  - 恢复显示"所属部门"
+
+#### 📁 关键文件变更
+
+| 文件                          | 修改内容                                   |
+| ----------------------------- | ------------------------------------------ |
+| `question/index.vue`          | 添加导出按钮、操作题预览按钮               |
+| `score/index.vue`             | 添加账号列、修复班级显示逻辑               |
+| `grading.vue`                 | 修复已交/已批改统计                        |
+| `ScoreQueryController.java`   | 返回数据新增 userName、Excel导出新增账号列 |
+| `GlobalExceptionHandler.java` | ServiceException 日志级别改为 WARN         |
+| `student/index.vue`           | 添加URL参数自动筛选                        |
+| `user/profile/index.vue`      | 调整个人信息显示                           |
+
+---
+
+### 2.0.2 2026-02-05 更新摘要 (用户批量导入优化)
+
+- **用户导入模板优化**：
+  - 导入模板新增"归属校区"动态下拉框，从数据库获取所有学校名称供选择
+  - 下拉框设置为**允许自由输入**模式，支持选择后手动追加逗号输入多个学校
+  - 使用 `deptMapper.selectDeptList()` 绕过 RuoYi 数据权限限制，确保所有用户都能获取完整学校列表
+- **导入逻辑修复**：
+  - 修复导入时角色和归属校区未设置的问题（原因：调用了 `userMapper.insertUser` 而非 `this.insertUser`）
+  - 修正教师角色 ID 为 `100`（原错误配置为 `102` 教研员）
+  - 导入时自动设置默认密码（从系统参数 `sys.user.initPassword` 获取）
+- **Excel 工具类增强** (`ExcelUtil.java`)：
+  - 新增 `comboMap` 动态下拉框配置支持
+  - 新增 `allowFreeInput` 参数，控制下拉框是否允许自由输入（不弹出错误提示）
+  - 兼容原有静态 combo 配置
+
+### 2.0.2 2026-02-03 更新摘要 (学生个人成绩画像)
+
+- **📊 新增"学生个人成绩画像"页面** (`/business/student-profile`)：
+  - **入口**：侧边栏"成绩查询"下的"学生个人成绩画像"，或从成绩汇总表点击学生姓名跳转
+  - **筛选器**：学期选择 + 班级级联筛选（年级→班级）+ 学生搜索/选择
+  - **信息卡片**：深色科技风格 UI，展示学生姓名、备注(remark)、年级、班级、入学年份、班级排名、平均成绩、打字速度、课堂表现平均分
+  - **可视化图表**：
+    - **历次课程成绩**：柱状图，仅显示学生个人每次课程得分
+    - **历次打字速度**：双折线对比（学生速度 vs 年级基准）
+    - **课堂表现分变化**：折线图，**支持负分显示**
+    - **班级平均分对比**：双折线对比（我的成绩 vs 班级平均）
+    - **班级排名变化**：折线图，展示排名趋势
+- **关键技术实现**：
+  - **后端**：`StudentProfileController`, `StudentProfileServiceImpl`, `StudentProfileMapper.xml`
+  - **前端**：`student-profile/index.vue`, `StudentSelector.vue`, `StudentInfoCard.vue`, 5个图表组件
+  - **VO**：`StudentProfileVo` 包含内部类 `CourseScoreItem`, `TypingSpeedItem`, `PerformanceItem`, `RankItem`
+- **Bug 修复**：
+  - 修复学生列表重复问题（Service 层 Stream API 去重）
+  - 修复跳转后班级筛选器未回显问题（watch immediate + 自动设置 selectedClass）
+  - 修复课堂表现负分不显示问题（SQL `p.score > 0` → `p.score != 0`，Java 过滤条件同步修改）
+  - 修复成绩查询页面 `showStudentProfile` 函数未定义问题
+- **UI 优化**：
+  - 信息卡片使用通用学习图标（`UserFilled`）替代图片头像
+  - "表现评分"改为"课堂表现平均"
+  - 柱状图移除班级平均分，改在独立折线图中展示对比
+
+### 2.0.1 2026-01-14 更新摘要 (Chart Fullscreen & Visualization)
 
 - **图表全屏优化**：成绩分析页所有 ECharts 图表支持全屏查看，右上角悬浮全屏按钮，全屏时图表占屏幕 98% 宽度 x 95% 高度。
 - **全屏字体增大**：全屏模式下 X 轴标签 18px、Y 轴标签 16px、Y 轴名称 20px、数据标签 16px。
@@ -57,13 +169,14 @@
 
 #### 🟢 教学管理端
 
-| 模块         | 功能点     | 详细描述                                                                                   | 关键交互/接口                             |
-| :----------- | :--------- | :----------------------------------------------------------------------------------------- | :---------------------------------------- |
-| **课程设计** | 课程管理   | 创建/编辑课程，支持**随机出题模式** (固定/乱序/抽题) 配置，拖拽排序。                      | `designer.vue`, `BizLessonController`     |
-| **题目库**   | 试题维护   | 维护四类题型，支持 **Word/Excel 批量导入**，富文本题干编辑。                               | `question/index.vue`, `ImportController`  |
-| **班级指派** | 教学安排   | 灵活将课程指派给多个行政班级，支持按年级快速筛选。                                         | `BizLessonAssignmentController`           |
-| **作业批改** | 操作题评分 | **在线预览 PDF** (无需下载)，支持**分项打分** (如: 创新性 40%，完整性 60%)，自动计算总分。 | `grading.vue`, `PdfPreview`               |
-| **学情分析** | 数据看板   | **ECharts 可视化**：班级均分、**题目答题分析** (易错题/选项分布)、不及格名单、进退步分析。 | `score/index.vue`, `ScoreQueryController` |
+| 模块         | 功能点     | 详细描述                                                                                          | 关键交互/接口                                           |
+| :----------- | :--------- | :------------------------------------------------------------------------------------------------ | :------------------------------------------------------ |
+| **课程设计** | 课程管理   | 创建/编辑课程，支持**随机出题模式** (固定/乱序/抽题) 配置，拖拽排序。                             | `designer.vue`, `BizLessonController`                   |
+| **题目库**   | 试题维护   | 维护四类题型，支持 **Word/Excel 批量导入**，富文本题干编辑。                                      | `question/index.vue`, `ImportController`                |
+| **班级指派** | 教学安排   | 灵活将课程指派给多个行政班级，支持按年级快速筛选。                                                | `BizLessonAssignmentController`                         |
+| **作业批改** | 操作题评分 | **在线预览 PDF** (无需下载)，支持**分项打分** (如: 创新性 40%，完整性 60%)，自动计算总分。        | `grading.vue`, `PdfPreview`                             |
+| **学情分析** | 数据看板   | **ECharts 可视化**：班级均分、**题目答题分析** (易错题/选项分布)、不及格名单、进退步分析。        | `score/index.vue`, `ScoreQueryController`               |
+| **学生画像** | 个人分析   | **v2.6 新增**：查看单个学生的历次成绩、打字速度、课堂表现、班级排名变化，支持班级筛选、跳转入口。 | `student-profile/index.vue`, `StudentProfileController` |
 
 #### 🔵 学生学习端
 
@@ -73,6 +186,39 @@
 | **打字测评**   | 实时反馈 | 沉浸式打字界面，**防作弊** (禁粘贴)，实时显示速度/进度，练习结束后生成详细报告。  | `Typer.vue`, `typing-utils.js`     |
 | **作品提交**   | 文件处理 | 支持大文件分片上传，**自动格式转换** (Docx -> PDF) 以供预览，支持多版本覆盖提交。 | `FileUpload`, `LibreOfficeService` |
 | **错题本**     | 巩固提升 | 自动收集历史错题，支持筛选课程回顾，查看正确答案与解析。                          | `WrongQuestionDialog.vue`          |
+
+### 2.3.1 学生端考试体验优化 (v2.6.1 - 2026-01-29)
+
+本次更新针对 `student/index.vue` 进行了多项 UX 优化：
+
+#### 🔒 顶部导航栏固定
+
+- **实现**：`.dashboard-header` 设置 `position: sticky; top: 0; z-index: 2000;`
+- **效果**：学生滚动答题时导航栏始终可见，方便快速访问历史成绩、错题本等功能
+
+#### ✅ 理论测试答题反馈
+
+- **需求演变**：从"选项高亮正确答案"调整为"仅在卡片右上角显示对错标记"
+- **实现细节**：
+  - 提交后每道题卡片右上角显示 `正确` (绿色✓) 或 `错误` (红色✗) 标记
+  - 使用 Element Plus 的 `<el-icon>` 组件 (`Check`, `Close`)
+  - 样式类：`.result-tag.correct` / `.result-tag.wrong`
+- **判断题选中高亮**：
+  - 提交后判断题的选项变为 `disabled`，但选中项保持蓝色高亮
+  - 使用 `:deep()` 穿透 Element Plus 默认的禁用灰色样式
+  - 选择器：`.audit-group :deep(.el-radio.is-disabled.is-checked .el-radio__inner)` + `!important`
+
+#### ⌨️ 打字题防作弊与对齐
+
+- **防复制/拖拽**：
+  - 原文容器 `.text-content` 添加 `user-select: none; pointer-events: none;`
+  - 同时绑定 `@copy.prevent @paste.prevent @cut.prevent @dragstart.prevent @contextmenu.prevent`
+- **输入框与原文严格对齐**：
+  - **统一字体**：`font-family: Consolas, "Courier New", monospace, "Microsoft YaHei";`
+  - **统一排版**：`font-size: 18px; line-height: 2; letter-spacing: 1px;`
+  - **统一换行**：`word-break: break-all; white-space: pre-wrap;`
+  - **关键修复**：`.input-box` 添加 `padding: 0 17px;` 补偿 `.original-text-box` 的 `padding(16px) + border(1px)` 宽度差异，确保每行字数完全一致
+  - **盒模型**：两者均使用 `box-sizing: border-box;`
 
 ---
 
@@ -181,6 +327,31 @@ _定义教师可以管理哪些班级 (v2.4 新增)_
 | `dept_id` | `bigint` | **FK** | 学校 ID |
 | `entry_year` | `varchar` | Yes | 入学年份 |
 | `class_code` | `varchar` | Yes | 班级编号 |
+
+#### 9. `biz_student` (学生信息表)
+
+_存储学生的扩展信息，关联 sys_user_
+| 字段名 | 类型 | 必填 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `student_id` | `bigint` | **PK** | 学生主键 ID |
+| `user_id` | `bigint` | **FK** | 关联 sys_user.user_id |
+| `entry_year` | `varchar` | Yes | 入学年份 (如 "2024") |
+| `class_code` | `varchar` | Yes | 班级编号 (如 "01") |
+| `student_name` | `varchar` | - | 学生姓名 (冗余字段，主要从 sys_user.nick_name 获取) |
+| `remark` | `varchar` | - | 备注信息 (用于学生画像显示) |
+
+#### 10. `biz_classroom_performance` (课堂表现分记录表)
+
+_记录学生每节课的课堂表现加减分 (v2.6 新增)_
+| 字段名 | 类型 | 必填 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint` | **PK** | 记录 ID |
+| `student_id` | `bigint` | **FK** | 学生 ID |
+| `lesson_id` | `bigint` | **FK** | 课程 ID |
+| `score` | `int` | Yes | 表现分 (**支持正负值**，如 +5 或 -3) |
+| `create_time` | `datetime` | - | 记录时间 |
+
+> **注意**：`score` 字段支持负数，用于表示扣分项。查询时使用 `score != 0` 过滤无效记录。
 
 ### 3.2 系统管理表 (System Management Tables)
 
@@ -323,6 +494,11 @@ _存储组织架构，包括地区教育局、学校及校内部门_
   - [√] 班级平均分对比柱状图
   - [√] 总分 Top20 排名图
   - [√] 学生个人画像弹窗（成绩趋势折线图）
+- [√] **学生个人成绩画像页面** (v2.6 新增)
+  - [√] 独立页面展示单个学生的全面分析
+  - [√] 五大可视化图表：历次成绩、打字速度、课堂表现、班级对比、排名变化
+  - [√] 班级级联筛选器，支持从成绩汇总表跳转并自动回显
+  - [√] 课堂表现支持负分计算
 - [√] **打字能力分析**
   - [√] 表格新增"打字速度"列（字/分），悬停显示正确率/完成率
   - [√] 成绩详情弹窗展示打字三项指标
@@ -346,3 +522,23 @@ _存储组织架构，包括地区教育局、学校及校内部门_
 5. **判断题答案**：数据库存储 `T/F`，前端提交中文后后端自动转换（`normalizeJudgmentAnswer`）。
 6. **评分项表结构** (P6)：`biz_scoring_item` 仅关联 `question_id`（不再关联 `lesson_id`），一道题的评分项全局通用。
 7. **中文文件名预览**：`CommonController.resourceView` 使用 `FileUtils.percentEncode` 编码文件名，避免 HTTP 头报错。
+8. **数据权限绕过**：查询所有部门/学校时（如导入模板下拉框），需使用 `deptMapper.selectDeptList()` 而非 `deptService.selectDeptList()`，后者受 `@DataScope` 注解限制会返回空结果。
+9. **角色 ID 配置**：`100=教师`, `101=学生`, `102=教研员`。用户导入时默认分配教师角色 (`role_id=100`)。
+10. **用户导入关联表**：必须调用 `this.insertUser()` 而非 `userMapper.insertUser()`，前者会自动插入 `sys_user_role` 和 `sys_user_dept` 关联表。
+11. **Excel 动态下拉框**：使用 `ExcelUtil.setComboMap(Map<String, String[]>)` 设置动态下拉数据，key 为 `@Excel` 注解的 `name` 属性值。
+12. **学生画像数据获取**：`StudentProfileServiceImpl` 中获取 `deptId` 需使用 `SecurityUtils.getDeptId()`，确保数据隔离。
+13. **课堂表现负分**：`biz_classroom_performance.score` 支持负数，SQL 查询使用 `score != 0` 过滤，Java 计算平均分时同样使用 `!= 0`。
+14. **学生列表去重**：`getStudentList` 方法使用 Stream API + TreeSet 按 `studentId` 去重，避免下拉框重复显示。
+15. **跳转自动回显**：`StudentSelector.vue` 中 watch `studentId` 时需设置 `immediate: true`，并在加载学生信息后自动设置 `selectedClass`。
+16. **Element Plus 样式穿透**：在 Vue 3 scoped CSS 中使用 `:deep()` 覆盖组件库默认样式，配合 `!important` 提升优先级（如禁用状态下的 Radio 高亮）。
+17. **打字题输入框对齐**：需补偿父容器的 `padding + border` 宽度差异（如 `.input-box { padding: 0 17px; }`），使用等宽字体和一致的 `box-sizing: border-box`。
+18. **防复制组合拳**：CSS (`user-select: none; pointer-events: none;`) + Vue 事件修饰符 (`@copy.prevent @paste.prevent` 等) 双重保险。
+19. **学生账号锁定机制**：账号锁定通过 Redis 缓存 `pwd_err_cnt:username` 实现，值为失败次数，达到5次即锁定。解锁需清除该缓存键。
+20. **重置密码同时解锁**：`BizStudentServiceImpl.resetStudentPwd` 重置密码后调用 `redisCache.deleteObject(CacheConstants.PWD_ERR_CNT_KEY + userName)` 清除锁定。
+21. **锁定状态查询接口**：`BizStudentController.getLockStatus` 接收逗号分隔的用户名列表，返回 `Map<String, Boolean>` 锁定状态映射。
+22. **学生导入必填校验**：`importStudent` 方法需校验 `studentName`, `entryYear`, `classCode`, `studentNo` 四个字段不能为空，否则跳过该记录。
+23. **前端 computed 筛选**：锁定状态筛选使用 Vue computed 属性 `filteredStudentList` 在前端过滤，避免后端额外查询。
+24. **班级显示格式化**：成绩查询中格式化班级名时，仅对1-2位数班号拼接年级（如 `1` → `601`），3位以上直接使用（如 `604`），避免重复拼接。
+25. **账号唯一性**：`userName`（登录账号）具有唯一性且创建后不可修改，适合作为学生身份的稳定标识；`studentNo`（学号）可能因转班等原因变动。
+26. **操作题不支持导出**：操作题的附件文件无法嵌入Excel，导出时需在前端检查 `questionType === 'practical'` 并提示用户。
+27. **登录错误日志级别**：登录失败（如密码错误）属于正常业务场景，日志级别应为 WARN 而非 ERROR，避免日志噪音。
