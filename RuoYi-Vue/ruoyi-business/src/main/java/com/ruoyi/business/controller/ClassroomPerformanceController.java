@@ -29,7 +29,8 @@ public class ClassroomPerformanceController extends BaseController {
             @RequestParam Long lessonId,
             @RequestParam String classCode,
             @RequestParam String entryYear) {
-        List<BizClassroomPerformance> list = performanceMapper.selectListByLessonAndClass(lessonId, classCode, entryYear);
+        Long deptId = SecurityUtils.getLoginUser().getUser().getDeptId();
+        List<BizClassroomPerformance> list = performanceMapper.selectListByLessonAndClass(lessonId, classCode, entryYear, deptId);
         return AjaxResult.success(list);
     }
 
@@ -52,6 +53,7 @@ public class ClassroomPerformanceController extends BaseController {
         
         // 设置教师ID
         performance.setTeacherId(SecurityUtils.getUserId());
+        performance.setDeptId(SecurityUtils.getLoginUser().getUser().getDeptId());
         
         // 使用 INSERT ... ON DUPLICATE KEY UPDATE
         int rows = performanceMapper.insertOrUpdate(performance);
@@ -68,6 +70,7 @@ public class ClassroomPerformanceController extends BaseController {
         }
         
         Long teacherId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getLoginUser().getUser().getDeptId();
         int successCount = 0;
         
         for (PerformanceItem item : request.getPerformances()) {
@@ -77,6 +80,7 @@ public class ClassroomPerformanceController extends BaseController {
             performance.setScore(item.getScore() != null ? item.getScore() : 0);
             performance.setReason(item.getReason());
             performance.setTeacherId(teacherId);
+            performance.setDeptId(deptId);
             
             // 分数范围限制
             if (performance.getScore() < -10) performance.setScore(-10);

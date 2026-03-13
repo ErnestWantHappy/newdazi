@@ -10,11 +10,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="entryYear"    column="entry_year"    />
         <result property="classCode"    column="class_code"    />
         <result property="assignerId"    column="assigner_id"    />
+        <result property="deptId"    column="dept_id"    />
         <result property="assignTime"    column="assign_time"    />
     </resultMap>
 
     <sql id="selectBizLessonAssignmentVo">
-        select assignment_id, lesson_id, entry_year, class_code, assigner_id, assign_time from biz_lesson_assignment
+        select assignment_id, lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time from biz_lesson_assignment
     </sql>
 
     <select id="selectBizLessonAssignmentList" parameterType="BizLessonAssignment" resultMap="BizLessonAssignmentResult">
@@ -39,6 +40,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="entryYear != null and entryYear != ''">entry_year,</if>
             <if test="classCode != null and classCode != ''">class_code,</if>
             <if test="assignerId != null">assigner_id,</if>
+            <if test="deptId != null">dept_id,</if>
             <if test="assignTime != null">assign_time,</if>
          </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
@@ -46,6 +48,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="entryYear != null and entryYear != ''">#{entryYear},</if>
             <if test="classCode != null and classCode != ''">#{classCode},</if>
             <if test="assignerId != null">#{assignerId},</if>
+            <if test="deptId != null">#{deptId},</if>
             <if test="assignTime != null">#{assignTime},</if>
          </trim>
     </insert>
@@ -57,6 +60,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="entryYear != null and entryYear != ''">entry_year = #{entryYear},</if>
             <if test="classCode != null and classCode != ''">class_code = #{classCode},</if>
             <if test="assignerId != null">assigner_id = #{assignerId},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
             <if test="assignTime != null">assign_time = #{assignTime},</if>
         </trim>
         where assignment_id = #{assignmentId}
@@ -85,9 +89,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 新增：批量新增课程指派记录 -->
     <insert id="batchInsert" parameterType="java.util.List">
-        INSERT INTO biz_lesson_assignment (lesson_id, entry_year, class_code, assigner_id, assign_time) VALUES
+        INSERT INTO biz_lesson_assignment (lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time) VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.assignTime})
+            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.deptId}, #{item.assignTime})
         </foreach>
     </insert>
 
@@ -96,15 +100,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         DELETE FROM biz_lesson_assignment 
         WHERE entry_year = #{entryYear} 
           AND class_code = #{classCode}
+          AND dept_id = #{deptId}
           AND lesson_id != #{currentLessonId}
     </delete>
 
-    <!-- 新增：根据学生的入学年份和班级查询当前被指派的课程 -->
+    <!-- 新增：根据学生的入学年份,班级和学校查询当前被指派的课程 -->
     <select id="selectCurrentLessonByClass" resultType="java.lang.Long">
         SELECT la.lesson_id 
         FROM biz_lesson_assignment la
         WHERE la.entry_year = #{entryYear} 
           AND la.class_code = #{classCode}
+          AND la.dept_id = #{deptId}
         LIMIT 1
     </select>
 

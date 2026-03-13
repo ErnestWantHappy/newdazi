@@ -145,6 +145,10 @@ function handleLogin() {
       }
       // 调用action的登录方法
       userStore.login(loginForm.value).then(res => {
+        const password = loginForm.value.password;
+        const isStrong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,20}$/.test(password);
+        userStore.needChangePwd = !isStrong;
+
         if (res && res.needsSchoolSelection) {
           schoolOptions.value = Array.isArray(res.schools) ? res.schools : []
           selectedSchoolId.value = schoolOptions.value[0]?.deptId

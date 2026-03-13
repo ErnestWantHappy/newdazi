@@ -18,7 +18,8 @@ const useUserStore = defineStore(
       permissions: [],
       schools: [],
       currentDeptId: null,
-      needsSchoolSelection: false
+      needsSchoolSelection: false,
+      needChangePwd: false
     }),
     actions: {
       // 登录
@@ -97,6 +98,7 @@ const useUserStore = defineStore(
             this.schools = []
             this.currentDeptId = null
             this.needsSchoolSelection = false
+            this.needChangePwd = false
             removeToken()
             resolve()
           }).catch(error => {

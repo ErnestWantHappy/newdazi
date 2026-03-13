@@ -128,7 +128,8 @@ public class TeacherGradingController extends BaseController {
             @RequestParam(required = false) Long questionId,
             @RequestParam(required = false) String classCode,
             @RequestParam(required = false) String entryYear) {
-        List<PracticalSubmissionVo> submissions = studentAnswerMapper.selectPracticalSubmissions(lessonId, questionId, classCode, entryYear);
+        Long deptId = com.ruoyi.common.utils.SecurityUtils.getDeptId();
+        List<PracticalSubmissionVo> submissions = studentAnswerMapper.selectPracticalSubmissions(lessonId, questionId, classCode, entryYear, deptId);
         return AjaxResult.success(submissions);
     }
 

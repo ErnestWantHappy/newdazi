@@ -66,7 +66,7 @@ public interface BizLessonMapper
      * @param creatorName 创建者用户名
      * @return 简化课程信息列表
      */
-    List<LessonInfoVo> selectLessonsByGradeAndCreator(@Param("grade") Long grade, @Param("creatorName") String creatorName);
+    List<LessonInfoVo> selectLessonsByGradeAndCreator(@Param("grade") Long grade, @Param("creatorName") String creatorName, @Param("deptId") Long deptId);
 
     /**
      * 查询共享给指定教师的课程（指派给其管理班级的、非其创建的课程）

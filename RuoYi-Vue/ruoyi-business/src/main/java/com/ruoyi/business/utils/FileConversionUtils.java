@@ -139,11 +139,13 @@ public class FileConversionUtils {
      */
     private static synchronized void stopOfficeManager() {
         if (officeManager != null) {
+            // 先主动杀掉 soffice 进程，避免 stop() 时等待 2 分钟超时
+            killOrphanedOfficeProcesses();
             try {
                 officeManager.stop();
                 log.info("【LibreOffice服务】服务已停止");
             } catch (OfficeException e) {
-                log.error("【LibreOffice服务】停止失败: {}", e.getMessage());
+                log.warn("【LibreOffice服务】停止时出现异常（进程已被提前清理，可忽略）: {}", e.getMessage());
             }
             officeManager = null;
             documentConverter = null;

@@ -33,7 +33,7 @@ public interface BizStudentAnswerMapper
     /**
      * 查询某课程指定班级的答题记录
      */
-    List<BizStudentAnswer> selectByLessonAndClass(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear);
+    List<BizStudentAnswer> selectByLessonAndClass(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear, @Param("deptId") Long deptId);
 
     /**
      * 删除学生某课程的旧答题记录（用于重新提交）
@@ -68,7 +68,7 @@ public interface BizStudentAnswerMapper
     /**
      * P5: 查询班级所有学生的操作题提交情况（含未提交）
      */
-    List<PracticalSubmissionVo> selectPracticalSubmissions(@Param("lessonId") Long lessonId, @Param("questionId") Long questionId, @Param("classCode") String classCode, @Param("entryYear") String entryYear);
+    List<PracticalSubmissionVo> selectPracticalSubmissions(@Param("lessonId") Long lessonId, @Param("questionId") Long questionId, @Param("classCode") String classCode, @Param("entryYear") String entryYear, @Param("deptId") Long deptId);
 
     /**
      * 更新答题记录分数（批改打分）
@@ -94,7 +94,7 @@ public interface BizStudentAnswerMapper
     /**
      * 查询学生答题矩阵详情
      */
-    List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> selectStudentAnswerMatrix(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear);
+    List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> selectStudentAnswerMatrix(@Param("lessonId") Long lessonId, @Param("classCode") String classCode, @Param("entryYear") String entryYear, @Param("deptId") Long deptId);
 
     /**
      * 查询某课程有答题记录的班级列表（用于批改页面班级选择）

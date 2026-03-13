@@ -47,6 +47,40 @@ public class ScoreQueryController extends BaseController {
     private com.ruoyi.business.mapper.BizClassroomPerformanceMapper performanceMapper;
 
     /**
+     * 设置/取消某节课缺考请假
+     */
+    @PutMapping("/absent")
+    public AjaxResult setAbsent(@RequestBody Map<String, Object> params) {
+        Long lessonId = ((Number) params.get("lessonId")).longValue();
+        Long studentId = ((Number) params.get("studentId")).longValue();
+        Boolean isAbsent = (Boolean) params.get("isAbsent");
+
+        Long deptId = SecurityUtils.getDeptId();
+        Long teacherId = SecurityUtils.getUserId();
+
+        com.ruoyi.business.domain.BizClassroomPerformance performance = performanceMapper.selectByStudentAndLesson(studentId, lessonId);
+        if (performance == null) {
+            performance = new com.ruoyi.business.domain.BizClassroomPerformance();
+            performance.setStudentId(studentId);
+            performance.setLessonId(lessonId);
+            performance.setTeacherId(teacherId);
+            performance.setDeptId(deptId);
+            performance.setScore(0);
+            performance.setReason("请假/缺考");
+            performance.setIsAbsent(isAbsent ? 1 : 0);
+            performanceMapper.insert(performance);
+        } else {
+            performance.setIsAbsent(isAbsent ? 1 : 0);
+            if (isAbsent) {
+                performance.setScore(0); // 清空表现分
+                System.out.println("将之前的原因修改为缺考");
+            }
+            performanceMapper.update(performance);
+        }
+        return AjaxResult.success();
+    }
+
+    /**
      * 获取班级列表（用于筛选下拉框）
      */
     @GetMapping("/classes")
@@ -76,7 +110,7 @@ public class ScoreQueryController extends BaseController {
         System.out.println("[课程下拉DEBUG] 计算的年级 gradeNum: " + gradeNum);
         System.out.println("[课程下拉DEBUG] creator: " + creator);
         
-        List<?> lessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator);
+        List<?> lessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator, deptId);
         System.out.println("[课程下拉DEBUG] 查询结果数量: " + (lessons != null ? lessons.size() : "null"));
         if (lessons != null && !lessons.isEmpty()) {
             System.out.println("[课程下拉DEBUG] 第一个课程: " + lessons.get(0));
@@ -171,25 +205,64 @@ public class ScoreQueryController extends BaseController {
                 performanceMapper.selectByStudentId(student.getStudentId());
             
             // 将平时分添加到每个课程成绩中
-            Map<Long, Integer> performanceMap = new HashMap<>();
+            Map<Long, com.ruoyi.business.domain.BizClassroomPerformance> performanceMap = new HashMap<>();
             for (com.ruoyi.business.domain.BizClassroomPerformance p : performanceList) {
-                performanceMap.put(p.getLessonId(), p.getScore());
+                performanceMap.put(p.getLessonId(), p);
             }
+            
+            List<Long> scoredLessonIds = new ArrayList<>();
             for (Map<String, Object> score : scores) {
                 Long lid = ((Number) score.get("lessonId")).longValue();
-                Integer performanceScore = performanceMap.getOrDefault(lid, 0);
+                scoredLessonIds.add(lid);
+                
+                com.ruoyi.business.domain.BizClassroomPerformance p = performanceMap.get(lid);
+                Integer performanceScore = (p != null && p.getScore() != null) ? p.getScore() : 0;
+                boolean isAbsent = (p != null && p.getIsAbsent() != null && p.getIsAbsent() == 1);
+                
                 score.put("performanceScore", performanceScore);
-                // 计算课程总分 = 作业分 + 平时分，上限100
-                int homeworkScore = ((Number) score.get("totalScore")).intValue();
-                int finalScore = Math.min(homeworkScore + performanceScore, 100);
-                score.put("finalScore", finalScore);
+                score.put("isAbsent", isAbsent);
+                
+                if (isAbsent) {
+                    score.put("finalScore", null);
+                } else {
+                    int homeworkScore = ((Number) score.get("totalScore")).intValue();
+                    int finalScore = Math.min(homeworkScore + performanceScore, 100);
+                    score.put("finalScore", finalScore);
+                }
             }
+            
+            // 补充未答过题但被打平时分或被标记请假数据的课次
+            for (com.ruoyi.business.domain.BizClassroomPerformance p : performanceList) {
+                Long lid = p.getLessonId();
+                if (!scoredLessonIds.contains(lid)) {
+                    Map<String, Object> extraScore = new HashMap<>();
+                    extraScore.put("lessonId", lid);
+                    extraScore.put("totalScore", 0);
+                    Integer performanceScore = p.getScore() != null ? p.getScore() : 0;
+                    boolean isAbsent = (p.getIsAbsent() != null && p.getIsAbsent() == 1);
+                    
+                    extraScore.put("performanceScore", performanceScore);
+                    extraScore.put("isAbsent", isAbsent);
+                    
+                    if (isAbsent) {
+                        extraScore.put("finalScore", null);
+                    } else {
+                        extraScore.put("finalScore", Math.min(performanceScore, 100));
+                    }
+                    scores.add(extraScore);
+                }
+            }
+            
             row.put("scores", scores);
             
-            // 计算总分
+            // 计算总分 (跳过所有缺考的课程)
             int totalScore = 0;
             int totalPerformance = 0;
             for (Map<String, Object> score : scores) {
+                if (Boolean.TRUE.equals(score.get("isAbsent"))) {
+                    continue; // 缺考的不累计
+                }
+                
                 Object ts = score.get("totalScore");
                 if (ts != null) {
                     totalScore += ((Number) ts).intValue();
@@ -394,10 +467,12 @@ public class ScoreQueryController extends BaseController {
         // 1. 查询课程的所有题目详情
         List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         
+        Long deptId = SecurityUtils.getDeptId();
+        
         // 2. 查询该课程的答题记录 (根据筛选条件)
         List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers;
         if ((classCode != null && !classCode.isEmpty()) || (entryYear != null && !entryYear.isEmpty())) {
-            allAnswers = studentAnswerMapper.selectByLessonAndClass(lessonId, classCode, entryYear);
+            allAnswers = studentAnswerMapper.selectByLessonAndClass(lessonId, classCode, entryYear, deptId);
         } else {
             allAnswers = studentAnswerMapper.selectByLessonId(lessonId);
         }
@@ -482,7 +557,7 @@ public class ScoreQueryController extends BaseController {
         String schoolType = dept != null ? dept.getSchoolType() : "1";
         int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         
-        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear);
+        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear, deptId);
         
         // 格式化 className 为 年级+班级号 (如 "601")
         for (com.ruoyi.business.domain.vo.StudentAnswerMatrixVo vo : result) {

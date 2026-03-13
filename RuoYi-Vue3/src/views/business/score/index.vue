@@ -90,7 +90,7 @@
     </el-row>
 
     <!-- 答题分析区域 - 放在成绩表上方 (仅班级模式显示) -->
-    <el-card v-if="!isGradeMode && selectedLessonIds.length === 1 && analysisData.length > 0" class="analysis-card" style="margin-bottom: 15px;">
+    <el-card v-if="!isGradeMode && selectedLessonIds.length === 1 && analysisData.length > 0 && hasTheoryQuestions" class="analysis-card" style="margin-bottom: 15px;">
       <template #header>
         <div class="chart-header">
           📊 答题情况分析 - {{ lessonOptions.find(l => l.lessonId === selectedLessonIds[0])?.lessonTitle || '当前课程' }}
@@ -160,7 +160,7 @@
 
     <!-- 学生答题详情矩阵 -->
     <analysis-matrix 
-      v-if="!isGradeMode && selectedLessonIds.length === 1 && matrixData.length > 0" 
+      v-if="!isGradeMode && selectedLessonIds.length === 1 && matrixData.length > 0 && hasTheoryQuestions" 
       :matrix-data="matrixData"
       :questions="analysisData"
       :loading="matrixLoading"
@@ -181,6 +181,9 @@
         <div class="card-header">
           <span style="font-weight: bold; font-size: 16px;">📊 学生成绩汇总表</span>
           <div class="header-actions">
+            <span v-if="selectedLessonIds.length === 1" style="font-size: 13px; color: #909399; margin-right: 15px;">
+              <el-icon style="vertical-align: middle; margin-top: -2px;"><Calendar /></el-icon> 点击姓名右侧图标可标记请假
+            </span>
             <el-switch
               v-model="excludeZeroScore"
               active-text="排除0分"
@@ -222,6 +225,23 @@
           </template>
         </el-table-column>
         
+        <!-- 请假状态列 (仅在选中单门课程时显示，更直观) -->
+        <el-table-column v-if="selectedLessonIds.length === 1" label="请假" width="60" align="center" fixed="left">
+          <template #default="scope">
+            <el-button 
+                circle
+                size="small" 
+                :type="isLessonAbsent(scope.row, selectedLessonIds[0]) ? 'info' : 'warning'" 
+                :title="isLessonAbsent(scope.row, selectedLessonIds[0]) ? '恢复得分' : '设为请假'"
+                plain 
+                @click="handleAbsent(scope.row.studentId, selectedLessonIds[0], !isLessonAbsent(scope.row, selectedLessonIds[0]))"
+                style="width: 24px; height: 24px; padding: 0;"
+            >
+                <el-icon style="font-size: 12px;"><Calendar /></el-icon>
+            </el-button>
+          </template>
+        </el-table-column>
+        
         <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip fixed="left">
           <template #default="scope">
             <span v-if="scope.row.remark" style="color: #E6A23C;">{{ scope.row.remark }}</span>
@@ -241,8 +261,8 @@
                 width="120"
             >
                 <template #default="scope">
-                    <span class="score-num" :class="getScoreClass(getLessonScore(scope.row, lessonId))">
-                        {{ getLessonScore(scope.row, lessonId) }}
+                    <span class="score-num" :class="getScoreClass(getLessonScore(scope.row, lessonId))" :style="{ color: isLessonAbsent(scope.row, lessonId) ? '#909399' : '' }">
+                        {{ getLessonScoreDisplay(scope.row, lessonId) }}
                     </span>
                 </template>
             </el-table-column>
@@ -267,11 +287,11 @@
                 <el-popover placement="bottom" :width="240" trigger="hover">
                   <template #reference>
                     <el-tag 
-                      :type="getScoreType(score.totalScore)" 
+                      :type="score.isAbsent ? 'info' : getScoreType(score.totalScore)" 
                       size="small"
                       :class="{ 'selected-tag': selectedLessonIds.includes(score.lessonId) }"
                       class="score-num"
-                    >{{ score.totalScore }}</el-tag>
+                    >{{ score.isAbsent ? '请假' : score.totalScore }}</el-tag>
                   </template>
                   <div class="score-detail">
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
@@ -424,9 +444,9 @@
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix } from '@/api/business/score';
-import { ElMessage } from 'element-plus';
-import { FullScreen, Search, Download, Setting } from '@element-plus/icons-vue';
+import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent } from '@/api/business/score';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { FullScreen, Search, Download, Setting, Calendar } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import * as XLSX from 'xlsx';
 
@@ -470,6 +490,10 @@ const currentStudent = ref(null);
 // 答题分析相关
 const analysisData = ref([]);
 const analysisLoading = ref(false);
+
+const hasTheoryQuestions = computed(() => {
+  return analysisData.value && analysisData.value.some(q => q.questionType === 'choice' || q.questionType === 'judgment');
+});
 
 // 等级比例设置
 const ratioDialogVisible = ref(false);
@@ -857,11 +881,15 @@ function processData() {
     const count = filteredScores.length;
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
     let sumPerformance = 0, sumFinal = 0; // 平时分和课程总分
+    let validScoreCount = 0; // 有效（非请假）课次数
     
     // 打字统计：累加有效记录
     let typingSpeedSum = 0, accuracySum = 0, completionSum = 0, typingCount = 0;
     
     filteredScores.forEach(s => {
+      if (s.isAbsent) return; // 缺考请假的课程不参与均分计算
+      
+      validScoreCount++;
       sumTyping += (s.typingScore || 0);
       sumTheory += (s.theoryScore || 0);
       sumPractical += (s.practicalScore || 0);
@@ -878,10 +906,10 @@ function processData() {
       }
     });
     
-    const avgTyping = count > 0 ? Math.round(sumTyping / count) : 0;
-    const avgTheory = count > 0 ? Math.round(sumTheory / count) : 0;
-    const avgPractical = count > 0 ? Math.round(sumPractical / count) : 0;
-    const filteredAverage = count > 0 ? Math.round(sumTotal / count) : 0;
+    const avgTyping = validScoreCount > 0 ? Math.round(sumTyping / validScoreCount) : 0;
+    const avgTheory = validScoreCount > 0 ? Math.round(sumTheory / validScoreCount) : 0;
+    const avgPractical = validScoreCount > 0 ? Math.round(sumPractical / validScoreCount) : 0;
+    const filteredAverage = validScoreCount > 0 ? Math.round(sumFinal / validScoreCount) : 0;
     
     // 计算整体打字指标
     const overallTypingSpeed = typingCount > 0 ? Math.round(typingSpeedSum / typingCount) : null;
@@ -1154,8 +1182,8 @@ function renderAnalysisChart() {
           let html = `<div style="max-width:400px; white-space:normal; line-height: 1.6; font-size: 13px;">`;
           
           // 标题头
-          html += `<div style="margin-bottom:8px; border-bottom:1px solid #ebeef5; padding-bottom:5px;">
-                      <span style="font-weight:bold; font-size:14px; color:#303133;">${item.questionContent}</span>
+          html += `<div style="margin-bottom:8px; border-bottom:1px solid #ebeef5; padding-bottom:5px; font-family: 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;">
+                      <span style="font-weight:600; font-size:14px; color:#303133;">${item.questionContent}</span>
                    </div>`;
           
           // 核心指标
@@ -1209,24 +1237,28 @@ function renderAnalysisChart() {
        data: ['正确人数', '错误人数'],
        top: 0
     },
-    grid: { 
-        left: '3%', 
-        right: '4%', 
-        bottom: '3%', 
-        containLabel: true 
+    grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
     },
-    xAxis: { 
-      type: 'value', 
+    xAxis: {
+      type: 'value',
       position: 'top', // X轴放在上面更容易阅读
       splitLine: { lineStyle: { type: 'dashed' } }
     },
-    yAxis: { 
-      type: 'category', 
+    yAxis: {
+      type: 'category',
       data: yAxisData,
       axisLabel: { 
           interval: 0,
           width: 150,
           overflow: 'truncate',
+          textStyle: { 
+            fontSize: 14, 
+            fontFamily: '"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif' 
+          },
           formatter: function (value) {
               return value;
           }
@@ -1268,6 +1300,37 @@ function getLessonScore(student, lessonId) {
     const s = student.scores.find(item => item.lessonId === lessonId);
     return s ? (s.totalScore || 0) : 0;
 }
+
+function getLessonScoreDisplay(student, lessonId) {
+    if (!student.scores) return 0;
+    const s = student.scores.find(item => item.lessonId === lessonId);
+    if (s && s.isAbsent) return '请假';
+    return s ? (s.totalScore || 0) : 0;
+}
+
+function isLessonAbsent(student, lessonId) {
+    if (!student.scores) return false;
+    const s = student.scores.find(item => item.lessonId === lessonId);
+    return s ? !!s.isAbsent : false;
+}
+
+const handleAbsent = async (studentId, lessonId, isAbsent) => {
+  try {
+    const actionText = isAbsent ? '设为请假' : '取消请假';
+    await ElMessageBox.confirm(`确定要将该生本节课的成绩状态${actionText}吗？`, '提示', {
+      type: 'warning'
+    });
+    
+    await setStudentAbsent(studentId, lessonId, isAbsent);
+    ElMessage.success(`${actionText}成功`);
+    handleQuery(); // 重新加载数据
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error(e);
+      ElMessage.error('操作失败');
+    }
+  }
+};
 
 function getScoreClass(score) {
     if (score >= 90) return 'text-success';

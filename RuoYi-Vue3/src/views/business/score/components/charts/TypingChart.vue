@@ -175,6 +175,9 @@ function renderChart() {
   const option = {
     tooltip: { 
       trigger: 'axis',
+      textStyle: {
+        fontFamily: '"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif'
+      },
       formatter: (params) => {
         const idx = params[0].dataIndex;
         const data = typingData[idx];
@@ -188,12 +191,19 @@ function renderChart() {
     xAxis: {
       type: 'category',
       data: names,
-      axisLabel: { rotate: 45, fontSize: isFullscreen.value ? 14 : 10 }
+      axisLabel: { 
+          rotate: 45, 
+          fontSize: isFullscreen.value ? 14 : 11,
+          fontFamily: '"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif'
+      }
     },
     yAxis: { 
       type: 'value', 
       name: `${config.name}(${config.unit})`,
-      nameTextStyle: { fontSize: isFullscreen.value ? 16 : 12 }
+      nameTextStyle: { 
+          fontSize: isFullscreen.value ? 16 : 12,
+          fontFamily: '"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif'
+      }
     },
     dataZoom: [
       {
@@ -215,7 +225,13 @@ function renderChart() {
           { offset: 1, color: config.color[1] }
         ])
       },
-      label: { show: true, position: 'top', fontSize: isFullscreen.value ? 12 : 10 }
+      label: { 
+        show: true, 
+        position: 'top', 
+        fontSize: isFullscreen.value ? 12 : 11,
+        fontFamily: "'Microsoft YaHei', 'PingFang SC', sans-serif",
+        color: '#333'
+      }
     }],
     grid: { 
       left: '8%', 

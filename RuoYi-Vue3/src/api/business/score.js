@@ -53,3 +53,12 @@ export function getStudentAnswerMatrix(lessonId, classCode, entryYear) {
     params: { lessonId, classCode, entryYear }
   })
 }
+
+// 设置/取消某节课缺考请假
+export function setStudentAbsent(studentId, lessonId, isAbsent) {
+  return request({
+    url: '/business/score/absent',
+    method: 'put',
+    data: { studentId, lessonId, isAbsent }
+  })
+}

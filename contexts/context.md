@@ -1,7 +1,7 @@
 # 信息科技学业测评平台 (Context)
 
-> **版本**：v2.7
-> **更新时间**：2026-02-05
+> **版本**：v2.8
+> **更新时间**：2026-03-12
 > **核心定位**：服务于中小学信息科技课程的综合性教学与评价平台，集课程管理、多维度测评（选择/判断/操作/打字）、智能评分、学情分析与可视化于一体。
 
 ---
@@ -19,6 +19,62 @@
 ---
 
 ## 🧩 2. 系统核心功能与业务流程 (System Core & Workflows)
+
+### 2.0 2026-03-12 更新摘要 (v2.9 - 请假/缺考管理与视觉优化)
+
+#### 📝 请假/缺考 (Absent/Leave) 深度集成
+- **核心逻辑**：在 `biz_classroom_performance` 表新增 `is_absent` 字段。标记请假后，学生该课总分记为 `NULL`（而非 0）。
+- **均分计算修正**：`score/index.vue` 逻辑重构，平均分分母使用 `validScoreCount`（自动排除所有请假记录），确保均分真实反映在校生水平。
+- **交互入口**：
+  - **汇总表快捷操作**：只选中单门课程时，表格新增“请假”图标列（小日历），支持一键标记/恢复。
+  - **状态说明**：标记请假后的成绩 Tag 显示为灰色“请假”字样。
+- **后端支持**：`ScoreQueryController` 新增 `setAbsent` 接口，同步更新 `BizStudentAnswerMapper` 关联查询逻辑。
+
+#### 🎨 视觉体验与图表清晰度优化
+- **字体规范统一**：全站图表禁用 `bold` 加粗（解决小字模糊），全局应用字体系列：`"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`。
+- **异常状态高亮**：
+  - **RankChart 姓名变色**：有备注的学生姓名在 X 轴自动显示为**橙色** (`#E6A23C`)。
+  - **零分灰色占位**：分数为 0 且有备注（跳级/休学/请假）的学生，柱状图柱体强制变灰 (`#C0C4CC`)。
+- **性能/响应式提升**：修正 `RankChart` 全屏状态下的像素级布局计算，支持旋转 45 度的长姓名标签不被截断。
+
+#### ⚡ 效率提升（自动保存）
+- **课堂表现分**：实现“失去焦点即保存”逻辑，移除手动保存按钮，提升实时打分体验。
+- **字段宽度调整**：微调列表布局，增加特定字段的可视范围级。
+
+### 2.0 2026-03-12 更新摘要 (v2.8 - 跨校数据隔离修复)
+
+#### 🔐 多学校数据串台 Bug 修复
+
+- **问题现象**：殷夫中学老师能看到大目湾实验学校创建的课程；大目湾的课堂表现分列表混入了殷夫中学的学生（多个"张三"）；理论测试详情页出现跨校学生重复。
+- **根因分析**：系统最初为单学校设计，核心业务表（`biz_lesson`, `biz_lesson_assignment`, `biz_classroom_performance`）缺少 `dept_id`（学校ID）字段。当多所学校的班级编号相同（如都有"2024级8班"）时，SQL 查询仅按 `entry_year + class_code` 关联，导致跨校数据混合。更严重的是，`deleteOtherAssignmentsByClass` 方法会**跨校删除课程指派记录**。
+- **修复方案**：
+
+| 修复层面 | 具体内容 |
+|:---|:---|
+| **数据库** | 为 `biz_lesson`、`biz_lesson_assignment`、`biz_classroom_performance` 三张表追加 `dept_id` 字段，并通过 SQL 回填历史数据 |
+| **后端代码** | 12 个文件中所有涉及跨表关联 `entry_year + class_code` 的查询，全部追加 `dept_id` 过滤条件 |
+
+- **修改的后端文件清单**：
+
+| 文件 | 修改内容 |
+|:---|:---|
+| `BizLessonMapper.xml` | `selectLessonsByGradeAndCreator` 加 `AND dept_id = #{deptId}`；共享课程查询 JOIN 加 `AND la.dept_id = tc.dept_id` |
+| `BizLessonMapper.java` | `selectLessonsByGradeAndCreator` 方法签名加 `deptId` 参数 |
+| `BizLessonServiceImpl.java` | 教师首页调用传入 `deptId`；`saveLessonDetails` 中 `deleteOtherAssignmentsByClass` 传入 `deptId` |
+| `BizLessonAssignmentMapper.xml` | `deleteOtherAssignmentsByClass`、`selectCurrentLessonByClass` 加 `dept_id` 过滤 |
+| `BizLessonAssignmentMapper.java` | 对应方法签名加 `deptId` 参数 |
+| `BizClassroomPerformanceMapper.xml` | `selectListByLessonAndClass` 加 `AND u.dept_id = #{deptId}` |
+| `BizClassroomPerformanceMapper.java` | 对应方法签名加 `deptId` 参数 |
+| `ClassroomPerformanceController.java` | `list` 方法传入 `deptId` |
+| `ScoreQueryController.java` | 课程下拉、答题分析、答题矩阵均传入 `deptId` |
+| `StudentHomeController.java` | `getCurrentLesson` 传入 `deptId` |
+| `BizStudentAnswerMapper.xml` | `selectByLessonAndClass`、`selectStudentAnswerMatrix`、`selectPracticalSubmissions` 加 `u.dept_id` 过滤 |
+| `BizStudentAnswerMapper.java` | 对应方法签名加 `deptId` 参数 |
+| `TeacherGradingController.java` | `getPracticalSubmissions` 传入 `deptId` |
+| `FileConversionUtils.java` | `stopOfficeManager` 优化：关闭前先 `taskkill` 残留进程，消除重启超时 |
+
+> [!CAUTION]
+> **关键注意**：`biz_student` 表本身**没有** `dept_id` 字段！学生的学校归属必须通过 `LEFT JOIN sys_user u ON s.user_id = u.user_id` 后使用 `u.dept_id` 获取，直接写 `s.dept_id` 会报 `Unknown column` 错误。
 
 ### 2.0 2026-01-21/22 更新摘要 (学生管理功能增强)
 
@@ -240,6 +296,7 @@ _定义了一次教学活动或作业的基本属性_
 | `shuffle_mode` | `int` | - | 出题模式 (0:固定 1:随机排序 2:随机抽题) (**v2.5 新增**) |
 | `random_choice_count` | `int` | - | 随机抽取选择题数 (模式 2 有效) (**v2.5 新增**) |
 | `random_judgment_count` | `int` | - | 随机抽取判断题数 (模式 2 有效) (**v2.5 新增**) |
+| `dept_id` | `bigint` | **FK** | 所属学校 ID (**v2.8 新增，多校隔离**) |
 | `create_time` | `datetime` | - | 创建时间 |
 
 #### 2. `biz_question` (统一题库表)
@@ -278,6 +335,7 @@ _控制哪些班级的学生可以看到并进行该课程_
 | `lesson_id` | `bigint` | **FK** | 课程 ID |
 | `entry_year` | `varchar` | Yes | 入学年份 (如 "2024") |
 | `class_code` | `varchar` | Yes | 班级编号 (如 "01", "02") |
+| `dept_id` | `bigint` | **FK** | 所属学校 ID (**v2.8 新增，多校隔离**) |
 | _联合索引_ | - | - | `idx_year_class` (`entry_year`, `class_code`) |
 
 #### 5. `biz_student_answer` (答题记录表)
@@ -349,6 +407,7 @@ _记录学生每节课的课堂表现加减分 (v2.6 新增)_
 | `student_id` | `bigint` | **FK** | 学生 ID |
 | `lesson_id` | `bigint` | **FK** | 课程 ID |
 | `score` | `int` | Yes | 表现分 (**支持正负值**，如 +5 或 -3) |
+| `dept_id` | `bigint` | **FK** | 所属学校 ID (**v2.8 新增，多校隔离**) |
 | `create_time` | `datetime` | - | 记录时间 |
 
 > **注意**：`score` 字段支持负数，用于表示扣分项。查询时使用 `score != 0` 过滤无效记录。
@@ -542,3 +601,4 @@ _存储组织架构，包括地区教育局、学校及校内部门_
 25. **账号唯一性**：`userName`（登录账号）具有唯一性且创建后不可修改，适合作为学生身份的稳定标识；`studentNo`（学号）可能因转班等原因变动。
 26. **操作题不支持导出**：操作题的附件文件无法嵌入Excel，导出时需在前端检查 `questionType === 'practical'` 并提示用户。
 27. **登录错误日志级别**：登录失败（如密码错误）属于正常业务场景，日志级别应为 WARN 而非 ERROR，避免日志噪音。
+28. **多校数据隔离原则 (v2.8)**：所有涉及 `entry_year + class_code` 关联查询的地方，**必须同时加 `dept_id` 过滤**，否则不同学校的同名班级会串台。`biz_student` 表无 `dept_id`，需通过 `JOIN sys_user` 取 `u.dept_id`。

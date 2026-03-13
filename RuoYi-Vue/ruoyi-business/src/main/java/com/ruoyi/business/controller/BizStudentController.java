@@ -106,6 +106,28 @@ public class BizStudentController extends BaseController
     }
 
     /**
+     * 按班级批量删除学生
+     */
+    @PreAuthorize("@ss.hasPermi('business:student:remove')")
+    @Log(title = "学生管理-按班级删除", businessType = BusinessType.DELETE)
+    @DeleteMapping("/byClass")
+    public AjaxResult removeByClass(String entryYear, String classCode, Long deptId)
+    {
+        if (com.ruoyi.common.utils.StringUtils.isEmpty(entryYear) || com.ruoyi.common.utils.StringUtils.isEmpty(classCode)) {
+            return AjaxResult.error("入学年份和班级不能为空");
+        }
+        // 如果未传入 deptId，则默认使用当前用户的 deptId
+        if (deptId == null) {
+            com.ruoyi.common.core.domain.model.LoginUser loginUser = SecurityUtils.getLoginUser();
+            if (loginUser != null && loginUser.getUser() != null) {
+                deptId = loginUser.getUser().getDeptId();
+            }
+        }
+        int rows = bizStudentService.deleteBizStudentByClass(entryYear, classCode, deptId);
+        return success("成功清空 " + rows + " 名学生");
+    }
+
+    /**
      * 下载学生导入模板
      */
     @Log(title = "学生管理", businessType = BusinessType.IMPORT)

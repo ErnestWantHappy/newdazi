@@ -2,7 +2,6 @@ package com.ruoyi.business.service.impl;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.ArrayList;
 import com.ruoyi.system.service.ISysUserService;
 import com.ruoyi.common.constant.CacheConstants;
 import com.ruoyi.common.core.redis.RedisCache;
@@ -144,6 +143,37 @@ public class BizStudentServiceImpl implements IBizStudentService
         userMapper.updateUser(userUpdate);
 
         return bizStudentMapper.updateBizStudent(bizStudent);
+    }
+
+    @Override
+    @Transactional
+    public int deleteBizStudentByClass(String entryYear, String classCode, Long deptId) {
+        BizStudent query = new BizStudent();
+        query.setEntryYear(entryYear);
+        query.setClassCode(classCode);
+        query.setDeptId(deptId);
+        
+        // 为了安全起见，非管理员只能删除自己校区的
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (loginUser != null && !loginUser.getUser().isAdmin()) {
+            query.setDeptId(loginUser.getUser().getDeptId());
+        }
+
+        List<BizStudent> students = bizStudentMapper.selectBizStudentList(query);
+        if (students == null || students.isEmpty()) {
+            return 0;
+        }
+
+        Long[] studentIds = new Long[students.size()];
+        int i = 0;
+        for (BizStudent student : students) {
+            studentIds[i++] = student.getStudentId();
+            if (student.getUserId() != null) {
+                userMapper.deleteUserById(student.getUserId());
+                userRoleMapper.deleteUserRoleByUserId(student.getUserId());
+            }
+        }
+        return bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
     }
 
     @Override

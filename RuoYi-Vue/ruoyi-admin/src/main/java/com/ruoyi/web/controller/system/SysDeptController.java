@@ -46,7 +46,6 @@ public class SysDeptController extends BaseController
     public AjaxResult list(SysDept dept)
     {
         List<SysDept> depts = deptService.selectDeptList(dept);
-        log.info("从Service层获取到的全部部门数据: {}", depts.get(20).toString()); // 直接打印列表
         return success(depts);
     }
 

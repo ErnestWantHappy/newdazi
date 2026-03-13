@@ -27,7 +27,8 @@ public interface BizClassroomPerformanceMapper
     List<BizClassroomPerformance> selectListByLessonAndClass(
         @Param("lessonId") Long lessonId, 
         @Param("classCode") String classCode, 
-        @Param("entryYear") String entryYear);
+        @Param("entryYear") String entryYear,
+        @Param("deptId") Long deptId);
 
     /**
      * 新增课堂表现记录

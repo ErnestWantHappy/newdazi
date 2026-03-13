@@ -107,7 +107,7 @@ public class StudentHomeController extends BaseController
         studentInfo.put("gradeName", gradeName);
 
         // 2. 查询当前被指派的课程ID
-        Long lessonId = lessonAssignmentMapper.selectCurrentLessonByClass(entryYear, classCode);
+        Long lessonId = lessonAssignmentMapper.selectCurrentLessonByClass(entryYear, classCode, deptId);
         if (lessonId == null) {
             log.info("【学生首页】学生 {} 当前没有被指派课程", userId);
             return AjaxResult.success()

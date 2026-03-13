@@ -87,6 +87,7 @@ public interface BizLessonAssignmentMapper
      */
     void deleteOtherAssignmentsByClass(@Param("entryYear") String entryYear, 
                                         @Param("classCode") String classCode, 
+                                        @Param("deptId") Long deptId,
                                         @Param("currentLessonId") Long currentLessonId);
 
     /**
@@ -96,5 +97,6 @@ public interface BizLessonAssignmentMapper
      * @return 课程ID
      */
     Long selectCurrentLessonByClass(@Param("entryYear") String entryYear, 
-                                     @Param("classCode") String classCode);
+                                     @Param("classCode") String classCode,
+                                     @Param("deptId") Long deptId);
 }

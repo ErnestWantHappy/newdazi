@@ -36,6 +36,14 @@ public class BizClassroomPerformance extends BaseEntity
     /** 打分教师ID */
     private Long teacherId;
 
+    /** 所属学校ID */
+    @Excel(name = "所属学校ID")
+    private Long deptId;
+
+    /** 是否请假/缺考(1:是, 0:否) */
+    @Excel(name = "是否请假")
+    private Integer isAbsent;
+
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date createTime;
@@ -106,6 +114,22 @@ public class BizClassroomPerformance extends BaseEntity
 
     public void setTeacherId(Long teacherId) {
         this.teacherId = teacherId;
+    }
+
+    public Long getDeptId() {
+        return deptId;
+    }
+
+    public void setDeptId(Long deptId) {
+        this.deptId = deptId;
+    }
+
+    public Integer getIsAbsent() {
+        return isAbsent;
+    }
+
+    public void setIsAbsent(Integer isAbsent) {
+        this.isAbsent = isAbsent;
     }
 
     @Override

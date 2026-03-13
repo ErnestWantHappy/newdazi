@@ -19,6 +19,8 @@ import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -56,6 +58,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private BizLessonAssignmentMapper lessonAssignmentMapper;
+
+    @Autowired
+    private BizTeacherClassMapper teacherClassMapper;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -116,6 +121,48 @@ public class BizLessonServiceImpl implements IBizLessonService
         String username = loginUser != null ? loginUser.getUsername() : "unknown";
         log.info("【教师首页数据】开始获取数据，教师: {}, 学校ID: {}", username, deptId);
 
+        // ====== 一次性诊断日志 START ======
+        log.info("===== 【诊断】教师: {}, user_id: {}, sys_user.dept_id: {}, 当前上下文deptId(可能已切换): {} =====",
+                username, loginUser.getUserId(),
+                loginUser.getUser() != null ? loginUser.getUser().getDeptId() : "null(user对象为空)",
+                deptId);
+
+        // 打印该教师创建的所有 biz_lesson 记录
+        BizLesson queryAll = new BizLesson();
+        List<BizLesson> diagLessons = bizLessonMapper.selectBizLessonList(queryAll);
+        log.info("【诊断】biz_lesson 全表共 {} 条记录", diagLessons.size());
+        for (BizLesson lesson : diagLessons) {
+            if (username.equals(lesson.getCreateBy())) {
+                log.info("【诊断】  该教师的课程: lesson_id={}, title={}, grade={}, dept_id={}, creator_id={}, create_by={}",
+                        lesson.getLessonId(), lesson.getLessonTitle(), lesson.getGrade(),
+                        lesson.getDeptId(), lesson.getCreatorId(), lesson.getCreateBy());
+            }
+        }
+
+        // 打印当前 deptId 对应的学校信息
+        SysDept currentDept = deptMapper.selectDeptById(deptId);
+        log.info("【诊断】当前上下文 dept_id={} 对应的学校: name={}, school_code={}, school_type={}",
+                deptId,
+                currentDept != null ? currentDept.getDeptName() : "null",
+                currentDept != null ? currentDept.getSchoolCode() : "null",
+                currentDept != null ? currentDept.getSchoolType() : "null");
+
+        // 打印 sys_user.dept_id 对应的学校信息
+        Long userOriginalDeptId = loginUser.getUser() != null ? loginUser.getUser().getDeptId() : null;
+        // 注意：selectSchool 切换后 user.getDeptId() 已经被改写为当前选中的，因此这里可能与 deptId 相同
+        // 我们需要查看 manageDepts (所有归属学校)
+        if (loginUser.getDeptIds() != null) {
+            log.info("【诊断】该教师可管理的所有 deptIds: {}", loginUser.getDeptIds());
+            for (Long did : loginUser.getDeptIds()) {
+                SysDept d = deptMapper.selectDeptById(did);
+                if (d != null) {
+                    log.info("【诊断】  dept_id={}, name={}, school_code={}, school_type={}", 
+                            d.getDeptId(), d.getDeptName(), d.getSchoolCode(), d.getSchoolType());
+                }
+            }
+        }
+        // ====== 一次性诊断日志 END ======
+
         SysDept school = deptMapper.selectDeptById(deptId);
         if (school == null) {
             log.warn("【教师首页数据】无法找到教师关联的学校信息，DeptId: {}", deptId);
@@ -124,15 +171,19 @@ public class BizLessonServiceImpl implements IBizLessonService
         String schoolType = school.getSchoolType();
         log.info("【教师首页数据】学校类型: {}", schoolType);
 
-        List<BizStudent> students = bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId);
-        log.info("【教师首页数据】步骤1: 从数据库查询到 {} 条学生(年级-班级)记录。", students.size());
+        // 改为从教师管理的班级表（biz_teacher_class）获取年级分组，而不是全校学生
+        BizTeacherClass tcQuery = new BizTeacherClass();
+        tcQuery.setUserId(loginUser.getUserId());
+        tcQuery.setDeptId(deptId);
+        List<BizTeacherClass> managedClasses = teacherClassMapper.selectBizTeacherClassList(tcQuery);
+        log.info("【教师首页数据】步骤1: 从 biz_teacher_class 查询到 {} 条该教师管理的班级记录。", managedClasses.size());
 
-        Map<String, List<String>> yearClassMap = students.stream()
+        Map<String, List<String>> yearClassMap = managedClasses.stream()
                 .filter(Objects::nonNull)
-                .filter(s -> Objects.nonNull(s.getEntryYear()))
+                .filter(tc -> tc.getEntryYear() != null && !tc.getEntryYear().isEmpty())
                 .collect(Collectors.groupingBy(
-                        BizStudent::getEntryYear,
-                        Collectors.mapping(s -> s.getClassCode() + "班", Collectors.toList())
+                        BizTeacherClass::getEntryYear,
+                        Collectors.mapping(tc -> tc.getClassCode() + "班", Collectors.toList())
                 ));
         log.info("【教师首页数据】步骤2: 成功按入学年份分组，共 {} 个年份组。", yearClassMap.size());
 
@@ -152,7 +203,7 @@ public class BizLessonServiceImpl implements IBizLessonService
 
             if (currentGradeId > 0) {
                 // 查询我创建的课程
-                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByGradeAndCreator(currentGradeId, username);
+                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByGradeAndCreator(currentGradeId, username, deptId);
                 log.info("【教师首页数据】为该年级查询到 {} 门自建课程。", selfLessons.size());
 
                 // 查询共享给我的课程
@@ -263,9 +314,11 @@ public class BizLessonServiceImpl implements IBizLessonService
         LoginUser loginUser = SecurityUtils.getLoginUser();
         String username = loginUser.getUsername();
         Long userId = loginUser.getUserId();
+        Long deptId = loginUser.getUser().getDeptId();
 
         BizLesson lessonToSave = new BizLesson();
         lessonToSave.setLessonId(lessonDetailVo.getLessonId());
+        lessonToSave.setDeptId(deptId);
         lessonToSave.setLessonTitle(lessonDetailVo.getLessonTitle());
         lessonToSave.setGrade(lessonDetailVo.getGrade());
         lessonToSave.setSemester(lessonDetailVo.getSemester());
@@ -310,10 +363,11 @@ public class BizLessonServiceImpl implements IBizLessonService
                 String pureClassCode = classCode.replace("班", "").trim();
                 
                 // 【核心】班级互斥：删除该班级在其他课程的指派
-                lessonAssignmentMapper.deleteOtherAssignmentsByClass(entryYear, pureClassCode, lessonId);
+                lessonAssignmentMapper.deleteOtherAssignmentsByClass(entryYear, pureClassCode, deptId, lessonId);
                 
                 BizLessonAssignment assignment = new BizLessonAssignment();
                 assignment.setLessonId(lessonId);
+                assignment.setDeptId(deptId);
                 assignment.setClassCode(pureClassCode);
                 assignment.setEntryYear(entryYear);
                 assignment.setAssignerId(userId);

@@ -58,7 +58,10 @@ router.beforeEach((to, from, next) => {
                   }
                 } else {
                   // 教师/教研员/管理员 登录后跳转逻辑
-                  if (to.path === "/" || to.path === "/index") {
+                  if (isTeacher && userStore.needChangePwd && to.path !== '/user/profile') {
+                    ElMessage.warning('为保证账号安全，请先修改为强密码（含大小写字母、数字及特殊符号，至少6位）');
+                    next({ path: '/user/profile', replace: true });
+                  } else if (to.path === "/" || to.path === "/index") {
                     if (isResearcher) {
                       // 教研员登录后默认进入用户管理页面
                       next({ path: "/system/user", replace: true });
@@ -88,6 +91,9 @@ router.beforeEach((to, from, next) => {
         if (isStudent && !to.path.startsWith("/student")) {
           // 如果是学生，但目标路径不是以/student开头，则强制送回学生首页
           next({ path: "/student/index" });
+        } else if (isTeacher && userStore.needChangePwd && to.path !== '/user/profile') {
+          ElMessage.warning('为保证账号安全，请先修改为强密码（含大小写字母、数字及特殊符号，至少6位）');
+          next({ path: '/user/profile' });
         } else if (isResearcher && (to.path === "/" || to.path === "/index")) {
           // 如果是教研员，访问首页时强制跳转到用户管理页面
           next({ path: "/system/user" });

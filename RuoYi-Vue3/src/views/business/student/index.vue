@@ -59,10 +59,9 @@
           type="danger"
           plain
           icon="Delete"
-          :disabled="multiple"
-          @click="handleDelete"
+          @click="openBatchDelete"
           v-hasPermi="['business:student:remove']"
-        >批量删除</el-button>
+        >综合批量删除</el-button>
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -195,6 +194,50 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 综合批量删除对话框 -->
+    <el-dialog title="批量删除设置" v-model="deleteDialog.open" width="550px" append-to-body>
+      <div style="margin-bottom: 20px;">
+        <el-radio-group v-model="deleteDialog.mode" style="display: flex; flex-direction: column; align-items: flex-start; gap: 20px;">
+          <!-- 模式一：删除勾选 -->
+          <el-radio label="selected" :disabled="!ids.length" style="height: auto; white-space: normal;">
+            <div style="font-size: 15px; font-weight: bold; margin-bottom: 5px;">删除表格已勾选项</div>
+            <div style="color: #909399; font-size: 13px;">
+              <span v-if="ids.length">当前已勾选 <b>{{ ids.length }}</b> 名学生。系统将仅删除当前页面所勾选的这些数据。</span>
+              <span v-else>当前未勾选任何学生。</span>
+            </div>
+          </el-radio>
+          <!-- 模式二：按班级删除 -->
+          <el-radio label="byClass" style="height: auto; white-space: normal; padding-top: 10px; border-top: 1px dashed #eee; width: 100%;">
+            <div style="font-size: 15px; font-weight: bold; margin-bottom: 15px;">按班级整班删除（跨页全删）</div>
+            <div v-show="deleteDialog.mode === 'byClass'" style="padding-left: 24px;">
+              <el-form label-width="80px">
+                <el-form-item label="入学年份">
+                  <el-select v-model="deleteDialog.entryYear" placeholder="请选择年份" style="width: 200px">
+                    <el-option v-for="year in entryYearOptions" :key="year" :label="year" :value="year" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="班级">
+                  <el-select v-model="deleteDialog.classCode" placeholder="请选择班级" style="width: 200px">
+                    <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+                  </el-select>
+                </el-form-item>
+              </el-form>
+              <div style="color: #F56C6C; font-size: 13px; margin-top: 10px; line-height: 1.5;">
+                <el-icon style="vertical-align: middle; margin-right: 4px;"><warning /></el-icon>
+                <span style="vertical-align: middle;">警告：此操作将彻底清空该班级下<b>全部有效学生账号</b>及其关联数据，无需逐页勾选，不可恢复！</span>
+              </div>
+            </div>
+          </el-radio>
+        </el-radio-group>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="danger" @click="submitBatchDelete">确 认 删 除</el-button>
+          <el-button @click="deleteDialog.open = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -202,7 +245,7 @@
 import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import useUserStore from "@/store/modules/user";
-import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus } from "@/api/business/student";
+import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus, delStudentByClass } from "@/api/business/student";
 import { getToken } from "@/utils/auth";
 
 const route = useRoute();
@@ -221,6 +264,13 @@ const total = ref(0);
 const title = ref("");
 const lockStatusMap = ref({});
 const editingRemarkId = ref(null); // 当前正在编辑备注的学生ID
+
+const deleteDialog = reactive({
+  open: false,
+  mode: 'selected',
+  entryYear: null,
+  classCode: null
+});
 
 const entryYearOptions = ref([]);
 const currentYear = new Date().getFullYear();
@@ -395,6 +445,49 @@ function handleDelete(row) {
   getList();
     proxy.$modal.msgSuccess("删除成功");
   }).catch(() => {});
+}
+
+/** 综合批量删除弹出 */
+function openBatchDelete() {
+  deleteDialog.mode = ids.value.length > 0 ? 'selected' : 'byClass';
+  deleteDialog.entryYear = queryParams.value.entryYear || null;
+  deleteDialog.classCode = queryParams.value.classCode || null;
+  deleteDialog.open = true;
+}
+
+/** 提交综合批量删除 */
+function submitBatchDelete() {
+  if (deleteDialog.mode === 'selected') {
+    if (!ids.value.length) return;
+    const studentNames = studentList.value.filter(item => ids.value.includes(item.studentId)).map(item => item.studentName).join(',');
+    const confirmMsg = studentNames 
+      ? '确认删除已选学生（如：' + studentNames.split(',').slice(0,3).join(',') + ' 等）吗？' 
+      : '确认删除已选名学生吗？';
+    
+    proxy.$modal.confirm(confirmMsg).then(function() {
+      return delStudent(ids.value);
+    }).then(() => {
+      deleteDialog.open = false;
+      getList();
+      proxy.$modal.msgSuccess("删除成功");
+    }).catch(() => {});
+  } else if (deleteDialog.mode === 'byClass') {
+    if (!deleteDialog.entryYear || !deleteDialog.classCode) {
+      proxy.$modal.msgError("请选择要删除的入学年份和班级！");
+      return;
+    }
+    proxy.$modal.confirm('此严重警告操作！确定要彻底清空 ' + deleteDialog.entryYear + '级 ' + deleteDialog.classCode + '班 的所有学生吗？').then(function() {
+      return delStudentByClass({
+        entryYear: deleteDialog.entryYear,
+        classCode: deleteDialog.classCode,
+        deptId: userStore.currentDeptId
+      });
+    }).then((res) => {
+      deleteDialog.open = false;
+      getList();
+      proxy.$modal.msgSuccess(res.msg || "班级数据已清空");
+    }).catch(() => {});
+  }
 }
 
 /** 开始编辑备注 */

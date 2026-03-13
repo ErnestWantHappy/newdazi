@@ -59,7 +59,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT a.* 
         FROM biz_student_answer a
         JOIN biz_student s ON a.student_id = s.student_id
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
+        AND u.dept_id = #{deptId}
         <if test="classCode != null and classCode != ''">
             AND s.class_code = #{classCode}
         </if>
@@ -181,7 +183,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LEFT JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
         WHERE s.class_code = #{classCode}
           AND s.entry_year = #{entryYear}
-        ORDER BY s.student_no
+          AND u.dept_id = #{deptId}
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC
     </select>
 
     <!-- 更新答题记录分数（批改打分） -->
@@ -265,7 +268,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         WHERE s.class_code = #{classCode} 
           AND s.entry_year = #{entryYear}
-        ORDER BY s.student_no ASC, lq.order_num ASC
+          AND u.dept_id = #{deptId}
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC, lq.order_num ASC
     </select>
 
     <!-- 查询某课程有答题记录的班级列表（用于批改页面班级选择） -->

@@ -18,6 +18,7 @@
 
 <script setup>
 import { updateUserPwd } from "@/api/system/user"
+import useUserStore from '@/store/modules/user'
 
 const { proxy } = getCurrentInstance()
 
@@ -37,7 +38,11 @@ const equalToPassword = (rule, value, callback) => {
 
 const rules = ref({
   oldPassword: [{ required: true, message: "旧密码不能为空", trigger: "blur" }],
-  newPassword: [{ required: true, message: "新密码不能为空", trigger: "blur" }, { min: 6, max: 20, message: "长度在 6 到 20 个字符", trigger: "blur" }, { pattern: /^[^<>"'|\\]+$/, message: "不能包含非法字符：< > \" ' \\\ |", trigger: "blur" }],
+  newPassword: [
+    { required: true, message: "新密码不能为空", trigger: "blur" },
+    { min: 6, max: 20, message: "长度在 6 到 20 个字符", trigger: "blur" },
+    { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,20}$/, message: "密码须包含大小写字母、数字和特殊字符", trigger: "blur" }
+  ],
   confirmPassword: [{ required: true, message: "确认密码不能为空", trigger: "blur" }, { required: true, validator: equalToPassword, trigger: "blur" }]
 })
 
@@ -47,6 +52,10 @@ function submit() {
     if (valid) {
       updateUserPwd(user.oldPassword, user.newPassword).then(response => {
         proxy.$modal.msgSuccess("修改成功")
+        const store = useUserStore()
+        if (store.needChangePwd) {
+          store.needChangePwd = false
+        }
       })
     }
   })

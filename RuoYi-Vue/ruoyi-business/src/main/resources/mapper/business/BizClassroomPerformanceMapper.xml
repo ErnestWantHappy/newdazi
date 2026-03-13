@@ -11,6 +11,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="score" column="score"/>
         <result property="reason" column="reason"/>
         <result property="teacherId" column="teacher_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="isAbsent" column="is_absent"/>
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
         <!-- 非数据库字段 -->
@@ -38,6 +40,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             p.score,
             p.reason,
             p.teacher_id,
+            p.dept_id,
+            p.is_absent,
             p.create_time,
             p.update_time,
             u.nick_name AS student_name,
@@ -49,18 +53,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LEFT JOIN biz_classroom_performance p ON s.student_id = p.student_id AND p.lesson_id = #{lessonId}
         WHERE s.class_code = #{classCode}
           AND s.entry_year = #{entryYear}
-        ORDER BY s.student_no
+          AND u.dept_id = #{deptId}
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC
     </select>
 
     <insert id="insert" parameterType="com.ruoyi.business.domain.BizClassroomPerformance" useGeneratedKeys="true" keyProperty="performanceId">
-        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, create_time)
-        VALUES (#{studentId}, #{lessonId}, #{score}, #{reason}, #{teacherId}, NOW())
+        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, dept_id, is_absent, create_time)
+        VALUES (#{studentId}, #{lessonId}, #{score}, #{reason}, #{teacherId}, #{deptId}, #{isAbsent}, NOW())
     </insert>
 
     <update id="update" parameterType="com.ruoyi.business.domain.BizClassroomPerformance">
         UPDATE biz_classroom_performance
         SET score = #{score},
             reason = #{reason},
+            is_absent = #{isAbsent},
             update_time = NOW()
         WHERE performance_id = #{performanceId}
     </update>
@@ -71,11 +77,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 插入或更新（如果存在则更新，不存在则插入） -->
     <insert id="insertOrUpdate" parameterType="com.ruoyi.business.domain.BizClassroomPerformance">
-        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, create_time)
-        VALUES (#{studentId}, #{lessonId}, #{score}, #{reason}, #{teacherId}, NOW())
+        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, dept_id, is_absent, create_time)
+        VALUES (#{studentId}, #{lessonId}, #{score}, #{reason}, #{teacherId}, #{deptId}, #{isAbsent}, NOW())
         ON DUPLICATE KEY UPDATE
             score = #{score},
             reason = #{reason},
+            is_absent = #{isAbsent},
             update_time = NOW()
     </insert>
 

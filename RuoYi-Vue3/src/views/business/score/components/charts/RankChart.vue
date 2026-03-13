@@ -99,7 +99,8 @@ function renderChart() {
           theory: Math.round(s.avgTheory || 0),
           practical: Math.round(s.avgPractical || 0),
           typing: Math.round(s.avgTyping || 0),
-          studentNo: s.studentNo
+          studentNo: s.studentNo,
+          remark: s.remark
       };
   });
   
@@ -108,18 +109,26 @@ function renderChart() {
   const option = {
     tooltip: { 
         trigger: 'axis',
+        textStyle: {
+            fontFamily: "'Microsoft YaHei', 'PingFang SC', sans-serif"
+        },
         formatter: function(params) {
             const name = params[0].name;
             const score = params[0].value;
             const detail = detailMap[name] || {};
-            return `
-                <div style="font-weight:bold; margin-bottom:5px;">${name} (${detail.studentNo}号)</div>
+            
+            let html = `<div style="font-weight:bold; margin-bottom:5px;">${name} (${detail.studentNo}号)</div>`;
+            if (detail.remark) {
+               html += `<div style="color: #F56C6C; margin-bottom:5px;"><b>状态/备注：${detail.remark}</b></div>`;
+            }
+            html += `
                 <div>总分：<b>${score}</b></div>
                 <hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;">
                 <div>⌨️ 打字：${detail.typing}</div>
                 <div>📝 理论：${detail.theory}</div>
                 <div>🖥️ 操作：${detail.practical}</div>
             `;
+            return html;
         }
     },
     xAxis: {
@@ -127,13 +136,22 @@ function renderChart() {
       data: names,
       axisLabel: { 
           rotate: 45, 
-          fontSize: isFullscreen.value ? 14 : 10
+          fontSize: isFullscreen.value ? 14 : 11,
+          fontFamily: '"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif',
+          color: (value) => {
+              const detail = detailMap[value] || {};
+              // 备注学生改为橙色，避免红色过于刺眼或误导
+              return detail.remark ? '#E6A23C' : '#1a1a1a';
+          }
       }
     },
     yAxis: { 
       type: 'value', 
       name: '总分',
-      nameTextStyle: { fontSize: isFullscreen.value ? 16 : 12 }
+      nameTextStyle: { 
+          fontSize: isFullscreen.value ? 16 : 12, 
+          fontFamily: "'Microsoft YaHei', 'PingFang SC', sans-serif"
+      }
     },
     dataZoom: [
       {
@@ -150,17 +168,28 @@ function renderChart() {
       data: scores,
       itemStyle: {
         color: (params) => {
+          const detail = detailMap[params.name] || {};
+          // 如果分数为 0 且存在备注，变灰
+          if (params.value === 0 && detail.remark) {
+              return '#C0C4CC';
+          }
           const colors = ['#F56C6C', '#E6A23C', '#67C23A'];
           if (params.dataIndex < 3) return colors[params.dataIndex];
           return '#409EFF';
         }
       },
-      label: { show: true, position: 'top', fontSize: isFullscreen.value ? 12 : 10 }
+      label: { 
+        show: true, 
+        position: 'top', 
+        fontSize: isFullscreen.value ? 12 : 11,
+        fontFamily: "'Microsoft YaHei', 'PingFang SC', sans-serif",
+        color: '#000'
+      }
     }],
     grid: { 
       left: '10%', 
       right: '5%', 
-      bottom: isFullscreen.value ? '15%' : '20%', 
+      bottom: isFullscreen.value ? '20%' : '26%', 
       top: isFullscreen.value ? '10%' : '15%' 
     }
   };

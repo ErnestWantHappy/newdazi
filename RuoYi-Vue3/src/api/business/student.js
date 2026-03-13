@@ -43,6 +43,15 @@ export function delStudent(studentId) {
   })
 }
 
+// 按班级批量删除学生
+export function delStudentByClass(query) {
+  return request({
+    url: '/business/student/byClass',
+    method: 'delete',
+    params: query
+  })
+}
+
 // 重置学生密码 (支持批量)
 export function resetStudentPwd(userIds) {
   // 后端接收的是一个 Long[] 数组

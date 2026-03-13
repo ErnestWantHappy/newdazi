@@ -1,17 +1,17 @@
 <template>
    <div class="app-container">
       <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch">
-         <el-form-item label="部门名称" prop="deptName">
+         <el-form-item label="学校名称" prop="deptName">
             <el-input
                v-model="queryParams.deptName"
-               placeholder="请输入部门名称"
+               placeholder="请输入学校名称"
                clearable
                style="width: 200px"
                @keyup.enter="handleQuery"
             />
          </el-form-item>
          <el-form-item label="状态" prop="status">
-            <el-select v-model="queryParams.status" placeholder="部门状态" clearable style="width: 200px">
+            <el-select v-model="queryParams.status" placeholder="学校状态" clearable style="width: 200px">
                <el-option
                   v-for="dict in sys_normal_disable"
                   :key="dict.value"
@@ -55,19 +55,14 @@
          :default-expand-all="isExpandAll"
          :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
       >
-         <el-table-column prop="deptName" label="部门名称" width="260"></el-table-column>
-         <el-table-column label="学校ID" align="center" prop="schoolCode" width="120"></el-table-column>
+         <el-table-column prop="deptName" label="学校名称" width="260"></el-table-column>
+         <el-table-column label="学校代码" align="center" prop="schoolCode" width="120"></el-table-column>
          <el-table-column prop="orderNum" label="排序" width="200"></el-table-column>
          <el-table-column prop="status" label="状态" width="100">
             <template #default="scope">
                <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
             </template>
          </el-table-column>
-         <!-- <el-table-column  label="创建时间" align="center" prop="createTime" width="200">
-            <template #default="scope">
-               <span>{{ parseTime(scope.row.createTime) }}</span>
-            </template>
-         </el-table-column> -->
          <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
             <template #default="scope">
                <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['system:dept:edit']">修改</el-button>
@@ -77,25 +72,30 @@
          </el-table-column>
       </el-table>
 
-      <!-- 添加或修改部门对话框 -->
+      <!-- 添加或修改学校对话框 -->
       <el-dialog :title="title" v-model="open" width="600px" append-to-body>
          <el-form ref="deptRef" :model="form" :rules="rules" label-width="80px">
             <el-row>
                <el-col :span="24" v-if="form.parentId !== 0">
-                  <el-form-item label="上级部门" prop="parentId">
+                  <el-form-item label="上级学校" prop="parentId">
                      <el-tree-select
                         v-model="form.parentId"
                         :data="deptOptions"
                         :props="{ value: 'deptId', label: 'deptName', children: 'children' }"
                         value-key="deptId"
-                        placeholder="选择上级部门"
+                        placeholder="选择上级学校"
                         check-strictly
                      />
                   </el-form-item>
                </el-col>
                <el-col :span="12">
-                  <el-form-item label="部门名称" prop="deptName">
-                     <el-input v-model="form.deptName" placeholder="请输入部门名称" />
+                  <el-form-item label="学校名称" prop="deptName">
+                     <el-input v-model="form.deptName" placeholder="请输入学校名称" />
+                  </el-form-item>
+               </el-col>
+               <el-col :span="12">
+                  <el-form-item label="学校代码" prop="schoolCode">
+                     <el-input v-model="form.schoolCode" placeholder="请输入自定义学校编号" />
                   </el-form-item>
                </el-col>
                <el-col :span="12">
@@ -104,22 +104,7 @@
                   </el-form-item>
                </el-col>
                <el-col :span="12">
-                  <el-form-item label="负责人" prop="leader">
-                     <el-input v-model="form.leader" placeholder="请输入负责人" maxlength="20" />
-                  </el-form-item>
-               </el-col>
-               <el-col :span="12">
-                  <el-form-item label="联系电话" prop="phone">
-                     <el-input v-model="form.phone" placeholder="请输入联系电话" maxlength="11" />
-                  </el-form-item>
-               </el-col>
-               <el-col :span="12">
-                  <el-form-item label="邮箱" prop="email">
-                     <el-input v-model="form.email" placeholder="请输入邮箱" maxlength="50" />
-                  </el-form-item>
-               </el-col>
-               <el-col :span="12">
-                  <el-form-item label="部门状态">
+                  <el-form-item label="学校状态">
                      <el-radio-group v-model="form.status">
                         <el-radio
                            v-for="dict in sys_normal_disable"
@@ -163,11 +148,10 @@ const data = reactive({
     status: undefined
   },
   rules: {
-    parentId: [{ required: true, message: "上级部门不能为空", trigger: "blur" }],
-    deptName: [{ required: true, message: "部门名称不能为空", trigger: "blur" }],
+    parentId: [{ required: true, message: "上级学校不能为空", trigger: "blur" }],
+    deptName: [{ required: true, message: "学校名称不能为空", trigger: "blur" }],
     orderNum: [{ required: true, message: "显示排序不能为空", trigger: "blur" }],
-    email: [{ type: "email", message: "请输入正确的邮箱地址", trigger: ["blur", "change"] }],
-    phone: [{ pattern: /^1[3|4|5|6|7|8|9][0-9]\d{8}$/, message: "请输入正确的手机号码", trigger: "blur" }]
+    schoolCode: [{ required: true, message: "学校代码不能为空", trigger: "blur" }]
   },
 })
 
@@ -195,9 +179,7 @@ function reset() {
     parentId: undefined,
     deptName: undefined,
     orderNum: 0,
-    leader: undefined,
-    phone: undefined,
-    email: undefined,
+    schoolCode: undefined,
     status: "0"
   }
   proxy.resetForm("deptRef")
@@ -214,17 +196,38 @@ function resetQuery() {
   handleQuery()
 }
 
+/** 递归处理学校树，仅允许选择小学、初中、高中作为上级 */
+function processDeptOptions(nodes) {
+  if (!nodes) return [];
+  nodes.forEach(node => {
+     if (['小学', '初中', '高中'].includes(node.deptName)) {
+         node.disabled = false;
+     } else {
+         node.disabled = true;
+     }
+     if (node.children) {
+         processDeptOptions(node.children);
+     }
+  });
+  return nodes;
+}
+
 /** 新增按钮操作 */
 function handleAdd(row) {
   reset()
   listDept().then(response => {
-    deptOptions.value = proxy.handleTree(response.data, "deptId")
+    deptOptions.value = processDeptOptions(proxy.handleTree(response.data, "deptId"))
   })
   if (row != undefined) {
-    form.value.parentId = row.deptId
+    if (['小学', '初中', '高中'].includes(row.deptName)) {
+      form.value.parentId = row.deptId;
+    } else {
+      // 否则将同级分类作为其默认上级
+      form.value.parentId = row.parentId;
+    }
   }
   open.value = true
-  title.value = "添加部门"
+  title.value = "添加学校"
 }
 
 /** 展开/折叠操作 */
@@ -240,12 +243,25 @@ function toggleExpandAll() {
 function handleUpdate(row) {
   reset()
   listDeptExcludeChild(row.deptId).then(response => {
-    deptOptions.value = proxy.handleTree(response.data, "deptId")
+    deptOptions.value = processDeptOptions(proxy.handleTree(response.data, "deptId"));
+    // 允许当前编辑的节点保持原有上级（即使不是三大类，例如编辑根节点）
+    const getParentNode = (options, id) => {
+      for (const opt of options) {
+        if (opt.deptId === id) return opt;
+        if (opt.children) {
+          const found = getParentNode(opt.children, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const pNode = getParentNode(deptOptions.value, row.parentId);
+    if (pNode) pNode.disabled = false;
   })
   getDept(row.deptId).then(response => {
     form.value = response.data
     open.value = true
-    title.value = "修改部门"
+    title.value = "修改学校"
   })
 }
 
@@ -253,6 +269,24 @@ function handleUpdate(row) {
 function submitForm() {
   proxy.$refs["deptRef"].validate(valid => {
     if (valid) {
+      if (form.value.parentId !== 0 && form.value.parentId != null) {
+        const getParentNode = (options, id) => {
+          for (const opt of options) {
+            if (opt.deptId === id) return opt;
+            if (opt.children) {
+              const found = getParentNode(opt.children, id);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const pNode = getParentNode(deptOptions.value, form.value.parentId);
+        if (pNode && pNode.disabled) {
+          proxy.$modal.msgWarning('只能选择小学、初中或高中作为上级！');
+          return;
+        }
+      }
+
       if (form.value.deptId != undefined) {
         updateDept(form.value).then(response => {
           proxy.$modal.msgSuccess("修改成功")

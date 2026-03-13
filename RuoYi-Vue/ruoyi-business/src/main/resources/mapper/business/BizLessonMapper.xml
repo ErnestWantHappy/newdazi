@@ -13,6 +13,8 @@
         <result property="shuffleMode"    column="shuffle_mode"    />
         <result property="randomChoiceCount"    column="random_choice_count"    />
         <result property="randomJudgmentCount"    column="random_judgment_count"    />
+        <result property="creatorId"    column="creator_id"    />
+        <result property="deptId"    column="dept_id"    />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
@@ -20,7 +22,7 @@
     </resultMap>
 
     <sql id="selectBizLessonVo">
-        select lesson_id, lesson_title, grade, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count, create_by, create_time, update_by, update_time from biz_lesson
+        select lesson_id, lesson_title, grade, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count, creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
 
     <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
@@ -47,6 +49,8 @@
             <if test="shuffleMode != null">shuffle_mode,</if>
             <if test="randomChoiceCount != null">random_choice_count,</if>
             <if test="randomJudgmentCount != null">random_judgment_count,</if>
+            <if test="creatorId != null">creator_id,</if>
+            <if test="deptId != null">dept_id,</if>
             <if test="createBy != null and createBy != ''">create_by,</if>
             <if test="createTime != null">create_time,</if>
             <if test="updateBy != null and updateBy != ''">update_by,</if>
@@ -60,6 +64,8 @@
             <if test="shuffleMode != null">#{shuffleMode},</if>
             <if test="randomChoiceCount != null">#{randomChoiceCount},</if>
             <if test="randomJudgmentCount != null">#{randomJudgmentCount},</if>
+            <if test="creatorId != null">#{creatorId},</if>
+            <if test="deptId != null">#{deptId},</if>
             <if test="createBy != null and createBy != ''">#{createBy},</if>
             <if test="createTime != null">#{createTime},</if>
             <if test="updateBy != null and updateBy != ''">#{updateBy},</if>
@@ -77,6 +83,8 @@
             <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
             <if test="randomChoiceCount != null">random_choice_count = #{randomChoiceCount},</if>
             <if test="randomJudgmentCount != null">random_judgment_count = #{randomJudgmentCount},</if>
+            <if test="creatorId != null">creator_id = #{creatorId},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
             <if test="createBy != null and createBy != ''">create_by = #{createBy},</if>
             <if test="createTime != null">create_time = #{createTime},</if>
             <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
@@ -120,6 +128,7 @@
         WHERE
             grade = #{grade}
           AND create_by = #{creatorName}
+          AND dept_id = #{deptId}
         ORDER BY
             lesson_id DESC
     </select>
@@ -140,6 +149,7 @@
         INNER JOIN biz_teacher_class tc 
             ON la.entry_year = tc.entry_year 
             AND la.class_code = tc.class_code
+            AND la.dept_id = tc.dept_id
         WHERE
             tc.user_id = #{userId}
             AND tc.dept_id = #{deptId}

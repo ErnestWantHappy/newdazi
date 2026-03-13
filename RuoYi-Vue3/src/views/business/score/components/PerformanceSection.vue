@@ -9,7 +9,7 @@
             <el-radio-button label="chart">图表</el-radio-button>
           </el-radio-group>
           <el-button v-if="viewMode === 'table'" type="primary" size="small" @click="saveAll" :loading="saving">
-            保存全部
+            全部手动保存
           </el-button>
         </div>
       </div>
@@ -21,7 +21,7 @@
       <el-table :data="tableData" border stripe max-height="350" style="width: 100%">
         <el-table-column prop="studentNo" label="学号" width="70" align="center" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" />
-        <el-table-column label="课堂表现分" width="120" align="center">
+        <el-table-column label="课堂表现分" width="160" align="center">
           <template #default="scope">
             <el-input-number 
               v-model="scope.row.score" 
@@ -30,22 +30,27 @@
               :step="1"
               size="small"
               controls-position="right"
-              style="width: 90px;"
+              :disabled="scope.row.isAbsent"
+              style="width: 120px;"
+              @change="handleDataChange(scope.row)"
+              @blur="handleDataChange(scope.row)"
             />
           </template>
         </el-table-column>
-        <el-table-column label="原因" min-width="200">
+        <el-table-column label="原因" min-width="180">
           <template #default="scope">
             <el-input 
               v-model="scope.row.reason" 
-              placeholder="加分/扣分原因"
+              placeholder="请假/加减分原因"
               size="small"
+              @blur="handleDataChange(scope.row)"
             />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column label="状态" width="100" align="center">
           <template #default="scope">
-            <el-tag v-if="scope.row.changed" type="warning" size="small">已修改</el-tag>
+            <el-tag v-if="scope.row.saving" type="primary" size="small">保存中</el-tag>
+            <el-tag v-else-if="scope.row.changed" type="warning" size="small">已修改</el-tag>
             <el-tag v-else-if="scope.row.performanceId" type="success" size="small">已保存</el-tag>
             <el-tag v-else type="info" size="small">-</el-tag>
           </template>
@@ -101,9 +106,10 @@ async function loadData() {
     })
     tableData.value = (res.data || []).map(item => ({
       ...item,
-      score: item.score || 0,
+      score: item.score,
       reason: item.reason || '',
-      changed: false
+      changed: false,
+      saving: false
     }))
     // 保存原始数据
     originalData.value = {}
@@ -121,11 +127,48 @@ async function loadData() {
 watch(() => tableData.value, (newVal) => {
   newVal.forEach(item => {
     const orig = originalData.value[item.studentId]
-    if (orig) {
+    if (orig && !item.saving) {
       item.changed = item.score !== orig.score || item.reason !== orig.reason
     }
   })
 }, { deep: true })
+
+let autoSaveTimer = null;
+
+// 失去焦点或数据变化时，防抖触发单个自动保存
+function handleDataChange(row) {
+  // 如果当前行没有发生变化直接返回
+  if (!row.changed) return;
+
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => {
+    saveSingleRow(row);
+  }, 800);
+}
+
+// 静默保存单条记录
+async function saveSingleRow(row) {
+  if (!row.changed) return;
+  row.saving = true;
+  try {
+    const res = await batchSavePerformance({
+      lessonId: props.lessonId,
+      performances: [{
+        studentId: row.studentId,
+        score: row.score,
+        reason: row.reason
+      }]
+    });
+    // 保存成功，更新基线原始数据
+    originalData.value[row.studentId] = { score: row.score, reason: row.reason };
+    row.changed = false;
+    row.performanceId = res.data || true;
+  } catch (e) {
+    ElMessage.error('自动保存失败: ' + row.studentName);
+  } finally {
+    row.saving = false;
+  }
+}
 
 // 保存全部
 async function saveAll() {

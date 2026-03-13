@@ -60,6 +60,16 @@ public interface IBizStudentService
     public int deleteBizStudentByStudentId(Long studentId);
 
     /**
+     * 按班级批量删除学生管理
+     * 
+     * @param entryYear 入学年份
+     * @param classCode 班级
+     * @param deptId 部门(学校)ID
+     * @return 结果
+     */
+    public int deleteBizStudentByClass(String entryYear, String classCode, Long deptId);
+
+    /**
      * 导入学生数据
      * * @param studentList 学生数据列表
      * @param operName 操作用户

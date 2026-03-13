@@ -1,6 +1,7 @@
 package com.ruoyi.business.domain;
 
 import java.util.List;
+import com.ruoyi.common.annotation.Excel;
 import com.ruoyi.common.core.domain.BaseEntity;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
@@ -31,6 +32,10 @@ public class BizLesson extends BaseEntity
 
     /** 创建教师ID */
     private Long creatorId;
+
+    /** 所属学校ID */
+    @Excel(name = "所属学校ID")
+    private Long deptId;
 
     /** 出题模式: 0=固定顺序, 1=随机排序, 2=随机抽取 */
     private Integer shuffleMode;
@@ -92,6 +97,14 @@ public class BizLesson extends BaseEntity
 
     public void setCreatorId(Long creatorId) {
         this.creatorId = creatorId;
+    }
+
+    public Long getDeptId() {
+        return deptId;
+    }
+
+    public void setDeptId(Long deptId) {
+        this.deptId = deptId;
     }
 
     public Integer getShuffleMode() {

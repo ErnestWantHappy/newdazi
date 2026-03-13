@@ -35,6 +35,10 @@ public class BizLessonAssignment extends BaseEntity
     /** 指派教师的用户ID (关联 sys_user.user_id) */
     private Long assignerId;
 
+    /** 所属学校ID */
+    @Excel(name = "所属学校ID")
+    private Long deptId;
+
     /** 指派时间 */
     @JsonFormat(pattern = "yyyy-MM-dd")
     @Excel(name = "指派时间", width = 30, dateFormat = "yyyy-MM-dd")
@@ -88,6 +92,16 @@ public class BizLessonAssignment extends BaseEntity
     public Long getAssignerId() 
     {
         return assignerId;
+    }
+
+    public Long getDeptId() 
+    {
+        return deptId;
+    }
+
+    public void setDeptId(Long deptId) 
+    {
+        this.deptId = deptId;
     }
 
     public void setAssignTime(Date assignTime) 
