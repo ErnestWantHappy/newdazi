@@ -89,13 +89,14 @@ function renderChart() {
   if (!chartInstance) initChart();
   if (!chartInstance) return;
 
-  const sorted = [...props.data].sort((a, b) => b.filteredTotal - a.filteredTotal);
+  const getCourseTotal = (student) => Math.round(student.finalTotal ?? student.filteredTotal ?? 0);
+  const sorted = [...props.data].sort((a, b) => getCourseTotal(b) - getCourseTotal(a));
   const names = sorted.map(s => s.studentName);
   
   const detailMap = {};
   sorted.forEach((s) => {
       detailMap[s.studentName] = {
-          total: Math.round(s.filteredTotal || 0),
+          total: getCourseTotal(s),
           theory: Math.round(s.avgTheory || 0),
           practical: Math.round(s.avgPractical || 0),
           typing: Math.round(s.avgTyping || 0),
@@ -104,7 +105,7 @@ function renderChart() {
       };
   });
   
-  const scores = sorted.map(s => Math.round(s.filteredTotal || 0));
+  const scores = sorted.map(s => getCourseTotal(s));
   
   const option = {
     tooltip: { 

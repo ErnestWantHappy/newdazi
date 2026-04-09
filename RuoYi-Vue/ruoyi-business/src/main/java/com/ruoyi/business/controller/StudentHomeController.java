@@ -311,24 +311,27 @@ public class StudentHomeController extends BaseController
                         // 记录答题时间到数据库
                         answer.setAnswerTime(timeSpent);
                         
-                        // === 新公式 v4.1 (方案B) ===
-                        // 目标字数 = 原文字数（不依赖时长，时长仅作为答题时间限制）
-                        // 速度系数 = 正确字数 / 原文字数（封顶1.0）
+                        // === 新公式 v5 ===
+                        // 目标字数 = min(baseSpeed × 自定义时长, 原文字数)
+                        // 速度系数 = 正确字数 / 目标字数（封顶1.0）
                         // 得分 = 满分 × 速度系数 × 正确率
                         if (question.getQuestionScore() != null) {
-                            double speedFactor = (double) correctCount / originalLength;
+                            int targetCount = Math.min(baseSpeed * duration, originalLength);
+                            if (targetCount <= 0) targetCount = originalLength; // 兜底
+                            
+                            double speedFactor = (double) correctCount / targetCount;
                             speedFactor = Math.min(speedFactor, 1.0); // 封顶，不超过满分
                             
                             double rawScore = question.getQuestionScore() * speedFactor * accuracyRate;
                             score = (int) Math.round(rawScore);
                             
                             // 打印调试日志
-                            log.info("=== 打字评分调试 (v4.1) Start ===");
-                            log.info("题目ID: {}, 满分: {}, 原文字数: {}", 
-                                    question.getQuestionId(), question.getQuestionScore(), originalLength);
-                            log.info("正确字数: {}, 速度系数: {}, 正确率: {}", correctCount, speedFactor, accuracyRate);
+                            log.info("=== 打字评分调试 (v5) Start ===");
+                            log.info("题目ID: {}, 满分: {}, 原文字数: {}, baseSpeed: {}, 自定义时长: {}分钟", 
+                                    question.getQuestionId(), question.getQuestionScore(), originalLength, baseSpeed, duration);
+                            log.info("目标字数: {}, 正确字数: {}, 速度系数: {}, 正确率: {}", targetCount, correctCount, speedFactor, accuracyRate);
                             log.info("得分: {} (原始: {})", score, rawScore);
-                            log.info("=== 打字评分调试 (v4.1) End ===");
+                            log.info("=== 打字评分调试 (v5) End ===");
                             
                             // 确保不超过满分
                             score = Math.min(score, question.getQuestionScore().intValue());

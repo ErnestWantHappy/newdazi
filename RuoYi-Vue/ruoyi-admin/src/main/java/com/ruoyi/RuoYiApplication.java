@@ -19,7 +19,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
         "com.ruoyi.*",
 })
 
-@MapperScan({"com.ruoyi.system.mapper", "com.ruoyi.business.mapper"})
+@MapperScan({"com.ruoyi.system.mapper", "com.ruoyi.business.mapper", "com.ruoyi.quartz.mapper", "com.ruoyi.generator.mapper"})
 public class RuoYiApplication
 {
     public static void main(String[] args)

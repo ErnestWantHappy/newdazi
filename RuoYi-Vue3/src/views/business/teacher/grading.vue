@@ -71,7 +71,8 @@
                @click="s.submitted ? selectStudent(s, index) : null"
             >
                <div class="s-info">
-                   <div class="s-name">{{ s.studentName }}</div>
+                   <div class="s-name" :style="s.remark ? { color: '#E6A23C' } : {}">{{ s.studentName }}</div>
+                   <div class="s-remark" v-if="s.remark">{{ s.remark }}</div>
                    <div class="s-no">{{ s.studentNo }}</div>
                </div>
                <div class="s-status" v-if="!s.submitted">未交</div>
@@ -576,9 +577,18 @@ function submitScore() {
         if (res.code === 200) {
             ElMessage.success('批改保存成功');
             // 更新本地数据
+            const wasUngraded = currentStudent.value.score == null;
             currentStudent.value.score = finalScore;
             const item = submissions.value[currentIndex.value];
             if(item) item.score = finalScore;
+            
+            // Bug 2: 同步更新班级下拉框的未批改计数
+            if (wasUngraded && selectedClassCode.value) {
+                const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
+                if (classInfo && classInfo.practicalUngraded > 0) {
+                    classInfo.practicalUngraded--;
+                }
+            }
             
             // 自动跳转下一个已提交的学生
             nextSubmittedStudent();
@@ -771,6 +781,7 @@ function autoFocusItem() {
     
     .s-info {
        .s-name { font-size: 14px; color: #303133; }
+       .s-remark { font-size: 11px; color: #E6A23C; margin-top: 2px; }
        .s-no { font-size: 12px; color: #909399; }
     }
     

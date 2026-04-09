@@ -2,6 +2,7 @@ package com.ruoyi.business.mapper;
 
 import java.util.List;
 import com.ruoyi.business.domain.BizStudent;
+import org.apache.ibatis.annotations.Param;
 /**
  * 学生管理Mapper接口
  * 
@@ -71,4 +72,15 @@ public interface BizStudentMapper
      * @return 学生信息
      */
     public BizStudent selectBizStudentByUserId(Long userId);
+    /**
+     * 缁熻鎸囧畾瀛︽牎鐝骇鐨勫墿浣欏鐢熶汉鏁?
+     *
+     * @param deptId 瀛︽牎ID
+     * @param entryYear 鍏ュ骞翠唤
+     * @param classCode 鐝骇缂栧彿
+     * @return 瀛︾敓浜烘暟
+     */
+    public int countByDeptIdAndClass(@Param("deptId") Long deptId,
+                                     @Param("entryYear") String entryYear,
+                                     @Param("classCode") String classCode);
 }

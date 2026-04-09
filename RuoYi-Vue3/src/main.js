@@ -28,6 +28,7 @@ import './permission' // permission control
 import { useDict } from '@/utils/dict'
 import { getConfigKey } from "@/api/system/config"
 import { parseTime, resetForm, addDateRange, handleTree, selectDictLabel, selectDictLabels } from '@/utils/ruoyi'
+import { startSessionHeartbeat } from '@/utils/session'
 
 // 分页组件
 import Pagination from '@/components/Pagination'
@@ -80,5 +81,7 @@ app.use(ElementPlus, {
   // 支持 large、default、small
   size: Cookies.get('size') || 'default'
 })
+
+startSessionHeartbeat()
 
 app.mount('#app')

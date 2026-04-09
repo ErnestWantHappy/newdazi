@@ -449,6 +449,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { FullScreen, Search, Download, Setting, Calendar } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import * as XLSX from 'xlsx';
+import { isSessionExpiredError } from '@/utils/session';
 
 import StudentRankList from './components/GradeOverview/StudentRankList.vue';
 import ClassScoreChart from './components/charts/ClassScoreChart.vue';
@@ -1019,11 +1020,15 @@ function handleExport() {
     link.href = window.URL.createObjectURL(blob);
     link.download = `成绩汇总_${queryParams.value.entryYear}级.xlsx`;
     link.click();
+    window.URL.revokeObjectURL(link.href);
     loadingMsg.close();
     ElMessage.success('导出成功');
-  }).catch(() => {
+  }).catch((error) => {
     loadingMsg.close();
-    ElMessage.error('导出失败');
+    if (isSessionExpiredError(error)) {
+      return;
+    }
+    ElMessage.error(error?.message || '导出失败');
   });
 }
 

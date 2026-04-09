@@ -308,7 +308,7 @@
                   }}</span>
                   <span class="header-right-info">
                     <template v-if="theorySubmitted && q.answer">
-                      <span v-if="answers[q.questionId] === q.answer" class="result-tag correct">
+                      <span v-if="isQuestionAnswerCorrect(q, answers[q.questionId])" class="result-tag correct">
                         <el-icon><Check /></el-icon> 正确
                       </span>
                       <span v-else class="result-tag wrong">
@@ -346,8 +346,8 @@
                 class="audit-group"
               >
                 <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted">
-                  <el-radio label="对" border>正确</el-radio>
-                  <el-radio label="错" border>错误</el-radio>
+                  <el-radio label="T" border>正确</el-radio>
+                  <el-radio label="F" border>错误</el-radio>
                 </el-radio-group>
               </div>
             </el-card>
@@ -731,30 +731,30 @@
               <div
                 class="opt-btn"
                 :class="{
-                  selected: wrongAnswers[q.questionId] === 'true',
+                  selected: wrongAnswers[q.questionId] === 'T',
                   'correct-result':
-                    wrongSubmitted[q.questionId] && q.answer === 'true',
+                    wrongSubmitted[q.questionId] && isQuestionAnswerOption(q, 'T'),
                   'wrong-result':
                     wrongSubmitted[q.questionId] &&
-                    wrongAnswers[q.questionId] === 'true' &&
-                    q.answer !== 'true',
+                    wrongAnswers[q.questionId] === 'T' &&
+                    !isQuestionAnswerOption(q, 'T'),
                 }"
-                @click="selectWrongAnswer(q.questionId, 'true')"
+                @click="selectWrongAnswer(q.questionId, 'T', q.questionType)"
               >
                 正确
               </div>
               <div
                 class="opt-btn"
                 :class="{
-                  selected: wrongAnswers[q.questionId] === 'false',
+                  selected: wrongAnswers[q.questionId] === 'F',
                   'correct-result':
-                    wrongSubmitted[q.questionId] && q.answer === 'false',
+                    wrongSubmitted[q.questionId] && isQuestionAnswerOption(q, 'F'),
                   'wrong-result':
                     wrongSubmitted[q.questionId] &&
-                    wrongAnswers[q.questionId] === 'false' &&
-                    q.answer !== 'false',
+                    wrongAnswers[q.questionId] === 'F' &&
+                    !isQuestionAnswerOption(q, 'F'),
                 }"
-                @click="selectWrongAnswer(q.questionId, 'false')"
+                @click="selectWrongAnswer(q.questionId, 'F', q.questionType)"
               >
                 错误
               </div>
@@ -798,7 +798,7 @@
               class="answer-analysis"
             >
               <div class="analysis-box">
-                <div class="label">正确答案：{{ q.answer }}</div>
+                <div class="label">正确答案：{{ getQuestionAnswerLabel(q) }}</div>
                 <div class="content">{{ q.analysis || "暂无解析" }}</div>
               </div>
             </div>
@@ -966,6 +966,85 @@ const wrongAnswers = ref({}); // { questionId: 'A' } 用户选择的答案
 const wrongSubmitted = ref({}); // { questionId: true } 是否已提交
 const wrongResults = ref({}); // { questionId: 'correct'|'wrong' } 结果
 
+function normalizeJudgmentAnswer(answer) {
+  if (answer === null || answer === undefined) {
+    return null;
+  }
+
+  const trimmed = String(answer).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (
+    trimmed === "对" ||
+    trimmed === "正确" ||
+    trimmed === "T" ||
+    trimmed === "1" ||
+    trimmed.toLowerCase() === "true"
+  ) {
+    return "T";
+  }
+
+  if (
+    trimmed === "错" ||
+    trimmed === "错误" ||
+    trimmed === "F" ||
+    trimmed === "0" ||
+    trimmed.toLowerCase() === "false"
+  ) {
+    return "F";
+  }
+
+  return trimmed.toUpperCase();
+}
+
+function normalizeQuestionAnswer(questionType, answer) {
+  if (questionType === "judgment") {
+    return normalizeJudgmentAnswer(answer);
+  }
+  return answer;
+}
+
+function isQuestionAnswerCorrect(question, userAnswer) {
+  const normalizedUserAnswer = normalizeQuestionAnswer(
+    question?.questionType,
+    userAnswer
+  );
+  const normalizedStandardAnswer = normalizeQuestionAnswer(
+    question?.questionType,
+    question?.answer
+  );
+
+  if (normalizedUserAnswer === null || normalizedStandardAnswer === null) {
+    return false;
+  }
+
+  return normalizedUserAnswer === normalizedStandardAnswer;
+}
+
+function isQuestionAnswerOption(question, option) {
+  return isQuestionAnswerCorrect(question, option);
+}
+
+function getQuestionAnswerLabel(question) {
+  const normalizedAnswer = normalizeQuestionAnswer(
+    question?.questionType,
+    question?.answer
+  );
+
+  if (question?.questionType === "judgment") {
+    if (normalizedAnswer === "T") {
+      return "正确";
+    }
+    if (normalizedAnswer === "F") {
+      return "错误";
+    }
+  }
+
+  return question?.answer ?? "";
+}
+
 // 加载错题
 async function loadWrongQuestions() {
   wrongLoading.value = true;
@@ -1030,7 +1109,7 @@ async function loadLessonOptions() {
 }
 
 // 选择答案
-function selectWrongAnswer(questionId, answer) {
+function selectWrongAnswer(questionId, answer, questionType = null) {
   // 如果已提交且正确，不允许修改
   if (
     wrongSubmitted.value[questionId] &&
@@ -1038,7 +1117,7 @@ function selectWrongAnswer(questionId, answer) {
   ) {
     return;
   }
-  wrongAnswers.value[questionId] = answer;
+  wrongAnswers.value[questionId] = normalizeQuestionAnswer(questionType, answer);
   // 如果之前提交错误，现在重新选择，清除提交状态
   if (wrongSubmitted.value[questionId]) {
     wrongSubmitted.value[questionId] = false;
@@ -1055,7 +1134,7 @@ function submitWrongAnswer(question) {
     return;
   }
   wrongSubmitted.value[questionId] = true;
-  if (userAnswer === question.answer) {
+  if (isQuestionAnswerCorrect(question, userAnswer)) {
     wrongResults.value[questionId] = "correct";
     ElMessage.success("回答正确！");
   } else {
@@ -1268,7 +1347,10 @@ function initTheoryState() {
       totalScore += submitted.score || 0;
       // 恢复已提交的答案到界面
       if (submitted.answer) {
-        answers.value[q.questionId] = submitted.answer;
+        answers.value[q.questionId] = normalizeQuestionAnswer(
+          q.questionType,
+          submitted.answer
+        );
       }
     }
   });
@@ -1531,13 +1613,20 @@ function submitTheory() {
     return;
   }
 
+  const theoryQuestionMap = new Map(
+    theoryQuestions.value.map((q) => [q.questionId, q])
+  );
   const ids = theoryQuestions.value.map((q) => q.questionId);
   const submitData = {};
   let answeredCount = 0;
 
   ids.forEach((id) => {
     if (answers.value[id]) {
-      submitData[id] = answers.value[id];
+      const question = theoryQuestionMap.get(id);
+      submitData[id] = normalizeQuestionAnswer(
+        question?.questionType,
+        answers.value[id]
+      );
       answeredCount++;
     }
   });

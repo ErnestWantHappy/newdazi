@@ -122,6 +122,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </delete>
 
+    <delete id="deleteByDeptIdAndClass">
+        delete from biz_teacher_class
+        where dept_id = #{deptId}
+          and entry_year = #{entryYear}
+          and class_code = #{classCode}
+    </delete>
+
     <select id="checkTeacherClassExists" parameterType="BizTeacherClass" resultType="int">
         select count(*) from biz_teacher_class
         where user_id = #{userId} and dept_id = #{deptId} and entry_year = #{entryYear} and class_code = #{classCode}

@@ -1,7 +1,9 @@
 package com.ruoyi.business.service.impl;
 
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import com.ruoyi.system.service.ISysUserService;
 import com.ruoyi.common.constant.CacheConstants;
 import com.ruoyi.common.core.redis.RedisCache;
@@ -159,8 +161,11 @@ public class BizStudentServiceImpl implements IBizStudentService
             query.setDeptId(loginUser.getUser().getDeptId());
         }
 
+        Long targetDeptId = query.getDeptId();
+
         List<BizStudent> students = bizStudentMapper.selectBizStudentList(query);
         if (students == null || students.isEmpty()) {
+            recycleEmptyClass(targetDeptId, entryYear, classCode);
             return 0;
         }
 
@@ -173,21 +178,30 @@ public class BizStudentServiceImpl implements IBizStudentService
                 userRoleMapper.deleteUserRoleByUserId(student.getUserId());
             }
         }
-        return bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
+        int rows = bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
+        recycleEmptyClass(targetDeptId, entryYear, classCode);
+        return rows;
     }
 
     @Override
     @Transactional
     public int deleteBizStudentByStudentIds(Long[] studentIds)
     {
+        Set<String> affectedClasses = new LinkedHashSet<>();
         for (Long studentId : studentIds) {
             BizStudent student = bizStudentMapper.selectBizStudentByStudentId(studentId);
-            if (student != null && student.getUserId() != null) {
+            if (student == null) {
+                continue;
+            }
+            markAffectedClass(affectedClasses, student.getDeptId(), student.getEntryYear(), student.getClassCode());
+            if (student.getUserId() != null) {
                 userMapper.deleteUserById(student.getUserId());
                 userRoleMapper.deleteUserRoleByUserId(student.getUserId());
             }
         }
-        return bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
+        int rows = bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
+        recycleEmptyClasses(affectedClasses);
+        return rows;
     }
 
     @Override
@@ -195,10 +209,16 @@ public class BizStudentServiceImpl implements IBizStudentService
     public int deleteBizStudentByStudentId(Long studentId)
     {
         BizStudent student = bizStudentMapper.selectBizStudentByStudentId(studentId);
-        if (student != null && student.getUserId() != null) {
-            userMapper.deleteUserById(student.getUserId());
+        if (student == null) {
+            return 0;
         }
-        return bizStudentMapper.deleteBizStudentByStudentId(studentId);
+        if (student.getUserId() != null) {
+            userMapper.deleteUserById(student.getUserId());
+            userRoleMapper.deleteUserRoleByUserId(student.getUserId());
+        }
+        int rows = bizStudentMapper.deleteBizStudentByStudentId(studentId);
+        recycleEmptyClass(student.getDeptId(), student.getEntryYear(), student.getClassCode());
+        return rows;
     }
 
     @Override
@@ -376,5 +396,38 @@ public class BizStudentServiceImpl implements IBizStudentService
         } catch (Exception e) {
             log.warn("自动添加教师管理班级失败: {}", e.getMessage());
         }
+    }
+    /**
+     * 班级删空后同步回收教师管理关系，避免保留 0 人空班。
+     */
+    private void recycleEmptyClass(Long deptId, String entryYear, String classCode) {
+        if (deptId == null || StringUtils.isEmpty(entryYear) || StringUtils.isEmpty(classCode)) {
+            return;
+        }
+
+        int remainingCount = bizStudentMapper.countByDeptIdAndClass(deptId, entryYear, classCode);
+        if (remainingCount > 0) {
+            return;
+        }
+
+        int removed = teacherClassService.deleteByDeptIdAndClass(deptId, entryYear, classCode);
+        if (removed > 0) {
+            log.info("班级已清空，自动清理教师管理关系: deptId={}, entryYear={}, classCode={}, removed={}",
+                    deptId, entryYear, classCode, removed);
+        }
+    }
+
+    private void recycleEmptyClasses(Set<String> affectedClasses) {
+        for (String classKey : affectedClasses) {
+            String[] parts = classKey.split("\\|", 3);
+            recycleEmptyClass(Long.valueOf(parts[0]), parts[1], parts[2]);
+        }
+    }
+
+    private void markAffectedClass(Set<String> affectedClasses, Long deptId, String entryYear, String classCode) {
+        if (deptId == null || StringUtils.isEmpty(entryYear) || StringUtils.isEmpty(classCode)) {
+            return;
+        }
+        affectedClasses.add(deptId + "|" + entryYear + "|" + classCode);
     }
 }

@@ -41,8 +41,13 @@
 </template>
 
 <script setup>
-import { getToken } from "@/utils/auth"
 import Sortable from 'sortablejs'
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from '@/utils/session'
 
 const props = defineProps({
   modelValue: [String, Object, Array],
@@ -93,11 +98,15 @@ const number = ref(0)
 const uploadList = ref([])
 const baseUrl = import.meta.env.VITE_APP_BASE_API
 const uploadFileUrl = ref(import.meta.env.VITE_APP_BASE_API + props.action) // 上传文件服务器地址
-const headers = ref({ Authorization: "Bearer " + getToken() })
+const headers = ref(refreshAuthorizationHeader())
 const fileList = ref([])
 const showTip = computed(
   () => props.isShowTip && (props.fileType || props.fileSize)
 )
+
+function refreshHeaders() {
+  headers.value = refreshAuthorizationHeader(headers.value)
+}
 
 watch(() => props.modelValue, val => {
   if (val) {
@@ -120,6 +129,7 @@ watch(() => props.modelValue, val => {
 
 // 上传前校检格式和大小
 function handleBeforeUpload(file) {
+  refreshHeaders()
   // 校检文件类型
   if (props.fileType.length) {
     const fileName = file.name.split('.')
@@ -155,7 +165,11 @@ function handleExceed() {
 
 // 上传失败
 function handleUploadError(err) {
-  proxy.$modal.msgError("上传文件失败")
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired()
+  } else {
+    proxy.$modal.msgError("上传文件失败")
+  }
   proxy.$modal.closeLoading()
 }
 
@@ -164,6 +178,11 @@ function handleUploadSuccess(res, file) {
   if (res.code === 200) {
     uploadList.value.push({ name: res.fileName, url: res.fileName })
     uploadedSuccessfully()
+  } else if (isSessionExpiredCode(res.code)) {
+    number.value--
+    proxy.$modal.closeLoading()
+    handleSessionExpired(res.msg)
+    proxy.$refs.fileUpload.handleRemove(file)
   } else {
     number.value--
     proxy.$modal.closeLoading()

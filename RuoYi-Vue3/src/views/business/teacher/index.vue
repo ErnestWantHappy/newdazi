@@ -112,12 +112,17 @@ function fetchDashboardData() {
 
 /** 处理新增课程 */
 function handleAddNewLesson(group) {
+  // 自动计算下一课序号
+  const maxLessonNum = group.lessons && group.lessons.length > 0
+    ? Math.max(...group.lessons.map(l => l.lessonNum || 0))
+    : 0;
   router.push({
     path: '/business/lesson-auth/designer',
     query: {
       grade: group.gradeId,
       gradeName: group.gradeName,
-      classes: JSON.stringify(group.allClassesInGrade)
+      classes: JSON.stringify(group.allClassesInGrade),
+      nextNum: maxLessonNum + 1
     }
   });
 }

@@ -1,35 +1,46 @@
 import axios from 'axios'
-import { ElNotification , ElMessageBox, ElMessage, ElLoading } from 'element-plus'
-import { getToken } from '@/utils/auth'
+import { ElNotification, ElMessage, ElLoading } from 'element-plus'
 import errorCode from '@/utils/errorCode'
 import { tansParams, blobValidate } from '@/utils/ruoyi'
 import cache from '@/plugins/cache'
 import { saveAs } from 'file-saver'
-import useUserStore from '@/store/modules/user'
+import {
+  isRelogin,
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from '@/utils/session'
 
 let downloadLoadingInstance
-// 是否显示重新登录
-export let isRelogin = { show: false }
 
 axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
-// 创建axios实例
+
 const service = axios.create({
-  // axios中请求配置有baseURL选项，表示请求URL公共部分
   baseURL: import.meta.env.VITE_APP_BASE_API,
-  // 超时时间设置为60秒，支持文件转换等耗时操作
   timeout: 60000
 })
 
-// request拦截器
+function parseResponseCode(data) {
+  return Number(data?.code ?? 200)
+}
+
+function parseResponseMessage(data, code) {
+  return errorCode[code] || data?.msg || errorCode.default
+}
+
+async function parseBlobError(data) {
+  const resText = await data.text()
+  return JSON.parse(resText)
+}
+
 service.interceptors.request.use(config => {
-  // 是否需要设置 token
   const isToken = (config.headers || {}).isToken === false
-  // 是否需要防止数据重复提交
   const isRepeatSubmit = (config.headers || {}).repeatSubmit === false
-  if (getToken() && !isToken) {
-    config.headers['Authorization'] = 'Bearer ' + getToken() // 让每个请求携带自定义token 请根据实际情况自行修改
+  config.headers = config.headers || {}
+  if (!isToken) {
+    config.headers = refreshAuthorizationHeader(config.headers)
   }
-  // get请求映射params参数
   if (config.method === 'get' && config.params) {
     let url = config.url + '?' + tansParams(config.params)
     url = url.slice(0, -1)
@@ -42,110 +53,123 @@ service.interceptors.request.use(config => {
       data: typeof config.data === 'object' ? JSON.stringify(config.data) : config.data,
       time: new Date().getTime()
     }
-    const requestSize = Object.keys(JSON.stringify(requestObj)).length // 请求数据大小
-    const limitSize = 5 * 1024 * 1024 // 限制存放数据5M
+    const requestSize = Object.keys(JSON.stringify(requestObj)).length
+    const limitSize = 5 * 1024 * 1024
     if (requestSize >= limitSize) {
-      console.warn(`[${config.url}]: ` + '请求数据大小超出允许的5M限制，无法进行防重复提交验证。')
+      console.warn(`[${config.url}]: 请求数据大小超出允许的5M限制，无法进行防重复提交验证。`)
       return config
     }
     const sessionObj = cache.session.getJSON('sessionObj')
     if (sessionObj === undefined || sessionObj === null || sessionObj === '') {
       cache.session.setJSON('sessionObj', requestObj)
     } else {
-      const s_url = sessionObj.url                // 请求地址
-      const s_data = sessionObj.data              // 请求数据
-      const s_time = sessionObj.time              // 请求时间
-      const interval = 1000                       // 间隔时间(ms)，小于此时间视为重复提交
+      const s_url = sessionObj.url
+      const s_data = sessionObj.data
+      const s_time = sessionObj.time
+      const interval = 1000
       if (s_data === requestObj.data && requestObj.time - s_time < interval && s_url === requestObj.url) {
         const message = '数据正在处理，请勿重复提交'
-        console.warn(`[${s_url}]: ` + message)
+        console.warn(`[${s_url}]: ${message}`)
         return Promise.reject(new Error(message))
-      } else {
-        cache.session.setJSON('sessionObj', requestObj)
       }
+      cache.session.setJSON('sessionObj', requestObj)
     }
   }
   return config
 }, error => {
-    console.log(error)
-    Promise.reject(error)
+  console.log(error)
+  return Promise.reject(error)
 })
 
-// 响应拦截器
-service.interceptors.response.use(res => {
-    // 未设置状态码则默认成功状态
-    const code = res.data.code || 200
-    // 获取错误信息
-    const msg = errorCode[code] || res.data.msg || errorCode['default']
-    // 二进制数据则直接返回
-    if (res.request.responseType ===  'blob' || res.request.responseType ===  'arraybuffer') {
+service.interceptors.response.use(async res => {
+  if (res.request.responseType === 'blob' || res.request.responseType === 'arraybuffer') {
+    if (blobValidate(res.data)) {
       return res.data
     }
-    if (code === 401) {
-      if (!isRelogin.show) {
-        isRelogin.show = true
-        ElMessageBox.confirm('登录状态已过期，您的当前进度可能无法保存。请不要关闭页面，建议新建标签页重新登录后再尝试提交。', '系统提示', { confirmButtonText: '重新登录', cancelButtonText: '留在本页', type: 'warning' }).then(() => {
-          isRelogin.show = false
-          useUserStore().logOut().then(() => {
-            location.href = '/index'
-          })
-      }).catch(() => {
-        isRelogin.show = false
-      })
-    }
-      return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
-    } else if (code === 500) {
-      ElMessage({ message: msg, type: 'error' })
-      return Promise.reject(new Error(msg))
-    } else if (code === 601) {
-      ElMessage({ message: msg, type: 'warning' })
-      return Promise.reject(new Error(msg))
-    } else if (code !== 200) {
-      ElNotification.error({ title: msg })
-      return Promise.reject('error')
+    const rspObj = await parseBlobError(res.data)
+    const code = parseResponseCode(rspObj)
+    const msg = parseResponseMessage(rspObj, code)
+    if (isSessionExpiredCode(code)) {
+      handleSessionExpired(msg)
     } else {
-      return  Promise.resolve(res.data)
+      ElMessage.error(msg)
     }
-  },
-  error => {
-    console.log('err' + error)
-    let { message } = error
-    if (message == "Network Error") {
-      message = "后端接口连接异常"
-    } else if (message.includes("timeout")) {
-      message = "系统接口请求超时"
-    } else if (message.includes("Request failed with status code")) {
-      message = "系统接口" + message.substr(message.length - 3) + "异常"
-    }
-    ElMessage({ message: message, type: 'error', duration: 5 * 1000 })
+    return Promise.reject(new Error(msg))
+  }
+
+  const code = parseResponseCode(res.data)
+  const msg = parseResponseMessage(res.data, code)
+  if (isSessionExpiredCode(code)) {
+    handleSessionExpired(msg)
+    return Promise.reject(new Error(msg))
+  }
+  if (code === 500) {
+    ElMessage({ message: msg, type: 'error' })
+    return Promise.reject(new Error(msg))
+  }
+  if (code === 601) {
+    ElMessage({ message: msg, type: 'warning' })
+    return Promise.reject(new Error(msg))
+  }
+  if (code !== 200) {
+    ElNotification.error({ title: msg })
+    return Promise.reject(new Error(msg))
+  }
+  return res.data
+}, error => {
+  console.log('err' + error)
+  if (isSessionExpiredError(error)) {
+    handleSessionExpired(error?.response?.data?.msg || error?.message)
     return Promise.reject(error)
   }
-)
 
-// 通用下载方法
+  let message = error?.message || ''
+  if (message === 'Network Error') {
+    message = '后端接口连接异常'
+  } else if (message.includes('timeout')) {
+    message = '系统接口请求超时'
+  } else if (message.includes('Request failed with status code')) {
+    message = '系统接口' + message.substring(message.length - 3) + '异常'
+  } else if (!message) {
+    message = errorCode.default
+  }
+  ElMessage({ message, type: 'error', duration: 5 * 1000 })
+  return Promise.reject(error)
+})
+
+export { isRelogin }
+
 export function download(url, params, filename, config) {
-  downloadLoadingInstance = ElLoading.service({ text: "正在下载数据，请稍候", background: "rgba(0, 0, 0, 0.7)", })
+  downloadLoadingInstance = ElLoading.service({
+    text: '正在下载数据，请稍候',
+    background: 'rgba(0, 0, 0, 0.7)'
+  })
   return service.post(url, params, {
-    transformRequest: [(params) => { return tansParams(params) }],
+    transformRequest: [(requestParams) => tansParams(requestParams)],
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     responseType: 'blob',
     ...config
-  }).then(async (data) => {
-    const isBlob = blobValidate(data)
-    if (isBlob) {
-      const blob = new Blob([data])
-      saveAs(blob, filename)
-    } else {
-      const resText = await data.text()
-      const rspObj = JSON.parse(resText)
-      const errMsg = errorCode[rspObj.code] || rspObj.msg || errorCode['default']
-      ElMessage.error(errMsg)
+  }).then(async data => {
+    if (blobValidate(data)) {
+      saveAs(new Blob([data]), filename)
+      return
     }
-    downloadLoadingInstance.close()
-  }).catch((r) => {
-    console.error(r)
-    ElMessage.error('下载文件出现错误，请联系管理员！')
-    downloadLoadingInstance.close()
+    const rspObj = await parseBlobError(data)
+    const code = parseResponseCode(rspObj)
+    const errMsg = parseResponseMessage(rspObj, code)
+    if (isSessionExpiredCode(code)) {
+      handleSessionExpired(errMsg)
+      return
+    }
+    ElMessage.error(errMsg)
+  }).catch(error => {
+    if (isSessionExpiredError(error)) {
+      return
+    }
+    console.error(error)
+    ElMessage.error(error?.message || '下载文件出现错误，请联系管理员！')
+  }).finally(() => {
+    downloadLoadingInstance?.close()
   })
 }
 

@@ -3,6 +3,10 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.BizStudentMapper">
+    <resultMap id="YearAndClassResult" type="com.ruoyi.business.domain.BizStudent">
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+    </resultMap>
 
     <resultMap type="BizStudent" id="BizStudentResult">
         <result property="studentId"    column="student_id"    />
@@ -87,10 +91,6 @@
             #{studentId}
         </foreach>
     </delete>
-    <resultMap id="YearAndClassResult" type="com.ruoyi.business.domain.BizStudent">
-        <result property="entryYear" column="entry_year"/>
-        <result property="classCode" column="class_code"/>
-    </resultMap>
     <select id="selectDistinctYearAndClassByDeptId" parameterType="Long" resultMap="YearAndClassResult">
         SELECT DISTINCT
             s.entry_year,
@@ -106,6 +106,15 @@
     <select id="selectBizStudentByUserId" parameterType="Long" resultMap="BizStudentResult">
         <include refid="selectBizStudentVo"/>
         where s.user_id = #{userId}
+    </select>
+
+    <select id="countByDeptIdAndClass" resultType="int">
+        select count(*)
+        from biz_student s
+        inner join sys_user u on s.user_id = u.user_id
+        where u.dept_id = #{deptId}
+          and s.entry_year = #{entryYear}
+          and s.class_code = #{classCode}
     </select>
 
 </mapper>

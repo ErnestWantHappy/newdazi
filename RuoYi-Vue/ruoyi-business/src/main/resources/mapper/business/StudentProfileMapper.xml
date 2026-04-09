@@ -10,9 +10,11 @@
             s.class_code AS classCode,
             s.entry_year AS entryYear,
             s.remark AS remark,
-            u.dept_id AS deptId
+            u.dept_id AS deptId,
+            d.school_type AS schoolType
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN sys_dept d ON u.dept_id = d.dept_id
         WHERE s.student_id = #{studentId}
     </select>
 

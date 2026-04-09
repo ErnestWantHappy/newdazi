@@ -88,14 +88,20 @@ spring:
         # #连接池最大阻塞等待时间（使用负值表示没有限制）
         max-wait: -1ms
 
+management:
+  health:
+    ldap:
+      # 当前项目未依赖 LDAP 健康状态作为启动前提，关闭以避免本地环境误报
+      enabled: false
+
 # token配置
 token:
   # 令牌自定义标识
   header: Authorization
   # 令牌密钥
   secret: abcdefghijklmnopqrstuvwxyz
-  # 令牌有效期（默认30分钟）
-  expireTime: 60
+  # 令牌有效期（分钟）
+  expireTime: 120
 
 # MyBatis配置
 mybatis:

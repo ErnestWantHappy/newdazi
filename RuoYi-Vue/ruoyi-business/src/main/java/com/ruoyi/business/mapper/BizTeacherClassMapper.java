@@ -92,4 +92,15 @@ public interface BizTeacherClassMapper
      * @return 数量
      */
     public int checkTeacherClassExists(BizTeacherClass bizTeacherClass);
+    /**
+     * 鎸夊鏍°€佸叆瀛﹀勾浠藉拰鐝骇娓呯悊鎵€鏈夋暀甯堢鐞嗗叧鑱?
+     *
+     * @param deptId 瀛︽牎ID
+     * @param entryYear 鍏ュ骞翠唤
+     * @param classCode 鐝骇缂栧彿
+     * @return 鍒犻櫎鏁伴噺
+     */
+    public int deleteByDeptIdAndClass(@Param("deptId") Long deptId,
+                                      @Param("entryYear") String entryYear,
+                                      @Param("classCode") String classCode);
 }

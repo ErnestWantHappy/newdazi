@@ -156,7 +156,16 @@
                 </div>
                 <div v-else-if="scope.row.questionType === 'typing'" class="typing-info">
                   <span>总字数：{{ scope.row.wordCount || 0 }}</span>
-                  <span style="margin-left: 15px;">时长：{{ scope.row.typingDuration || 0 }} 分钟</span>
+                  <span style="margin-left: 15px;">时长：</span>
+                  <el-input-number 
+                    v-model="scope.row.typingDuration" 
+                    :min="1" :max="30" size="small" 
+                    controls-position="right"
+                    style="width: 100px; margin-right: 4px;"
+                  /> 分钟
+                  <span style="margin-left: 8px; color: #909399; font-size: 11px;">
+                    {{ getTypingDurationHint(scope.row) }}
+                  </span>
                 </div>
                 <!-- 操作题显示评分标准 -->
                 <div v-else-if="scope.row.questionType === 'practical'" class="scoring-info">
@@ -309,7 +318,7 @@
 
     <div class="footer-toolbar">
       <el-button type="primary" @click="submitForm">保 存</el-button>
-      <el-button @click="cancel">取 消</el-button>
+      <el-button @click="router.push('/teacher-dashboard')">返回教师首页</el-button>
     </div>
 
     <pdf-preview ref="pdfPreviewRef" />
@@ -600,7 +609,7 @@ function initialize() {
       lessonTitle: null,
       grade: grade ? parseInt(grade, 10) : null,
       semester: getDefaultSemester(),
-      lessonNum: 1,
+      lessonNum: route.query.nextNum ? parseInt(route.query.nextNum, 10) : 1,
       assignedClasses: [],
       shuffleMode: 0,
       randomChoiceCount: 0,
@@ -651,6 +660,26 @@ function formatJudgeAnswer(answer) {
   }
   return normalized || '未配置';
 }
+// 打字题时长推荐提示
+function getTypingDurationHint(row) {
+  const wordCount = row.wordCount || 0;
+  if (wordCount === 0 || !row.typingDuration) return '';
+  
+  // 根据年级判断基准速度（小学20字/分，初高中40字/分）
+  const grade = form.value.grade || 7;
+  const baseSpeed = grade <= 6 ? 20 : 40;
+  const recommendedMin = Math.ceil(wordCount / baseSpeed);
+  const duration = row.typingDuration;
+  
+  if (duration === recommendedMin) {
+    return '✓ 推荐时长';
+  } else if (duration < recommendedMin) {
+    return `⚠️ 时间较短，推荐 ${recommendedMin} 分钟，可能导致整体分数偏低`;
+  } else {
+    return `⚠️ 时间较长，推荐 ${recommendedMin} 分钟，可能导致整体分数偏高`;
+  }
+}
+
 function stripHtml(html) {
   if (!html) return "";
   let tmp = document.createElement("DIV");

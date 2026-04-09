@@ -103,6 +103,7 @@
         :disabled="upload.isUploading"
         :on-progress="handleFileUploadProgress"
         :on-success="handleFileSuccess"
+        :on-error="handleFileError"
         :auto-upload="false"
         drag
       >
@@ -127,7 +128,13 @@
 
 <script setup name="Student">
 import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd } from "@/api/business/student";
-import { getToken } from "@/utils/auth";
+import { ElLoading } from "element-plus";
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from "@/utils/session";
 
 const { proxy } = getCurrentInstance();
 
@@ -171,9 +178,15 @@ const upload = reactive({
   open: false,
   title: "",
   isUploading: false,
-  headers: { Authorization: "Bearer " + getToken() },
+  headers: refreshAuthorizationHeader(),
   url: import.meta.env.VITE_APP_BASE_API + "/business/student/importData"
 });
+
+let uploadLoadingInstance;
+
+function refreshUploadHeaders() {
+  upload.headers = refreshAuthorizationHeader(upload.headers);
+}
 
 /** 查询学生管理列表 */
 function getList() {
@@ -283,6 +296,7 @@ function handleExport() {
 
 /** 导入按钮操作 */
 function handleImport() {
+  refreshUploadHeaders();
   upload.title = "学生导入";
   upload.open = true;
 };
@@ -294,15 +308,41 @@ function importTemplate() {
 
 /** 文件上传成功处理 */
 const handleFileSuccess = (response, file, fileList) => {
+  if (isSessionExpiredCode(response?.code)) {
+    upload.isUploading = false;
+    proxy.$refs["uploadRef"].clearFiles();
+    uploadLoadingInstance?.close();
+    handleSessionExpired(response?.msg);
+    return;
+  }
   upload.open = false;
   upload.isUploading = false;
   proxy.$refs["uploadRef"].handleRemove(file);
+  uploadLoadingInstance?.close();
   proxy.$alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + "</div>", "导入结果", { dangerouslyUseHTMLString: true });
   getList();
 };
 
+/** 文件上传中处理 */
+const handleFileUploadProgress = () => {
+  upload.isUploading = true;
+  uploadLoadingInstance = ElLoading.service({ text: "正在导入数据，请稍候", background: "rgba(0, 0, 0, 0.7)" });
+};
+
+/** 文件上传失败处理 */
+const handleFileError = (err) => {
+  upload.isUploading = false;
+  uploadLoadingInstance?.close();
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired();
+    return;
+  }
+  proxy.$modal.msgError("上传失败");
+};
+
 /** 提交上传文件 */
 function submitFileForm() {
+  refreshUploadHeaders();
   proxy.$refs["uploadRef"].submit();
 };
 

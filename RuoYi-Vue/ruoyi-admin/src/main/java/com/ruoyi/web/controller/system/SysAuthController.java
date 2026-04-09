@@ -1,14 +1,18 @@
 package com.ruoyi.web.controller.system;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.common.constant.Constants;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysUser;
@@ -32,6 +36,25 @@ public class SysAuthController
 
     @Autowired
     private ISysUserService userService;
+
+    @GetMapping("/session-status")
+    public AjaxResult sessionStatus()
+    {
+        LoginUser loginUser = tokenService.getLoginUser(ServletUtils.getRequest());
+        if (StringUtils.isNull(loginUser))
+        {
+            return AjaxResult.error(HttpStatus.UNAUTHORIZED, "登录状态已过期，请重新登录后重试。");
+        }
+        tokenService.refreshToken(loginUser);
+        long serverTime = System.currentTimeMillis();
+        long expireTime = loginUser.getExpireTime();
+        long remainSeconds = Math.max((expireTime - serverTime) / 1000, 0);
+        Map<String, Object> data = new HashMap<>();
+        data.put("expireTime", expireTime);
+        data.put("serverTime", serverTime);
+        data.put("remainSeconds", remainSeconds);
+        return AjaxResult.success(data);
+    }
 
     @PostMapping("/select-school")
     public AjaxResult selectSchool(@RequestBody SelectSchoolBody body)

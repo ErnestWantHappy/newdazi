@@ -217,7 +217,7 @@
 
     <!-- 用户导入对话框 -->
     <el-dialog :title="upload.title" v-model="upload.open" width="400px" append-to-body>
-      <el-upload ref="uploadRef" :limit="1" accept=".xlsx, .xls" :headers="upload.headers" :action="upload.url + '?updateSupport=' + upload.updateSupport" :disabled="upload.isUploading" :on-progress="handleFileUploadProgress" :on-success="handleFileSuccess" :auto-upload="false" drag>
+      <el-upload ref="uploadRef" :limit="1" accept=".xlsx, .xls" :headers="upload.headers" :action="upload.url + '?updateSupport=' + upload.updateSupport" :disabled="upload.isUploading" :on-progress="handleFileUploadProgress" :on-success="handleFileSuccess" :on-error="handleFileError" :auto-upload="false" drag>
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
@@ -241,13 +241,18 @@
 </template>
 
 <script setup name="User">
-import { getToken } from "@/utils/auth"
 import useAppStore from '@/store/modules/app'
 import useUserStore from '@/store/modules/user'
 import { changeUserStatus, listUser, resetUserPwd, delUser, getUser, updateUser, addUser, deptTreeSelect } from "@/api/system/user"
 import { listRole } from "@/api/system/role"
 import { Splitpanes, Pane } from "splitpanes"
 import "splitpanes/dist/splitpanes.css"
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from "@/utils/session"
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -282,10 +287,14 @@ const upload = reactive({
   // 是否更新已经存在的用户数据
   updateSupport: 0,
   // 设置上传的请求头部
-  headers: { Authorization: "Bearer " + getToken() },
+  headers: refreshAuthorizationHeader(),
   // 上传的地址
   url: import.meta.env.VITE_APP_BASE_API + "/system/user/importData"
 })
+
+function refreshUploadHeaders() {
+  upload.headers = refreshAuthorizationHeader(upload.headers)
+}
 // 列显隐信息
 const columns = ref([
   { key: 0, label: `用户编号`, visible: false },
@@ -473,6 +482,7 @@ function handleSelectionChange(selection) {
 
 /** 导入按钮操作 */
 function handleImport() {
+  refreshUploadHeaders()
   upload.title = "用户导入"
   upload.open = true
 }
@@ -490,6 +500,12 @@ const handleFileUploadProgress = (event, file, fileList) => {
 
 /** 文件上传成功处理 */
 const handleFileSuccess = (response, file, fileList) => {
+  if (isSessionExpiredCode(response?.code)) {
+    upload.isUploading = false
+    proxy.$refs["uploadRef"].clearFiles()
+    handleSessionExpired(response?.msg)
+    return
+  }
   upload.open = false
   upload.isUploading = false
   proxy.$refs["uploadRef"].handleRemove(file)
@@ -497,8 +513,19 @@ const handleFileSuccess = (response, file, fileList) => {
   getList()
 }
 
+/** 文件上传失败处理 */
+const handleFileError = (err, file, fileList) => {
+  upload.isUploading = false
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired()
+    return
+  }
+  proxy.$modal.msgError("上传失败")
+}
+
 /** 提交上传文件 */
 function submitFileForm() {
+  refreshUploadHeaders()
   proxy.$refs["uploadRef"].submit()
 }
 

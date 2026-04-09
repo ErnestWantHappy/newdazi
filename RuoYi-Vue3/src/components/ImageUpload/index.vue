@@ -48,9 +48,14 @@
 </template>
 
 <script setup>
-import { getToken } from "@/utils/auth"
 import { isExternal } from "@/utils/validate"
 import Sortable from 'sortablejs'
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from '@/utils/session'
 
 const props = defineProps({
   modelValue: [String, Object, Array],
@@ -103,11 +108,15 @@ const dialogImageUrl = ref("")
 const dialogVisible = ref(false)
 const baseUrl = import.meta.env.VITE_APP_BASE_API
 const uploadImgUrl = ref(import.meta.env.VITE_APP_BASE_API + props.action) // 上传的图片服务器地址
-const headers = ref({ Authorization: "Bearer " + getToken() })
+const headers = ref(refreshAuthorizationHeader())
 const fileList = ref([])
 const showTip = computed(
   () => props.isShowTip && (props.fileType || props.fileSize)
 )
+
+function refreshHeaders() {
+  headers.value = refreshAuthorizationHeader(headers.value)
+}
 
 watch(() => props.modelValue, val => {
   if (val) {
@@ -132,6 +141,7 @@ watch(() => props.modelValue, val => {
 
 // 上传前loading加载
 function handleBeforeUpload(file) {
+  refreshHeaders()
   let isImg = false
   if (props.fileType.length) {
     let fileExtension = ""
@@ -175,6 +185,11 @@ function handleUploadSuccess(res, file) {
   if (res.code === 200) {
     uploadList.value.push({ name: res.fileName, url: res.fileName })
     uploadedSuccessfully()
+  } else if (isSessionExpiredCode(res.code)) {
+    number.value--
+    proxy.$modal.closeLoading()
+    handleSessionExpired(res.msg)
+    proxy.$refs.imageUpload.handleRemove(file)
   } else {
     number.value--
     proxy.$modal.closeLoading()
@@ -206,8 +221,12 @@ function uploadedSuccessfully() {
 }
 
 // 上传失败
-function handleUploadError() {
-  proxy.$modal.msgError("上传图片失败")
+function handleUploadError(err) {
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired()
+  } else {
+    proxy.$modal.msgError("上传图片失败")
+  }
   proxy.$modal.closeLoading()
 }
 

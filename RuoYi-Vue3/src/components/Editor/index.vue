@@ -30,15 +30,18 @@
 import axios from 'axios'
 import { QuillEditor } from "@vueup/vue-quill"
 import "@vueup/vue-quill/dist/vue-quill.snow.css"
-import { getToken } from "@/utils/auth"
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from '@/utils/session'
 
 const { proxy } = getCurrentInstance()
 
 const quillEditorRef = ref()
 const uploadUrl = ref(import.meta.env.VITE_APP_BASE_API + "/common/upload") // 上传的图片服务器地址
-const headers = ref({
-  Authorization: "Bearer " + getToken()
-})
+const headers = ref(refreshAuthorizationHeader())
 
 const props = defineProps({
   /* 编辑器的内容 */
@@ -113,6 +116,10 @@ watch(() => props.modelValue, (v) => {
   }
 }, { immediate: true })
 
+function refreshHeaders() {
+  headers.value = refreshAuthorizationHeader(headers.value)
+}
+
 // 如果设置了上传地址则自定义图片上传事件
 onMounted(() => {
   if (props.type == 'url') {
@@ -131,6 +138,7 @@ onMounted(() => {
 
 // 上传前校检格式和大小
 function handleBeforeUpload(file) {
+  refreshHeaders()
   const type = ["image/jpeg", "image/jpg", "image/png", "image/svg"]
   const isJPG = type.includes(file.type)
   //检验文件格式
@@ -161,14 +169,20 @@ function handleUploadSuccess(res, file) {
     quill.insertEmbed(length, "image", import.meta.env.VITE_APP_BASE_API + res.fileName)
     // 调整光标到最后
     quill.setSelection(length + 1)
+  } else if (isSessionExpiredCode(res.code)) {
+    handleSessionExpired(res.msg)
   } else {
     proxy.$modal.msgError("图片插入失败")
   }
 }
 
 // 上传失败处理
-function handleUploadError() {
-  proxy.$modal.msgError("图片插入失败")
+function handleUploadError(err) {
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired()
+  } else {
+    proxy.$modal.msgError("图片插入失败")
+  }
 }
 
 // 复制粘贴图片处理
@@ -187,10 +201,18 @@ function handlePasteCapture(e) {
 }
 
 function insertImage(file) {
+  refreshHeaders()
   const formData = new FormData()
   formData.append("file", file)
-  axios.post(uploadUrl.value, formData, { headers: { "Content-Type": "multipart/form-data", Authorization: headers.value.Authorization } }).then(res => {
+  axios.post(uploadUrl.value, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+      ...headers.value
+    }
+  }).then(res => {
     handleUploadSuccess(res.data)
+  }).catch(err => {
+    handleUploadError(err)
   })
 }
 </script>

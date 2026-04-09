@@ -246,7 +246,12 @@ import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted, computed }
 import { useRoute } from "vue-router";
 import useUserStore from "@/store/modules/user";
 import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus, delStudentByClass } from "@/api/business/student";
-import { getToken } from "@/utils/auth";
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from "@/utils/session";
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -320,9 +325,13 @@ const upload = reactive({
   open: false,
   title: "",
   isUploading: false,
-  headers: { Authorization: "Bearer " + getToken() },
+  headers: refreshAuthorizationHeader(),
   url: import.meta.env.VITE_APP_BASE_API + "/business/student/importData"
 });
+
+function refreshUploadHeaders() {
+  upload.headers = refreshAuthorizationHeader(upload.headers);
+}
 /** 查询学生管理列表 */
 function getList() {
   loading.value = true;
@@ -534,7 +543,7 @@ function handleExport() {
 
 /** 导入按钮操作 */
 function handleImport() {
-  upload.headers.Authorization = "Bearer " + getToken();
+  refreshUploadHeaders();
   upload.title = "学生导入";
   upload.open = true;
 };
@@ -556,6 +565,15 @@ const handleFileUploadProgress = (event, file, fileList) => {
 
 /** 文件上传成功处理 */
 const handleFileSuccess = (response, file, fileList) => {
+  if (isSessionExpiredCode(response?.code)) {
+    upload.isUploading = false;
+    proxy.$refs["uploadRef"].clearFiles();
+    if (uploadLoadingInstance) {
+      uploadLoadingInstance.close();
+    }
+    handleSessionExpired(response?.msg);
+    return;
+  }
   upload.open = false;
   upload.isUploading = false;
   proxy.$refs["uploadRef"].handleRemove(file);
@@ -572,11 +590,16 @@ const handleFileError = (err, file, fileList) => {
   if (uploadLoadingInstance) {
     uploadLoadingInstance.close();
   }
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired();
+    return;
+  }
   proxy.$modal.msgError("上传失败");
 };
 
 /** 提交上传文件 */
 function submitFileForm() {
+  refreshUploadHeaders();
   proxy.$refs["uploadRef"].submit();
 };
 

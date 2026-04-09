@@ -87,6 +87,7 @@ const tableData = ref([])
 const originalData = ref({}) // 保存原始数据用于对比
 const chartRef = ref(null)
 let chartInstance = null
+const autoSaveTimers = new Map()
 
 // 判断是否有图表数据
 const hasChartData = computed(() => {
@@ -133,23 +134,34 @@ watch(() => tableData.value, (newVal) => {
   })
 }, { deep: true })
 
-let autoSaveTimer = null;
+function hasRowChanged(row) {
+  const orig = originalData.value[row.studentId] || { score: null, reason: '' }
+  return row.score !== orig.score || (row.reason || '') !== (orig.reason || '')
+}
 
 // 失去焦点或数据变化时，防抖触发单个自动保存
 function handleDataChange(row) {
-  // 如果当前行没有发生变化直接返回
-  if (!row.changed) return;
+  row.changed = hasRowChanged(row)
+  if (!row.changed || row.saving) return
 
-  if (autoSaveTimer) clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => {
-    saveSingleRow(row);
-  }, 800);
+  const timer = autoSaveTimers.get(row.studentId)
+  if (timer) clearTimeout(timer)
+
+  autoSaveTimers.set(
+    row.studentId,
+    setTimeout(() => {
+      autoSaveTimers.delete(row.studentId)
+      saveSingleRow(row)
+    }, 800)
+  )
 }
 
 // 静默保存单条记录
 async function saveSingleRow(row) {
-  if (!row.changed) return;
-  row.saving = true;
+  row.changed = hasRowChanged(row)
+  if (!row.changed) return
+
+  row.saving = true
   try {
     const res = await batchSavePerformance({
       lessonId: props.lessonId,
@@ -158,15 +170,16 @@ async function saveSingleRow(row) {
         score: row.score,
         reason: row.reason
       }]
-    });
+    })
     // 保存成功，更新基线原始数据
-    originalData.value[row.studentId] = { score: row.score, reason: row.reason };
-    row.changed = false;
-    row.performanceId = res.data || true;
+    originalData.value[row.studentId] = { score: row.score, reason: row.reason || '' }
+    row.changed = false
+    row.performanceId = res.data || row.performanceId || true
+    emit('saved')
   } catch (e) {
-    ElMessage.error('自动保存失败: ' + row.studentName);
+    ElMessage.error('自动保存失败: ' + row.studentName)
   } finally {
-    row.saving = false;
+    row.saving = false
   }
 }
 
@@ -319,6 +332,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  autoSaveTimers.forEach(timer => clearTimeout(timer))
+  autoSaveTimers.clear()
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null

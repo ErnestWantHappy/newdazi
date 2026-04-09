@@ -83,4 +83,13 @@ public interface IBizTeacherClassService
      * @return 结果
      */
     public int deleteBizTeacherClassById(Long id);
+    /**
+     * 鎸夌彮绾ф潯浠舵竻鐞嗘墍鏈夋暀甯堢鐞嗗叧鑱?
+     *
+     * @param deptId 瀛︽牎ID
+     * @param entryYear 鍏ュ骞翠唤
+     * @param classCode 鐝骇缂栧彿
+     * @return 缁撴灉
+     */
+    public int deleteByDeptIdAndClass(Long deptId, String entryYear, String classCode);
 }

@@ -624,9 +624,14 @@ import {
   addQuestion,
   updateQuestion,
 } from "@/api/business/question";
-import { getToken } from "@/utils/auth";
 import { computed } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
+import {
+  handleSessionExpired,
+  isSessionExpiredCode,
+  isSessionExpiredError,
+  refreshAuthorizationHeader
+} from "@/utils/session";
 
 const { proxy } = getCurrentInstance();
 const { biz_question_type, sys_yes_no, biz_grade, biz_semester } =
@@ -703,9 +708,13 @@ const upload = reactive({
   title: "",
   isUploading: false,
   updateSupport: 0,
-  headers: { Authorization: "Bearer " + getToken() },
+  headers: refreshAuthorizationHeader(),
   url: import.meta.env.VITE_APP_BASE_API + "/business/question/importData",
 });
+
+function refreshUploadHeaders() {
+  upload.headers = refreshAuthorizationHeader(upload.headers);
+}
 
 const questionContentLabel = computed(() => {
   switch (form.value.questionType) {
@@ -963,6 +972,7 @@ function handleExport() {
 
 /** 导入按钮操作 */
 function handleImport() {
+  refreshUploadHeaders();
   upload.title = "题目导入";
   upload.open = true;
 }
@@ -986,6 +996,15 @@ const handleFileUploadProgress = (event, file, fileList) => {
 
 /** 文件上传成功处理 */
 const handleFileSuccess = (response, file, fileList) => {
+  if (isSessionExpiredCode(response?.code)) {
+    upload.isUploading = false;
+    proxy.$refs["uploadRef"].clearFiles();
+    if (uploadLoadingInstance) {
+      uploadLoadingInstance.close();
+    }
+    handleSessionExpired(response?.msg);
+    return;
+  }
   upload.open = false;
   upload.isUploading = false;
   proxy.$refs["uploadRef"].clearFiles();
@@ -1008,11 +1027,16 @@ const handleFileError = (err, file, fileList) => {
   if (uploadLoadingInstance) {
     uploadLoadingInstance.close();
   }
+  if (isSessionExpiredError(err)) {
+    handleSessionExpired();
+    return;
+  }
   proxy.$modal.msgError("上传失败");
 };
 
 /** 提交上传文件 */
 function submitFileForm() {
+  refreshUploadHeaders();
   proxy.$refs["uploadRef"].submit();
 }
 

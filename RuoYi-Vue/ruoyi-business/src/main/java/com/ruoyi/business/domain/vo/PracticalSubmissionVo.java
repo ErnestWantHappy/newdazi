@@ -47,6 +47,9 @@ public class PracticalSubmissionVo {
     
     /** P5: 是否已提交 */
     private Boolean submitted;
+    
+    /** 学生备注 */
+    private String remark;
 
     // Getters and Setters
     public Long getAnswerId() { return answerId; }
@@ -87,4 +90,7 @@ public class PracticalSubmissionVo {
     
     public Boolean getSubmitted() { return submitted; }
     public void setSubmitted(Boolean submitted) { this.submitted = submitted; }
+    
+    public String getRemark() { return remark; }
+    public void setRemark(String remark) { this.remark = remark; }
 }

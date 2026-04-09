@@ -160,6 +160,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             u.nick_name AS studentName,
             s.student_no AS studentNo,
             s.class_code AS classCode,
+            s.remark AS remark,
             #{questionId} AS questionId,
             q.question_content AS questionContent,
             a.student_answer AS studentAnswer,
@@ -168,7 +169,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 WHEN a.student_answer LIKE '%.doc' THEN REPLACE(a.student_answer, '.doc', '.pdf')
                 ELSE a.student_answer
             END AS previewPath,
-            IFNULL(a.score, 0) AS score,
+            a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
             CASE WHEN a.answer_id IS NOT NULL THEN 1 ELSE 0 END AS submitted

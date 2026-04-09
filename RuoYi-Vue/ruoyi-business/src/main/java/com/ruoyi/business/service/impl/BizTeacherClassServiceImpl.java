@@ -144,4 +144,10 @@ public class BizTeacherClassServiceImpl implements IBizTeacherClassService
     {
         return bizTeacherClassMapper.deleteBizTeacherClassById(id);
     }
+
+    @Override
+    public int deleteByDeptIdAndClass(Long deptId, String entryYear, String classCode)
+    {
+        return bizTeacherClassMapper.deleteByDeptIdAndClass(deptId, entryYear, classCode);
+    }
 }

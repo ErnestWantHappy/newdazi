@@ -62,6 +62,9 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Autowired
     private BizTeacherClassMapper teacherClassMapper;
 
+    @Autowired
+    private com.ruoyi.business.mapper.BizQuestionMapper bizQuestionMapper;
+
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
     {
@@ -183,7 +186,9 @@ public class BizLessonServiceImpl implements IBizLessonService
                 .filter(tc -> tc.getEntryYear() != null && !tc.getEntryYear().isEmpty())
                 .collect(Collectors.groupingBy(
                         BizTeacherClass::getEntryYear,
-                        Collectors.mapping(tc -> tc.getClassCode() + "班", Collectors.toList())
+                        Collectors.mapping(tc -> tc.getClassCode() + "班", 
+                            Collectors.collectingAndThen(Collectors.toList(), 
+                                list -> list.stream().distinct().collect(Collectors.toList())))
                 ));
         log.info("【教师首页数据】步骤2: 成功按入学年份分组，共 {} 个年份组。", yearClassMap.size());
 
@@ -349,6 +354,16 @@ public class BizLessonServiceImpl implements IBizLessonService
                 return item;
             }).collect(Collectors.toList());
             lessonQuestionMapper.batchInsert(questionToInsert);
+            
+            // 同步更新打字题的自定义时长到 biz_question 表
+            for (BizLessonQuestionDetailVo q : questions) {
+                if ("typing".equals(q.getQuestionType()) && q.getTypingDuration() != null) {
+                    com.ruoyi.business.domain.BizQuestion updateQ = new com.ruoyi.business.domain.BizQuestion();
+                    updateQ.setQuestionId(q.getQuestionId());
+                    updateQ.setTypingDuration(q.getTypingDuration());
+                    bizQuestionMapper.updateBizQuestion(updateQ);
+                }
+            }
         }
 
         lessonAssignmentMapper.deleteByLessonId(lessonId);

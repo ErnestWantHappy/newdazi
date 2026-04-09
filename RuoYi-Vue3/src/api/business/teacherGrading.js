@@ -26,10 +26,10 @@ export function getPracticalSubmissions(lessonId, questionId, classCode, entryYe
 }
 
 // 批改打分
-export function gradeSubmission(answerId, score) {
+export function gradeSubmission(data) {
   return request({
     url: '/business/teacher/grading/grade',
     method: 'post',
-    data: { answerId, score }
+    data
   })
 }
