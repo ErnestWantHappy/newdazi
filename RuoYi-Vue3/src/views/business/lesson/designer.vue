@@ -57,7 +57,7 @@
               </el-checkbox-group>
               <!-- 提示语 -->
               <div v-if="form.assignedClasses.length === 0 && form.grade && filteredManagedClasses.length > 0" style="color: #E6A23C; font-size: 12px; margin-top: 5px;">
-                请选择要上课的班级（支持多选）
+                可暂不指派班级，后续正式上课前再补充即可
               </div>
               <div v-else-if="form.grade && filteredManagedClasses.length === 0" style="color: #909399; font-size: 12px;">
                 您没有管理该年级对应的班级，请先在"班级管理"中添加
@@ -377,8 +377,7 @@ const queryParams = ref({
 const rules = {
   lessonTitle: [{ required: true, message: "课程/作业标题不能为空", trigger: "blur" }],
   grade: [{ required: true, message: "年级不能为空", trigger: "change" }],
-  semester: [{ required: true, message: "学期不能为空", trigger: "change" }],
-  assignedClasses: [{ required: true, type: 'array', min: 1, message: "请至少指派一个班级", trigger: "change" }]
+  semester: [{ required: true, message: "学期不能为空", trigger: "change" }]
 };
 
 const totalScore = computed(() => {

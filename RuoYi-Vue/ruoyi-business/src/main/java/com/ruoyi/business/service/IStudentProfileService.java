@@ -12,27 +12,27 @@ public interface IStudentProfileService {
     /**
      * 获取学生画像汇总数据
      */
-    StudentProfileVo getStudentProfile(Long studentId, String semesterStart, String semesterEnd);
+    StudentProfileVo getStudentProfile(Long studentId, String academicYearStart, String academicYearEnd);
 
     /**
      * 获取历次课程成绩（含班级平均对比）
      */
-    List<StudentProfileVo.CourseScoreItem> getCourseScores(Long studentId, String semesterStart, String semesterEnd);
+    List<StudentProfileVo.CourseScoreItem> getCourseScores(Long studentId, String academicYearStart, String academicYearEnd);
 
     /**
      * 获取打字速度数据
      */
-    List<StudentProfileVo.TypingSpeedItem> getTypingSpeeds(Long studentId, String semesterStart, String semesterEnd);
+    List<StudentProfileVo.TypingSpeedItem> getTypingSpeeds(Long studentId, String academicYearStart, String academicYearEnd);
 
     /**
      * 获取课堂表现分数据
      */
-    List<StudentProfileVo.PerformanceItem> getPerformances(Long studentId, String semesterStart, String semesterEnd);
+    List<StudentProfileVo.PerformanceItem> getPerformances(Long studentId, String academicYearStart, String academicYearEnd);
 
     /**
      * 获取排名变化数据
      */
-    List<StudentProfileVo.RankItem> getRankChanges(Long studentId, String semesterStart, String semesterEnd);
+    List<StudentProfileVo.RankItem> getRankChanges(Long studentId, String academicYearStart, String academicYearEnd);
 
     /**
      * 获取班级列表

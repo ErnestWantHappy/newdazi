@@ -192,10 +192,11 @@
                   @click="submitTyping(q)"
                   :disabled="
                     !typingStates[q.questionId]?.started ||
-                    typingStates[q.questionId]?.submitted
+                    typingStates[q.questionId]?.submitted ||
+                    typingStates[q.questionId]?.submitting
                   "
                 >
-                  提交打字成绩
+                  {{ typingStates[q.questionId]?.submitting ? "提交中..." : "提交打字成绩" }}
                 </el-button>
               </div>
             </div>
@@ -451,8 +452,10 @@
                   class="work-uploader"
                   :action="uploadUrl"
                   :headers="uploadHeaders"
+                  :limit="1"
                   :on-success="(res) => handleUploadSuccess(q.questionId, res)"
                   :on-error="handleUploadError"
+                  :on-exceed="handleUploadExceed"
                   :show-file-list="false"
                   accept=".docx,.doc,.pdf,.pptx,.ppt,.xlsx,.xls"
                 >
@@ -471,16 +474,32 @@
                 <!-- 已上传文件展示 -->
                 <div v-else class="uploaded-file">
                   <el-icon><Document /></el-icon>
-                  <span class="file-name">{{
-                    getFileName(practicalUploads[q.questionId])
-                  }}</span>
+                  <div class="uploaded-meta">
+                    <span class="file-name">{{
+                      getFileName(practicalUploads[q.questionId])
+                    }}</span>
+                    <span
+                      class="preview-state"
+                      :class="getPracticalPreviewClass(q.questionId)"
+                    >
+                      {{ getPracticalPreviewLabel(q.questionId) }}
+                    </span>
+                  </div>
                   <el-button-group>
                     <el-button
                       type="primary"
                       size="small"
                       icon="View"
                       @click="previewWork(q.questionId)"
+                      :disabled="!canPreviewPractical(q.questionId)"
                       >预览</el-button
+                    >
+                    <el-button
+                      type="info"
+                      size="small"
+                      icon="Download"
+                      @click="downloadSubmittedWork(q.questionId)"
+                      >下载</el-button
                     >
                     <el-button
                       type="danger"
@@ -1182,8 +1201,11 @@ const practicalQuestions = computed(() =>
 );
 const practicalUploads = ref({}); // { questionId: uploadedFilePath }
 const practicalScores = ref({}); // { questionId: score | null } - null表示未批阅
-const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { answer, score } }
+const practicalPreviewStatuses = ref({}); // { questionId: previewStatus }
+const practicalPreviewPaths = ref({}); // { questionId: previewPath }
+const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { answer, score, previewStatus, previewPath } }
 const uploadingQuestionId = ref(null); // 正在上传/转换的题目ID（用于显示loading）
+const practicalPollingTimers = {};
 
 // 操作题总分
 const practicalTotalScore = computed(() => {
@@ -1326,12 +1348,71 @@ async function fetchData() {
 // 初始化操作题状态（加载已提交的作品）
 function initPracticalStates() {
   practicalQuestions.value.forEach((q) => {
-    const submitted = submittedAnswers.value[q.questionId];
-    if (submitted && submitted.answer) {
-      practicalUploads.value[q.questionId] = submitted.answer;
-      practicalScores.value[q.questionId] = submitted.score; // null表示未批阅
-    }
+    syncPracticalSubmission(q.questionId, submittedAnswers.value[q.questionId]);
   });
+}
+
+function syncPracticalSubmission(questionId, submitted) {
+  if (submitted && submitted.answer) {
+    practicalUploads.value[questionId] = submitted.answer;
+    practicalScores.value[questionId] = submitted.score;
+    practicalPreviewPaths.value[questionId] = submitted.previewPath || "";
+    practicalPreviewStatuses.value[questionId] = submitted.previewStatus || (submitted.previewPath ? "success" : "");
+  } else {
+    delete practicalUploads.value[questionId];
+    delete practicalScores.value[questionId];
+    delete practicalPreviewStatuses.value[questionId];
+    delete practicalPreviewPaths.value[questionId];
+  }
+}
+
+function clearPracticalPolling(questionId) {
+  if (practicalPollingTimers[questionId]) {
+    clearTimeout(practicalPollingTimers[questionId]);
+    delete practicalPollingTimers[questionId];
+  }
+}
+
+async function refreshPracticalSubmission(questionId) {
+  const res = await getCurrentLesson();
+  const latestAnswers = res.submittedAnswers || {};
+  submittedAnswers.value = latestAnswers;
+  const submitted = latestAnswers[questionId];
+  syncPracticalSubmission(questionId, submitted);
+  return submitted;
+}
+
+function schedulePracticalPreviewPolling(questionId, attempt = 0) {
+  clearPracticalPolling(questionId);
+  practicalPollingTimers[questionId] = setTimeout(async () => {
+    try {
+      const submitted = await refreshPracticalSubmission(questionId);
+      const previewStatus = submitted?.previewStatus || "";
+      if (previewStatus === "success" || submitted?.previewPath) {
+        uploadingQuestionId.value = null;
+        ElMessage.success("转换完成，可以预览了");
+        clearPracticalPolling(questionId);
+        return;
+      }
+      if (previewStatus === "failed") {
+        uploadingQuestionId.value = null;
+        ElMessage.warning("转换失败，请先下载原文件查看");
+        clearPracticalPolling(questionId);
+        return;
+      }
+      if (attempt >= 9) {
+        uploadingQuestionId.value = null;
+        ElMessage.info("文件仍在转换中，稍后刷新页面或再次进入即可查看最新状态");
+        clearPracticalPolling(questionId);
+        return;
+      }
+      schedulePracticalPreviewPolling(questionId, attempt + 1);
+    } catch (error) {
+      uploadingQuestionId.value = null;
+      clearPracticalPolling(questionId);
+      ElMessage.warning("已上传作品，但刷新转换状态失败，请稍后查看");
+    }
+  }, 2000);
 }
 
 // 初始化理论测试状态（检查是否已提交）
@@ -1380,6 +1461,7 @@ function initTypingStates() {
       accuracy: 100,
       speed: 0,
       progress: 0,
+      submitting: false,
       myScore: hasSubmitted ? (submitted.score || 0) : 0,
     };
     
@@ -1447,6 +1529,7 @@ function restartTyping(qid) {
   state.accuracy = 100;
   state.speed = 0;
   state.progress = 0;
+  state.submitting = false;
   state.myScore = 0;
 
   // 清空输入
@@ -1510,7 +1593,9 @@ function updateTypingStats(qid, inputVal) {
 // 自动提交（打完或时间到）
 function autoSubmitTyping(qid) {
   const state = typingStates.value[qid];
-  if (!state || state.submitted) return;
+  if (!state || state.submitted || state.submitting) return;
+
+  state.submitting = true;
 
   // 停止计时
   if (timerIntervals[qid]) {
@@ -1567,10 +1652,13 @@ function autoSubmitTyping(qid) {
   })
     .then((res) => {
       state.submitted = true;
+      state.submitting = false;
       state.myScore = res.totalScore || 0;
       ElMessage.success(`打字成绩已自动提交！得分: ${state.myScore}分`);
     })
     .catch(() => {
+      state.submitting = false;
+      state.finished = false;
       ElMessage.error("提交失败，请手动点击提交按钮重试");
     });
 }
@@ -1584,6 +1672,10 @@ function submitTyping(q) {
   }
   if (state.submitted) {
     ElMessage.info("成绩已提交，如需重新打字请点击「重新打字」");
+    return;
+  }
+  if (state.submitting) {
+    ElMessage.info("成绩正在提交，请稍候");
     return;
   }
 
@@ -1691,6 +1783,8 @@ function handleUploadSuccess(questionId, res) {
     const filePath = res.fileName;
     practicalUploads.value[questionId] = filePath;
     practicalScores.value[questionId] = null; // 刚上传，未批阅
+    practicalPreviewStatuses.value[questionId] = "";
+    practicalPreviewPaths.value[questionId] = "";
 
     // 设置loading状态（后端会进行LibreOffice转换，需要等待）
     uploadingQuestionId.value = questionId;
@@ -1700,18 +1794,26 @@ function handleUploadSuccess(questionId, res) {
       lessonId: lessonId.value,
       answers: { [questionId]: filePath },
     })
-      .then(() => {
-        // 后端返回成功只表示已触发转换，实际转换需要10-15秒
-        // 延迟12秒后再显示预览按钮，确保转换完成
-        ElMessage.info("作品已上传，正在后台转换为预览格式，请稍候...");
-        setTimeout(() => {
+      .then(async () => {
+        const submitted = await refreshPracticalSubmission(questionId);
+        const previewStatus = submitted?.previewStatus || "";
+        if (previewStatus === "success" || submitted?.previewPath) {
           uploadingQuestionId.value = null;
-          ElMessage.success("转换完成，可以预览了！");
-        }, 3000);
+          ElMessage.success("作品已上传，可以直接预览");
+          return;
+        }
+        if (previewStatus === "failed") {
+          uploadingQuestionId.value = null;
+          ElMessage.warning("作品已上传，但当前文件暂不支持在线预览，请下载原文件查看");
+          return;
+        }
+        ElMessage.info("作品已上传，正在后台转换为预览格式，请稍候...");
+        schedulePracticalPreviewPolling(questionId);
       })
       .catch(() => {
         ElMessage.warning("作品已上传，但保存到服务器失败，请重试");
         uploadingQuestionId.value = null;
+        clearPracticalPolling(questionId);
       });
   } else {
     ElMessage.error(res.msg || "上传失败");
@@ -1722,38 +1824,74 @@ function handleUploadError() {
   ElMessage.error("上传失败，请重试");
 }
 
+function handleUploadExceed() {
+  ElMessage.warning("操作题仅允许上传 1 个文件");
+}
+
+function getPracticalPreviewLabel(questionId) {
+  const status = practicalPreviewStatuses.value[questionId];
+  if (practicalPreviewPaths.value[questionId]) return "可预览";
+  if (status === "success") return "可预览";
+  if (status === "pending") return "待转换";
+  if (status === "converting") return "转换中";
+  if (status === "failed") return "转换失败";
+  return "待处理";
+}
+
+function getPracticalPreviewClass(questionId) {
+  const status = practicalPreviewStatuses.value[questionId];
+  if (practicalPreviewPaths.value[questionId]) return "success";
+  if (status === "success") return "success";
+  if (status === "pending" || status === "converting") return "pending";
+  if (status === "failed") return "failed";
+  return "";
+}
+
+function canPreviewPractical(questionId) {
+  return !!practicalPreviewPaths.value[questionId];
+}
+
+function downloadSubmittedWork(questionId) {
+  const filePath = practicalUploads.value[questionId];
+  if (!filePath) return;
+  const link = document.createElement("a");
+  link.href = import.meta.env.VITE_APP_BASE_API + filePath;
+  link.download = getFileName(filePath);
+  link.target = "_blank";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 // 预览作品（使用PDF预览组件，借助后端LibreOffice转换）
 function previewWork(questionId) {
   const filePath = practicalUploads.value[questionId];
   if (!filePath) return;
   const baseUrl = import.meta.env.VITE_APP_BASE_API;
-
-  // 对于docx文件，需要查找对应的previewPath（LibreOffice转换后的PDF路径）
-  const question = practicalQuestions.value.find(
-    (q) => q.questionId === questionId
-  );
-  const fileName = filePath.toLowerCase();
+  const previewStatus = practicalPreviewStatuses.value[questionId];
+  const previewPath = practicalPreviewPaths.value[questionId];
 
   // 使用后端专用的预览接口，解决特殊字符文件名导致的404问题
   // 接口地址: /common/resource/view?resource=xxx
   const previewApi = `${baseUrl}/common/resource/view?resource=`;
 
-  if (fileName.endsWith(".pdf")) {
-    // PDF直接使用预览组件
-    const resourceUrl = previewApi + encodeURIComponent(filePath);
-    console.log("【Preview】PDF URL:", resourceUrl);
+  if (previewStatus === "success" && previewPath) {
+    const resourceUrl = previewApi + encodeURIComponent(previewPath);
+    console.log("【Preview】Actual Preview URL:", resourceUrl);
     pdfPreviewRef.value?.open(resourceUrl);
-  } else if (fileName.endsWith(".docx") || fileName.endsWith(".doc")) {
-    // Office文件：使用转换后的PDF路径预览
-    const pdfPath = filePath.replace(/\.docx?$/i, ".pdf");
-    const resourceUrl = previewApi + encodeURIComponent(pdfPath);
-    console.log("【Preview】Converted PDF URL:", resourceUrl);
-    pdfPreviewRef.value?.open(resourceUrl);
-  } else {
-    // 其他文件尝试直接预览
-    const resourceUrl = previewApi + encodeURIComponent(filePath);
-    window.open(resourceUrl, "_blank");
+    return;
   }
+
+  if (previewStatus === "pending" || previewStatus === "converting") {
+    ElMessage.info(
+      previewStatus === "pending"
+        ? "文件已提交，正在排队转换，请稍候再试"
+        : "文件正在转换中，请稍候再试"
+    );
+    return;
+  }
+
+  ElMessage.warning("当前文件暂不支持在线预览，请下载原文件查看");
 }
 
 // 删除已上传作品
@@ -1766,8 +1904,11 @@ function deleteWork(questionId) {
       lessonId: lessonId.value,
       answers: { [questionId]: "" }, // 空字符串表示删除
     }).then(() => {
+      clearPracticalPolling(questionId);
       delete practicalUploads.value[questionId];
       delete practicalScores.value[questionId];
+      delete practicalPreviewStatuses.value[questionId];
+      delete practicalPreviewPaths.value[questionId];
       ElMessage.success("已删除");
     });
   });
@@ -1834,6 +1975,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   Object.values(timerIntervals).forEach((i) => clearInterval(i));
+  Object.values(practicalPollingTimers).forEach((i) => clearTimeout(i));
 });
 </script>
 
@@ -2355,6 +2497,29 @@ onUnmounted(() => {
 .file-name {
   color: #67c23a;
   font-weight: 500;
+}
+
+.uploaded-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-state {
+  font-size: 12px;
+  color: #909399;
+}
+
+.preview-state.success {
+  color: #67c23a;
+}
+
+.preview-state.pending {
+  color: #e6a23c;
+}
+
+.preview-state.failed {
+  color: #f56c6c;
 }
 
 /* 上传/转换中状态 */

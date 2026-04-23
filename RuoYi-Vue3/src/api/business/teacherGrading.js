@@ -25,6 +25,15 @@ export function getPracticalSubmissions(lessonId, questionId, classCode, entryYe
   })
 }
 
+// 重新转换当前课程班级下失败的操作题文件
+export function retryFailedPreviews(data) {
+  return request({
+    url: '/business/teacher/grading/retry-failed-previews',
+    method: 'post',
+    data
+  })
+}
+
 // 批改打分
 export function gradeSubmission(data) {
   return request({

@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -27,8 +30,6 @@ import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.common.core.domain.entity.SysDept;
-import com.ruoyi.common.config.RuoYiConfig;
-import com.ruoyi.business.utils.FileConversionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -145,6 +146,8 @@ public class StudentHomeController extends BaseController
             info.put("answer", sa.getStudentAnswer());
             info.put("score", sa.getScore());
             info.put("submitTime", sa.getSubmitTime());
+            info.put("previewStatus", sa.getPreviewStatus());
+            info.put("previewPath", sa.getPreviewPath());
             answersMap.put(sa.getQuestionId(), info);
         }
 
@@ -202,6 +205,7 @@ public class StudentHomeController extends BaseController
      * 提交学生答案
      */
     @PostMapping("/submit-answers")
+    @Transactional(rollbackFor = Exception.class)
     public AjaxResult submitAnswers(@RequestBody SubmitAnswerRequest request)
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
@@ -234,20 +238,14 @@ public class StudentHomeController extends BaseController
         int baseSpeed = determineBaseSpeed(gradeName);
         log.info("【学生答题】学生年级: {}, 打字基准速度: {} 字/分", gradeName, baseSpeed);
 
-        // 删除旧答案（只删除本次提交的题目ID）
-        List<Long> questionIds = new java.util.ArrayList<>(answers.keySet());
-        if (!questionIds.isEmpty()) {
-            studentAnswerMapper.deleteByStudentLessonAndQuestions(student.getStudentId(), lessonId, questionIds);
-        }
-
         // 获取题目列表用于判断正确答案
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         Map<Long, BizLessonQuestionDetailVo> questionMap = questions.stream()
                 .collect(java.util.stream.Collectors.toMap(BizLessonQuestionDetailVo::getQuestionId, q -> q));
 
-        List<BizStudentAnswer> answerList = new java.util.ArrayList<>();
         Date now = new Date();
         int totalScore = 0;
+        java.util.List<Long> pendingConversionAnswerIds = new java.util.ArrayList<>();
 
         for (Map.Entry<Long, String> entry : answers.entrySet()) {
             Long questionId = entry.getKey();
@@ -315,7 +313,7 @@ public class StudentHomeController extends BaseController
                         // 目标字数 = min(baseSpeed × 自定义时长, 原文字数)
                         // 速度系数 = 正确字数 / 目标字数（封顶1.0）
                         // 得分 = 满分 × 速度系数 × 正确率
-                        if (question.getQuestionScore() != null) {
+                        if (question.getQuestionScore() != null && question.getQuestionScore() > 0) {
                             int targetCount = Math.min(baseSpeed * duration, originalLength);
                             if (targetCount <= 0) targetCount = originalLength; // 兜底
                             
@@ -335,6 +333,9 @@ public class StudentHomeController extends BaseController
                             
                             // 确保不超过满分
                             score = Math.min(score, question.getQuestionScore().intValue());
+                        } else {
+                            log.warn("【学生答题】打字题缺少有效分值配置，lessonId={}, questionId={}, questionScore={}",
+                                    lessonId, questionId, question.getQuestionScore());
                         }
                     
                     // isCorrect 标记（60%及格线）
@@ -356,10 +357,33 @@ public class StudentHomeController extends BaseController
             if ("practical".equals(question.getQuestionType())) {
                 // 操作题：保存文件路径，异步转换为PDF
                 if (studentAnswer != null && !studentAnswer.trim().isEmpty()) {
+                    String lowerCaseAnswer = studentAnswer.toLowerCase();
+                    answer.setPreviewRetryCount(0);
+                    answer.setPreviewLastRetryTime(null);
                     // 检查是否为docx文件，标记为待转换
-                    if (studentAnswer.toLowerCase().endsWith(".docx") || studentAnswer.toLowerCase().endsWith(".doc")) {
+                    if (lowerCaseAnswer.endsWith(".docx") || lowerCaseAnswer.endsWith(".doc")) {
                         answer.setPreviewStatus("pending");
+                        answer.setPreviewPath(null);
+                        answer.setPreviewErrorMessage(null);
+                    } else if (lowerCaseAnswer.endsWith(".pdf")) {
+                        // PDF 可直接预览，无需转换
+                        answer.setPreviewStatus("success");
+                        answer.setPreviewPath(studentAnswer);
+                        answer.setPreviewErrorMessage(null);
+                    } else {
+                        // 其他文件暂不支持在线预览，保留原文件下载即可
+                        answer.setPreviewStatus("failed");
+                        answer.setPreviewPath(null);
+                        answer.setPreviewErrorMessage("不支持在线预览的文件类型");
+                        log.warn("【操作题】暂不支持在线预览的文件类型，lessonId={}, questionId={}, answer={}",
+                                lessonId, questionId, studentAnswer);
                     }
+                } else {
+                    answer.setPreviewStatus(null);
+                    answer.setPreviewPath(null);
+                    answer.setPreviewRetryCount(0);
+                    answer.setPreviewLastRetryTime(null);
+                    answer.setPreviewErrorMessage(null);
                 }
                 // 操作题不自动评分，score必须为null
                 answer.setIsCorrect(false); // 均视为未判
@@ -367,35 +391,61 @@ public class StudentHomeController extends BaseController
             } else {
                 answer.setIsCorrect(isCorrect);
                 answer.setScore(score);
-                totalScore += answer.getScore();
+                totalScore += score;
             }
-            
-            answerList.add(answer);
-        }
 
-        if (!answerList.isEmpty()) {
-            studentAnswerMapper.batchInsert(answerList);
-            
-            // 异步转换操作题的 docx 文件
-            for (BizStudentAnswer answer : answerList) {
-                if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
-                    String studentAnswer = answer.getStudentAnswer();
-                    String fileSystemRelativePath = studentAnswer.replaceFirst(com.ruoyi.common.constant.Constants.RESOURCE_PREFIX, "");
-                    String docxFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
-                    String outputDir = new java.io.File(docxFullPath).getParent();
-                    
-                    // 计算预览URL前缀
-                    String previewUrlPrefix = studentAnswer.substring(0, studentAnswer.lastIndexOf('/') + 1);
-                    
-                    asyncConversionService.convertAsync(answer.getAnswerId(), docxFullPath, outputDir, previewUrlPrefix);
-                    log.info("【操作题】已触发异步转换 answerId={}", answer.getAnswerId());
+            BizStudentAnswer existingAnswer = studentAnswerMapper.selectLatestByStudentLessonQuestion(studentId, lessonId, questionId);
+            boolean isNewAnswer = existingAnswer == null;
+            if (existingAnswer != null) {
+                answer.setAnswerId(existingAnswer.getAnswerId());
+                studentAnswerMapper.updateAnswerById(answer);
+            } else {
+                studentAnswerMapper.insertAnswer(answer);
+            }
+
+            if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
+                if (answer.getStudentAnswer() != null && !answer.getStudentAnswer().trim().isEmpty()) {
+                    pendingConversionAnswerIds.add(answer.getAnswerId());
+                    log.info("【操作题】{} answerId={}，已登记待转换，事务提交后触发异步任务",
+                            isNewAnswer ? "新增提交" : "更新提交", answer.getAnswerId());
                 }
             }
         }
 
+        triggerPendingPracticalConversionsAfterCommit(pendingConversionAnswerIds);
         log.info("【学生答题】学生 {} 提交课程 {} 答案，得分: {}", student.getStudentId(), lessonId, totalScore);
 
         return AjaxResult.success("提交成功").put("totalScore", totalScore);
+    }
+
+    /**
+     * 在事务提交后再触发操作题异步转换，避免异步线程读不到尚未提交的答题记录。
+     */
+    private void triggerPendingPracticalConversionsAfterCommit(java.util.List<Long> answerIds) {
+        if (answerIds == null || answerIds.isEmpty()) {
+            return;
+        }
+
+        java.util.LinkedHashSet<Long> uniqueAnswerIds = new java.util.LinkedHashSet<>(answerIds);
+        Runnable conversionTrigger = () -> {
+            for (Long answerId : uniqueAnswerIds) {
+                asyncConversionService.convertAsync(answerId, null, null, null);
+                log.info("【操作题】answerId={}，afterCommit 已触发异步转换", answerId);
+            }
+        };
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    conversionTrigger.run();
+                }
+            });
+            return;
+        }
+
+        log.warn("【操作题】当前事务同步未激活，直接触发异步转换，answerIds={}", uniqueAnswerIds);
+        conversionTrigger.run();
     }
 
     /**

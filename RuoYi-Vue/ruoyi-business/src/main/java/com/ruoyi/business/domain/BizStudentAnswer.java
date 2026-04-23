@@ -57,6 +57,16 @@ public class BizStudentAnswer extends BaseEntity
     /** 预览文件路径 (PDF) */
     private String previewPath;
 
+    /** 预览重试次数 */
+    private Integer previewRetryCount;
+
+    /** 最近一次预览重试时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date previewLastRetryTime;
+
+    /** 预览失败原因 */
+    private String previewErrorMessage;
+
     // --- 非数据库字段，用于查询展示 ---
     private String studentName;
     private String studentNo;
@@ -113,4 +123,13 @@ public class BizStudentAnswer extends BaseEntity
 
     public String getPreviewPath() { return previewPath; }
     public void setPreviewPath(String previewPath) { this.previewPath = previewPath; }
+
+    public Integer getPreviewRetryCount() { return previewRetryCount; }
+    public void setPreviewRetryCount(Integer previewRetryCount) { this.previewRetryCount = previewRetryCount; }
+
+    public Date getPreviewLastRetryTime() { return previewLastRetryTime; }
+    public void setPreviewLastRetryTime(Date previewLastRetryTime) { this.previewLastRetryTime = previewLastRetryTime; }
+
+    public String getPreviewErrorMessage() { return previewErrorMessage; }
+    public void setPreviewErrorMessage(String previewErrorMessage) { this.previewErrorMessage = previewErrorMessage; }
 }

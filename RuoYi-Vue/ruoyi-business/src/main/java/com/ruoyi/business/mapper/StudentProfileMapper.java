@@ -20,8 +20,8 @@ public interface StudentProfileMapper {
      */
     List<StudentProfileVo.CourseScoreItem> selectCourseScores(
         @Param("studentId") Long studentId,
-        @Param("semesterStart") String semesterStart,
-        @Param("semesterEnd") String semesterEnd
+        @Param("academicYearStart") String academicYearStart,
+        @Param("academicYearEnd") String academicYearEnd
     );
 
     /**
@@ -31,8 +31,8 @@ public interface StudentProfileMapper {
         @Param("entryYear") String entryYear,
         @Param("classCode") String classCode,
         @Param("deptId") Long deptId,
-        @Param("semesterStart") String semesterStart,
-        @Param("semesterEnd") String semesterEnd
+        @Param("academicYearStart") String academicYearStart,
+        @Param("academicYearEnd") String academicYearEnd
     );
 
     /**
@@ -40,8 +40,8 @@ public interface StudentProfileMapper {
      */
     List<StudentProfileVo.TypingSpeedItem> selectTypingSpeeds(
         @Param("studentId") Long studentId,
-        @Param("semesterStart") String semesterStart,
-        @Param("semesterEnd") String semesterEnd
+        @Param("academicYearStart") String academicYearStart,
+        @Param("academicYearEnd") String academicYearEnd
     );
 
     /**
@@ -49,8 +49,8 @@ public interface StudentProfileMapper {
      */
     List<StudentProfileVo.PerformanceItem> selectPerformances(
         @Param("studentId") Long studentId,
-        @Param("semesterStart") String semesterStart,
-        @Param("semesterEnd") String semesterEnd
+        @Param("academicYearStart") String academicYearStart,
+        @Param("academicYearEnd") String academicYearEnd
     );
 
     /**
@@ -60,8 +60,8 @@ public interface StudentProfileMapper {
         @Param("entryYear") String entryYear,
         @Param("classCode") String classCode,
         @Param("deptId") Long deptId,
-        @Param("semesterStart") String semesterStart,
-        @Param("semesterEnd") String semesterEnd
+        @Param("academicYearStart") String academicYearStart,
+        @Param("academicYearEnd") String academicYearEnd
     );
 
     /**

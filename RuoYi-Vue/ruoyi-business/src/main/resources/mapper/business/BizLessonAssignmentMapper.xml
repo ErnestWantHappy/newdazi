@@ -79,7 +79,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 新增：根据课程ID查询所有被指派的班级编号 -->
     <select id="selectClassCodesByLessonId" parameterType="java.lang.Long" resultType="java.lang.String">
-        SELECT class_code FROM biz_lesson_assignment WHERE lesson_id = #{lessonId}
+        SELECT DISTINCT class_code
+        FROM biz_lesson_assignment
+        WHERE lesson_id = #{lessonId}
+        ORDER BY CAST(class_code AS UNSIGNED) ASC, class_code ASC
     </select>
 
     <!-- 新增：根据课程ID删除所有指派记录 -->

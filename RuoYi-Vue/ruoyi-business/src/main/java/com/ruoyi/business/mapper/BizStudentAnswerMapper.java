@@ -1,6 +1,7 @@
 package com.ruoyi.business.mapper;
 
 import java.util.List;
+import java.util.Date;
 import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.LessonRankingVo;
@@ -16,14 +17,31 @@ import org.apache.ibatis.annotations.Param;
 public interface BizStudentAnswerMapper 
 {
     /**
+     * 新增单条答题记录
+     */
+    int insertAnswer(BizStudentAnswer answer);
+
+    /**
      * 批量插入答题记录
      */
     void batchInsert(List<BizStudentAnswer> answers);
 
     /**
+     * 更新答题记录
+     */
+    int updateAnswerById(BizStudentAnswer answer);
+
+    /**
      * 查询学生某课程的答题记录
      */
     List<BizStudentAnswer> selectByStudentAndLesson(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId);
+
+    /**
+     * 查询学生某课程某题最新一条答题记录
+     */
+    BizStudentAnswer selectLatestByStudentLessonQuestion(@Param("studentId") Long studentId,
+                                                         @Param("lessonId") Long lessonId,
+                                                         @Param("questionId") Long questionId);
     
     /**
      * 查询某课程的所有答题记录
@@ -100,4 +118,21 @@ public interface BizStudentAnswerMapper
      * 查询某课程有答题记录的班级列表（用于批改页面班级选择）
      */
     List<java.util.Map<String, Object>> selectClassesByLessonAnswers(@Param("lessonId") Long lessonId);
+
+    /**
+     * 查询达到自动重试条件的失败操作题记录
+     */
+    List<BizStudentAnswer> selectRecoverablePracticalAnswersForRetry(@Param("retryBefore") Date retryBefore,
+                                                                     @Param("stuckBefore") Date stuckBefore,
+                                                                     @Param("maxRetryCount") Integer maxRetryCount);
+
+    /**
+     * 查询当前班级当前操作题下可手动重转的失败记录
+     */
+    List<BizStudentAnswer> selectRecoverablePracticalAnswersForManualRetry(@Param("lessonId") Long lessonId,
+                                                                           @Param("questionId") Long questionId,
+                                                                           @Param("classCode") String classCode,
+                                                                           @Param("entryYear") String entryYear,
+                                                                           @Param("deptId") Long deptId,
+                                                                           @Param("stuckBefore") Date stuckBefore);
 }

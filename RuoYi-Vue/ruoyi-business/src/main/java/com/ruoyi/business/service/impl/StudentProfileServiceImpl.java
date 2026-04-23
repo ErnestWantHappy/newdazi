@@ -28,7 +28,7 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
     private SysDeptMapper deptMapper;
 
     @Override
-    public StudentProfileVo getStudentProfile(Long studentId, String semesterStart, String semesterEnd) {
+    public StudentProfileVo getStudentProfile(Long studentId, String academicYearStart, String academicYearEnd) {
         StudentProfileVo profile = new StudentProfileVo();
         
         // 1. 获取学生基础信息
@@ -49,7 +49,7 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
         profile.setGradeName(gradeName);
         
         // 2. 获取课程成绩并计算统计
-        List<StudentProfileVo.CourseScoreItem> courses = getCourseScores(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.CourseScoreItem> courses = getCourseScores(studentId, academicYearStart, academicYearEnd);
         profile.setTotalCourses(courses.size());
         
         // 计算总体平均分
@@ -63,7 +63,7 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
         }
         
         // 3. 计算课堂表现平均分（0分不参与）
-        List<StudentProfileVo.PerformanceItem> performances = getPerformances(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.PerformanceItem> performances = getPerformances(studentId, academicYearStart, academicYearEnd);
         if (!performances.isEmpty()) {
             double perfAvg = performances.stream()
                 .filter(p -> p.getPerformance() != null && p.getPerformance() != 0)
@@ -74,7 +74,7 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
         }
         
         // 4. 计算打字平均速度
-        List<StudentProfileVo.TypingSpeedItem> typingSpeeds = getTypingSpeeds(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.TypingSpeedItem> typingSpeeds = getTypingSpeeds(studentId, academicYearStart, academicYearEnd);
         if (!typingSpeeds.isEmpty()) {
             double speedAvg = typingSpeeds.stream()
                 .filter(t -> t.getTypingSpeed() != null)
@@ -86,7 +86,7 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
         
         // 5. 计算当前排名
         Long deptId = SecurityUtils.getDeptId();
-        List<StudentProfileVo.RankItem> ranks = getRankChanges(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.RankItem> ranks = getRankChanges(studentId, academicYearStart, academicYearEnd);
         if (!ranks.isEmpty()) {
             StudentProfileVo.RankItem lastRank = ranks.get(ranks.size() - 1);
             profile.setCurrentRank(lastRank.getRank());
@@ -104,7 +104,7 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
     }
 
     @Override
-    public List<StudentProfileVo.CourseScoreItem> getCourseScores(Long studentId, String semesterStart, String semesterEnd) {
+    public List<StudentProfileVo.CourseScoreItem> getCourseScores(Long studentId, String academicYearStart, String academicYearEnd) {
         // 获取学生信息
         Map<String, Object> basicInfo = studentProfileMapper.selectStudentBasicInfo(studentId);
         if (basicInfo == null) {
@@ -114,15 +114,15 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
         Long deptId = SecurityUtils.getDeptId();
         
         // 获取学生课程成绩
-        List<StudentProfileVo.CourseScoreItem> courses = studentProfileMapper.selectCourseScores(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.CourseScoreItem> courses = studentProfileMapper.selectCourseScores(studentId, academicYearStart, academicYearEnd);
         
         // 获取班级平均分
         List<Map<String, Object>> classAvgs = studentProfileMapper.selectClassAvgScores(
             (String) basicInfo.get("entryYear"),
             (String) basicInfo.get("classCode"),
             deptId,
-            semesterStart,
-            semesterEnd
+            academicYearStart,
+            academicYearEnd
         );
         
         // 转换为 Map 方便查找
@@ -141,8 +141,8 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
     }
 
     @Override
-    public List<StudentProfileVo.TypingSpeedItem> getTypingSpeeds(Long studentId, String semesterStart, String semesterEnd) {
-        List<StudentProfileVo.TypingSpeedItem> speeds = studentProfileMapper.selectTypingSpeeds(studentId, semesterStart, semesterEnd);
+    public List<StudentProfileVo.TypingSpeedItem> getTypingSpeeds(Long studentId, String academicYearStart, String academicYearEnd) {
+        List<StudentProfileVo.TypingSpeedItem> speeds = studentProfileMapper.selectTypingSpeeds(studentId, academicYearStart, academicYearEnd);
         
         // 获取学生信息确定年级基准
         Map<String, Object> basicInfo = studentProfileMapper.selectStudentBasicInfo(studentId);
@@ -160,12 +160,12 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
     }
 
     @Override
-    public List<StudentProfileVo.PerformanceItem> getPerformances(Long studentId, String semesterStart, String semesterEnd) {
-        return studentProfileMapper.selectPerformances(studentId, semesterStart, semesterEnd);
+    public List<StudentProfileVo.PerformanceItem> getPerformances(Long studentId, String academicYearStart, String academicYearEnd) {
+        return studentProfileMapper.selectPerformances(studentId, academicYearStart, academicYearEnd);
     }
 
     @Override
-    public List<StudentProfileVo.RankItem> getRankChanges(Long studentId, String semesterStart, String semesterEnd) {
+    public List<StudentProfileVo.RankItem> getRankChanges(Long studentId, String academicYearStart, String academicYearEnd) {
         // 获取学生信息
         Map<String, Object> basicInfo = studentProfileMapper.selectStudentBasicInfo(studentId);
         if (basicInfo == null) {
@@ -181,11 +181,11 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
         
         // 获取班级所有学生的历次课程成绩
         List<Map<String, Object>> allScores = studentProfileMapper.selectClassStudentScores(
-            entryYear, classCode, deptId, semesterStart, semesterEnd
+            entryYear, classCode, deptId, academicYearStart, academicYearEnd
         );
         
         // 获取这个学生的课程列表（用于确定顺序）
-        List<StudentProfileVo.CourseScoreItem> studentCourses = studentProfileMapper.selectCourseScores(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.CourseScoreItem> studentCourses = studentProfileMapper.selectCourseScores(studentId, academicYearStart, academicYearEnd);
         
         // 计算每个课程后的排名
         List<StudentProfileVo.RankItem> result = new ArrayList<>();

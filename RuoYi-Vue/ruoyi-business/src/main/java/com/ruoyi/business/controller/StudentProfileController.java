@@ -24,10 +24,10 @@ public class StudentProfileController extends BaseController {
     @GetMapping("/summary/{studentId}")
     public AjaxResult getSummary(
         @PathVariable Long studentId,
-        @RequestParam(required = false) String semesterStart,
-        @RequestParam(required = false) String semesterEnd
+        @RequestParam(required = false) String academicYearStart,
+        @RequestParam(required = false) String academicYearEnd
     ) {
-        StudentProfileVo profile = studentProfileService.getStudentProfile(studentId, semesterStart, semesterEnd);
+        StudentProfileVo profile = studentProfileService.getStudentProfile(studentId, academicYearStart, academicYearEnd);
         if (profile == null) {
             return AjaxResult.error("未找到学生信息");
         }
@@ -40,10 +40,10 @@ public class StudentProfileController extends BaseController {
     @GetMapping("/courses/{studentId}")
     public AjaxResult getCourseScores(
         @PathVariable Long studentId,
-        @RequestParam(required = false) String semesterStart,
-        @RequestParam(required = false) String semesterEnd
+        @RequestParam(required = false) String academicYearStart,
+        @RequestParam(required = false) String academicYearEnd
     ) {
-        List<StudentProfileVo.CourseScoreItem> list = studentProfileService.getCourseScores(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.CourseScoreItem> list = studentProfileService.getCourseScores(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
 
@@ -53,10 +53,10 @@ public class StudentProfileController extends BaseController {
     @GetMapping("/typing/{studentId}")
     public AjaxResult getTypingSpeeds(
         @PathVariable Long studentId,
-        @RequestParam(required = false) String semesterStart,
-        @RequestParam(required = false) String semesterEnd
+        @RequestParam(required = false) String academicYearStart,
+        @RequestParam(required = false) String academicYearEnd
     ) {
-        List<StudentProfileVo.TypingSpeedItem> list = studentProfileService.getTypingSpeeds(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.TypingSpeedItem> list = studentProfileService.getTypingSpeeds(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
 
@@ -66,10 +66,10 @@ public class StudentProfileController extends BaseController {
     @GetMapping("/performance/{studentId}")
     public AjaxResult getPerformances(
         @PathVariable Long studentId,
-        @RequestParam(required = false) String semesterStart,
-        @RequestParam(required = false) String semesterEnd
+        @RequestParam(required = false) String academicYearStart,
+        @RequestParam(required = false) String academicYearEnd
     ) {
-        List<StudentProfileVo.PerformanceItem> list = studentProfileService.getPerformances(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.PerformanceItem> list = studentProfileService.getPerformances(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
 
@@ -79,10 +79,10 @@ public class StudentProfileController extends BaseController {
     @GetMapping("/rank/{studentId}")
     public AjaxResult getRankChanges(
         @PathVariable Long studentId,
-        @RequestParam(required = false) String semesterStart,
-        @RequestParam(required = false) String semesterEnd
+        @RequestParam(required = false) String academicYearStart,
+        @RequestParam(required = false) String academicYearEnd
     ) {
-        List<StudentProfileVo.RankItem> list = studentProfileService.getRankChanges(studentId, semesterStart, semesterEnd);
+        List<StudentProfileVo.RankItem> list = studentProfileService.getRankChanges(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
 

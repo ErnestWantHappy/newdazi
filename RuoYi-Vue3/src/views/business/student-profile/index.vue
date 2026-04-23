@@ -4,7 +4,7 @@
     <el-card class="filter-card">
       <StudentSelector 
         v-model:studentId="selectedStudentId"
-        v-model:semester="selectedSemester"
+        v-model:academicYear="selectedAcademicYear"
         @change="loadProfile"
       />
     </el-card>
@@ -79,7 +79,7 @@ import {
 const route = useRoute()
 
 const selectedStudentId = ref(null)
-const selectedSemester = ref(null)
+const selectedAcademicYear = ref(null)
 const loading = ref(false)
 
 // 数据
@@ -95,17 +95,17 @@ async function loadProfile() {
   
   loading.value = true
   
-  const semesterStart = selectedSemester.value?.start || null
-  const semesterEnd = selectedSemester.value?.end || null
+  const academicYearStart = selectedAcademicYear.value?.start || null
+  const academicYearEnd = selectedAcademicYear.value?.end || null
   
   try {
     // 并行请求所有数据
     const [summaryRes, coursesRes, typingRes, perfRes, rankRes] = await Promise.all([
-      getStudentProfileSummary(selectedStudentId.value, semesterStart, semesterEnd),
-      getCourseScores(selectedStudentId.value, semesterStart, semesterEnd),
-      getTypingSpeeds(selectedStudentId.value, semesterStart, semesterEnd),
-      getPerformances(selectedStudentId.value, semesterStart, semesterEnd),
-      getRankChanges(selectedStudentId.value, semesterStart, semesterEnd)
+      getStudentProfileSummary(selectedStudentId.value, academicYearStart, academicYearEnd),
+      getCourseScores(selectedStudentId.value, academicYearStart, academicYearEnd),
+      getTypingSpeeds(selectedStudentId.value, academicYearStart, academicYearEnd),
+      getPerformances(selectedStudentId.value, academicYearStart, academicYearEnd),
+      getRankChanges(selectedStudentId.value, academicYearStart, academicYearEnd)
     ])
     
     profileData.value = summaryRes.data || {}

@@ -1,7 +1,7 @@
 # 信息科技学业测评平台 (Context)
 
 > **版本**：v2.8
-> **更新时间**：2026-03-12
+> **更新时间**：2026-04-22
 > **核心定位**：服务于中小学信息科技课程的综合性教学与评价平台，集课程管理、多维度测评（选择/判断/操作/打字）、智能评分、学情分析与可视化于一体。
 
 ---
@@ -19,6 +19,47 @@
 ---
 
 ## 🧩 2. 系统核心功能与业务流程 (System Core & Workflows)
+
+### 2.x 2026-04-22 更新摘要 (工作快照 - 操作题预览重试 / 答题记录唯一化 / 学年画像)
+
+> [!IMPORTANT]
+> **状态口径**：以下内容表示**仓库代码已经修改**，但**尚未确认上线、尚未确认数据库脚本已执行、尚未确认定时任务已创建、尚未完成构建与联调回归**。后续继续开发或排障时，请先按本节的“待验证事项”补齐环境确认。
+
+#### 🔁 操作题预览重试链路（已改代码，待验证）
+- **学生端预览状态流**：`StudentHomeController` 返回的已提交答案新增 `previewStatus`、`previewPath`；学生页上传操作题后会根据服务端状态显示“可预览 / 转换中 / 转换失败”，并补充失败下载兜底。
+- **状态字段扩展**：`biz_student_answer` 已按代码引入 `preview_retry_count`、`preview_last_retry_time`、`preview_error_message` 三个预览失败重试字段；实体 `BizStudentAnswer` 与 `PracticalSubmissionVo` 已同步承载这些字段。
+- **异步转换统一入口**：`AsyncConversionService` 不再依赖提交时临时拼路径，而是统一按答题记录读取源文件；支持 PDF 直出成功、DOC/DOCX 转换、失败原因落库、自动重试次数控制。
+- **教师端人工重转**：教师批改页新增“重新转换本班失败文件”按钮；后端新增 `/business/teacher/grading/retry-failed-previews` 接口，由 `PracticalPreviewRetryService` 触发当前课程、当前班级、当前操作题下的失败文件重转。
+- **定时自动重试**：`ruoyi-quartz` 已新增 `PracticalPreviewRetryTask`，调用目标为 `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`，用于按时间窗口重试失败的 DOC/DOCX 预览转换。
+- **配套 SQL**：仓库已新增 `sql/practical_preview_retry_fields.sql`，用于补充字段、回填默认值、创建辅助索引，并给出 Quartz 任务建议配置。
+
+#### 🧹 答题记录去重与唯一化（已改代码，待验证）
+- **查询语义变更**：`BizStudentAnswerMapper.xml` 新增 `latestAnswerIdSubquery`，多处查询已统一改为按 `student_id + lesson_id + question_id` 仅取最新一条答题记录，避免旧提交混入统计、画像和批改列表。
+- **提交流程变更**：学生提交答案从原先“先删旧记录，再批量插入”改为“按题逐条查询最新记录，存在则更新，不存在则新增”，降低重复记录风险，并让操作题预览状态可以持续更新。
+- **预留数据库收口方案**：仓库已新增 `sql/typing_answer_dedup_fix.sql`，内容包括历史数据备份、重复记录清理、以及 `uk_student_lesson_question` 唯一索引补充脚本。
+- **直接影响范围**：课程答题详情、成绩统计、操作题批改列表、学生画像等依赖 `biz_student_answer` 的查询，后续应默认按“最新答题记录视图”理解，不再按“历史全量答题流水”理解。
+
+#### 👤 学生画像改为学年维度（已改代码，待验证）
+- **接口参数统一调整**：学生画像相关接口已从 `semesterStart / semesterEnd` 改为 `academicYearStart / academicYearEnd`，前后端参数名保持一致。
+- **前端筛选器升级**：`StudentSelector.vue` 已由“学期选择”改为“学年选择”，默认学年按 9 月开学口径计算。
+- **画像查询口径同步**：`StudentProfileController`、`IStudentProfileService`、`StudentProfileServiceImpl`、`StudentProfileMapper.xml` 已同步按学年时间范围查询课程成绩、打字速度、课堂表现与排名变化。
+- **画像数据去重同步受益**：由于画像底层查询也切换为读取最新答题记录，理论上可以避免重复答题造成的成绩与排名失真，但尚未完成联调验证。
+
+#### ✍️ 题库与课程设计器体验优化（已改代码，待验证）
+- **打字题时长改为可手动覆盖推荐值**：题库页面不再只读展示推荐时长，教师可在推荐值基础上手动调整；仅在未手工覆盖时，才随字数和年级自动更新。
+- **操作题模板文件改为可选**：题库中操作题的参考模板文件不再强制上传；如上传，仅允许 1 个 `docx` 文件，避免多文件带来预览和管理歧义。
+- **课程可先创建后指派班级**：课程设计器移除了“至少指派一个班级”的前端硬校验，允许教师先完成课程设计、后续正式上课前再补充班级指派。
+
+#### 🧩 其他配套修补（已改代码，待验证）
+- **教师批改体验补强**：批改页会保留当前选中的学生，并在学生列表中直接展示预览状态；失败记录支持显示失败原因与已重试次数。
+- **学生页体验补强**：打字题提交过程新增 `submitting` 防重入状态；操作题上传限制为单文件，并在页面销毁时清理轮询定时器。
+- **排序与导入细节修补**：课程与班级查询的排序做了进一步规范；`biz_student` 插入语句已补上 `remark` 字段；系统重置密码时会清理登录错误缓存，减少“已重置但仍显示锁定”的假象。
+
+#### ⚠️ 当前待验证事项（截至 2026-04-22）
+- **数据库脚本未确认执行**：没有证据表明 `sql/practical_preview_retry_fields.sql` 与 `sql/typing_answer_dedup_fix.sql` 已在线下或生产数据库中执行。
+- **Quartz 任务未确认创建**：代码中已有 `PracticalPreviewRetryTask`，但没有证据表明系统中已经真正创建 `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews` 定时任务。
+- **构建与联调未确认完成**：没有证据表明本轮改动已完成后端构建、前端构建、接口联调或回归测试。
+- **运行产物不纳入核心记忆**：`RuoYi-Vue/uploadPath/upload/2026/04/` 属于本地运行产物，默认不写入业务上下文，只在排查具体附件问题时再单独引用。
 
 ### 2.0 2026-03-12 更新摘要 (v2.9 - 请假/缺考管理与视觉优化)
 

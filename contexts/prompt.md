@@ -1,84 +1,133 @@
-# AI 辅助开发提示词大纲 (v2.8.1 多项修复与优化)
+# AI 辅助开发接力提示 (2026-04-22)
 
-> **背景说明**：这是一个基于 RuoYi-Vue3 和 Spring Boot 的信息科技学业测评平台。以下包含了 7 个待修复/优化项的详细拆解与实现思路，请 AI 逐一执行。
-
----
-
-## 任务 1：修复跨校历史数据回填失败 (最高优)
-**问题背景**：由于 `biz_lesson` 表早期的历史数据 `creator_id` 字段大量为 NULL，导致先前基于 `creator_id = sys_user.user_id` 的关联更新 SQL 失败，老师依然看不到早期创建的课程。
-**实现步骤**：
-1. 请提供重新回填 `biz_lesson.dept_id` 的 SQL 语句。由于截图显示 `create_by` 字段有真实的用户名（例如手机号 `19157727791`），需要改为通过 `create_by = sys_user.user_name` 进行关联更新：
-   ```sql
-   UPDATE `biz_lesson` bl 
-   INNER JOIN `sys_user` su ON bl.create_by = su.user_name 
-   SET bl.dept_id = su.dept_id 
-   WHERE bl.dept_id IS NULL;
-   ```
-2. 提示用户在 Navicat 中单独执行这段 SQL，即可恢复丢失的课程。
+> **适用范围**：这是当前仓库的开发接力提示，不再沿用旧版“7 项待修复清单”作为主线任务来源。
+>
+> **状态口径**：以下内容表示**仓库代码已经修改**，但**尚未确认上线、尚未确认数据库脚本已执行、尚未确认定时任务已创建、尚未完成构建与联调回归**。后续 AI 或开发者继续工作时，请先把“环境确认”和“验证闭环”补齐，再决定是否进入下一轮功能开发。
 
 ---
 
-## 任务 2：教师角色强密码策略与首登强制改密 (高优)
-**问题背景**：平台需要加强教师账号的安全性，密码必须满足强密码规则（至少6位，包含大小写字母、数字和特殊字符），并且第一次登录或当前密码仍为弱密码时，必须强制重定向到修改密码页面。学生角色无需此限制。
-**实现步骤**：
-1. **密码规则修改**：修改前端 `RuoYi-Vue3/src/views/system/user/profile/resetPwd.vue` 中的校验规则，加入强密码的正则表达式，确保修改密码时验证通过。
-2. **登录拦截逻辑**：
-   - 在前端 `login.vue` 登录成功后，如果是教师角色，即刻校验其输入的明文密码是否符合强密码正则。
-   - 如果不符合强密码条件，则将全局状态（例如 pinia 里的 user store）标记为 `needChangePwd: true`。
-   - 在路由拦截器 `permission.js` 中，如果读取到 `needChangePwd`，强制重定向到 `/user/profile` 页面，提示“为保证账号安全，请先修改为强密码（含大小写字母、数字及特殊符号，至少6位）”，并且阻止其点击其他菜单。
-   - 修改完成并成功提交后端后，清除前端的 `needChangePwd` 状态。
+## 一、当前仓库主线（已改代码，待验证）
+
+### 1. 操作题预览状态流与失败重试
+- 学生端当前课程接口返回的已提交答案，已包含 `previewStatus` 与 `previewPath`。
+- `biz_student_answer` 已扩展预览失败重试相关字段：
+  - `previewRetryCount`
+  - `previewLastRetryTime`
+  - `previewErrorMessage`
+- 学生页上传操作题后，会根据服务端状态展示“可预览 / 转换中 / 转换失败”，并提供失败下载兜底。
+- 教师批改页新增“重新转换本班失败文件”按钮。
+- 后端新增接口：
+  - `POST /business/teacher/grading/retry-failed-previews`
+- 后端新增服务与定时任务：
+  - `PracticalPreviewRetryService`
+  - `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`
+- 仓库已提供 SQL：
+  - `sql/practical_preview_retry_fields.sql`
+
+### 2. 答题记录查询统一按“最新记录”聚合
+- `biz_student_answer` 的多处查询已改为按 `student_id + lesson_id + question_id` 只取最新一条记录。
+- 学生提交答案从原先“删旧记录 + 批量新增”，改为“存在则更新，不存在则新增”。
+- 这会直接影响：
+  - 成绩统计
+  - 画像汇总
+  - 操作题批改列表
+  - 课程答题详情
+- 仓库已提供历史数据清理与唯一索引脚本：
+  - `sql/typing_answer_dedup_fix.sql`
+
+### 3. 学生画像从“学期”切换为“学年”
+- 学生画像接口参数已统一改为：
+  - `academicYearStart`
+  - `academicYearEnd`
+- 前端选择器已从“学期”调整为“学年”，默认口径按 9 月开学计算。
+- 学年维度已同步覆盖：
+  - 课程成绩
+  - 打字速度
+  - 课堂表现
+  - 排名变化
+
+### 4. 题库与课程设计器配套优化
+- 打字题时长不再只读，教师可以手动覆盖推荐值。
+- 操作题参考模板文件改为可选；如上传，仅允许 1 个 `docx` 文件。
+- 课程设计器允许先创建课程，后续再补充班级指派。
+
+### 5. 其他已改但未单独验收的配套项
+- 教师批改页会展示学生提交的预览状态，并尽量保留当前选中学生。
+- 学生页打字题增加提交中防重入状态，操作题轮询在页面销毁时会清理。
+- 部分排序与后端细节已补强：
+  - 课程与班级排序更稳定
+  - 学生导入插入语句补上 `remark`
+  - 重置密码后清理登录错误缓存
 
 ---
 
-## 任务 3：修复成绩汇总表课程总分与平均分计算差异 (中优)
-**问题背景**：成绩查询页面（`score/index.vue`）的“学生成绩汇总表”中，课程总分变化了（加入了表现分），但最右侧的平均分没有变化。
-**实现步骤**：
-1. 定位 `score/index.vue` 第 868-884 行的数据聚合逻辑。
-2. 目前 `sumTotal += (s.totalScore || 0)` 累加的是**理论+操作+打字**的分数，而 `sumFinal += (s.finalScore || s.totalScore || 0)` 才是包含**平时表现分**的最终总成绩。
-3. 修改第 884 行平均分的计算逻辑，将原先的 `filteredAverage = count > 0 ? Math.round(sumTotal / count) : 0;` 修改为基于 `sumFinal` 计算，确保平均分与显示的课程总分保持严谨的一致性。
-4. 注意所有分数显示的四舍五入规则并应用 `Math.round`。
+## 二、关键接口与数据口径（继续开发时必须遵守）
+
+### 1. 已变更接口
+- 学生画像接口参数从 `semesterStart / semesterEnd` 改为 `academicYearStart / academicYearEnd`。
+- 教师批改新增：
+  - `POST /business/teacher/grading/retry-failed-previews`
+
+### 2. 已变更返回结构
+- 学生当前课程返回的 `submittedAnswers` 已包含：
+  - `previewStatus`
+  - `previewPath`
+
+### 3. 已变更数据理解方式
+- `biz_student_answer` 相关查询默认按“最新答题记录”理解，而不是按“历史全量流水”理解。
+- 后续新写 SQL、Mapper、统计逻辑时，若场景需要“当前有效答案”，应优先复用“最新记录聚合”口径，避免把旧答题再次统计进去。
 
 ---
 
-## 任务 4：全局学号数值类型排序 (中优)
-**问题背景**：前端因为 JS 类型推断，将 `student_no`（学号）推断为了字符串，导致排序错乱（比如 1, 10, 11, 2）。需要改为严格按数值大小升序。
-**实现步骤**：
-1. 检查和修改以下三个场景的 SQL 查询或前端排序逻辑：
-   - 批改操作题的学生列表（涉及 `TeacherGradingController` 或相关前端页面 `grading.vue`）
-   - 课堂表现分的学生列表（`ClassroomPerformanceController` 或 `performance.vue`）
-   - 成绩查询页面的理论测试详情（这部分由 `BizStudentAnswerMapper.xml` 里的 `ORDER BY` 控制或前端 `ScoreQuery.vue` 控制）
-2. **后端方案**：在 MyBatis 的 XML 中，使用 `ORDER BY CAST(s.student_no AS UNSIGNED) ASC` 替代普通的 `ORDER BY s.student_no`。
-3. **前端方案**：在涉及到对应列表渲染的 Vue 组件的 `table-column` 中，配置 `sortable` 并书写自定义 `sort-method`，用 `parseInt(a.student_no) - parseInt(b.student_no)` 实现正确排序。
+## 三、当前仍未确认完成的事项
+
+### 1. 数据库执行状态未确认
+- 没有证据表明以下 SQL 已执行：
+  - `sql/practical_preview_retry_fields.sql`
+  - `sql/typing_answer_dedup_fix.sql`
+
+### 2. 定时任务配置未确认
+- 没有证据表明 Quartz 中已经真正创建：
+  - `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`
+
+### 3. 构建与联调未确认
+- 没有证据表明已完成：
+  - 后端 Maven 构建
+  - 前端 Vite 构建
+  - 学生端与教师端联调
+  - 回归测试
+
+### 4. 运行产物不作为上下文事实
+- `RuoYi-Vue/uploadPath/upload/2026/04/` 属于运行过程中生成的本地附件样本。
+- 默认不要把该目录内容写入项目核心记忆，也不要把它当成“需要提交的功能资产”。
 
 ---
 
-## 任务 5：根据理论题存无动态隐藏理论测试详情表 (体验优化)
-**问题背景**：成绩查询页面如果当前选择的课程都没有理论测试题目，依然会显示出一个空的理论测试详情表，影响阅读。
-**实现步骤**：
-1. 在 `score/index.vue` 的请求（如 `getQuestionAnalysis` 或 `getStudentAnswerMatrix` 返回结果后）中，判断当次所有的题库数据中是否存在选择题（`choice`）或判断题（`judgment`）。
-2. 在对应的 `<el-table>` 渲染标签上，通过 `v-if="hasTheoryQuestions"` 的方式进行包裹。
-3. 如果 `hasTheoryQuestions` 为 false，展示一段空状态提示或直接将其 DOM 元素隐藏。
+## 四、下一轮建议优先验证的内容
+
+### 1. 先补环境确认
+1. 确认数据库是否已经执行 `practical_preview_retry_fields.sql`。
+2. 确认数据库是否已经执行 `typing_answer_dedup_fix.sql`。
+3. 确认 Quartz 是否已创建 `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`。
+
+### 2. 再做功能联调
+1. 学生端上传 `docx` 后，是否能经历“上传成功 -> 转换中 -> 可预览”。
+2. 学生端上传 `pdf` 后，是否能直接预览。
+3. 学生端上传暂不支持在线预览的文件后，是否能正确显示失败态并允许下载原文件。
+4. 教师批改页点击“重新转换本班失败文件”后，失败记录是否会重新进入转换流程。
+5. 学生画像学年筛选后，课程、打字、表现、排名四类数据是否都按学年范围返回。
+
+### 3. 最后补构建与回归
+1. 后端构建是否通过。
+2. 前端构建是否通过。
+3. 最新答题记录口径是否影响历史统计页面。
+4. 唯一索引落地后，提交答案是否仍能正常更新而不是报重复键错误。
 
 ---
 
-## 任务 6：部门管理页面 UI 与文案深度定制为“学校管理” (低优/改造)
-**问题背景**：RuoYi 原生“部门管理”需要进一步深度定制教育局-学校架构，隐藏不需要的输入框。
-**实现步骤**：
-1. **文案替换**：在 `views/system/dept/index.vue` 中，将所有的“部门管理”、“添加部门”、“部门名称”批量修改为“学校管理”、“添加学校”、“学校名称”。
-2. **隐藏多余字段**：在新增/修改弹窗的表单 (`<el-form>`) 中，找到并删除（或 `v-if="false"` 隐藏）“负责人”、“联系电话”、“邮箱”等表单项代码（包含校验规则）。
-3. **上级学校强限制**：
-   - 目前系统的上级部门应只能选“小学”、“初中”、“高中”分类，教育局节点为根。
-   - 在弹窗的树状下拉选择器（`<el-tree-select>`）中，设置只能通过前端数据过滤逻辑，或者在表单选择校验中，确保用户所选父级 `parent_id` 对应的节点属于这些允许的分类集合，不符合则抛出提示 `ElMessage.warning('只能选择小学、初中或高中作为上级！')`。
-4. **自定义学校代码**：
-   - 在弹窗表单中新增字段 `<el-input v-model="form.schoolCode" placeholder="请输入自定义学校编号" />`。
-   - 确保 `rules` 中配置必填或正则校验，并在请求 `/system/dept` `POST` 与 `PUT` 接口时传递给后端。
+## 五、继续协作时的默认原则
 
----
-
-## 任务 7：排查并修复部门（学校）管理点击查询报错 (最高优)
-**问题背景**：用户反馈点击部门管理的查询按钮会报错。
-**实现步骤**：
-1. 定位 `views/system/dept/index.vue` 的搜索查询函数 `handleQuery()` 以及向后端的请求动作。
-2. 可能是因为后端实体类（`SysDept.java`）中刚刚加的 `school_code`，或者其它相关返回缺少字段导致的 MyBatis 报错。
-3. 或者是由于树形数据处理失败，需优先让用户贴出浏览器的 F12 Response 报错信息，或者后端控制台 `org.springframework...` 的异常栈，明确具体错误是由 SQL 语法引起（例如 MyBatis xml 层没有把 `d.school_code` 包裹进去）还是前端找不到属性。
-4. （备用猜测）如果是在查询框里输入的内容传给了原有的 `deptName`，后端按 `like` 查一般不报错；报错往往是由于之前手动在 sys_dept 中添字段却没有同步修改 `selectDeptList` 的底层 xml SQL。请仔细核对 `SysDeptMapper.xml`。
+- 默认把当前状态理解为：**代码已改，验证待补**。
+- 没有明确证据前，不要把 SQL 已执行、Quartz 已配置、功能已上线写成既成事实。
+- 如果下一轮任务与 `biz_student_answer`、学生画像、操作题批改有关，优先核对本文件中的新接口名和新数据口径，避免继续沿用旧的 `semesterStart / semesterEnd` 或“全量答题流水”思维。
+- 如果要继续扩展操作题预览链路，优先在现有 `previewStatus / previewPath / previewRetryCount / previewLastRetryTime / previewErrorMessage` 基础上演进，不要再额外引入一套平行状态字段。

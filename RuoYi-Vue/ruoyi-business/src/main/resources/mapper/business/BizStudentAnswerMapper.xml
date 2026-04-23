@@ -4,6 +4,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.BizStudentAnswerMapper">
 
+    <sql id="latestAnswerIdSubquery">
+        SELECT MAX(answer_id) AS answer_id
+        FROM biz_student_answer
+        GROUP BY student_id, lesson_id, question_id
+    </sql>
+
     <resultMap type="com.ruoyi.business.domain.BizStudentAnswer" id="BizStudentAnswerResult">
         <result property="answerId" column="answer_id"/>
         <result property="studentId" column="student_id"/>
@@ -19,6 +25,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="completionRate" column="completion_rate"/>
         <result property="previewStatus" column="preview_status"/>
         <result property="previewPath" column="preview_path"/>
+        <result property="previewRetryCount" column="preview_retry_count"/>
+        <result property="previewLastRetryTime" column="preview_last_retry_time"/>
+        <result property="previewErrorMessage" column="preview_error_message"/>
     </resultMap>
 
     <resultMap type="com.ruoyi.business.domain.vo.LessonRankingVo" id="LessonRankingVoResult">
@@ -32,32 +41,84 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="totalCount" column="total_count"/>
     </resultMap>
 
+    <!-- 新增单条答题记录 -->
+    <insert id="insertAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer" useGeneratedKeys="true" keyProperty="answerId">
+        INSERT INTO biz_student_answer
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message)
+        VALUES
+        (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer},
+         #{isCorrect}, #{score}, #{answerTime}, #{submitTime},
+         #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
+    </insert>
+
     <!-- 批量插入答题记录 -->
     <insert id="batchInsert" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="answerId">
         INSERT INTO biz_student_answer 
-        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path) 
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message) 
         VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.studentId}, #{item.lessonId}, #{item.questionId}, #{item.studentAnswer}, 
              #{item.isCorrect}, #{item.score}, #{item.answerTime}, #{item.submitTime},
-             #{item.typingSpeed}, #{item.accuracyRate}, #{item.completionRate}, #{item.previewStatus}, #{item.previewPath})
+             #{item.typingSpeed}, #{item.accuracyRate}, #{item.completionRate}, #{item.previewStatus}, #{item.previewPath}, #{item.previewRetryCount}, #{item.previewLastRetryTime}, #{item.previewErrorMessage})
         </foreach>
     </insert>
 
+    <!-- 更新答题记录 -->
+    <update id="updateAnswerById" parameterType="com.ruoyi.business.domain.BizStudentAnswer">
+        UPDATE biz_student_answer
+        SET student_answer = #{studentAnswer},
+            is_correct = #{isCorrect},
+            score = #{score},
+            answer_time = #{answerTime},
+            submit_time = #{submitTime},
+            typing_speed = #{typingSpeed},
+            accuracy_rate = #{accuracyRate},
+            completion_rate = #{completionRate},
+            preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage}
+        WHERE answer_id = #{answerId}
+    </update>
+
     <!-- 查询学生某课程的答题记录 -->
     <select id="selectByStudentAndLesson" resultMap="BizStudentAnswerResult">
-        SELECT * FROM biz_student_answer 
-        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        WHERE a.student_id = #{studentId}
+          AND a.lesson_id = #{lessonId}
+        ORDER BY a.question_id ASC
+    </select>
+
+    <select id="selectLatestByStudentLessonQuestion" resultMap="BizStudentAnswerResult">
+        SELECT *
+        FROM biz_student_answer
+        WHERE student_id = #{studentId}
+          AND lesson_id = #{lessonId}
+          AND question_id = #{questionId}
+        ORDER BY answer_id DESC
+        LIMIT 1
     </select>
 
     <select id="selectByLessonId" resultMap="BizStudentAnswerResult">
-        SELECT * FROM biz_student_answer 
-        WHERE lesson_id = #{lessonId}
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        WHERE a.lesson_id = #{lessonId}
     </select>
 
     <select id="selectByLessonAndClass" resultMap="BizStudentAnswerResult">
         SELECT a.* 
         FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
         JOIN biz_student s ON a.student_id = s.student_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
@@ -80,17 +141,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectLessonRanking" resultMap="LessonRankingVoResult">
         SELECT 
             a.student_id,
-            s.student_name,
+            u.nick_name AS student_name,
             s.student_no,
             s.class_code,
-            SUM(a.score) as total_score,
-            SUM(a.answer_time) as total_time,
+            SUM(IFNULL(a.score, 0)) as total_score,
+            SUM(IFNULL(a.answer_time, 0)) as total_time,
             SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_count,
             COUNT(*) as total_count
         FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_student s ON a.student_id = s.student_id
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
-        GROUP BY a.student_id, s.student_name, s.student_no, s.class_code
+        GROUP BY a.student_id, u.nick_name, s.student_no, s.class_code
         ORDER BY total_score DESC, total_time ASC
     </select>
 
@@ -141,6 +206,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.file_path AS filePath,
             a.student_answer AS studentAnswer
         FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
         WHERE a.student_id = #{studentId}
@@ -164,23 +232,29 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{questionId} AS questionId,
             q.question_content AS questionContent,
             a.student_answer AS studentAnswer,
-            CASE 
-                WHEN a.student_answer LIKE '%.docx' THEN REPLACE(a.student_answer, '.docx', '.pdf')
-                WHEN a.student_answer LIKE '%.doc' THEN REPLACE(a.student_answer, '.doc', '.pdf')
-                ELSE a.student_answer
-            END AS previewPath,
+            a.preview_status AS previewStatus,
+            a.preview_path AS previewPath,
+            a.preview_retry_count AS previewRetryCount,
+            a.preview_last_retry_time AS previewLastRetryTime,
+            a.preview_error_message AS previewErrorMessage,
             a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
             CASE WHEN a.answer_id IS NOT NULL THEN 1 ELSE 0 END AS submitted
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
-        LEFT JOIN biz_student_answer a ON s.student_id = a.student_id 
-            AND a.lesson_id = #{lessonId}
-            <if test="questionId != null">
-                AND a.question_id = #{questionId}
-            </if>
-        LEFT JOIN biz_question q ON a.question_id = q.question_id OR q.question_id = #{questionId}
+        LEFT JOIN (
+            SELECT a1.*
+            FROM biz_student_answer a1
+            INNER JOIN (
+                <include refid="latestAnswerIdSubquery"/>
+            ) latest ON latest.answer_id = a1.answer_id
+        ) a ON s.student_id = a.student_id
+           AND a.lesson_id = #{lessonId}
+           <if test="questionId != null">
+               AND a.question_id = #{questionId}
+           </if>
+        LEFT JOIN biz_question q ON q.question_id = #{questionId}
         LEFT JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
         WHERE s.class_code = #{classCode}
           AND s.entry_year = #{entryYear}
@@ -210,6 +284,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
         FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id = #{studentId}
@@ -223,10 +300,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 更新答题记录的预览状态 -->
     <update id="updatePreviewStatus">
         UPDATE biz_student_answer 
-        SET preview_status = #{previewStatus}
-        <if test="previewPath != null">
-            , preview_path = #{previewPath}
-        </if>
+        SET preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage}
         WHERE answer_id = #{answerId}
     </update>
 
@@ -264,7 +342,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.question_content
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
-        LEFT JOIN biz_student_answer a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
+        LEFT JOIN (
+            SELECT a1.*
+            FROM biz_student_answer a1
+            INNER JOIN (
+                <include refid="latestAnswerIdSubquery"/>
+            ) latest ON latest.answer_id = a1.answer_id
+        ) a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
         LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND lq.lesson_id = #{lessonId}
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         WHERE s.class_code = #{classCode} 
@@ -282,10 +366,64 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL THEN a.student_id END) AS practicalSubmitted,
             COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL AND a.score IS NULL THEN a.student_id END) AS practicalUngraded
         FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
         JOIN biz_student s ON a.student_id = s.student_id
         JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.lesson_id = #{lessonId}
         GROUP BY s.class_code, s.entry_year
         ORDER BY s.entry_year DESC, s.class_code ASC
+    </select>
+
+    <select id="selectRecoverablePracticalAnswersForRetry" resultMap="BizStudentAnswerResult">
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_question q ON q.question_id = a.question_id
+        WHERE q.question_type = 'practical'
+          AND a.student_answer IS NOT NULL
+          AND a.student_answer != ''
+          AND (LOWER(a.student_answer) LIKE '%.docx' OR LOWER(a.student_answer) LIKE '%.doc')
+          AND a.preview_path IS NULL
+          AND (
+                (a.preview_status = 'failed'
+                 AND (a.preview_last_retry_time IS NULL OR a.preview_last_retry_time &lt;= #{retryBefore}))
+             OR (a.preview_status IN ('pending', 'converting')
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) IS NOT NULL
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
+          )
+          AND IFNULL(a.preview_retry_count, 0) &lt; #{maxRetryCount}
+        ORDER BY a.submit_time ASC
+    </select>
+
+    <select id="selectRecoverablePracticalAnswersForManualRetry" resultMap="BizStudentAnswerResult">
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_question q ON q.question_id = a.question_id
+        INNER JOIN biz_student s ON s.student_id = a.student_id
+        INNER JOIN sys_user u ON u.user_id = s.user_id
+        WHERE q.question_type = 'practical'
+          AND a.lesson_id = #{lessonId}
+          AND a.question_id = #{questionId}
+          AND s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+          AND u.dept_id = #{deptId}
+          AND a.student_answer IS NOT NULL
+          AND a.student_answer != ''
+          AND (LOWER(a.student_answer) LIKE '%.docx' OR LOWER(a.student_answer) LIKE '%.doc')
+          AND a.preview_path IS NULL
+          AND (
+                a.preview_status = 'failed'
+             OR (a.preview_status IN ('pending', 'converting')
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) IS NOT NULL
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
+          )
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC, a.submit_time ASC
     </select>
 </mapper>

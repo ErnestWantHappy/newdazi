@@ -40,6 +40,15 @@
       </div>
       
       <div class="right-actions">
+        <el-button
+          type="warning"
+          plain
+          :loading="retryLoading"
+          :disabled="!canRetryFailedPreviews"
+          @click="handleRetryFailedPreviews"
+        >
+          重新转换本班异常文件
+        </el-button>
         <el-button type="primary" plain @click="toggleFullscreen">
            <el-icon><FullScreen /></el-icon> {{ isFullscreen ? '退出全屏' : '全屏批改' }}
         </el-button>
@@ -74,6 +83,13 @@
                    <div class="s-name" :style="s.remark ? { color: '#E6A23C' } : {}">{{ s.studentName }}</div>
                    <div class="s-remark" v-if="s.remark">{{ s.remark }}</div>
                    <div class="s-no">{{ s.studentNo }}</div>
+                   <div
+                     v-if="s.submitted"
+                     class="s-preview-status"
+                     :class="getPreviewStatusClass(s.previewStatus)"
+                   >
+                     {{ getPreviewStatusText(s) }}
+                   </div>
                </div>
                <div class="s-status" v-if="!s.submitted">未交</div>
                <div class="s-status score-num" v-else-if="s.score != null">{{ s.score }}分</div>
@@ -99,6 +115,28 @@
                 class="pdf-frame" 
                 frameborder="0"
              ></iframe>
+             <el-alert
+                v-else-if="currentStudent.previewStatus === 'pending'"
+                title="文件已提交，等待启动转换"
+                type="info"
+                :closable="false"
+                show-icon
+             />
+             <el-alert
+                v-else-if="currentStudent.previewStatus === 'converting'"
+                title="文件正在转换中，暂时无法预览"
+                type="info"
+                :closable="false"
+                show-icon
+             />
+             <el-alert
+                v-else-if="currentStudent.previewStatus === 'failed'"
+                title="文件转换失败，请先下载源文件查看"
+                :description="currentStudent.previewErrorMessage || '可稍后重试转换，或点击上方按钮批量重转当前班级失败文件。'"
+                type="warning"
+                :closable="false"
+                show-icon
+             />
              <el-empty v-else description="该生未提交文件或文件不可预览" />
          </div>
          <el-empty v-else description="请从左侧选择一名学生开始批改" />
@@ -176,17 +214,18 @@
 </template>
 
 <script setup name="TeacherGrading">
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
-import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, gradeSubmission } from '@/api/business/teacherGrading';
+import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
 import { getToken } from '@/utils/auth';  // P6 fix: use Cookies token
-import { ElMessage } from 'element-plus';
-import { FullScreen, Download } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { FullScreen } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const loading = ref(false);
+const STUCK_PREVIEW_TIMEOUT_MS = 10 * 60 * 1000;
 const gradeGroups = ref([]);
 const lessons = ref([]);
 const classes = ref([]);        // P3.5: 班级列表
@@ -201,6 +240,7 @@ const currentStudent = ref(null);
 const currentIndex = ref(-1);
 const currentScore = ref(undefined);
 const previewUrl = ref('');
+const retryLoading = ref(false);
 
 const isFullscreen = ref(false);
 const gradingPageRef = ref(null);
@@ -415,19 +455,33 @@ function loadSubmissions() {
     // P5: 获取当前班级的entryYear
     const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
     const entryYear = classInfo?.entryYear || '';
+    const previousStudentId = currentStudent.value?.studentId;
     
     loading.value = true;
     getPracticalSubmissions(selectedLessonId.value, selectedQuestionId.value, selectedClassCode.value, entryYear).then(res => {
         submissions.value = res.data;
         loading.value = false;
-        // P5: 自动选择第一个已提交的学生
-        const firstSubmitted = submissions.value.find(s => s.submitted);
-        if (firstSubmitted) {
-            const idx = submissions.value.indexOf(firstSubmitted);
-            selectStudent(firstSubmitted, idx);
-        } else {
-            currentStudent.value = null;
+        const preservedStudent = previousStudentId != null
+            ? submissions.value.find(s => s.studentId === previousStudentId && s.submitted)
+            : null;
+        const nextStudent = preservedStudent || submissions.value.find(s => s.submitted);
+        if (nextStudent) {
+            const idx = submissions.value.findIndex(s => s.studentId === nextStudent.studentId);
+            selectStudent(nextStudent, idx);
+            return;
         }
+        currentStudent.value = null;
+        currentIndex.value = -1;
+        currentScore.value = undefined;
+        previewUrl.value = '';
+    }).catch(() => {
+        loading.value = false;
+        submissions.value = [];
+        currentStudent.value = null;
+        currentIndex.value = -1;
+        currentScore.value = undefined;
+        previewUrl.value = '';
+        ElMessage.error('加载学生提交记录失败');
     });
 }
 
@@ -435,6 +489,24 @@ const gradedCount = computed(() => submissions.value.filter(s => s.submitted && 
 
 // 已提交学生数量
 const submittedCount = computed(() => submissions.value.filter(s => s.submitted).length);
+function isRecoverablePreview(student) {
+    if (!student?.submitted || student.previewPath) return false;
+    const answerPath = (student.studentAnswer || '').toLowerCase();
+    const isWordFile = answerPath.endsWith('.docx') || answerPath.endsWith('.doc');
+    if (!isWordFile) return false;
+    if (student.previewStatus === 'failed') return true;
+    if (student.previewStatus !== 'pending' && student.previewStatus !== 'converting') return false;
+    const referenceTime = student.previewLastRetryTime || student.submitTime;
+    if (!referenceTime) return false;
+    return Date.now() - new Date(referenceTime).getTime() >= STUCK_PREVIEW_TIMEOUT_MS;
+}
+
+const failedSubmissionCount = computed(() => submissions.value.filter(
+    isRecoverablePreview
+).length);
+const canRetryFailedPreviews = computed(() => Boolean(
+    selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value && failedSubmissionCount.value > 0
+));
 
 // P4: 获取当前选中班级的学生总人数
 const currentClassTotalStudents = computed(() => {
@@ -453,6 +525,12 @@ const currentGradeName = computed(() => {
         }
     }
     return '';
+});
+
+const currentEntryYear = computed(() => {
+    if (!selectedClassCode.value || !classes.value.length) return '';
+    const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
+    return classInfo?.entryYear || '';
 });
 
 function getFileUrl(path) {
@@ -479,7 +557,7 @@ function selectStudent(student, index) {
     currentScore.value = student.score != null ? student.score : null; // 默认为空，方便直接输入
     
     // 生成预览URL
-    if (student.previewPath) {
+    if (student.previewPath && student.previewStatus === 'success') {
         previewUrl.value = getPreviewUrl(student.previewPath);
     } else {
         previewUrl.value = '';
@@ -596,6 +674,68 @@ function submitScore() {
             ElMessage.error(res.msg || '批改失败');
         }
     });
+}
+
+function getPreviewStatusText(student) {
+    if (!student?.submitted) return '';
+    if (student.previewStatus === 'success') return '可预览';
+    if (student.previewStatus === 'pending') return '待转换';
+    if (student.previewStatus === 'converting') return '转换中';
+    if (student.previewStatus === 'failed') {
+        const retryCount = student.previewRetryCount || 0;
+        return retryCount > 0 ? `转换失败，已重试${retryCount}次` : '转换失败';
+    }
+    return student.previewPath ? '可预览' : '已提交';
+}
+
+function getPreviewStatusClass(status) {
+    if (status === 'success') return 'is-success';
+    if (status === 'pending' || status === 'converting') return 'is-pending';
+    if (status === 'failed') return 'is-failed';
+    return '';
+}
+
+async function handleRetryFailedPreviews() {
+    if (!canRetryFailedPreviews.value) return;
+
+    try {
+        await ElMessageBox.confirm(
+            `当前班级有 ${failedSubmissionCount.value} 份失败或卡住的文件，确定重新转换吗？`,
+            '重新转换确认',
+            {
+                type: 'warning',
+                confirmButtonText: '开始重转',
+                cancelButtonText: '取消'
+            }
+        );
+    } catch {
+        return;
+    }
+
+    retryLoading.value = true;
+    try {
+        const res = await retryFailedPreviews({
+            lessonId: selectedLessonId.value,
+            questionId: selectedQuestionId.value,
+            classCode: selectedClassCode.value,
+            entryYear: currentEntryYear.value
+        });
+        const data = res?.data || {};
+        const matchedCount = data.matchedCount || 0;
+        const triggeredCount = data.triggeredCount || 0;
+        const skippedCount = data.skippedCount || 0;
+
+        if (matchedCount === 0) {
+            ElMessage.info('当前班级暂无异常文件需要重转');
+        } else {
+            ElMessage.success(`已触发 ${triggeredCount} 条重转任务，跳过 ${skippedCount} 条`);
+        }
+        loadSubmissions();
+    } catch (error) {
+        ElMessage.error(error?.message || '重新转换失败，请稍后再试');
+    } finally {
+        retryLoading.value = false;
+    }
 }
 
 // P6: 跳转到下一个已提交的学生 (P1: 优先跳转未批改)
@@ -783,6 +923,23 @@ function autoFocusItem() {
        .s-name { font-size: 14px; color: #303133; }
        .s-remark { font-size: 11px; color: #E6A23C; margin-top: 2px; }
        .s-no { font-size: 12px; color: #909399; }
+       .s-preview-status {
+          font-size: 11px;
+          margin-top: 4px;
+          color: #909399;
+
+          &.is-success {
+             color: #67c23a;
+          }
+
+          &.is-pending {
+             color: #409eff;
+          }
+
+          &.is-failed {
+             color: #e6a23c;
+          }
+       }
     }
     
     .s-status {

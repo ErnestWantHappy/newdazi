@@ -167,10 +167,8 @@
     <!-- 更新题目预览状态 -->
     <update id="updatePreviewStatus">
         UPDATE biz_question 
-        SET preview_status = #{previewStatus}
-        <if test="previewPath != null">
-            , preview_path = #{previewPath}
-        </if>
+        SET preview_status = #{previewStatus},
+            preview_path = #{previewPath}
         WHERE question_id = #{questionId}
     </update>
 </mapper>

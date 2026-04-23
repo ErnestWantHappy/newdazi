@@ -61,12 +61,14 @@
             <if test="studentNo != null and studentNo != ''">student_no,</if>
             <if test="entryYear != null and entryYear != ''">entry_year,</if>
             <if test="classCode != null and classCode != ''">class_code,</if>
+            <if test="remark != null">remark,</if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="userId != null">#{userId},</if>
             <if test="studentNo != null and studentNo != ''">#{studentNo},</if>
             <if test="entryYear != null and entryYear != ''">#{entryYear},</if>
             <if test="classCode != null and classCode != ''">#{classCode},</if>
+            <if test="remark != null">#{remark},</if>
         </trim>
     </insert>
 

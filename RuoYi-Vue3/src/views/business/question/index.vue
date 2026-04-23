@@ -404,13 +404,13 @@
             </el-col>
             <el-col :span="8">
               <el-form-item label="打字时长">
-                <el-input
-                  :value="form.typingDuration || '-'"
-                  disabled
+                <el-input-number
+                  v-model="form.typingDuration"
+                  :min="1"
+                  :max="120"
                   style="width: 100%"
-                >
-                  <template #suffix>分钟</template>
-                </el-input>
+                  @change="markTypingDurationCustomized"
+                />
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -481,9 +481,11 @@
 
         <!-- 动态表单项: 操作题专属 -->
         <div v-if="form.questionType === 'practical'">
-          <el-form-item label="操作文件" prop="filePath">
-            <!-- 核心修复：限制文件类型为.docx -->
-            <file-upload v-model="form.filePath" :file-type="['docx']" />
+          <el-form-item label="操作文件">
+            <file-upload v-model="form.filePath" :file-type="['docx']" :limit="1" />
+            <div style="color: #909399; font-size: 12px; margin-top: 6px;">
+              操作文件可不上传；如上传，仅支持 1 个 docx 文件作为参考模板。
+            </div>
           </el-form-item>
 
           <el-divider content-position="left"
@@ -624,7 +626,7 @@ import {
   addQuestion,
   updateQuestion,
 } from "@/api/business/question";
-import { computed } from "vue";
+import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
 import {
   handleSessionExpired,
@@ -691,7 +693,6 @@ const rules = computed(() => {
   } else if (form.value.questionType === "practical") {
     return {
       ...baseRules,
-      filePath: [{ required: true, message: "操作文件不能为空" }],
     };
   } else if (form.value.questionType === "typing") {
     return {
@@ -721,7 +722,7 @@ const questionContentLabel = computed(() => {
     case "typing":
       return "打字题内容";
     case "practical":
-      return "操作题任务";
+      return "操作题名称";
     default:
       return "题目内容";
   }
@@ -808,15 +809,28 @@ const recommendedDuration = computed(() => {
   return Math.ceil(wordCount / typingBaseSpeed.value);
 });
 
+const typingDurationCustomized = ref(false);
+
+function syncTypingWordStats(newContent) {
+  const content = newContent || "";
+  form.value.wordCount = content.replace(/\s/g, "").length;
+  if (!typingDurationCustomized.value) {
+    form.value.typingDuration = recommendedDuration.value;
+  }
+}
+
+function markTypingDurationCustomized() {
+  if (form.value.questionType === "typing") {
+    typingDurationCustomized.value = true;
+  }
+}
+
 /** 监听打字题内容变化，自动计算字数和推荐时长 */
 watch(
   () => form.value.questionContent,
   (newContent) => {
-    if (form.value.questionType === "typing" && newContent) {
-      // 计算字数（排除空白字符）
-      form.value.wordCount = newContent.replace(/\s/g, "").length;
-      // 自动设置推荐时长
-      form.value.typingDuration = recommendedDuration.value;
+    if (form.value.questionType === "typing") {
+      syncTypingWordStats(newContent);
     }
   }
 );
@@ -825,7 +839,7 @@ watch(
 watch(
   () => form.value.grade,
   () => {
-    if (form.value.questionType === "typing" && form.value.wordCount > 0) {
+    if (form.value.questionType === "typing" && form.value.wordCount > 0 && !typingDurationCustomized.value) {
       form.value.typingDuration = recommendedDuration.value;
     }
   }
@@ -869,6 +883,7 @@ function handleSelectionChange(selection) {
 /** 新增按钮操作 */
 function handleAdd() {
   reset();
+  typingDurationCustomized.value = false;
   open.value = true;
   title.value = "添加题目";
   proxy.$nextTick(() => {
@@ -882,6 +897,7 @@ function handleUpdate(row) {
   const _questionId = row.questionId || ids.value[0];
   getQuestion(_questionId).then((response) => {
     form.value = response.data;
+    typingDurationCustomized.value = form.value.questionType === "typing" && form.value.typingDuration != null;
     open.value = true;
     title.value = "修改题目";
   });

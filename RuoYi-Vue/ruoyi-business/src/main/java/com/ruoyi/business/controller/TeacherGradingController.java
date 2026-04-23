@@ -34,6 +34,9 @@ public class TeacherGradingController extends BaseController {
     @Autowired
     private com.ruoyi.business.mapper.BizStudentMapper studentMapper;
 
+    @Autowired
+    private com.ruoyi.business.service.PracticalPreviewRetryService practicalPreviewRetryService;
+
     /**
      * 获取课程的班级列表（用于批改页面班级选择下拉框）
      * 优先从答题记录获取有提交的班级，再合并当前指派的班级
@@ -133,6 +136,26 @@ public class TeacherGradingController extends BaseController {
         return AjaxResult.success(submissions);
     }
 
+    /**
+     * 当前课程、班级、操作题下失败文件重新转换
+     */
+    @PostMapping("/retry-failed-previews")
+    public AjaxResult retryFailedPreviews(@RequestBody RetryPreviewRequest request) {
+        if (request.getLessonId() == null || request.getQuestionId() == null) {
+            return AjaxResult.error("课程和操作题不能为空");
+        }
+        if (request.getClassCode() == null || request.getClassCode().trim().isEmpty()
+                || request.getEntryYear() == null || request.getEntryYear().trim().isEmpty()) {
+            return AjaxResult.error("班级和入学年份不能为空");
+        }
+
+        Long deptId = com.ruoyi.common.utils.SecurityUtils.getDeptId();
+        java.util.Map<String, Object> result = practicalPreviewRetryService.retryFailedPreviewsByQuestionAndClass(
+                request.getLessonId(), request.getQuestionId(), request.getClassCode(), request.getEntryYear(), deptId
+        );
+        return AjaxResult.success(result);
+    }
+
     @Autowired
     private com.ruoyi.business.mapper.BizScoringDetailMapper scoringDetailMapper;
     
@@ -217,6 +240,28 @@ public class TeacherGradingController extends BaseController {
         
         public Integer getScore() { return score; }
         public void setScore(Integer score) { this.score = score; }
+    }
+
+    /**
+     * 重转请求体
+     */
+    public static class RetryPreviewRequest {
+        private Long lessonId;
+        private Long questionId;
+        private String classCode;
+        private String entryYear;
+
+        public Long getLessonId() { return lessonId; }
+        public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
+
+        public Long getQuestionId() { return questionId; }
+        public void setQuestionId(Long questionId) { this.questionId = questionId; }
+
+        public String getClassCode() { return classCode; }
+        public void setClassCode(String classCode) { this.classCode = classCode; }
+
+        public String getEntryYear() { return entryYear; }
+        public void setEntryYear(String entryYear) { this.entryYear = entryYear; }
     }
 }
 

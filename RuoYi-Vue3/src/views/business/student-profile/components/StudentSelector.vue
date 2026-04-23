@@ -1,14 +1,14 @@
 <template>
   <div class="student-selector">
     <el-form :inline="true">
-      <!-- 学期选择 -->
-      <el-form-item label="学期">
-        <el-select v-model="currentSemester" placeholder="选择学期" style="width: 160px" @change="onSemesterChange">
+      <!-- 学年选择 -->
+      <el-form-item label="学年">
+        <el-select v-model="currentAcademicYear" placeholder="选择学年" style="width: 180px" @change="onAcademicYearChange">
           <el-option 
-            v-for="sem in semesterOptions" 
-            :key="sem.value" 
-            :label="sem.label" 
-            :value="sem.value" 
+            v-for="year in academicYearOptions" 
+            :key="year.value" 
+            :label="year.label" 
+            :value="year.value" 
           />
         </el-select>
       </el-form-item>
@@ -54,58 +54,47 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { listStudent } from '@/api/business/student'
-import { getClasses, getStudentsByClass } from '@/api/business/studentProfile'
+import { getClasses, getStudentProfileSummary, getStudentsByClass } from '@/api/business/studentProfile'
 
 const props = defineProps({
   studentId: { type: Number, default: null },
-  semester: { type: Object, default: null }
+  academicYear: { type: Object, default: null }
 })
 
-const emit = defineEmits(['update:studentId', 'update:semester', 'change'])
+const emit = defineEmits(['update:studentId', 'update:academicYear', 'change'])
 
-// === 学期逻辑 ===
-const semesterOptions = computed(() => {
+// === 学年逻辑 ===
+const academicYearOptions = computed(() => {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1
-  const currentYear = month >= 7 ? year : year - 1
+  const currentAcademicStartYear = month >= 9 ? year : year - 1
   
   const options = []
   for (let i = 0; i < 4; i++) {
-    const y = currentYear - i
+    const y = currentAcademicStartYear - i
     options.push({
-      value: `${y}-1`,
-      label: `${y}-${y+1} 第一学期`,
+      value: `${y}`,
+      label: `${y}-${y + 1} 学年`,
       start: `${y}-09-01`,
-      end: `${y+1}-02-28`
-    })
-    options.push({
-      value: `${y}-2`,
-      label: `${y}-${y+1} 第二学期`,
-      start: `${y+1}-03-01`,
-      end: `${y+1}-08-31`
+      end: `${y + 1}-08-31`
     })
   }
   return options
 })
 
-const defaultSemester = computed(() => {
+const defaultAcademicYear = computed(() => {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1
-  if (month >= 9 || month <= 2) {
-    const y = month >= 9 ? year : year - 1
-    return `${y}-1`
-  } else {
-    return `${year - 1}-2`
-  }
+  return `${month >= 9 ? year : year - 1}`
 })
 
-const currentSemester = ref(defaultSemester.value)
+const currentAcademicYear = ref(defaultAcademicYear.value)
 
-function onSemesterChange(val) {
-  const semInfo = semesterOptions.value.find(s => s.value === val)
-  emit('update:semester', semInfo ? { start: semInfo.start, end: semInfo.end } : null)
+function onAcademicYearChange(val) {
+  const yearInfo = academicYearOptions.value.find(item => item.value === val)
+  emit('update:academicYear', yearInfo ? { start: yearInfo.start, end: yearInfo.end, value: yearInfo.value, label: yearInfo.label } : null)
   emit('change')
 }
 
@@ -195,9 +184,15 @@ function onStudentChange(val) {
 
 // === 初始化 ===
 onMounted(() => {
-  onSemesterChange(currentSemester.value)
+  onAcademicYearChange(currentAcademicYear.value)
   loadClassOptions()
 })
+
+watch(() => props.academicYear, (val) => {
+  if (val?.value && val.value !== currentAcademicYear.value) {
+    currentAcademicYear.value = val.value
+  }
+}, { immediate: true })
 
 watch(() => props.studentId, async (val) => {
   if (val && val !== currentStudentId.value) {
@@ -206,9 +201,9 @@ watch(() => props.studentId, async (val) => {
     const exists = studentOptions.value.find(s => s.studentId === val)
     if (!exists) {
       try {
-        const res = await listStudent({ studentId: val, pageNum: 1, pageSize: 1 })
-        if (res.rows && res.rows.length > 0) {
-          const student = res.rows[0]
+        const res = await getStudentProfileSummary(val)
+        const student = res.data
+        if (student) {
           studentOptions.value = [student]
           
           // 自动设置班级筛选器

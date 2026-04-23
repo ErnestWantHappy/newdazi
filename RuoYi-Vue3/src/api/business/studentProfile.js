@@ -3,55 +3,55 @@ import request from '@/utils/request'
 /**
  * 获取学生画像汇总数据
  */
-export function getStudentProfileSummary(studentId, semesterStart, semesterEnd) {
+export function getStudentProfileSummary(studentId, academicYearStart, academicYearEnd) {
   return request({
     url: `/business/student-profile/summary/${studentId}`,
     method: 'get',
-    params: { semesterStart, semesterEnd }
+    params: { academicYearStart, academicYearEnd }
   })
 }
 
 /**
  * 获取历次课程成绩
  */
-export function getCourseScores(studentId, semesterStart, semesterEnd) {
+export function getCourseScores(studentId, academicYearStart, academicYearEnd) {
   return request({
     url: `/business/student-profile/courses/${studentId}`,
     method: 'get',
-    params: { semesterStart, semesterEnd }
+    params: { academicYearStart, academicYearEnd }
   })
 }
 
 /**
  * 获取打字速度数据
  */
-export function getTypingSpeeds(studentId, semesterStart, semesterEnd) {
+export function getTypingSpeeds(studentId, academicYearStart, academicYearEnd) {
   return request({
     url: `/business/student-profile/typing/${studentId}`,
     method: 'get',
-    params: { semesterStart, semesterEnd }
+    params: { academicYearStart, academicYearEnd }
   })
 }
 
 /**
  * 获取课堂表现分数据
  */
-export function getPerformances(studentId, semesterStart, semesterEnd) {
+export function getPerformances(studentId, academicYearStart, academicYearEnd) {
   return request({
     url: `/business/student-profile/performance/${studentId}`,
     method: 'get',
-    params: { semesterStart, semesterEnd }
+    params: { academicYearStart, academicYearEnd }
   })
 }
 
 /**
  * 获取排名变化数据
  */
-export function getRankChanges(studentId, semesterStart, semesterEnd) {
+export function getRankChanges(studentId, academicYearStart, academicYearEnd) {
   return request({
     url: `/business/student-profile/rank/${studentId}`,
     method: 'get',
-    params: { semesterStart, semesterEnd }
+    params: { academicYearStart, academicYearEnd }
   })
 }
 

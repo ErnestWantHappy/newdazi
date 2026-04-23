@@ -34,6 +34,19 @@ public class PracticalSubmissionVo {
     
     /** PDF预览路径 */
     private String previewPath;
+
+    /** 预览状态 */
+    private String previewStatus;
+
+    /** 预览重试次数 */
+    private Integer previewRetryCount;
+
+    /** 最近一次预览重试时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date previewLastRetryTime;
+
+    /** 预览失败原因 */
+    private String previewErrorMessage;
     
     /** 已批分数（null表示未批改） */
     private Integer score;
@@ -78,6 +91,18 @@ public class PracticalSubmissionVo {
 
     public String getPreviewPath() { return previewPath; }
     public void setPreviewPath(String previewPath) { this.previewPath = previewPath; }
+
+    public String getPreviewStatus() { return previewStatus; }
+    public void setPreviewStatus(String previewStatus) { this.previewStatus = previewStatus; }
+
+    public Integer getPreviewRetryCount() { return previewRetryCount; }
+    public void setPreviewRetryCount(Integer previewRetryCount) { this.previewRetryCount = previewRetryCount; }
+
+    public Date getPreviewLastRetryTime() { return previewLastRetryTime; }
+    public void setPreviewLastRetryTime(Date previewLastRetryTime) { this.previewLastRetryTime = previewLastRetryTime; }
+
+    public String getPreviewErrorMessage() { return previewErrorMessage; }
+    public void setPreviewErrorMessage(String previewErrorMessage) { this.previewErrorMessage = previewErrorMessage; }
 
     public Integer getScore() { return score; }
     public void setScore(Integer score) { this.score = score; }

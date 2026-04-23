@@ -30,6 +30,7 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.poi.ExcelUtil;
+import com.ruoyi.framework.web.service.SysPasswordService;
 import com.ruoyi.system.service.ISysDeptService;
 import com.ruoyi.system.service.ISysPostService;
 import com.ruoyi.system.service.ISysRoleService;
@@ -61,6 +62,9 @@ public class SysUserController extends BaseController
     
     @Autowired
     private com.ruoyi.system.mapper.SysDeptMapper deptMapper;
+
+    @Autowired
+    private SysPasswordService passwordService;
 
     private void validateDeptScope(SysUser user)
     {
@@ -249,9 +253,15 @@ public class SysUserController extends BaseController
     {
         userService.checkUserAllowed(user);
         userService.checkUserDataScope(user.getUserId());
+        SysUser existingUser = userService.selectUserById(user.getUserId());
         user.setPassword(SecurityUtils.encryptPassword(user.getPassword()));
         user.setUpdateBy(getUsername());
-        return toAjax(userService.resetPwd(user));
+        int rows = userService.resetPwd(user);
+        if (rows > 0 && existingUser != null && StringUtils.isNotEmpty(existingUser.getUserName()))
+        {
+            passwordService.clearLoginRecordCache(existingUser.getUserName());
+        }
+        return toAjax(rows);
     }
 
     /**

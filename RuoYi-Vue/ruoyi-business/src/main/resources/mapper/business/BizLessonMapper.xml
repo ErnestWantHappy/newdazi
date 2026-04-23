@@ -130,6 +130,7 @@
           AND create_by = #{creatorName}
           AND dept_id = #{deptId}
         ORDER BY
+            lesson_num ASC,
             lesson_id DESC
     </select>
 
@@ -156,6 +157,7 @@
             AND l.grade = #{grade}
             AND l.create_by != #{creatorName}
         ORDER BY
+            l.lesson_num ASC,
             l.lesson_id DESC
     </select>
 </mapper>
