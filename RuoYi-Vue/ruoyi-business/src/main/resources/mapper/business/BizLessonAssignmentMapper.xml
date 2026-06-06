@@ -114,6 +114,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE la.entry_year = #{entryYear} 
           AND la.class_code = #{classCode}
           AND la.dept_id = #{deptId}
+        ORDER BY la.assign_time DESC, la.assignment_id DESC
         LIMIT 1
     </select>
 

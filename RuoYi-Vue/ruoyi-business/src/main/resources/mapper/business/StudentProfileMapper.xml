@@ -95,7 +95,7 @@
         ORDER BY a.submit_time ASC
     </select>
 
-    <!-- 查询学生课堂表现分记录 -->
+    <!-- 查询学生课堂表现分记录：空白0分视为历史占位，显式0分仍保留 -->
     <select id="selectPerformances" resultType="com.ruoyi.business.domain.vo.StudentProfileVo$PerformanceItem">
         SELECT 
             p.lesson_id AS lessonId,
@@ -105,7 +105,8 @@
         FROM biz_classroom_performance p
         INNER JOIN biz_lesson l ON l.lesson_id = p.lesson_id
         WHERE p.student_id = #{studentId}
-          AND p.score != 0
+          AND IFNULL(p.is_absent, 0) = 0
+          AND (p.score != 0 OR (p.score = 0 AND p.reason IS NOT NULL AND TRIM(p.reason) != ''))
         <if test="academicYearStart != null and academicYearStart != ''">
             AND p.create_time >= #{academicYearStart}
         </if>

@@ -72,7 +72,7 @@
           </div>
            <div class="metric-data">
             <div class="label">课堂表现平均</div>
-            <div class="value">{{ studentInfo.performanceAvg || '-' }}</div>
+            <div class="value">{{ studentInfo.performanceAvg ?? '-' }}</div>
           </div>
         </div>
       </div>

@@ -81,4 +81,11 @@ public interface BizLessonMapper
             @Param("userId") Long userId, 
             @Param("deptId") Long deptId, 
             @Param("creatorName") String creatorName);
+
+    /**
+     * 查询当前教师某年级已创建课程的最大课次。
+     */
+    Integer selectMaxLessonNumByGradeAndCreator(@Param("grade") Long grade,
+                                                @Param("creatorName") String creatorName,
+                                                @Param("deptId") Long deptId);
 }

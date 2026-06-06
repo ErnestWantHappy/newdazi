@@ -109,6 +109,7 @@
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
         <result property="lessonNum"    column="lesson_num"    />
+        <result property="createTime"    column="create_time"    />
         <result property="courseType"    column="course_type"    />
         <result property="hasPractical"  column="has_practical"  />
     </resultMap>
@@ -119,6 +120,7 @@
             lesson_id,
             lesson_title,
             lesson_num,
+            create_time,
             'self' as course_type,
             (SELECT count(1) FROM biz_lesson_question lq 
              LEFT JOIN biz_question q ON lq.question_id = q.question_id 
@@ -130,7 +132,7 @@
           AND create_by = #{creatorName}
           AND dept_id = #{deptId}
         ORDER BY
-            lesson_num ASC,
+            create_time DESC,
             lesson_id DESC
     </select>
 
@@ -157,7 +159,15 @@
             AND l.grade = #{grade}
             AND l.create_by != #{creatorName}
         ORDER BY
-            l.lesson_num ASC,
+            l.create_time DESC,
             l.lesson_id DESC
+    </select>
+
+    <select id="selectMaxLessonNumByGradeAndCreator" resultType="java.lang.Integer">
+        SELECT IFNULL(MAX(lesson_num), 0)
+        FROM biz_lesson
+        WHERE grade = #{grade}
+          AND create_by = #{creatorName}
+          AND dept_id = #{deptId}
     </select>
 </mapper>

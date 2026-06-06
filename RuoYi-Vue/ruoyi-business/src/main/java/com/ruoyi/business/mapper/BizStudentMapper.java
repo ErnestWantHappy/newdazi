@@ -72,6 +72,22 @@ public interface BizStudentMapper
      * @return 学生信息
      */
     public BizStudent selectBizStudentByUserId(Long userId);
+
+    /**
+     * 成绩汇总页按教师、校区和班级条件查询学生。
+     */
+    public List<BizStudent> selectScoreStudents(@Param("teacherUserId") Long teacherUserId,
+                                                @Param("deptId") Long deptId,
+                                                @Param("entryYear") String entryYear,
+                                                @Param("classCode") String classCode,
+                                                @Param("keyword") String keyword);
+
+    /**
+     * 判断当前教师是否管理指定学生所在班级。
+     */
+    public int countManagedScoreStudent(@Param("teacherUserId") Long teacherUserId,
+                                        @Param("deptId") Long deptId,
+                                        @Param("studentId") Long studentId);
     /**
      * 缁熻鎸囧畾瀛︽牎鐝骇鐨勫墿浣欏鐢熶汉鏁?
      *

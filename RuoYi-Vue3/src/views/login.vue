@@ -73,7 +73,7 @@
       <el-form>
         <el-form-item label="校区">
           <el-radio-group v-model="selectedSchoolId">
-            <el-radio v-for="item in schoolOptions" :key="item.deptId" :label="item.deptId">
+            <el-radio v-for="item in schoolOptions" :key="item.deptId" :value="item.deptId">
               {{ item.deptName }}
             </el-radio>
           </el-radio-group>

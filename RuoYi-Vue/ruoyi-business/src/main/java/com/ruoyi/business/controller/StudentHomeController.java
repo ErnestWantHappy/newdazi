@@ -429,8 +429,8 @@ public class StudentHomeController extends BaseController
         java.util.LinkedHashSet<Long> uniqueAnswerIds = new java.util.LinkedHashSet<>(answerIds);
         Runnable conversionTrigger = () -> {
             for (Long answerId : uniqueAnswerIds) {
-                asyncConversionService.convertAsync(answerId, null, null, null);
-                log.info("【操作题】answerId={}，afterCommit 已触发异步转换", answerId);
+                boolean claimed = asyncConversionService.triggerSubmitPreviewConversion(answerId);
+                log.info("【操作题】answerId={}，afterCommit 已触发首次转换领取，claimed={}", answerId, claimed);
             }
         };
 

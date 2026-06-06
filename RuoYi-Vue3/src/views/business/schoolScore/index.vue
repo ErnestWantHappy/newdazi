@@ -69,9 +69,9 @@
         <div class="card-header">
           <span>校际打字速度对比</span>
           <el-radio-group v-model="chartTab" @change="initChart" size="small">
-            <el-radio-button label="1">小学组</el-radio-button>
-            <el-radio-button label="2">初中组</el-radio-button>
-            <el-radio-button label="3">高中组</el-radio-button>
+            <el-radio-button value="1">小学组</el-radio-button>
+            <el-radio-button value="2">初中组</el-radio-button>
+            <el-radio-button value="3">高中组</el-radio-button>
           </el-radio-group>
         </div>
       </template>

@@ -200,7 +200,7 @@
       <div style="margin-bottom: 20px;">
         <el-radio-group v-model="deleteDialog.mode" style="display: flex; flex-direction: column; align-items: flex-start; gap: 20px;">
           <!-- 模式一：删除勾选 -->
-          <el-radio label="selected" :disabled="!ids.length" style="height: auto; white-space: normal;">
+          <el-radio value="selected" :disabled="!ids.length" style="height: auto; white-space: normal;">
             <div style="font-size: 15px; font-weight: bold; margin-bottom: 5px;">删除表格已勾选项</div>
             <div style="color: #909399; font-size: 13px;">
               <span v-if="ids.length">当前已勾选 <b>{{ ids.length }}</b> 名学生。系统将仅删除当前页面所勾选的这些数据。</span>
@@ -208,7 +208,7 @@
             </div>
           </el-radio>
           <!-- 模式二：按班级删除 -->
-          <el-radio label="byClass" style="height: auto; white-space: normal; padding-top: 10px; border-top: 1px dashed #eee; width: 100%;">
+          <el-radio value="byClass" style="height: auto; white-space: normal; padding-top: 10px; border-top: 1px dashed #eee; width: 100%;">
             <div style="font-size: 15px; font-weight: bold; margin-bottom: 15px;">按班级整班删除（跨页全删）</div>
             <div v-show="deleteDialog.mode === 'byClass'" style="padding-left: 24px;">
               <el-form label-width="80px">

@@ -272,6 +272,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- P2: 查询学生成绩汇总（按课程分组） -->
     <select id="selectScoreSummaryByStudent" resultType="java.util.HashMap">
         SELECT 
+            a.student_id AS studentId,
             a.lesson_id AS lessonId,
             l.lesson_title AS lessonTitle,
             l.lesson_num AS lessonNum,
@@ -293,8 +294,41 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <if test="lessonId != null">
             AND a.lesson_id = #{lessonId}
         </if>
-        GROUP BY a.lesson_id, l.lesson_title, l.lesson_num
+        GROUP BY a.student_id, a.lesson_id, l.lesson_title, l.lesson_num
         ORDER BY l.lesson_num
+    </select>
+
+    <select id="selectScoreSummaryByStudents" resultType="java.util.HashMap">
+        SELECT
+            a.student_id AS studentId,
+            a.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            l.lesson_num AS lessonNum,
+            SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
+            SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
+            SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(IFNULL(a.score, 0)) AS totalScore,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        WHERE a.student_id IN
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+        <if test="lessonIds != null and lessonIds.size() > 0">
+            AND a.lesson_id IN
+            <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+                #{lessonId}
+            </foreach>
+        </if>
+        GROUP BY a.student_id, a.lesson_id, l.lesson_title, l.lesson_num
+        ORDER BY a.student_id, l.lesson_num
     </select>
 
     <!-- 更新答题记录的预览状态 -->
@@ -306,6 +340,34 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             preview_last_retry_time = #{previewLastRetryTime},
             preview_error_message = #{previewErrorMessage}
         WHERE answer_id = #{answerId}
+    </update>
+
+    <update id="claimSubmitPreviewConversion">
+        UPDATE biz_student_answer
+        SET preview_status = 'converting',
+            preview_path = NULL,
+            preview_retry_count = IFNULL(preview_retry_count, 0),
+            preview_error_message = NULL
+        WHERE answer_id = #{answerId}
+          AND preview_status = 'pending'
+          AND preview_path IS NULL
+    </update>
+
+    <update id="claimRetryPreviewConversion">
+        UPDATE biz_student_answer
+        SET preview_status = 'converting',
+            preview_path = NULL,
+            preview_retry_count = #{nextRetryCount},
+            preview_last_retry_time = #{claimedAt},
+            preview_error_message = NULL
+        WHERE answer_id = #{answerId}
+          AND preview_path IS NULL
+          AND preview_status = #{expectedStatus}
+          AND IFNULL(preview_retry_count, 0) = #{expectedRetryCount}
+          AND (
+                (#{expectedLastRetryTime} IS NULL AND preview_last_retry_time IS NULL)
+             OR preview_last_retry_time = #{expectedLastRetryTime}
+          )
     </update>
 
     <!-- 根据ID查询答题记录 -->
@@ -374,6 +436,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE a.lesson_id = #{lessonId}
         GROUP BY s.class_code, s.entry_year
         ORDER BY s.entry_year DESC, s.class_code ASC
+    </select>
+
+    <select id="countScoredStudentsByLessonAndClass" resultType="int">
+        SELECT COUNT(DISTINCT s.student_id)
+        FROM biz_student s
+        INNER JOIN sys_user u ON u.user_id = s.user_id
+        LEFT JOIN (
+            SELECT DISTINCT a.student_id
+            FROM biz_student_answer a
+            INNER JOIN (
+                <include refid="latestAnswerIdSubquery"/>
+            ) latest ON latest.answer_id = a.answer_id
+            WHERE a.lesson_id = #{lessonId}
+        ) ans ON ans.student_id = s.student_id
+        LEFT JOIN biz_classroom_performance p
+            ON p.student_id = s.student_id
+            AND p.lesson_id = #{lessonId}
+        WHERE s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+          AND u.dept_id = #{deptId}
+          AND IFNULL(p.is_absent, 0) = 0
+          AND (ans.student_id IS NOT NULL OR p.performance_id IS NOT NULL)
     </select>
 
     <select id="selectRecoverablePracticalAnswersForRetry" resultMap="BizStudentAnswerResult">

@@ -91,4 +91,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT * FROM biz_classroom_performance WHERE student_id = #{studentId}
     </select>
 
+    <select id="selectByStudentIdsAndLessons" resultMap="BizClassroomPerformanceResult">
+        SELECT *
+        FROM biz_classroom_performance
+        WHERE student_id IN
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+        <if test="deptId != null">
+            AND (dept_id = #{deptId} OR dept_id IS NULL)
+        </if>
+        <if test="lessonIds != null and lessonIds.size() > 0">
+            AND lesson_id IN
+            <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+                #{lessonId}
+            </foreach>
+        </if>
+    </select>
+
 </mapper>

@@ -4,8 +4,8 @@
       <div class="card-header">
         <span style="font-weight: bold; font-size: 16px;">🏆 课堂表现分排行榜</span>
         <el-radio-group v-model="viewMode" size="small">
-          <el-radio-button label="positive">加分榜</el-radio-button>
-          <el-radio-button label="negative">扣分榜</el-radio-button>
+          <el-radio-button value="positive">加分榜</el-radio-button>
+          <el-radio-button value="negative">扣分榜</el-radio-button>
         </el-radio-group>
       </div>
     </template>

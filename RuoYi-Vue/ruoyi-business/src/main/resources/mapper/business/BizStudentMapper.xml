@@ -18,6 +18,7 @@
         <!-- 关联查询出的字段 -->
         <result property="studentName"  column="student_name"  />
         <result property="userName"     column="user_name"     />
+        <result property="deptId"       column="dept_id"       />
     </resultMap>
 
     <sql id="selectBizStudentVo">
@@ -110,6 +111,34 @@
         where s.user_id = #{userId}
     </select>
 
+    <select id="selectScoreStudents" resultMap="BizStudentResult">
+        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
+               u.nick_name as student_name, u.user_name, u.dept_id
+        from biz_student s
+        left join sys_user u on s.user_id = u.user_id
+        inner join biz_teacher_class tc
+            on s.entry_year = tc.entry_year
+            and s.class_code = tc.class_code
+            and u.dept_id = tc.dept_id
+        <where>
+            and tc.user_id = #{teacherUserId}
+            and tc.dept_id = #{deptId}
+            and s.entry_year = #{entryYear}
+            <if test="classCode != null and classCode != ''">
+                and s.class_code = #{classCode}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    u.nick_name like concat('%', #{keyword}, '%')
+                    or s.student_no like concat('%', #{keyword}, '%')
+                    or u.user_name like concat('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        order by CAST(s.class_code AS UNSIGNED) asc, s.class_code asc,
+                 CAST(s.student_no AS UNSIGNED) asc, s.student_no asc
+    </select>
+
     <select id="countByDeptIdAndClass" resultType="int">
         select count(*)
         from biz_student s
@@ -117,6 +146,19 @@
         where u.dept_id = #{deptId}
           and s.entry_year = #{entryYear}
           and s.class_code = #{classCode}
+    </select>
+
+    <select id="countManagedScoreStudent" resultType="int">
+        select count(1)
+        from biz_student s
+        left join sys_user u on s.user_id = u.user_id
+        inner join biz_teacher_class tc
+            on s.entry_year = tc.entry_year
+            and s.class_code = tc.class_code
+            and u.dept_id = tc.dept_id
+        where tc.user_id = #{teacherUserId}
+          and tc.dept_id = #{deptId}
+          and s.student_id = #{studentId}
     </select>
 
 </mapper>

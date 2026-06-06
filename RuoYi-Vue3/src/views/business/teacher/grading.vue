@@ -95,7 +95,7 @@
                <div class="s-status score-num" v-else-if="s.score != null">{{ s.score }}分</div>
                <div class="s-status ungrad" v-else>未批</div>
             </div>
-            <el-empty v-if="submissions.length === 0" description="暂无学生" image-size="60" />
+            <el-empty v-if="submissions.length === 0" description="暂无学生" :image-size="60" />
          </div>
       </div>
 

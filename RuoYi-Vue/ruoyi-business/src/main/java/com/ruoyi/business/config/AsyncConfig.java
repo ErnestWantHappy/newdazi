@@ -14,7 +14,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 
  * 重要：线程池大小必须与 LibreOffice 实例数匹配
  * - 核心线程数 = LibreOffice 实例数（5个）
- * - 最大线程数 = 略多于实例数（8个），允许少量排队
+ * - 最大线程数 = LibreOffice 实例数（5个），严格限制实际并发
  * - 队列容量 200，全县级平台高并发时排队等待而非拒绝
  * 
  * 注意：此线程池仅服务于操作题 Word→PDF 转换，
@@ -38,8 +38,8 @@ public class AsyncConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         // 核心线程数 = LibreOffice 实例数（5个）
         executor.setCorePoolSize(5);
-        // 最大线程数：略多于核心数，应对突发高峰
-        executor.setMaxPoolSize(8);
+        // 最大线程数与核心线程数保持一致，避免瞬时并发超过 LibreOffice 实例数
+        executor.setMaxPoolSize(5);
         // 队列容量：全县多班级同时提交时排队等待
         executor.setQueueCapacity(200);
         // 线程名前缀

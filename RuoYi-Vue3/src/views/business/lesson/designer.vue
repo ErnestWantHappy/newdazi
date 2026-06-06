@@ -41,7 +41,8 @@
               </el-col>
             </el-row>
             <el-form-item label="第几课" prop="lessonNum">
-              <el-input-number v-model="form.lessonNum" placeholder="课程序号" :min="1" :max="30" />
+              <el-input-number v-model="form.lessonNum" placeholder="课程序号" :min="1" :max="30" disabled />
+              <span style="margin-left: 8px; color: #909399; font-size: 12px;">系统根据已创建课程自动计算</span>
             </el-form-item>
 
             <!-- 核心修复：将 v-model 指向 form 内部的属性 -->
@@ -71,9 +72,9 @@
             <el-divider content-position="left">出题设置</el-divider>
             <el-form-item label="出题模式">
               <el-radio-group v-model="form.shuffleMode">
-                <el-radio :label="0">固定顺序</el-radio>
-                <el-radio :label="1">随机排序</el-radio>
-                <el-radio :label="2">随机抽题</el-radio>
+                <el-radio :value="0">固定顺序</el-radio>
+                <el-radio :value="1">随机排序</el-radio>
+                <el-radio :value="2">随机抽题</el-radio>
               </el-radio-group>
             </el-form-item>
             

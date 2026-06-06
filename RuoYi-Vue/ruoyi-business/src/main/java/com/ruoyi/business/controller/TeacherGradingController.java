@@ -75,6 +75,8 @@ public class TeacherGradingController extends BaseController {
                 studentQuery.setDeptId(deptId);
                 List<?> students = studentMapper.selectBizStudentList(studentQuery);
                 classInfo.put("totalStudents", students.size());
+                classInfo.put("scoreReadyCount", studentAnswerMapper.countScoredStudentsByLessonAndClass(
+                        lessonId, classCode, entryYear, deptId));
                 
                 result.add(classInfo);
             }
@@ -102,6 +104,8 @@ public class TeacherGradingController extends BaseController {
                 // 补充默认统计值
                 item.put("practicalSubmitted", 0);
                 item.put("practicalUngraded", 0);
+                item.put("scoreReadyCount", studentAnswerMapper.countScoredStudentsByLessonAndClass(
+                        lessonId, classCode, entryYear, deptId));
                 result.add(item);
             }
         }

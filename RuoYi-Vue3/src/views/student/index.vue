@@ -347,8 +347,8 @@
                 class="audit-group"
               >
                 <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted">
-                  <el-radio label="T" border>正确</el-radio>
-                  <el-radio label="F" border>错误</el-radio>
+                  <el-radio value="T" border>正确</el-radio>
+                  <el-radio value="F" border>错误</el-radio>
                 </el-radio-group>
               </div>
             </el-card>
@@ -462,13 +462,13 @@
                   <el-button type="success" icon="Upload">上传作品</el-button>
                 </el-upload>
 
-                <!-- 正在上传/转换中 -->
+                <!-- 上传已成功，预览转换由服务器异步完成 -->
                 <div
                   v-else-if="uploadingQuestionId === q.questionId"
                   class="uploading-status"
                 >
                   <el-icon class="is-loading"><Loading /></el-icon>
-                  <span>正在转换中，请稍候...</span>
+                  <span>作品已上传，等待服务器转换...</span>
                 </div>
 
                 <!-- 已上传文件展示 -->
@@ -1396,13 +1396,13 @@ function schedulePracticalPreviewPolling(questionId, attempt = 0) {
       }
       if (previewStatus === "failed") {
         uploadingQuestionId.value = null;
-        ElMessage.warning("转换失败，请先下载原文件查看");
+        ElMessage.warning("作品已上传，预览暂不可用，请先下载原文件查看");
         clearPracticalPolling(questionId);
         return;
       }
       if (attempt >= 9) {
         uploadingQuestionId.value = null;
-        ElMessage.info("文件仍在转换中，稍后刷新页面或再次进入即可查看最新状态");
+        ElMessage.info("作品已上传，服务器仍在转换预览，稍后刷新页面即可查看最新状态");
         clearPracticalPolling(questionId);
         return;
       }
@@ -1834,7 +1834,7 @@ function getPracticalPreviewLabel(questionId) {
   if (status === "success") return "可预览";
   if (status === "pending") return "待转换";
   if (status === "converting") return "转换中";
-  if (status === "failed") return "转换失败";
+  if (status === "failed") return "预览暂不可用";
   return "待处理";
 }
 
@@ -1885,13 +1885,13 @@ function previewWork(questionId) {
   if (previewStatus === "pending" || previewStatus === "converting") {
     ElMessage.info(
       previewStatus === "pending"
-        ? "文件已提交，正在排队转换，请稍候再试"
-        : "文件正在转换中，请稍候再试"
+        ? "作品已上传，正在排队转换，请稍候再试"
+        : "作品已上传，正在转换预览，请稍候再试"
     );
     return;
   }
 
-  ElMessage.warning("当前文件暂不支持在线预览，请下载原文件查看");
+  ElMessage.warning("作品已上传，预览暂不可用，请下载原文件查看");
 }
 
 // 删除已上传作品

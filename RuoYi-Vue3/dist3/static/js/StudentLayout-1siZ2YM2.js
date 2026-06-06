@@ -1,0 +1,1 @@
+import{_ as t,j as a,o as e,l as o,S as s}from"./index-BXxkpeQ8.js";const _={__name:"StudentLayout",setup(c){return(n,r)=>(e(),a(o(s)))}},u=t(_,[["__scopeId","data-v-7b5d65c9"]]);export{u as default};

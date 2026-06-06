@@ -445,10 +445,10 @@
           /></el-form-item>
           <el-form-item label="标准答案" prop="answer">
             <el-radio-group v-model="form.answer">
-              <el-radio label="A">A</el-radio>
-              <el-radio label="B">B</el-radio>
-              <el-radio label="C">C</el-radio>
-              <el-radio label="D">D</el-radio>
+              <el-radio value="A">A</el-radio>
+              <el-radio value="B">B</el-radio>
+              <el-radio value="C">C</el-radio>
+              <el-radio value="D">D</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="题目解析" prop="analysis">
@@ -465,8 +465,8 @@
         <div v-if="form.questionType === 'judgment'">
           <el-form-item label="标准答案" prop="answer">
             <el-radio-group v-model="form.answer">
-              <el-radio label="T">正确</el-radio>
-              <el-radio label="F">错误</el-radio>
+              <el-radio value="T">正确</el-radio>
+              <el-radio value="F">错误</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="题目解析" prop="analysis">

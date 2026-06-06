@@ -20,7 +20,7 @@
         
         <!-- 学生搜索 -->
         <span class="filter-label">搜索学生：</span>
-        <el-input v-model="searchKeyword" placeholder="姓名或学号" clearable style="width: 150px" @input="filterStudents" />
+        <el-input v-model="searchKeyword" placeholder="姓名、学号或账号" clearable style="width: 170px" @keyup.enter="handleQuery" />
         
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
         
@@ -241,6 +241,22 @@
             </el-button>
           </template>
         </el-table-column>
+
+        <el-table-column v-if="selectedLessonIds.length === 1" label="改分" width="60" align="center" fixed="left">
+          <template #default="scope">
+            <el-button
+              circle
+              size="small"
+              :type="getSelectedLessonScore(scope.row)?.manualAdjusted ? 'danger' : 'primary'"
+              :title="getSelectedLessonScore(scope.row)?.manualAdjusted ? '查看/取消人工改分' : '人工改作业分'"
+              plain
+              @click="openManualScoreDialog(scope.row)"
+              style="width: 24px; height: 24px; padding: 0;"
+            >
+              <el-icon style="font-size: 12px;"><EditPen /></el-icon>
+            </el-button>
+          </template>
+        </el-table-column>
         
         <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip fixed="left">
           <template #default="scope">
@@ -287,16 +303,24 @@
                 <el-popover placement="bottom" :width="240" trigger="hover">
                   <template #reference>
                     <el-tag 
-                      :type="score.isAbsent ? 'info' : getScoreType(score.totalScore)" 
+                      :type="score.isAbsent ? 'info' : getScoreType(score.finalScore ?? score.totalScore)" 
                       size="small"
                       :class="{ 'selected-tag': selectedLessonIds.includes(score.lessonId) }"
                       class="score-num"
-                    >{{ score.isAbsent ? '请假' : score.totalScore }}</el-tag>
+                    >{{ score.isAbsent ? '请假' : (score.finalScore ?? score.totalScore) }}</el-tag>
                   </template>
                   <div class="score-detail">
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
                     <p><b>理论：</b><span class="score-num">{{ score.theoryScore }}</span> 分</p>
                     <p><b>操作：</b><span class="score-num">{{ score.practicalScore }}</span> 分</p>
+                    <p>
+                      <b>作业分：</b><span class="score-num">{{ score.totalScore || 0 }}</span> 分
+                      <el-tag v-if="score.manualAdjusted" size="small" type="danger" effect="plain" class="manual-score-mark">修</el-tag>
+                    </p>
+                    <p v-if="score.manualAdjusted"><b>原始作业分：</b><span class="score-num">{{ score.originalTotalScore || 0 }}</span> 分</p>
+                    <p v-if="score.manualAdjusted"><b>修正原因：</b>{{ score.adjustmentReason || '-' }}</p>
+                    <p><b>课堂表现：</b><span class="score-num">{{ (score.performanceScore || 0) > 0 ? '+' : '' }}{{ score.performanceScore || 0 }}</span> 分</p>
+                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.finalScore ?? score.totalScore) }}</span></p>
                     <el-divider v-if="score.avgTypingSpeed" style="margin: 8px 0" />
                     <template v-if="score.avgTypingSpeed">
                       <p><b>打字速度：</b><span class="score-num">{{ score.avgTypingSpeed }}</span> <small>字/分</small></p>
@@ -350,17 +374,17 @@
         </el-table-column>
         
         <!-- 作业总分 -->
-        <el-table-column v-if="visibleColumns.filteredTotal" prop="filteredTotal" label="作业总分" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.filteredTotal" prop="filteredTotal" :label="scoreLabels.filteredTotal" width="100" align="center" sortable>
           <template #default="scope">
             <div class="data-bar-cell">
               <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredTotal, maxTotal) + '%' }"></div>
-              <span class="data-bar-value total-score score-num">{{ scope.row.filteredTotal }}</span>
+              <span class="data-bar-value total-score score-num">{{ formatScoreDisplay(scope.row.filteredTotal, isMultiScoreMode) }}</span>
             </div>
           </template>
         </el-table-column>
         
         <!-- 课堂表现分 -->
-        <el-table-column v-if="visibleColumns.totalPerformance" prop="totalPerformance" label="课堂表现分" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.totalPerformance" prop="totalPerformance" :label="scoreLabels.totalPerformance" width="110" align="center" sortable>
           <template #default="scope">
             <span 
               class="score-num" 
@@ -368,22 +392,22 @@
                 color: scope.row.totalPerformance > 0 ? '#67C23A' : (scope.row.totalPerformance < 0 ? '#F56C6C' : '#909399'),
                 fontWeight: 'bold'
               }"
-            >{{ scope.row.totalPerformance > 0 ? '+' : '' }}{{ scope.row.totalPerformance || 0 }}</span>
+            >{{ scope.row.totalPerformance > 0 ? '+' : '' }}{{ formatScoreDisplay(scope.row.totalPerformance, isMultiScoreMode) }}</span>
           </template>
         </el-table-column>
         
         <!-- 课程总分 -->
-        <el-table-column v-if="visibleColumns.finalTotal" prop="finalTotal" label="课程总分" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.finalTotal" prop="finalTotal" :label="scoreLabels.finalTotal" width="110" align="center" sortable>
           <template #default="scope">
-            <span class="score-num" style="font-weight: bold; color: #409EFF;">{{ scope.row.finalTotal }}</span>
+            <span class="score-num" style="font-weight: bold; color: #409EFF;">{{ formatScoreDisplay(scope.row.finalTotal, isMultiScoreMode) }}</span>
           </template>
         </el-table-column>
         
-        <el-table-column v-if="visibleColumns.filteredAverage" prop="filteredAverage" label="平均分" width="100" align="center" sortable>
+        <el-table-column v-if="visibleColumns.filteredAverage" prop="filteredAverage" :label="scoreLabels.filteredAverage" width="100" align="center" sortable>
           <template #default="scope">
             <div class="data-bar-cell avg-bar">
               <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredAverage, 100) + '%' }"></div>
-              <span class="data-bar-value avg-score score-num">{{ scope.row.filteredAverage }}</span>
+              <span class="data-bar-value avg-score score-num">{{ formatScoreDisplay(scope.row.filteredAverage, isMultiScoreMode) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -429,26 +453,68 @@
       :columns="exportColumnOptions"
       @export="handleExportWithColumns"
     />
+
+    <el-dialog
+      v-model="manualScoreDialogVisible"
+      title="人工改作业分"
+      width="460px"
+      append-to-body
+    >
+      <el-descriptions :column="2" border size="small" class="manual-score-desc">
+        <el-descriptions-item label="学生">{{ manualScoreForm.studentName }}</el-descriptions-item>
+        <el-descriptions-item label="课程">{{ manualScoreForm.lessonTitle }}</el-descriptions-item>
+        <el-descriptions-item label="原始作业分">{{ manualScoreForm.originalScore }}</el-descriptions-item>
+        <el-descriptions-item label="当前作业分">{{ manualScoreForm.currentScore }}</el-descriptions-item>
+        <el-descriptions-item label="课堂表现">{{ manualScoreForm.performanceScore > 0 ? '+' : '' }}{{ manualScoreForm.performanceScore }}</el-descriptions-item>
+        <el-descriptions-item label="预估总分">{{ manualScorePreviewFinal }}</el-descriptions-item>
+      </el-descriptions>
+
+      <el-form :model="manualScoreForm" label-width="86px" class="manual-score-form">
+        <el-form-item label="作业分">
+          <el-input-number
+            v-model="manualScoreForm.adjustedScore"
+            :min="0"
+            :max="100"
+            :step="1"
+            step-strictly
+            controls-position="right"
+            style="width: 160px"
+          />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input
+            v-model="manualScoreForm.reason"
+            type="textarea"
+            maxlength="255"
+            show-word-limit
+            :autosize="{ minRows: 3, maxRows: 5 }"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="manualScoreDialogVisible = false">取消</el-button>
+        <el-button
+          v-if="manualScoreForm.manualAdjusted"
+          type="warning"
+          plain
+          :loading="manualScoreSaving"
+          @click="cancelManualScore"
+        >取消修正</el-button>
+        <el-button type="primary" :loading="manualScoreSaving" @click="submitManualScore">保存</el-button>
+      </template>
+    </el-dialog>
     
-    <!-- 课堂表现弹窗 -->
-    <performance-dialog
-      v-model="performanceDialogVisible"
-      :lesson-id="performanceLessonId"
-      :class-code="queryParams.classCode"
-      :entry-year="queryParams.entryYear"
-      @saved="onPerformanceSaved"
-    />
   </div>
 </template>
 
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent } from '@/api/business/score';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { FullScreen, Search, Download, Setting, Calendar } from '@element-plus/icons-vue';
+import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore } from '@/api/business/score';
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
+import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
-import * as XLSX from 'xlsx';
 import { isSessionExpiredError } from '@/utils/session';
 
 import StudentRankList from './components/GradeOverview/StudentRankList.vue';
@@ -503,9 +569,21 @@ const gradeRatios = ref({ excellent: 25, good: 40, pass: 30, fail: 5 });
 // 导出对话框
 const exportDialogVisible = ref(false);
 
-// 课堂表现弹窗
-const performanceDialogVisible = ref(false);
-const performanceLessonId = ref(null);
+// 人工改分弹窗
+const manualScoreDialogVisible = ref(false);
+const manualScoreSaving = ref(false);
+const manualScoreForm = ref({
+  studentId: null,
+  lessonId: null,
+  studentName: '',
+  lessonTitle: '',
+  originalScore: 0,
+  currentScore: 0,
+  performanceScore: 0,
+  adjustedScore: 0,
+  reason: '',
+  manualAdjusted: false
+});
 
 // 排除0分学生开关（默认不排除）
 const excludeZeroScore = ref(false);
@@ -523,7 +601,7 @@ const visibleColumns = ref({
   filteredTotal: true,
   totalPerformance: true,
   finalTotal: true,
-  filteredAverage: true,
+  filteredAverage: false,
   gradeLevel: true,
   scaledScore: true
 });
@@ -558,7 +636,9 @@ const exportColumnOptions = computed(() => [
   { key: 'overallCompletion', label: '打字完成率', required: false },
   { key: 'avgTheory', label: '理论平均', required: false },
   { key: 'avgPractical', label: '操作平均', required: false },
-  { key: 'filteredTotal', label: '总分', required: false },
+  { key: 'filteredTotal', label: '作业分', required: false },
+  { key: 'totalPerformance', label: '课堂表现分', required: false },
+  { key: 'finalTotal', label: '课程总分', required: false },
   { key: 'filteredAverage', label: '平均分', required: false },
   { key: 'gradeLevel', label: '等级', required: false },
   { key: 'scaledScore', label: '赋分', required: false }
@@ -569,37 +649,18 @@ function handleRatioConfirm(newRatios) {
   gradeRatios.value = newRatios;
 }
 
-// 打开课堂表现弹窗
-function openPerformanceDialog() {
-  if (selectedLessonIds.value.length !== 1) {
-    ElMessage.warning('请先选择单个课程');
-    return;
-  }
-  if (!queryParams.value.classCode) {
-    ElMessage.warning('请先选择班级');
-    return;
-  }
-  performanceLessonId.value = selectedLessonIds.value[0];
-  performanceDialogVisible.value = true;
-}
-
-// 课堂表现保存后刷新数据
-function onPerformanceSaved() {
-  // 保存后可刷新成绩数据（如果需要显示平时分）
-  handleQuery();
-}
-
 // 计算等级和赋分的数据
 const displayDataWithGrade = computed(() => {
   const data = displayData.value;
   if (data.length === 0) return [];
   
-  // 过滤出参与排名计算的学生（0分学生不参与排名）
-  const validStudents = data.filter(s => s.filteredTotal > 0);
-  const zeroStudents = data.filter(s => s.filteredTotal <= 0);
+  // 等级与赋分按课程总分口径计算，避免多课时被作业分带偏。
+  const getRankScore = (student) => Number(student.finalTotal ?? student.filteredAverage ?? 0);
+  const validStudents = data.filter(s => getRankScore(s) > 0);
+  const zeroStudents = data.filter(s => getRankScore(s) <= 0);
   
-  // 按总分排名计算等级
-  const sortedByTotal = [...validStudents].sort((a, b) => b.filteredTotal - a.filteredTotal);
+  // 按课程总分/课程平均分排名计算等级
+  const sortedByTotal = [...validStudents].sort((a, b) => getRankScore(b) - getRankScore(a));
   const totalCount = sortedByTotal.length;
   
   const gradeMap = new Map();
@@ -627,7 +688,7 @@ const displayDataWithGrade = computed(() => {
     });
     
     // 按平均分排名计算赋分（并列名次赋相同分数）
-    const sortedByAvg = [...validStudents].sort((a, b) => b.filteredAverage - a.filteredAverage);
+    const sortedByAvg = [...validStudents].sort((a, b) => getRankScore(b) - getRankScore(a));
     
     if (totalCount === 1) {
       scoreMap.set(sortedByAvg[0].studentId, 100);
@@ -636,10 +697,11 @@ const displayDataWithGrade = computed(() => {
       let prevAvg = null;
       
       sortedByAvg.forEach((student, index) => {
-        if (prevAvg === null || student.filteredAverage !== prevAvg) {
+        const currentScore = getRankScore(student);
+        if (prevAvg === null || currentScore !== prevAvg) {
           currentRank = index;
         }
-        prevAvg = student.filteredAverage;
+        prevAvg = currentScore;
         
         const scaledScore = Math.round(100 - (currentRank / (totalCount - 1)) * 45);
         scoreMap.set(student.studentId, scaledScore);
@@ -675,14 +737,37 @@ const isGradeMode = computed(() => !queryParams.value.classCode);
 
 // 搜索过滤后的数据
 const displayData = computed(() => {
-  if (!searchKeyword.value.trim()) {
-    return tableData.value;
-  }
-  const kw = searchKeyword.value.trim().toLowerCase();
-  return tableData.value.filter(s => 
-    s.studentName?.toLowerCase().includes(kw) || 
-    String(s.studentNo).includes(kw)
-  );
+  return tableData.value;
+});
+
+const isMultiScoreMode = computed(() => selectedLessonIds.value.length !== 1);
+
+const scoreLabels = computed(() => {
+  const multiMode = isMultiScoreMode.value;
+  return {
+    filteredTotal: multiMode ? '作业平均' : '作业分',
+    totalPerformance: multiMode ? '课堂表现平均' : '课堂表现分',
+    finalTotal: multiMode ? '课程平均分' : '课程总分',
+    filteredAverage: multiMode ? '平均分' : '平均分'
+  };
+});
+
+function roundOne(value) {
+  return Math.round(Number(value || 0) * 10) / 10;
+}
+
+function formatScoreDisplay(value, keepOneDecimal = false) {
+  const num = Number(value || 0);
+  return keepOneDecimal ? roundOne(num).toFixed(1) : String(Math.round(num));
+}
+
+function clampClientScore(score) {
+  const num = Number(score || 0);
+  return Math.min(Math.max(Math.round(num), 0), 100);
+}
+
+const manualScorePreviewFinal = computed(() => {
+  return clampClientScore(Number(manualScoreForm.value.adjustedScore || 0) + Number(manualScoreForm.value.performanceScore || 0));
 });
 
 // 计算最大总分（用于 Data Bar 比例）
@@ -796,9 +881,14 @@ function handleQuery() {
   
   loading.value = true;
   
-  getScoreSummary(queryParams.value.entryYear, queryParams.value.classCode, null)
+  getScoreSummary(
+    queryParams.value.entryYear,
+    queryParams.value.classCode,
+    selectedLessonIds.value,
+    searchKeyword.value.trim() || null
+  )
     .then(res => {
-      rawData.value = res.data || [];
+      rawData.value = res.rows || res.data || [];
       processData();
       // 使用延时确保 DOM 完全渲染后再初始化图表
       nextTick(() => {
@@ -827,21 +917,18 @@ function toggleLesson(lessonId, checked) {
     selectedLessonIds.value = selectedLessonIds.value.filter(id => id !== lessonId);
   }
   dropdownLessonIds.value = [...selectedLessonIds.value];
-  processData();
-  nextTick(() => renderCharts());
+  handleQuery();
 }
 
 function clearSelection() {
   selectedLessonIds.value = [];
   dropdownLessonIds.value = [];
-  processData();
-  nextTick(() => setTimeout(() => renderCharts(), 100));
+  handleQuery();
 }
 
 function onDropdownChange(val) {
   selectedLessonIds.value = [...val];
-  processData();
-  nextTick(() => setTimeout(() => renderCharts(), 100));
+  handleQuery();
 }
 
 function filterStudents() {
@@ -863,7 +950,7 @@ function calculateGrade(entryYear) {
 function processData() {
   const selectedIds = selectedLessonIds.value;
   const entryYear = parseInt(queryParams.value.entryYear);
-  const grade = calculateGrade(entryYear);
+  const multiMode = !selectedIds || selectedIds.length !== 1;
   
   tableData.value = rawData.value.map(student => {
     let className = '';
@@ -879,9 +966,8 @@ function processData() {
       filteredScores = filteredScores.filter(s => selectedIds.includes(s.lessonId));
     }
     
-    const count = filteredScores.length;
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
-    let sumPerformance = 0, sumFinal = 0; // 平时分和课程总分
+    let sumPerformance = 0, sumFinal = 0; // 课堂表现分和课程总分
     let validScoreCount = 0; // 有效（非请假）课次数
     
     // 打字统计：累加有效记录
@@ -895,8 +981,8 @@ function processData() {
       sumTheory += (s.theoryScore || 0);
       sumPractical += (s.practicalScore || 0);
       sumTotal += (s.totalScore || 0);
-      sumPerformance += (s.performanceScore || 0); // 平时分
-      sumFinal += (s.finalScore || s.totalScore || 0); // 课程总分
+      sumPerformance += (s.performanceScore || 0);
+      sumFinal += (s.finalScore ?? s.totalScore ?? 0); // 课程总分
       
       // 累加打字统计（只统计有数据的记录）
       if (s.avgTypingSpeed) {
@@ -910,7 +996,9 @@ function processData() {
     const avgTyping = validScoreCount > 0 ? Math.round(sumTyping / validScoreCount) : 0;
     const avgTheory = validScoreCount > 0 ? Math.round(sumTheory / validScoreCount) : 0;
     const avgPractical = validScoreCount > 0 ? Math.round(sumPractical / validScoreCount) : 0;
-    const filteredAverage = validScoreCount > 0 ? Math.round(sumFinal / validScoreCount) : 0;
+    const avgHomework = validScoreCount > 0 ? roundOne(sumTotal / validScoreCount) : 0;
+    const avgPerformance = validScoreCount > 0 ? roundOne(sumPerformance / validScoreCount) : 0;
+    const filteredAverage = validScoreCount > 0 ? roundOne(sumFinal / validScoreCount) : 0;
     
     // 计算整体打字指标
     const overallTypingSpeed = typingCount > 0 ? Math.round(typingSpeedSum / typingCount) : null;
@@ -921,7 +1009,7 @@ function processData() {
       ...student,
       studentNo: parseInt(student.studentNo), // P0: 强制转化为数字，修复排序问题
       className: Number(className),
-      filteredTotal: Math.round(sumTotal), // P0: 取整
+      filteredTotal: multiMode ? avgHomework : Math.round(sumTotal), // 多课模式展示均分，避免总分口径混乱
       filteredAverage: filteredAverage,
       avgTyping: avgTyping,
       avgTheory: avgTheory,
@@ -929,9 +1017,8 @@ function processData() {
       overallTypingSpeed,
       overallAccuracy,
       overallCompletion,
-      totalPerformance: sumPerformance, // 课堂表现分合计
-      // 课程总分 = max(作业总分 + 课堂表现分, 0)，上限100
-      finalTotal: Math.min(Math.max(Math.round(sumTotal) + sumPerformance, 0), 100)
+      totalPerformance: multiMode ? avgPerformance : sumPerformance,
+      finalTotal: filteredAverage
     };
   });
 }
@@ -1002,18 +1089,24 @@ function showStudentProfile(row) {
   });
 }
 
-function handleExport() {
-  if (!rawData.value.length) return;
+function handleExport(selectedColumns) {
+  if (!rawData.value.length) {
+    ElMessage.warning('暂无数据可导出');
+    return Promise.resolve();
+  }
   
-  const loadingMsg = ElMessage.loading({
+  const loadingMsg = ElLoading.service({
+    lock: true,
     text: '正在生成 Excel...',
-    duration: 0
+    background: 'rgba(255, 255, 255, 0.65)'
   });
   
-  exportScoreExcel(
+  return exportScoreExcel(
     queryParams.value.entryYear, 
     queryParams.value.classCode, 
-    selectedLessonIds.value
+    selectedLessonIds.value,
+    searchKeyword.value.trim() || null,
+    selectedColumns
   ).then(res => {
     const blob = new Blob([res]);
     const link = document.createElement('a');
@@ -1021,14 +1114,14 @@ function handleExport() {
     link.download = `成绩汇总_${queryParams.value.entryYear}级.xlsx`;
     link.click();
     window.URL.revokeObjectURL(link.href);
-    loadingMsg.close();
     ElMessage.success('导出成功');
   }).catch((error) => {
-    loadingMsg.close();
     if (isSessionExpiredError(error)) {
       return;
     }
     ElMessage.error(error?.message || '导出失败');
+  }).finally(() => {
+    loadingMsg.close();
   });
 }
 
@@ -1300,17 +1393,26 @@ function getLessonName(lessonId) {
     return l ? l.lessonTitle : `课程${lessonId}`;
 }
 
+function getSelectedLessonScore(student) {
+    if (!student?.scores || selectedLessonIds.value.length !== 1) return null;
+    return student.scores.find(item => item.lessonId === selectedLessonIds.value[0]) || null;
+}
+
 function getLessonScore(student, lessonId) {
     if (!student.scores) return 0;
     const s = student.scores.find(item => item.lessonId === lessonId);
-    return s ? (s.totalScore || 0) : 0;
+    return s ? (s.finalScore ?? s.totalScore ?? 0) : 0;
 }
 
 function getLessonScoreDisplay(student, lessonId) {
     if (!student.scores) return 0;
     const s = student.scores.find(item => item.lessonId === lessonId);
     if (s && s.isAbsent) return '请假';
-    return s ? (s.totalScore || 0) : 0;
+    if (!s) return 0;
+    const performance = s.performanceScore || 0;
+    const performanceText = performance > 0 ? `+${performance}` : String(performance);
+    const manualText = s.manualAdjusted ? '修' : '';
+    return `${manualText}${s.totalScore || 0}/${performanceText}/${s.finalScore ?? s.totalScore ?? 0}`;
 }
 
 function isLessonAbsent(student, lessonId) {
@@ -1337,6 +1439,92 @@ const handleAbsent = async (studentId, lessonId, isAbsent) => {
   }
 };
 
+function openManualScoreDialog(row) {
+  const lessonId = selectedLessonIds.value[0];
+  const score = getSelectedLessonScore(row) || {
+    lessonId,
+    lessonTitle: getLessonName(lessonId),
+    originalTotalScore: 0,
+    totalScore: 0,
+    performanceScore: 0,
+    manualAdjusted: false
+  };
+  if (score.isAbsent) {
+    ElMessage.warning('该学生本节课已请假，请先取消请假后再改分');
+    return;
+  }
+
+  manualScoreForm.value = {
+    studentId: row.studentId,
+    lessonId,
+    studentName: row.studentName,
+    lessonTitle: score.lessonTitle || getLessonName(lessonId),
+    originalScore: score.originalTotalScore ?? score.totalScore ?? 0,
+    currentScore: score.totalScore ?? 0,
+    performanceScore: score.performanceScore || 0,
+    adjustedScore: score.totalScore ?? 0,
+    reason: score.adjustmentReason || '',
+    manualAdjusted: !!score.manualAdjusted
+  };
+  manualScoreDialogVisible.value = true;
+}
+
+async function submitManualScore() {
+  const adjustedScore = Number(manualScoreForm.value.adjustedScore);
+  const reason = (manualScoreForm.value.reason || '').trim();
+  if (!Number.isFinite(adjustedScore) || adjustedScore < 0 || adjustedScore > 100) {
+    ElMessage.warning('作业分必须在0到100之间');
+    return;
+  }
+  if (!reason) {
+    ElMessage.warning('请填写改分原因');
+    return;
+  }
+
+  manualScoreSaving.value = true;
+  try {
+    await saveManualHomeworkScore({
+      studentId: manualScoreForm.value.studentId,
+      lessonId: manualScoreForm.value.lessonId,
+      adjustedScore: Math.round(adjustedScore),
+      reason
+    });
+    ElMessage.success('改分成功');
+    manualScoreDialogVisible.value = false;
+    handleQuery();
+  } catch (e) {
+    ElMessage.error(e?.msg || e?.message || '改分失败');
+  } finally {
+    manualScoreSaving.value = false;
+  }
+}
+
+async function cancelManualScore() {
+  try {
+    await ElMessageBox.confirm('确定取消该学生本节课的人工修正吗？', '提示', {
+      type: 'warning'
+    });
+  } catch (e) {
+    return;
+  }
+
+  manualScoreSaving.value = true;
+  try {
+    await cancelManualHomeworkScore({
+      studentId: manualScoreForm.value.studentId,
+      lessonId: manualScoreForm.value.lessonId,
+      reason: '取消人工修正'
+    });
+    ElMessage.success('已取消修正');
+    manualScoreDialogVisible.value = false;
+    handleQuery();
+  } catch (e) {
+    ElMessage.error(e?.msg || e?.message || '取消修正失败');
+  } finally {
+    manualScoreSaving.value = false;
+  }
+}
+
 function getScoreClass(score) {
     if (score >= 90) return 'text-success';
     if (score < 60) return 'text-danger';
@@ -1360,60 +1548,16 @@ function getGradeTagType(grade) {
   return typeMap[grade] || 'info';
 }
 
-// 前端生成Excel导出
+// 服务端全量导出，避免分页后只导出当前页。
 async function handleExportWithColumns(selectedColumns) {
-  if (!displayDataWithGrade.value.length) {
+  if (!rawData.value.length) {
     ElMessage.warning('暂无数据可导出');
     return;
   }
-  
-  
+
   try {
-    // 获取列配置
-    const columnConfig = exportColumnOptions.value.filter(c => selectedColumns.includes(c.key));
-    
-    // 构建表头
-    const headers = columnConfig.map(c => c.label);
-    
-    // 构建数据行
-    const rows = displayDataWithGrade.value.map(student => {
-      return columnConfig.map(col => {
-        let value = student[col.key];
-        // 特殊处理：打字速度添加单位
-        if (col.key === 'overallTypingSpeed' && value) {
-          return value + ' 字/分';
-        }
-        // 特殊处理：百分比字段
-        if (['overallAccuracy', 'overallCompletion'].includes(col.key) && value) {
-          return value + '%';
-        }
-        return value ?? '-';
-      });
-    });
-    
-    // 创建工作表
-    const wsData = [headers, ...rows];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    
-    // 设置列宽
-    const colWidths = columnConfig.map(col => {
-      if (col.key === 'studentName') return { wch: 10 };
-      if (col.key === 'className') return { wch: 8 };
-      return { wch: 12 };
-    });
-    ws['!cols'] = colWidths;
-    
-    // 创建工作簿
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '成绩汇总');
-    
-    // 生成文件名
-    const fileName = `成绩汇总_${queryParams.value.entryYear}级${queryParams.value.classCode ? '_' + queryParams.value.classCode + '班' : ''}.xlsx`;
-    
-    // 下载
-    XLSX.writeFile(wb, fileName);
-    
-    ElMessage.success('导出成功');
+    // 服务端导出按当前筛选条件生成全量数据，不受当前分页限制。
+    await handleExport(selectedColumns);
   } catch (e) {
     ElMessage.error('导出失败：' + e.message);
   }
@@ -1650,6 +1794,19 @@ async function handleExportWithColumns(selectedColumns) {
     padding: 40px;
     color: #909399;
   }
+}
+
+.manual-score-mark {
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+
+.manual-score-desc {
+  margin-bottom: 16px;
+}
+
+.manual-score-form {
+  padding-top: 4px;
 }
 
 .profile-content {

@@ -13,6 +13,9 @@ public class LessonInfoVo {
     /** 第几课 */
     private Integer lessonNum;
 
+    /** 创建时间，用于教师首页按最新课程排序 */
+    private java.util.Date createTime;
+
     /**
      * 核心修复：添加无参数的构造函数
      * 这对于某些框架的JSON序列化和反序列化至关重要
@@ -43,6 +46,14 @@ public class LessonInfoVo {
 
     public void setLessonNum(Integer lessonNum) {
         this.lessonNum = lessonNum;
+    }
+
+    public java.util.Date getCreateTime() {
+        return createTime;
+    }
+
+    public void setCreateTime(java.util.Date createTime) {
+        this.createTime = createTime;
     }
 
     /** 课程类型: self=自建, shared=共享 */

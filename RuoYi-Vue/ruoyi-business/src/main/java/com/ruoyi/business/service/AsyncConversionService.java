@@ -29,26 +29,80 @@ public class AsyncConversionService {
     private BizStudentAnswerMapper studentAnswerMapper;
 
     /**
-     * 异步转换操作题文件
-     * @param answerId 答题记录ID
+     * 提交后触发首次预览转换
      */
-    @Async("conversionExecutor")
-    public void convertAsync(Long answerId, String docxFullPath, String outputDir, String previewUrlPrefix) {
-        convertStudentAnswerPreview(answerId, false, true, "submit");
+    public boolean triggerSubmitPreviewConversion(Long answerId) {
+        BizStudentAnswer answer = studentAnswerMapper.selectById(answerId);
+        if (answer == null) {
+            log.warn("【异步转换】首次转换领取失败，未找到答题记录，answerId={}", answerId);
+            return false;
+        }
+        if (!isWordDocument(answer.getStudentAnswer())) {
+            log.info("【异步转换】首次转换跳过，answerId={}, file={}", answerId, answer.getStudentAnswer());
+            return false;
+        }
+
+        int updated = studentAnswerMapper.claimSubmitPreviewConversion(answerId);
+        if (updated <= 0) {
+            log.info("【异步转换】首次转换领取被跳过，answerId={}, currentStatus={}",
+                    answerId, answer.getPreviewStatus());
+            return false;
+        }
+
+        executeClaimedPreviewAsync(answerId, "submit");
+        log.info("【异步转换】首次转换领取成功，answerId={}", answerId);
+        return true;
     }
 
     /**
-     * 异步重试指定答题记录的预览转换
+     * 领取失败或卡住的预览重转任务，再交给异步线程执行
      */
-    @Async("conversionExecutor")
-    public void retryAnswerPreviewAsync(Long answerId, boolean ignoreRetryLimit, String triggerSource) {
-        convertStudentAnswerPreview(answerId, true, ignoreRetryLimit, triggerSource);
+    public boolean claimRetryAndExecute(BizStudentAnswer answerSnapshot, boolean ignoreRetryLimit, String triggerSource) {
+        if (answerSnapshot == null || answerSnapshot.getAnswerId() == null) {
+            return false;
+        }
+
+        Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getPreviewRetryCount());
+        if (!ignoreRetryLimit && currentRetryCount >= MAX_AUTO_RETRY_COUNT) {
+            log.info("【异步转换】达到自动重试上限，跳过 answerId={}, retryCount={}, source={}",
+                    answerSnapshot.getAnswerId(), currentRetryCount, triggerSource);
+            return false;
+        }
+
+        Date claimedAt = new Date();
+        int updated = studentAnswerMapper.claimRetryPreviewConversion(
+                answerSnapshot.getAnswerId(),
+                answerSnapshot.getPreviewStatus(),
+                currentRetryCount,
+                answerSnapshot.getPreviewLastRetryTime(),
+                currentRetryCount + 1,
+                claimedAt
+        );
+        if (updated <= 0) {
+            log.info("【异步转换】重转领取被跳过，answerId={}, source={}, status={}, retryCount={}",
+                    answerSnapshot.getAnswerId(), triggerSource,
+                    answerSnapshot.getPreviewStatus(), currentRetryCount);
+            return false;
+        }
+
+        executeClaimedPreviewAsync(answerSnapshot.getAnswerId(), triggerSource);
+        log.info("【异步转换】重转领取成功，answerId={}, source={}, retryCount={}",
+                answerSnapshot.getAnswerId(), triggerSource, currentRetryCount + 1);
+        return true;
     }
 
     /**
-     * 学生答题预览转换统一入口
+     * 执行已领取的转换任务
      */
-    private void convertStudentAnswerPreview(Long answerId, boolean countAsRetry, boolean ignoreRetryLimit, String triggerSource) {
+    @Async("conversionExecutor")
+    public void executeClaimedPreviewAsync(Long answerId, String triggerSource) {
+        convertClaimedPreview(answerId, triggerSource);
+    }
+
+    /**
+     * 学生答题预览转换统一执行入口
+     */
+    private void convertClaimedPreview(Long answerId, String triggerSource) {
         BizStudentAnswer answer = studentAnswerMapper.selectById(answerId);
         if (answer == null) {
             log.warn("【异步转换】未找到答题记录，answerId={}, source={}", answerId, triggerSource);
@@ -56,6 +110,12 @@ public class AsyncConversionService {
         }
         log.info("【异步转换】已读取答题记录，answerId={}, source={}, status={}, retryCount={}",
                 answerId, triggerSource, answer.getPreviewStatus(), answer.getPreviewRetryCount());
+
+        if (!"converting".equals(answer.getPreviewStatus())) {
+            log.info("【异步转换】跳过未领取任务，answerId={}, source={}, status={}",
+                    answerId, triggerSource, answer.getPreviewStatus());
+            return;
+        }
 
         String answerFilePath = answer.getStudentAnswer();
         if (answerFilePath == null || answerFilePath.trim().isEmpty()) {
@@ -78,24 +138,9 @@ public class AsyncConversionService {
             return;
         }
 
-        if (countAsRetry) {
-            Integer currentRetryCount = answer.getPreviewRetryCount() == null ? 0 : answer.getPreviewRetryCount();
-            if (!ignoreRetryLimit && currentRetryCount >= MAX_AUTO_RETRY_COUNT) {
-                log.info("【异步转换】达到自动重试上限，跳过 answerId={}, retryCount={}, source={}",
-                        answerId, currentRetryCount, triggerSource);
-                return;
-            }
-            answer.setPreviewRetryCount(currentRetryCount + 1);
-            answer.setPreviewLastRetryTime(new Date());
-        } else if (answer.getPreviewRetryCount() == null) {
+        if (answer.getPreviewRetryCount() == null) {
             answer.setPreviewRetryCount(0);
         }
-
-        answer.setPreviewStatus("converting");
-        answer.setPreviewPath(null);
-        answer.setPreviewErrorMessage(null);
-        studentAnswerMapper.updatePreviewStatus(answer);
-        log.info("【异步转换】answerId={}, source={} 已切换为 converting", answerId, triggerSource);
 
         String fileSystemRelativePath = answerFilePath.replaceFirst(Constants.RESOURCE_PREFIX, "");
         String docxFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
@@ -157,6 +202,18 @@ public class AsyncConversionService {
         return errorMessage.length() <= MAX_ERROR_MESSAGE_LENGTH
                 ? errorMessage
                 : errorMessage.substring(0, MAX_ERROR_MESSAGE_LENGTH);
+    }
+
+    private int normalizeRetryCount(Integer retryCount) {
+        return retryCount == null ? 0 : retryCount;
+    }
+
+    private boolean isWordDocument(String answerFilePath) {
+        if (answerFilePath == null || answerFilePath.trim().isEmpty()) {
+            return false;
+        }
+        String lowerCaseAnswer = answerFilePath.toLowerCase();
+        return lowerCaseAnswer.endsWith(".docx") || lowerCaseAnswer.endsWith(".doc");
     }
 
     @Autowired

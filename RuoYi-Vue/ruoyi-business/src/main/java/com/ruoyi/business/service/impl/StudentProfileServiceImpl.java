@@ -62,11 +62,11 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
             profile.setAverageScore(Math.round(avgScore * 10) / 10.0);
         }
         
-        // 3. 计算课堂表现平均分（0分不参与）
+        // 3. 计算课堂表现平均分（Mapper已排除空白0分，显式0分仍有效）
         List<StudentProfileVo.PerformanceItem> performances = getPerformances(studentId, academicYearStart, academicYearEnd);
         if (!performances.isEmpty()) {
             double perfAvg = performances.stream()
-                .filter(p -> p.getPerformance() != null && p.getPerformance() != 0)
+                .filter(p -> p.getPerformance() != null)
                 .mapToInt(StudentProfileVo.PerformanceItem::getPerformance)
                 .average()
                 .orElse(0.0);

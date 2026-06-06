@@ -28,7 +28,7 @@ public class StudentProfileVo {
     /** 总体平均分 */
     private Double averageScore;
     
-    /** 课堂表现平均分（0分不参与计算） */
+    /** 课堂表现平均分 */
     private Double performanceAvg;
     
     /** 打字平均速度 */

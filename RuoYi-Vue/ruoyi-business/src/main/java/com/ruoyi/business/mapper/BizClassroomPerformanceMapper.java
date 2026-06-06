@@ -54,4 +54,11 @@ public interface BizClassroomPerformanceMapper
      * 查询学生的所有课程平时分记录
      */
     List<BizClassroomPerformance> selectByStudentId(@Param("studentId") Long studentId);
+
+    /**
+     * 批量查询学生课堂表现记录。
+     */
+    List<BizClassroomPerformance> selectByStudentIdsAndLessons(@Param("studentIds") List<Long> studentIds,
+                                                               @Param("lessonIds") List<Long> lessonIds,
+                                                               @Param("deptId") Long deptId);
 }

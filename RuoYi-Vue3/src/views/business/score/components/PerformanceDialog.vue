@@ -16,6 +16,7 @@
 
       <!-- 学生表格 -->
       <el-table 
+        class="performance-table"
         :data="studentList" 
         v-loading="loading" 
         border 
@@ -25,17 +26,13 @@
       >
         <el-table-column prop="studentNo" label="学号" width="80" align="center" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" />
-        <el-table-column label="平时分" width="150" align="center">
+        <el-table-column label="平时分" width="150" align="center" class-name="performance-score-column">
           <template #default="scope">
-            <el-input-number 
+            <PerformanceScoreStepper
               v-model="scope.row.score" 
               :min="-10" 
               :max="10" 
-              :precision="0"
-              size="small"
-              controls-position="right"
               @change="onScoreChange(scope.row)"
-              style="width: 100px"
             />
           </template>
         </el-table-column>
@@ -50,7 +47,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column label="状态" width="80" align="center" class-name="performance-status-column">
           <template #default="scope">
             <el-tag v-if="scope.row.modified" type="warning" size="small">未保存</el-tag>
             <el-tag v-else-if="scope.row.performanceId" type="success" size="small">已保存</el-tag>
@@ -75,6 +72,7 @@
 import { ref, watch, computed } from 'vue'
 import { getPerformanceList, batchSavePerformance } from '@/api/business/classroomPerformance'
 import { ElMessage } from 'element-plus'
+import PerformanceScoreStepper from '@/components/PerformanceScoreStepper/index.vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -173,5 +171,23 @@ watch(() => [props.lessonId, props.classCode, props.entryYear], () => {
 
 :deep(.negative-score) {
   background-color: #fef0f0 !important;
+}
+
+:deep(.performance-table .el-table__body .el-table__row) {
+  height: 42px;
+}
+
+:deep(.performance-table .el-table__body .el-table__cell) {
+  padding: 4px 0;
+}
+
+:deep(.performance-table .performance-score-column .cell),
+:deep(.performance-table .performance-status-column .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  height: 28px;
+  line-height: 28px;
 }
 </style>

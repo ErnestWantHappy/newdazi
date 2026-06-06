@@ -80,6 +80,9 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Override
     public int insertBizLesson(BizLesson bizLesson)
     {
+        if (bizLesson.getCreateTime() == null) {
+            bizLesson.setCreateTime(new Date());
+        }
         return bizLessonMapper.insertBizLesson(bizLesson);
     }
 
@@ -220,9 +223,19 @@ public class BizLessonServiceImpl implements IBizLessonService
                 List<LessonInfoVo> allLessons = new ArrayList<>();
                 allLessons.addAll(selfLessons);
                 allLessons.addAll(sharedLessons);
-                // 注意：由于LessonInfoVo没有createTime，需要依赖查询顺序
-                // 或者在查询时已经按创建时间降序返回
-                
+                // 自建和共享课程合并后统一排序，确保最新课程固定在左上角。
+                allLessons.sort((a, b) -> {
+                    long timeA = a.getCreateTime() == null ? 0L : a.getCreateTime().getTime();
+                    long timeB = b.getCreateTime() == null ? 0L : b.getCreateTime().getTime();
+                    int byCreateTime = Long.compare(timeB, timeA);
+                    if (byCreateTime != 0) {
+                        return byCreateTime;
+                    }
+                    long idA = a.getLessonId() == null ? 0L : a.getLessonId();
+                    long idB = b.getLessonId() == null ? 0L : b.getLessonId();
+                    return Long.compare(idB, idA);
+                });
+                 
                 // 填充每个课程的已指派班级
                 for (LessonInfoVo lesson : allLessons) {
                     List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lesson.getLessonId());
@@ -327,13 +340,20 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonToSave.setLessonTitle(lessonDetailVo.getLessonTitle());
         lessonToSave.setGrade(lessonDetailVo.getGrade());
         lessonToSave.setSemester(lessonDetailVo.getSemester());
-        lessonToSave.setLessonNum(lessonDetailVo.getLessonNum());
+        Integer lessonNum = lessonDetailVo.getLessonNum();
+        if (lessonToSave.getLessonId() == null && (lessonNum == null || lessonNum <= 0)) {
+            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByGradeAndCreator(
+                    lessonDetailVo.getGrade(), username, deptId);
+            lessonNum = (maxLessonNum == null ? 0 : maxLessonNum) + 1;
+        }
+        lessonToSave.setLessonNum(lessonNum);
         lessonToSave.setShuffleMode(lessonDetailVo.getShuffleMode() != null ? lessonDetailVo.getShuffleMode() : 0);
         lessonToSave.setRandomChoiceCount(lessonDetailVo.getRandomChoiceCount() != null ? lessonDetailVo.getRandomChoiceCount() : 0);
         lessonToSave.setRandomJudgmentCount(lessonDetailVo.getRandomJudgmentCount() != null ? lessonDetailVo.getRandomJudgmentCount() : 0);
 
         if (lessonToSave.getLessonId() == null) {
             lessonToSave.setCreateBy(username);
+            lessonToSave.setCreateTime(new Date());
             bizLessonMapper.insertBizLesson(lessonToSave);
         } else {
             lessonToSave.setUpdateBy(username);

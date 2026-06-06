@@ -1,12 +1,20 @@
-# AI 辅助开发接力提示 (2026-04-22)
+# AI 辅助开发接力提示 (2026-05-27)
 
 > **适用范围**：这是当前仓库的开发接力提示，不再沿用旧版“7 项待修复清单”作为主线任务来源。
 >
-> **状态口径**：以下内容表示**仓库代码已经修改**，但**尚未确认上线、尚未确认数据库脚本已执行、尚未确认定时任务已创建、尚未完成构建与联调回归**。后续 AI 或开发者继续工作时，请先把“环境确认”和“验证闭环”补齐，再决定是否进入下一轮功能开发。
+> **状态口径**：当前仓库已完成本地构建与角色冒烟验证，但**不代表已经部署线上**。线上执行 SQL 或替换 jar/dist 前仍需备份、确认目标库与发布窗口。
 
 ---
 
-## 一、当前仓库主线（已改代码，待验证）
+## 一、当前仓库主线（已改代码，本地已验证）
+
+### 0. 成绩口径与导出紧急修复
+- 成绩汇总页按分页懒加载读取当前筛选学生，避免一次性加载全班/全年级所有课程成绩。
+- 单课口径：`课程总分 = clamp(作业分 + 课堂表现分, 0, 100)`。
+- 多课口径：`作业平均 / 课堂表现平均 / 课程平均分`，请假不参与平均，课堂表现 `0` 分是有效分。
+- Excel 导出每节课拆成三列：`作业分 / 课堂表现分 / 课程总分`。
+- 导出汇总列按单课/多课自动切换，并同步前端搜索关键词 `keyword`。
+- 2026-05-27 已验证：前端 `npm run build:prod` 通过，后端 `compile` 与 `clean package` 通过，教师成绩汇总和导出接口返回正常。
 
 ### 1. 操作题预览状态流与失败重试
 - 学生端当前课程接口返回的已提交答案，已包含 `previewStatus` 与 `previewPath`。
@@ -14,7 +22,7 @@
   - `previewRetryCount`
   - `previewLastRetryTime`
   - `previewErrorMessage`
-- 学生页上传操作题后，会根据服务端状态展示“可预览 / 转换中 / 转换失败”，并提供失败下载兜底。
+- 学生页上传操作题后，会根据服务端状态展示“可预览 / 待转换 / 预览暂不可用”，并提供失败下载兜底；预览失败不等于上传失败。
 - 教师批改页新增“重新转换本班失败文件”按钮。
 - 后端新增接口：
   - `POST /business/teacher/grading/retry-failed-previews`
@@ -23,6 +31,7 @@
   - `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`
 - 仓库已提供 SQL：
   - `sql/practical_preview_retry_fields.sql`
+  - `sql/practical_preview_retry_quartz_job.sql`
 
 ### 2. 答题记录查询统一按“最新记录”聚合
 - `biz_student_answer` 的多处查询已改为按 `student_id + lesson_id + question_id` 只取最新一条记录。
@@ -79,23 +88,24 @@
 
 ---
 
-## 三、当前仍未确认完成的事项
+## 三、当前仍未确认上线的事项
 
 ### 1. 数据库执行状态未确认
 - 没有证据表明以下 SQL 已执行：
   - `sql/practical_preview_retry_fields.sql`
   - `sql/typing_answer_dedup_fix.sql`
 
-### 2. 定时任务配置未确认
-- 没有证据表明 Quartz 中已经真正创建：
+### 2. 定时任务配置
+- 本地 `xueyeceping.sys_job` 已确认存在并启用：
   - `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`
+- 线上环境是否已执行仍需发布前确认。
 
-### 3. 构建与联调未确认
-- 没有证据表明已完成：
-  - 后端 Maven 构建
-  - 前端 Vite 构建
-  - 学生端与教师端联调
-  - 回归测试
+### 3. 构建与联调
+- 本地已完成：
+  - 后端 Maven `compile` / `clean package`
+  - 前端 Vite `build:prod`
+  - 教师、学生、教研员菜单与关键页面冒烟
+- 线上发布后仍需按真实域名再做一次冒烟。
 
 ### 4. 运行产物不作为上下文事实
 - `RuoYi-Vue/uploadPath/upload/2026/04/` 属于运行过程中生成的本地附件样本。
@@ -106,20 +116,20 @@
 ## 四、下一轮建议优先验证的内容
 
 ### 1. 先补环境确认
-1. 确认数据库是否已经执行 `practical_preview_retry_fields.sql`。
-2. 确认数据库是否已经执行 `typing_answer_dedup_fix.sql`。
-3. 确认 Quartz 是否已创建 `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`。
+1. 确认线上数据库是否已经执行 `practical_preview_retry_fields.sql`。
+2. 确认线上数据库是否已经执行 `typing_answer_dedup_fix.sql`。
+3. 确认线上 Quartz 是否已创建 `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`。
 
 ### 2. 再做功能联调
 1. 学生端上传 `docx` 后，是否能经历“上传成功 -> 转换中 -> 可预览”。
 2. 学生端上传 `pdf` 后，是否能直接预览。
-3. 学生端上传暂不支持在线预览的文件后，是否能正确显示失败态并允许下载原文件。
+3. 学生端上传暂不支持在线预览的文件后，是否能正确显示“作品已上传，预览暂不可用”并允许下载原文件。
 4. 教师批改页点击“重新转换本班失败文件”后，失败记录是否会重新进入转换流程。
 5. 学生画像学年筛选后，课程、打字、表现、排名四类数据是否都按学年范围返回。
 
 ### 3. 最后补构建与回归
-1. 后端构建是否通过。
-2. 前端构建是否通过。
+1. 线上后端启动日志是否正常。
+2. 线上前端静态资源是否更新到最新 dist。
 3. 最新答题记录口径是否影响历史统计页面。
 4. 唯一索引落地后，提交答案是否仍能正常更新而不是报重复键错误。
 

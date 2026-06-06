@@ -12,203 +12,193 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.io.File;
-import java.io.IOException;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * 文件转换工具类
- * 使用 JODConverter + LibreOffice 服务模式进行文档转换
- * 
- * 针对 Windows 服务器长时间运行优化：
- * 1. 自动检测 LibreOffice 进程健康状态
- * 2. 超时/挂死时自动强制重启
- * 3. 连续失败计数器，达到阈值时强制清理所有进程重建
- * 4. 转换任务支持重试机制
+ * 使用 JODConverter + LibreOffice 服务模式进行文档转换。
  */
 @Component
 public class FileConversionUtils {
 
     private static final Logger log = LoggerFactory.getLogger(FileConversionUtils.class);
 
-    // LibreOffice 安装路径（Windows默认）
+    // LibreOffice 安装路径（Windows 默认）
     private static final String LIBRE_OFFICE_HOME = "C:\\Program Files\\LibreOffice";
 
-    // === 关键参数配置 ===
-    // LibreOffice 实例数（端口数），与线程池大小保持一致
-    // 全县级平台，操作题可能有多个班级同时提交，设为 5 个实例
+    // LibreOffice 实例数需要与转换线程池大小保持一致。
     private static final int OFFICE_INSTANCE_COUNT = 5;
-    // 每个进程处理任务数后自动重启（防止内存泄漏）
     private static final int MAX_TASKS_PER_PROCESS = 30;
-    // 单个任务执行超时（5分钟，适应大文件）
     private static final long TASK_EXECUTION_TIMEOUT = 300_000L;
-    // 队列等待超时（2分钟）
     private static final long TASK_QUEUE_TIMEOUT = 120_000L;
-    // 进程启动超时（2分钟，Windows 上 LibreOffice 启动较慢）
     private static final long PROCESS_TIMEOUT = 120_000L;
-    // 连续失败次数达到此阈值时强制重建
-    private static final int FAILURE_THRESHOLD = 3;
-    // 最大重试次数
     private static final int MAX_RETRY = 1;
 
-    // 服务管理器
+    private static final ReentrantReadWriteLock OFFICE_MANAGER_LOCK = new ReentrantReadWriteLock(true);
+    private static final Lock OFFICE_READ_LOCK = OFFICE_MANAGER_LOCK.readLock();
+    private static final Lock OFFICE_WRITE_LOCK = OFFICE_MANAGER_LOCK.writeLock();
+
+    private static final AtomicInteger serviceFailureCount = new AtomicInteger(0);
+
     private static OfficeManager officeManager;
-    
-    // 文档转换器
     private static DocumentConverter documentConverter;
-    
-    // 服务是否可用
     private static volatile boolean serviceAvailable = false;
 
-    // 连续失败计数器
-    private static final AtomicInteger consecutiveFailures = new AtomicInteger(0);
-
-    // 上次成功重启时间（防止短时间内反复重启）
-    private static final AtomicLong lastRestartTime = new AtomicLong(0);
-
-    // 最小重启间隔（30秒）
-    private static final long MIN_RESTART_INTERVAL = 30_000L;
-
-    /**
-     * 应用启动时初始化 LibreOffice 服务
-     */
     @PostConstruct
     public void init() {
-        startOfficeManager();
+        startOfficeManager(true);
     }
 
-    /**
-     * 应用关闭时停止服务
-     */
     @PreDestroy
     public void destroy() {
-        stopOfficeManager();
+        stopOfficeManager(true);
     }
 
-    /**
-     * 启动 LibreOffice 服务管理器
-     */
-    private static synchronized void startOfficeManager() {
-        if (officeManager != null && officeManager.isRunning()) {
+    private static void startOfficeManager(boolean cleanOrphansBeforeStart) {
+        OFFICE_WRITE_LOCK.lock();
+        try {
+            startOfficeManagerInternal(cleanOrphansBeforeStart);
+        } finally {
+            OFFICE_WRITE_LOCK.unlock();
+        }
+    }
+
+    private static void stopOfficeManager(boolean killAfterStopFailure) {
+        OFFICE_WRITE_LOCK.lock();
+        try {
+            stopOfficeManagerInternal(killAfterStopFailure);
+        } finally {
+            OFFICE_WRITE_LOCK.unlock();
+        }
+    }
+
+    private static boolean startOfficeManagerInternal(boolean cleanOrphansBeforeStart) {
+        if (isManagerRunningInternal()) {
+            serviceAvailable = true;
             log.info("【LibreOffice服务】服务已在运行中");
-            return;
+            return true;
         }
 
         try {
+            if (cleanOrphansBeforeStart) {
+                killOrphanedOfficeProcesses();
+            }
+
             log.info("【LibreOffice服务】正在启动服务模式（{}个实例）...", OFFICE_INSTANCE_COUNT);
-            
-            // 先清理可能残留的 LibreOffice 进程
-            killOrphanedOfficeProcesses();
+            int[] ports = buildPortNumbers();
 
-            // 构建端口号数组
-            int[] ports = new int[OFFICE_INSTANCE_COUNT];
-            for (int i = 0; i < OFFICE_INSTANCE_COUNT; i++) {
-                ports[i] = 2002 + i;
-            }
+            LocalOfficeManager newOfficeManager = LocalOfficeManager.builder()
+                    .officeHome(LIBRE_OFFICE_HOME)
+                    .portNumbers(ports)
+                    .maxTasksPerProcess(MAX_TASKS_PER_PROCESS)
+                    .taskExecutionTimeout(TASK_EXECUTION_TIMEOUT)
+                    .taskQueueTimeout(TASK_QUEUE_TIMEOUT)
+                    .processTimeout(PROCESS_TIMEOUT)
+                    .build();
 
-            // 创建本地办公套件管理器
-            officeManager = LocalOfficeManager.builder()
-                .officeHome(LIBRE_OFFICE_HOME)
-                .portNumbers(ports)
-                .maxTasksPerProcess(MAX_TASKS_PER_PROCESS)
-                .taskExecutionTimeout(TASK_EXECUTION_TIMEOUT)
-                .taskQueueTimeout(TASK_QUEUE_TIMEOUT)
-                .processTimeout(PROCESS_TIMEOUT)
-                .build();
-
-            officeManager.start();
-            
-            // 创建文档转换器
+            newOfficeManager.start();
+            officeManager = newOfficeManager;
             documentConverter = LocalConverter.builder()
-                .officeManager(officeManager)
-                .build();
-
+                    .officeManager(newOfficeManager)
+                    .build();
             serviceAvailable = true;
-            consecutiveFailures.set(0);
-            lastRestartTime.set(System.currentTimeMillis());
+            serviceFailureCount.set(0);
             log.info("【LibreOffice服务】服务启动成功，支持{}个并发转换实例", OFFICE_INSTANCE_COUNT);
-            
+            return true;
         } catch (Exception e) {
-            log.error("【LibreOffice服务】启动失败: {}", e.getMessage(), e);
-            serviceAvailable = false;
-        }
-    }
-
-    /**
-     * 停止 LibreOffice 服务管理器
-     */
-    private static synchronized void stopOfficeManager() {
-        if (officeManager != null) {
-            // 先主动杀掉 soffice 进程，避免 stop() 时等待 2 分钟超时
-            killOrphanedOfficeProcesses();
-            try {
-                officeManager.stop();
-                log.info("【LibreOffice服务】服务已停止");
-            } catch (OfficeException e) {
-                log.warn("【LibreOffice服务】停止时出现异常（进程已被提前清理，可忽略）: {}", e.getMessage());
-            }
             officeManager = null;
             documentConverter = null;
             serviceAvailable = false;
+            log.error("【LibreOffice服务】启动失败: {}", e.getMessage(), e);
+            return false;
         }
     }
 
-    /**
-     * 强制重建 LibreOffice 服务
-     * 停止现有服务 → 清理残留进程 → 重新启动
-     */
-    private static synchronized void forceRebuildOfficeManager() {
-        long now = System.currentTimeMillis();
-        if (now - lastRestartTime.get() < MIN_RESTART_INTERVAL) {
-            log.warn("【LibreOffice服务】距离上次重启不足30秒，跳过本次重建");
+    private static void stopOfficeManagerInternal(boolean killAfterStopFailure) {
+        OfficeManager currentOfficeManager = officeManager;
+        officeManager = null;
+        documentConverter = null;
+        serviceAvailable = false;
+
+        if (currentOfficeManager == null) {
             return;
         }
 
-        log.warn("【LibreOffice服务】开始强制重建...");
-        stopOfficeManager();
-
-        // 等待进程完全退出
         try {
-            Thread.sleep(3000);
-        } catch (InterruptedException ignored) {
+            currentOfficeManager.stop();
+            log.info("【LibreOffice服务】服务已停止");
+        } catch (OfficeException e) {
+            log.warn("【LibreOffice服务】服务停止异常: {}", e.getMessage(), e);
+            if (killAfterStopFailure) {
+                killOrphanedOfficeProcesses();
+            }
+        }
+    }
+
+    private static boolean rebuildOfficeManager(String reason) {
+        OFFICE_WRITE_LOCK.lock();
+        try {
+            log.warn("【LibreOffice服务】开始重建，原因={}", reason);
+            stopOfficeManagerInternal(true);
+            waitForOfficeShutdown();
+            boolean started = startOfficeManagerInternal(false);
+            if (!started) {
+                log.error("【LibreOffice服务】重建失败，原因={}", reason);
+            }
+            return started;
+        } finally {
+            OFFICE_WRITE_LOCK.unlock();
+        }
+    }
+
+    private static int[] buildPortNumbers() {
+        int[] ports = new int[OFFICE_INSTANCE_COUNT];
+        for (int i = 0; i < OFFICE_INSTANCE_COUNT; i++) {
+            ports[i] = 2002 + i;
+        }
+        return ports;
+    }
+
+    private static void waitForOfficeShutdown() {
+        try {
+            Thread.sleep(1500L);
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-
-        startOfficeManager();
     }
 
     /**
-     * 清理残留的 LibreOffice / soffice 进程（Windows）
-     * 避免僵尸进程占用端口
+     * 清理残留的 LibreOffice / soffice 进程（Windows）。
+     * 仅在首次启动前或优雅关闭失败后的兜底场景使用。
      */
     private static void killOrphanedOfficeProcesses() {
         try {
             log.info("【LibreOffice服务】清理残留 soffice 进程...");
-            // Windows 下强制结束 soffice.bin 进程
-            ProcessBuilder pb = new ProcessBuilder("taskkill", "/F", "/IM", "soffice.bin");
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            p.waitFor();
-            
-            // 也清理 soffice.exe
-            pb = new ProcessBuilder("taskkill", "/F", "/IM", "soffice.exe");
-            pb.redirectErrorStream(true);
-            p = pb.start();
-            p.waitFor();
-
-            // 等待进程退出
-            Thread.sleep(2000);
+            killProcess("soffice.bin");
+            killProcess("soffice.exe");
+            Thread.sleep(2000L);
             log.info("【LibreOffice服务】残留进程清理完成");
         } catch (Exception e) {
             log.warn("【LibreOffice服务】清理残留进程时出现异常（可忽略）: {}", e.getMessage());
         }
     }
 
+    private static void killProcess(String processName) throws Exception {
+        ProcessBuilder processBuilder = new ProcessBuilder("taskkill", "/F", "/IM", processName);
+        processBuilder.redirectErrorStream(true);
+        Process process = processBuilder.start();
+        process.waitFor();
+    }
+
     /**
-     * 使用 LibreOffice 服务模式将 DOCX 文件转换为 PDF（带重试机制）
-     * @param docxFilePath DOCX源文件的绝对路径
-     * @param outputDir    PDF输出目录的绝对路径
-     * @return 转换后的PDF文件绝对路径，失败返回null
+     * 使用 LibreOffice 服务模式将 DOCX 文件转换为 PDF。
+     *
+     * @param docxFilePath DOCX 源文件的绝对路径
+     * @param outputDir PDF 输出目录的绝对路径
+     * @return 转换后的 PDF 文件绝对路径，失败返回 null
      */
     public static String convertDocxToPdfWithLibreOffice(String docxFilePath, String outputDir) {
         File docxFile = new File(docxFilePath);
@@ -217,77 +207,58 @@ public class FileConversionUtils {
             return null;
         }
 
-        // 确保输出目录存在
-        File outDirFile = new File(outputDir);
-        if (!outDirFile.exists()) {
-            outDirFile.mkdirs();
+        File outputDirectory = new File(outputDir);
+        if (!outputDirectory.exists() && !outputDirectory.mkdirs()) {
+            log.error("输出目录创建失败: {}", outputDir);
+            return null;
         }
 
-        // 计算输出PDF文件路径
         String docxFileName = docxFile.getName();
         String pdfFileName = docxFileName.replaceAll("(?i)\\.docx?$", ".pdf");
         String pdfFilePath = outputDir + File.separator + pdfFileName;
         File pdfFile = new File(pdfFilePath);
 
-        // 带重试的转换逻辑
         for (int attempt = 0; attempt <= MAX_RETRY; attempt++) {
+            if (!ensureOfficeManagerReady()) {
+                log.error("【LibreOffice服务】服务不可用，无法进行转换: {}", docxFilePath);
+                return null;
+            }
+
+            long startTime = System.currentTimeMillis();
             try {
-                // 检查服务是否可用
-                if (!serviceAvailable || documentConverter == null) {
-                    log.warn("【LibreOffice服务】服务不可用，尝试重新启动...");
-                    forceRebuildOfficeManager();
-                    if (!serviceAvailable) {
-                        log.error("【LibreOffice服务】服务重启失败，无法进行转换");
-                        return null;
+                if (!executeConversionWithSharedLock(docxFile, pdfFile)) {
+                    if (attempt < MAX_RETRY && rebuildOfficeManager("服务未就绪")) {
+                        continue;
                     }
+                    log.error("【服务模式转换】服务未就绪，转换失败: {}", docxFilePath);
+                    return null;
                 }
 
-                if (attempt > 0) {
-                    log.info("【服务模式转换】第{}次重试: {}", attempt, docxFilePath);
-                } else {
-                    log.info("【服务模式转换】开始: {}", docxFilePath);
-                }
-                long startTime = System.currentTimeMillis();
-                
-                // 使用服务模式进行转换
-                documentConverter.convert(docxFile).to(pdfFile).execute();
-                
                 long duration = System.currentTimeMillis() - startTime;
-                
                 if (pdfFile.exists()) {
                     log.info("【服务模式转换】成功: {} -> {} (耗时: {}ms)", docxFilePath, pdfFilePath, duration);
-                    // 转换成功，重置失败计数器
-                    consecutiveFailures.set(0);
+                    serviceFailureCount.set(0);
                     return pdfFilePath;
-                } else {
-                    log.error("【服务模式转换】完成但PDF文件未生成: {}", pdfFilePath);
                 }
 
+                log.error("【服务模式转换】完成但 PDF 文件未生成: {}", pdfFilePath);
+                return null;
             } catch (OfficeException e) {
-                int failures = consecutiveFailures.incrementAndGet();
-                log.error("【服务模式转换】异常（连续失败{}次）: {}", failures, e.getMessage(), e);
-
-                // 连续失败达到阈值，强制重建服务
-                if (failures >= FAILURE_THRESHOLD) {
-                    log.warn("【LibreOffice服务】连续失败{}次，达到阈值，强制重建服务", failures);
-                    forceRebuildOfficeManager();
+                if (!isServiceLevelFailure(e)) {
+                    log.error("【服务模式转换】文档转换失败，不触发服务重建: {}", e.getMessage(), e);
+                    return null;
                 }
 
-                // 如果还有重试机会，等待一段时间后重试
-                if (attempt < MAX_RETRY) {
-                    try {
-                        long waitTime = 5000L * (attempt + 1); // 递增等待
-                        log.info("【服务模式转换】等待{}ms后重试...", waitTime);
-                        Thread.sleep(waitTime);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        return null;
-                    }
-                    // 如果服务不可用，重建后重试
-                    if (!serviceAvailable) {
-                        forceRebuildOfficeManager();
-                    }
+                int failureCount = serviceFailureCount.incrementAndGet();
+                String rebuildReason = "服务级异常#" + failureCount + ": " + truncateMessage(e.getMessage());
+                log.warn("【服务模式转换】检测到服务级异常，将尝试重建: {}", rebuildReason, e);
+
+                if (attempt < MAX_RETRY && rebuildOfficeManager(rebuildReason)) {
+                    continue;
                 }
+
+                log.error("【服务模式转换】服务级异常重试失败: {}", docxFilePath);
+                return null;
             }
         }
 
@@ -295,8 +266,54 @@ public class FileConversionUtils {
         return null;
     }
 
+    private static boolean executeConversionWithSharedLock(File docxFile, File pdfFile) throws OfficeException {
+        OFFICE_READ_LOCK.lock();
+        try {
+            if (!serviceAvailable || documentConverter == null || !isManagerRunningInternal()) {
+                return false;
+            }
+            documentConverter.convert(docxFile).to(pdfFile).execute();
+            return true;
+        } finally {
+            OFFICE_READ_LOCK.unlock();
+        }
+    }
+
+    private static boolean ensureOfficeManagerReady() {
+        if (isServiceAvailable()) {
+            return true;
+        }
+        return rebuildOfficeManager("转换前发现服务不可用");
+    }
+
+    private static boolean isServiceLevelFailure(OfficeException exception) {
+        if (!isServiceAvailable()) {
+            return true;
+        }
+        String message = exception.getMessage();
+        if (message == null) {
+            return false;
+        }
+
+        String normalizedMessage = message.toLowerCase(Locale.ROOT);
+        return normalizedMessage.contains("office manager")
+                || normalizedMessage.contains("office process")
+                || normalizedMessage.contains("could not establish connection")
+                || normalizedMessage.contains("connection")
+                || normalizedMessage.contains("disconnected")
+                || normalizedMessage.contains("pipe")
+                || normalizedMessage.contains("socket");
+    }
+
+    private static String truncateMessage(String message) {
+        if (message == null || message.isEmpty()) {
+            return "unknown";
+        }
+        return message.length() <= 120 ? message : message.substring(0, 120);
+    }
+
     /**
-     * 检查LibreOffice是否已安装
+     * 检查 LibreOffice 是否已安装。
      */
     public static boolean isLibreOfficeInstalled() {
         File officeHome = new File(LIBRE_OFFICE_HOME);
@@ -304,9 +321,18 @@ public class FileConversionUtils {
     }
 
     /**
-     * 检查服务是否可用
+     * 检查服务是否可用。
      */
     public static boolean isServiceAvailable() {
-        return serviceAvailable && officeManager != null && officeManager.isRunning();
+        OFFICE_READ_LOCK.lock();
+        try {
+            return serviceAvailable && isManagerRunningInternal();
+        } finally {
+            OFFICE_READ_LOCK.unlock();
+        }
+    }
+
+    private static boolean isManagerRunningInternal() {
+        return officeManager != null && officeManager.isRunning();
     }
 }

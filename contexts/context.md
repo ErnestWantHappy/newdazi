@@ -1,7 +1,7 @@
 # 信息科技学业测评平台 (Context)
 
 > **版本**：v2.8
-> **更新时间**：2026-04-22
+> **更新时间**：2026-05-27
 > **核心定位**：服务于中小学信息科技课程的综合性教学与评价平台，集课程管理、多维度测评（选择/判断/操作/打字）、智能评分、学情分析与可视化于一体。
 
 ---
@@ -20,13 +20,48 @@
 
 ## 🧩 2. 系统核心功能与业务流程 (System Core & Workflows)
 
+### 2.x 2026-05-27 更新摘要 (工作快照 - 成绩懒加载 / 分数口径收口 / 导出三列化 / 当前课程指派稳定)
+
+> [!IMPORTANT]
+> **状态口径**：本节记录本轮代码收口后的业务定义与验证边界。数据库迁移脚本已作为仓库交付物补充，但线上执行前仍需备份并确认目标库。
+
+#### 📊 成绩口径
+- **作业分**：学生在某节课所有答题记录的得分合计，不包含课堂表现分。
+- **课堂表现分**：学生在某节课的课堂表现加减分，业务范围为 `-10` 到 `+10`，可为负数。
+- **课程总分**：`clamp(作业分 + 课堂表现分, 0, 100)`；请假/缺考课程不参与课程总分与均分统计。
+- **多课课堂表现平均**：选择多节课时，课堂表现分按非请假课程求平均，`0` 分是有效课堂表现，不能被过滤。
+- **多课平均分**：按非请假课程的课程总分求平均，不再把多节课分数合计后封顶到 100；`作业平均 / 课堂表现平均 / 课程平均分` 默认保留 1 位小数。
+- **成绩页展示语义**：成绩汇总页按当前筛选条件一次性展示全部学生，图表、排行、等级基于当前筛选结果全量数据；Excel 导出仍由服务端按当前筛选条件生成全量数据。
+- **Excel 导出口径**：每节课拆为“作业分 / 课堂表现分 / 课程总分”三列；只选一课时汇总列为“作业分 / 课堂表现分 / 课程总分”，多课或全选时为“作业平均 / 课堂表现平均 / 课程平均分”。搜索关键词 `keyword` 会同步传给导出接口，异常班级号不再因强转整数导致导出 500。
+
+#### 🧭 当前课程指派
+- **当前课程**：同一 `dept_id + entry_year + class_code` 在同一时刻只能对应一条班级当前课程指派。
+- **重复指派处理**：上线前使用 `sql/lesson_assignment_current_unique_fix.sql` 诊断并清理历史重复指派，保留最新 `assign_time / assignment_id` 的记录，再添加唯一约束。
+- **课程课次**：新建课程的“第几课”由服务端按同校区、同教师、同年级最大课次自动递增，前端只读展示。
+- **空指派课程**：课程可先创建和设计，班级指派允许为空；学生端只展示已指派到本班的当前课程。
+
+#### 🧾 教师首页与操作题转换
+- **教师首页成绩入口**：成绩班级弹窗显示每班“已出成绩人数 / 班级人数”，有答题记录或课堂表现记录且非请假即视为有成绩。
+- **操作题上传与预览转换**：上传成功只表示学生作品文件已保存；在线预览依赖服务器异步转换。预览失败不等于上传失败，学生端应提示“作品已上传，预览暂不可用”，并提供下载原文件兜底。
+- **定时重试**：`practicalPreviewRetryTask.retryFailedStudentAnswerPreviews` 应在 Quartz 中每小时执行，配套初始化脚本为 `sql/practical_preview_retry_quartz_job.sql`。
+
+#### ✅ 本轮收尾验证
+- **构建状态**：2026-05-27 已完成 `npm run build:prod`、`mvn -pl ruoyi-admin -am -DskipTests compile`、`mvn -pl ruoyi-admin -am -DskipTests clean package`。打包时曾因旧后端 jar 正在运行导致 `ruoyi-admin.jar` 被占用，已停止旧进程后重新打包，并用 `javap` 确认 fat jar 内嵌的 `ruoyi-business` 已包含 `exportScoreExcel(entryYear, classCode, lessonIds, keyword, response)` 新签名。
+- **导出接口验证**：本地重启新后端后，教师账号 `19157727791` 切到小学部，请求 `/business/score/summary?entryYear=2020&classCode=1&pageNum=1&pageSize=3` 返回 200；请求 `/business/score/export?entryYear=2020&classCode=1` 与单课带 `keyword` 导出均成功生成 xlsx，表头已确认包含每课三列与正确的单课/多课汇总列。
+- **角色冒烟**：教师、学生、教研员账号均可正常登录；教师 6 个菜单路由、学生首页、教研员 20 个菜单路由均通过页面冒烟，未发现白屏、404、接口 500、请求失败、控制台错误或控制台警告。教师首页“成绩”入口弹窗已显示“已出成绩人数 / 班级人数”统计，例如 `42/42有成绩`。
+- **本地定时任务**：本地 `xueyeceping.sys_job` 已存在并启用 `practicalPreviewRetryTask.retryFailedStudentAnswerPreviews`，表达式为每小时执行一次。
+- **前端警告收口**：成绩页残留的旧课堂表现弹窗引用已移除；教师/学生/教研员会触达的业务页面已改用 Element Plus 当前 `value` 单选值写法，避免旧 `label` 写法产生运行警告。
+
+#### ⏳ 待评审事项
+- **自动推进下一课**：`50%` 学生有成绩后延迟 `2` 小时自动切到下一课仍为独立待评审功能。本轮只修当前手动指派稳定性，不实现自动推进。
+
 ### 2.x 2026-04-22 更新摘要 (工作快照 - 操作题预览重试 / 答题记录唯一化 / 学年画像)
 
 > [!IMPORTANT]
 > **状态口径**：以下内容表示**仓库代码已经修改**，但**尚未确认上线、尚未确认数据库脚本已执行、尚未确认定时任务已创建、尚未完成构建与联调回归**。后续继续开发或排障时，请先按本节的“待验证事项”补齐环境确认。
 
 #### 🔁 操作题预览重试链路（已改代码，待验证）
-- **学生端预览状态流**：`StudentHomeController` 返回的已提交答案新增 `previewStatus`、`previewPath`；学生页上传操作题后会根据服务端状态显示“可预览 / 转换中 / 转换失败”，并补充失败下载兜底。
+- **学生端预览状态流**：`StudentHomeController` 返回的已提交答案新增 `previewStatus`、`previewPath`；学生页上传操作题后会根据服务端状态显示“可预览 / 待转换 / 预览暂不可用”，并补充失败下载兜底。
 - **状态字段扩展**：`biz_student_answer` 已按代码引入 `preview_retry_count`、`preview_last_retry_time`、`preview_error_message` 三个预览失败重试字段；实体 `BizStudentAnswer` 与 `PracticalSubmissionVo` 已同步承载这些字段。
 - **异步转换统一入口**：`AsyncConversionService` 不再依赖提交时临时拼路径，而是统一按答题记录读取源文件；支持 PDF 直出成功、DOC/DOCX 转换、失败原因落库、自动重试次数控制。
 - **教师端人工重转**：教师批改页新增“重新转换本班失败文件”按钮；后端新增 `/business/teacher/grading/retry-failed-previews` 接口，由 `PracticalPreviewRetryService` 触发当前课程、当前班级、当前操作题下的失败文件重转。
@@ -222,7 +257,7 @@
 - **Bug 修复**：
   - 修复学生列表重复问题（Service 层 Stream API 去重）
   - 修复跳转后班级筛选器未回显问题（watch immediate + 自动设置 selectedClass）
-  - 修复课堂表现负分不显示问题（SQL `p.score > 0` → `p.score != 0`，Java 过滤条件同步修改）
+  - 修复课堂表现负分不显示问题，并在 2026-05-27 调整为：负分、0 分、正分都是有效课堂表现；请假/缺考记录不参与平均。
   - 修复成绩查询页面 `showStudentProfile` 函数未定义问题
 - **UI 优化**：
   - 信息卡片使用通用学习图标（`UserFilled`）替代图片头像
@@ -377,7 +412,7 @@ _控制哪些班级的学生可以看到并进行该课程_
 | `entry_year` | `varchar` | Yes | 入学年份 (如 "2024") |
 | `class_code` | `varchar` | Yes | 班级编号 (如 "01", "02") |
 | `dept_id` | `bigint` | **FK** | 所属学校 ID (**v2.8 新增，多校隔离**) |
-| _联合索引_ | - | - | `idx_year_class` (`entry_year`, `class_code`) |
+| _当前课唯一约束_ | - | - | `uk_lesson_assignment_current_class` (`dept_id`, `entry_year`, `class_code`) |
 
 #### 5. `biz_student_answer` (答题记录表)
 
@@ -451,7 +486,7 @@ _记录学生每节课的课堂表现加减分 (v2.6 新增)_
 | `dept_id` | `bigint` | **FK** | 所属学校 ID (**v2.8 新增，多校隔离**) |
 | `create_time` | `datetime` | - | 记录时间 |
 
-> **注意**：`score` 字段支持负数，用于表示扣分项。查询时使用 `score != 0` 过滤无效记录。
+> **注意**：`score` 字段支持负数，用于表示扣分项；`0` 分也是有效课堂表现。成绩均分应排除请假/缺考记录，而不是按 `score != 0` 过滤。
 
 ### 3.2 系统管理表 (System Management Tables)
 
@@ -548,7 +583,7 @@ _存储组织架构，包括地区教育局、学校及校内部门_
 ### 5.2 操作题流程
 
 1. 教师创建操作题时上传 `.docx` 素材 → 后端调用 LibreOffice 生成 `preview_path`（PDF）
-2. 学生下载素材 → 修改后上传作品 → **显示"正在转换中"loading** → 后端转换 → 自动保存到 `biz_student_answer.student_answer`
+2. 学生下载素材 → 修改后上传作品 → **提示作品已上传、等待服务器转换** → 后端异步转换 → 自动保存到 `biz_student_answer.student_answer`
 3. 学生预览作品：调用 `/common/resource/view?resource=xxx` 接口（通过后端读取文件流，解决特殊字符文件名问题）
 4. 右上角状态：未提交显示总分，已提交未批阅显示"待批阅"，已批阅显示"得分/总分"
 
@@ -563,7 +598,7 @@ _存储组织架构，包括地区教育局、学校及校内部门_
 
 ### 5.5 Loading 等待规范
 
-- **操作题上传**：上传后显示 `uploadingQuestionId` loading，直到后端转换完成才允许预览
+- **操作题上传**：上传成功后显示 `uploadingQuestionId` loading，等待服务器异步转换预览；转换失败只代表在线预览不可用，不代表作品上传失败
 - 所有涉及 LibreOffice 转换的操作都需要等待，前端必须显示 loading 提示
 
 ---
@@ -627,7 +662,7 @@ _存储组织架构，包括地区教育局、学校及校内部门_
 10. **用户导入关联表**：必须调用 `this.insertUser()` 而非 `userMapper.insertUser()`，前者会自动插入 `sys_user_role` 和 `sys_user_dept` 关联表。
 11. **Excel 动态下拉框**：使用 `ExcelUtil.setComboMap(Map<String, String[]>)` 设置动态下拉数据，key 为 `@Excel` 注解的 `name` 属性值。
 12. **学生画像数据获取**：`StudentProfileServiceImpl` 中获取 `deptId` 需使用 `SecurityUtils.getDeptId()`，确保数据隔离。
-13. **课堂表现负分**：`biz_classroom_performance.score` 支持负数，SQL 查询使用 `score != 0` 过滤，Java 计算平均分时同样使用 `!= 0`。
+13. **课堂表现负分**：`biz_classroom_performance.score` 支持负数；学生画像与成绩汇总的课堂表现平均分不再过滤 `0` 分，只排除请假/缺考记录。
 14. **学生列表去重**：`getStudentList` 方法使用 Stream API + TreeSet 按 `studentId` 去重，避免下拉框重复显示。
 15. **跳转自动回显**：`StudentSelector.vue` 中 watch `studentId` 时需设置 `immediate: true`，并在加载学生信息后自动设置 `selectedClass`。
 16. **Element Plus 样式穿透**：在 Vue 3 scoped CSS 中使用 `:deep()` 覆盖组件库默认样式，配合 `!important` 提升优先级（如禁用状态下的 Radio 高亮）。

@@ -5,8 +5,8 @@
         <span style="font-weight: bold; font-size: 16px;">📋 课堂表现管理</span>
         <div class="header-right">
           <el-radio-group v-model="viewMode" size="small" style="margin-right: 15px;">
-            <el-radio-button label="table">表格</el-radio-button>
-            <el-radio-button label="chart">图表</el-radio-button>
+            <el-radio-button value="table">表格</el-radio-button>
+            <el-radio-button value="chart">图表</el-radio-button>
           </el-radio-group>
           <el-button v-if="viewMode === 'table'" type="primary" size="small" @click="saveAll" :loading="saving">
             全部手动保存
@@ -18,20 +18,17 @@
     <!-- 表格视图 -->
     <div v-if="viewMode === 'table'" v-loading="loading">
       <div class="tip-text">课堂表现分范围 -10 ~ +10，正数为加分，负数为扣分。总分 = min(作业分 + 课堂表现分, 100)</div>
-      <el-table :data="tableData" border stripe max-height="350" style="width: 100%">
+      <el-table class="performance-table" :data="tableData" border stripe max-height="350" style="width: 100%">
         <el-table-column prop="studentNo" label="学号" width="70" align="center" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" />
-        <el-table-column label="课堂表现分" width="160" align="center">
+        <el-table-column label="课堂表现分" width="160" align="center" class-name="performance-score-column">
           <template #default="scope">
-            <el-input-number 
+            <PerformanceScoreStepper
               v-model="scope.row.score" 
               :min="-10" 
               :max="10" 
               :step="1"
-              size="small"
-              controls-position="right"
               :disabled="scope.row.isAbsent"
-              style="width: 120px;"
               @change="handleDataChange(scope.row)"
               @blur="handleDataChange(scope.row)"
             />
@@ -47,7 +44,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column label="状态" width="100" align="center" class-name="performance-status-column">
           <template #default="scope">
             <el-tag v-if="scope.row.saving" type="primary" size="small">保存中</el-tag>
             <el-tag v-else-if="scope.row.changed" type="warning" size="small">已修改</el-tag>
@@ -71,6 +68,7 @@ import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { getPerformanceList, batchSavePerformance } from '@/api/business/classroomPerformance'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
+import PerformanceScoreStepper from '@/components/PerformanceScoreStepper/index.vue'
 
 const props = defineProps({
   lessonId: { type: Number, default: null },
@@ -369,6 +367,24 @@ function handleResize() {
   .performance-chart {
     height: 350px;
     width: 100%;
+  }
+
+  :deep(.performance-table .el-table__body .el-table__row) {
+    height: 42px;
+  }
+
+  :deep(.performance-table .el-table__body .el-table__cell) {
+    padding: 4px 0;
+  }
+
+  :deep(.performance-table .performance-score-column .cell),
+  :deep(.performance-table .performance-status-column .cell) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    height: 28px;
+    line-height: 28px;
   }
 }
 </style>

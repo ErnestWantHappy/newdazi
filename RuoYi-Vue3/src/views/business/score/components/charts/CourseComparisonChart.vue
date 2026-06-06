@@ -5,9 +5,9 @@
         <span class="header-title">📊 课程成绩对比分析</span>
         <div class="chart-actions">
            <el-radio-group v-model="metric" size="small" style="margin-right: 15px;">
-              <el-radio-button label="avg">平均分</el-radio-button>
-              <el-radio-button label="pass">及格率</el-radio-button>
-              <el-radio-button label="excellent">优秀率</el-radio-button>
+              <el-radio-button value="avg">平均分</el-radio-button>
+              <el-radio-button value="pass">及格率</el-radio-button>
+              <el-radio-button value="excellent">优秀率</el-radio-button>
             </el-radio-group>
            <el-button 
             :icon="Back" 

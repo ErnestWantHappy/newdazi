@@ -101,9 +101,31 @@ public interface BizStudentAnswerMapper
         @Param("lessonId") Long lessonId);
 
     /**
+     * 批量查询学生成绩汇总（按学生和课程分组）
+     */
+    List<java.util.Map<String, Object>> selectScoreSummaryByStudents(
+        @Param("studentIds") List<Long> studentIds,
+        @Param("lessonIds") List<Long> lessonIds);
+
+    /**
      * 更新答题记录的预览状态
      */
     int updatePreviewStatus(BizStudentAnswer answer);
+
+    /**
+     * 领取首次提交后的预览转换任务
+     */
+    int claimSubmitPreviewConversion(@Param("answerId") Long answerId);
+
+    /**
+     * 领取失败或卡住的预览重转任务
+     */
+    int claimRetryPreviewConversion(@Param("answerId") Long answerId,
+                                    @Param("expectedStatus") String expectedStatus,
+                                    @Param("expectedRetryCount") Integer expectedRetryCount,
+                                    @Param("expectedLastRetryTime") Date expectedLastRetryTime,
+                                    @Param("nextRetryCount") Integer nextRetryCount,
+                                    @Param("claimedAt") Date claimedAt);
 
     /**
      * 根据ID查询答题记录
@@ -118,6 +140,14 @@ public interface BizStudentAnswerMapper
      * 查询某课程有答题记录的班级列表（用于批改页面班级选择）
      */
     List<java.util.Map<String, Object>> selectClassesByLessonAnswers(@Param("lessonId") Long lessonId);
+
+    /**
+     * 统计当前课程当前班级已有成绩的学生数。
+     */
+    int countScoredStudentsByLessonAndClass(@Param("lessonId") Long lessonId,
+                                            @Param("classCode") String classCode,
+                                            @Param("entryYear") String entryYear,
+                                            @Param("deptId") Long deptId);
 
     /**
      * 查询达到自动重试条件的失败操作题记录

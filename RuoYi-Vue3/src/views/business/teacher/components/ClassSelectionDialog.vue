@@ -1,6 +1,6 @@
 <template>
   <el-dialog 
-    title="请选择班级" 
+    :title="dialogTitle" 
     v-model="visible" 
     width="500px" 
     append-to-body 
@@ -21,9 +21,15 @@
           :class="getBtnClass(cls)"
         >
           <span class="class-name">{{ cls.classCode }}班</span>
-          <span v-if="cls.practicalUngraded > 0" class="badge-ungraded">{{ cls.practicalUngraded }}人未批</span>
-          <span v-else-if="cls.practicalSubmitted > 0" class="badge-graded">已批改</span>
-          <span v-else-if="cls.hasData" class="badge-none">暂无提交</span>
+          <template v-if="mode === 'score'">
+            <span v-if="cls.scoreReadyCount > 0" class="badge-graded">{{ cls.scoreReadyCount }}/{{ cls.totalStudents || 0 }}有成绩</span>
+            <span v-else class="badge-none">暂无成绩</span>
+          </template>
+          <template v-else>
+            <span v-if="cls.practicalUngraded > 0" class="badge-ungraded">{{ cls.practicalUngraded }}人未批</span>
+            <span v-else-if="cls.practicalSubmitted > 0" class="badge-graded">已批改</span>
+            <span v-else-if="cls.hasData" class="badge-none">暂无提交</span>
+          </template>
         </el-button>
       </div>
     </div>
@@ -34,13 +40,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { getClassesByLesson } from '@/api/business/teacherGrading';
 
 const visible = ref(false);
 const loading = ref(false);
 const classes = ref([]);
 const resolvePromise = ref(null);
+const mode = ref('grading');
+const dialogTitle = computed(() => mode.value === 'score' ? '请选择班级查看成绩' : '请选择班级');
 
 /**
  * 打开选择框
@@ -48,10 +56,11 @@ const resolvePromise = ref(null);
  * @param {Number} lessonId 课程ID（新模式，如有则自动加载详细统计）
  * @returns {Promise<String|null>} 返回选中的班级名称，未选中返回null
  */
-function open(simpleClassList, lessonId = null) {
+function open(simpleClassList, lessonId = null, openMode = 'grading') {
   visible.value = true;
   loading.value = false;
   classes.value = [];
+  mode.value = openMode;
   
   if (lessonId) {
     // 新模式：加载带统计的班级列表
@@ -62,6 +71,8 @@ function open(simpleClassList, lessonId = null) {
         classCode: item.classCode,
         practicalSubmitted: item.practicalSubmitted || item.practicalsubmitted || 0, // 兼容大小写
         practicalUngraded: item.practicalUngraded || item.practicalungraded || 0, // 兼容大小写
+        scoreReadyCount: item.scoreReadyCount || item.scorereadycount || 0,
+        totalStudents: item.totalStudents || item.totalstudents || 0,
         hasData: true // 标记为从后端获取的详细数据
       })).sort((a, b) => sortClassCode(a.classCode, b.classCode));
     }).finally(() => {
@@ -73,6 +84,8 @@ function open(simpleClassList, lessonId = null) {
       classCode: c.replace(/[^\d]/g, ''),
       practicalSubmitted: 0,
       practicalUngraded: 0,
+      scoreReadyCount: 0,
+      totalStudents: 0,
       hasData: false
     })).sort((a, b) => sortClassCode(a.classCode, b.classCode));
   }
@@ -105,6 +118,11 @@ function handleClose() {
 
 function getBtnClass(cls) {
   if (!cls.hasData) return '';
+  if (mode.value === 'score') {
+    if (cls.scoreReadyCount > 0 && cls.scoreReadyCount >= (cls.totalStudents || 0)) return 'btn-all-done';
+    if (cls.scoreReadyCount > 0) return 'btn-action-needed';
+    return 'btn-no-data';
+  }
   if (cls.practicalUngraded > 0) return 'btn-action-needed';
   if (cls.practicalSubmitted > 0) return 'btn-all-done';
   return 'btn-no-data';

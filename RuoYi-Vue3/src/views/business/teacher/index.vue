@@ -18,7 +18,7 @@
         <div class="lesson-container">
           <!-- 课程卡片列表 -->
           <div
-            v-for="lesson in group.lessons"
+            v-for="lesson in getVisibleLessons(group)"
             :key="lesson.lessonId"
             class="lesson-folder"
           >
@@ -68,7 +68,17 @@
                </div>
             </div>
           </div>
-          
+
+          <div
+            v-if="hasHiddenLessons(group)"
+            class="expand-lessons-btn"
+            title="展开更早课程"
+            @click="expandLessons(group)"
+          >
+            <el-icon class="more-icon"><MoreFilled /></el-icon>
+            <div class="more-text">还有 {{ group.lessons.length - 5 }} 节</div>
+          </div>
+           
           <!-- 新增课程按钮 -->
           <div class="add-lesson-btn" @click="handleAddNewLesson(group)">
             <el-icon class="add-icon"><Plus /></el-icon>
@@ -89,20 +99,56 @@ import { useRouter } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
 import { delLesson } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, MoreFilled } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
 const loading = ref(true);
 const gradeGroups = ref([]);
 const classDialogRef = ref(null);
+const expandedGradeKeys = ref(new Set());
+
+function compareLessonsByLatest(a, b) {
+  const timeA = a.createTime ? new Date(a.createTime).getTime() : 0;
+  const timeB = b.createTime ? new Date(b.createTime).getTime() : 0;
+  if (timeA !== timeB) {
+    return timeB - timeA;
+  }
+  return (b.lessonId || 0) - (a.lessonId || 0);
+}
+
+function getGroupKey(group) {
+  return `${group.entryYear || ''}-${group.gradeId || group.gradeName || ''}`;
+}
+
+function isGroupExpanded(group) {
+  return expandedGradeKeys.value.has(getGroupKey(group));
+}
+
+function getVisibleLessons(group) {
+  const lessons = group.lessons || [];
+  return isGroupExpanded(group) ? lessons : lessons.slice(0, 5);
+}
+
+function hasHiddenLessons(group) {
+  return !isGroupExpanded(group) && (group.lessons?.length || 0) > 5;
+}
+
+function expandLessons(group) {
+  const next = new Set(expandedGradeKeys.value);
+  next.add(getGroupKey(group));
+  expandedGradeKeys.value = next;
+}
 
 /** 获取首页数据 */
 function fetchDashboardData() {
   loading.value = true;
   getDashboardData()
     .then(response => {
-      gradeGroups.value = response.data;
+      gradeGroups.value = (response.data || []).map(group => ({
+        ...group,
+        lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
+      }));
       loading.value = false;
     })
     .catch(() => {
@@ -152,7 +198,7 @@ async function goToGrading(lesson, group) {
 /** 跳转成绩分析 */
 async function goToScoreAnalysis(lesson, group) {
   // 1. 选择班级
-  const selectedClass = await classDialogRef.value.open(group.allClassesInGrade);
+  const selectedClass = await classDialogRef.value.open(group.allClassesInGrade, lesson.lessonId, 'score');
   if (!selectedClass) return; // 用户取消
 
   // 2. 跳转
@@ -386,6 +432,34 @@ onActivated(() => {
 .folder-delete:hover {
   background-color: #fef0f0;
   color: #f56c6c;
+}
+
+.expand-lessons-btn {
+  width: 200px;
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.3s;
+  border: 1px dashed #c0c4cc;
+  color: #606266;
+  background-color: #f7f9fb;
+}
+.expand-lessons-btn:hover {
+  color: #409eff;
+  border-color: #409eff;
+  background-color: #ecf5ff;
+}
+.more-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.more-text {
+  font-size: 13px;
+  color: inherit;
 }
 
 /* 新增按钮 */

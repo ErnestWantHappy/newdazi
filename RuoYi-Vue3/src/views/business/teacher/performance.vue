@@ -17,6 +17,7 @@
 
     <!-- 学生列表表格 -->
     <el-table 
+      class="performance-table"
       :data="studentList" 
       v-loading="loading" 
       border 
@@ -25,15 +26,12 @@
     >
       <el-table-column prop="studentNo" label="学号" width="120" />
       <el-table-column prop="studentName" label="姓名" width="120" />
-      <el-table-column label="平时分" width="180">
+      <el-table-column label="平时分" width="180" align="center" class-name="performance-score-column">
         <template #default="scope">
-          <el-input-number 
+          <PerformanceScoreStepper
             v-model="scope.row.score" 
             :min="-10" 
             :max="10" 
-            :precision="0"
-            size="small"
-            controls-position="right"
             @change="onScoreChange(scope.row)"
           />
         </template>
@@ -49,7 +47,7 @@
           />
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100" align="center">
+      <el-table-column label="状态" width="100" align="center" class-name="performance-status-column">
         <template #default="scope">
           <el-tag v-if="scope.row.modified" type="warning" size="small">未保存</el-tag>
           <el-tag v-else-if="scope.row.performanceId" type="success" size="small">已保存</el-tag>
@@ -80,6 +78,7 @@ import { getClassesByLesson } from '@/api/business/teacherGrading'
 import { getPerformanceList, batchSavePerformance } from '@/api/business/classroomPerformance'
 import { ElMessage } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
+import PerformanceScoreStepper from '@/components/PerformanceScoreStepper/index.vue'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -212,5 +211,23 @@ function batchSave() {
 
 :deep(.negative-score) {
   background-color: #fef0f0 !important;
+}
+
+:deep(.performance-table .el-table__body .el-table__row) {
+  height: 42px;
+}
+
+:deep(.performance-table .el-table__body .el-table__cell) {
+  padding: 4px 0;
+}
+
+:deep(.performance-table .performance-score-column .cell),
+:deep(.performance-table .performance-status-column .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  height: 28px;
+  line-height: 28px;
 }
 </style>

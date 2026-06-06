@@ -20,9 +20,9 @@
           <el-option v-for="s in student.scores" :key="s.lessonId" :label="s.lessonTitle || '课程' + s.lessonId" :value="s.lessonId" />
         </el-select>
         <el-radio-group v-model="internalScoreType" size="small">
-          <el-radio-button label="total">总分</el-radio-button>
-          <el-radio-button label="typingSpeed">打字速度</el-radio-button>
-          <el-radio-button label="theoryAccuracy">理论正确率</el-radio-button>
+          <el-radio-button value="total">总分</el-radio-button>
+          <el-radio-button value="typingSpeed">打字速度</el-radio-button>
+          <el-radio-button value="theoryAccuracy">理论正确率</el-radio-button>
         </el-radio-group>
       </div>
       

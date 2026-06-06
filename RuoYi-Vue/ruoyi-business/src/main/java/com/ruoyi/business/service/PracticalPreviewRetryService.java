@@ -41,8 +41,9 @@ public class PracticalPreviewRetryService {
         int triggeredCount = 0;
 
         for (BizStudentAnswer answer : failedAnswers) {
-            asyncConversionService.retryAnswerPreviewAsync(answer.getAnswerId(), false, "scheduler");
-            triggeredCount++;
+            if (asyncConversionService.claimRetryAndExecute(answer, false, "scheduler")) {
+                triggeredCount++;
+            }
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -50,7 +51,8 @@ public class PracticalPreviewRetryService {
         result.put("triggeredCount", triggeredCount);
         result.put("skippedCount", Math.max(failedAnswers.size() - triggeredCount, 0));
 
-        log.info("【操作题自动重试】匹配 {} 条，触发 {} 条", failedAnswers.size(), triggeredCount);
+        log.info("【操作题自动重试】匹配 {} 条，触发 {} 条，跳过 {} 条",
+                failedAnswers.size(), triggeredCount, Math.max(failedAnswers.size() - triggeredCount, 0));
         return result;
     }
 
@@ -66,8 +68,9 @@ public class PracticalPreviewRetryService {
         int triggeredCount = 0;
 
         for (BizStudentAnswer answer : failedAnswers) {
-            asyncConversionService.retryAnswerPreviewAsync(answer.getAnswerId(), true, "teacher-manual");
-            triggeredCount++;
+            if (asyncConversionService.claimRetryAndExecute(answer, true, "teacher-manual")) {
+                triggeredCount++;
+            }
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -75,8 +78,9 @@ public class PracticalPreviewRetryService {
         result.put("triggeredCount", triggeredCount);
         result.put("skippedCount", Math.max(failedAnswers.size() - triggeredCount, 0));
 
-        log.info("【操作题手动重转】lessonId={}, questionId={}, classCode={}, entryYear={}, 匹配 {} 条，触发 {} 条",
-                lessonId, questionId, classCode, entryYear, failedAnswers.size(), triggeredCount);
+        log.info("【操作题手动重转】lessonId={}, questionId={}, classCode={}, entryYear={}, 匹配 {} 条，触发 {} 条，跳过 {} 条",
+                lessonId, questionId, classCode, entryYear,
+                failedAnswers.size(), triggeredCount, Math.max(failedAnswers.size() - triggeredCount, 0));
         return result;
     }
 }

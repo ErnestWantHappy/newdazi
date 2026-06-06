@@ -11,15 +11,15 @@
               size="small" 
               style="width: 160px;" 
             >
-              <el-option label="全部课程" :value="null" />
+              <el-option label="全部课程" value="" />
               <el-option v-for="l in lessonOptions" :key="l.lessonId" :label="l.lessonTitle" :value="l.lessonId" />
             </el-select>
             
             <el-radio-group v-model="internalMetric" size="small">
-              <el-radio-button label="speed">速度</el-radio-button>
-              <el-radio-button label="accuracy">正确率</el-radio-button>
-              <el-radio-button label="completion">完成率</el-radio-button>
-              <el-radio-button label="score">得分</el-radio-button>
+              <el-radio-button value="speed">速度</el-radio-button>
+              <el-radio-button value="accuracy">正确率</el-radio-button>
+              <el-radio-button value="completion">完成率</el-radio-button>
+              <el-radio-button value="score">得分</el-radio-button>
             </el-radio-group>
             
            <el-button 
@@ -66,7 +66,7 @@ const isFullscreen = ref(false);
 const originalHeight = '400px';
 
 const internalMetric = ref('speed');
-const internalLesson = ref(null);
+const internalLesson = ref('');
 
 watch(() => props.data, () => {
     nextTick(() => renderChart());
