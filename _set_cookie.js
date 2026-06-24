@@ -1,0 +1,1 @@
+document.cookie = 'Admin-Token=eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJhZG1pbiIsImxvZ2luX3VzZXJfa2V5IjoiZDIwMTA2MDAtM2JhNC00ZDM4LTkwNDUtMjhmMzZkOWY1MjJlIn0.5_bvyjckePRBBCFNQ0-ip9AclW2e5m6PZ0YmKobaQYL4Oi2RdRK-vbcaZYprfOD69P13_hZ8mUmdAAebc1ldZg; path=/'; 'done'

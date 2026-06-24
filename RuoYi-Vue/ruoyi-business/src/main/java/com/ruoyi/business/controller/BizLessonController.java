@@ -64,9 +64,8 @@ public class BizLessonController extends BaseController
     // =================================================================
 
     /**
-     * 查询课程管理列表
+     * 查询课程管理列表（作为其他模块的依赖数据源，不限制权限，仅需登录认证）
      */
-    @PreAuthorize("@ss.hasPermi('business:lesson:list')")
     @GetMapping("/list")
     public TableDataInfo list(BizLesson bizLesson)
     {

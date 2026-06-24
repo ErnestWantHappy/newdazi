@@ -5,6 +5,10 @@
       <div class="header-left">
         <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
         <span class="platform-name">智慧课堂 - 学生端</span>
+        <div class="view-toggle">
+          <el-button size="small" type="primary" disabled>主页</el-button>
+          <el-button size="small" plain @click="switchToGuideSheet">导学单</el-button>
+        </div>
       </div>
       <div class="header-right">
         <div class="header-actions">
@@ -833,12 +837,7 @@
 
 <script setup name="StudentIndex">
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
-import {
-  getCurrentLesson,
-  submitAnswers as submitAnswersApi,
-  getHistoryScores,
-  getWrongQuestions,
-} from "@/api/business/studentHome";
+import { getCurrentLesson, submitAnswers as submitAnswersApi, getHistoryScores, getWrongQuestions } from "@/api/business/studentHome";
 import { updateUserPwd } from "@/api/system/user";
 import useUserStore from "@/store/modules/user";
 import { useRouter } from "vue-router";
@@ -1969,8 +1968,12 @@ function formatDateTime(dateStr) {
   return `${y}-${m}-${d} ${h}:${min}`;
 }
 
+function switchToGuideSheet() {
+  router.push('/student/guide-sheet')
+}
+
 onMounted(() => {
-  fetchData();
+  fetchData()
 });
 
 onUnmounted(() => {
@@ -2004,6 +2007,21 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 16px;
+}
+.view-toggle .el-button {
+  border-radius: 0;
+}
+.view-toggle .el-button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.view-toggle .el-button:last-child {
+  border-radius: 0 4px 4px 0;
 }
 .logo {
   height: 32px;

@@ -123,6 +123,19 @@ export const constantRoutes = [
         meta: { title: '学生画像', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/business/guide-sheet-list',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/guideSheet/index'),
+        name: 'GuideSheetList',
+        meta: { title: '导学单管理', icon: 'guide-sheet' }
+      }
+    ]
   }
   
 ]
@@ -141,6 +154,12 @@ export const dynamicRoutes = [
         component: () => import('@/views/student/index'),
         name: 'StudentDashboard',
         meta: { title: '学生首页', icon: 'dashboard' }
+      },
+      {
+        path: 'guide-sheet',
+        component: () => import('@/views/student/guideSheet/index'),
+        name: 'StudentGuideSheet',
+        meta: { title: '电子导学单', icon: 'guide-sheet' }
       }
     ]
   },
@@ -242,7 +261,49 @@ export const dynamicRoutes = [
         meta: { title: '课程设计', activeMenu: '/business/lesson' }
       }
     ]
-}
+  },
+  {
+    path: '/business/guide-sheet',
+    component: Layout,
+    hidden: true,
+    permissions: ['business:guideSheet:design'],
+    children: [
+      {
+        path: 'designer/:sheetId(\\d+)?',
+        component: () => import('@/views/business/guideSheet/designer'),
+        name: 'GuideSheetDesigner',
+        meta: { title: '导学单设计', activeMenu: '/business/guide-sheet-list' }
+      }
+    ]
+  },
+  {
+    path: '/business/guide-sheet-dashboard',
+    component: Layout,
+    hidden: true,
+    permissions: ['business:guideSheet:dashboard'],
+    children: [
+      {
+        path: ':sheetId(\\d+)',
+        component: () => import('@/views/business/guideSheet/dashboard'),
+        name: 'GuideSheetDashboard',
+        meta: { title: '导学单看板', activeMenu: '/business/guide-sheet-list' }
+      }
+    ]
+  },
+  {
+    path: '/business/guide-sheet-preview',
+    component: Layout,
+    hidden: true,
+    roles: ['teacher', 'researcher', 'admin'],
+    children: [
+      {
+        path: ':sheetId(\\d+)',
+        component: () => import('@/views/business/guideSheet/preview'),
+        name: 'GuideSheetPreview',
+        meta: { title: '导学单预览', activeMenu: '/business/guide-sheet-list' }
+      }
+    ]
+  }
 ]
 
 const router = createRouter({

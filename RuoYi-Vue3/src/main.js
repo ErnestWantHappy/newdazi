@@ -45,6 +45,10 @@ import ImagePreview from "@/components/ImagePreview"
 // 字典标签组件
 import DictTag from '@/components/DictTag'
 
+// VForm3 表单设计器 - 导学单设计
+import VForm3 from 'vform3-builds'
+import 'vform3-builds/dist/designer.style.css'
+
 const app = createApp(App)
 
 // 全局方法挂载
@@ -81,6 +85,8 @@ app.use(ElementPlus, {
   // 支持 large、default、small
   size: Cookies.get('size') || 'default'
 })
+
+app.use(VForm3)  // 全局注册 v-form-designer、v-form-render 等组件
 
 startSessionHeartbeat()
 

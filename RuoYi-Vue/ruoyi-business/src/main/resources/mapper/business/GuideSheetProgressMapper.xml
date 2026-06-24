@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.GuideSheetProgressMapper">
+
+    <resultMap type="BizGuideSheetProgress" id="BizGuideSheetProgressResult">
+        <result property="id"            column="id"             />
+        <result property="sheetId"       column="sheet_id"       />
+        <result property="studentId"     column="student_id"     />
+        <result property="classCode"     column="class_code"     />
+        <result property="currentPage"   column="current_page"   />
+        <result property="isSubmitted"   column="is_submitted"   />
+        <result property="lastHeartbeat" column="last_heartbeat" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.business.domain.vo.GuideSheetProgressVo" id="GuideSheetProgressVoResult">
+        <result property="id"            column="id"             />
+        <result property="studentId"    column="student_id"      />
+        <result property="studentName"  column="student_name"    />
+        <result property="studentNo"    column="student_no"      />
+        <result property="classCode"    column="class_code"      />
+        <result property="currentPage"  column="current_page"    />
+        <result property="isSubmitted"  column="is_submitted"    />
+        <result property="lastHeartbeat" column="last_heartbeat"  />
+    </resultMap>
+
+    <select id="selectBySheetAndClass" resultMap="GuideSheetProgressVoResult">
+        SELECT p.id, p.student_id, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
+               s.student_name, s.student_no
+        FROM biz_guide_sheet_progress p
+        LEFT JOIN biz_student s ON p.student_id = s.student_id
+        WHERE p.sheet_id = #{sheetId}
+          AND p.class_code = #{classCode}
+        ORDER BY p.last_heartbeat DESC
+    </select>
+
+    <select id="selectBySheetId" resultMap="GuideSheetProgressVoResult">
+        SELECT p.id, p.student_id, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
+               s.student_name, s.student_no
+        FROM biz_guide_sheet_progress p
+        LEFT JOIN biz_student s ON p.student_id = s.student_id
+        WHERE p.sheet_id = #{sheetId}
+        ORDER BY p.class_code, s.student_no
+    </select>
+
+    <select id="selectBySheetAndStudent" resultMap="BizGuideSheetProgressResult">
+        SELECT id, sheet_id, student_id, class_code, current_page, is_submitted, last_heartbeat
+        FROM biz_guide_sheet_progress
+        WHERE sheet_id = #{sheetId} AND student_id = #{studentId}
+    </select>
+
+    <insert id="insertOrUpdate" parameterType="BizGuideSheetProgress">
+        INSERT INTO biz_guide_sheet_progress (sheet_id, student_id, class_code, current_page, is_submitted, last_heartbeat)
+        VALUES (#{sheetId}, #{studentId}, #{classCode}, #{currentPage}, #{isSubmitted}, #{lastHeartbeat})
+        ON DUPLICATE KEY UPDATE
+            current_page = VALUES(current_page),
+            is_submitted = VALUES(is_submitted),
+            last_heartbeat = VALUES(last_heartbeat)
+    </insert>
+
+    <delete id="deleteBySheetId" parameterType="Long">
+        delete from biz_guide_sheet_progress where sheet_id = #{sheetId}
+    </delete>
+
+</mapper>

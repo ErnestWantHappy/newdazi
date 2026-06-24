@@ -1,0 +1,8 @@
+[
+  ["open", "http://localhost:8082/"],
+  ["wait", "--load", "networkidle"],
+  ["eval", "-b", "ZG9jdW1lbnQuY29va2llID0gJ0FkbWluLVRva2VuPWV5SmhiR2NpT2lKSVV6VXhNaUo5LmV5SnpkV0lpT2lKaFpHMXBiaUlzSW14dloybHVYM1Z6WlhKZmEyVjVJam9pWkRJd01UQTJNREF0TTJKaE5DMDBaRE00TFRrd05EVXRNamhtTXpaa09XWTFNakpsSW4wLjVfYnZ5amNrZVBSQkJDRk5RMC1pcDlBY2xXMmU1bTZQWjBZbUtvYmFRWUw0T2kyUmRSSy12YmNhWllwcmZPRDY5UDEzX2haOG1VbWRBQWViYzFsZFpnOyBwYXRoPS8n"],
+  ["open", "http://localhost:8082/"],
+  ["wait", "--load", "networkidle"],
+  ["get", "url"]
+]

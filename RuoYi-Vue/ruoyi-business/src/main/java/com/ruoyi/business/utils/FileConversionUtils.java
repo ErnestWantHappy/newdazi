@@ -27,7 +27,7 @@ public class FileConversionUtils {
     private static final Logger log = LoggerFactory.getLogger(FileConversionUtils.class);
 
     // LibreOffice 安装路径（Windows 默认）
-    private static final String LIBRE_OFFICE_HOME = "C:\\Program Files\\LibreOffice";
+    private static final String LIBRE_OFFICE_HOME = "E:\\LibreOffice";
 
     // LibreOffice 实例数需要与转换线程池大小保持一致。
     private static final int OFFICE_INSTANCE_COUNT = 5;

@@ -130,7 +130,7 @@ function loadStudentList() {
   if (!selectedLessonId.value || !selectedClassCode.value || !selectedEntryYear.value) return
   
   loading.value = true
-  getPerformanceList(selectedLessonId.value, selectedClassCode.value, selectedEntryYear.value)
+  getPerformanceList({ lessonId: selectedLessonId.value, classCode: selectedClassCode.value, entryYear: selectedEntryYear.value })
     .then(res => {
       studentList.value = (res.data || []).map(item => ({
         ...item,

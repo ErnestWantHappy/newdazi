@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.GuideSheetUploadMapper">
+
+    <resultMap type="BizGuideSheetUpload" id="BizGuideSheetUploadResult">
+        <result property="uploadId"          column="upload_id"          />
+        <result property="answerId"          column="answer_id"          />
+        <result property="sheetId"           column="sheet_id"           />
+        <result property="studentId"         column="student_id"         />
+        <result property="questionName"      column="question_name"      />
+        <result property="fileName"          column="file_name"          />
+        <result property="fileSize"          column="file_size"          />
+        <result property="mimeType"          column="mime_type"          />
+        <result property="teacherMachineIp"  column="teacher_machine_ip" />
+        <result property="storedPath"        column="stored_path"        />
+        <result property="accessUrl"         column="access_url"         />
+        <result property="uploadTime"        column="upload_time"        />
+    </resultMap>
+
+    <sql id="selectBizGuideSheetUploadVo">
+        select upload_id, answer_id, sheet_id, student_id, question_name, file_name, file_size, mime_type, teacher_machine_ip, stored_path, access_url, upload_time from biz_guide_sheet_upload
+    </sql>
+
+    <select id="selectBySheetId" parameterType="Long" resultMap="BizGuideSheetUploadResult">
+        <include refid="selectBizGuideSheetUploadVo"/>
+        where sheet_id = #{sheetId}
+        order by upload_time desc
+    </select>
+
+    <select id="selectBySheetAndClass" resultMap="BizGuideSheetUploadResult">
+        SELECT u.upload_id, u.answer_id, u.sheet_id, u.student_id, u.question_name,
+               u.file_name, u.file_size, u.mime_type, u.teacher_machine_ip,
+               u.stored_path, u.access_url, u.upload_time
+        FROM biz_guide_sheet_upload u
+        INNER JOIN biz_student s ON u.student_id = s.student_id
+        WHERE u.sheet_id = #{sheetId}
+        <if test="classCode != null and classCode != ''">
+            AND s.class_code = #{classCode}
+        </if>
+        ORDER BY u.upload_time DESC
+    </select>
+
+    <insert id="insertBizGuideSheetUpload" parameterType="BizGuideSheetUpload">
+        insert into biz_guide_sheet_upload
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="answerId != null">answer_id,</if>
+            <if test="sheetId != null">sheet_id,</if>
+            <if test="studentId != null">student_id,</if>
+            <if test="questionName != null">question_name,</if>
+            <if test="fileName != null">file_name,</if>
+            <if test="fileSize != null">file_size,</if>
+            <if test="mimeType != null">mime_type,</if>
+            <if test="teacherMachineIp != null">teacher_machine_ip,</if>
+            <if test="storedPath != null">stored_path,</if>
+            <if test="accessUrl != null">access_url,</if>
+            <if test="uploadTime != null">upload_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="answerId != null">#{answerId},</if>
+            <if test="sheetId != null">#{sheetId},</if>
+            <if test="studentId != null">#{studentId},</if>
+            <if test="questionName != null">#{questionName},</if>
+            <if test="fileName != null">#{fileName},</if>
+            <if test="fileSize != null">#{fileSize},</if>
+            <if test="mimeType != null">#{mimeType},</if>
+            <if test="teacherMachineIp != null">#{teacherMachineIp},</if>
+            <if test="storedPath != null">#{storedPath},</if>
+            <if test="accessUrl != null">#{accessUrl},</if>
+            <if test="uploadTime != null">#{uploadTime},</if>
+        </trim>
+    </insert>
+
+    <delete id="deleteBySheetId" parameterType="Long">
+        delete from biz_guide_sheet_upload where sheet_id = #{sheetId}
+    </delete>
+
+</mapper>

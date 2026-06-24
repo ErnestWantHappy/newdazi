@@ -1,0 +1,1 @@
+SELECT user_name, password FROM `ry-vue`.sys_user WHERE user_name = 'admin';

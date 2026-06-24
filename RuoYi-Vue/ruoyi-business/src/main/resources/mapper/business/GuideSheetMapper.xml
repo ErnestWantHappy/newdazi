@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.GuideSheetMapper">
+
+    <resultMap type="BizGuideSheet" id="BizGuideSheetResult">
+        <result property="sheetId"         column="sheet_id"         />
+        <result property="sheetTitle"      column="sheet_title"      />
+        <result property="lessonId"        column="lesson_id"        />
+        <result property="creatorId"       column="creator_id"       />
+        <result property="deptId"          column="dept_id"          />
+        <result property="formJson"      column="form_json"      />
+        <result property="status"          column="status"           />
+        <result property="maxPages"        column="max_pages"        />
+        <result property="teacherMachineIp" column="teacher_machine_ip" />
+        <result property="createBy"        column="create_by"        />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateBy"        column="update_by"        />
+        <result property="updateTime"      column="update_time"      />
+    </resultMap>
+
+    <sql id="selectBizGuideSheetVo">
+        select sheet_id, sheet_title, lesson_id, creator_id, dept_id, form_json, status, max_pages, teacher_machine_ip, create_by, create_time, update_by, update_time from biz_guide_sheet
+    </sql>
+
+    <select id="selectBizGuideSheetList" parameterType="BizGuideSheet" resultMap="BizGuideSheetResult">
+        <include refid="selectBizGuideSheetVo"/>
+        <where>
+            <if test="sheetTitle != null and sheetTitle != ''"> and sheet_title like concat('%', #{sheetTitle}, '%')</if>
+            <if test="lessonId != null"> and lesson_id = #{lessonId}</if>
+            <if test="deptId != null"> and dept_id = #{deptId}</if>
+            <if test="creatorId != null"> and creator_id = #{creatorId}</if>
+            <if test="status != null and status != ''"> and status = #{status}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectBizGuideSheetBySheetId" parameterType="Long" resultMap="BizGuideSheetResult">
+        <include refid="selectBizGuideSheetVo"/>
+        where sheet_id = #{sheetId}
+    </select>
+
+    <insert id="insertBizGuideSheet" parameterType="BizGuideSheet" useGeneratedKeys="true" keyProperty="sheetId">
+        insert into biz_guide_sheet
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="sheetTitle != null and sheetTitle != ''">sheet_title,</if>
+            <if test="lessonId != null">lesson_id,</if>
+            <if test="creatorId != null">creator_id,</if>
+            <if test="deptId != null">dept_id,</if>
+            <if test="formJson != null">form_json,</if>
+            <if test="status != null">status,</if>
+            <if test="maxPages != null">max_pages,</if>
+            <if test="teacherMachineIp != null">teacher_machine_ip,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="sheetTitle != null and sheetTitle != ''">#{sheetTitle},</if>
+            <if test="lessonId != null">#{lessonId},</if>
+            <if test="creatorId != null">#{creatorId},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="formJson != null">#{formJson},</if>
+            <if test="status != null">#{status},</if>
+            <if test="maxPages != null">#{maxPages},</if>
+            <if test="teacherMachineIp != null">#{teacherMachineIp},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateBizGuideSheet" parameterType="BizGuideSheet">
+        update biz_guide_sheet
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="sheetTitle != null and sheetTitle != ''">sheet_title = #{sheetTitle},</if>
+            <if test="lessonId != null">lesson_id = #{lessonId},</if>
+            <if test="formJson != null">form_json = #{formJson},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="maxPages != null">max_pages = #{maxPages},</if>
+            <if test="teacherMachineIp != null">teacher_machine_ip = #{teacherMachineIp},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = now()
+        </trim>
+        where sheet_id = #{sheetId}
+    </update>
+
+    <delete id="deleteBizGuideSheetBySheetId" parameterType="Long">
+        delete from biz_guide_sheet where sheet_id = #{sheetId}
+    </delete>
+
+    <delete id="deleteBizGuideSheetBySheetIds" parameterType="String">
+        delete from biz_guide_sheet where sheet_id in
+        <foreach item="sheetId" collection="array" open="(" separator="," close=")">
+            #{sheetId}
+        </foreach>
+    </delete>
+
+</mapper>

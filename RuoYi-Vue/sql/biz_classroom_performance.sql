@@ -7,10 +7,13 @@ CREATE TABLE IF NOT EXISTS `biz_classroom_performance` (
   `score` int NOT NULL DEFAULT 0 COMMENT '平时分（-10到+10）',
   `reason` varchar(200) DEFAULT NULL COMMENT '加分/扣分原因',
   `teacher_id` bigint NOT NULL COMMENT '打分教师ID',
+  `dept_id` bigint DEFAULT NULL COMMENT '所属学校ID',
+  `is_absent` tinyint DEFAULT 0 COMMENT '是否请假/缺考(1:是, 0:否)',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`performance_id`),
   UNIQUE KEY `uk_student_lesson` (`student_id`, `lesson_id`),
   KEY `idx_lesson` (`lesson_id`),
-  KEY `idx_teacher` (`teacher_id`)
+  KEY `idx_teacher` (`teacher_id`),
+  KEY `idx_dept` (`dept_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='课堂表现记录表';

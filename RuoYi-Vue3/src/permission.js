@@ -41,7 +41,9 @@ router.beforeEach((to, from, next) => {
               .then((accessRoutes) => {
                 accessRoutes.forEach((route) => {
                   if (!isHttp(route.path)) {
-                    router.addRoute(route);
+                    // 规范化路径，去掉多余斜杠（后台返回的路由路径可能含有双斜杠）
+                    route.path = route.path.replace(/\/{2,}/g, '/')
+                    router.addRoute(route)
                   }
                 });
                 
