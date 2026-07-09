@@ -28,10 +28,15 @@ const useTagsViewStore = defineStore(
         )
       },
       addCachedView(view) {
-        if (this.cachedViews.includes(view.name)) return
-        if (!view.meta.noCache) {
-          this.cachedViews.push(view.name)
+        if (view.meta.noCache) {
+          const index = this.cachedViews.indexOf(view.name)
+          if (index > -1) {
+            this.cachedViews.splice(index, 1)
+          }
+          return
         }
+        if (this.cachedViews.includes(view.name)) return
+        this.cachedViews.push(view.name)
       },
       delView(view) {
         return new Promise(resolve => {

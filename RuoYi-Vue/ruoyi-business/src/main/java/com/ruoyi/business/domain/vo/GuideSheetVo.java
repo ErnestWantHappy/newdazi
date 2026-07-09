@@ -19,6 +19,7 @@ public class GuideSheetVo extends BaseEntity
     private List<String> allClassesInGrade;
     private Integer answerCount;
     private Integer submittedCount;
+    private String isPublic;
 
     public Long getSheetId() {
         return sheetId;
@@ -131,4 +132,7 @@ public class GuideSheetVo extends BaseEntity
     public void setSubmittedCount(Integer submittedCount) {
         this.submittedCount = submittedCount;
     }
+
+    public String getIsPublic() { return isPublic; }
+    public void setIsPublic(String isPublic) { this.isPublic = isPublic; }
 }

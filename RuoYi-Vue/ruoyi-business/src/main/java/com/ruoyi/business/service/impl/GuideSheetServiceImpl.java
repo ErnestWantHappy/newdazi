@@ -68,6 +68,7 @@ public class GuideSheetServiceImpl implements IGuideSheetService
         vo.setStatus(sheet.getStatus());
         vo.setMaxPages(sheet.getMaxPages());
         vo.setTeacherMachineIp(sheet.getTeacherMachineIp());
+        vo.setIsPublic(sheet.getIsPublic());
 
         List<String> assignedClassCodes = guideSheetAssignmentMapper.selectClassCodesBySheetId(sheetId);
         if (!CollectionUtils.isEmpty(assignedClassCodes))
@@ -130,6 +131,8 @@ public class GuideSheetServiceImpl implements IGuideSheetService
     {
         for (Long sheetId : sheetIds)
         {
+            // 级联删除：先删子表（答案、指派、进度），最后删主表
+            guideSheetAnswerMapper.deleteBySheetId(sheetId);
             guideSheetAssignmentMapper.deleteBySheetId(sheetId);
             guideSheetProgressMapper.deleteBySheetId(sheetId);
         }
@@ -154,6 +157,7 @@ public class GuideSheetServiceImpl implements IGuideSheetService
         sheet.setStatus(vo.getStatus() != null ? vo.getStatus() : "0");
         sheet.setMaxPages(vo.getMaxPages());
         sheet.setTeacherMachineIp(vo.getTeacherMachineIp());
+        sheet.setIsPublic(vo.getIsPublic() != null ? vo.getIsPublic() : "Y");
 
         if (sheet.getSheetId() == null)
         {
@@ -248,9 +252,9 @@ public class GuideSheetServiceImpl implements IGuideSheetService
     {
         if (classCode != null && !classCode.isEmpty())
         {
-            return guideSheetProgressMapper.selectBySheetAndClass(sheetId, classCode);
+            return guideSheetProgressMapper.selectFullProgressBySheetAndClass(sheetId, classCode);
         }
-        return guideSheetProgressMapper.selectBySheetId(sheetId);
+        return guideSheetProgressMapper.selectFullProgressBySheetId(sheetId);
     }
 
     private String calculateEntryYear(Long deptId)
@@ -265,5 +269,17 @@ public class GuideSheetServiceImpl implements IGuideSheetService
             academicStartYear = currentYear - 1;
         }
         return String.valueOf(academicStartYear);
+    }
+
+    @Override
+    public List<Map<String, Object>> getCreatorList(Long deptId)
+    {
+        return guideSheetMapper.selectCreatorList(deptId);
+    }
+
+    @Override
+    public List<String> getAssignedClasses(Long sheetId)
+    {
+        return guideSheetAssignmentMapper.selectClassCodesBySheetId(sheetId);
     }
 }

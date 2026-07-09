@@ -132,7 +132,7 @@ export const constantRoutes = [
       {
         path: '',
         component: () => import('@/views/business/guideSheet/index'),
-        name: 'GuideSheetList',
+        name: 'GuideSheet',
         meta: { title: '导学单管理', icon: 'guide-sheet' }
       }
     ]
@@ -272,7 +272,7 @@ export const dynamicRoutes = [
         path: 'designer/:sheetId(\\d+)?',
         component: () => import('@/views/business/guideSheet/designer'),
         name: 'GuideSheetDesigner',
-        meta: { title: '导学单设计', activeMenu: '/business/guide-sheet-list' }
+        meta: { title: '导学单设计', activeMenu: '/business/guide-sheet-list', noCache: true }
       }
     ]
   },

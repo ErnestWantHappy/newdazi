@@ -20,6 +20,11 @@ public interface IGuideSheetAnswerService
      */
     public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String classCode);
 
+    /**
+     * 获取已提交答案的平均分
+     */
+    public Double getAvgScore(Long sheetId, String classCode);
+
     public int saveAnswer(BizGuideSheetAnswer answer);
 
     public int submitAnswer(BizGuideSheetAnswer answer);

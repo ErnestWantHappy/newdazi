@@ -20,6 +20,9 @@ public class BizGuideSheetProgress extends BaseEntity
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date lastHeartbeat;
 
+    /** 进度详情JSON */
+    private String progressDetail;
+
     public Long getId() {
         return id;
     }
@@ -75,6 +78,9 @@ public class BizGuideSheetProgress extends BaseEntity
     public void setLastHeartbeat(Date lastHeartbeat) {
         this.lastHeartbeat = lastHeartbeat;
     }
+
+    public String getProgressDetail() { return progressDetail; }
+    public void setProgressDetail(String progressDetail) { this.progressDetail = progressDetail; }
 
     @Override
     public String toString() {

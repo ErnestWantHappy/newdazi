@@ -16,6 +16,9 @@ public class GuideSheetProgressVo
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date lastHeartbeat;
 
+    /** 进度详情JSON（填写中：{filled:N,total:N}；已提交：评分详情） */
+    private String progressDetail;
+
     public Long getId() {
         return id;
     }
@@ -79,4 +82,7 @@ public class GuideSheetProgressVo
     public void setLastHeartbeat(Date lastHeartbeat) {
         this.lastHeartbeat = lastHeartbeat;
     }
+
+    public String getProgressDetail() { return progressDetail; }
+    public void setProgressDetail(String progressDetail) { this.progressDetail = progressDetail; }
 }

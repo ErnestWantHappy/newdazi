@@ -1,6 +1,7 @@
 package com.ruoyi.business.mapper;
 
 import java.util.List;
+import java.util.Map;
 import com.ruoyi.business.domain.BizGuideSheet;
 
 public interface GuideSheetMapper
@@ -16,4 +17,6 @@ public interface GuideSheetMapper
     public int deleteBizGuideSheetBySheetId(Long sheetId);
 
     public int deleteBizGuideSheetBySheetIds(Long[] sheetIds);
+
+    public List<Map<String, Object>> selectCreatorList(Long deptId);
 }

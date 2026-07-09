@@ -107,3 +107,10 @@ export function exportGuideSheet(sheetId, classCode) {
     responseType: 'blob'
   })
 }
+
+export function getCreatorList() {
+  return request({
+    url: '/business/guide-sheet/creators',
+    method: 'get'
+  })
+}

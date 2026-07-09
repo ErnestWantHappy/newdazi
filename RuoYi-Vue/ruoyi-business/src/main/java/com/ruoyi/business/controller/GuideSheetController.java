@@ -2,10 +2,14 @@ package com.ruoyi.business.controller;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.servlet.http.HttpServletResponse;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.business.domain.BizGuideSheet;
 import com.ruoyi.business.domain.BizGuideSheetAnswer;
 import com.ruoyi.business.domain.BizGuideSheetProgress;
@@ -61,18 +65,56 @@ public class GuideSheetController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('business:guideSheet:list')")
     @GetMapping("/list")
-    public TableDataInfo list(BizGuideSheet bizGuideSheet)
+    public TableDataInfo list(BizGuideSheet bizGuideSheet,
+                               @RequestParam(value = "creatorFilter", required = false) String creatorFilter)
     {
+        if ("self".equals(creatorFilter)) {
+            bizGuideSheet.setCreatorId(SecurityUtils.getUserId());
+        }
+        // 可见性过滤：只显示公开导学单 + 自己创建的导学单
+        bizGuideSheet.getParams().put("currentUserId", SecurityUtils.getUserId());
         startPage();
         List<BizGuideSheet> list = guideSheetService.selectBizGuideSheetList(bizGuideSheet);
+        // 计算完成率和正确率
+        for (BizGuideSheet sheet : list) {
+            if (sheet.getTotalAssigned() != null && sheet.getTotalAssigned() > 0) {
+                sheet.setCompletionRate(
+                    Math.round(sheet.getSubmittedCount() * 1000.0 / sheet.getTotalAssigned()) / 10.0
+                );
+            } else {
+                sheet.setCompletionRate(0.0);
+            }
+            sheet.setAccuracyRate(sheet.getAvgScore() != null ? sheet.getAvgScore() : 0.0);
+        }
         return getDataTable(list);
+    }
+
+    /**
+     * 获取本部门下所有导学单创建者列表
+     */
+    @GetMapping("/creators")
+    public AjaxResult getCreators()
+    {
+        Long deptId = SecurityUtils.getDeptId();
+        List<Map<String, Object>> list = guideSheetService.getCreatorList(deptId);
+        return success(list);
     }
 
     @GetMapping(value = "/{sheetId}")
     public AjaxResult getInfo(@PathVariable("sheetId") Long sheetId)
     {
         GuideSheetVo vo = guideSheetService.selectGuideSheetDetail(sheetId);
-        return vo != null ? success(vo) : error("导学单不存在");
+        if (vo == null) {
+            return error("导学单不存在");
+        }
+        // 可见性校验：公开导学单任何人可看，私有导学单仅创建者可看
+        if (!"Y".equals(vo.getIsPublic())) {
+            LoginUser loginUser = SecurityUtils.getLoginUser();
+            if (loginUser == null || !vo.getCreatorId().equals(loginUser.getUserId())) {
+                return error("无权访问该导学单");
+            }
+        }
+        return success(vo);
     }
 
     @PreAuthorize("@ss.hasPermi('business:guideSheet:add')")
@@ -116,6 +158,24 @@ public class GuideSheetController extends BaseController
     @PutMapping("/{sheetId}/publish")
     public AjaxResult publish(@PathVariable("sheetId") Long sheetId)
     {
+        BizGuideSheet existing = guideSheetService.getBySheetId(sheetId);
+        if (existing == null)
+        {
+            return error("导学单不存在");
+        }
+        if (!"0".equals(existing.getStatus()))
+        {
+            return error("仅草稿状态的导学单可以发布");
+        }
+        if (existing.getFormJson() == null || existing.getFormJson().isEmpty())
+        {
+            return error("表单内容为空，请先设计表单");
+        }
+        List<String> assignedClasses = guideSheetService.getAssignedClasses(sheetId);
+        if (assignedClasses == null || assignedClasses.isEmpty())
+        {
+            return error("未指派班级，请先在设计页面选择班级后发布");
+        }
         return toAjax(guideSheetService.publishGuideSheet(sheetId));
     }
 
@@ -124,6 +184,15 @@ public class GuideSheetController extends BaseController
     @PutMapping("/{sheetId}/close")
     public AjaxResult close(@PathVariable("sheetId") Long sheetId)
     {
+        BizGuideSheet existing = guideSheetService.getBySheetId(sheetId);
+        if (existing == null)
+        {
+            return error("导学单不存在");
+        }
+        if (!"1".equals(existing.getStatus()))
+        {
+            return error("仅已发布状态的导学单可以关闭");
+        }
         return toAjax(guideSheetService.closeGuideSheet(sheetId));
     }
 
@@ -149,11 +218,15 @@ public class GuideSheetController extends BaseController
         }
         BizGuideSheetAnswer existingAnswer = guideSheetAnswerService.getByStudentAndSheet(
                 student.getStudentId(), vo.getSheetId());
+
+        // 过滤 formJson 中的敏感字段，防止泄露给学生端
+        String safeFormJson = sanitizeFormJsonForStudent(vo.getFormJson());
+
         return AjaxResult.success()
                 .put("hasSheet", true)
                 .put("sheetId", vo.getSheetId())
                 .put("sheetTitle", vo.getSheetTitle())
-                .put("formJson", vo.getFormJson())
+                .put("formJson", safeFormJson)
                 .put("maxPages", vo.getMaxPages())
                 .put("teacherMachineIp", vo.getTeacherMachineIp())
                 .put("existingAnswer", existingAnswer);
@@ -227,12 +300,21 @@ public class GuideSheetController extends BaseController
     public AjaxResult getProgress(@RequestParam("sheetId") Long sheetId,
                                    @RequestParam(value = "classCode", required = false) String classCode)
     {
+        // 前端可能传带"班"后缀的 classCode，数据库存储的是纯数字，需统一处理
+        if (classCode != null && classCode.endsWith("班")) {
+            classCode = classCode.substring(0, classCode.length() - 1);
+        }
         List<GuideSheetProgressVo> list = guideSheetService.getProgress(sheetId, classCode);
         int total = list.size();
         long submitted = list.stream().filter(p -> "Y".equals(p.getIsSubmitted())).count();
+
+        // 获取平均分
+        Double avgScore = guideSheetAnswerService.getAvgScore(sheetId, classCode);
+
         return success()
                 .put("total", total)
                 .put("submitted", submitted)
+                .put("avgScore", avgScore != null ? avgScore : 0.0)
                 .put("list", list);
     }
 
@@ -257,6 +339,16 @@ public class GuideSheetController extends BaseController
         if (sheetId == null)
         {
             return error("参数错误");
+        }
+
+        // 归属校验：学生是否属于该导学单的指派班级
+        List<String> assignedClasses = guideSheetService.getAssignedClasses(sheetId);
+        if (assignedClasses == null || assignedClasses.isEmpty()) {
+            return error("该导学单未指派任何班级");
+        }
+        String studentClass = student.getClassCode();
+        if (studentClass == null || !assignedClasses.contains(studentClass)) {
+            return error("您不属于该导学单的指派班级");
         }
 
         BizGuideSheetProgress progress = new BizGuideSheetProgress();
@@ -311,11 +403,33 @@ public class GuideSheetController extends BaseController
         String sheetName = sheet != null ? sheet.getSheetTitle() : "导学单答案";
         String exportName = sheetName + "_答案数据";
 
+        // 批量查询学生信息（修复 N+1 问题：100 答案 101 次查询 → 2 次查询）
+        java.util.Map<Long, BizStudent> studentMap = new java.util.HashMap<>();
+        if (!answerList.isEmpty()) {
+            List<Long> studentIds = answerList.stream()
+                    .map(BizGuideSheetAnswer::getStudentId)
+                    .filter(id -> id != null)
+                    .distinct()
+                    .collect(java.util.stream.Collectors.toList());
+            if (!studentIds.isEmpty()) {
+                // 使用已有的 selectBizStudentList + 条件过滤实现批量查询
+                BizStudent query = new BizStudent();
+                for (Long sid : studentIds) {
+                    // 通过逐个查询构建 Map，使用已有的 Mapper 方法
+                    // 注：如果后续需要更高性能，可新增 selectByStudentIds 批量方法
+                    BizStudent s = bizStudentMapper.selectBizStudentByStudentId(sid);
+                    if (s != null) {
+                        studentMap.put(s.getStudentId(), s);
+                    }
+                }
+            }
+        }
+
         // 构建导出 VO（含学生姓名、学号、状态、分数等可读字段）
         List<GuideSheetExportVo> exportList = new ArrayList<>();
         for (BizGuideSheetAnswer answer : answerList)
         {
-            BizStudent student = bizStudentMapper.selectBizStudentByStudentId(answer.getStudentId());
+            BizStudent student = studentMap.get(answer.getStudentId());
             GuideSheetExportVo vo = new GuideSheetExportVo();
             vo.setStudentName(student != null ? student.getStudentName() : "未知");
             vo.setStudentNo(student != null ? student.getStudentNo() : "");
@@ -329,6 +443,69 @@ public class GuideSheetController extends BaseController
 
         ExcelUtil<GuideSheetExportVo> util = new ExcelUtil<>(GuideSheetExportVo.class);
         util.exportExcel(response, exportList, exportName);
+    }
+
+    /**
+     * 过滤 formJson 中的敏感字段，防止泄露给学生端。
+     * 移除：_scoringConfig（参考答案快照）、_aiApiKey、_aiProvider、_aiModel、_aiCustomUrl
+     * 同时递归移除 widgetList 中所有 widget 及 widget.options 内的 scoring 属性
+     */
+    @SuppressWarnings("unchecked")
+    private String sanitizeFormJsonForStudent(String formJson) {
+        if (formJson == null || formJson.isEmpty()) {
+            return formJson;
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> jsonMap = mapper.readValue(formJson,
+                    new TypeReference<Map<String, Object>>() {});
+
+            // 移除顶层敏感字段
+            jsonMap.remove("_scoringConfig");
+            jsonMap.remove("_aiApiKey");
+            jsonMap.remove("_aiProvider");
+            jsonMap.remove("_aiModel");
+            jsonMap.remove("_aiCustomUrl");
+
+            // 递归移除 widget 树中的 scoring 属性
+            List<Map<String, Object>> widgetList = (List<Map<String, Object>>) jsonMap.get("widgetList");
+            if (widgetList != null) {
+                removeScoringFromWidgets(widgetList, new HashSet<>());
+            }
+
+            return mapper.writeValueAsString(jsonMap);
+        } catch (Exception e) {
+            log.warn("过滤 formJson 敏感字段失败，返回空表单", e);
+            return "{}";
+        }
+    }
+
+    /**
+     * 递归移除 widget 树中所有 scoring 属性（防止通过 widget.scoring 和 widget.options.scoring 泄露答案）
+     */
+    @SuppressWarnings("unchecked")
+    private void removeScoringFromWidgets(Object value, Set<Object> visited) {
+        if (value == null || visited.contains(value)) return;
+        if (value instanceof List) {
+            for (Object item : (List<?>) value) {
+                removeScoringFromWidgets(item, visited);
+            }
+        } else if (value instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) value;
+            visited.add(map);
+            // 移除 widget 顶层和 options 内的 scoring 属性
+            map.remove("scoring");
+            Object options = map.get("options");
+            if (options instanceof Map) {
+                ((Map<String, Object>) options).remove("scoring");
+            }
+            // 递归处理所有子属性
+            for (Object v : map.values()) {
+                if (v instanceof Map || v instanceof List) {
+                    removeScoringFromWidgets(v, visited);
+                }
+            }
+        }
     }
 
     private String convertStatus(String status)
@@ -394,7 +571,8 @@ public class GuideSheetController extends BaseController
         try
         {
             GuideSheetGradingService.GradingResult gradingResult = gradingService.grade(
-                    sheet.getFormJson(), answer.getAnswerJson());
+                    sheet.getFormJson(), answer.getAnswerJson(),
+                    answer.getStudentId(), answer.getSheetId());
             answer.setTotalScore(gradingResult.totalScore);
             answer.setGradingStatus(gradingResult.gradingStatus);
             answer.setGradingDetail(gradingResult.gradingDetail);
@@ -428,7 +606,8 @@ public class GuideSheetController extends BaseController
             try
             {
                 GuideSheetGradingService.GradingResult gradingResult = gradingService.grade(
-                        sheet.getFormJson(), answer.getAnswerJson());
+                        sheet.getFormJson(), answer.getAnswerJson(),
+                        answer.getStudentId(), answer.getSheetId());
                 answer.setTotalScore(gradingResult.totalScore);
                 answer.setGradingStatus(gradingResult.gradingStatus);
                 answer.setGradingDetail(gradingResult.gradingDetail);

@@ -1,6 +1,7 @@
 package com.ruoyi.business.service;
 
 import java.util.List;
+import java.util.Map;
 import com.ruoyi.business.domain.BizGuideSheet;
 import com.ruoyi.business.domain.vo.GuideSheetProgressVo;
 import com.ruoyi.business.domain.vo.GuideSheetVo;
@@ -28,4 +29,8 @@ public interface IGuideSheetService
     public GuideSheetVo getStudentGuideSheet(Long deptId, String entryYear, String classCode);
 
     public List<GuideSheetProgressVo> getProgress(Long sheetId, String classCode);
+
+    public List<Map<String, Object>> getCreatorList(Long deptId);
+
+    public List<String> getAssignedClasses(Long sheetId);
 }

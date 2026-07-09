@@ -113,6 +113,31 @@ const studentName = ref('')
 
 let heartbeatTimer = null
 let autoSaveTimer = null
+let abortController = null
+
+/** 当前活跃的标签页索引（0-based，对应 VForm3 tab-pane 数组索引） */
+const currentTabIndex = ref(0)
+
+/**
+ * 从 DOM 中获取当前活跃的标签页索引（0-based）
+ * VForm3 渲染的 tab 使用 Element Plus 的 el-tabs 组件
+ */
+function getCurrentTabIndex() {
+  try {
+    const formEl = renderRef.value?.$el
+    if (!formEl) return 0
+    // 查找所有 el-tabs 容器中第一个可见的活跃 tab
+    const activeTab = formEl.querySelector('.el-tabs__item.is-active')
+    if (!activeTab) return 0
+    const tabContainer = activeTab.closest('.el-tabs')
+    if (!tabContainer) return 0
+    const allTabs = tabContainer.querySelectorAll('.el-tabs__item')
+    const index = Array.from(allTabs).indexOf(activeTab)
+    return index >= 0 ? index : 0
+  } catch (e) {
+    return 0
+  }
+}
 
 function switchToHome() {
   router.replace('/student/index')
@@ -130,15 +155,25 @@ function handleCommand(cmd) {
 
 function handleSave() {
   if (!renderRef.value) return
+  // 取消上一次未完成的保存请求（ARCH-04 防抖）
+  if (abortController) {
+    abortController.abort()
+  }
+  abortController = new AbortController()
   saving.value = true
+  const pageIndex = getCurrentTabIndex() + 1  // 1-based
   const data = {
     sheetId: sheetId.value,
     answerJson: JSON.stringify(answerData.value),
-    currentPage: 0,
+    currentPage: pageIndex,
     action: 'save'
   }
   submitGuideSheet(data).then(() => {
     ElMessage.success('草稿已保存')
+  }).catch((err) => {
+    if (err?.name !== 'AbortError' && err?.code !== 'ERR_CANCELED') {
+      console.warn('保存草稿失败', err)
+    }
   }).finally(() => { saving.value = false })
 }
 
@@ -146,10 +181,11 @@ function handleSubmit() {
   if (!renderRef.value) return
   submitting.value = true
   renderRef.value.getFormData().then(formData => {
+    const pageIndex = getCurrentTabIndex() + 1  // 1-based
     const data = {
       sheetId: sheetId.value,
       answerJson: JSON.stringify(formData),
-      currentPage: 0,
+      currentPage: pageIndex,
       action: 'submit'
     }
     submitGuideSheet(data).then(() => {
@@ -197,9 +233,10 @@ onMounted(() => {
           answerData.value = {}
         }
       }
-      // 心跳定时器
+      // 心跳定时器：每 30 秒上报当前所在标签页
       heartbeatTimer = setInterval(() => {
-        sendHeartbeat({ sheetId: sheetId.value, currentPage: 0 }).catch(() => {})
+        const pageIndex = getCurrentTabIndex() + 1  // 1-based
+        sendHeartbeat({ sheetId: sheetId.value, currentPage: pageIndex }).catch(() => {})
       }, 30000)
       // 自动保存定时器
       autoSaveTimer = setInterval(() => {
@@ -218,10 +255,11 @@ onMounted(() => {
 
 function onBeforeUnload() {
   if (answerData.value && Object.keys(answerData.value).length > 0) {
+    const pageIndex = getCurrentTabIndex() + 1  // 1-based
     const data = {
       sheetId: sheetId.value,
       answerJson: JSON.stringify(answerData.value),
-      currentPage: 0,
+      currentPage: pageIndex,
       action: 'save'
     }
     navigator.sendBeacon
@@ -234,6 +272,7 @@ function onBeforeUnload() {
 onBeforeUnmount(() => {
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (autoSaveTimer) clearInterval(autoSaveTimer)
+  if (abortController) abortController.abort()
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
 </script>

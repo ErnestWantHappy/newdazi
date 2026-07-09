@@ -9,7 +9,7 @@
         </div>
 
         <div class="toolbar-section toolbar-settings">
-          <span class="toolbar-label">基本设置</span>
+          <span class="toolbar-label">关联课程</span>
           <div class="settings-row">
             <el-select v-model="form.lessonId" placeholder="关联课程" clearable filterable size="default">
               <el-option v-for="l in lessonOptions" :key="l.lessonId" :label="l.lessonTitle" :value="l.lessonId" />
@@ -22,6 +22,14 @@
           <el-select v-model="form.assignedClassCodes" multiple placeholder="请选择指派班级" size="default">
             <el-option v-for="cls in classOptions" :key="cls" :label="cls" :value="cls" />
           </el-select>
+        </div>
+
+        <div class="toolbar-section toolbar-public">
+          <span class="toolbar-label">是否公开</span>
+          <el-radio-group v-model="form.isPublic" size="default">
+            <el-radio value="Y">是</el-radio>
+            <el-radio value="N">否</el-radio>
+          </el-radio-group>
         </div>
 
         <div class="toolbar-section toolbar-actions">
@@ -50,14 +58,43 @@
           <span class="scoring-title">评分配置</span>
           <div class="scoring-header-right">
             <el-button size="small" icon="Refresh" text @click="refreshScoredFields">刷新字段</el-button>
+            <el-select
+              v-if="scoringEnabled"
+              v-model="aiProvider"
+              size="small"
+              style="width: 130px"
+              placeholder="选择供应商"
+            >
+              <el-option label="DeepSeek" value="deepseek" />
+              <el-option label="豆包" value="doubao" />
+              <el-option label="千问" value="qwen" />
+              <el-option label="智谱清言" value="zhipu" />
+              <el-option label="自定义" value="custom" />
+            </el-select>
+            <el-input
+              v-if="scoringEnabled && aiProvider === 'custom'"
+              v-model="aiCustomUrl"
+              size="small"
+              placeholder="自定义API地址"
+              style="width: 200px"
+              clearable
+            />
+            <el-input
+              v-if="scoringEnabled"
+              v-model="aiModel"
+              size="small"
+              placeholder="模型名（可选，留空使用默认）"
+              style="width: 180px"
+              clearable
+            />
             <el-input
               v-if="scoringEnabled"
               v-model="aiApiKey"
               type="password"
-              placeholder="请输入大模型请求的API-Key"
+              placeholder="请输入API-Key"
               show-password
               size="small"
-              style="width: 220px"
+              style="width: 200px"
               clearable
             />
             <el-switch v-model="scoringEnabled" active-text="启用自动评分" />
@@ -86,7 +123,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="正确答案" min-width="320">
+          <el-table-column label="参考答案" min-width="320">
             <template #default="{ row }">
               <!-- 单选 / 下拉选择：字母按钮组 -->
               <template v-if="row.type === 'radio' || row.type === 'select'">
@@ -95,7 +132,7 @@
                     v-if="row.type === 'select'"
                     size="small" round
                     :type="!scoringConfig[row.id]?.answer ? 'primary' : ''"
-                    :disabled="isDisabled(row)"
+                    
                     @click="scoringConfig[row.id].answer = ''"
                   >未设置</el-button>
                   <el-button
@@ -103,7 +140,7 @@
                     :key="opt.value"
                     :type="scoringConfig[row.id]?.answer === opt.value ? 'primary' : ''"
                     size="small" round
-                    :disabled="isDisabled(row)"
+                    
                     @click="scoringConfig[row.id].answer = opt.value"
                   >{{ indexToLetter(idx) }}.{{ opt.label }}</el-button>
                 </div>
@@ -117,7 +154,7 @@
                     :key="opt.value"
                     :type="isCheckboxChecked(row.id, opt.value) ? 'primary' : ''"
                     size="small" round
-                    :disabled="isDisabled(row)"
+                    
                     @click="toggleCheckboxAnswer(row.id, opt.value, !isCheckboxChecked(row.id, opt.value))"
                   >{{ indexToLetter(idx) }}.{{ opt.label }}</el-button>
                 </div>
@@ -129,7 +166,7 @@
                   <el-button
                     size="small" round
                     :type="!scoringConfig[row.id]?._cascaderPath?.length ? 'primary' : ''"
-                    :disabled="isDisabled(row)"
+                    
                     @click="scoringConfig[row.id]._cascaderPath = ''"
                   >未设置</el-button>
                   <el-button
@@ -137,7 +174,7 @@
                     :key="opt.path.join('-')"
                     :type="arraysEqual(scoringConfig[row.id]?._cascaderPath, opt.path) ? 'primary' : ''"
                     size="small" round
-                    :disabled="isDisabled(row)"
+                    
                     @click="scoringConfig[row.id]._cascaderPath = opt.path"
                   >{{ opt.label }}</el-button>
                 </div>
@@ -149,13 +186,13 @@
                   <el-button
                     :type="scoringConfig[row.id]?.answer === 'true' ? 'success' : ''"
                     size="small" round
-                    :disabled="isDisabled(row)"
+                    
                     @click="scoringConfig[row.id].answer = 'true'"
                   >开</el-button>
                   <el-button
                     :type="scoringConfig[row.id]?.answer === 'false' ? 'danger' : ''"
                     size="small" round
-                    :disabled="isDisabled(row)"
+                    
                     @click="scoringConfig[row.id].answer = 'false'"
                   >关</el-button>
                 </div>
@@ -166,7 +203,7 @@
                 <div class="answer-number-row">
                   <el-input-number
                     v-model="scoringConfig[row.id].answer"
-                    :disabled="isDisabled(row)"
+                    
                     :controls="false"
                     size="small"
                     style="width:100%"
@@ -180,7 +217,7 @@
                   <el-date-picker
                     v-model="scoringConfig[row.id].answer"
                     type="date"
-                    :disabled="isDisabled(row)"
+                    
                     placeholder="选择日期"
                     value-format="YYYY-MM-DD"
                     size="small"
@@ -194,13 +231,13 @@
                 <div class="answer-color-row">
                   <el-color-picker
                     v-model="scoringConfig[row.id].answer"
-                    :disabled="isDisabled(row)"
+                    
                     show-alpha
                     size="small"
                   />
                   <el-input
                     v-model="scoringConfig[row.id].answer"
-                    :disabled="isDisabled(row)"
+                    
                     size="small"
                     style="width: 100px"
                     placeholder="#000000"
@@ -208,12 +245,42 @@
                 </div>
               </template>
 
+              <!-- 包含匹配：关键词标签输入 -->
+              <template v-else-if="scoringConfig[row.id]?.type === 'contains'">
+                <div class="keyword-tags">
+                  <el-tag
+                    v-for="(kw, idx) in (scoringConfig[row.id]?._keywords || [])"
+                    :key="idx"
+                    closable
+                    size="small"
+                    type="warning"
+                    @close="removeKeyword(row.id, idx)"
+                  >{{ kw }}</el-tag>
+                  <el-input
+                    v-if="keywordInputVisible[row.id]"
+                    ref="keywordInputRef"
+                    v-model="keywordInput[row.id]"
+                    size="small"
+                    style="width: 80px"
+                    @keyup.enter="addKeyword(row.id)"
+                    @blur="addKeyword(row.id)"
+                  />
+                  <el-button
+                    v-else
+                    size="small"
+                    type="primary"
+                    plain
+                    @click="showKeywordInput(row.id)"
+                  >+ 添加关键词</el-button>
+                </div>
+              </template>
+
               <!-- 默认：文本输入（text, textarea, rich-editor 等） -->
               <template v-else>
                 <el-input
                   v-model="scoringConfig[row.id].answer"
-                  :disabled="isDisabled(row)"
-                  :placeholder="row.type === 'textarea' ? '输入答案...' : '输入正确答案...'"
+                  
+                  :placeholder="row.type === 'textarea' ? '输入参考答案...' : '输入参考答案...'"
                   :type="row.type === 'textarea' ? 'textarea' : 'text'"
                   size="small"
                   :autosize="row.type === 'textarea' ? { minRows: 2, maxRows: 4 } : false"
@@ -222,26 +289,26 @@
               </template>
             </template>
           </el-table-column>
-          <el-table-column label="评分方式" width="130">
+          <el-table-column label="评分方式" width="160">
             <template #default="{ row }">
-              <el-select v-model="scoringConfig[row.id].type" size="small" style="width: 110px">
+              <el-select v-model="scoringConfig[row.id].type" size="small" style="width: 140px" @change="onScoringTypeChange(row.id)">
                 <el-option label="精确匹配" value="exact" />
                 <el-option label="包含匹配" value="contains" />
-                <el-option label="正则匹配" value="regex" />
-                <el-option label="人工批改" value="manual" />
                 <el-option label="AI评分" value="ai" :disabled="!aiApiKey" />
               </el-select>
+              <div class="scoring-type-hint">{{ scoringTypeHint(scoringConfig[row.id].type) }}</div>
             </template>
           </el-table-column>
         </el-table>
         <el-empty v-else description="暂无表单字段，请先在上方设计器中添加字段" :image-size="60" />
       </template>
     </el-card>
-  </div>
+
+    </div>
 </template>
 
 <script setup name="GuideSheetDesigner">
-import { ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet } from '@/api/business/guideSheet'
 import { listLesson } from '@/api/business/lesson'
@@ -255,6 +322,7 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const saving = ref(false)
+const dirty = ref(false)  // 标记表单是否有未保存的修改
 const lessonOptions = ref([])
 const classOptions = ref([])
 const designerRef = ref(null)
@@ -265,21 +333,351 @@ const scoredFields = ref([])
 const scoringConfig = reactive({})
 const formJsonVersion = ref(0)
 const aiApiKey = ref('')
+const aiProvider = ref('deepseek')
+const aiModel = ref('')
+const aiCustomUrl = ref('')
 const rawFormJson = ref(null)  // 保存原始 formJson 用于提取字段选项
-let pollingTimer = null
 
-// 设计器中隐藏的无评分价值字段（容器类保留，仅隐藏展示/交互/文件类）
+let pollingTimer = null
+/** 标记：新建导学单时是否已注入标签页组件（防止重复注入） */
+let tabInjected = false
+
+// noCache 场景：组件每次重建时重置 tabInjected，确保 VForm3 的 onFormJsonChange 能正常注入标签页
+onBeforeMount(() => {
+  tabInjected = false
+})
+
+/**
+ * 重置为全新表单状态（仅含标签页组件）
+ */
+function resetToNewForm() {
+  form.sheetId = undefined
+  form.sheetTitle = ''
+  form.lessonId = undefined
+  form.classIds = undefined
+  form.formJson = ''
+  form.maxPages = 0
+  form.status = undefined
+  form.isPublic = 'Y'
+  scoredFields.value = []
+  Object.keys(scoringConfig).forEach(k => delete scoringConfig[k])
+  rawFormJson.value = null
+  scoringEnabled.value = false
+  tabInjected = false
+  dirty.value = false
+  aiApiKey.value = userStore.aiApiKey || ''
+  aiProvider.value = 'deepseek'
+  aiModel.value = ''
+  aiCustomUrl.value = ''
+
+  // 使用 setTimeout 确保 VForm3 已完全初始化
+  setTimeout(() => {
+    if (designerRef.value && !tabInjected) {
+      designerRef.value.setFormJson({ widgetList: [createTabWidget()] })
+      tabInjected = true
+    }
+  }, 200)
+}
+
+/**
+ * 提取表单中标签页的页面信息（页面名称列表）
+ * 同时递归检测 widgetList 中是否存在 tab 类型的 widget
+ */
+function extractTabPages(formJson) {
+  const pages = []
+  let hasTab = false
+  const visited = new Set()
+
+  function walk(value) {
+    if (value == null || typeof value !== 'object' || visited.has(value)) return
+    visited.add(value)
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+    } else {
+      if (value.type === 'tab') {
+        hasTab = true
+        const tabs = value.tabs  // tabs 是 tab widget 的直接属性，非 options.tabs
+        if (Array.isArray(tabs)) {
+          for (const tab of tabs) {
+            pages.push(tab.options?.label || tab.options?.name || '')
+          }
+        }
+      }
+      for (const key of Object.keys(value)) {
+        const v = value[key]
+        if (v && typeof v === 'object') walk(v)
+      }
+    }
+  }
+
+  walk(formJson?.widgetList || [])
+  return { pages, hasTab }
+}
+
+/**
+ * 创建一个有效的标签页 widget（结构与 VForm3 copyNewContainerWidget 输出一致）
+ * 唯一名称固定为 HomeTab，铺满整个设计面板
+ */
+function createTabWidget() {
+  const tabId = 'tab-' + Math.random().toString(36).substring(2, 10)
+  const paneId = 'tab-pane-' + Math.random().toString(36).substring(2, 10)
+  return {
+    id: tabId,
+    type: 'tab',
+    category: 'container',
+    icon: 'tab',
+    displayType: 'border-card',
+    internal: true,  // 标记为内部组件，禁止删除和移动
+    tabs: [
+      {
+        id: paneId,
+        type: 'tab-pane',
+        category: 'container',
+        icon: 'tab-pane',
+        internal: true,
+        widgetList: [],
+        options: {
+          name: 'tab1',
+          label: 'tab 1',
+          hidden: false,
+          active: false,
+          disabled: false,
+          customClass: ''
+        }
+      }
+    ],
+    options: {
+      name: 'HomeTab',
+      hidden: false,
+      customClass: ''
+    }
+  }
+}
+
+/**
+ * 深度克隆对象
+ */
+function deepClone(obj) {
+  if (obj === null || typeof obj !== 'object') return obj
+  if (obj instanceof Date) return new Date(obj.getTime())
+  if (obj instanceof Array) return obj.map(item => deepClone(item))
+  const cloned = {}
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      cloned[key] = deepClone(obj[key])
+    }
+  }
+  return cloned
+}
+
+/**
+ * 轮询兜底：确保 HomeTab 标签页约束不被破坏
+ * 复用 enforceHomeTabConstraints 逻辑，避免重复代码
+ */
+function ensureTabWidget() {
+  if (!designerRef.value) return
+  try {
+    const json = designerRef.value.getFormJson()
+    if (!json.widgetList) return
+
+    const fixedJson = enforceHomeTabConstraints(json)
+    if (fixedJson) {
+      designerRef.value.setFormJson(fixedJson)
+    }
+  } catch (e) {
+    // 忽略
+  }
+}
+
+/**
+ * 强制执行 HomeTab 约束：
+ * 1. HomeTab 必须存在且位于 widgetList 首位
+ * 2. HomeTab 不可删除、不可移动
+ * 3. 所有其他组件必须嵌入 HomeTab 的第一个 tab-pane 内
+ * 返回修复后的克隆对象（需 setFormJson），无违规返回 null
+ */
+function enforceHomeTabConstraints(formJson) {
+  if (!formJson || !Array.isArray(formJson.widgetList)) return null
+
+  const wl = formJson.widgetList
+  let needFix = false
+
+  // 1. 查找 HomeTab widget（通过 type === 'tab' 且 options.name === 'HomeTab'）
+  const tabIndex = wl.findIndex(w => w.type === 'tab' && w.options && w.options.name === 'HomeTab')
+
+  if (tabIndex === -1) {
+    // HomeTab 不存在 → 注入到首位
+    const cloned = deepClone(formJson)
+    cloned.widgetList.unshift(createTabWidget())
+    return cloned
+  }
+
+  if (tabIndex !== 0) {
+    needFix = true
+  }
+
+  const tabWidget = wl[tabIndex]
+
+  // 3. 确保 internal 标记存在（防止 VForm3 序列化/反序列化时剥离）
+  if (tabWidget.internal !== true) {
+    needFix = true
+  }
+
+  // 4. 确保 HomeTab 至少有一个 tab-pane
+  if (!Array.isArray(tabWidget.tabs) || tabWidget.tabs.length === 0) {
+    needFix = true
+  }
+
+  // 5. 检查 widgetList 中是否有非 HomeTab 的 widget
+  if (wl.length > 1) {
+    needFix = true
+  }
+
+  if (!needFix) return null
+
+  // 有违规，克隆后修复
+  const cloned = deepClone(formJson)
+  const cwl = cloned.widgetList
+
+  // 找到克隆后的 HomeTab
+  const cTabIndex = cwl.findIndex(w => w.type === 'tab' && w.options && w.options.name === 'HomeTab')
+  if (cTabIndex === -1) {
+    cwl.unshift(createTabWidget())
+    return cloned
+  }
+
+  // 确保 HomeTab 在首位
+  if (cTabIndex !== 0) {
+    const [ctw] = cwl.splice(cTabIndex, 1)
+    cwl.unshift(ctw)
+  }
+
+  const cTab = cwl[0]
+
+  // 显式确保 internal 标记（防止 VForm3 序列化/反序列化时剥离）
+  cTab.internal = true
+
+  // 确保至少有一个 tab-pane
+  if (!Array.isArray(cTab.tabs) || cTab.tabs.length === 0) {
+    const paneId = 'tab-pane-' + Math.random().toString(36).substring(2, 10)
+    cTab.tabs = [{
+      id: paneId, type: 'tab-pane', category: 'container', icon: 'tab-pane',
+      internal: true, widgetList: [],
+      options: { name: 'tab1', label: 'tab 1', hidden: false, active: false, disabled: false, customClass: '' }
+    }]
+  }
+
+  // 确保第一个 tab-pane 也有 internal 标记
+  if (cTab.tabs[0]) {
+    cTab.tabs[0].internal = true
+  }
+
+  const targetPane = cTab.tabs[0]
+  if (!Array.isArray(targetPane.widgetList)) {
+    targetPane.widgetList = []
+  }
+
+  // 将所有非 HomeTab 的 widget 移动到 tab-pane 内
+  const nonTabWidgets = cwl.slice(1)
+  for (const w of nonTabWidgets) {
+    targetPane.widgetList.push(w)
+  }
+  cwl.splice(1, cwl.length - 1)
+
+  return cloned
+}
+
+/**
+ * 递归遍历 widgetList，修复 picture-upload 组件的 uploadURL
+ * VForm3 默认 uploadURL 为空字符串，导致上传请求 404
+ */
+function fixUploadURLs(formJson) {
+  let needFix = false
+  const uploadEndpoint = '/dev-api/common/upload'
+
+  function walk(widgetList) {
+    if (!Array.isArray(widgetList)) return
+    for (const w of widgetList) {
+      if (w.type === 'picture-upload' && w.options && (w.options.uploadURL === '' || w.options.uploadURL === undefined)) {
+        needFix = true
+      }
+      // 递归处理容器内的子组件
+      if (w.type === 'tab' && Array.isArray(w.tabs)) {
+        for (const pane of w.tabs) {
+          if (Array.isArray(pane.widgetList)) walk(pane.widgetList)
+        }
+      } else if (Array.isArray(w.widgetList)) {
+        walk(w.widgetList)
+      }
+    }
+  }
+
+  walk(formJson.widgetList)
+  if (!needFix) return null
+
+  // 克隆并修复
+  const cloned = deepClone(formJson)
+
+  function fixWalk(widgetList) {
+    if (!Array.isArray(widgetList)) return
+    for (const w of widgetList) {
+      if (w.type === 'picture-upload' && w.options && (w.options.uploadURL === '' || w.options.uploadURL === undefined)) {
+        w.options.uploadURL = uploadEndpoint
+      }
+      if (w.type === 'tab' && Array.isArray(w.tabs)) {
+        for (const pane of w.tabs) {
+          if (Array.isArray(pane.widgetList)) fixWalk(pane.widgetList)
+        }
+      } else if (Array.isArray(w.widgetList)) {
+        fixWalk(w.widgetList)
+      }
+    }
+  }
+
+  fixWalk(cloned.widgetList)
+  return cloned
+}
+
+/**
+ * 原地修复 picture-upload 组件的 uploadURL（不克隆，直接修改对象）
+ * 用于保存前确保 uploadURL 不会被遗漏
+ */
+function fixUploadURLsInPlace(obj) {
+  if (!obj || typeof obj !== 'object') return
+  const uploadEndpoint = '/dev-api/common/upload'
+  const visited = new Set()
+
+  function walk(value) {
+    if (value == null || typeof value !== 'object' || visited.has(value)) return
+    visited.add(value)
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+    } else {
+      if (value.type === 'picture-upload' && value.options && (value.options.uploadURL === '' || value.options.uploadURL === undefined || value.options.uploadURL == null)) {
+        value.options.uploadURL = uploadEndpoint
+      }
+      for (const key of Object.keys(value)) {
+        const v = value[key]
+        if (v && typeof v === 'object') walk(v)
+      }
+    }
+  }
+
+  walk(obj.widgetList || [])
+}
+
+// 设计器中隐藏的无评分价值字段
 const bannedWidgets = [
   'button', 'alert',
-  'static-text', 'html-text', 'divider',
-  'file-upload', 'picture-upload',
-  'color',
+  'divider',
+  'file-upload',
   'fold', 'snippet', 'type-editor',
   // 隐藏不需要的输入/时间/数值/富文本字段（单行输入 input 恢复显示）
   'text', 'number',
   'time', 'time-range', 'date', 'date-range', 'daterange',
   'rate', 'slider', 'switch',
-  'rich-editor'
+  'rich-editor',
+  'picture-upload'
 ]
 
 // pinyin 命名计数器，key=widgetType, value=当前编号
@@ -292,7 +690,8 @@ const form = reactive({
   formJson: '',
   maxPages: 0,
   assignedClassCodes: [],
-  status: '0'
+  status: '0',
+  isPublic: 'Y'
 })
 
 // 表单设计器配置
@@ -313,15 +712,55 @@ const designerConfig = ref({
  * 设计器表单内容变化时，更新组件内部状态
  */
 function onFormJsonChange(formJson) {
-  if (formJson) {
-    form.maxPages = (formJson.widgetList && Array.isArray(formJson.widgetList))
-      ? formJson.widgetList.length || 1
-      : 1
-    // 为新增字段设置中文标签 + 拼音唯一名称
-    autoRenameWidgets(formJson)
-    // 同步评分配置字段列表 - 不覆盖已恢复的 scoringConfig（防止 setFormJson 触发后丢失已加载的正确答案）
-    extractScoredFieldsPreserveConfig(formJson)
-    formJsonVersion.value++
+  try {
+    if (formJson) {
+      // 标记表单已修改
+      dirty.value = true
+      // 新建导学单时，在 VForm3 初始化完成的首个事件中自动注入标签页
+      if (!tabInjected && !route.params.sheetId) {
+        tabInjected = true
+        const { hasTab } = extractTabPages(formJson)
+        if (!hasTab && formJson.widgetList) {
+          // 深度克隆后注入标签页，再 setFormJson 触发重渲染
+          const cloned = deepClone(formJson)
+          cloned.widgetList.unshift(createTabWidget())
+          nextTick(() => {
+            designerRef.value?.setFormJson(cloned)
+          })
+          return  // 本次跳过业务处理，等 setFormJson 触发下一次事件
+        }
+      }
+
+      // 强制执行 HomeTab 约束：不可删除、不可移动、所有组件嵌入其中
+      const fixedJson = enforceHomeTabConstraints(formJson)
+      if (fixedJson) {
+        // 有违规需要修复，通过 setFormJson 触发重渲染
+        nextTick(() => {
+          designerRef.value?.setFormJson(fixedJson)
+        })
+        return
+      }
+
+      // 修复图片上传组件的 uploadURL（默认空字符串导致 404）
+      const urlFixedJson = fixUploadURLs(formJson)
+      if (urlFixedJson) {
+        nextTick(() => {
+          designerRef.value?.setFormJson(urlFixedJson)
+        })
+        return
+      }
+
+      form.maxPages = (formJson.widgetList && Array.isArray(formJson.widgetList))
+        ? formJson.widgetList.length || 1
+        : 1
+      // 为新增字段设置中文标签 + 拼音唯一名称
+      autoRenameWidgets(formJson)
+      // 同步评分配置字段列表 - 不覆盖已恢复的 scoringConfig（防止 setFormJson 触发后丢失已加载的参考答案）
+      extractScoredFieldsPreserveConfig(formJson)
+      formJsonVersion.value++
+    }
+  } catch (e) {
+    console.warn('onFormJsonChange error:', e)
   }
 }
 
@@ -329,50 +768,54 @@ function onFormJsonChange(formJson) {
  * 自动为新增字段设置中文标签和拼音+数字的唯一名称
  */
 function autoRenameWidgets(formJson) {
-  const visited = new Set()
-  const widgetTypeLabels = {
-    text: '单行文本', textarea: '多行文本', number: '数字', input: '输入框',
-    radio: '单选', checkbox: '多选', select: '下拉选择', cascader: '级联选择',
-    date: '日期', 'date-range': '日期范围', daterange: '日期范围',
-    time: '时间', 'time-range': '时间范围',
-    rate: '评分', slider: '滑块', switch: '开关', color: '颜色选择',
-    'rich-editor': '富文本', 'file-upload': '文件上传', 'picture-upload': '图片上传',
-    'static-text': '静态文本', 'html-text': 'HTML文本'
-  }
+  try {
+    const visited = new Set()
+    const widgetTypeLabels = {
+      text: '单行文本', textarea: '多行文本', number: '数字', input: '输入框',
+      radio: '单选', checkbox: '多选', select: '下拉选择', cascader: '级联选择',
+      date: '日期', 'date-range': '日期范围', daterange: '日期范围',
+      time: '时间', 'time-range': '时间范围',
+      rate: '评分', slider: '滑块', switch: '开关', color: '颜色选择',
+      'rich-editor': '富文本', 'file-upload': '文件上传', 'picture-upload': '图片上传',
+      'static-text': '静态文本', 'html-text': 'HTML文本'
+    }
 
-  function walk(value) {
-    if (value == null || typeof value !== 'object' || visited.has(value)) return
-    visited.add(value)
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item)
-    } else {
-      const id = value.id || value.name
-      const type = value.type
-      // 如果有 options 对象，则标签/名称在 options 内（VForm3 结构）
-      const labelHolder = value.options || value
-      if (id && type) {
-        // 标签：空标签或全局默认名则改为中文
-        if (!labelHolder.label || labelHolder.label === type || /^[a-z]+\d*$/i.test(labelHolder.label)) {
-          const cnLabel = widgetTypeLabels[type] || type
-          if (!pinyinCounters[type]) pinyinCounters[type] = 1
-          else pinyinCounters[type]++
-          labelHolder.label = cnLabel + pinyinCounters[type]
+    function walk(value) {
+      if (value == null || typeof value !== 'object' || visited.has(value)) return
+      visited.add(value)
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item)
+      } else {
+        const id = value.id || value.name
+        const type = value.type
+        // 如果有 options 对象，则标签/名称在 options 内（VForm3 结构）
+        const labelHolder = value.options || value
+        if (id && type) {
+          // 标签：空标签或全局默认名则改为中文
+          if (!labelHolder.label || labelHolder.label === type || /^[a-z]+\d*$/i.test(labelHolder.label)) {
+            const cnLabel = widgetTypeLabels[type] || type
+            if (!pinyinCounters[type]) pinyinCounters[type] = 1
+            else pinyinCounters[type]++
+            labelHolder.label = cnLabel + pinyinCounters[type]
+          }
+          // 名称：空名称或纯英文则改为拼音+数字
+          if (!labelHolder.name || /^[a-z]+\d*$/i.test(labelHolder.name)) {
+            const nameBase = pinyin(labelHolder.label || type, { toneType: 'none', type: 'array' }).join('')
+            labelHolder.name = nameBase + (pinyinCounters[type] || 1)
+          }
         }
-        // 名称：空名称或纯英文则改为拼音+数字
-        if (!labelHolder.name || /^[a-z]+\d*$/i.test(labelHolder.name)) {
-          const nameBase = pinyin(labelHolder.label || type, { toneType: 'none', type: 'array' }).join('')
-          labelHolder.name = nameBase + (pinyinCounters[type] || 1)
+        // 继续深入嵌套
+        for (const key of Object.keys(value)) {
+          const v = value[key]
+          if (v && typeof v === 'object') walk(v)
         }
-      }
-      // 继续深入嵌套
-      for (const key of Object.keys(value)) {
-        const v = value[key]
-        if (v && typeof v === 'object') walk(v)
       }
     }
-  }
 
-  walk(formJson.widgetList)
+    walk(formJson.widgetList)
+  } catch (e) {
+    console.warn('autoRenameWidgets error:', e)
+  }
 }
 
 /**
@@ -389,7 +832,7 @@ function widgetTypeLabel(type) {
     time: '时间', 'time-range': '时间范围',
     // === 数值/状态类（可评分）===
     rate: '评分', slider: '滑块', switch: '开关', color: '颜色选择',
-    // === 富文本（仅可人工批改）===
+    // === 富文本 ===
     'rich-editor': '富文本',
     // === 文件上传（不可评分）===
     'file-upload': '文件上传', 'picture-upload': '图片上传',
@@ -460,6 +903,7 @@ function extractScoredFields(formJson) {
           } else {
             scoringConfig[id] = { score: 0, answer: type === 'checkbox' ? [] : '', type: 'exact' }
           }
+          initKeywords(scoringConfig[id])
         }
       }
       for (const key of Object.keys(value)) {
@@ -548,6 +992,26 @@ function normalizeScoringConfigValue(cfg, widgetType) {
   return { score: cfg.score || 0, answer: Array.isArray(answer) ? answer : (answer || ''), type: cfg.type || 'exact' }
 }
 
+/** 初始化包含匹配的关键词数组 */
+function initKeywords(cfg) {
+  if (cfg.type === 'contains' && !cfg._keywords) {
+    const answer = cfg.answer
+    if (typeof answer === 'string' && answer.trim()) {
+      cfg._keywords = answer.split(',').map(v => v.trim()).filter(v => v !== '')
+    } else {
+      cfg._keywords = []
+    }
+  }
+}
+
+/** 评分方式变更时处理 */
+function onScoringTypeChange(widgetId) {
+  const cfg = scoringConfig[widgetId]
+  if (cfg) {
+    initKeywords(cfg)
+  }
+}
+
 /**
  * 提取评分字段但不覆盖已有的 scoringConfig（保留用户实时修改）
  * 核心策略：优先从 _scoringConfig 快照（label 作 key）恢复，不受 VForm3 重分配 id/guid 影响
@@ -590,6 +1054,7 @@ function extractScoredFieldsPreserveConfig(formJson) {
           } else {
             scoringConfig[id] = { score: 0, answer: type === 'checkbox' ? [] : '', type: 'exact' }
           }
+          initKeywords(scoringConfig[id])
         }
       }
       for (const key of Object.keys(value)) {
@@ -631,11 +1096,59 @@ function increaseScore(widgetId) {
 }
 
 /**
- * 判断评分输入是否禁用（人工/AI评分不需要填正确答案）
+ * 评分方式提示说明
  */
-function isDisabled(row) {
-  const cfg = scoringConfig[row.id]
-  return !cfg || cfg.type === 'manual' || cfg.type === 'ai'
+function scoringTypeHint(type) {
+  const hints = {
+    exact: '学生答案与参考答案完全一致才得分',
+    contains: '按匹配关键词数量比例计分',
+    ai: 'AI根据参考答案对学生答案智能评分'
+  }
+  return hints[type] || ''
+}
+
+// 关键词标签输入相关状态
+const keywordInput = reactive({})
+const keywordInputVisible = reactive({})
+const keywordInputRef = ref(null)
+
+/** 显示关键词输入框 */
+function showKeywordInput(widgetId) {
+  keywordInputVisible[widgetId] = true
+  nextTick(() => {
+    // 聚焦输入框
+    const el = document.querySelector(`.keyword-tags input`)
+    if (el) el.focus()
+  })
+}
+
+/** 添加关键词 */
+function addKeyword(widgetId) {
+  const kw = (keywordInput[widgetId] || '').trim()
+  if (!kw) {
+    keywordInputVisible[widgetId] = false
+    return
+  }
+  const cfg = scoringConfig[widgetId]
+  if (!cfg._keywords) {
+    cfg._keywords = []
+  }
+  if (!cfg._keywords.includes(kw)) {
+    cfg._keywords.push(kw)
+    // 同步到 answer 字段（逗号分隔）
+    cfg.answer = cfg._keywords.join(',')
+  }
+  keywordInput[widgetId] = ''
+  keywordInputVisible[widgetId] = false
+}
+
+/** 移除关键词 */
+function removeKeyword(widgetId, idx) {
+  const cfg = scoringConfig[widgetId]
+  if (cfg._keywords) {
+    cfg._keywords.splice(idx, 1)
+    cfg.answer = cfg._keywords.join(',')
+  }
 }
 
 /**
@@ -875,6 +1388,9 @@ function getFormJsonString() {
     }
     walkWidgets(json.widgetList || [])
 
+    // 修复图片上传组件的 uploadURL（确保保存时 uploadURL 始终正确）
+    fixUploadURLsInPlace(json)
+
     // 构建 _scoringConfig 快照（递归遍历所有 widget，用 label 作 key）
     const scoringSnapshot = {}
     const visited2 = new Set()
@@ -906,11 +1422,17 @@ function getFormJsonString() {
     collectSnapshot(json.widgetList || [])
     json._scoringConfig = scoringSnapshot
 
-    // 将 AI API Key 写入 formJson
+    // 将 AI 配置写入 formJson
     if (scoringEnabled.value && aiApiKey.value) {
       json._aiApiKey = aiApiKey.value
-    } else if (json._aiApiKey) {
+      json._aiProvider = aiProvider.value
+      if (aiModel.value) json._aiModel = aiModel.value
+      if (aiCustomUrl.value) json._aiCustomUrl = aiCustomUrl.value
+    } else {
       delete json._aiApiKey
+      delete json._aiProvider
+      delete json._aiModel
+      delete json._aiCustomUrl
     }
     return JSON.stringify(json)
   }
@@ -928,7 +1450,8 @@ function buildSaveData(status) {
     formJson: getFormJsonString(),
     maxPages: form.maxPages,
     status: status,
-    assignedClassCodes: form.assignedClassCodes
+    assignedClassCodes: form.assignedClassCodes,
+    isPublic: form.isPublic
   }
 }
 
@@ -951,6 +1474,10 @@ function validateScoringTotal() {
 }
 
 function handleSave() {
+  if (!form.sheetId && !form.sheetTitle) {
+    ElMessage.warning('请输入导学单标题')
+    return
+  }
   if (!validateScoringTotal()) return
   const data = buildSaveData(form.sheetId ? form.status : '0')
   saving.value = true
@@ -958,6 +1485,7 @@ function handleSave() {
   apiCall.then(res => {
     if (!form.sheetId && res?.sheetId) form.sheetId = res.sheetId
     if (!form.sheetId && res?.data?.sheetId) form.sheetId = res.data.sheetId
+    dirty.value = false
     ElMessage.success('保存成功')
   }).finally(() => { saving.value = false })
 }
@@ -975,6 +1503,7 @@ function handleSaveAndPublish() {
   apiCall.then(res => {
     if (!form.sheetId && res?.sheetId) form.sheetId = res.sheetId
     if (!form.sheetId && res?.data?.sheetId) form.sheetId = res.data.sheetId
+    dirty.value = false
     return publishGuideSheet(form.sheetId)
   }).then(() => {
     ElMessage.success('保存并发布成功')
@@ -992,6 +1521,16 @@ function openPreview() {
 
 function goBack() {
   if (saving.value) return
+  // 新建表单且无标题：直接返回，不保存（避免 sheet_title 空值导致数据库错误）
+  if (!form.sheetId && !form.sheetTitle) {
+    router.push({ path: '/business/guide-sheet-list' })
+    return
+  }
+  // 无未保存的修改：直接返回，不重复保存
+  if (!dirty.value) {
+    router.push({ path: '/business/guide-sheet-list' })
+    return
+  }
   if (!validateScoringTotal()) return
   saving.value = true
   const data = buildSaveData(form.sheetId ? form.status : '0')
@@ -999,6 +1538,7 @@ function goBack() {
   apiCall.then(res => {
     if (!form.sheetId && res?.sheetId) form.sheetId = res.sheetId
     if (!form.sheetId && res?.data?.sheetId) form.sheetId = res.data.sheetId
+    dirty.value = false
   }).finally(() => {
     saving.value = false
     router.push({ path: '/business/guide-sheet-list' })
@@ -1017,17 +1557,30 @@ function loadSheet(sheetId) {
     form.maxPages = res.data.maxPages || 0
     form.assignedClassCodes = res.data.assignedClassCodes || []
     form.status = res.data.status || '0'
+    form.isPublic = res.data.isPublic || 'Y'
     classOptions.value = res.data.allClassesInGrade || []
+    dirty.value = false
 
     // 将 JSON 回填到设计器
     nextTick(() => {
       if (designerRef.value && form.formJson) {
         try {
           const parsed = JSON.parse(form.formJson)
+          // 修复图片上传组件的 uploadURL（兼容旧数据）
+          fixUploadURLsInPlace(parsed)
           // 在 setFormJson 之前提取评分配置和 AI API Key
           // （防止 setFormJson 触发 onFormJsonChange 时覆盖尚未恢复的 scoringConfig）
           if (parsed._aiApiKey) {
             aiApiKey.value = parsed._aiApiKey
+          }
+          if (parsed._aiProvider) {
+            aiProvider.value = parsed._aiProvider
+          }
+          if (parsed._aiModel) {
+            aiModel.value = parsed._aiModel
+          }
+          if (parsed._aiCustomUrl) {
+            aiCustomUrl.value = parsed._aiCustomUrl
           }
           extractScoredFields(parsed)
           // 检查是否有评分配置（递归检查 widgetList 或 _scoringConfig 快照）
@@ -1038,6 +1591,46 @@ function loadSheet(sheetId) {
           designerRef.value.setFormJson(parsed)
         } catch (e) {
           console.warn('表单JSON解析失败', e)
+        }
+      }
+    })
+  })
+}
+
+/**
+ * 引用模式：加载模板导学单的 formJson，创建新导学单
+ */
+function loadSheetAsTemplate(copyFromId) {
+  tabInjected = true  // 模板已有表单结构，无需注入标签页
+  getGuideSheet(copyFromId).then(res => {
+    form.sheetId = undefined  // 清空ID，保存时创建新记录
+    form.sheetTitle = (res.data.sheetTitle || '') + '的副本'
+    form.lessonId = res.data.lessonId
+    form.formJson = res.data.formJson || ''
+    form.maxPages = res.data.maxPages || 0
+    form.assignedClassCodes = []  // 引用时不复制班级指派
+    form.status = '0'
+    form.isPublic = 'Y'
+    classOptions.value = res.data.allClassesInGrade || []
+    aiApiKey.value = userStore.aiApiKey || ''
+    aiProvider.value = 'deepseek'
+    aiModel.value = ''
+    aiCustomUrl.value = ''
+    dirty.value = false
+
+    nextTick(() => {
+      if (designerRef.value && form.formJson) {
+        try {
+          const parsed = JSON.parse(form.formJson)
+          // 修复图片上传组件的 uploadURL（兼容旧数据）
+          fixUploadURLsInPlace(parsed)
+          extractScoredFields(parsed)
+          const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
+            || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
+          if (hasScoring) scoringEnabled.value = true
+          designerRef.value.setFormJson(parsed)
+        } catch (e) {
+          console.warn('模板表单JSON解析失败', e)
         }
       }
     })
@@ -1055,30 +1648,103 @@ function fetchLessonOptions() {
   }).catch(() => {})
 }
 
+// 监听 formJsonVersion 变化，延迟刷新评分字段列表
+watch(formJsonVersion, () => {
+  if (!designerRef.value) return
+  nextTick(() => {
+    setTimeout(() => refreshScoredFields(), 300)
+  })
+})
+
+// 轮询兜底注入：新建导学单时等待 VForm3 初始化完成，直到标签页注入成功
+let injectPollingTimer = null
+function startInjectPolling() {
+  if (tabInjected) return
+
+  let attempts = 0
+  const maxAttempts = 20  // 20 * 300ms = 6秒，超时停止
+
+  injectPollingTimer = setInterval(() => {
+    attempts++
+    // 仅超时或已注入时停止轮询；designerRef 未就绪时继续等待
+    if (attempts > maxAttempts || tabInjected) {
+      clearInterval(injectPollingTimer)
+      injectPollingTimer = null
+      return
+    }
+
+    try {
+      if (!designerRef.value) return  // VForm3 未就绪，继续轮询
+      const json = designerRef.value.getFormJson()
+      const { hasTab } = extractTabPages(json)
+      if (!hasTab && json.widgetList) {
+        const clonedJson = deepClone(json)
+        clonedJson.widgetList.unshift(createTabWidget())
+        designerRef.value.setFormJson(clonedJson)
+        tabInjected = true
+        clearInterval(injectPollingTimer)
+        injectPollingTimer = null
+      } else if (hasTab) {
+        tabInjected = true
+        clearInterval(injectPollingTimer)
+        injectPollingTimer = null
+      }
+    } catch (e) {
+      // ignore, VForm3 not ready
+    }
+  }, 300)
+}
+
 onMounted(() => {
   fetchLessonOptions()
+  const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId
-  if (sheetId) {
+  if (copyFrom) {
+    // 引用模式：加载模板导学单的 formJson，但创建新导学单
+    loadSheetAsTemplate(copyFrom)
+  } else if (sheetId) {
+    tabInjected = true  // 已有导学单无需注入标签页
     loadSheet(sheetId)
+  } else {
+    // 新建导学单：显式重置所有状态为空白，确保不残留任何旧数据
+    // resetToNewForm 内部会通过 setTimeout 注入 HomeTab 标签页
+    resetToNewForm()
+    // 轮询作为兜底：确保即使 VForm3 初始化延迟也能注入标签页
+    nextTick(startInjectPolling)
   }
 
-  // 监听 formJsonVersion 变化，延迟刷新评分字段列表
-  watch(formJsonVersion, () => {
-    nextTick(() => {
-      setTimeout(() => refreshScoredFields(), 300)
-    })
-  })
-
-  // 轮询兜底：每 2 秒检测一次字段变化（VForm3 操作可能不触发 form-json-change）
+  // 轮询兜底：每 5 秒检测一次字段变化 + 确保标签页不被删除
   pollingTimer = setInterval(() => {
     refreshScoredFields()
-  }, 2000)
+    ensureTabWidget()
+  }, 5000)
 })
 
 onBeforeUnmount(() => {
   if (pollingTimer) {
     clearInterval(pollingTimer)
     pollingTimer = null
+  }
+  if (injectPollingTimer) {
+    clearInterval(injectPollingTimer)
+    injectPollingTimer = null
+  }
+  })
+
+// 监听路由变化：从其他页面跳转到新建表单时，重置为空白状态
+watch(
+  () => route.path,
+  (newPath, oldPath) => {
+    if (newPath === '/business/guide-sheet/designer' && oldPath && oldPath !== '/business/guide-sheet/designer') {
+      nextTick(() => resetToNewForm())
+    }
+  }
+)
+
+// keep-alive 缓存激活时：若为新建表单，重置为仅含 HomeTab 标签页的空白状态
+onActivated(() => {
+  if (!route.params.sheetId) {
+    nextTick(() => resetToNewForm())
   }
 })
 </script>
@@ -1134,6 +1800,11 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.toolbar-public {
+  width: 140px;
+  flex-shrink: 0;
+}
+
 .toolbar-actions {
   display: flex;
   flex-direction: row;
@@ -1181,7 +1852,7 @@ onBeforeUnmount(() => {
   gap: 2px;
 }
 
-/* 正确答案按钮组 */
+/* 参考答案按钮组 */
 .answer-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -1218,5 +1889,37 @@ onBeforeUnmount(() => {
 
 .designer-card :deep(.v-form-designer) {
   width: 100%;
+}
+
+/* 拖拽放置区域高亮 */
+.designer-card :deep(.form-widget-list.drag-over) {
+  outline: 2px dashed #409eff;
+  outline-offset: 2px;
+  background-color: rgba(64, 158, 255, 0.05);
+}
+
+/* 拖拽中的侧边栏项 */
+.field-widget-item.dragging {
+  opacity: 0.5;
+}
+
+/* 评分方式提示文字 */
+.scoring-type-hint {
+  font-size: 11px;
+  color: #909399;
+  margin-top: 3px;
+  line-height: 1.4;
+  max-width: 140px;
+}
+
+/* 关键词标签输入 */
+.keyword-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.keyword-tags .el-tag {
+  margin: 0;
 }
 </style>

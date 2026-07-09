@@ -44,6 +44,8 @@ import ImageUpload from "@/components/ImageUpload"
 import ImagePreview from "@/components/ImagePreview"
 // 字典标签组件
 import DictTag from '@/components/DictTag'
+// 自定义图片展示组件
+import ImageDisplay from '@/components/ImageDisplay/index.vue'
 
 // VForm3 表单设计器 - 导学单设计
 import VForm3 from 'vform3-builds'
@@ -68,6 +70,7 @@ app.component('Pagination', Pagination)
 app.component('FileUpload', FileUpload)
 app.component('ImageUpload', ImageUpload)
 app.component('ImagePreview', ImagePreview)
+app.component('ImageDisplay', ImageDisplay)
 app.component('RightToolbar', RightToolbar)
 app.component('Editor', Editor)
 

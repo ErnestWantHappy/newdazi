@@ -16,9 +16,17 @@ public interface GuideSheetAnswerMapper
     public List<BizGuideSheetAnswer> selectBySheetIdByClassCode(@Param("sheetId") Long sheetId,
                                                                        @Param("classCode") String classCode);
 
+    public Double selectAvgScore(@Param("sheetId") Long sheetId,
+                                  @Param("classCode") String classCode);
+
     public int insertBizGuideSheetAnswer(BizGuideSheetAnswer answer);
 
     public int updateBizGuideSheetAnswer(BizGuideSheetAnswer answer);
 
     public int deleteBizGuideSheetAnswerByAnswerIds(Long[] answerIds);
+
+    /**
+     * 按导学单ID删除所有答案记录（级联删除）
+     */
+    public int deleteBySheetId(Long sheetId);
 }
