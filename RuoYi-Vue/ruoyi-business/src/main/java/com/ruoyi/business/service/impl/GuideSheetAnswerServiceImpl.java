@@ -27,7 +27,10 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
 {
     private static final Logger log = LoggerFactory.getLogger(GuideSheetAnswerServiceImpl.class);
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    // DevTools reload marker - v2
+    private static final String RELOAD_MARKER = "merge-v2";
 
     @Autowired
     private GuideSheetAnswerMapper guideSheetAnswerMapper;
@@ -145,10 +148,30 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
 
     @Override
     @Transactional
-    public int submitAnswer(BizGuideSheetAnswer answer)
+    public int submitAnswer(BizGuideSheetAnswer answer) {
+        return submitAnswer(answer, null);
+    }
+
+    @Override
+    @Transactional
+    public int submitAnswer(BizGuideSheetAnswer answer, Integer tabIndex)
     {
         answer.setStatus("2");
         answer.setSubmitTime(new Date());
+
+        // 分页批改：提交前先获取旧评分数据，用于后续合并
+        String oldGradingDetail = null;
+        if (tabIndex != null) {
+            BizGuideSheetAnswer existing = guideSheetAnswerMapper.selectByStudentAndSheet(
+                    answer.getStudentId(), answer.getSheetId());
+            if (existing != null) {
+                oldGradingDetail = existing.getGradingDetail();
+            }
+        }
+        // 清除旧评分，后续由 gradePage 重新计算
+        answer.setTotalScore(null);
+        answer.setGradingDetail(null);
+        answer.setGradingStatus(null);
         int result = saveAnswer(answer);
 
         // 自动评分
@@ -157,12 +180,23 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
             BizGuideSheet sheet = guideSheetMapper.selectBizGuideSheetBySheetId(answer.getSheetId());
             if (sheet != null && sheet.getFormJson() != null)
             {
-                GradingResult gradingResult = gradingService.grade(
+                GradingResult gradingResult = gradingService.gradePage(
                         sheet.getFormJson(), answer.getAnswerJson(),
-                        answer.getStudentId(), answer.getSheetId());
-                answer.setTotalScore(gradingResult.totalScore);
-                answer.setGradingStatus(gradingResult.gradingStatus);
-                answer.setGradingDetail(gradingResult.gradingDetail);
+                        answer.getStudentId(), answer.getSheetId(), tabIndex);
+
+                if (tabIndex != null) {
+                    // 分页批改：仅评分当前标签页，合并其他标签页旧数据
+                    String mergedDetail = mergeGradingDetail(oldGradingDetail, gradingResult.gradingDetail, tabIndex);
+                    int mergedTotalScore = calculateTotalScoreFromDetail(mergedDetail);
+                    String mergedStatus = calculateGradingStatus(mergedDetail);
+                    answer.setTotalScore(mergedTotalScore);
+                    answer.setGradingStatus(mergedStatus);
+                    answer.setGradingDetail(mergedDetail);
+                } else {
+                    answer.setTotalScore(gradingResult.totalScore);
+                    answer.setGradingStatus(gradingResult.gradingStatus);
+                    answer.setGradingDetail(gradingResult.gradingDetail);
+                }
                 guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
             }
         }
@@ -303,6 +337,90 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
                     collectFieldNames((List<Map<String, Object>>) value, fieldNames, visited);
                 }
             }
+        }
+    }
+
+    /**
+     * 合并评分详情：移除旧数据中同 tabIndex 的项，追加新数据
+     */
+    @SuppressWarnings("unchecked")
+    private String mergeGradingDetail(String existingJson, String newPageJson, int tabIndex) {
+        List<Map<String, Object>> merged = new ArrayList<>();
+        try {
+            // 保留不属于当前 tabIndex 的旧数据
+            if (existingJson != null && !existingJson.isEmpty() && !"null".equals(existingJson)) {
+                List<Map<String, Object>> existingList = objectMapper.readValue(existingJson,
+                        new TypeReference<List<Map<String, Object>>>() {});
+                for (Map<String, Object> item : existingList) {
+                    Object itemTabIdx = item.get("tabIndex");
+                    if (itemTabIdx == null || !Integer.valueOf(itemTabIdx.toString()).equals(tabIndex)) {
+                        merged.add(item);
+                    }
+                }
+            }
+            // 追加新评分数据
+            if (newPageJson != null && !newPageJson.isEmpty()) {
+                List<Map<String, Object>> newList = objectMapper.readValue(newPageJson,
+                        new TypeReference<List<Map<String, Object>>>() {});
+                merged.addAll(newList);
+            }
+            return objectMapper.writeValueAsString(merged);
+        } catch (Exception e) {
+            log.warn("合并评分详情失败，使用新数据", e);
+            return newPageJson != null ? newPageJson : "[]";
+        }
+    }
+
+    /**
+     * 根据合并后的评分详情计算总分
+     */
+    @SuppressWarnings("unchecked")
+    private int calculateTotalScoreFromDetail(String detailJson) {
+        try {
+            int total = 0;
+            if (detailJson != null && !detailJson.isEmpty()) {
+                List<Map<String, Object>> list = objectMapper.readValue(detailJson,
+                        new TypeReference<List<Map<String, Object>>>() {});
+                for (Map<String, Object> item : list) {
+                    Object score = item.get("score");
+                    if (score instanceof Number) {
+                        total += ((Number) score).intValue();
+                    }
+                }
+            }
+            return total;
+        } catch (Exception e) {
+            log.warn("计算总分失败", e);
+            return 0;
+        }
+    }
+
+    /**
+     * 根据评分详情判断评分状态
+     */
+    @SuppressWarnings("unchecked")
+    private String calculateGradingStatus(String detailJson) {
+        try {
+            int autoCount = 0, manualCount = 0;
+            if (detailJson != null && !detailJson.isEmpty()) {
+                List<Map<String, Object>> list = objectMapper.readValue(detailJson,
+                        new TypeReference<List<Map<String, Object>>>() {});
+                for (Map<String, Object> item : list) {
+                    String matchType = (String) item.get("matchType");
+                    if ("manual".equals(matchType)) {
+                        manualCount++;
+                    } else if ("auto".equals(matchType)) {
+                        autoCount++;
+                    }
+                }
+            }
+            if (manualCount > 0 && autoCount > 0) return "partial";
+            if (manualCount > 0) return "manual";
+            if (autoCount > 0) return "auto";
+            return "pending";
+        } catch (Exception e) {
+            log.warn("计算评分状态失败", e);
+            return "partial";
         }
     }
 }

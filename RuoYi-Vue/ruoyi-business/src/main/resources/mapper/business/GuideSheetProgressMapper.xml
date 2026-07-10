@@ -25,6 +25,7 @@
         <result property="isSubmitted"  column="is_submitted"    />
         <result property="lastHeartbeat" column="last_heartbeat"  />
         <result property="progressDetail" column="progress_detail" />
+        <result property="answerJson"   column="answer_json"     />
     </resultMap>
 
     <select id="selectBySheetAndClass" resultMap="GuideSheetProgressVoResult">
@@ -60,7 +61,8 @@
                  WHEN p.is_submitted = 'Y' THEN
                    CONCAT('{"type":"grading","totalScore":', COALESCE(ans.total_score, 0), ',"details":', COALESCE(ans.grading_detail, '[]'), '}')
                  ELSE p.progress_detail
-               END as progress_detail
+               END as progress_detail,
+               ans.answer_json
         FROM biz_guide_sheet_assignment a
         INNER JOIN biz_student s ON s.class_code COLLATE utf8mb4_0900_ai_ci = a.class_code COLLATE utf8mb4_0900_ai_ci AND s.entry_year COLLATE utf8mb4_0900_ai_ci = a.entry_year COLLATE utf8mb4_0900_ai_ci
         INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = a.dept_id
@@ -81,7 +83,8 @@
                  WHEN p.is_submitted = 'Y' THEN
                    CONCAT('{"type":"grading","totalScore":', COALESCE(ans.total_score, 0), ',"details":', COALESCE(ans.grading_detail, '[]'), '}')
                  ELSE p.progress_detail
-               END as progress_detail
+               END as progress_detail,
+               ans.answer_json
         FROM biz_guide_sheet_assignment a
         INNER JOIN biz_student s ON s.class_code COLLATE utf8mb4_0900_ai_ci = a.class_code COLLATE utf8mb4_0900_ai_ci AND s.entry_year COLLATE utf8mb4_0900_ai_ci = a.entry_year COLLATE utf8mb4_0900_ai_ci
         INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = a.dept_id

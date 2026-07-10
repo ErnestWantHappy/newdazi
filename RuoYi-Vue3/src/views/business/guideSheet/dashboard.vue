@@ -118,7 +118,15 @@
                             :class="item.score === item.maxScore ? 'correct' : item.score === 0 ? 'wrong' : 'partial'"
                           >{{ item.fieldTitle || getFieldLabel(item.fieldKey) }} {{ item.score }}/{{ item.maxScore }}</span>
                         </span>
-                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(filterPageGradingDetails(row.progressDetail, selectedPage).details)">详情</el-button>
+                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(filterPageGradingDetails(row.progressDetail, selectedPage).details, row.studentId)">详情</el-button>
+                      </span>
+                    </div>
+                    <!-- 自评 -->
+                    <div v-if="hasRateFields && getSelfScores(row.studentId).length > 0" class="self-assessment-inline">
+                      <span class="self-assessment-label">自评：</span>
+                      <span v-for="(s, si) in getSelfScores(row.studentId)" :key="si" class="self-rate-item">
+                        <span class="self-rate-item-label">{{ s.label }}</span>
+                        <el-rate v-model="s.value" disabled size="small" />
                       </span>
                     </div>
                   </template>
@@ -162,7 +170,15 @@
                             :class="item.score === item.maxScore ? 'correct' : item.score === 0 ? 'wrong' : 'partial'"
                           >{{ item.fieldTitle || item.fieldKey }} {{ item.score }}/{{ item.maxScore }}</span>
                         </span>
-                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(parseGradingDetail(row.progressDetail).details)">详情</el-button>
+                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(parseGradingDetail(row.progressDetail).details, row.studentId)">详情</el-button>
+                      </span>
+                    </div>
+                    <!-- 自评 -->
+                    <div v-if="hasRateFields && getSelfScores(row.studentId).length > 0" class="self-assessment-inline">
+                      <span class="self-assessment-label">自评：</span>
+                      <span v-for="(s, si) in getSelfScores(row.studentId)" :key="si" class="self-rate-item">
+                        <span class="self-rate-item-label">{{ s.label }}</span>
+                        <el-rate v-model="s.value" disabled size="small" />
                       </span>
                     </div>
                   </template>
@@ -183,7 +199,11 @@
       </el-col>
       <el-col :span="12">
         <el-card shadow="never" header="填写进度详情">
-          <el-table :data="sortedFilteredList" stripe size="small" max-height="calc(100vh - 420px)" v-loading="loading">
+          <div v-if="!classCode" class="chart-placeholder">
+            <el-icon :size="48"><Warning /></el-icon>
+            <p>请选择指定班级查看教学进度</p>
+          </div>
+          <el-table v-else :data="sortedFilteredList" stripe size="small" max-height="calc(100vh - 420px)" v-loading="loading">
             <el-table-column label="班级" prop="classCode" width="80" v-if="!classCode" />
             <el-table-column label="姓名" prop="studentName" width="120" />
             <el-table-column label="学号" prop="studentNo" width="120" />
@@ -215,6 +235,14 @@
 
   <!-- 批改详情弹窗 -->
   <el-dialog v-model="gradingDetailVisible" title="批改详情" width="620px" append-to-body>
+    <!-- 自评数据（置顶，固定不随滚动） -->
+    <div v-if="hasRateFields && getSelfScores(currentDetailStudentId).length > 0" class="self-assessment-detail self-assessment-sticky">
+      <div class="self-assessment-sticky-title">学生自评</div>
+      <div v-for="(s, si) in getSelfScores(currentDetailStudentId)" :key="si" class="self-assessment-row">
+        <span class="self-assessment-label">{{ s.label }}：</span>
+        <el-rate v-model="s.value" disabled show-score size="default" />
+      </div>
+    </div>
     <div class="grading-detail-dialog">
       <div class="detail-item"
         v-for="(item, idx) in currentGradingItems"
@@ -265,15 +293,31 @@ const assignedClasses = ref([])
 const progressData = ref({ total: 0, submitted: 0, avgScore: 0, list: [] })
 const loading = ref(false)
 
+// 自评数据
+const selfAssessment = ref({ rateFields: [], studentScores: {} })
+
 // 批改详情弹窗
 const gradingDetailVisible = ref(false)
 const currentGradingItems = ref([])
+const currentDetailStudentId = ref(null)
 
 /** 打开批改详情弹窗 */
-function openGradingDetail(items) {
+function openGradingDetail(items, studentId) {
   currentGradingItems.value = items || []
+  currentDetailStudentId.value = studentId || null
   gradingDetailVisible.value = true
 }
+
+/** 获取学生自评数据 */
+function getSelfScores(studentId) {
+  const scores = selfAssessment.value.studentScores || {}
+  return scores[String(studentId)] || []
+}
+
+/** 是否有评分组件 */
+const hasRateFields = computed(() => {
+  return (selfAssessment.value.rateFields || []).length > 0
+})
 
 /** 标签页名称映射：pageIndex(1-based) → pageName */
 const pageNameMap = ref({})
@@ -561,6 +605,7 @@ function refresh() {
   loading.value = true
   getProgress(sheetId, classCode.value).then(res => {
     progressData.value = res
+    selfAssessment.value = res.selfAssessment || { rateFields: [], studentScores: {} }
     nextTick(() => {
       updateBarChart()
       updateCompletionPie()
@@ -954,4 +999,69 @@ onBeforeUnmount(() => {
 }
 .field-tag.field-filled { background: #f0f9eb; color: #67C23A; }
 .field-tag.field-empty { background: #fef0f0; color: #F56C6C; }
+
+/* 自评样式 */
+.self-assessment-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.self-assessment-label {
+  font-size: 12px;
+  color: #909399;
+}
+.self-rate-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.self-rate-item-label {
+  font-size: 11px;
+  color: #606266;
+  white-space: nowrap;
+}
+.self-rate-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.self-rate-label {
+  font-size: 11px;
+  color: #909399;
+}
+.self-assessment-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-bottom: 1px solid #ebeef5;
+  padding: 10px 0;
+  margin-bottom: 12px;
+}
+.self-assessment-sticky-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #dcdfe6;
+}
+.self-assessment-detail {
+  margin-top: 0;
+}
+.self-assessment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.self-assessment-row .self-assessment-label {
+  font-size: 14px;
+  color: #606266;
+  min-width: 80px;
+}
 </style>

@@ -29,5 +29,7 @@ public interface IGuideSheetAnswerService
 
     public int submitAnswer(BizGuideSheetAnswer answer);
 
+    public int submitAnswer(BizGuideSheetAnswer answer, Integer tabIndex);
+
     public int updateGrading(BizGuideSheetAnswer answer);
 }

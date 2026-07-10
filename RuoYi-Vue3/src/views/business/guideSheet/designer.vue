@@ -669,13 +669,12 @@ function fixUploadURLsInPlace(obj) {
 // 设计器中隐藏的无评分价值字段
 const bannedWidgets = [
   'button', 'alert',
-  'divider',
   'file-upload',
   'fold', 'snippet', 'type-editor',
   // 隐藏不需要的输入/时间/数值/富文本字段（单行输入 input 恢复显示）
   'text', 'number',
   'time', 'time-range', 'date', 'date-range', 'daterange',
-  'rate', 'slider', 'switch',
+  'slider', 'switch',
   'rich-editor',
   'picture-upload'
 ]

@@ -60,10 +60,16 @@ public class GuideSheetGradingService {
         public int totalScore;
         public String gradingStatus;
         public String gradingDetail;
+        /** 当前页得分（分页评分时） */
+        public int pageScore;
+        /** 当前页满分（分页评分时） */
+        public int pageMaxScore;
+        /** 当前页评分详情 JSON（分页评分时） */
+        public String pageGradingDetail;
     }
 
     /**
-     * 执行自动评分
+     * 执行自动评分（全页评分）
      *
      * @param formJson   导学单表单结构 JSON（含 _scoringConfig 快照和 widgetList[].scoring）
      * @param answerJson 学生答案 JSON（key 为 widget 的 name 字段）
@@ -71,8 +77,18 @@ public class GuideSheetGradingService {
      * @param sheetId    导学单ID（用于频率限制）
      * @return 评分结果
      */
-    @SuppressWarnings("unchecked")
     public GradingResult grade(String formJson, String answerJson, Long studentId, Long sheetId) {
+        return gradePage(formJson, answerJson, studentId, sheetId, null);
+    }
+
+    /**
+     * 分页评分：仅评分指定 tab-pane 索引的字段（null = 全部页）
+     *
+     * @param targetTabIndex 目标标签页索引（0-based），null 表示评分全部页
+     */
+    @SuppressWarnings("unchecked")
+    public GradingResult gradePage(String formJson, String answerJson, Long studentId, Long sheetId,
+                                    Integer targetTabIndex) {
         GradingResult result = new GradingResult();
         int totalScore = 0;
         List<Map<String, Object>> detailList = new ArrayList<>();
@@ -86,7 +102,7 @@ public class GuideSheetGradingService {
             // 1. 优先读取 _scoringConfig 快照（label -> config），label 稳定不受 VForm3 id/guid 变化影响
             Map<String, Map<String, Object>> scoringSnapshot = (Map<String, Map<String, Object>>) formObj.get("_scoringConfig");
             boolean hasSnapshot = scoringSnapshot != null && !scoringSnapshot.isEmpty();
-            log.info("评分调试: hasSnapshot={}, scoringKeys={}", hasSnapshot,
+            log.info("评分: hasSnapshot={}, scoringKeys={}", hasSnapshot,
                     hasSnapshot ? scoringSnapshot.keySet() : "null");
 
             // 2. 解析学生答案
@@ -95,6 +111,7 @@ public class GuideSheetGradingService {
                 answerObj = objectMapper.readValue(answerJson,
                         new TypeReference<Map<String, Object>>() {});
             }
+            log.info("学生答案字段数: {}", answerObj.size());
 
             // 3. 递归展平所有 widget
             List<Map<String, Object>> widgetList = (List<Map<String, Object>>) formObj.get("widgetList");
@@ -104,12 +121,27 @@ public class GuideSheetGradingService {
                 return result;
             }
             List<Map<String, Object>> flatWidgets = new ArrayList<>();
-            flattenWidgets(widgetList, flatWidgets);
+            // 展平 widget 时同时跟踪每个字段所属的 tab-pane 索引（0-based），用于分页评分
+            Map<String, Integer> fieldTabIndexMap = new LinkedHashMap<>();
+            flattenWidgetsWithTabIndex(widgetList, flatWidgets, fieldTabIndexMap, -1);
+
+            
 
             // 4. 遍历每个字段进行评分
+            boolean isPageGrading = targetTabIndex != null;
+            List<Map<String, Object>> pageDetailList = new ArrayList<>();
+            int pageScore = 0, pageMaxScore = 0;
             for (Map<String, Object> widget : flatWidgets) {
                 String fieldKey = (String) widget.getOrDefault("name", widget.get("id"));
                 if (fieldKey == null) continue;
+
+                // 分页评分模式：跳过不属于目标标签页的字段
+                if (isPageGrading) {
+                    Integer widgetTabIndex = fieldTabIndexMap.get(fieldKey);
+                    if (widgetTabIndex == null || !widgetTabIndex.equals(targetTabIndex)) {
+                        continue;
+                    }
+                }
 
                 String fieldLabel = getWidgetLabel(widget);
                 String fieldType = (String) widget.get("type");
@@ -118,8 +150,7 @@ public class GuideSheetGradingService {
                 ScoringEntry scoringEntry = null;
                 if (hasSnapshot) {
                     Map<String, Object> snapCfg = scoringSnapshot.get(fieldLabel);
-                    log.info("评分调试: fieldKey={}, fieldLabel={}, type={}, inSnapshot={}",
-                            fieldKey, fieldLabel, fieldType, snapCfg != null);
+                    
                     if (snapCfg != null) {
                         scoringEntry = new ScoringEntry();
                         scoringEntry.score = toInt(snapCfg.get("score"), 0);
@@ -144,23 +175,23 @@ public class GuideSheetGradingService {
                 int maxScore = scoringEntry.score;
                 String answerType = scoringEntry.type;
                 String correctAnswer = scoringEntry.answer;
-
                 // 人工批改 → 不计分，标记待处理
                 if (GRADING_TYPE_MANUAL.equals(answerType)) {
                     manualCount++;
-                    log.info("评分调试: 人工批改分支 fieldKey={}, fieldLabel={}, answerType={}", fieldKey, fieldLabel, answerType);
+                    
+                    Integer tabIdx1 = fieldTabIndexMap.get(fieldKey);
                     detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                            "manual", "待人工批改", correctAnswer, null));
+                            "manual", "待人工批改", correctAnswer, null, tabIdx1));
                     continue;
                 }
 
                 // AI 评分
                 if (GRADING_TYPE_AI.equals(answerType)) {
-                    log.info("评分调试: AI评分分支 fieldKey={}, fieldLabel={}", fieldKey, fieldLabel);
+                    Integer tabIdxAi = fieldTabIndexMap.get(fieldKey);
                     if (correctAnswer == null || correctAnswer.isEmpty()) {
                         manualCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                                "manual", "未设置参考答案", null, null));
+                                "manual", "未设置参考答案", null, null, tabIdxAi));
                         continue;
                     }
                     // 获取学生答案
@@ -168,7 +199,7 @@ public class GuideSheetGradingService {
                     if (studentAnswer == null || "".equals(String.valueOf(studentAnswer).trim())) {
                         autoCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                                "auto", "未作答", correctAnswer, null));
+                                "auto", "未作答", correctAnswer, null, tabIdxAi));
                         continue;
                     }
                     // 调用 AI 评分
@@ -177,7 +208,7 @@ public class GuideSheetGradingService {
                         if (!checkRateLimit(studentId, sheetId)) {
                             manualCount++;
                             detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                                    "manual", "AI评分频率限制：5分钟内已调用" + RATE_LIMIT_MAX_CALLS + "次，请稍后再试", correctAnswer, null));
+                                    "manual", "AI评分频率限制：5分钟内已调用" + RATE_LIMIT_MAX_CALLS + "次，请稍后再试", correctAnswer, null, tabIdxAi));
                             continue;
                         }
                         String aiApiKey = (String) formObj.get("_aiApiKey");
@@ -193,12 +224,12 @@ public class GuideSheetGradingService {
                         totalScore += aiResult.score;
                         autoCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, aiResult.score, maxScore,
-                                "auto", "AI评分(" + provider.getCode() + "): " + aiResult.score + "/" + maxScore, correctAnswer, aiResult.comment));
+                                "auto", "AI评分(" + provider.getCode() + "): " + aiResult.score + "/" + maxScore, correctAnswer, aiResult.comment, tabIdxAi));
                     } catch (Exception e) {
                         log.error("AI评分调用失败 fieldKey={}", fieldKey, e);
                         manualCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                                "manual", "AI评分失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"), correctAnswer, null));
+                                "manual", "AI评分失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"), correctAnswer, null, tabIdxAi));
                     }
                     continue;
                 }
@@ -207,8 +238,9 @@ public class GuideSheetGradingService {
                 Object studentAnswer = answerObj.get(fieldKey);
                 if (studentAnswer == null || "".equals(String.valueOf(studentAnswer).trim())) {
                     autoCount++;
+                    Integer tabIdxEmpty = fieldTabIndexMap.get(fieldKey);
                     detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                            "auto", "未作答", correctAnswer, null));
+                            "auto", "未作答", correctAnswer, null, tabIdxEmpty));
                     continue;
                 }
 
@@ -237,8 +269,25 @@ public class GuideSheetGradingService {
                 autoCount++;
                 totalScore += fieldScore;
 
-                detailList.add(buildDetail(fieldKey, fieldLabel, fieldScore, maxScore,
-                        "auto", desc, correctAnswer, null));
+                // 获取字段所属的 tab-pane 索引（用于分页评分展示）
+                Integer tabIndex = fieldTabIndexMap.get(fieldKey);
+                Map<String, Object> detailItem = buildDetail(fieldKey, fieldLabel, fieldScore, maxScore,
+                        "auto", desc, correctAnswer, null, tabIndex);
+                detailList.add(detailItem);
+                // 分页评分：同时累加当前页得分
+                if (isPageGrading) {
+                    pageDetailList.add(detailItem);
+                    pageScore += fieldScore;
+                    pageMaxScore += maxScore;
+                }
+            }
+
+            // 分页评分：生成当前页评分结果
+            if (isPageGrading) {
+                pageScore = deduplicateDetailList(pageDetailList, pageScore);
+                result.pageScore = pageScore;
+                result.pageMaxScore = pageMaxScore;
+                result.pageGradingDetail = toJson(pageDetailList);
             }
 
         } catch (Exception e) {
@@ -323,50 +372,83 @@ public class GuideSheetGradingService {
 
     /**
      * 通用递归展平 widget 树——不依赖特定容器属性名
-     * 凡是带 id/name + type 的 Map 即为字段，所有数组和子 Map 一律深入
+     * 同时跟踪每个字段所属的 tab-pane 索引（0-based），用于分页评分展示
+     * parentTabIndex: -1 表示不在任何 tab-pane 内（顶层 widget）
      */
     @SuppressWarnings("unchecked")
-    private void flattenWidgets(List<Map<String, Object>> widgets,
-                                List<Map<String, Object>> result) {
+    private void flattenWidgetsWithTabIndex(List<Map<String, Object>> widgets,
+                                List<Map<String, Object>> result,
+                                Map<String, Integer> fieldTabIndexMap,
+                                int parentTabIndex) {
         Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<String> addedKeys = new HashSet<>();
         for (Map<String, Object> widget : widgets) {
-            walkFlatten(widget, result, visited, addedKeys);
+            int tabIndexForThis = parentTabIndex;
+            // 如果当前 widget 是 tab，需要提取每个 tab-pane 的索引
+            if ("tab".equals(widget.get("type"))) {
+                List<Map<String, Object>> tabs = (List<Map<String, Object>>) widget.get("tabs");
+                if (tabs != null) {
+                    for (int i = 0; i < tabs.size(); i++) {
+                        Map<String, Object> pane = tabs.get(i);
+                        List<Map<String, Object>> paneWidgets = (List<Map<String, Object>>) pane.get("widgetList");
+                        if (paneWidgets != null) {
+                            // 递归处理 tab-pane 内的 widgetList，传入当前 pane 的索引
+                            flattenWidgetsWithTabIndex(paneWidgets, result, fieldTabIndexMap, i);
+                        }
+                    }
+                }
+                continue; // tab 本身不是可评分字段，跳过
+            }
+            walkFlattenWithTabIndex(widget, result, visited, addedKeys, tabIndexForThis, fieldTabIndexMap);
         }
     }
 
     /**
-     * 通用递归遍历：深入任意 Map 和 List，提取所有可评分字段
-     * 使用 addedKeys Set 按 fieldKey 去重（O(1)查重），避免同一字段被多次添加
+     * 通用递归遍历，同时记录每字段所属的 tabIndex
      */
     @SuppressWarnings("unchecked")
-    private void walkFlatten(Object value, List<Map<String, Object>> result,
-                             Set<Object> visited, Set<String> addedKeys) {
+    private void walkFlattenWithTabIndex(Object value, List<Map<String, Object>> result,
+                             Set<Object> visited, Set<String> addedKeys,
+                             int tabIndex, Map<String, Integer> fieldTabIndexMap) {
         if (value == null || visited.contains(value)) return;
         visited.add(value);
 
         if (value instanceof List) {
             for (Object item : (List<?>) value) {
-                walkFlatten(item, result, visited, addedKeys);
+                walkFlattenWithTabIndex(item, result, visited, addedKeys, tabIndex, fieldTabIndexMap);
             }
         } else if (value instanceof Map) {
             Map<String, Object> map = (Map<String, Object>) value;
-            // 有 id/name + type 且包含控件特征属性的才是真正的 widget（排除 options 等配置对象）
+            // 遇到 tab 时，按 tab-pane 索引分别处理
+            if ("tab".equals(map.get("type"))) {
+                List<Map<String, Object>> tabs = (List<Map<String, Object>>) map.get("tabs");
+                if (tabs != null) {
+                    for (int i = 0; i < tabs.size(); i++) {
+                        Map<String, Object> pane = tabs.get(i);
+                        List<Map<String, Object>> paneWidgets = (List<Map<String, Object>>) pane.get("widgetList");
+                        if (paneWidgets != null) {
+                            for (Map<String, Object> pw : paneWidgets) {
+                                walkFlattenWithTabIndex(pw, result, visited, addedKeys, i, fieldTabIndexMap);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
             Object id = map.get("id");
             if (id == null) id = map.get("name");
             Object type = map.get("type");
             if (id != null && type != null && isRealWidget(map)) {
                 String fieldKey = String.valueOf(id);
-                // 使用 Set 去重（O(1)），替代 O(n) 的 stream 扫描
                 if (addedKeys.add(fieldKey)) {
                     result.add(map);
+                    fieldTabIndexMap.put(fieldKey, tabIndex);
                 }
             }
-            }
-            // 无论是否为字段，继续深入所有属性值
+            // 继续深入子属性
             for (Object v : map.values()) {
                 if (v instanceof Map || v instanceof List) {
-                    walkFlatten(v, result, visited, addedKeys);
+                    walkFlattenWithTabIndex(v, result, visited, addedKeys, tabIndex, fieldTabIndexMap);
                 }
             }
         }
@@ -407,9 +489,10 @@ public class GuideSheetGradingService {
         }
         if (removed > 0) {
             log.warn("评分详情去重：移除 {} 条重复记录，总分从 {} 修正为 {}", removed, currentTotal, newTotal);
-            detailList.clear();
-            detailList.addAll(deduplicated);
         }
+        // 始终用去重后的列表替换，防止任何情况下的重复
+        detailList.clear();
+        detailList.addAll(deduplicated);
         return newTotal;
     }
 
@@ -517,7 +600,8 @@ public class GuideSheetGradingService {
     private Map<String, Object> buildDetail(String fieldKey, String fieldTitle,
                                             int score, int maxScore,
                                             String matchType, String desc,
-                                            String referenceAnswer, String aiComment) {
+                                            String referenceAnswer, String aiComment,
+                                            Integer tabIndex) {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("fieldKey", fieldKey);
         detail.put("fieldTitle", fieldTitle);
@@ -530,6 +614,9 @@ public class GuideSheetGradingService {
         }
         if (aiComment != null) {
             detail.put("aiComment", aiComment);
+        }
+        if (tabIndex != null && tabIndex >= 0) {
+            detail.put("tabIndex", tabIndex);
         }
         return detail;
     }

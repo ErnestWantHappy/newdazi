@@ -19,6 +19,9 @@ public class GuideSheetProgressVo
     /** 进度详情JSON（填写中：{filled:N,total:N}；已提交：评分详情） */
     private String progressDetail;
 
+    /** 学生答案JSON（用于提取自评数据） */
+    private String answerJson;
+
     public Long getId() {
         return id;
     }
@@ -85,4 +88,7 @@ public class GuideSheetProgressVo
 
     public String getProgressDetail() { return progressDetail; }
     public void setProgressDetail(String progressDetail) { this.progressDetail = progressDetail; }
+
+    public String getAnswerJson() { return answerJson; }
+    public void setAnswerJson(String answerJson) { this.answerJson = answerJson; }
 }

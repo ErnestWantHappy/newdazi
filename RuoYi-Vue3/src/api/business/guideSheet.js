@@ -114,3 +114,11 @@ export function getCreatorList() {
     method: 'get'
   })
 }
+
+/** 学生获取自己的评分结果 */
+export function getStudentGrading(sheetId) {
+  return request({
+    url: '/business/guide-sheet/student/grading/' + sheetId,
+    method: 'get'
+  })
+}

@@ -2,7 +2,9 @@ package com.ruoyi.business.controller;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -253,6 +255,9 @@ public class GuideSheetController extends BaseController
                 ? Integer.valueOf(request.get("currentPage").toString()) : 0;
         String action = request.get("action") != null
                 ? request.get("action").toString() : "save";
+        // 分页批改：前端传入的标签页索引（0-based），null 表示全页批改
+        Integer tabIndex = request.get("tabIndex") != null
+                ? Integer.valueOf(request.get("tabIndex").toString()) : null;
 
         if (sheetId == null)
         {
@@ -267,7 +272,7 @@ public class GuideSheetController extends BaseController
 
         if ("submit".equals(action))
         {
-            guideSheetAnswerService.submitAnswer(answer);
+            guideSheetAnswerService.submitAnswer(answer, tabIndex);
             return success("提交成功");
         }
         else
@@ -311,11 +316,148 @@ public class GuideSheetController extends BaseController
         // 获取平均分
         Double avgScore = guideSheetAnswerService.getAvgScore(sheetId, classCode);
 
+        // 提取自评数据：从 formJson 中找 rate 类型组件，从学生 answerJson 中提取对应值
+        Map<String, Object> selfAssessmentData = extractSelfAssessment(sheetId, list);
+
         return success()
                 .put("total", total)
                 .put("submitted", submitted)
                 .put("avgScore", avgScore != null ? avgScore : 0.0)
-                .put("list", list);
+                .put("list", list)
+                .put("selfAssessment", selfAssessmentData);
+    }
+
+    /**
+     * 提取学生自评数据：从 formJson 中找到所有 rate（评分）组件，
+     * 然后从每个学生的 answerJson 中提取对应的评分值。
+     *
+     * @return Map<"rateFields", List<{name,label}>> + Map<"studentScores", Map<studentId, List<{name,label,value}>>>
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractSelfAssessment(Long sheetId, List<GuideSheetProgressVo> progressList) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        List<Map<String, String>> rateFields = new ArrayList<>();
+        Map<String, List<Map<String, Object>>> studentScores = new LinkedHashMap<>();
+
+        try {
+            // 1. 获取导学单的 formJson，找到所有 rate 类型组件
+            BizGuideSheet sheet = guideSheetService.getBySheetId(sheetId);
+            if (sheet == null || sheet.getFormJson() == null || sheet.getFormJson().isEmpty()) {
+                result.put("rateFields", rateFields);
+                result.put("studentScores", studentScores);
+                return result;
+            }
+
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> formObj = mapper.readValue(sheet.getFormJson(),
+                    new TypeReference<Map<String, Object>>() {});
+            List<Map<String, Object>> widgetList = (List<Map<String, Object>>) formObj.get("widgetList");
+            if (widgetList != null) {
+                findRateWidgets(widgetList, rateFields, new HashSet<>());
+            }
+
+            if (rateFields.isEmpty()) {
+                result.put("rateFields", rateFields);
+                result.put("studentScores", studentScores);
+                return result;
+            }
+
+            // 2. 收集所有 rate 组件的 name，用于从 answerJson 中提取值
+            Set<String> rateNames = new HashSet<>();
+            for (Map<String, String> f : rateFields) {
+                rateNames.add(f.get("name"));
+            }
+
+            // 3. 遍历每个已提交的学生，从 answerJson 中提取评分值
+            for (GuideSheetProgressVo p : progressList) {
+                if (!"Y".equals(p.getIsSubmitted()) || p.getAnswerJson() == null || p.getAnswerJson().isEmpty()) {
+                    continue;
+                }
+                try {
+                    Map<String, Object> answerObj = mapper.readValue(p.getAnswerJson(),
+                            new TypeReference<Map<String, Object>>() {});
+                    List<Map<String, Object>> scores = new ArrayList<>();
+                    for (Map<String, String> rf : rateFields) {
+                        String name = rf.get("name");
+                        Object value = answerObj.get(name);
+                        if (value != null) {
+                            Map<String, Object> item = new LinkedHashMap<>();
+                            item.put("name", name);
+                            item.put("label", rf.get("label"));
+                            item.put("value", value);
+                            scores.add(item);
+                        }
+                    }
+                    if (!scores.isEmpty()) {
+                        studentScores.put(String.valueOf(p.getStudentId()), scores);
+                    }
+                } catch (Exception e) {
+                    log.warn("解析学生 {} 答案JSON失败", p.getStudentId(), e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("提取自评数据失败", e);
+        }
+
+        result.put("rateFields", rateFields);
+        result.put("studentScores", studentScores);
+        return result;
+    }
+
+    /**
+     * 递归查找 formJson widget 树中所有 type=rate 的组件
+     */
+    @SuppressWarnings("unchecked")
+    private void findRateWidgets(List<Map<String, Object>> widgets, List<Map<String, String>> result,
+                                  Set<Object> visited) {
+        if (widgets == null) return;
+        for (Map<String, Object> w : widgets) {
+            if (visited.contains(w)) continue;
+            visited.add(w);
+            String type = (String) w.get("type");
+            if ("rate".equals(type)) {
+                Map<String, String> field = new LinkedHashMap<>();
+                field.put("name", String.valueOf(w.getOrDefault("name", w.get("id"))));
+                // 优先从 options.label 获取标签文字（VForm3评分组件标签存储在options中）
+                String label = null;
+                Map<String, Object> options = (Map<String, Object>) w.get("options");
+                if (options != null) {
+                    Object optLabel = options.get("label");
+                    if (optLabel != null && !"null".equals(String.valueOf(optLabel))) {
+                        label = String.valueOf(optLabel);
+                    }
+                }
+                if (label == null || "null".equals(label)) {
+                    label = String.valueOf(w.getOrDefault("label", w.getOrDefault("name", w.get("id"))));
+                }
+                field.put("label", label);
+                result.add(field);
+            }
+            // 递归检查子组件（tabs、widgetList 等）
+            List<Map<String, Object>> children = (List<Map<String, Object>>) w.get("widgetList");
+            if (children != null) {
+                findRateWidgets(children, result, visited);
+            }
+            List<Map<String, Object>> tabs = (List<Map<String, Object>>) w.get("tabs");
+            if (tabs != null) {
+                for (Map<String, Object> tab : tabs) {
+                    List<Map<String, Object>> tabWidgets = (List<Map<String, Object>>) tab.get("widgetList");
+                    if (tabWidgets != null) {
+                        findRateWidgets(tabWidgets, result, visited);
+                    }
+                }
+            }
+            // 检查 col 布局中的子组件
+            List<Map<String, Object>> cols = (List<Map<String, Object>>) w.get("cols");
+            if (cols != null) {
+                for (Map<String, Object> col : cols) {
+                    List<Map<String, Object>> colWidgets = (List<Map<String, Object>>) col.get("widgetList");
+                    if (colWidgets != null) {
+                        findRateWidgets(colWidgets, result, visited);
+                    }
+                }
+            }
+        }
     }
 
     @PutMapping("/progress/heartbeat")
