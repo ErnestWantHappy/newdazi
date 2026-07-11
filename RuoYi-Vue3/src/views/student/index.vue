@@ -5,6 +5,10 @@
       <div class="header-left">
         <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
         <span class="platform-name">智慧课堂 - 学生端</span>
+        <div class="view-toggle">
+          <el-button size="small" type="primary" disabled>主页</el-button>
+          <el-button size="small" plain @click="switchToGuideSheet">电子导学单</el-button>
+        </div>
       </div>
       <div class="header-right">
         <div class="header-actions">
@@ -1975,6 +1979,10 @@ function formatDateTime(dateStr) {
   return `${y}-${m}-${d} ${h}:${min}`;
 }
 
+function switchToGuideSheet() {
+  router.push('/student/guide-sheet');
+}
+
 onMounted(() => {
   fetchData();
 });
@@ -2010,6 +2018,21 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.view-toggle {
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+.view-toggle .el-button {
+  margin-left: 0;
+  border-radius: 0;
+}
+.view-toggle .el-button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.view-toggle .el-button:last-child {
+  border-radius: 0 4px 4px 0;
 }
 .logo {
   height: 32px;
