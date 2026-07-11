@@ -14,8 +14,20 @@ public class CountyExamGrader {
     /** 县考ID */
     private Long examId;
 
+    /** 操作题ID */
+    private Long questionId;
+
     /** 教师ID */
     private Long graderId;
+
+    /** 教师姓名 */
+    private String graderName;
+
+    /** 教师账号 */
+    private String userName;
+
+    /** 所属学校 */
+    private String deptName;
 
     /** 分配数量 */
     private Integer targetCount;
@@ -39,12 +51,44 @@ public class CountyExamGrader {
         this.examId = examId;
     }
 
+    public Long getQuestionId() {
+        return questionId;
+    }
+
+    public void setQuestionId(Long questionId) {
+        this.questionId = questionId;
+    }
+
     public Long getGraderId() {
         return graderId;
     }
 
     public void setGraderId(Long graderId) {
         this.graderId = graderId;
+    }
+
+    public String getGraderName() {
+        return graderName;
+    }
+
+    public void setGraderName(String graderName) {
+        this.graderName = graderName;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
+
+    public String getDeptName() {
+        return deptName;
+    }
+
+    public void setDeptName(String deptName) {
+        this.deptName = deptName;
     }
 
     public Integer getTargetCount() {

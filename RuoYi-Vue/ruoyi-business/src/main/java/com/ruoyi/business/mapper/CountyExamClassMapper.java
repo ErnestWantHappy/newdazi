@@ -2,6 +2,7 @@ package com.ruoyi.business.mapper;
 
 import com.ruoyi.business.domain.CountyExamClass;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 县考班级指派表 Mapper接口
@@ -33,5 +34,14 @@ public interface CountyExamClassMapper {
     /**
      * 根据学生信息查询是否在县考班级中
      */
-    CountyExamClass selectByStudentInfo(Long deptId, String entryYear, String classCode);
+    CountyExamClass selectByStudentInfo(@Param("deptId") Long deptId,
+                                        @Param("entryYear") String entryYear,
+                                        @Param("classCode") String classCode);
+
+    /**
+     * 查询学生当前可参加的已开启区域抽测班级。
+     */
+    List<CountyExamClass> selectActiveByStudentInfo(@Param("deptId") Long deptId,
+                                                    @Param("entryYear") String entryYear,
+                                                    @Param("classCode") String classCode);
 }

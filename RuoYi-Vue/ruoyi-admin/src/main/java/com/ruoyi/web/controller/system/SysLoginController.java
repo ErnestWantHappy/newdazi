@@ -82,8 +82,7 @@ public class SysLoginController
         // 角色集合
         Set<String> roles = permissionService.getRolePermission(user);
         
-        // 【核心修复】手动检查是否为学生，强制添加 student 角色
-        // 解决因 sys_role 表中缺少 role_id=4 的记录导致前端无法识别学生身份的问题
+        // 前端路由兼容：biz_student 存在则补充 student 角色（后端接口鉴权见 StudentSecurityService）
         com.ruoyi.business.domain.BizStudent student = bizStudentMapper.selectBizStudentByUserId(user.getUserId());
         if (student != null) {
             roles.add("student");

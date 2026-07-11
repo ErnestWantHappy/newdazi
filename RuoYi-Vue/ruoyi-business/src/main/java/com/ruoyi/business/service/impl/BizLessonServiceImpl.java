@@ -357,6 +357,7 @@ public class BizLessonServiceImpl implements IBizLessonService
             bizLessonMapper.insertBizLesson(lessonToSave);
         } else {
             lessonToSave.setUpdateBy(username);
+            lessonToSave.setUpdateTime(new Date());
             bizLessonMapper.updateBizLesson(lessonToSave);
         }
         Long lessonId = lessonToSave.getLessonId();

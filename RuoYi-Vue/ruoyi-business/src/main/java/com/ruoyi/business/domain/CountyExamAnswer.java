@@ -1,5 +1,7 @@
 package com.ruoyi.business.domain;
 
+import java.util.Date;
+
 /**
  * 县考答题记录表 biz_county_exam_answer
  * 
@@ -40,6 +42,33 @@ public class CountyExamAnswer {
 
     /** 文件路径 */
     private String filePath;
+
+    /** 提交时间 */
+    private Date submitTime;
+
+    /** 打字速度 */
+    private Integer typingSpeed;
+
+    /** 正确率 */
+    private Double accuracyRate;
+
+    /** 完成率 */
+    private Double completionRate;
+
+    /** 预览状态 */
+    private String previewStatus;
+
+    /** 预览路径 */
+    private String previewPath;
+
+    /** 重试次数 */
+    private Integer previewRetryCount;
+
+    /** 最近重试时间 */
+    private Date previewLastRetryTime;
+
+    /** 预览错误信息 */
+    private String previewErrorMessage;
 
     public Long getAnswerId() {
         return answerId;
@@ -127,5 +156,77 @@ public class CountyExamAnswer {
 
     public void setFilePath(String filePath) {
         this.filePath = filePath;
+    }
+
+    public Date getSubmitTime() {
+        return submitTime;
+    }
+
+    public void setSubmitTime(Date submitTime) {
+        this.submitTime = submitTime;
+    }
+
+    public Integer getTypingSpeed() {
+        return typingSpeed;
+    }
+
+    public void setTypingSpeed(Integer typingSpeed) {
+        this.typingSpeed = typingSpeed;
+    }
+
+    public Double getAccuracyRate() {
+        return accuracyRate;
+    }
+
+    public void setAccuracyRate(Double accuracyRate) {
+        this.accuracyRate = accuracyRate;
+    }
+
+    public Double getCompletionRate() {
+        return completionRate;
+    }
+
+    public void setCompletionRate(Double completionRate) {
+        this.completionRate = completionRate;
+    }
+
+    public String getPreviewStatus() {
+        return previewStatus;
+    }
+
+    public void setPreviewStatus(String previewStatus) {
+        this.previewStatus = previewStatus;
+    }
+
+    public String getPreviewPath() {
+        return previewPath;
+    }
+
+    public void setPreviewPath(String previewPath) {
+        this.previewPath = previewPath;
+    }
+
+    public Integer getPreviewRetryCount() {
+        return previewRetryCount;
+    }
+
+    public void setPreviewRetryCount(Integer previewRetryCount) {
+        this.previewRetryCount = previewRetryCount;
+    }
+
+    public Date getPreviewLastRetryTime() {
+        return previewLastRetryTime;
+    }
+
+    public void setPreviewLastRetryTime(Date previewLastRetryTime) {
+        this.previewLastRetryTime = previewLastRetryTime;
+    }
+
+    public String getPreviewErrorMessage() {
+        return previewErrorMessage;
+    }
+
+    public void setPreviewErrorMessage(String previewErrorMessage) {
+        this.previewErrorMessage = previewErrorMessage;
     }
 }

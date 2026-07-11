@@ -1,7 +1,9 @@
 package com.ruoyi.business.service;
 
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.CountyExamAnswer;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+import com.ruoyi.business.mapper.CountyExamAnswerMapper;
 import com.ruoyi.business.utils.FileConversionUtils;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.constant.Constants;
@@ -28,6 +30,12 @@ public class AsyncConversionService {
     @Autowired
     private BizStudentAnswerMapper studentAnswerMapper;
 
+    @Autowired
+    private CountyExamAnswerMapper countyExamAnswerMapper;
+
+    @Autowired
+    private AsyncConversionWorkerService conversionWorkerService;
+
     /**
      * 提交后触发首次预览转换
      */
@@ -49,8 +57,35 @@ public class AsyncConversionService {
             return false;
         }
 
-        executeClaimedPreviewAsync(answerId, "submit");
+        conversionWorkerService.executeClaimedPreviewAsync(answerId, "submit");
         log.info("【异步转换】首次转换领取成功，answerId={}", answerId);
+        return true;
+    }
+
+    /**
+     * 区域抽测操作题答卷首次预览转换
+     */
+    public boolean triggerCountyExamPreviewConversion(Long answerId) {
+        CountyExamAnswer answer = countyExamAnswerMapper.selectById(answerId);
+        if (answer == null) {
+            log.warn("【区域抽测转换】领取失败，未找到答题记录，answerId={}", answerId);
+            return false;
+        }
+        if (!isWordDocument(answer.getStudentAnswer())) {
+            log.info("【区域抽测转换】跳过非 Word 文件，answerId={}, file={}", answerId, answer.getStudentAnswer());
+            return false;
+        }
+
+        Date claimedAt = new Date();
+        int updated = countyExamAnswerMapper.claimSubmitPreviewConversion(answerId, claimedAt);
+        if (updated <= 0) {
+            log.info("【区域抽测转换】领取被跳过，answerId={}, currentStatus={}",
+                    answerId, answer.getPreviewStatus());
+            return false;
+        }
+
+        conversionWorkerService.executeCountyExamPreviewAsync(answerId, "county-submit");
+        log.info("【区域抽测转换】领取成功，answerId={}", answerId);
         return true;
     }
 
@@ -85,8 +120,45 @@ public class AsyncConversionService {
             return false;
         }
 
-        executeClaimedPreviewAsync(answerSnapshot.getAnswerId(), triggerSource);
+        conversionWorkerService.executeClaimedPreviewAsync(answerSnapshot.getAnswerId(), triggerSource);
         log.info("【异步转换】重转领取成功，answerId={}, source={}, retryCount={}",
+                answerSnapshot.getAnswerId(), triggerSource, currentRetryCount + 1);
+        return true;
+    }
+
+    /**
+     * 领取区域抽测失败或卡住的预览重转任务。
+     */
+    public boolean claimCountyRetryAndExecute(CountyExamAnswer answerSnapshot, boolean ignoreRetryLimit, String triggerSource) {
+        if (answerSnapshot == null || answerSnapshot.getAnswerId() == null) {
+            return false;
+        }
+
+        Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getPreviewRetryCount());
+        if (!ignoreRetryLimit && currentRetryCount >= MAX_AUTO_RETRY_COUNT) {
+            log.info("【区域抽测转换】达到自动重试上限，跳过 answerId={}, retryCount={}, source={}",
+                    answerSnapshot.getAnswerId(), currentRetryCount, triggerSource);
+            return false;
+        }
+
+        Date claimedAt = new Date();
+        int updated = countyExamAnswerMapper.claimRetryPreviewConversion(
+                answerSnapshot.getAnswerId(),
+                answerSnapshot.getPreviewStatus(),
+                currentRetryCount,
+                answerSnapshot.getPreviewLastRetryTime(),
+                currentRetryCount + 1,
+                claimedAt
+        );
+        if (updated <= 0) {
+            log.info("【区域抽测转换】重转领取被跳过，answerId={}, source={}, status={}, retryCount={}",
+                    answerSnapshot.getAnswerId(), triggerSource,
+                    answerSnapshot.getPreviewStatus(), currentRetryCount);
+            return false;
+        }
+
+        conversionWorkerService.executeCountyExamPreviewAsync(answerSnapshot.getAnswerId(), triggerSource);
+        log.info("【区域抽测转换】重转领取成功，answerId={}, source={}, retryCount={}",
                 answerSnapshot.getAnswerId(), triggerSource, currentRetryCount + 1);
         return true;
     }
@@ -97,6 +169,14 @@ public class AsyncConversionService {
     @Async("conversionExecutor")
     public void executeClaimedPreviewAsync(Long answerId, String triggerSource) {
         convertClaimedPreview(answerId, triggerSource);
+    }
+
+    /**
+     * 执行区域抽测答卷预览转换
+     */
+    @Async("conversionExecutor")
+    public void executeCountyExamPreviewAsync(Long answerId, String triggerSource) {
+        convertCountyExamPreview(answerId, triggerSource);
     }
 
     /**
@@ -182,6 +262,73 @@ public class AsyncConversionService {
             markFailed(answer, "转换执行异常：" + e.getMessage());
         }
     }
+
+    /**
+     * 区域抽测答卷预览转换执行入口。
+     */
+    private void convertCountyExamPreview(Long answerId, String triggerSource) {
+        CountyExamAnswer answer = countyExamAnswerMapper.selectById(answerId);
+        if (answer == null) {
+            log.warn("【区域抽测转换】未找到答题记录，answerId={}, source={}", answerId, triggerSource);
+            return;
+        }
+        if (!"converting".equals(answer.getPreviewStatus())) {
+            log.info("【区域抽测转换】跳过未领取任务，answerId={}, source={}, status={}",
+                    answerId, triggerSource, answer.getPreviewStatus());
+            return;
+        }
+
+        String answerFilePath = answer.getStudentAnswer();
+        if (answerFilePath == null || answerFilePath.trim().isEmpty()) {
+            markCountyFailed(answer, "未找到学生提交的源文件");
+            return;
+        }
+
+        String lowerCaseAnswer = answerFilePath.toLowerCase();
+        if (lowerCaseAnswer.endsWith(".pdf")) {
+            answer.setPreviewStatus("success");
+            answer.setPreviewPath(answerFilePath);
+            answer.setPreviewErrorMessage(null);
+            countyExamAnswerMapper.updatePreviewStatus(answer);
+            return;
+        }
+        if (!lowerCaseAnswer.endsWith(".docx") && !lowerCaseAnswer.endsWith(".doc")) {
+            markCountyFailed(answer, "不支持重转的文件类型");
+            return;
+        }
+
+        String fileSystemRelativePath = answerFilePath.replaceFirst(Constants.RESOURCE_PREFIX, "");
+        String docxFullPath = RuoYiConfig.getProfile() + fileSystemRelativePath;
+        String outputDir = new File(docxFullPath).getParent();
+        String previewUrlPrefix = answerFilePath.substring(0, answerFilePath.lastIndexOf('/') + 1);
+
+        try {
+            File docxFile = new File(docxFullPath);
+            if (!docxFile.exists()) {
+                markCountyFailed(answer, "源文件不存在");
+                return;
+            }
+            if (!FileConversionUtils.isLibreOfficeInstalled()) {
+                markCountyFailed(answer, "LibreOffice 未安装或不可用");
+                return;
+            }
+
+            String pdfFullPath = FileConversionUtils.convertDocxToPdfWithLibreOffice(docxFullPath, outputDir);
+            if (pdfFullPath != null && new File(pdfFullPath).exists()) {
+                String pdfFileName = new File(pdfFullPath).getName();
+                String previewUrlPath = previewUrlPrefix + pdfFileName;
+                answer.setPreviewStatus("success");
+                answer.setPreviewPath(previewUrlPath);
+                answer.setPreviewErrorMessage(null);
+                countyExamAnswerMapper.updatePreviewStatus(answer);
+            } else {
+                markCountyFailed(answer, "PDF 文件生成失败");
+            }
+        } catch (Exception e) {
+            log.error("【区域抽测转换】异常 answerId={}, error={}", answerId, e.getMessage(), e);
+            markCountyFailed(answer, "转换执行异常：" + e.getMessage());
+        }
+    }
     
     /**
      * 更新答题记录的预览状态
@@ -192,6 +339,18 @@ public class AsyncConversionService {
         answer.setPreviewErrorMessage(truncateErrorMessage(errorMessage));
         studentAnswerMapper.updatePreviewStatus(answer);
         log.warn("【异步转换】失败收口，answerId={}, status=failed, reason={}",
+                answer.getAnswerId(), answer.getPreviewErrorMessage());
+    }
+
+    /**
+     * 区域抽测预览失败状态收口。
+     */
+    private void markCountyFailed(CountyExamAnswer answer, String errorMessage) {
+        answer.setPreviewStatus("failed");
+        answer.setPreviewPath(null);
+        answer.setPreviewErrorMessage(truncateErrorMessage(errorMessage));
+        countyExamAnswerMapper.updatePreviewStatus(answer);
+        log.warn("【区域抽测转换】失败收口，answerId={}, reason={}",
                 answer.getAnswerId(), answer.getPreviewErrorMessage());
     }
 
@@ -226,44 +385,8 @@ public class AsyncConversionService {
      * @param outputDir PDF输出目录
      * @param previewUrlPath 预览URL路径（已计算好）
      */
-    @Async("conversionExecutor")
     public void convertQuestionAsync(Long questionId, String docxFullPath, String outputDir, String previewUrlPath) {
-        log.info("【题库异步转换】开始处理 questionId={}, docxPath={}", questionId, docxFullPath);
-        
-        try {
-            // 1. 更新状态为 converting
-            updateQuestionPreviewStatus(questionId, "converting", null);
-            
-            // 2. 检查源文件是否存在
-            File docxFile = new File(docxFullPath);
-            if (!docxFile.exists()) {
-                log.error("【题库异步转换】源文件不存在: {}", docxFullPath);
-                updateQuestionPreviewStatus(questionId, "failed", null);
-                return;
-            }
-            
-            // 3. 检查 LibreOffice 是否可用
-            if (!FileConversionUtils.isLibreOfficeInstalled()) {
-                log.error("【题库异步转换】LibreOffice 未安装");
-                updateQuestionPreviewStatus(questionId, "failed", null);
-                return;
-            }
-            
-            // 4. 执行转换
-            String pdfFullPath = FileConversionUtils.convertDocxToPdfWithLibreOffice(docxFullPath, outputDir);
-            
-            if (pdfFullPath != null && new File(pdfFullPath).exists()) {
-                log.info("【题库异步转换】成功 questionId={}, previewPath={}", questionId, previewUrlPath);
-                updateQuestionPreviewStatus(questionId, "success", previewUrlPath);
-            } else {
-                log.error("【题库异步转换】转换失败 questionId={}", questionId);
-                updateQuestionPreviewStatus(questionId, "failed", null);
-            }
-            
-        } catch (Exception e) {
-            log.error("【题库异步转换】异常 questionId={}, error={}", questionId, e.getMessage(), e);
-            updateQuestionPreviewStatus(questionId, "failed", null);
-        }
+        conversionWorkerService.executeQuestionPreviewAsync(questionId, docxFullPath, outputDir, previewUrlPath);
     }
     
     /**

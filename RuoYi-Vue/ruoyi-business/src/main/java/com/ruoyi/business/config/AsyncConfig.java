@@ -4,8 +4,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.beans.factory.annotation.Value;
 
-import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -15,7 +15,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 重要：线程池大小必须与 LibreOffice 实例数匹配
  * - 核心线程数 = LibreOffice 实例数（5个）
  * - 最大线程数 = LibreOffice 实例数（5个），严格限制实际并发
- * - 队列容量 200，全县级平台高并发时排队等待而非拒绝
+ * - 队列容量默认 800，最低 500，全县级平台高并发时排队等待而非拒绝
  * 
  * 注意：此线程池仅服务于操作题 Word→PDF 转换，
  * 选择题/判断题/打字题的提交走普通 HTTP 线程池，不受此配置影响。
@@ -29,19 +29,26 @@ import java.util.concurrent.ThreadPoolExecutor;
 @EnableAsync
 public class AsyncConfig {
 
+    @Value("${ruoyi.libre-office.instance-count:5}")
+    private int officeInstanceCount;
+
+    @Value("${ruoyi.conversion.queue-capacity:800}")
+    private int conversionQueueCapacity;
+
     /**
      * 文件转换专用线程池（仅用于操作题 docx→pdf 转换）
-     * 与 FileConversionUtils 中的 OFFICE_INSTANCE_COUNT(5) 保持一致
+     * 与 LibreOffice 实例数保持一致，避免实际并发超过服务池容量。
      */
     @Bean("conversionExecutor")
-    public Executor conversionExecutor() {
+    public ThreadPoolTaskExecutor conversionExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        // 核心线程数 = LibreOffice 实例数（5个）
-        executor.setCorePoolSize(5);
-        // 最大线程数与核心线程数保持一致，避免瞬时并发超过 LibreOffice 实例数
-        executor.setMaxPoolSize(5);
+        int poolSize = Math.max(officeInstanceCount, 1);
+        // 核心线程数与 LibreOffice 实例数保持一致。
+        executor.setCorePoolSize(poolSize);
+        // 最大线程数与核心线程数保持一致，避免瞬时并发超过 LibreOffice 实例数。
+        executor.setMaxPoolSize(poolSize);
         // 队列容量：全县多班级同时提交时排队等待
-        executor.setQueueCapacity(200);
+        executor.setQueueCapacity(Math.max(conversionQueueCapacity, 500));
         // 线程名前缀
         executor.setThreadNamePrefix("conversion-");
         // 拒绝策略：由调用线程执行（兜底背压）

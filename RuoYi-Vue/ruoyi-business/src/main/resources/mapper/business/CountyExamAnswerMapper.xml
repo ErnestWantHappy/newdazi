@@ -1,39 +1,206 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.CountyExamAnswerMapper">
-    
+
     <resultMap type="CountyExamAnswer" id="CountyExamAnswerResult">
-        <id     property="answerId"       column="answer_id"       />
-        <result property="examId"         column="exam_id"         />
-        <result property="studentId"      column="student_id"      />
-        <result property="questionId"     column="question_id"     />
-        <result property="studentAnswer"  column="student_answer"  />
-        <result property="score"          column="score"           />
-        <result property="isCorrect"      column="is_correct"      />
-        <result property="graderId"       column="grader_id"       />
-        <result property="gradingStatus"  column="grading_status"  />
-        <result property="answerTime"     column="answer_time"     />
-        <result property="filePath"       column="file_path"       />
+        <id     property="answerId"             column="answer_id"              />
+        <result property="examId"               column="exam_id"                />
+        <result property="studentId"            column="student_id"             />
+        <result property="questionId"           column="question_id"            />
+        <result property="studentAnswer"        column="student_answer"         />
+        <result property="score"                column="score"                  />
+        <result property="isCorrect"            column="is_correct"             />
+        <result property="graderId"             column="grader_id"              />
+        <result property="gradingStatus"        column="grading_status"         />
+        <result property="answerTime"           column="answer_time"            />
+        <result property="filePath"             column="file_path"              />
+        <result property="submitTime"           column="submit_time"            />
+        <result property="typingSpeed"          column="typing_speed"           />
+        <result property="accuracyRate"         column="accuracy_rate"          />
+        <result property="completionRate"       column="completion_rate"        />
+        <result property="previewStatus"        column="preview_status"         />
+        <result property="previewPath"          column="preview_path"           />
+        <result property="previewRetryCount"    column="preview_retry_count"    />
+        <result property="previewLastRetryTime" column="preview_last_retry_time"/>
+        <result property="previewErrorMessage"  column="preview_error_message"  />
     </resultMap>
 
-    <select id="selectByExamAndStudent" resultMap="CountyExamAnswerResult">
-        select answer_id, exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status, answer_time, file_path
+    <sql id="selectCountyExamAnswerVo">
+        select answer_id, exam_id, student_id, question_id, student_answer, score, is_correct,
+               grader_id, grading_status, answer_time, file_path, submit_time, typing_speed,
+               accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count,
+               preview_last_retry_time, preview_error_message
         from biz_county_exam_answer
+    </sql>
+
+    <select id="selectById" parameterType="Long" resultMap="CountyExamAnswerResult">
+        <include refid="selectCountyExamAnswerVo"/>
+        where answer_id = #{answerId}
+    </select>
+
+    <select id="selectByExamAndStudent" resultMap="CountyExamAnswerResult">
+        <include refid="selectCountyExamAnswerVo"/>
         where exam_id = #{examId} and student_id = #{studentId}
+        order by question_id asc
+    </select>
+
+    <select id="selectLatestByExamStudentQuestion" resultMap="CountyExamAnswerResult">
+        <include refid="selectCountyExamAnswerVo"/>
+        where exam_id = #{examId}
+          and student_id = #{studentId}
+          and question_id = #{questionId}
+        order by answer_id desc
+        limit 1
     </select>
 
     <select id="selectByGraderId" resultMap="CountyExamAnswerResult">
-        select answer_id, exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status, answer_time, file_path
-        from biz_county_exam_answer
+        <include refid="selectCountyExamAnswerVo"/>
         where grader_id = #{graderId}
         <if test="gradingStatus != null and gradingStatus != ''">
             and grading_status = #{gradingStatus}
         </if>
+        order by answer_id asc
+    </select>
+
+    <select id="selectPracticalAnswersForAllocation" parameterType="Long" resultMap="CountyExamAnswerResult">
+        select a.*
+        from biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.exam_id = #{examId}
+          and pq.question_type = 'practical'
+          and a.student_answer is not null
+          and a.student_answer != ''
+        order by a.answer_id asc
+    </select>
+
+    <select id="selectPracticalAnswersForAllocationByQuestion" resultMap="CountyExamAnswerResult">
+        select a.*
+        from biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.exam_id = #{examId}
+          and a.question_id = #{questionId}
+          and pq.question_type = 'practical'
+          and a.student_answer is not null
+          and a.student_answer != ''
+        order by a.answer_id asc
+    </select>
+
+    <select id="countUngradedPracticalAnswers" parameterType="Long" resultType="int">
+        select count(1)
+        from biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.exam_id = #{examId}
+          and pq.question_type = 'practical'
+          and a.student_answer is not null
+          and a.student_answer != ''
+          and ifnull(a.grading_status, '0') != '1'
+    </select>
+
+    <select id="countGradedPracticalAnswers" parameterType="Long" resultType="int">
+        select count(1)
+        from biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.exam_id = #{examId}
+          and pq.question_type = 'practical'
+          and a.student_answer is not null
+          and a.student_answer != ''
+          and ifnull(a.grading_status, '0') = '1'
+          and a.score is not null
+    </select>
+
+    <select id="selectGradingTasks" resultType="java.util.HashMap">
+        select a.answer_id as answerId,
+               a.exam_id as examId,
+               e.exam_name as examName,
+               a.question_id as questionId,
+               pq.question_content as questionContent,
+               pq.question_score as questionScore,
+               a.student_answer as studentAnswer,
+               a.score as score,
+               a.grading_status as gradingStatus,
+               a.preview_status as previewStatus,
+               a.preview_path as previewPath,
+               a.preview_error_message as previewErrorMessage
+        from biz_county_exam_answer a
+        inner join biz_county_exam e on a.exam_id = e.exam_id
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.grader_id = #{graderId}
+          and pq.question_type = 'practical'
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+        <if test="gradingStatus != null and gradingStatus != ''">
+          and a.grading_status = #{gradingStatus}
+        </if>
+        order by e.exam_id desc, a.answer_id asc
+    </select>
+
+    <select id="selectGradingAnswerDetail" resultType="java.util.HashMap">
+        select a.answer_id as answerId,
+               a.exam_id as examId,
+               e.exam_name as examName,
+               a.question_id as questionId,
+               pq.question_content as questionContent,
+               pq.question_score as questionScore,
+               pq.file_path as materialPath,
+               a.student_answer as studentAnswer,
+               a.score as score,
+               a.grading_status as gradingStatus,
+               a.preview_status as previewStatus,
+               a.preview_path as previewPath,
+               a.preview_error_message as previewErrorMessage
+        from biz_county_exam_answer a
+        inner join biz_county_exam e on a.exam_id = e.exam_id
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.answer_id = #{answerId}
+          and a.grader_id = #{graderId}
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+    </select>
+
+    <select id="countTasksByGrader" resultType="int">
+        select count(1)
+        from biz_county_exam_answer a
+        inner join biz_county_exam e on a.exam_id = e.exam_id
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        where a.grader_id = #{graderId}
+          and pq.question_type = 'practical'
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+        <if test="gradingStatus != null and gradingStatus != ''">
+          and a.grading_status = #{gradingStatus}
+        </if>
     </select>
 
     <insert id="insert" parameterType="CountyExamAnswer" useGeneratedKeys="true" keyProperty="answerId">
-        insert into biz_county_exam_answer (exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status, answer_time, file_path)
-        values (#{examId}, #{studentId}, #{questionId}, #{studentAnswer}, #{score}, #{isCorrect}, #{graderId}, #{gradingStatus}, #{answerTime}, #{filePath})
+        insert into biz_county_exam_answer
+        (exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status,
+         answer_time, file_path, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status,
+         preview_path, preview_retry_count, preview_last_retry_time, preview_error_message)
+        values
+        (#{examId}, #{studentId}, #{questionId}, #{studentAnswer}, #{score}, #{isCorrect}, #{graderId}, #{gradingStatus},
+         #{answerTime}, #{filePath}, #{submitTime}, #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus},
+         #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
     </insert>
 
     <update id="update" parameterType="CountyExamAnswer">
@@ -46,16 +213,148 @@
             <if test="gradingStatus != null">grading_status = #{gradingStatus},</if>
             <if test="answerTime != null">answer_time = #{answerTime},</if>
             <if test="filePath != null">file_path = #{filePath},</if>
+            <if test="submitTime != null">submit_time = #{submitTime},</if>
+            <if test="typingSpeed != null">typing_speed = #{typingSpeed},</if>
+            <if test="accuracyRate != null">accuracy_rate = #{accuracyRate},</if>
+            <if test="completionRate != null">completion_rate = #{completionRate},</if>
+            <if test="previewStatus != null">preview_status = #{previewStatus},</if>
+            <if test="previewPath != null">preview_path = #{previewPath},</if>
+            <if test="previewRetryCount != null">preview_retry_count = #{previewRetryCount},</if>
+            <if test="previewLastRetryTime != null">preview_last_retry_time = #{previewLastRetryTime},</if>
+            <if test="previewErrorMessage != null">preview_error_message = #{previewErrorMessage},</if>
         </trim>
         where answer_id = #{answerId}
     </update>
 
+    <update id="updateStudentAnswer" parameterType="CountyExamAnswer">
+        update biz_county_exam_answer
+        set student_answer = #{studentAnswer},
+            score = #{score},
+            is_correct = #{isCorrect},
+            answer_time = #{answerTime},
+            file_path = #{filePath},
+            submit_time = #{submitTime},
+            typing_speed = #{typingSpeed},
+            accuracy_rate = #{accuracyRate},
+            completion_rate = #{completionRate},
+            preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage}
+            <if test="gradingStatus != null">
+                , grading_status = #{gradingStatus}
+            </if>
+        where answer_id = #{answerId}
+    </update>
+
+    <update id="updateGrade">
+        update biz_county_exam_answer
+        set score = #{score},
+            grading_status = '1',
+            grader_id = #{graderId}
+        where answer_id = #{answerId}
+    </update>
+
     <update id="batchUpdateGrader">
-        update biz_county_exam_answer set grader_id = #{graderId}
+        update biz_county_exam_answer
+        set grader_id = #{graderId},
+            grading_status = ifnull(grading_status, '0')
         where answer_id in
         <foreach collection="answerIds" item="answerId" open="(" separator="," close=")">
             #{answerId}
         </foreach>
     </update>
 
+    <update id="clearPracticalGraders" parameterType="Long">
+        update biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        set a.grader_id = null,
+            a.grading_status = '0'
+        where a.exam_id = #{examId}
+          and pq.question_type = 'practical'
+          and ifnull(a.grading_status, '0') != '1'
+    </update>
+
+    <update id="resetPracticalGrading" parameterType="Long">
+        update biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        set a.grader_id = null,
+            a.grading_status = '0',
+            a.score = null
+        where a.exam_id = #{examId}
+          and pq.question_type = 'practical'
+          and a.student_answer is not null
+          and a.student_answer != ''
+    </update>
+
+    <update id="updatePreviewStatus" parameterType="CountyExamAnswer">
+        update biz_county_exam_answer
+        set preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage}
+        where answer_id = #{answerId}
+    </update>
+
+    <update id="claimSubmitPreviewConversion">
+        update biz_county_exam_answer
+        set preview_status = 'converting',
+            preview_path = null,
+            preview_retry_count = ifnull(preview_retry_count, 0),
+            preview_last_retry_time = #{claimedAt},
+            preview_error_message = null
+        where answer_id = #{answerId}
+          and preview_status = 'pending'
+          and preview_path is null
+    </update>
+
+    <update id="claimRetryPreviewConversion">
+        update biz_county_exam_answer
+        set preview_status = 'converting',
+            preview_path = null,
+            preview_retry_count = #{nextRetryCount},
+            preview_last_retry_time = #{claimedAt},
+            preview_error_message = null
+        where answer_id = #{answerId}
+          and preview_path is null
+          and preview_status = #{expectedStatus}
+          and ifnull(preview_retry_count, 0) = #{expectedRetryCount}
+          and (
+                (#{expectedLastRetryTime} is null and preview_last_retry_time is null)
+             or preview_last_retry_time = #{expectedLastRetryTime}
+          )
+    </update>
+
+    <select id="selectRecoverablePreviewsForRetry" resultMap="CountyExamAnswerResult">
+        select a.*
+        from biz_county_exam_answer a
+        inner join biz_county_exam_paper_question pq
+            on pq.exam_id = a.exam_id
+            and pq.student_id = a.student_id
+            and pq.question_id = a.question_id
+        inner join biz_county_exam e on e.exam_id = a.exam_id
+        where pq.question_type = 'practical'
+          and e.status in ('1', '2')
+          and a.student_answer is not null
+          and a.student_answer != ''
+          and (lower(a.student_answer) like '%.docx' or lower(a.student_answer) like '%.doc')
+          and a.preview_path is null
+          and (
+                (a.preview_status = 'failed'
+                 and (a.preview_last_retry_time is null or a.preview_last_retry_time &lt;= #{retryBefore}))
+             or (a.preview_status in ('pending', 'converting')
+                 and coalesce(a.preview_last_retry_time, a.submit_time) is not null
+                 and coalesce(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
+          )
+          and ifnull(a.preview_retry_count, 0) &lt; #{maxRetryCount}
+        order by a.submit_time asc
+    </select>
 </mapper>

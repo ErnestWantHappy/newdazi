@@ -1,6 +1,7 @@
 package com.ruoyi.business.mapper;
 
 import com.ruoyi.business.domain.CountyExamQuestion;
+import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import java.util.List;
 
 /**
@@ -14,6 +15,11 @@ public interface CountyExamQuestionMapper {
      * 根据考试ID查询题目列表
      */
     List<CountyExamQuestion> selectByExamId(Long examId);
+
+    /**
+     * 查询区域抽测组卷题目完整信息。
+     */
+    List<BizLessonQuestionDetailVo> selectDetailsByExamId(Long examId);
 
     /**
      * 新增题目关联

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.CountyExamStudentMapper">
-    
+
     <resultMap type="CountyExamStudent" id="CountyExamStudentResult">
         <id     property="id"           column="id"           />
         <result property="examId"       column="exam_id"      />
@@ -12,17 +12,30 @@
         <result property="theoryScore"  column="theory_score" />
         <result property="techScore"    column="tech_score"   />
         <result property="status"       column="status"       />
+        <result property="startTime"    column="start_time"   />
+        <result property="deadlineTime" column="deadline_time"/>
+        <result property="autoSubmit"   column="auto_submit"  />
         <result property="submitTime"   column="submit_time"  />
     </resultMap>
 
     <select id="selectByExamAndStudent" resultMap="CountyExamStudentResult">
-        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, submit_time
+        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score,
+               status, start_time, deadline_time, auto_submit, submit_time
         from biz_county_exam_student
         where exam_id = #{examId} and student_id = #{studentId}
     </select>
 
     <select id="selectByExamId" parameterType="Long" resultMap="CountyExamStudentResult">
-        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, submit_time
+        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score,
+               status, start_time, deadline_time, auto_submit, submit_time
+        from biz_county_exam_student
+        where exam_id = #{examId}
+        order by dept_id asc, class_info asc, student_id asc
+    </select>
+
+    <select id="selectParticipants" parameterType="Long" resultMap="CountyExamStudentResult">
+        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score,
+               status, start_time, deadline_time, auto_submit, submit_time
         from biz_county_exam_student
         where exam_id = #{examId}
     </select>
@@ -34,9 +47,90 @@
         group by dept_id
     </select>
 
+    <select id="selectSummaryRows" parameterType="Long" resultType="java.util.HashMap">
+        select c.dept_id as deptId,
+               d.dept_name as deptName,
+               group_concat(distinct concat(c.entry_year, '级', c.class_code, '班')
+                            order by c.entry_year asc, c.class_code asc separator '、') as classInfo,
+               ifnull(stats.studentCount, 0) as studentCount,
+               ifnull(stats.avgScore, 0) as avgScore,
+               ifnull(stats.maxScore, 0) as maxScore,
+               ifnull(stats.minScore, 0) as minScore,
+               ifnull(stats.passCount, 0) as passCount,
+               case when ifnull(stats.studentCount, 0) &gt; 0
+                    then round(ifnull(stats.passCount, 0) * 100 / stats.studentCount, 1)
+                    else 0 end as passRate
+        from biz_county_exam_class c
+        left join sys_dept d on c.dept_id = d.dept_id
+        left join (
+            select st.dept_id,
+                   count(1) as studentCount,
+                   round(avg(ifnull(st.total_score, 0)), 1) as avgScore,
+                   max(ifnull(st.total_score, 0)) as maxScore,
+                   min(ifnull(st.total_score, 0)) as minScore,
+                   sum(case when ifnull(st.total_score, 0) &gt;= 60 then 1 else 0 end) as passCount
+            from biz_county_exam_student st
+            where st.exam_id = #{examId}
+            group by st.dept_id
+        ) stats on stats.dept_id = c.dept_id
+        where c.exam_id = #{examId}
+        group by c.dept_id,
+                 d.dept_name,
+                 stats.studentCount,
+                 stats.avgScore,
+                 stats.maxScore,
+                 stats.minScore,
+                 stats.passCount
+        order by ifnull(stats.avgScore, 0) desc, deptName asc
+    </select>
+
+    <select id="selectStudentRows" resultType="java.util.HashMap">
+        select st.id,
+               st.exam_id as examId,
+               st.student_id as studentId,
+               st.dept_id as deptId,
+               d.dept_name as deptName,
+               st.class_info as classInfo,
+               u.nick_name as studentName,
+               u.user_name as userName,
+               s.student_no as studentNo,
+               st.theory_score as theoryScore,
+               st.tech_score as practicalScore,
+               (ifnull(st.total_score, 0) - ifnull(st.theory_score, 0) - ifnull(st.tech_score, 0)) as typingScore,
+               st.total_score as totalScore,
+               st.status,
+               st.start_time as startTime,
+               st.deadline_time as deadlineTime,
+               st.auto_submit as autoSubmit,
+               st.submit_time as submitTime
+        from biz_county_exam_student st
+        left join biz_student s on st.student_id = s.student_id
+        left join sys_user u on s.user_id = u.user_id
+        left join sys_dept d on st.dept_id = d.dept_id
+        where st.exam_id = #{examId}
+        <if test="keyword != null and keyword != ''">
+            and (
+                u.nick_name like concat('%', #{keyword}, '%')
+                or u.user_name like concat('%', #{keyword}, '%')
+                or s.student_no like concat('%', #{keyword}, '%')
+                or d.dept_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by d.dept_name asc, st.class_info asc, cast(s.student_no as unsigned) asc, s.student_no asc
+    </select>
+
     <insert id="insert" parameterType="CountyExamStudent" useGeneratedKeys="true" keyProperty="id">
-        insert into biz_county_exam_student (exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, submit_time)
-        values (#{examId}, #{studentId}, #{deptId}, #{classInfo}, #{totalScore}, #{theoryScore}, #{techScore}, #{status}, #{submitTime})
+        insert into biz_county_exam_student
+        (exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, start_time, deadline_time, auto_submit, submit_time)
+        values
+        (#{examId}, #{studentId}, #{deptId}, #{classInfo}, #{totalScore}, #{theoryScore}, #{techScore}, #{status}, #{startTime}, #{deadlineTime}, #{autoSubmit}, #{submitTime})
+    </insert>
+
+    <insert id="insertOrIgnore" parameterType="CountyExamStudent" useGeneratedKeys="true" keyProperty="id">
+        insert ignore into biz_county_exam_student
+        (exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score, status, start_time, deadline_time, auto_submit, submit_time)
+        values
+        (#{examId}, #{studentId}, #{deptId}, #{classInfo}, #{totalScore}, #{theoryScore}, #{techScore}, #{status}, #{startTime}, #{deadlineTime}, #{autoSubmit}, #{submitTime})
     </insert>
 
     <update id="update" parameterType="CountyExamStudent">
@@ -46,9 +140,11 @@
             <if test="theoryScore != null">theory_score = #{theoryScore},</if>
             <if test="techScore != null">tech_score = #{techScore},</if>
             <if test="status != null">status = #{status},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="deadlineTime != null">deadline_time = #{deadlineTime},</if>
+            <if test="autoSubmit != null">auto_submit = #{autoSubmit},</if>
             <if test="submitTime != null">submit_time = #{submitTime},</if>
         </trim>
         where id = #{id}
     </update>
-
 </mapper>

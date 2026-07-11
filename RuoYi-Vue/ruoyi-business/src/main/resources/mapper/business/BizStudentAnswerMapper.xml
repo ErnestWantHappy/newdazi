@@ -438,6 +438,92 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         ORDER BY s.entry_year DESC, s.class_code ASC
     </select>
 
+    <select id="selectClassStatusByLesson" resultType="java.util.HashMap">
+        SELECT
+            class_scope.classCode AS classCode,
+            class_scope.entryYear AS entryYear,
+            COUNT(DISTINCT CASE WHEN u.user_id IS NOT NULL THEN s.student_id END) AS totalStudents,
+            COUNT(DISTINCT CASE
+                WHEN u.user_id IS NOT NULL
+                 AND q.question_type = 'practical'
+                 AND ans.student_answer IS NOT NULL
+                THEN s.student_id
+            END) AS practicalSubmitted,
+            COUNT(DISTINCT CASE
+                WHEN u.user_id IS NOT NULL
+                 AND q.question_type = 'practical'
+                 AND ans.student_answer IS NOT NULL
+                 AND ans.score IS NULL
+                THEN s.student_id
+            END) AS practicalUngraded,
+            COUNT(DISTINCT CASE
+                WHEN u.user_id IS NOT NULL
+                 AND IFNULL(p.is_absent, 0) = 0
+                 AND (ans.student_id IS NOT NULL OR p.performance_id IS NOT NULL)
+                THEN s.student_id
+            END) AS scoreReadyCount
+        FROM (
+            SELECT DISTINCT
+                la.class_code AS classCode,
+                la.entry_year AS entryYear
+            FROM biz_lesson_assignment la
+            WHERE la.lesson_id = #{lessonId}
+              AND (la.dept_id = #{deptId} OR la.dept_id IS NULL)
+            UNION
+            SELECT DISTINCT
+                s.class_code AS classCode,
+                s.entry_year AS entryYear
+            FROM biz_student_answer a
+            INNER JOIN (
+                SELECT MAX(answer_id) AS answer_id
+                FROM biz_student_answer
+                WHERE lesson_id = #{lessonId}
+                GROUP BY student_id, lesson_id, question_id
+            ) latest ON latest.answer_id = a.answer_id
+            INNER JOIN biz_student s ON a.student_id = s.student_id
+            INNER JOIN sys_user u ON s.user_id = u.user_id
+            INNER JOIN biz_teacher_class tc
+                ON s.entry_year = tc.entry_year
+                AND s.class_code = tc.class_code
+                AND u.dept_id = tc.dept_id
+            WHERE a.lesson_id = #{lessonId}
+              AND u.dept_id = #{deptId}
+              AND tc.user_id = #{teacherUserId}
+              AND tc.dept_id = #{deptId}
+        ) class_scope
+        INNER JOIN biz_teacher_class tc
+            ON class_scope.entryYear = tc.entry_year
+            AND class_scope.classCode = tc.class_code
+            AND tc.user_id = #{teacherUserId}
+            AND tc.dept_id = #{deptId}
+        LEFT JOIN biz_student s
+            ON s.entry_year = class_scope.entryYear
+            AND s.class_code = class_scope.classCode
+        LEFT JOIN sys_user u
+            ON s.user_id = u.user_id
+            AND u.dept_id = tc.dept_id
+        LEFT JOIN (
+            SELECT a1.*
+            FROM biz_student_answer a1
+            INNER JOIN (
+                SELECT MAX(answer_id) AS answer_id
+                FROM biz_student_answer
+                WHERE lesson_id = #{lessonId}
+                GROUP BY student_id, lesson_id, question_id
+            ) latest ON latest.answer_id = a1.answer_id
+            WHERE a1.lesson_id = #{lessonId}
+        ) ans ON ans.student_id = s.student_id
+        LEFT JOIN biz_question q ON ans.question_id = q.question_id
+        LEFT JOIN biz_classroom_performance p
+            ON p.student_id = s.student_id
+            AND p.lesson_id = #{lessonId}
+            AND (p.dept_id = #{deptId} OR p.dept_id IS NULL)
+        GROUP BY class_scope.entryYear, class_scope.classCode
+        ORDER BY class_scope.entryYear DESC,
+                 CAST(class_scope.classCode AS UNSIGNED) ASC,
+                 class_scope.classCode ASC
+    </select>
+
     <select id="countScoredStudentsByLessonAndClass" resultType="int">
         SELECT COUNT(DISTINCT s.student_id)
         FROM biz_student s

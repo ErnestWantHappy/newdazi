@@ -12,11 +12,24 @@ ruoyi:
   addressEnabled: false
   # 验证码类型 math 数字计算 char 字符验证
   captchaType: math
+  # LibreOffice 转换服务配置
+  libre-office:
+    home: C:\Program Files\LibreOffice
+    instance-count: 5
+    process-warn-threshold: 10
+    max-tasks-per-process: 30
+    task-execution-timeout: 300000
+    task-queue-timeout: 120000
+    process-timeout: 120000
+    max-retry: 1
+  # 操作题预览转换队列容量
+  conversion:
+    queue-capacity: 800
 
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080
-  port: 3009
+  port: 8080
   servlet:
     # 应用的访问路径
     context-path: /

@@ -839,6 +839,7 @@ import {
   getHistoryScores,
   getWrongQuestions,
 } from "@/api/business/studentHome";
+import { checkCurrentCountyExam } from "@/api/business/countyExam";
 import { updateUserPwd } from "@/api/system/user";
 import useUserStore from "@/store/modules/user";
 import { useRouter } from "vue-router";
@@ -1298,6 +1299,11 @@ const uploadHeaders = computed(() => ({
 async function fetchData() {
   loading.value = true;
   try {
+    const countyExamRes = await checkCurrentCountyExam().catch(() => ({ data: { hasExam: false } }));
+    if (countyExamRes.data?.hasExam && !countyExamRes.data?.ended) {
+      router.replace("/student/county-exam");
+      return;
+    }
     const res = await getCurrentLesson();
     hasLesson.value = res.hasLesson || false;
     if (res.hasLesson) {

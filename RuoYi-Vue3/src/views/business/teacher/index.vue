@@ -1,5 +1,12 @@
 <template>
   <div class="app-container teacher-dashboard">
+    <div v-if="countyGradingEntry.hasTask" class="county-grading-entry" @click="goToCountyExamGrading">
+      <div>
+        <strong>区域抽测评卷</strong>
+        <span>{{ pendingCountyGradingCount }} 份匿名答卷待处理</span>
+      </div>
+      <el-button type="primary" icon="Right">进入评卷</el-button>
+    </div>
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
@@ -94,9 +101,10 @@
 </template>
 
 <script setup name="TeacherDashboard">
-import { ref, onMounted, onActivated } from 'vue';
+import { computed, ref, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
+import { getCountyExamGradingEntry } from '@/api/business/countyExam';
 import { delLesson } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Close, Edit, Check, DataLine, MoreFilled } from '@element-plus/icons-vue';
@@ -107,6 +115,8 @@ const loading = ref(true);
 const gradeGroups = ref([]);
 const classDialogRef = ref(null);
 const expandedGradeKeys = ref(new Set());
+const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
+const pendingCountyGradingCount = computed(() => countyGradingEntry.value.pendingTaskCount ?? countyGradingEntry.value.taskCount ?? 0);
 
 function compareLessonsByLatest(a, b) {
   const timeA = a.createTime ? new Date(a.createTime).getTime() : 0;
@@ -143,17 +153,25 @@ function expandLessons(group) {
 /** 获取首页数据 */
 function fetchDashboardData() {
   loading.value = true;
-  getDashboardData()
-    .then(response => {
+  Promise.all([
+    getDashboardData(),
+    getCountyExamGradingEntry().catch(() => ({ data: { hasTask: false, taskCount: 0 } }))
+  ])
+    .then(([response, gradingResponse]) => {
       gradeGroups.value = (response.data || []).map(group => ({
         ...group,
         lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
       }));
+      countyGradingEntry.value = gradingResponse.data || { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
       loading.value = false;
     })
     .catch(() => {
       loading.value = false;
     });
+}
+
+function goToCountyExamGrading() {
+  router.push('/business/county-exam-grading');
 }
 
 /** 处理新增课程 */
@@ -249,6 +267,34 @@ onActivated(() => {
 .teacher-dashboard {
   .box-card {
     min-height: calc(100vh - 84px);
+  }
+}
+
+.county-grading-entry {
+  min-height: 64px;
+  border: 1px solid #b3d8ff;
+  border-radius: 8px;
+  background: #ecf5ff;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: #1f2937;
+    margin-bottom: 4px;
+  }
+
+  span {
+    color: #606266;
+    font-size: 13px;
   }
 }
 

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import com.ruoyi.system.domain.SysOperLog;
 import com.ruoyi.system.mapper.SysOperLogMapper;
 import com.ruoyi.system.service.ISysOperLogService;
+import com.ruoyi.system.service.ISysPerfEventService;
 
 /**
  * 操作日志 服务层处理
@@ -18,6 +19,9 @@ public class SysOperLogServiceImpl implements ISysOperLogService
     @Autowired
     private SysOperLogMapper operLogMapper;
 
+    @Autowired
+    private ISysPerfEventService perfEventService;
+
     /**
      * 新增操作日志
      * 
@@ -27,6 +31,7 @@ public class SysOperLogServiceImpl implements ISysOperLogService
     public void insertOperlog(SysOperLog operLog)
     {
         operLogMapper.insertOperlog(operLog);
+        perfEventService.recordFromOperLog(operLog);
     }
 
     /**

@@ -38,6 +38,15 @@ public class CountyExamStudent {
     /** 状态(0未交/1已交) */
     private String status;
 
+    /** 个人开始作答时间 */
+    private Date startTime;
+
+    /** 个人作答截止时间 */
+    private Date deadlineTime;
+
+    /** 是否超时自动提交(0否/1是) */
+    private String autoSubmit;
+
     /** 提交时间 */
     private Date submitTime;
 
@@ -111,6 +120,30 @@ public class CountyExamStudent {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Date getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(Date startTime) {
+        this.startTime = startTime;
+    }
+
+    public Date getDeadlineTime() {
+        return deadlineTime;
+    }
+
+    public void setDeadlineTime(Date deadlineTime) {
+        this.deadlineTime = deadlineTime;
+    }
+
+    public String getAutoSubmit() {
+        return autoSubmit;
+    }
+
+    public void setAutoSubmit(String autoSubmit) {
+        this.autoSubmit = autoSubmit;
     }
 
     public Date getSubmitTime() {

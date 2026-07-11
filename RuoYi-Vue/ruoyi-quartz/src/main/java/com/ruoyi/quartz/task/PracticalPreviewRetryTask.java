@@ -1,5 +1,6 @@
 package com.ruoyi.quartz.task;
 
+import com.ruoyi.business.service.CountyExamPreviewRetryService;
 import com.ruoyi.business.service.PracticalPreviewRetryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -15,11 +16,18 @@ public class PracticalPreviewRetryTask {
     @Autowired
     private PracticalPreviewRetryService practicalPreviewRetryService;
 
+    @Autowired
+    private CountyExamPreviewRetryService countyExamPreviewRetryService;
+
     public String retryFailedStudentAnswerPreviews() {
         Map<String, Object> result = practicalPreviewRetryService.retryExpiredFailedPreviews();
-        return String.format("操作题自动重试完成：匹配 %s 条，触发 %s 条，跳过 %s 条",
+        Map<String, Object> countyResult = countyExamPreviewRetryService.retryExpiredFailedPreviews();
+        return String.format("操作题自动重试完成：日常匹配 %s 条，触发 %s 条，跳过 %s 条；区域抽测匹配 %s 条，触发 %s 条，跳过 %s 条",
                 result.get("matchedCount"),
                 result.get("triggeredCount"),
-                result.get("skippedCount"));
+                result.get("skippedCount"),
+                countyResult.get("matchedCount"),
+                countyResult.get("triggeredCount"),
+                countyResult.get("skippedCount"));
     }
 }

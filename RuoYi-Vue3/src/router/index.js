@@ -129,6 +129,21 @@ export const constantRoutes = [
 
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
+  {
+    path: '/platform',
+    component: Layout,
+    redirect: '/platform/overview',
+    roles: ['admin', 'researcher'],
+    hidden: true,
+    children: [
+      {
+        path: 'overview',
+        component: () => import('@/views/platform/overview/index'),
+        name: 'PlatformOverview',
+        meta: { title: '平台概览', icon: 'dashboard', affix: true }
+      }
+    ]
+  },
   // 学生首页 - 仅学生角色可见
   {
     path: '/student',
@@ -141,6 +156,53 @@ export const dynamicRoutes = [
         component: () => import('@/views/student/index'),
         name: 'StudentDashboard',
         meta: { title: '学生首页', icon: 'dashboard' }
+      },
+      {
+        path: 'county-exam',
+        component: () => import('@/views/student/countyExam'),
+        name: 'StudentCountyExam',
+        meta: { title: '区域抽测', icon: 'education' }
+      }
+    ]
+  },
+  {
+    path: '/business/county-exam',
+    component: Layout,
+    roles: ['admin', 'researcher'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/countyExam/index'),
+        name: 'CountyExam',
+        meta: { title: '区域抽测', icon: 'education' }
+      }
+    ]
+  },
+  {
+    path: '/business/county-exam-designer',
+    component: Layout,
+    roles: ['admin', 'researcher'],
+    hidden: true,
+    children: [
+      {
+        path: ':examId(\\d+)',
+        component: () => import('@/views/business/countyExam/examDesigner'),
+        name: 'CountyExamDesigner',
+        meta: { title: '区域抽测组卷', activeMenu: '/business/county-exam' }
+      }
+    ]
+  },
+  {
+    path: '/business/county-exam-grading',
+    component: Layout,
+    roles: ['teacher'],
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/countyExam/grading'),
+        name: 'CountyExamGrading',
+        meta: { title: '区域抽测评卷', activeMenu: '/teacher-dashboard' }
       }
     ]
   },
@@ -158,6 +220,20 @@ export const dynamicRoutes = [
       }
     ],
     redirect: '/teacher-dashboard/index'
+  },
+  {
+    path: '/monitor/diagnosis',
+    component: Layout,
+    roles: ['admin', 'researcher'],
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/monitor/diagnosis/index'),
+        name: 'SystemDiagnosis',
+        meta: { title: '系统诊断中心', icon: 'monitor' }
+      }
+    ]
   },
   {
     path: '/system/user-auth',

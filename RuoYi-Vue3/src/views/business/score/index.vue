@@ -1240,12 +1240,21 @@ function renderAnalysisChart() {
   // 过滤掉无人作答的题目
   const validData = analysisData.value.filter(d => d.studentCount > 0);
   
-  // 排序逻辑：将题目按照“错误率从高到低”排序
-  // 错误率高 = 正确率低。
-  // ECharts Y轴类目默认从下往上绘制（数组第0项在下，最后项在上）
-  // 我们希望红色条最长（错误率最高）的在最上面，所以数组由“高正确率 -> 低正确率”排序
-  // 这样 0% 正确率（100% 错误率）的会在数组末尾，显示在图表顶部
-  const sorted = [...validData].sort((a, b) => b.accuracy - a.accuracy).slice(0, 10);
+  // 先按错误率取最易错的题，再反转给 ECharts，让最高错误率显示在顶部。
+  const sorted = validData
+    .map(item => {
+      const correct = Number(item.correctCount || 0);
+      const total = Number(item.studentCount || 0);
+      const wrongCount = Math.max(total - correct, 0);
+      const wrongRate = total > 0 ? wrongCount / total : 0;
+      return { ...item, wrongCount, wrongRate };
+    })
+    .sort((a, b) => {
+      if (b.wrongRate !== a.wrongRate) return b.wrongRate - a.wrongRate;
+      return b.wrongCount - a.wrongCount;
+    })
+    .slice(0, 10)
+    .reverse();
   
   // 2. 准备数据
   const yAxisData = []; // 题目名称
@@ -1260,7 +1269,7 @@ function renderAnalysisChart() {
     
     const correct = item.correctCount || 0;
     const total = item.studentCount || 0;
-    const wrong = total - correct;
+    const wrong = item.wrongCount;
     
     correctSeries.push(correct);
     wrongSeries.push(wrong);
@@ -1288,6 +1297,7 @@ function renderAnalysisChart() {
           html += `<div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                       <span>类型：<b>${item.questionType === 'choice' ? '选择题' : '判断题'}</b></span>
                       <span>正确率：<b style="color:${getAccuracyColor(item.accuracy)}">${item.accuracy}%</b></span>
+                      <span>错误率：<b style="color:#F56C6C">${Math.round((item.wrongRate || 0) * 100)}%</b></span>
                    </div>`;
           
           // 选项详情表格

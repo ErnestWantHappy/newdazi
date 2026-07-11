@@ -123,7 +123,16 @@ public class FileUploadUtils
             throws FileSizeLimitExceededException, IOException, FileNameLengthLimitExceededException,
             InvalidExtensionException
     {
-        int fileNameLength = Objects.requireNonNull(file.getOriginalFilename()).length();
+        String originalFilename = file.getOriginalFilename();
+        if (StringUtils.isEmpty(originalFilename))
+        {
+            originalFilename = file.getName();
+        }
+        if (originalFilename == null)
+        {
+            originalFilename = "";
+        }
+        int fileNameLength = originalFilename.length();
         if (fileNameLength > FileUploadUtils.DEFAULT_FILE_NAME_LENGTH)
         {
             throw new FileNameLengthLimitExceededException(FileUploadUtils.DEFAULT_FILE_NAME_LENGTH);
@@ -143,7 +152,17 @@ public class FileUploadUtils
      */
     public static final String extractFilename(MultipartFile file)
     {
-        return StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(), FilenameUtils.getBaseName(file.getOriginalFilename()), Seq.getId(Seq.uploadSeqType), getExtension(file));
+        String originalFilename = file.getOriginalFilename();
+        if (StringUtils.isEmpty(originalFilename))
+        {
+            originalFilename = file.getName();
+        }
+        if (originalFilename == null)
+        {
+            originalFilename = "";
+        }
+        String baseName = FilenameUtils.getBaseName(originalFilename);
+        return StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(), baseName, Seq.getId(Seq.uploadSeqType), getExtension(file));
     }
 
     /**
@@ -193,6 +212,10 @@ public class FileUploadUtils
         }
 
         String fileName = file.getOriginalFilename();
+        if (StringUtils.isEmpty(fileName))
+        {
+            fileName = file.getName();
+        }
         String extension = getExtension(file);
         if (allowedExtension != null && !isAllowedExtension(extension, allowedExtension))
         {
@@ -250,10 +273,20 @@ public class FileUploadUtils
      */
     public static final String getExtension(MultipartFile file)
     {
-        String extension = FilenameUtils.getExtension(file.getOriginalFilename());
+        String originalFilename = file.getOriginalFilename();
+        if (StringUtils.isEmpty(originalFilename))
+        {
+            originalFilename = file.getName();
+        }
+        String extension = FilenameUtils.getExtension(originalFilename);
         if (StringUtils.isEmpty(extension))
         {
-            extension = MimeTypeUtils.getExtension(Objects.requireNonNull(file.getContentType()));
+            String contentType = file.getContentType();
+            if (StringUtils.isEmpty(contentType))
+            {
+                return "";
+            }
+            extension = MimeTypeUtils.getExtension(contentType);
         }
         return extension;
     }

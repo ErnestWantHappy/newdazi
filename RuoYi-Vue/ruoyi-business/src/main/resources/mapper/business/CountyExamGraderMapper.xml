@@ -5,26 +5,44 @@
     <resultMap type="CountyExamGrader" id="CountyExamGraderResult">
         <id     property="id"           column="id"           />
         <result property="examId"       column="exam_id"      />
+        <result property="questionId"   column="question_id"  />
         <result property="graderId"     column="grader_id"    />
+        <result property="graderName"   column="grader_name"  />
+        <result property="userName"     column="user_name"    />
+        <result property="deptName"     column="dept_name"    />
         <result property="targetCount"  column="target_count" />
         <result property="gradedCount"  column="graded_count" />
     </resultMap>
 
     <select id="selectByExamId" parameterType="Long" resultMap="CountyExamGraderResult">
-        select id, exam_id, grader_id, target_count, graded_count
-        from biz_county_exam_grader
-        where exam_id = #{examId}
+        select g.id, g.exam_id, g.question_id, g.grader_id, u.nick_name as grader_name,
+               u.user_name, d.dept_name, g.target_count, g.graded_count
+        from biz_county_exam_grader g
+        left join sys_user u on g.grader_id = u.user_id
+        left join sys_dept d on u.dept_id = d.dept_id
+        where g.exam_id = #{examId}
+        order by g.question_id asc, g.id asc
     </select>
 
     <select id="selectByExamAndGrader" resultMap="CountyExamGraderResult">
-        select id, exam_id, grader_id, target_count, graded_count
+        select id, exam_id, question_id, grader_id, target_count, graded_count
         from biz_county_exam_grader
         where exam_id = #{examId} and grader_id = #{graderId}
+        order by id asc
+        limit 1
+    </select>
+
+    <select id="selectByExamQuestionAndGrader" resultMap="CountyExamGraderResult">
+        select id, exam_id, question_id, grader_id, target_count, graded_count
+        from biz_county_exam_grader
+        where exam_id = #{examId}
+          and question_id = #{questionId}
+          and grader_id = #{graderId}
     </select>
 
     <insert id="insert" parameterType="CountyExamGrader" useGeneratedKeys="true" keyProperty="id">
-        insert into biz_county_exam_grader (exam_id, grader_id, target_count, graded_count)
-        values (#{examId}, #{graderId}, #{targetCount}, #{gradedCount})
+        insert into biz_county_exam_grader (exam_id, question_id, grader_id, target_count, graded_count)
+        values (#{examId}, #{questionId}, #{graderId}, #{targetCount}, #{gradedCount})
     </insert>
 
     <update id="update" parameterType="CountyExamGrader">

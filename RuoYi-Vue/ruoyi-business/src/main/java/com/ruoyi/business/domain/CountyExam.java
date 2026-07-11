@@ -26,11 +26,29 @@ public class CountyExam extends BaseEntity {
     /** 状态(0草稿/1开启/2关闭/3已发布) */
     private String status;
 
+    /** 匿名评卷是否开启(0关闭/1开启) */
+    private String gradingEnabled;
+
     /** 出题模式(0固定/1乱序/2抽题) */
     private Integer shuffleMode;
 
+    /** 随机抽取选择题数量 */
+    private Integer randomChoiceCount;
+
+    /** 随机抽取判断题数量 */
+    private Integer randomJudgmentCount;
+
+    /** 试卷总分 */
+    private Integer totalScore;
+
+    /** 作答时长(分钟) */
+    private Integer durationMinutes;
+
     /** 创建人ID */
     private Long creatorId;
+
+    /** 开启时间 */
+    private Date openTime;
 
     /** 关闭时间 */
     private Date closeTime;
@@ -81,6 +99,14 @@ public class CountyExam extends BaseEntity {
         this.status = status;
     }
 
+    public String getGradingEnabled() {
+        return gradingEnabled;
+    }
+
+    public void setGradingEnabled(String gradingEnabled) {
+        this.gradingEnabled = gradingEnabled;
+    }
+
     public Integer getShuffleMode() {
         return shuffleMode;
     }
@@ -89,12 +115,52 @@ public class CountyExam extends BaseEntity {
         this.shuffleMode = shuffleMode;
     }
 
+    public Integer getRandomChoiceCount() {
+        return randomChoiceCount;
+    }
+
+    public void setRandomChoiceCount(Integer randomChoiceCount) {
+        this.randomChoiceCount = randomChoiceCount;
+    }
+
+    public Integer getRandomJudgmentCount() {
+        return randomJudgmentCount;
+    }
+
+    public void setRandomJudgmentCount(Integer randomJudgmentCount) {
+        this.randomJudgmentCount = randomJudgmentCount;
+    }
+
+    public Integer getTotalScore() {
+        return totalScore;
+    }
+
+    public void setTotalScore(Integer totalScore) {
+        this.totalScore = totalScore;
+    }
+
+    public Integer getDurationMinutes() {
+        return durationMinutes;
+    }
+
+    public void setDurationMinutes(Integer durationMinutes) {
+        this.durationMinutes = durationMinutes;
+    }
+
     public Long getCreatorId() {
         return creatorId;
     }
 
     public void setCreatorId(Long creatorId) {
         this.creatorId = creatorId;
+    }
+
+    public Date getOpenTime() {
+        return openTime;
+    }
+
+    public void setOpenTime(Date openTime) {
+        this.openTime = openTime;
     }
 
     public Date getCloseTime() {

@@ -1,78 +1,1504 @@
 package com.ruoyi.business.service.impl;
 
+import com.ruoyi.business.domain.BizScoringItem;
+import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.CountyExam;
+import com.ruoyi.business.domain.CountyExamAnswer;
+import com.ruoyi.business.domain.CountyExamClass;
+import com.ruoyi.business.domain.CountyExamGrader;
+import com.ruoyi.business.domain.CountyExamPaperQuestion;
+import com.ruoyi.business.domain.CountyExamQuestion;
+import com.ruoyi.business.domain.CountyExamStudent;
+import com.ruoyi.business.domain.dto.CountyExamGradeRequest;
+import com.ruoyi.business.domain.dto.CountyExamGraderAllocateRequest;
+import com.ruoyi.business.domain.dto.CountyExamSubmitRequest;
+import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
+import com.ruoyi.business.mapper.BizScoringItemMapper;
+import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.mapper.CountyExamAnswerMapper;
+import com.ruoyi.business.mapper.CountyExamClassMapper;
+import com.ruoyi.business.mapper.CountyExamGraderMapper;
 import com.ruoyi.business.mapper.CountyExamMapper;
+import com.ruoyi.business.mapper.CountyExamPaperQuestionMapper;
+import com.ruoyi.business.mapper.CountyExamQuestionMapper;
+import com.ruoyi.business.mapper.CountyExamStudentMapper;
+import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.ICountyExamService;
+import com.ruoyi.common.core.domain.entity.SysDept;
+import com.ruoyi.common.core.domain.model.LoginUser;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
+import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.system.mapper.SysDeptMapper;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 县考管理 Service实现类
- * 
- * @author ruoyi
+ * 区域抽测管理 Service实现类。
  */
 @Service
 public class CountyExamServiceImpl implements ICountyExamService {
+    private static final String STATUS_DRAFT = "0";
+    private static final String STATUS_OPEN = "1";
+    private static final String STATUS_CLOSED = "2";
+    private static final String STATUS_PUBLISHED = "3";
+    private static final String GRADING_ENABLED = "1";
+    private static final String GRADING_DISABLED = "0";
+    private static final String STUDENT_SUBMITTED = "1";
+    private static final String AUTO_SUBMIT_YES = "1";
+    private static final String AUTO_SUBMIT_NO = "0";
+    private static final int DEFAULT_DURATION_MINUTES = 40;
 
     @Autowired
     private CountyExamMapper countyExamMapper;
 
-    /**
-     * 查询县考
-     */
+    @Autowired
+    private CountyExamQuestionMapper questionMapper;
+
+    @Autowired
+    private CountyExamClassMapper classMapper;
+
+    @Autowired
+    private CountyExamStudentMapper studentMapper;
+
+    @Autowired
+    private CountyExamAnswerMapper answerMapper;
+
+    @Autowired
+    private CountyExamGraderMapper graderMapper;
+
+    @Autowired
+    private CountyExamPaperQuestionMapper paperQuestionMapper;
+
+    @Autowired
+    private BizStudentMapper bizStudentMapper;
+
+    @Autowired
+    private SysDeptMapper deptMapper;
+
+    @Autowired
+    private BizScoringItemMapper scoringItemMapper;
+
+    @Autowired
+    private AsyncConversionService asyncConversionService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @Override
     public CountyExam selectCountyExamById(Long examId) {
         return countyExamMapper.selectCountyExamById(examId);
     }
 
-    /**
-     * 查询县考列表
-     */
     @Override
     public List<CountyExam> selectCountyExamList(CountyExam countyExam) {
         return countyExamMapper.selectCountyExamList(countyExam);
     }
 
-    /**
-     * 新增县考
-     */
     @Override
     public int insertCountyExam(CountyExam countyExam) {
-        // 设置默认状态为草稿
+        requireManager();
         if (countyExam.getStatus() == null) {
-            countyExam.setStatus("0");
+            countyExam.setStatus(STATUS_DRAFT);
         }
-        // 设置创建人
+        if (countyExam.getGradingEnabled() == null) {
+            countyExam.setGradingEnabled(GRADING_DISABLED);
+        }
+        if (countyExam.getShuffleMode() == null) {
+            countyExam.setShuffleMode(0);
+        }
+        if (countyExam.getRandomChoiceCount() == null) {
+            countyExam.setRandomChoiceCount(0);
+        }
+        if (countyExam.getRandomJudgmentCount() == null) {
+            countyExam.setRandomJudgmentCount(0);
+        }
+        if (countyExam.getDurationMinutes() == null || countyExam.getDurationMinutes() <= 0) {
+            countyExam.setDurationMinutes(DEFAULT_DURATION_MINUTES);
+        }
         countyExam.setCreatorId(SecurityUtils.getUserId());
         countyExam.setCreateBy(SecurityUtils.getUsername());
         return countyExamMapper.insertCountyExam(countyExam);
     }
 
-    /**
-     * 修改县考
-     */
     @Override
     public int updateCountyExam(CountyExam countyExam) {
+        requireManager();
+        CountyExam saved = requireExam(countyExam.getExamId());
+        requireDraft(saved);
         countyExam.setUpdateBy(SecurityUtils.getUsername());
         return countyExamMapper.updateCountyExam(countyExam);
     }
 
-    /**
-     * 删除县考
-     */
     @Override
     public int deleteCountyExamById(Long examId) {
+        requireManager();
+        CountyExam saved = requireExam(examId);
+        requireDraft(saved);
         return countyExamMapper.deleteCountyExamById(examId);
     }
 
-    /**
-     * 批量删除县考
-     */
     @Override
     public int deleteCountyExamByIds(Long[] examIds) {
+        requireManager();
+        if (examIds != null) {
+            for (Long examId : examIds) {
+                requireDraft(requireExam(examId));
+            }
+        }
         return countyExamMapper.deleteCountyExamByIds(examIds);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int saveQuestions(Long examId, List<CountyExamQuestion> questions) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        requireDraft(exam);
+        questionMapper.deleteByExamId(examId);
+        if (questions == null || questions.isEmpty()) {
+            updateTotalScore(examId, 0);
+            return 0;
+        }
+        int order = 1;
+        int totalScore = 0;
+        for (CountyExamQuestion question : questions) {
+            question.setExamId(examId);
+            if (question.getOrderNum() == null) {
+                question.setOrderNum(order);
+            }
+            if (question.getQuestionScore() == null) {
+                question.setQuestionScore(0);
+            }
+            totalScore += question.getQuestionScore();
+            order++;
+        }
+        int rows = questionMapper.batchInsert(questions);
+        updateTotalScore(examId, totalScore);
+        return rows;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int saveClasses(Long examId, List<CountyExamClass> classes) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        requireDraft(exam);
+        classMapper.deleteByExamId(examId);
+        if (classes == null || classes.isEmpty()) {
+            return 0;
+        }
+        for (CountyExamClass examClass : classes) {
+            examClass.setExamId(examId);
+            if (StringUtils.isEmpty(examClass.getType())) {
+                examClass.setType("1");
+            }
+        }
+        return classMapper.batchInsert(classes);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> openExam(Long examId, Integer durationMinutes) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        requireDraft(exam);
+        int normalizedDuration = normalizeDurationMinutes(durationMinutes == null ? exam.getDurationMinutes() : durationMinutes);
+        CountyExam durationUpdate = new CountyExam();
+        durationUpdate.setExamId(examId);
+        durationUpdate.setDurationMinutes(normalizedDuration);
+        durationUpdate.setUpdateBy(SecurityUtils.getUsername());
+        countyExamMapper.updateCountyExam(durationUpdate);
+        exam.setDurationMinutes(normalizedDuration);
+        List<BizLessonQuestionDetailVo> questions = questionMapper.selectDetailsByExamId(examId);
+        if (questions == null || questions.isEmpty()) {
+            throw new ServiceException("请先完成区域抽测组卷");
+        }
+        List<CountyExamClass> classes = classMapper.selectByExamId(examId);
+        if (classes == null || classes.isEmpty()) {
+            throw new ServiceException("请先指派参考班级");
+        }
+        validateNoActiveClassConflict(examId, classes);
+        snapshotScoringItems(examId, questions);
+        int participantCount = createParticipants(examId, classes);
+        List<CountyExamStudent> participants = studentMapper.selectParticipants(examId);
+        for (CountyExamStudent participant : participants) {
+            ensurePaperForStudent(exam, participant.getStudentId());
+        }
+        countyExamMapper.updateStatus(examId, STATUS_OPEN);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("participantCount", participantCount);
+        result.put("durationMinutes", normalizedDuration);
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> closeExam(Long examId) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        if (!STATUS_OPEN.equals(exam.getStatus())) {
+            throw new ServiceException("只有已开启的区域抽测可以关闭");
+        }
+        int autoSubmitCount = autoSubmitOpenParticipants(exam);
+        countyExamMapper.updateStatus(examId, STATUS_CLOSED);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("status", STATUS_CLOSED);
+        result.put("autoSubmitCount", autoSubmitCount);
+        List<CountyExamGrader> configs = graderMapper.selectByExamId(examId);
+        if (configs != null && !configs.isEmpty()) {
+            result.putAll(generateGradingTasks(examId, configs));
+        }
+        result.put("gradingProgress", buildGradingProgress(examId));
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> allocateGraders(Long examId, CountyExamGraderAllocateRequest request) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        if (STATUS_PUBLISHED.equals(exam.getStatus())) {
+            throw new ServiceException("成绩已发布，不能修改评卷配置");
+        }
+        List<CountyExamGrader> configs = buildGraderConfigs(examId, request);
+        if (configs.isEmpty()) {
+            throw new ServiceException("请选择评卷教师");
+        }
+        graderMapper.deleteByExamId(examId);
+        for (CountyExamGrader config : configs) {
+            graderMapper.insert(config);
+        }
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("configured", true);
+        result.put("configCount", configs.size());
+        if (STATUS_CLOSED.equals(exam.getStatus())) {
+            result.putAll(generateGradingTasks(examId, configs));
+        } else {
+            result.put("allocated", false);
+        }
+        result.put("gradingProgress", buildGradingProgress(examId));
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> resetGraders(Long examId) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        if (!STATUS_CLOSED.equals(exam.getStatus())) {
+            throw new ServiceException("只有关闭后且未发布的区域抽测可以重置评卷任务");
+        }
+        List<CountyExamGrader> configs = graderMapper.selectByExamId(examId);
+        if (configs == null || configs.isEmpty()) {
+            throw new ServiceException("请先配置评卷教师");
+        }
+        jdbcTemplate.update(
+                "delete d from biz_county_exam_grading_detail d " +
+                        "inner join biz_county_exam_answer a on d.answer_id = a.answer_id " +
+                        "inner join biz_county_exam_paper_question pq on pq.exam_id = a.exam_id and pq.student_id = a.student_id and pq.question_id = a.question_id " +
+                        "where a.exam_id = ? and pq.question_type = 'practical'",
+                examId);
+        int resetCount = answerMapper.resetPracticalGrading(examId);
+        for (CountyExamGrader config : configs) {
+            config.setGradedCount(0);
+            graderMapper.update(config);
+        }
+        Map<String, Object> result = generateGradingTasks(examId, configs);
+        result.put("resetCount", resetCount);
+        result.put("gradingProgress", buildGradingProgress(examId));
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> updateGradingEnabled(Long examId, boolean enabled) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        if (!STATUS_CLOSED.equals(exam.getStatus())) {
+            throw new ServiceException("只有已关闭且未发布的区域抽测可以调整评卷入口");
+        }
+        if (enabled) {
+            int assignedCount = countAssignedPracticalAnswers(examId);
+            if (assignedCount <= 0) {
+                throw new ServiceException("请先配置评卷教师并生成匿名评卷任务");
+            }
+        }
+        String gradingEnabled = enabled ? GRADING_ENABLED : GRADING_DISABLED;
+        countyExamMapper.updateGradingEnabled(examId, gradingEnabled, SecurityUtils.getUsername());
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("examId", examId);
+        result.put("gradingEnabled", gradingEnabled);
+        result.put("gradingProgress", buildGradingProgress(examId));
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> publishExam(Long examId) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        if (!STATUS_CLOSED.equals(exam.getStatus())) {
+            throw new ServiceException("请先关闭区域抽测，再发布成绩");
+        }
+        autoSubmitOpenParticipants(exam);
+        int ungradedCount = answerMapper.countUngradedPracticalAnswers(examId);
+        if (ungradedCount > 0) {
+            throw new ServiceException("还有 " + ungradedCount + " 份操作题未完成评卷");
+        }
+        for (CountyExamStudent student : studentMapper.selectParticipants(examId)) {
+            recomputeStudentScore(examId, student.getStudentId(), true, student.getSubmitTime());
+        }
+        countyExamMapper.updateStatus(examId, STATUS_PUBLISHED);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("status", STATUS_PUBLISHED);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> getExamDetail(Long examId) {
+        requireManager();
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("exam", requireExam(examId));
+        result.put("questions", questionMapper.selectDetailsByExamId(examId));
+        result.put("classes", classMapper.selectByExamId(examId));
+        result.put("graders", graderMapper.selectByExamId(examId));
+        result.put("gradingProgress", buildGradingProgress(examId));
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> getSummary(Long examId) {
+        requireManager();
+        requireExam(examId);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("schools", studentMapper.selectSummaryRows(examId));
+        result.put("students", studentMapper.selectStudentRows(examId, null));
+        return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> getStudents(Long examId, String keyword) {
+        requireManager();
+        requireExam(examId);
+        return studentMapper.selectStudentRows(examId, keyword);
+    }
+
+    @Override
+    public void exportStudents(Long examId, HttpServletResponse response) {
+        requireManager();
+        CountyExam exam = requireExam(examId);
+        List<Map<String, Object>> rows = studentMapper.selectStudentRows(examId, null);
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("区域抽测成绩");
+            String[] headers = {"学校", "班级", "账号", "学生姓名", "学号", "理论分", "打字分", "操作分", "总分", "状态", "提交时间"};
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                headerRow.createCell(i).setCellValue(headers[i]);
+                sheet.setColumnWidth(i, 16 * 256);
+            }
+            int rowIndex = 1;
+            for (Map<String, Object> item : rows) {
+                Row row = sheet.createRow(rowIndex++);
+                writeCell(row, 0, item.get("deptName"));
+                writeCell(row, 1, item.get("classInfo"));
+                writeCell(row, 2, item.get("userName"));
+                writeCell(row, 3, item.get("studentName"));
+                writeCell(row, 4, item.get("studentNo"));
+                writeCell(row, 5, item.get("theoryScore"));
+                writeCell(row, 6, item.get("typingScore"));
+                writeCell(row, 7, item.get("practicalScore"));
+                writeCell(row, 8, item.get("totalScore"));
+                writeCell(row, 9, STUDENT_SUBMITTED.equals(String.valueOf(item.get("status"))) ? "已提交" : "未提交");
+                writeCell(row, 10, item.get("submitTime"));
+            }
+            String fileName = URLEncoder.encode(exam.getExamName() + "-成绩.xlsx", StandardCharsets.UTF_8.name()).replaceAll("\\+", "%20");
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding("utf-8");
+            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+            ServletOutputStream outputStream = response.getOutputStream();
+            workbook.write(outputStream);
+            outputStream.flush();
+        } catch (IOException e) {
+            throw new ServiceException("导出区域抽测成绩失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Map<String, Object> checkCurrentStudentExam() {
+        return getStudentExam(false);
+    }
+
+    @Override
+    public Map<String, Object> getCurrentStudentExam() {
+        return getStudentExam(true);
+    }
+
+    private Map<String, Object> getStudentExam(boolean startTiming) {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null) {
+            throw new ServiceException("未找到学生信息");
+        }
+        List<CountyExamClass> activeClasses = classMapper.selectActiveByStudentInfo(
+                loginUser.getDeptId(), student.getEntryYear(), student.getClassCode());
+        if (activeClasses == null || activeClasses.isEmpty()) {
+            return noStudentExam();
+        }
+        CountyExam exam = requireExam(activeClasses.get(0).getExamId());
+        ensureParticipant(exam, student, loginUser.getDeptId());
+        if (startTiming) {
+            ensurePaperForStudent(exam, student.getStudentId());
+        }
+        CountyExamStudent examStudent = startTiming
+                ? ensureStudentTiming(exam, student.getStudentId())
+                : studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        Date now = new Date();
+        if (STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
+            return endedStudentExamPayload(exam, examStudent, "区域抽测已提交");
+        }
+        if (isTimedOut(examStudent, now)) {
+            autoSubmitStudentExam(exam, student, examStudent);
+            CountyExamStudent submitted = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+            return endedStudentExamPayload(exam, submitted, "区域抽测作答时间已结束");
+        }
+        if (!startTiming) {
+            return buildStudentExamStatusPayload(exam, examStudent);
+        }
+        Map<String, Object> result = buildStudentExamPayload(exam, student, loginUser.getDeptId());
+        result.put("hasExam", true);
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> saveStudentDraft(CountyExamSubmitRequest request) {
+        return saveStudentAnswers(request, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> submitStudentExam(CountyExamSubmitRequest request) {
+        return saveStudentAnswers(request, true);
+    }
+
+    @Override
+    public Map<String, Object> getGradingEntry() {
+        Long userId = SecurityUtils.getUserId();
+        Map<String, Object> result = new HashMap<String, Object>();
+        int pendingCount = answerMapper.countTasksByGrader(userId, "0");
+        int totalCount = answerMapper.countTasksByGrader(userId, null);
+        result.put("hasTask", pendingCount > 0);
+        result.put("taskCount", pendingCount);
+        result.put("pendingTaskCount", pendingCount);
+        result.put("totalTaskCount", totalCount);
+        return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> getGradingTasks(String gradingStatus) {
+        Long userId = SecurityUtils.getUserId();
+        List<Map<String, Object>> tasks = answerMapper.selectGradingTasks(userId, gradingStatus);
+        for (Map<String, Object> task : tasks) {
+            Long examId = longValue(task.get("examId"));
+            Long questionId = longValue(task.get("questionId"));
+            task.put("scoringItems", selectCountyScoringItems(examId, questionId));
+        }
+        return tasks;
+    }
+
+    @Override
+    public Map<String, Object> getGradingAnswer(Long answerId) {
+        Long userId = SecurityUtils.getUserId();
+        Map<String, Object> detail = answerMapper.selectGradingAnswerDetail(answerId, userId);
+        if (detail == null) {
+            throw new ServiceException("未找到可评阅的匿名答卷");
+        }
+        detail.put("scoringItems", selectCountyScoringItems(longValue(detail.get("examId")), longValue(detail.get("questionId"))));
+        detail.put("scoringDetails", selectCountyGradingDetails(answerId));
+        return detail;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> gradeAnswer(CountyExamGradeRequest request) {
+        if (request == null || request.getAnswerId() == null || request.getScore() == null) {
+            throw new ServiceException("评卷参数不完整");
+        }
+        if (request.getScore() < 0) {
+            throw new ServiceException("分数不能为负数");
+        }
+        Long userId = SecurityUtils.getUserId();
+        CountyExamAnswer answer = answerMapper.selectById(request.getAnswerId());
+        if (answer == null || answer.getGraderId() == null || !answer.getGraderId().equals(userId)) {
+            throw new ServiceException("只能评阅分配给自己的匿名答卷");
+        }
+        Map<String, Object> detail = answerMapper.selectGradingAnswerDetail(request.getAnswerId(), userId);
+        if (detail == null) {
+            throw new ServiceException("未找到可评阅的匿名答卷");
+        }
+        Object questionScore = detail.get("questionScore");
+        if (questionScore != null && BigDecimal.valueOf(request.getScore()).compareTo(new BigDecimal(String.valueOf(questionScore))) > 0) {
+            throw new ServiceException("得分不能超过题目满分");
+        }
+        answerMapper.updateGrade(request.getAnswerId(), request.getScore(), userId);
+        saveCountyGradingDetails(request);
+        refreshGraderCount(answer.getExamId(), answer.getQuestionId(), userId);
+        recomputeStudentScore(answer.getExamId(), answer.getStudentId(), true, null);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("answerId", request.getAnswerId());
+        result.put("score", request.getScore());
+        return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> getAssignableClasses(String schoolType) {
+        requireManager();
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "select d.dept_id as deptId, d.dept_name as deptName, s.entry_year as entryYear, s.class_code as classCode, count(1) as studentCount " +
+                        "from biz_student s " +
+                        "inner join sys_user u on s.user_id = u.user_id " +
+                        "inner join sys_dept d on u.dept_id = d.dept_id " +
+                        "where d.del_flag = '0' and d.status = '0' and (? is null or d.school_type = ?) " +
+                        "group by d.dept_id, d.dept_name, s.entry_year, s.class_code " +
+                        "order by d.dept_name asc, s.entry_year desc, cast(s.class_code as unsigned) asc, s.class_code asc",
+                schoolType, schoolType);
+        return rows;
+    }
+
+    @Override
+    public List<Map<String, Object>> getAssignableGraders(String keyword) {
+        requireManager();
+        String likeKeyword = StringUtils.isEmpty(keyword) ? null : "%" + keyword.trim() + "%";
+        return jdbcTemplate.queryForList(
+                "select distinct u.user_id as userId, u.user_name as userName, u.nick_name as nickName, " +
+                        "d.dept_name as deptName " +
+                        "from sys_user u " +
+                        "inner join sys_user_role ur on u.user_id = ur.user_id " +
+                        "inner join sys_role r on ur.role_id = r.role_id " +
+                        "left join sys_dept d on u.dept_id = d.dept_id " +
+                        "where u.del_flag = '0' and u.status = '0' " +
+                        "and r.del_flag = '0' and r.status = '0' and r.role_key = 'teacher' " +
+                        "and (? is null or u.nick_name like ? or u.user_name like ? or d.dept_name like ?) " +
+                        "order by d.dept_name asc, u.nick_name asc, u.user_id asc " +
+                        "limit 80",
+                likeKeyword, likeKeyword, likeKeyword, likeKeyword);
+    }
+
+    private List<CountyExamGrader> buildGraderConfigs(Long examId, CountyExamGraderAllocateRequest request) {
+        List<BizLessonQuestionDetailVo> questions = questionMapper.selectDetailsByExamId(examId);
+        Set<Long> practicalQuestionIds = new HashSet<Long>();
+        for (BizLessonQuestionDetailVo question : questions) {
+            if ("practical".equals(question.getQuestionType())) {
+                practicalQuestionIds.add(question.getQuestionId());
+            }
+        }
+        if (practicalQuestionIds.isEmpty()) {
+            throw new ServiceException("本场区域抽测没有操作题，无需配置评卷教师");
+        }
+
+        List<CountyExamGrader> configs = new ArrayList<CountyExamGrader>();
+        Set<String> uniqueKeys = new HashSet<String>();
+        if (request != null && request.getAssignments() != null && !request.getAssignments().isEmpty()) {
+            for (CountyExamGraderAllocateRequest.Assignment item : request.getAssignments()) {
+                if (item == null || item.getQuestionId() == null || item.getGraderId() == null) {
+                    continue;
+                }
+                if (!practicalQuestionIds.contains(item.getQuestionId())) {
+                    throw new ServiceException("只能为操作题配置评卷教师");
+                }
+                String key = item.getQuestionId() + "-" + item.getGraderId();
+                if (!uniqueKeys.add(key)) {
+                    throw new ServiceException("同一道操作题不能重复配置同一位评卷教师");
+                }
+                CountyExamGrader config = new CountyExamGrader();
+                config.setExamId(examId);
+                config.setQuestionId(item.getQuestionId());
+                config.setGraderId(item.getGraderId());
+                config.setTargetCount(item.getTargetCount() == null || item.getTargetCount() < 0 ? 0 : item.getTargetCount());
+                config.setGradedCount(0);
+                configs.add(config);
+            }
+            return configs;
+        }
+
+        if (request != null && request.getGraderIds() != null) {
+            for (Long questionId : practicalQuestionIds) {
+                for (Long graderId : request.getGraderIds()) {
+                    if (graderId == null || graderId <= 0) {
+                        continue;
+                    }
+                    String key = questionId + "-" + graderId;
+                    if (!uniqueKeys.add(key)) {
+                        continue;
+                    }
+                    CountyExamGrader config = new CountyExamGrader();
+                    config.setExamId(examId);
+                    config.setQuestionId(questionId);
+                    config.setGraderId(graderId);
+                    config.setTargetCount(0);
+                    config.setGradedCount(0);
+                    configs.add(config);
+                }
+            }
+        }
+        return configs;
+    }
+
+    private Map<String, Object> generateGradingTasks(Long examId, List<CountyExamGrader> configs) {
+        if (answerMapper.countGradedPracticalAnswers(examId) > 0) {
+            throw new ServiceException("已有操作题完成评卷，不能重新生成评卷任务");
+        }
+        answerMapper.clearPracticalGraders(examId);
+        Map<Long, List<CountyExamGrader>> configsByQuestion = new LinkedHashMap<Long, List<CountyExamGrader>>();
+        for (CountyExamGrader config : configs) {
+            if (config.getQuestionId() == null || config.getGraderId() == null) {
+                continue;
+            }
+            if (!configsByQuestion.containsKey(config.getQuestionId())) {
+                configsByQuestion.put(config.getQuestionId(), new ArrayList<CountyExamGrader>());
+            }
+            configsByQuestion.get(config.getQuestionId()).add(config);
+        }
+
+        int answerCount = 0;
+        int assignedCount = 0;
+        Set<Long> graderIds = new HashSet<Long>();
+        for (Map.Entry<Long, List<CountyExamGrader>> entry : configsByQuestion.entrySet()) {
+            Long questionId = entry.getKey();
+            List<CountyExamGrader> questionConfigs = entry.getValue();
+            List<CountyExamAnswer> answers = answerMapper.selectPracticalAnswersForAllocationByQuestion(examId, questionId);
+            Collections.shuffle(answers, new java.util.Random(examId * 1009L + questionId));
+            answerCount += answers.size();
+
+            Map<Long, List<Long>> answerIdsByGrader = new LinkedHashMap<Long, List<Long>>();
+            for (CountyExamGrader config : questionConfigs) {
+                graderIds.add(config.getGraderId());
+                answerIdsByGrader.put(config.getGraderId(), new ArrayList<Long>());
+            }
+
+            int cursor = 0;
+            for (CountyExamGrader config : questionConfigs) {
+                int targetCount = config.getTargetCount() == null ? 0 : config.getTargetCount();
+                for (int i = 0; i < targetCount && cursor < answers.size(); i++) {
+                    answerIdsByGrader.get(config.getGraderId()).add(answers.get(cursor++).getAnswerId());
+                }
+            }
+
+            int roundRobinIndex = 0;
+            while (cursor < answers.size() && !questionConfigs.isEmpty()) {
+                CountyExamGrader config = questionConfigs.get(roundRobinIndex % questionConfigs.size());
+                answerIdsByGrader.get(config.getGraderId()).add(answers.get(cursor++).getAnswerId());
+                roundRobinIndex++;
+            }
+
+            for (CountyExamGrader config : questionConfigs) {
+                List<Long> answerIds = answerIdsByGrader.get(config.getGraderId());
+                int actualCount = answerIds == null ? 0 : answerIds.size();
+                config.setTargetCount(actualCount);
+                config.setGradedCount(0);
+                if (config.getId() != null) {
+                    graderMapper.update(config);
+                }
+                if (answerIds != null && !answerIds.isEmpty()) {
+                    answerMapper.batchUpdateGrader(answerIds, config.getGraderId());
+                    assignedCount += answerIds.size();
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("allocated", true);
+        result.put("answerCount", answerCount);
+        result.put("assignedCount", assignedCount);
+        result.put("graderCount", graderIds.size());
+        return result;
+    }
+
+    private CountyExamStudent ensureStudentTiming(CountyExam exam, Long studentId) {
+        CountyExamStudent examStudent = studentMapper.selectByExamAndStudent(exam.getExamId(), studentId);
+        if (examStudent == null) {
+            throw new ServiceException("未找到区域抽测参考学生记录");
+        }
+        if (examStudent.getStartTime() == null || examStudent.getDeadlineTime() == null) {
+            Date startTime = new Date();
+            examStudent.setStartTime(startTime);
+            examStudent.setDeadlineTime(addMinutes(startTime, normalizeDurationMinutes(exam.getDurationMinutes())));
+            examStudent.setAutoSubmit(AUTO_SUBMIT_NO);
+            studentMapper.update(examStudent);
+        }
+        return examStudent;
+    }
+
+    private boolean isTimedOut(CountyExamStudent examStudent, Date now) {
+        return examStudent != null
+                && examStudent.getDeadlineTime() != null
+                && !examStudent.getDeadlineTime().after(now);
+    }
+
+    private long remainingSeconds(CountyExamStudent examStudent, Date now) {
+        if (examStudent == null || examStudent.getDeadlineTime() == null) {
+            return 0L;
+        }
+        return Math.max(0L, (examStudent.getDeadlineTime().getTime() - now.getTime()) / 1000L);
+    }
+
+    private Date addMinutes(Date startTime, int minutes) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(startTime);
+        calendar.add(Calendar.MINUTE, minutes);
+        return calendar.getTime();
+    }
+
+    private int normalizeDurationMinutes(Integer durationMinutes) {
+        return durationMinutes == null || durationMinutes <= 0 ? DEFAULT_DURATION_MINUTES : durationMinutes;
+    }
+
+    private Map<String, Object> endedStudentExamPayload(CountyExam exam, CountyExamStudent examStudent, String message) {
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("hasExam", true);
+        result.put("ended", true);
+        result.put("submitted", examStudent != null && STUDENT_SUBMITTED.equals(examStudent.getStatus()));
+        result.put("autoSubmitted", examStudent != null && AUTO_SUBMIT_YES.equals(examStudent.getAutoSubmit()));
+        result.put("examId", exam.getExamId());
+        result.put("examName", exam.getExamName());
+        result.put("status", exam.getStatus());
+        result.put("durationMinutes", normalizeDurationMinutes(exam.getDurationMinutes()));
+        result.put("startTime", examStudent == null ? null : examStudent.getStartTime());
+        result.put("deadlineTime", examStudent == null ? null : examStudent.getDeadlineTime());
+        result.put("submitTime", examStudent == null ? null : examStudent.getSubmitTime());
+        result.put("serverTime", new Date());
+        result.put("message", message);
+        return result;
+    }
+
+    private Map<String, Object> buildStudentExamStatusPayload(CountyExam exam, CountyExamStudent examStudent) {
+        Date now = new Date();
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("hasExam", true);
+        result.put("ended", false);
+        result.put("submitted", examStudent != null && STUDENT_SUBMITTED.equals(examStudent.getStatus()));
+        result.put("examId", exam.getExamId());
+        result.put("examName", exam.getExamName());
+        result.put("status", exam.getStatus());
+        result.put("durationMinutes", normalizeDurationMinutes(exam.getDurationMinutes()));
+        result.put("startTime", examStudent == null ? null : examStudent.getStartTime());
+        result.put("deadlineTime", examStudent == null ? null : examStudent.getDeadlineTime());
+        result.put("serverTime", now);
+        result.put("remainingSeconds", examStudent == null ? null : remainingSeconds(examStudent, now));
+        return result;
+    }
+
+    private void autoSubmitStudentExam(CountyExam exam, BizStudent student, CountyExamStudent examStudent) {
+        if (examStudent == null || STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
+            return;
+        }
+        ensurePaperForStudent(exam, student.getStudentId());
+        List<BizLessonQuestionDetailVo> questions = paperQuestionMapper.selectDetailsByExamAndStudent(exam.getExamId(), student.getStudentId());
+        List<CountyExamAnswer> answers = answerMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        Map<Long, CountyExamAnswer> answerMap = new HashMap<Long, CountyExamAnswer>();
+        for (CountyExamAnswer answer : answers) {
+            answerMap.put(answer.getQuestionId(), answer);
+        }
+
+        Date now = new Date();
+        CountyExamSubmitRequest emptyRequest = new CountyExamSubmitRequest();
+        emptyRequest.setExamId(exam.getExamId());
+        emptyRequest.setAnswers(new HashMap<Long, String>());
+        List<Long> pendingPreviewAnswerIds = new ArrayList<Long>();
+        for (BizLessonQuestionDetailVo question : questions) {
+            CountyExamAnswer existing = answerMap.get(question.getQuestionId());
+            if (existing == null) {
+                CountyExamAnswer answer = buildAnswer(exam, student, question, null, emptyRequest, now, true);
+                answerMapper.insert(answer);
+                if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
+                    pendingPreviewAnswerIds.add(answer.getAnswerId());
+                }
+            } else if ("practical".equals(question.getQuestionType()) && StringUtils.isEmpty(existing.getStudentAnswer())) {
+                CountyExamAnswer answer = buildAnswer(exam, student, question, null, emptyRequest, now, true);
+                answer.setAnswerId(existing.getAnswerId());
+                answerMapper.updateStudentAnswer(answer);
+            }
+        }
+        recomputeStudentScore(exam.getExamId(), student.getStudentId(), true, now);
+        CountyExamStudent submitted = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        if (submitted != null) {
+            submitted.setAutoSubmit(AUTO_SUBMIT_YES);
+            studentMapper.update(submitted);
+        }
+        triggerCountyPreviewConversionsAfterCommit(pendingPreviewAnswerIds);
+    }
+
+    private int autoSubmitOpenParticipants(CountyExam exam) {
+        int count = 0;
+        for (CountyExamStudent participant : studentMapper.selectParticipants(exam.getExamId())) {
+            if (participant == null || STUDENT_SUBMITTED.equals(participant.getStatus())) {
+                continue;
+            }
+            BizStudent student = bizStudentMapper.selectBizStudentByStudentId(participant.getStudentId());
+            if (student == null) {
+                continue;
+            }
+            autoSubmitStudentExam(exam, student, participant);
+            count++;
+        }
+        return count;
+    }
+
+    private Map<String, Object> saveStudentAnswers(CountyExamSubmitRequest request, boolean finalSubmit) {
+        if (request == null || request.getExamId() == null) {
+            throw new ServiceException("区域抽测提交参数不完整");
+        }
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null) {
+            throw new ServiceException("未找到学生信息");
+        }
+        CountyExam exam = requireExam(request.getExamId());
+        if (!STATUS_OPEN.equals(exam.getStatus())) {
+            throw new ServiceException("区域抽测未开启或已关闭");
+        }
+        ensureParticipant(exam, student, loginUser.getDeptId());
+        CountyExamStudent examStudent = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        examStudent = ensureStudentTiming(exam, student.getStudentId());
+        if (examStudent != null && STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
+            throw new ServiceException("区域抽测已最终提交，不能再次修改");
+        }
+        if (isTimedOut(examStudent, new Date())) {
+            autoSubmitStudentExam(exam, student, examStudent);
+            return endedStudentExamPayload(exam, studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId()), "区域抽测作答时间已结束");
+        }
+        ensurePaperForStudent(exam, student.getStudentId());
+        List<BizLessonQuestionDetailVo> paperQuestions = paperQuestionMapper.selectDetailsByExamAndStudent(exam.getExamId(), student.getStudentId());
+        Map<Long, BizLessonQuestionDetailVo> questionMap = new HashMap<Long, BizLessonQuestionDetailVo>();
+        for (BizLessonQuestionDetailVo question : paperQuestions) {
+            questionMap.put(question.getQuestionId(), question);
+        }
+        Map<Long, String> requestAnswers = request.getAnswers() == null ? new HashMap<Long, String>() : request.getAnswers();
+        List<Long> pendingPreviewAnswerIds = new ArrayList<Long>();
+        Date now = new Date();
+        for (BizLessonQuestionDetailVo question : paperQuestions) {
+            boolean hasRequestAnswer = requestAnswers.containsKey(question.getQuestionId());
+            if (!finalSubmit && !hasRequestAnswer) {
+                continue;
+            }
+            CountyExamAnswer existing = answerMapper.selectLatestByExamStudentQuestion(exam.getExamId(), student.getStudentId(), question.getQuestionId());
+            if (finalSubmit && !hasRequestAnswer && existing != null) {
+                continue;
+            }
+            String studentAnswer = requestAnswers.get(question.getQuestionId());
+            if ("typing".equals(question.getQuestionType()) && existing != null && existing.getAnswerTime() != null && !finalSubmit) {
+                throw new ServiceException("打字题已提交，不能重新打字");
+            }
+            CountyExamAnswer answer = buildAnswer(exam, student, question, studentAnswer, request, now, finalSubmit);
+            if (existing == null) {
+                answerMapper.insert(answer);
+            } else {
+                answer.setAnswerId(existing.getAnswerId());
+                answerMapper.updateStudentAnswer(answer);
+            }
+            if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
+                pendingPreviewAnswerIds.add(answer.getAnswerId());
+            }
+        }
+        if (finalSubmit) {
+            recomputeStudentScore(exam.getExamId(), student.getStudentId(), true, now);
+        } else {
+            recomputeStudentScore(exam.getExamId(), student.getStudentId(), false, null);
+        }
+        triggerCountyPreviewConversionsAfterCommit(pendingPreviewAnswerIds);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("submitted", finalSubmit);
+        result.put("examId", exam.getExamId());
+        return result;
+    }
+
+    private CountyExamAnswer buildAnswer(CountyExam exam, BizStudent student, BizLessonQuestionDetailVo question,
+                                         String studentAnswer, CountyExamSubmitRequest request, Date now, boolean finalSubmit) {
+        CountyExamAnswer answer = new CountyExamAnswer();
+        answer.setExamId(exam.getExamId());
+        answer.setStudentId(student.getStudentId());
+        answer.setQuestionId(question.getQuestionId());
+        answer.setStudentAnswer(studentAnswer);
+        answer.setSubmitTime(now);
+        answer.setAnswerTime(request.getAnswerTimes() == null ? null : request.getAnswerTimes().get(question.getQuestionId()));
+        String questionType = question.getQuestionType();
+        int score = 0;
+        Boolean correct = Boolean.FALSE;
+        if ("choice".equals(questionType)) {
+            String normalized = studentAnswer == null ? null : studentAnswer.trim();
+            correct = normalized != null && normalized.equalsIgnoreCase(question.getAnswer());
+            score = correct ? scoreValue(question) : 0;
+            answer.setScore(score);
+        } else if ("judgment".equals(questionType)) {
+            String normalized = normalizeJudgmentAnswer(studentAnswer);
+            correct = normalized != null && normalized.equalsIgnoreCase(question.getAnswer());
+            score = correct ? scoreValue(question) : 0;
+            answer.setScore(score);
+            answer.setStudentAnswer(normalized);
+        } else if ("typing".equals(questionType)) {
+            score = calculateTypingScore(question, studentAnswer, request);
+            correct = score >= scoreValue(question) * 0.6;
+            answer.setScore(score);
+            applyTypingStats(answer, request, question.getQuestionId());
+        } else if ("practical".equals(questionType)) {
+            applyPracticalPreview(answer, studentAnswer);
+            answer.setFilePath(studentAnswer);
+            answer.setScore(StringUtils.isEmpty(studentAnswer) && finalSubmit ? 0 : null);
+            answer.setGradingStatus(StringUtils.isEmpty(studentAnswer) ? "1" : "0");
+        }
+        answer.setIsCorrect(Boolean.TRUE.equals(correct) ? 1 : 0);
+        return answer;
+    }
+
+    private void applyTypingStats(CountyExamAnswer answer, CountyExamSubmitRequest request, Long questionId) {
+        if (request.getTypingStats() == null || request.getTypingStats().get(questionId) == null) {
+            return;
+        }
+        CountyExamSubmitRequest.TypingStatItem stat = request.getTypingStats().get(questionId);
+        answer.setTypingSpeed(stat.getTypingSpeed());
+        answer.setAccuracyRate(stat.getAccuracyRate());
+        answer.setCompletionRate(stat.getCompletionRate());
+    }
+
+    private void applyPracticalPreview(CountyExamAnswer answer, String studentAnswer) {
+        answer.setPreviewRetryCount(0);
+        answer.setPreviewLastRetryTime(null);
+        if (StringUtils.isEmpty(studentAnswer)) {
+            answer.setPreviewStatus(null);
+            answer.setPreviewPath(null);
+            answer.setPreviewErrorMessage(null);
+            return;
+        }
+        String lower = studentAnswer.toLowerCase();
+        if (lower.endsWith(".docx") || lower.endsWith(".doc")) {
+            answer.setPreviewStatus("pending");
+            answer.setPreviewPath(null);
+            answer.setPreviewErrorMessage(null);
+        } else if (lower.endsWith(".pdf")) {
+            answer.setPreviewStatus("success");
+            answer.setPreviewPath(studentAnswer);
+            answer.setPreviewErrorMessage(null);
+        } else {
+            answer.setPreviewStatus("failed");
+            answer.setPreviewPath(null);
+            answer.setPreviewErrorMessage("不支持在线预览的文件类型");
+        }
+    }
+
+    private int calculateTypingScore(BizLessonQuestionDetailVo question, String studentAnswer, CountyExamSubmitRequest request) {
+        String original = question.getQuestionContent();
+        if (StringUtils.isEmpty(original) || studentAnswer == null) {
+            return 0;
+        }
+        int correctCount = 0;
+        int compareLength = Math.min(studentAnswer.length(), original.length());
+        for (int i = 0; i < compareLength; i++) {
+            if (original.charAt(i) == studentAnswer.charAt(i)) {
+                correctCount++;
+            }
+        }
+        double accuracyRate = studentAnswer.length() > 0 ? (double) correctCount / studentAnswer.length() : 0;
+        int duration = question.getTypingDuration() == null || question.getTypingDuration() <= 0 ? 5 : question.getTypingDuration();
+        int baseSpeed = 40;
+        int targetCount = Math.min(baseSpeed * duration, original.length());
+        if (targetCount <= 0) {
+            targetCount = original.length();
+        }
+        double speedFactor = Math.min((double) correctCount / targetCount, 1.0);
+        return Math.min((int) Math.round(scoreValue(question) * speedFactor * accuracyRate), scoreValue(question));
+    }
+
+    private void recomputeStudentScore(Long examId, Long studentId, boolean markSubmitted, Date submitTime) {
+        List<BizLessonQuestionDetailVo> questions = paperQuestionMapper.selectDetailsByExamAndStudent(examId, studentId);
+        List<CountyExamAnswer> answers = answerMapper.selectByExamAndStudent(examId, studentId);
+        Map<Long, CountyExamAnswer> answerMap = new HashMap<Long, CountyExamAnswer>();
+        for (CountyExamAnswer answer : answers) {
+            answerMap.put(answer.getQuestionId(), answer);
+        }
+        int theoryScore = 0;
+        int typingScore = 0;
+        int practicalScore = 0;
+        for (BizLessonQuestionDetailVo question : questions) {
+            CountyExamAnswer answer = answerMap.get(question.getQuestionId());
+            int score = answer != null && answer.getScore() != null ? answer.getScore() : 0;
+            if ("choice".equals(question.getQuestionType()) || "judgment".equals(question.getQuestionType())) {
+                theoryScore += score;
+            } else if ("typing".equals(question.getQuestionType())) {
+                typingScore += score;
+            } else if ("practical".equals(question.getQuestionType())) {
+                practicalScore += score;
+            }
+        }
+        CountyExamStudent student = studentMapper.selectByExamAndStudent(examId, studentId);
+        if (student == null) {
+            return;
+        }
+        student.setTheoryScore(new BigDecimal(theoryScore));
+        student.setTechScore(new BigDecimal(practicalScore));
+        student.setTotalScore(new BigDecimal(theoryScore + typingScore + practicalScore));
+        if (markSubmitted) {
+            student.setStatus(STUDENT_SUBMITTED);
+            student.setSubmitTime(submitTime == null ? new Date() : submitTime);
+        }
+        studentMapper.update(student);
+    }
+
+    private void ensureParticipant(CountyExam exam, BizStudent student, Long deptId) {
+        CountyExamClass examClass = null;
+        List<CountyExamClass> activeClasses = classMapper.selectActiveByStudentInfo(deptId, student.getEntryYear(), student.getClassCode());
+        for (CountyExamClass activeClass : activeClasses) {
+            if (exam.getExamId().equals(activeClass.getExamId())) {
+                examClass = activeClass;
+                break;
+            }
+        }
+        if (examClass == null || !exam.getExamId().equals(examClass.getExamId())) {
+            throw new ServiceException("您不在本场区域抽测参考班级中");
+        }
+        CountyExamStudent existing = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        if (existing == null) {
+            CountyExamStudent countyStudent = new CountyExamStudent();
+            countyStudent.setExamId(exam.getExamId());
+            countyStudent.setStudentId(student.getStudentId());
+            countyStudent.setDeptId(deptId);
+            countyStudent.setClassInfo(student.getEntryYear() + "级" + student.getClassCode() + "班");
+            countyStudent.setTotalScore(BigDecimal.ZERO);
+            countyStudent.setTheoryScore(BigDecimal.ZERO);
+            countyStudent.setTechScore(BigDecimal.ZERO);
+            countyStudent.setStatus("0");
+            countyStudent.setAutoSubmit(AUTO_SUBMIT_NO);
+            studentMapper.insertOrIgnore(countyStudent);
+        }
+    }
+
+    private void validateNoActiveClassConflict(Long examId, List<CountyExamClass> classes) {
+        for (CountyExamClass examClass : classes) {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "select e.exam_name as examName " +
+                            "from biz_county_exam_class c " +
+                            "inner join biz_county_exam e on c.exam_id = e.exam_id " +
+                            "where c.exam_id <> ? and c.dept_id = ? and c.entry_year = ? and c.class_code = ? " +
+                            "and e.status = '1' and e.del_flag = '0' limit 1",
+                    examId, examClass.getDeptId(), examClass.getEntryYear(), examClass.getClassCode());
+            if (!rows.isEmpty()) {
+                throw new ServiceException("参考班级已存在开启中的区域抽测：" + rows.get(0).get("examName"));
+            }
+        }
+    }
+
+    private int createParticipants(Long examId, List<CountyExamClass> classes) {
+        int count = 0;
+        for (CountyExamClass examClass : classes) {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "select s.student_id as studentId " +
+                            "from biz_student s inner join sys_user u on s.user_id = u.user_id " +
+                            "where u.dept_id = ? and s.entry_year = ? and s.class_code = ?",
+                    examClass.getDeptId(), examClass.getEntryYear(), examClass.getClassCode());
+            for (Map<String, Object> row : rows) {
+                CountyExamStudent student = new CountyExamStudent();
+                student.setExamId(examId);
+                student.setStudentId(longValue(row.get("studentId")));
+                student.setDeptId(examClass.getDeptId());
+                student.setClassInfo(examClass.getEntryYear() + "级" + examClass.getClassCode() + "班");
+                student.setTotalScore(BigDecimal.ZERO);
+                student.setTheoryScore(BigDecimal.ZERO);
+                student.setTechScore(BigDecimal.ZERO);
+                student.setStatus("0");
+                student.setAutoSubmit(AUTO_SUBMIT_NO);
+                studentMapper.insertOrIgnore(student);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private void ensurePaperForStudent(CountyExam exam, Long studentId) {
+        if (paperQuestionMapper.countByExamAndStudent(exam.getExamId(), studentId) > 0) {
+            return;
+        }
+        List<BizLessonQuestionDetailVo> questions = questionMapper.selectDetailsByExamId(exam.getExamId());
+        List<BizLessonQuestionDetailVo> selected = selectQuestionsForStudent(questions, exam, studentId);
+        List<CountyExamPaperQuestion> snapshots = new ArrayList<CountyExamPaperQuestion>();
+        int order = 1;
+        for (BizLessonQuestionDetailVo question : selected) {
+            CountyExamPaperQuestion snapshot = new CountyExamPaperQuestion();
+            snapshot.setExamId(exam.getExamId());
+            snapshot.setStudentId(studentId);
+            snapshot.setQuestionId(question.getQuestionId());
+            snapshot.setQuestionType(question.getQuestionType());
+            snapshot.setQuestionContent(question.getQuestionContent());
+            snapshot.setOptionA(question.getOptionA());
+            snapshot.setOptionB(question.getOptionB());
+            snapshot.setOptionC(question.getOptionC());
+            snapshot.setOptionD(question.getOptionD());
+            snapshot.setAnswer(question.getAnswer());
+            snapshot.setAnalysis(question.getAnalysis());
+            snapshot.setQuestionScore(scoreValue(question));
+            snapshot.setOrderNum(order++);
+            snapshot.setTypingDuration(question.getTypingDuration());
+            snapshot.setWordCount(question.getWordCount());
+            snapshot.setFilePath(question.getFilePath());
+            snapshot.setPreviewPath(question.getPreviewPath());
+            snapshots.add(snapshot);
+        }
+        if (!snapshots.isEmpty()) {
+            paperQuestionMapper.batchInsert(snapshots);
+        }
+    }
+
+    private List<BizLessonQuestionDetailVo> selectQuestionsForStudent(List<BizLessonQuestionDetailVo> questions, CountyExam exam, Long studentId) {
+        List<BizLessonQuestionDetailVo> typing = new ArrayList<BizLessonQuestionDetailVo>();
+        List<BizLessonQuestionDetailVo> practical = new ArrayList<BizLessonQuestionDetailVo>();
+        List<BizLessonQuestionDetailVo> choice = new ArrayList<BizLessonQuestionDetailVo>();
+        List<BizLessonQuestionDetailVo> judgment = new ArrayList<BizLessonQuestionDetailVo>();
+        for (BizLessonQuestionDetailVo question : questions) {
+            if ("typing".equals(question.getQuestionType())) {
+                typing.add(question);
+            } else if ("practical".equals(question.getQuestionType())) {
+                practical.add(question);
+            } else if ("choice".equals(question.getQuestionType())) {
+                choice.add(question);
+            } else if ("judgment".equals(question.getQuestionType())) {
+                judgment.add(question);
+            }
+        }
+        long seed = studentId * 10000L + exam.getExamId();
+        if (exam.getShuffleMode() != null && exam.getShuffleMode() > 0) {
+            Collections.shuffle(choice, new java.util.Random(seed));
+            Collections.shuffle(judgment, new java.util.Random(seed + 1));
+        }
+        if (exam.getShuffleMode() != null && exam.getShuffleMode() == 2) {
+            choice = takeFirst(choice, exam.getRandomChoiceCount());
+            judgment = takeFirst(judgment, exam.getRandomJudgmentCount());
+        }
+        List<BizLessonQuestionDetailVo> result = new ArrayList<BizLessonQuestionDetailVo>();
+        result.addAll(typing);
+        result.addAll(practical);
+        result.addAll(choice);
+        result.addAll(judgment);
+        return result;
+    }
+
+    private List<BizLessonQuestionDetailVo> takeFirst(List<BizLessonQuestionDetailVo> questions, Integer count) {
+        if (count == null || count <= 0 || count >= questions.size()) {
+            return questions;
+        }
+        return new ArrayList<BizLessonQuestionDetailVo>(questions.subList(0, count));
+    }
+
+    private Map<String, Object> buildStudentExamPayload(CountyExam exam, BizStudent student, Long deptId) {
+        List<BizLessonQuestionDetailVo> questions = paperQuestionMapper.selectDetailsByExamAndStudent(exam.getExamId(), student.getStudentId());
+        Map<Long, String> questionTypes = new HashMap<Long, String>();
+        for (BizLessonQuestionDetailVo question : questions) {
+            questionTypes.put(question.getQuestionId(), question.getQuestionType());
+            question.setAnswer(null);
+            question.setAnalysis(null);
+            question.setScoringItems(null);
+        }
+        List<CountyExamAnswer> answers = answerMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        Map<Long, Map<String, Object>> answerMap = new HashMap<Long, Map<String, Object>>();
+        for (CountyExamAnswer answer : answers) {
+            Map<String, Object> item = new HashMap<String, Object>();
+            item.put("answer", answer.getStudentAnswer());
+            item.put("previewStatus", answer.getPreviewStatus());
+            item.put("previewPath", answer.getPreviewPath());
+            item.put("previewErrorMessage", answer.getPreviewErrorMessage());
+            item.put("typingSubmitted", "typing".equals(questionTypes.get(answer.getQuestionId())) && answer.getAnswerTime() != null);
+            item.put("answerTime", answer.getAnswerTime());
+            item.put("submitTime", answer.getSubmitTime());
+            answerMap.put(answer.getQuestionId(), item);
+        }
+        SysDept dept = deptMapper.selectDeptById(deptId);
+        Map<String, Object> studentInfo = new HashMap<String, Object>();
+        studentInfo.put("studentId", student.getStudentId());
+        studentInfo.put("studentName", student.getStudentName());
+        studentInfo.put("entryYear", student.getEntryYear());
+        studentInfo.put("classCode", student.getClassCode());
+        studentInfo.put("deptName", dept == null ? "" : dept.getDeptName());
+        studentInfo.put("gradeName", calculateGradeName(student.getEntryYear(), dept == null ? "1" : dept.getSchoolType()));
+        CountyExamStudent examStudent = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
+        Date now = new Date();
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("examId", exam.getExamId());
+        result.put("examName", exam.getExamName());
+        result.put("status", exam.getStatus());
+        result.put("durationMinutes", normalizeDurationMinutes(exam.getDurationMinutes()));
+        result.put("startTime", examStudent == null ? null : examStudent.getStartTime());
+        result.put("deadlineTime", examStudent == null ? null : examStudent.getDeadlineTime());
+        result.put("serverTime", now);
+        result.put("remainingSeconds", examStudent == null ? null : remainingSeconds(examStudent, now));
+        result.put("submitted", examStudent != null && STUDENT_SUBMITTED.equals(examStudent.getStatus()));
+        result.put("ended", false);
+        result.put("questions", questions);
+        result.put("submittedAnswers", answerMap);
+        result.put("studentInfo", studentInfo);
+        return result;
+    }
+
+    private void snapshotScoringItems(Long examId, List<BizLessonQuestionDetailVo> questions) {
+        jdbcTemplate.update("delete from biz_county_exam_scoring_item where exam_id = ?", examId);
+        for (BizLessonQuestionDetailVo question : questions) {
+            if (!"practical".equals(question.getQuestionType())) {
+                continue;
+            }
+            List<BizScoringItem> items = scoringItemMapper.selectItemsByQuestion(question.getQuestionId());
+            for (BizScoringItem item : items) {
+                jdbcTemplate.update(
+                        "insert into biz_county_exam_scoring_item (exam_id, question_id, source_item_id, item_name, item_score, order_num) values (?, ?, ?, ?, ?, ?)",
+                        examId, question.getQuestionId(), item.getItemId(), item.getItemName(), item.getItemScore(), item.getOrderNum());
+            }
+        }
+    }
+
+    private List<BizScoringItem> selectCountyScoringItems(Long examId, Long questionId) {
+        if (examId == null || questionId == null) {
+            return new ArrayList<BizScoringItem>();
+        }
+        return jdbcTemplate.query(
+                "select item_id, question_id, item_name, item_score, order_num from biz_county_exam_scoring_item where exam_id = ? and question_id = ? order by order_num asc",
+                new Object[]{examId, questionId},
+                (rs, rowNum) -> {
+                    BizScoringItem item = new BizScoringItem();
+                    item.setItemId(rs.getLong("item_id"));
+                    item.setQuestionId(rs.getLong("question_id"));
+                    item.setItemName(rs.getString("item_name"));
+                    item.setItemScore(rs.getInt("item_score"));
+                    item.setOrderNum(rs.getInt("order_num"));
+                    return item;
+                });
+    }
+
+    private List<Map<String, Object>> selectCountyGradingDetails(Long answerId) {
+        return jdbcTemplate.queryForList(
+                "select detail_id as detailId, answer_id as answerId, item_id as itemId, score from biz_county_exam_grading_detail where answer_id = ?",
+                answerId);
+    }
+
+    private void saveCountyGradingDetails(CountyExamGradeRequest request) {
+        jdbcTemplate.update("delete from biz_county_exam_grading_detail where answer_id = ?", request.getAnswerId());
+        if (request.getScoringDetails() == null) {
+            return;
+        }
+        for (CountyExamGradeRequest.ScoringDetailRequest detail : request.getScoringDetails()) {
+            jdbcTemplate.update(
+                    "insert into biz_county_exam_grading_detail (answer_id, item_id, score) values (?, ?, ?)",
+                    request.getAnswerId(), detail.getItemId(), detail.getScore());
+        }
+    }
+
+    private void refreshGraderCount(Long examId, Long questionId, Long graderId) {
+        Integer gradedCount = jdbcTemplate.queryForObject(
+                "select count(1) from biz_county_exam_answer where exam_id = ? and question_id = ? and grader_id = ? and grading_status = '1'",
+                Integer.class, examId, questionId, graderId);
+        CountyExamGrader grader = graderMapper.selectByExamQuestionAndGrader(examId, questionId, graderId);
+        if (grader != null) {
+            grader.setGradedCount(gradedCount == null ? 0 : gradedCount);
+            graderMapper.update(grader);
+        }
+    }
+
+    private int countAssignedPracticalAnswers(Long examId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(1) " +
+                        "from biz_county_exam_answer a " +
+                        "inner join biz_county_exam_paper_question pq " +
+                        "on pq.exam_id = a.exam_id and pq.student_id = a.student_id and pq.question_id = a.question_id " +
+                        "where a.exam_id = ? and pq.question_type = 'practical' " +
+                        "and a.student_answer is not null and a.student_answer != '' " +
+                        "and a.grader_id is not null",
+                Integer.class, examId);
+        return count == null ? 0 : count;
+    }
+
+    private Map<String, Object> buildGradingProgress(Long examId) {
+        Map<String, Object> progress = new HashMap<String, Object>();
+        Integer participantCount = jdbcTemplate.queryForObject(
+                "select count(1) from biz_county_exam_student where exam_id = ?",
+                Integer.class, examId);
+        List<Map<String, Object>> questionRows = jdbcTemplate.queryForList(
+                "select pq.question_id as questionId, " +
+                        "count(distinct pq.student_id) as participantCount, " +
+                        "count(distinct case when a.student_answer is not null and a.student_answer != '' then a.answer_id end) as submittedCount, " +
+                        "count(distinct case when a.student_answer is not null and a.student_answer != '' and a.grader_id is not null then a.answer_id end) as assignedCount, " +
+                        "count(distinct case when a.student_answer is not null and a.student_answer != '' and a.grading_status = '1' and a.score is not null then a.answer_id end) as gradedCount " +
+                        "from biz_county_exam_paper_question pq " +
+                        "left join biz_county_exam_answer a " +
+                        "on a.exam_id = pq.exam_id and a.student_id = pq.student_id and a.question_id = pq.question_id " +
+                        "where pq.exam_id = ? and pq.question_type = 'practical' " +
+                        "group by pq.question_id order by pq.question_id asc",
+                examId);
+        Map<Long, Map<String, Object>> byQuestion = new LinkedHashMap<Long, Map<String, Object>>();
+        int submittedTotal = 0;
+        int assignedTotal = 0;
+        int gradedTotal = 0;
+        for (Map<String, Object> row : questionRows) {
+            Long questionId = longValue(row.get("questionId"));
+            int submittedCount = intValue(row.get("submittedCount"));
+            int assignedCount = intValue(row.get("assignedCount"));
+            int gradedCount = intValue(row.get("gradedCount"));
+            row.put("pendingCount", Math.max(submittedCount - gradedCount, 0));
+            byQuestion.put(questionId, row);
+            submittedTotal += submittedCount;
+            assignedTotal += assignedCount;
+            gradedTotal += gradedCount;
+        }
+        progress.put("participantCount", participantCount == null ? 0 : participantCount);
+        progress.put("questionProgress", questionRows);
+        progress.put("questionProgressMap", byQuestion);
+        progress.put("submittedCount", submittedTotal);
+        progress.put("assignedCount", assignedTotal);
+        progress.put("gradedCount", gradedTotal);
+        progress.put("pendingCount", Math.max(submittedTotal - gradedTotal, 0));
+        return progress;
+    }
+
+    private void triggerCountyPreviewConversionsAfterCommit(List<Long> answerIds) {
+        if (answerIds == null || answerIds.isEmpty()) {
+            return;
+        }
+        final List<Long> finalAnswerIds = new ArrayList<Long>(answerIds);
+        Runnable runnable = () -> {
+            for (Long answerId : finalAnswerIds) {
+                asyncConversionService.triggerCountyExamPreviewConversion(answerId);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runnable.run();
+                }
+            });
+            return;
+        }
+        runnable.run();
+    }
+
+    private void updateTotalScore(Long examId, int totalScore) {
+        CountyExam exam = new CountyExam();
+        exam.setExamId(examId);
+        exam.setTotalScore(totalScore);
+        exam.setUpdateBy(SecurityUtils.getUsername());
+        countyExamMapper.updateCountyExam(exam);
+    }
+
+    private void requireManager() {
+        if (!SecurityUtils.hasRole("admin") && !SecurityUtils.hasRole("researcher")) {
+            throw new ServiceException("只有管理员或教研员可以操作区域抽测");
+        }
+    }
+
+    private CountyExam requireExam(Long examId) {
+        if (examId == null) {
+            throw new ServiceException("区域抽测ID不能为空");
+        }
+        CountyExam exam = countyExamMapper.selectCountyExamById(examId);
+        if (exam == null) {
+            throw new ServiceException("区域抽测不存在");
+        }
+        return exam;
+    }
+
+    private void requireDraft(CountyExam exam) {
+        if (!STATUS_DRAFT.equals(exam.getStatus())) {
+            throw new ServiceException("只有草稿状态的区域抽测可以修改");
+        }
+    }
+
+    private Map<String, Object> noStudentExam() {
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("hasExam", false);
+        return result;
+    }
+
+    private int scoreValue(BizLessonQuestionDetailVo question) {
+        return question.getQuestionScore() == null ? 0 : question.getQuestionScore().intValue();
+    }
+
+    private Long longValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return Long.valueOf(String.valueOf(value));
+    }
+
+    private int intValue(Object value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return Integer.parseInt(String.valueOf(value));
+    }
+
+    private String normalizeJudgmentAnswer(String answer) {
+        if (answer == null) {
+            return null;
+        }
+        String trimmed = answer.trim();
+        if ("对".equals(trimmed) || "正确".equals(trimmed) || "T".equalsIgnoreCase(trimmed) || "true".equalsIgnoreCase(trimmed)) {
+            return "T";
+        }
+        if ("错".equals(trimmed) || "错误".equals(trimmed) || "F".equalsIgnoreCase(trimmed) || "false".equalsIgnoreCase(trimmed)) {
+            return "F";
+        }
+        return trimmed;
+    }
+
+    private String calculateGradeName(String entryYear, String schoolType) {
+        if (entryYear == null) {
+            return "未知年级";
+        }
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        int currentYear = now.get(java.util.Calendar.YEAR);
+        int currentMonth = now.get(java.util.Calendar.MONTH) + 1;
+        int academicStartYear = currentMonth < 7 ? currentYear - 1 : currentYear;
+        int yearsInSchool = academicStartYear - Integer.parseInt(entryYear) + 1;
+        String[] gradeNames;
+        if ("1".equals(schoolType)) {
+            gradeNames = new String[]{"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"};
+        } else if ("2".equals(schoolType)) {
+            gradeNames = new String[]{"七年级", "八年级", "九年级"};
+        } else {
+            gradeNames = new String[]{"高一", "高二", "高三"};
+        }
+        if (yearsInSchool >= 1 && yearsInSchool <= gradeNames.length) {
+            return gradeNames[yearsInSchool - 1];
+        }
+        return "未知年级";
+    }
+
+    private void writeCell(Row row, int index, Object value) {
+        Cell cell = row.createCell(index);
+        cell.setCellValue(value == null ? "" : String.valueOf(value));
     }
 }

@@ -34,6 +34,8 @@ import org.slf4j.LoggerFactory;
 @Service
 public class BizStudentServiceImpl implements IBizStudentService
 {
+    private static final Long STUDENT_ROLE_ID = 101L;
+
     private static final Logger log = LoggerFactory.getLogger(BizStudentServiceImpl.class);
     @Autowired
     private BizStudentMapper bizStudentMapper;
@@ -123,7 +125,7 @@ public class BizStudentServiceImpl implements IBizStudentService
 
         SysUserRole ur = new SysUserRole();
         ur.setUserId(newUser.getUserId());
-        ur.setRoleId(4L);
+        ur.setRoleId(STUDENT_ROLE_ID);
         userRoleMapper.batchUserRole(Arrays.asList(ur));
 
         bizStudent.setUserId(newUser.getUserId());
@@ -300,7 +302,7 @@ public class BizStudentServiceImpl implements IBizStudentService
 
                 SysUserRole ur = new SysUserRole();
                 ur.setUserId(newUser.getUserId());
-                ur.setRoleId(4L);
+                ur.setRoleId(STUDENT_ROLE_ID);
                 userRoleMapper.batchUserRole(Arrays.asList(ur));
 
                 student.setUserId(newUser.getUserId());

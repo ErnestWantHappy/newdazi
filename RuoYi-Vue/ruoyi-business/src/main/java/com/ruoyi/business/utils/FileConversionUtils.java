@@ -7,12 +7,18 @@ import org.jodconverter.local.LocalConverter;
 import org.jodconverter.local.office.LocalOfficeManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -26,16 +32,14 @@ public class FileConversionUtils {
 
     private static final Logger log = LoggerFactory.getLogger(FileConversionUtils.class);
 
-    // LibreOffice 安装路径（Windows 默认）
-    private static final String LIBRE_OFFICE_HOME = "C:\\Program Files\\LibreOffice";
-
-    // LibreOffice 实例数需要与转换线程池大小保持一致。
-    private static final int OFFICE_INSTANCE_COUNT = 5;
-    private static final int MAX_TASKS_PER_PROCESS = 30;
-    private static final long TASK_EXECUTION_TIMEOUT = 300_000L;
-    private static final long TASK_QUEUE_TIMEOUT = 120_000L;
-    private static final long PROCESS_TIMEOUT = 120_000L;
-    private static final int MAX_RETRY = 1;
+    private static String libreOfficeHome = "C:\\Program Files\\LibreOffice";
+    private static int officeInstanceCount = 5;
+    private static int processWarnThreshold = 10;
+    private static int maxTasksPerProcess = 30;
+    private static long taskExecutionTimeout = 300_000L;
+    private static long taskQueueTimeout = 120_000L;
+    private static long processTimeout = 120_000L;
+    private static int maxRetry = 1;
 
     private static final ReentrantReadWriteLock OFFICE_MANAGER_LOCK = new ReentrantReadWriteLock(true);
     private static final Lock OFFICE_READ_LOCK = OFFICE_MANAGER_LOCK.readLock();
@@ -47,8 +51,40 @@ public class FileConversionUtils {
     private static DocumentConverter documentConverter;
     private static volatile boolean serviceAvailable = false;
 
+    @Value("${ruoyi.libre-office.home:C:\\Program Files\\LibreOffice}")
+    private String configuredOfficeHome;
+
+    @Value("${ruoyi.libre-office.instance-count:5}")
+    private int configuredInstanceCount;
+
+    @Value("${ruoyi.libre-office.process-warn-threshold:10}")
+    private int configuredProcessWarnThreshold;
+
+    @Value("${ruoyi.libre-office.max-tasks-per-process:30}")
+    private int configuredMaxTasksPerProcess;
+
+    @Value("${ruoyi.libre-office.task-execution-timeout:300000}")
+    private long configuredTaskExecutionTimeout;
+
+    @Value("${ruoyi.libre-office.task-queue-timeout:120000}")
+    private long configuredTaskQueueTimeout;
+
+    @Value("${ruoyi.libre-office.process-timeout:120000}")
+    private long configuredProcessTimeout;
+
+    @Value("${ruoyi.libre-office.max-retry:1}")
+    private int configuredMaxRetry;
+
     @PostConstruct
     public void init() {
+        libreOfficeHome = configuredOfficeHome;
+        officeInstanceCount = Math.max(configuredInstanceCount, 1);
+        processWarnThreshold = Math.max(configuredProcessWarnThreshold, officeInstanceCount * 2);
+        maxTasksPerProcess = Math.max(configuredMaxTasksPerProcess, 1);
+        taskExecutionTimeout = Math.max(configuredTaskExecutionTimeout, 30_000L);
+        taskQueueTimeout = Math.max(configuredTaskQueueTimeout, 30_000L);
+        processTimeout = Math.max(configuredProcessTimeout, 30_000L);
+        maxRetry = Math.max(configuredMaxRetry, 0);
         startOfficeManager(true);
     }
 
@@ -87,16 +123,16 @@ public class FileConversionUtils {
                 killOrphanedOfficeProcesses();
             }
 
-            log.info("【LibreOffice服务】正在启动服务模式（{}个实例）...", OFFICE_INSTANCE_COUNT);
+            log.info("【LibreOffice服务】正在启动服务模式（{}个实例）...", officeInstanceCount);
             int[] ports = buildPortNumbers();
 
             LocalOfficeManager newOfficeManager = LocalOfficeManager.builder()
-                    .officeHome(LIBRE_OFFICE_HOME)
+                    .officeHome(libreOfficeHome)
                     .portNumbers(ports)
-                    .maxTasksPerProcess(MAX_TASKS_PER_PROCESS)
-                    .taskExecutionTimeout(TASK_EXECUTION_TIMEOUT)
-                    .taskQueueTimeout(TASK_QUEUE_TIMEOUT)
-                    .processTimeout(PROCESS_TIMEOUT)
+                    .maxTasksPerProcess(maxTasksPerProcess)
+                    .taskExecutionTimeout(taskExecutionTimeout)
+                    .taskQueueTimeout(taskQueueTimeout)
+                    .processTimeout(processTimeout)
                     .build();
 
             newOfficeManager.start();
@@ -106,7 +142,7 @@ public class FileConversionUtils {
                     .build();
             serviceAvailable = true;
             serviceFailureCount.set(0);
-            log.info("【LibreOffice服务】服务启动成功，支持{}个并发转换实例", OFFICE_INSTANCE_COUNT);
+            log.info("【LibreOffice服务】服务启动成功，支持{}个并发转换实例", officeInstanceCount);
             return true;
         } catch (Exception e) {
             officeManager = null;
@@ -155,8 +191,8 @@ public class FileConversionUtils {
     }
 
     private static int[] buildPortNumbers() {
-        int[] ports = new int[OFFICE_INSTANCE_COUNT];
-        for (int i = 0; i < OFFICE_INSTANCE_COUNT; i++) {
+        int[] ports = new int[officeInstanceCount];
+        for (int i = 0; i < officeInstanceCount; i++) {
             ports[i] = 2002 + i;
         }
         return ports;
@@ -218,7 +254,7 @@ public class FileConversionUtils {
         String pdfFilePath = outputDir + File.separator + pdfFileName;
         File pdfFile = new File(pdfFilePath);
 
-        for (int attempt = 0; attempt <= MAX_RETRY; attempt++) {
+        for (int attempt = 0; attempt <= maxRetry; attempt++) {
             if (!ensureOfficeManagerReady()) {
                 log.error("【LibreOffice服务】服务不可用，无法进行转换: {}", docxFilePath);
                 return null;
@@ -227,7 +263,7 @@ public class FileConversionUtils {
             long startTime = System.currentTimeMillis();
             try {
                 if (!executeConversionWithSharedLock(docxFile, pdfFile)) {
-                    if (attempt < MAX_RETRY && rebuildOfficeManager("服务未就绪")) {
+                    if (attempt < maxRetry && rebuildOfficeManager("服务未就绪")) {
                         continue;
                     }
                     log.error("【服务模式转换】服务未就绪，转换失败: {}", docxFilePath);
@@ -253,7 +289,7 @@ public class FileConversionUtils {
                 String rebuildReason = "服务级异常#" + failureCount + ": " + truncateMessage(e.getMessage());
                 log.warn("【服务模式转换】检测到服务级异常，将尝试重建: {}", rebuildReason, e);
 
-                if (attempt < MAX_RETRY && rebuildOfficeManager(rebuildReason)) {
+                if (attempt < maxRetry && rebuildOfficeManager(rebuildReason)) {
                     continue;
                 }
 
@@ -280,6 +316,11 @@ public class FileConversionUtils {
     }
 
     private static boolean ensureOfficeManagerReady() {
+        int processCount = countOfficeProcesses();
+        if (processWarnThreshold > 0 && processCount > processWarnThreshold) {
+            log.warn("【LibreOffice服务】进程数 {} 超过阈值 {}，执行受控清理重启", processCount, processWarnThreshold);
+            return cleanupAndRestart("进程数超过阈值");
+        }
         if (isServiceAvailable()) {
             return true;
         }
@@ -316,7 +357,7 @@ public class FileConversionUtils {
      * 检查 LibreOffice 是否已安装。
      */
     public static boolean isLibreOfficeInstalled() {
-        File officeHome = new File(LIBRE_OFFICE_HOME);
+        File officeHome = new File(libreOfficeHome);
         return officeHome.exists() && officeHome.isDirectory();
     }
 
@@ -334,5 +375,70 @@ public class FileConversionUtils {
 
     private static boolean isManagerRunningInternal() {
         return officeManager != null && officeManager.isRunning();
+    }
+
+    /**
+     * 定时维护入口：停止本应用管理的服务池、清理残留进程并重启。
+     */
+    public static String cleanupAndRestartForMaintenance() {
+        boolean success = cleanupAndRestart("定时维护");
+        return success ? "LibreOffice 服务清理并重启成功" : "LibreOffice 服务清理后重启失败";
+    }
+
+    public static Map<String, Object> getHealthSnapshot() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        int processCount = countOfficeProcesses();
+        data.put("installed", isLibreOfficeInstalled());
+        data.put("serviceAvailable", isServiceAvailable());
+        data.put("officeHome", libreOfficeHome);
+        data.put("instanceCount", officeInstanceCount);
+        data.put("processCount", processCount);
+        data.put("processWarnThreshold", processWarnThreshold);
+        data.put("excessiveProcesses", processWarnThreshold > 0 && processCount > processWarnThreshold);
+        data.put("serviceFailureCount", serviceFailureCount.get());
+        return data;
+    }
+
+    public static int getOfficeInstanceCount() {
+        return officeInstanceCount;
+    }
+
+    public static int countOfficeProcesses() {
+        return countProcessByName("soffice.exe") + countProcessByName("soffice.bin");
+    }
+
+    private static boolean cleanupAndRestart(String reason) {
+        OFFICE_WRITE_LOCK.lock();
+        try {
+            log.warn("【LibreOffice服务】开始清理重启，原因={}", reason);
+            stopOfficeManagerInternal(true);
+            waitForOfficeShutdown();
+            killOrphanedOfficeProcesses();
+            return startOfficeManagerInternal(false);
+        } finally {
+            OFFICE_WRITE_LOCK.unlock();
+        }
+    }
+
+    private static int countProcessByName(String processName) {
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder("tasklist", "/FI", "IMAGENAME eq " + processName);
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
+            int count = 0;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), Charset.defaultCharset()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.toLowerCase(Locale.ROOT).startsWith(processName.toLowerCase(Locale.ROOT))) {
+                        count++;
+                    }
+                }
+            }
+            process.waitFor();
+            return count;
+        } catch (Exception e) {
+            log.debug("【LibreOffice服务】统计 {} 进程失败: {}", processName, e.getMessage());
+            return 0;
+        }
     }
 }

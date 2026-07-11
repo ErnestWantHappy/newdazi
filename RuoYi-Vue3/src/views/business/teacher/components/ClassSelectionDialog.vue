@@ -22,7 +22,8 @@
         >
           <span class="class-name">{{ cls.classCode }}班</span>
           <template v-if="mode === 'score'">
-            <span v-if="cls.scoreReadyCount > 0" class="badge-graded">{{ cls.scoreReadyCount }}/{{ cls.totalStudents || 0 }}有成绩</span>
+            <span v-if="statsLoading && !cls.hasData" class="badge-loading">统计中...</span>
+            <span v-else-if="cls.scoreReadyCount > 0" class="badge-graded">{{ cls.scoreReadyCount }}/{{ cls.totalStudents || 0 }}有成绩</span>
             <span v-else class="badge-none">暂无成绩</span>
           </template>
           <template v-else>
@@ -36,6 +37,12 @@
     <div v-if="!loading && classes.length === 0" class="empty-tip">
       暂无关联班级
     </div>
+    <div v-if="mode === 'score' && statsLoading && classes.length > 0" class="stats-tip">
+      正在加载成绩统计，可先选择班级查看成绩
+    </div>
+    <div v-if="mode === 'score' && statsError" class="stats-tip error">
+      成绩统计暂时加载失败，可直接选择班级查看成绩
+    </div>
   </el-dialog>
 </template>
 
@@ -45,10 +52,13 @@ import { getClassesByLesson } from '@/api/business/teacherGrading';
 
 const visible = ref(false);
 const loading = ref(false);
+const statsLoading = ref(false);
+const statsError = ref(false);
 const classes = ref([]);
 const resolvePromise = ref(null);
 const mode = ref('grading');
 const dialogTitle = computed(() => mode.value === 'score' ? '请选择班级查看成绩' : '请选择班级');
+let requestSeq = 0;
 
 /**
  * 打开选择框
@@ -59,40 +69,95 @@ const dialogTitle = computed(() => mode.value === 'score' ? '请选择班级查�
 function open(simpleClassList, lessonId = null, openMode = 'grading') {
   visible.value = true;
   loading.value = false;
+  statsLoading.value = false;
+  statsError.value = false;
   classes.value = [];
   mode.value = openMode;
+  const requestId = ++requestSeq;
+  const simpleClasses = buildClassItems(simpleClassList || [], false);
+  const shouldShowSimpleFirst = openMode === 'score' && simpleClasses.length > 0;
+
+  if (shouldShowSimpleFirst) {
+    classes.value = simpleClasses;
+  }
   
   if (lessonId) {
-    // 新模式：加载带统计的班级列表
-    loading.value = true;
-    getClassesByLesson(lessonId).then(res => {
-      // 转换后端数据结构
-      classes.value = (res.data || []).map(item => ({
-        classCode: item.classCode,
-        practicalSubmitted: item.practicalSubmitted || item.practicalsubmitted || 0, // 兼容大小写
-        practicalUngraded: item.practicalUngraded || item.practicalungraded || 0, // 兼容大小写
-        scoreReadyCount: item.scoreReadyCount || item.scorereadycount || 0,
-        totalStudents: item.totalStudents || item.totalstudents || 0,
-        hasData: true // 标记为从后端获取的详细数据
-      })).sort((a, b) => sortClassCode(a.classCode, b.classCode));
-    }).finally(() => {
-      loading.value = false;
-    });
+    // 成绩入口先展示班级，统计数据回来后再补状态。
+    if (shouldShowSimpleFirst) {
+      statsLoading.value = true;
+    } else {
+      loading.value = true;
+    }
+    getClassesByLesson(lessonId)
+      .then(res => {
+        if (requestId !== requestSeq) return;
+        const detailClasses = buildClassItems(res.data || [], true);
+        if (shouldShowSimpleFirst) {
+          mergeClassStats(detailClasses);
+        } else {
+          classes.value = detailClasses;
+        }
+      })
+      .catch(() => {
+        if (requestId !== requestSeq) return;
+        statsError.value = shouldShowSimpleFirst;
+      })
+      .finally(() => {
+        if (requestId !== requestSeq) return;
+        loading.value = false;
+        statsLoading.value = false;
+        if (shouldShowSimpleFirst) {
+          classes.value = classes.value.map(cls => ({ ...cls, hasData: true }));
+        }
+      });
   } else if (simpleClassList) {
     // 旧模式：使用传入的字符串列表
-    classes.value = simpleClassList.map(c => ({
-      classCode: c.replace(/[^\d]/g, ''),
-      practicalSubmitted: 0,
-      practicalUngraded: 0,
-      scoreReadyCount: 0,
-      totalStudents: 0,
-      hasData: false
-    })).sort((a, b) => sortClassCode(a.classCode, b.classCode));
+    classes.value = simpleClasses;
   }
 
   return new Promise((resolve) => {
     resolvePromise.value = resolve;
   });
+}
+
+function buildClassItems(list, hasData) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(item => {
+      const classCode = normalizeClassCode(item);
+      if (!classCode) return null;
+      return {
+        classCode,
+        entryYear: item?.entryYear || item?.entry_year || null,
+        practicalSubmitted: item?.practicalSubmitted || item?.practicalsubmitted || 0,
+        practicalUngraded: item?.practicalUngraded || item?.practicalungraded || 0,
+        scoreReadyCount: item?.scoreReadyCount || item?.scorereadycount || 0,
+        totalStudents: item?.totalStudents || item?.totalstudents || 0,
+        hasData
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => sortClassCode(a.classCode, b.classCode));
+}
+
+function normalizeClassCode(item) {
+  if (item == null) return '';
+  const raw = typeof item === 'object' ? (item.classCode || item.class_code || item.label || item.value) : item;
+  return String(raw ?? '').replace(/[^\d]/g, '');
+}
+
+function mergeClassStats(detailClasses) {
+  detailClasses.forEach(detail => {
+    const existing = classes.value.find(cls =>
+      cls.classCode === detail.classCode && (!cls.entryYear || !detail.entryYear || cls.entryYear === detail.entryYear)
+    );
+    if (existing) {
+      Object.assign(existing, detail, { hasData: true });
+    } else {
+      classes.value.push(detail);
+    }
+  });
+  classes.value = [...classes.value].sort((a, b) => sortClassCode(a.classCode, b.classCode));
 }
 
 function sortClassCode(a, b) {
@@ -177,6 +242,11 @@ defineExpose({
     color: #909399;
     font-size: 12px;
   }
+
+  .badge-loading {
+    color: #409EFF;
+    font-size: 12px;
+  }
 }
 
 // 按钮状态背景色
@@ -209,5 +279,16 @@ defineExpose({
   text-align: center;
   color: #909399;
   padding: 20px;
+}
+
+.stats-tip {
+  padding: 0 10px 8px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 18px;
+
+  &.error {
+    color: #E6A23C;
+  }
 }
 </style>

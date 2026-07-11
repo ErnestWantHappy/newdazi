@@ -2,6 +2,7 @@ package com.ruoyi.business.mapper;
 
 import com.ruoyi.business.domain.CountyExamGrader;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 评卷任务分配表 Mapper接口
@@ -18,7 +19,14 @@ public interface CountyExamGraderMapper {
     /**
      * 根据考试和教师查询
      */
-    CountyExamGrader selectByExamAndGrader(Long examId, Long graderId);
+    CountyExamGrader selectByExamAndGrader(@Param("examId") Long examId, @Param("graderId") Long graderId);
+
+    /**
+     * 根据考试、题目和教师查询
+     */
+    CountyExamGrader selectByExamQuestionAndGrader(@Param("examId") Long examId,
+                                                   @Param("questionId") Long questionId,
+                                                   @Param("graderId") Long graderId);
 
     /**
      * 新增评卷任务

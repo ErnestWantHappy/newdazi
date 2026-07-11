@@ -1,1 +1,0 @@
-import{P as r}from"./index-BXxkpeQ8.js";function o(e){return r({url:"/business/classroom-performance/list",method:"get",params:e})}function t(e){return r({url:"/business/classroom-performance/batch-save",method:"post",data:e})}export{t as b,o as g};

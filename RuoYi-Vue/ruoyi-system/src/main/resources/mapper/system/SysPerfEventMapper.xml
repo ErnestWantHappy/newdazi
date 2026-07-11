@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysPerfEventMapper">
+
+    <resultMap type="com.ruoyi.system.domain.SysPerfEvent" id="SysPerfEventResult">
+        <id     property="eventId"      column="event_id"      />
+        <result property="eventType"    column="event_type"    />
+        <result property="severity"     column="severity"      />
+        <result property="title"        column="title"         />
+        <result property="description"  column="description"   />
+        <result property="sourceName"   column="source_name"   />
+        <result property="sourceUrl"    column="source_url"    />
+        <result property="sqlText"      column="sql_text"      />
+        <result property="sqlHash"      column="sql_hash"      />
+        <result property="durationMs"   column="duration_ms"   />
+        <result property="errorMsg"     column="error_msg"     />
+        <result property="operName"     column="oper_name"     />
+        <result property="deptName"     column="dept_name"     />
+        <result property="occurTime"    column="occur_time"    />
+        <result property="createTime"   column="create_time"   />
+    </resultMap>
+
+    <insert id="insertSysPerfEvent" parameterType="com.ruoyi.system.domain.SysPerfEvent">
+        insert into sys_perf_event (
+            event_type, severity, title, description, source_name, source_url,
+            sql_text, sql_hash, duration_ms, error_msg, oper_name, dept_name, occur_time
+        ) values (
+            #{eventType}, #{severity}, #{title}, #{description}, #{sourceName}, #{sourceUrl},
+            #{sqlText}, #{sqlHash}, #{durationMs}, #{errorMsg}, #{operName}, #{deptName}, #{occurTime}
+        )
+    </insert>
+
+    <select id="selectRecentEvents" resultMap="SysPerfEventResult">
+        select event_id, event_type, severity, title, description, source_name, source_url,
+               sql_text, sql_hash, duration_ms, error_msg, oper_name, dept_name, occur_time, create_time
+        from sys_perf_event
+        where occur_time >= #{since}
+        <if test="eventType != null and eventType != ''">
+            and event_type = #{eventType}
+        </if>
+        order by occur_time desc
+        limit 200
+    </select>
+
+    <delete id="deleteBefore">
+        delete from sys_perf_event where occur_time &lt; #{before}
+    </delete>
+
+</mapper>

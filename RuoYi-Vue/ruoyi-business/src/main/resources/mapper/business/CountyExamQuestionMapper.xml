@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.CountyExamQuestionMapper">
-    
+
     <resultMap type="CountyExamQuestion" id="CountyExamQuestionResult">
         <id     property="id"             column="id"             />
         <result property="examId"         column="exam_id"        />
@@ -10,11 +10,59 @@
         <result property="orderNum"       column="order_num"      />
     </resultMap>
 
+    <resultMap id="CountyExamQuestionDetailResult" type="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        <result property="questionId" column="question_id"/>
+        <result property="questionScore" column="question_score"/>
+        <result property="orderNum" column="order_num"/>
+        <result property="questionContent" column="question_content"/>
+        <result property="questionType" column="question_type"/>
+        <result property="optionA" column="option_a"/>
+        <result property="optionB" column="option_b"/>
+        <result property="optionC" column="option_c"/>
+        <result property="optionD" column="option_d"/>
+        <result property="answer" column="answer"/>
+        <result property="analysis" column="analysis"/>
+        <result property="typingDuration" column="typing_duration"/>
+        <result property="wordCount" column="word_count"/>
+        <result property="previewPath" column="preview_path"/>
+        <result property="filePath" column="file_path"/>
+        <collection property="scoringItems" ofType="com.ruoyi.business.domain.BizScoringItem" column="question_id" select="selectScoringItemsByQuestionId"/>
+    </resultMap>
+
     <select id="selectByExamId" parameterType="Long" resultMap="CountyExamQuestionResult">
         select id, exam_id, question_id, question_score, order_num
         from biz_county_exam_question
         where exam_id = #{examId}
         order by order_num
+    </select>
+
+    <select id="selectDetailsByExamId" parameterType="Long" resultMap="CountyExamQuestionDetailResult">
+        select eq.question_id,
+               eq.question_score,
+               eq.order_num,
+               q.question_content,
+               q.question_type,
+               q.option_a,
+               q.option_b,
+               q.option_c,
+               q.option_d,
+               q.answer,
+               q.analysis,
+               q.typing_duration,
+               q.word_count,
+               q.preview_path,
+               q.file_path
+        from biz_county_exam_question eq
+        left join biz_question q on eq.question_id = q.question_id
+        where eq.exam_id = #{examId}
+        order by eq.order_num asc
+    </select>
+
+    <select id="selectScoringItemsByQuestionId" resultType="com.ruoyi.business.domain.BizScoringItem">
+        select item_id as itemId, question_id as questionId, item_name as itemName, item_score as itemScore, order_num as orderNum
+        from biz_scoring_item
+        where question_id = #{questionId}
+        order by order_num asc
     </select>
 
     <insert id="insert" parameterType="CountyExamQuestion" useGeneratedKeys="true" keyProperty="id">
@@ -43,5 +91,4 @@
         set question_score = #{questionScore}, order_num = #{orderNum}
         where id = #{id}
     </update>
-
 </mapper>

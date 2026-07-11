@@ -1,7 +1,14 @@
 package com.ruoyi.business.service;
 
 import com.ruoyi.business.domain.CountyExam;
+import com.ruoyi.business.domain.CountyExamClass;
+import com.ruoyi.business.domain.CountyExamQuestion;
+import com.ruoyi.business.domain.dto.CountyExamGradeRequest;
+import com.ruoyi.business.domain.dto.CountyExamGraderAllocateRequest;
+import com.ruoyi.business.domain.dto.CountyExamSubmitRequest;
 import java.util.List;
+import java.util.Map;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * 县考管理 Service接口
@@ -57,4 +64,48 @@ public interface ICountyExamService {
      * @return 结果
      */
     int deleteCountyExamByIds(Long[] examIds);
+
+    int saveQuestions(Long examId, List<CountyExamQuestion> questions);
+
+    int saveClasses(Long examId, List<CountyExamClass> classes);
+
+    Map<String, Object> openExam(Long examId, Integer durationMinutes);
+
+    Map<String, Object> closeExam(Long examId);
+
+    Map<String, Object> allocateGraders(Long examId, CountyExamGraderAllocateRequest request);
+
+    Map<String, Object> resetGraders(Long examId);
+
+    Map<String, Object> updateGradingEnabled(Long examId, boolean enabled);
+
+    Map<String, Object> publishExam(Long examId);
+
+    Map<String, Object> getExamDetail(Long examId);
+
+    List<Map<String, Object>> getAssignableClasses(String schoolType);
+
+    List<Map<String, Object>> getAssignableGraders(String keyword);
+
+    Map<String, Object> getSummary(Long examId);
+
+    List<Map<String, Object>> getStudents(Long examId, String keyword);
+
+    void exportStudents(Long examId, HttpServletResponse response);
+
+    Map<String, Object> checkCurrentStudentExam();
+
+    Map<String, Object> getCurrentStudentExam();
+
+    Map<String, Object> saveStudentDraft(CountyExamSubmitRequest request);
+
+    Map<String, Object> submitStudentExam(CountyExamSubmitRequest request);
+
+    Map<String, Object> getGradingEntry();
+
+    List<Map<String, Object>> getGradingTasks(String gradingStatus);
+
+    Map<String, Object> getGradingAnswer(Long answerId);
+
+    Map<String, Object> gradeAnswer(CountyExamGradeRequest request);
 }

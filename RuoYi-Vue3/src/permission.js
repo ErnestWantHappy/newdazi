@@ -63,8 +63,8 @@ router.beforeEach((to, from, next) => {
                     next({ path: '/user/profile', replace: true });
                   } else if (to.path === "/" || to.path === "/index") {
                     if (isResearcher) {
-                      // 教研员登录后默认进入用户管理页面
-                      next({ path: "/system/user", replace: true });
+                      // 教研员登录后默认进入平台概览，避免落到系统管理类页面。
+                      next({ path: "/platform/overview", replace: true });
                     } else if (isTeacher) {
                       next({ path: "/teacher-dashboard", replace: true });
                     } else {
@@ -95,8 +95,8 @@ router.beforeEach((to, from, next) => {
           ElMessage.warning('为保证账号安全，请先修改为强密码（含大小写字母、数字及特殊符号，至少6位）');
           next({ path: '/user/profile' });
         } else if (isResearcher && (to.path === "/" || to.path === "/index")) {
-          // 如果是教研员，访问首页时强制跳转到用户管理页面
-          next({ path: "/system/user" });
+          // 如果是教研员，访问首页时强制跳转到平台概览
+          next({ path: "/platform/overview" });
         } else if (isTeacher && (to.path === "/" || to.path === "/index")) {
           // 如果是教师，访问首页时强制跳转到教师工作台
           next({ path: "/teacher-dashboard" });

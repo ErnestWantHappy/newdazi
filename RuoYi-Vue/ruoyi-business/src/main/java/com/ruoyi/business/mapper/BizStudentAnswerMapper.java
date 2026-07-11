@@ -142,6 +142,13 @@ public interface BizStudentAnswerMapper
     List<java.util.Map<String, Object>> selectClassesByLessonAnswers(@Param("lessonId") Long lessonId);
 
     /**
+     * 聚合查询某课程下当前教师可管理班级的提交、批改和成绩状态。
+     */
+    List<java.util.Map<String, Object>> selectClassStatusByLesson(@Param("lessonId") Long lessonId,
+                                                                  @Param("teacherUserId") Long teacherUserId,
+                                                                  @Param("deptId") Long deptId);
+
+    /**
      * 统计当前课程当前班级已有成绩的学生数。
      */
     int countScoredStudentsByLessonAndClass(@Param("lessonId") Long lessonId,

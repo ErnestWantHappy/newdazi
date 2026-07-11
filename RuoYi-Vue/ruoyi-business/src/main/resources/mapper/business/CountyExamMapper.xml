@@ -1,26 +1,36 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.CountyExamMapper">
-    
+
     <resultMap type="CountyExam" id="CountyExamResult">
-        <id     property="examId"       column="exam_id"        />
-        <result property="examName"     column="exam_name"      />
-        <result property="schoolType"   column="school_type"    />
-        <result property="examGrade"    column="exam_grade"     />
-        <result property="status"       column="status"         />
-        <result property="shuffleMode"  column="shuffle_mode"   />
-        <result property="creatorId"    column="creator_id"     />
-        <result property="createBy"     column="create_by"      />
-        <result property="createTime"   column="create_time"    />
-        <result property="updateBy"     column="update_by"      />
-        <result property="updateTime"   column="update_time"    />
-        <result property="closeTime"    column="close_time"     />
-        <result property="publishTime"  column="publish_time"   />
-        <result property="delFlag"      column="del_flag"       />
+        <id     property="examId"              column="exam_id"              />
+        <result property="examName"            column="exam_name"            />
+        <result property="schoolType"          column="school_type"          />
+        <result property="examGrade"           column="exam_grade"           />
+        <result property="status"              column="status"               />
+        <result property="gradingEnabled"      column="grading_enabled"      />
+        <result property="shuffleMode"         column="shuffle_mode"         />
+        <result property="randomChoiceCount"   column="random_choice_count"  />
+        <result property="randomJudgmentCount" column="random_judgment_count"/>
+        <result property="totalScore"          column="total_score"          />
+        <result property="durationMinutes"     column="duration_minutes"     />
+        <result property="creatorId"           column="creator_id"           />
+        <result property="createBy"            column="create_by"            />
+        <result property="createTime"          column="create_time"          />
+        <result property="updateBy"            column="update_by"            />
+        <result property="updateTime"          column="update_time"          />
+        <result property="openTime"            column="open_time"            />
+        <result property="closeTime"           column="close_time"           />
+        <result property="publishTime"         column="publish_time"         />
+        <result property="delFlag"             column="del_flag"             />
     </resultMap>
 
     <sql id="selectCountyExamVo">
-        select exam_id, exam_name, school_type, exam_grade, status, shuffle_mode, creator_id, create_by, create_time, update_by, update_time, close_time, publish_time, del_flag from biz_county_exam
+        select exam_id, exam_name, school_type, exam_grade, status, grading_enabled, shuffle_mode,
+               random_choice_count, random_judgment_count, total_score, duration_minutes, creator_id,
+               create_by, create_time, update_by, update_time, open_time, close_time,
+               publish_time, del_flag
+        from biz_county_exam
     </sql>
 
     <select id="selectCountyExamList" parameterType="CountyExam" resultMap="CountyExamResult">
@@ -40,12 +50,12 @@
                 AND status = #{status}
             </if>
         </where>
-        order by create_time desc
+        order by create_time desc, exam_id desc
     </select>
 
     <select id="selectCountyExamById" parameterType="Long" resultMap="CountyExamResult">
         <include refid="selectCountyExamVo"/>
-        where exam_id = #{examId}
+        where exam_id = #{examId} and del_flag = '0'
     </select>
 
     <insert id="insertCountyExam" parameterType="CountyExam" useGeneratedKeys="true" keyProperty="examId">
@@ -55,7 +65,12 @@
             <if test="schoolType != null">school_type,</if>
             <if test="examGrade != null">exam_grade,</if>
             <if test="status != null">status,</if>
+            <if test="gradingEnabled != null">grading_enabled,</if>
             <if test="shuffleMode != null">shuffle_mode,</if>
+            <if test="randomChoiceCount != null">random_choice_count,</if>
+            <if test="randomJudgmentCount != null">random_judgment_count,</if>
+            <if test="totalScore != null">total_score,</if>
+            <if test="durationMinutes != null">duration_minutes,</if>
             <if test="creatorId != null">creator_id,</if>
             <if test="createBy != null">create_by,</if>
             create_time
@@ -65,7 +80,12 @@
             <if test="schoolType != null">#{schoolType},</if>
             <if test="examGrade != null">#{examGrade},</if>
             <if test="status != null">#{status},</if>
+            <if test="gradingEnabled != null">#{gradingEnabled},</if>
             <if test="shuffleMode != null">#{shuffleMode},</if>
+            <if test="randomChoiceCount != null">#{randomChoiceCount},</if>
+            <if test="randomJudgmentCount != null">#{randomJudgmentCount},</if>
+            <if test="totalScore != null">#{totalScore},</if>
+            <if test="durationMinutes != null">#{durationMinutes},</if>
             <if test="creatorId != null">#{creatorId},</if>
             <if test="createBy != null">#{createBy},</if>
             sysdate()
@@ -79,13 +99,40 @@
             <if test="schoolType != null">school_type = #{schoolType},</if>
             <if test="examGrade != null">exam_grade = #{examGrade},</if>
             <if test="status != null">status = #{status},</if>
+            <if test="gradingEnabled != null">grading_enabled = #{gradingEnabled},</if>
             <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
+            <if test="randomChoiceCount != null">random_choice_count = #{randomChoiceCount},</if>
+            <if test="randomJudgmentCount != null">random_judgment_count = #{randomJudgmentCount},</if>
+            <if test="totalScore != null">total_score = #{totalScore},</if>
+            <if test="durationMinutes != null">duration_minutes = #{durationMinutes},</if>
+            <if test="openTime != null">open_time = #{openTime},</if>
             <if test="closeTime != null">close_time = #{closeTime},</if>
             <if test="publishTime != null">publish_time = #{publishTime},</if>
             <if test="updateBy != null">update_by = #{updateBy},</if>
             update_time = sysdate()
         </trim>
         where exam_id = #{examId}
+    </update>
+
+    <update id="updateStatus">
+        update biz_county_exam
+        set status = #{status},
+            open_time = case when #{status} = '1' then sysdate() else open_time end,
+            close_time = case when #{status} = '2' then sysdate() else close_time end,
+            publish_time = case when #{status} = '3' then sysdate() else publish_time end,
+            grading_enabled = case when #{status} = '3' then '0' else grading_enabled end,
+            update_time = sysdate()
+        where exam_id = #{examId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateGradingEnabled">
+        update biz_county_exam
+        set grading_enabled = #{gradingEnabled},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where exam_id = #{examId}
+          and del_flag = '0'
     </update>
 
     <update id="deleteCountyExamById" parameterType="Long">
@@ -98,5 +145,4 @@
             #{examId}
         </foreach>
     </update>
-
 </mapper>
