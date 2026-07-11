@@ -1,0 +1,513 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizStudentAnswerMapper">
+
+    <sql id="latestAnswerIdSubquery">
+        SELECT MAX(answer_id) AS answer_id
+        FROM biz_student_answer
+        GROUP BY student_id, lesson_id, question_id
+    </sql>
+
+    <resultMap type="com.ruoyi.business.domain.BizStudentAnswer" id="BizStudentAnswerResult">
+        <result property="answerId" column="answer_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="studentAnswer" column="student_answer"/>
+        <result property="isCorrect" column="is_correct"/>
+        <result property="score" column="score"/>
+        <result property="answerTime" column="answer_time"/>
+        <result property="submitTime" column="submit_time"/>
+        <result property="typingSpeed" column="typing_speed"/>
+        <result property="accuracyRate" column="accuracy_rate"/>
+        <result property="completionRate" column="completion_rate"/>
+        <result property="previewStatus" column="preview_status"/>
+        <result property="previewPath" column="preview_path"/>
+        <result property="previewRetryCount" column="preview_retry_count"/>
+        <result property="previewLastRetryTime" column="preview_last_retry_time"/>
+        <result property="previewErrorMessage" column="preview_error_message"/>
+    </resultMap>
+
+    <resultMap type="com.ruoyi.business.domain.vo.LessonRankingVo" id="LessonRankingVoResult">
+        <result property="studentId" column="student_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="classCode" column="class_code"/>
+        <result property="totalScore" column="total_score"/>
+        <result property="totalTime" column="total_time"/>
+        <result property="correctCount" column="correct_count"/>
+        <result property="totalCount" column="total_count"/>
+    </resultMap>
+
+    <!-- 新增单条答题记录 -->
+    <insert id="insertAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer" useGeneratedKeys="true" keyProperty="answerId">
+        INSERT INTO biz_student_answer
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message)
+        VALUES
+        (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer},
+         #{isCorrect}, #{score}, #{answerTime}, #{submitTime},
+         #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
+    </insert>
+
+    <!-- 批量插入答题记录 -->
+    <insert id="batchInsert" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="answerId">
+        INSERT INTO biz_student_answer 
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message) 
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.studentId}, #{item.lessonId}, #{item.questionId}, #{item.studentAnswer}, 
+             #{item.isCorrect}, #{item.score}, #{item.answerTime}, #{item.submitTime},
+             #{item.typingSpeed}, #{item.accuracyRate}, #{item.completionRate}, #{item.previewStatus}, #{item.previewPath}, #{item.previewRetryCount}, #{item.previewLastRetryTime}, #{item.previewErrorMessage})
+        </foreach>
+    </insert>
+
+    <!-- 更新答题记录 -->
+    <update id="updateAnswerById" parameterType="com.ruoyi.business.domain.BizStudentAnswer">
+        UPDATE biz_student_answer
+        SET student_answer = #{studentAnswer},
+            is_correct = #{isCorrect},
+            score = #{score},
+            answer_time = #{answerTime},
+            submit_time = #{submitTime},
+            typing_speed = #{typingSpeed},
+            accuracy_rate = #{accuracyRate},
+            completion_rate = #{completionRate},
+            preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage}
+        WHERE answer_id = #{answerId}
+    </update>
+
+    <!-- 查询学生某课程的答题记录 -->
+    <select id="selectByStudentAndLesson" resultMap="BizStudentAnswerResult">
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        WHERE a.student_id = #{studentId}
+          AND a.lesson_id = #{lessonId}
+        ORDER BY a.question_id ASC
+    </select>
+
+    <select id="selectLatestByStudentLessonQuestion" resultMap="BizStudentAnswerResult">
+        SELECT *
+        FROM biz_student_answer
+        WHERE student_id = #{studentId}
+          AND lesson_id = #{lessonId}
+          AND question_id = #{questionId}
+        ORDER BY answer_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectByLessonId" resultMap="BizStudentAnswerResult">
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        WHERE a.lesson_id = #{lessonId}
+    </select>
+
+    <select id="selectByLessonAndClass" resultMap="BizStudentAnswerResult">
+        SELECT a.* 
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        JOIN biz_student s ON a.student_id = s.student_id
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        WHERE a.lesson_id = #{lessonId}
+        AND u.dept_id = #{deptId}
+        <if test="classCode != null and classCode != ''">
+            AND s.class_code = #{classCode}
+        </if>
+        <if test="entryYear != null and entryYear != ''">
+            AND s.entry_year = #{entryYear}
+        </if>
+    </select>
+
+    <!-- 删除学生某课程的旧答题记录 -->
+    <delete id="deleteByStudentAndLesson">
+        DELETE FROM biz_student_answer 
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </delete>
+
+    <!-- 查询课程排行榜（按总分降序，总时间升序） -->
+    <select id="selectLessonRanking" resultMap="LessonRankingVoResult">
+        SELECT 
+            a.student_id,
+            u.nick_name AS student_name,
+            s.student_no,
+            s.class_code,
+            SUM(IFNULL(a.score, 0)) as total_score,
+            SUM(IFNULL(a.answer_time, 0)) as total_time,
+            SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_count,
+            COUNT(*) as total_count
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        LEFT JOIN biz_student s ON a.student_id = s.student_id
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        WHERE a.lesson_id = #{lessonId}
+        GROUP BY a.student_id, u.nick_name, s.student_no, s.class_code
+        ORDER BY total_score DESC, total_time ASC
+    </select>
+
+    <!-- 查询学生是否已提交过该课程 -->
+    <select id="countByStudentAndLesson" resultType="int">
+        SELECT COUNT(*) FROM biz_student_answer 
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+
+    <!-- 删除学生某课程指定题目的旧答题记录 -->
+    <delete id="deleteByStudentLessonAndQuestions">
+        DELETE FROM biz_student_answer 
+        WHERE student_id = #{studentId} 
+          AND lesson_id = #{lessonId}
+          AND question_id IN
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
+    </delete>
+
+    <!-- 查询学生有答题记录的所有课程ID -->
+    <select id="selectDistinctLessonIdsByStudent" resultType="java.lang.Long">
+        SELECT a.lesson_id 
+        FROM biz_student_answer a
+        WHERE a.student_id = #{studentId}
+          AND YEAR(a.submit_time) = #{year}
+        GROUP BY a.lesson_id
+        ORDER BY MAX(a.submit_time) DESC
+    </select>
+
+    <select id="selectWrongQuestions" resultType="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        SELECT 
+            lq.lesson_id AS lessonId, 
+            lq.question_id AS questionId, 
+            COALESCE(lq.question_score, 0) AS questionScore, 
+            lq.order_num AS orderNum,
+            q.question_content AS questionContent, 
+            q.question_type AS questionType, 
+            q.option_a AS optionA, 
+            q.option_b AS optionB, 
+            q.option_c AS optionC, 
+            q.option_d AS optionD, 
+            q.answer,
+            q.analysis,
+            q.typing_duration AS typingDuration, 
+            q.word_count AS wordCount, 
+            q.preview_path AS previewPath, 
+            q.file_path AS filePath,
+            a.student_answer AS studentAnswer
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
+        WHERE a.student_id = #{studentId}
+          AND a.is_correct = 0
+          AND q.question_type IN ('choice', 'judgment')
+          <if test="lessonId != null">
+             AND a.lesson_id = #{lessonId}
+          </if>
+        ORDER BY a.submit_time DESC
+    </select>
+
+    <!-- P5: 查询班级所有学生的操作题提交情况（含未提交） -->
+    <select id="selectPracticalSubmissions" resultType="com.ruoyi.business.domain.vo.PracticalSubmissionVo">
+        SELECT 
+            a.answer_id AS answerId,
+            s.student_id AS studentId,
+            u.nick_name AS studentName,
+            s.student_no AS studentNo,
+            s.class_code AS classCode,
+            s.remark AS remark,
+            #{questionId} AS questionId,
+            q.question_content AS questionContent,
+            a.student_answer AS studentAnswer,
+            a.preview_status AS previewStatus,
+            a.preview_path AS previewPath,
+            a.preview_retry_count AS previewRetryCount,
+            a.preview_last_retry_time AS previewLastRetryTime,
+            a.preview_error_message AS previewErrorMessage,
+            a.score AS score,
+            lq.question_score AS maxScore,
+            a.submit_time AS submitTime,
+            CASE WHEN a.answer_id IS NOT NULL THEN 1 ELSE 0 END AS submitted
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN (
+            SELECT a1.*
+            FROM biz_student_answer a1
+            INNER JOIN (
+                <include refid="latestAnswerIdSubquery"/>
+            ) latest ON latest.answer_id = a1.answer_id
+        ) a ON s.student_id = a.student_id
+           AND a.lesson_id = #{lessonId}
+           <if test="questionId != null">
+               AND a.question_id = #{questionId}
+           </if>
+        LEFT JOIN biz_question q ON q.question_id = #{questionId}
+        LEFT JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
+        WHERE s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+          AND u.dept_id = #{deptId}
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC
+    </select>
+
+    <!-- 更新答题记录分数（批改打分） -->
+    <update id="updateScore">
+        UPDATE biz_student_answer 
+        SET score = #{score}
+        WHERE answer_id = #{answerId}
+    </update>
+    
+    <!-- P2: 查询学生成绩汇总（按课程分组） -->
+    <select id="selectScoreSummaryByStudent" resultType="java.util.HashMap">
+        SELECT 
+            a.student_id AS studentId,
+            a.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            l.lesson_num AS lessonNum,
+            SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
+            SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
+            SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(IFNULL(a.score, 0)) AS totalScore,
+            -- 打字统计（只取打字题的平均值）
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        WHERE a.student_id = #{studentId}
+        <if test="lessonId != null">
+            AND a.lesson_id = #{lessonId}
+        </if>
+        GROUP BY a.student_id, a.lesson_id, l.lesson_title, l.lesson_num
+        ORDER BY l.lesson_num
+    </select>
+
+    <select id="selectScoreSummaryByStudents" resultType="java.util.HashMap">
+        SELECT
+            a.student_id AS studentId,
+            a.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            l.lesson_num AS lessonNum,
+            SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
+            SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
+            SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(IFNULL(a.score, 0)) AS totalScore,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
+            ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        WHERE a.student_id IN
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+        <if test="lessonIds != null and lessonIds.size() > 0">
+            AND a.lesson_id IN
+            <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+                #{lessonId}
+            </foreach>
+        </if>
+        GROUP BY a.student_id, a.lesson_id, l.lesson_title, l.lesson_num
+        ORDER BY a.student_id, l.lesson_num
+    </select>
+
+    <!-- 更新答题记录的预览状态 -->
+    <update id="updatePreviewStatus">
+        UPDATE biz_student_answer 
+        SET preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage}
+        WHERE answer_id = #{answerId}
+    </update>
+
+    <update id="claimSubmitPreviewConversion">
+        UPDATE biz_student_answer
+        SET preview_status = 'converting',
+            preview_path = NULL,
+            preview_retry_count = IFNULL(preview_retry_count, 0),
+            preview_error_message = NULL
+        WHERE answer_id = #{answerId}
+          AND preview_status = 'pending'
+          AND preview_path IS NULL
+    </update>
+
+    <update id="claimRetryPreviewConversion">
+        UPDATE biz_student_answer
+        SET preview_status = 'converting',
+            preview_path = NULL,
+            preview_retry_count = #{nextRetryCount},
+            preview_last_retry_time = #{claimedAt},
+            preview_error_message = NULL
+        WHERE answer_id = #{answerId}
+          AND preview_path IS NULL
+          AND preview_status = #{expectedStatus}
+          AND IFNULL(preview_retry_count, 0) = #{expectedRetryCount}
+          AND (
+                (#{expectedLastRetryTime} IS NULL AND preview_last_retry_time IS NULL)
+             OR preview_last_retry_time = #{expectedLastRetryTime}
+          )
+    </update>
+
+    <!-- 根据ID查询答题记录 -->
+    <select id="selectById" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer WHERE answer_id = #{answerId}
+    </select>
+
+    <resultMap id="StudentAnswerMatrixResult" type="com.ruoyi.business.domain.vo.StudentAnswerMatrixVo">
+        <id property="studentId" column="student_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="className" column="class_name"/>
+        <collection property="results" ofType="com.ruoyi.business.domain.vo.StudentQuestionResult">
+            <result property="questionId" column="question_id"/>
+            <result property="orderNum" column="order_num"/>
+            <result property="userAnswer" column="student_answer"/>
+            <result property="isCorrect" column="is_correct"/>
+            <result property="score" column="score"/>
+            <result property="questionContent" column="question_content"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectStudentAnswerMatrix" resultMap="StudentAnswerMatrixResult">
+        SELECT 
+            s.student_id, 
+            u.nick_name as student_name, 
+            s.student_no, 
+            s.class_code as class_name,
+            a.question_id,
+            lq.order_num,
+            a.student_answer,
+            a.is_correct,
+            a.score,
+            q.question_content
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN (
+            SELECT a1.*
+            FROM biz_student_answer a1
+            INNER JOIN (
+                <include refid="latestAnswerIdSubquery"/>
+            ) latest ON latest.answer_id = a1.answer_id
+        ) a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
+        LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND lq.lesson_id = #{lessonId}
+        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        WHERE s.class_code = #{classCode} 
+          AND s.entry_year = #{entryYear}
+          AND u.dept_id = #{deptId}
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC, lq.order_num ASC
+    </select>
+
+    <!-- 查询某课程有答题记录的班级列表（用于批改页面班级选择） -->
+    <select id="selectClassesByLessonAnswers" resultType="java.util.HashMap">
+        SELECT 
+            s.class_code AS classCode,
+            s.entry_year AS entryYear,
+            COUNT(DISTINCT s.student_id) AS totalStudents,
+            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL THEN a.student_id END) AS practicalSubmitted,
+            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL AND a.score IS NULL THEN a.student_id END) AS practicalUngraded
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        JOIN biz_student s ON a.student_id = s.student_id
+        JOIN biz_question q ON a.question_id = q.question_id
+        WHERE a.lesson_id = #{lessonId}
+        GROUP BY s.class_code, s.entry_year
+        ORDER BY s.entry_year DESC, s.class_code ASC
+    </select>
+
+    <select id="countScoredStudentsByLessonAndClass" resultType="int">
+        SELECT COUNT(DISTINCT s.student_id)
+        FROM biz_student s
+        INNER JOIN sys_user u ON u.user_id = s.user_id
+        LEFT JOIN (
+            SELECT DISTINCT a.student_id
+            FROM biz_student_answer a
+            INNER JOIN (
+                <include refid="latestAnswerIdSubquery"/>
+            ) latest ON latest.answer_id = a.answer_id
+            WHERE a.lesson_id = #{lessonId}
+        ) ans ON ans.student_id = s.student_id
+        LEFT JOIN biz_classroom_performance p
+            ON p.student_id = s.student_id
+            AND p.lesson_id = #{lessonId}
+        WHERE s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+          AND u.dept_id = #{deptId}
+          AND IFNULL(p.is_absent, 0) = 0
+          AND (ans.student_id IS NOT NULL OR p.performance_id IS NOT NULL)
+    </select>
+
+    <select id="selectRecoverablePracticalAnswersForRetry" resultMap="BizStudentAnswerResult">
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_question q ON q.question_id = a.question_id
+        WHERE q.question_type = 'practical'
+          AND a.student_answer IS NOT NULL
+          AND a.student_answer != ''
+          AND (LOWER(a.student_answer) LIKE '%.docx' OR LOWER(a.student_answer) LIKE '%.doc')
+          AND a.preview_path IS NULL
+          AND (
+                (a.preview_status = 'failed'
+                 AND (a.preview_last_retry_time IS NULL OR a.preview_last_retry_time &lt;= #{retryBefore}))
+             OR (a.preview_status IN ('pending', 'converting')
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) IS NOT NULL
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
+          )
+          AND IFNULL(a.preview_retry_count, 0) &lt; #{maxRetryCount}
+        ORDER BY a.submit_time ASC
+    </select>
+
+    <select id="selectRecoverablePracticalAnswersForManualRetry" resultMap="BizStudentAnswerResult">
+        SELECT a.*
+        FROM biz_student_answer a
+        INNER JOIN (
+            <include refid="latestAnswerIdSubquery"/>
+        ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_question q ON q.question_id = a.question_id
+        INNER JOIN biz_student s ON s.student_id = a.student_id
+        INNER JOIN sys_user u ON u.user_id = s.user_id
+        WHERE q.question_type = 'practical'
+          AND a.lesson_id = #{lessonId}
+          AND a.question_id = #{questionId}
+          AND s.class_code = #{classCode}
+          AND s.entry_year = #{entryYear}
+          AND u.dept_id = #{deptId}
+          AND a.student_answer IS NOT NULL
+          AND a.student_answer != ''
+          AND (LOWER(a.student_answer) LIKE '%.docx' OR LOWER(a.student_answer) LIKE '%.doc')
+          AND a.preview_path IS NULL
+          AND (
+                a.preview_status = 'failed'
+             OR (a.preview_status IN ('pending', 'converting')
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) IS NOT NULL
+                 AND COALESCE(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
+          )
+        ORDER BY CAST(s.student_no AS UNSIGNED) ASC, a.submit_time ASC
+    </select>
+</mapper>

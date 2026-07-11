@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.StudentProfileMapper">
+
+    <sql id="latestAnswerIdSubquery">
+        SELECT MAX(answer_id) AS answer_id
+        FROM biz_student_answer
+        GROUP BY student_id, lesson_id, question_id
+    </sql>
+
+    <!-- 查询学生基础信息 -->
+    <select id="selectStudentBasicInfo" resultType="java.util.HashMap">
+        SELECT 
+            s.student_id AS studentId,
+            u.nick_name AS studentName,
+            s.class_code AS classCode,
+            s.entry_year AS entryYear,
+            s.remark AS remark,
+            u.dept_id AS deptId,
+            d.school_type AS schoolType
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN sys_dept d ON u.dept_id = d.dept_id
+        WHERE s.student_id = #{studentId}
+    </select>
+
+    <!-- 查询学生历次课程成绩 -->
+    <select id="selectCourseScores" resultType="com.ruoyi.business.domain.vo.StudentProfileVo$CourseScoreItem">
+        SELECT 
+            l.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            l.lesson_num AS lessonNum,
+            COALESCE(SUM(a.score), 0) AS studentScore,
+            MAX(a.submit_time) AS submitTime
+        FROM biz_lesson l
+        INNER JOIN biz_student_answer a ON a.lesson_id = l.lesson_id
+        INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
+        WHERE a.student_id = #{studentId}
+        <if test="academicYearStart != null and academicYearStart != ''">
+            AND a.submit_time >= #{academicYearStart}
+        </if>
+        <if test="academicYearEnd != null and academicYearEnd != ''">
+            AND a.submit_time &lt;= #{academicYearEnd}
+        </if>
+        GROUP BY l.lesson_id, l.lesson_title, l.lesson_num
+        ORDER BY MAX(a.submit_time) ASC
+    </select>
+
+    <!-- 查询班级各课程平均分 (通过关联 sys_user 获取 dept_id) -->
+    <select id="selectClassAvgScores" resultType="java.util.HashMap">
+        SELECT 
+            l.lesson_id AS lessonId,
+            ROUND(AVG(student_total.total_score), 1) AS classAvgScore
+        FROM biz_lesson l
+        INNER JOIN (
+            SELECT a.lesson_id, a.student_id, SUM(a.score) AS total_score
+            FROM biz_student_answer a
+            INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
+            INNER JOIN biz_student s ON s.student_id = a.student_id
+            INNER JOIN sys_user u ON s.user_id = u.user_id
+            WHERE s.entry_year = #{entryYear}
+              AND s.class_code = #{classCode}
+              AND u.dept_id = #{deptId}
+            <if test="academicYearStart != null and academicYearStart != ''">
+                AND a.submit_time >= #{academicYearStart}
+            </if>
+            <if test="academicYearEnd != null and academicYearEnd != ''">
+                AND a.submit_time &lt;= #{academicYearEnd}
+            </if>
+            GROUP BY a.lesson_id, a.student_id
+        ) student_total ON student_total.lesson_id = l.lesson_id
+        GROUP BY l.lesson_id
+    </select>
+
+    <!-- 查询学生打字速度记录 -->
+    <select id="selectTypingSpeeds" resultType="com.ruoyi.business.domain.vo.StudentProfileVo$TypingSpeedItem">
+        SELECT 
+            l.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            a.typing_speed AS typingSpeed,
+            a.submit_time AS submitTime
+        FROM biz_student_answer a
+        INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson l ON l.lesson_id = a.lesson_id
+        INNER JOIN biz_question q ON q.question_id = a.question_id
+        WHERE a.student_id = #{studentId}
+          AND q.question_type = 'typing'
+          AND a.typing_speed IS NOT NULL
+        <if test="academicYearStart != null and academicYearStart != ''">
+            AND a.submit_time >= #{academicYearStart}
+        </if>
+        <if test="academicYearEnd != null and academicYearEnd != ''">
+            AND a.submit_time &lt;= #{academicYearEnd}
+        </if>
+        ORDER BY a.submit_time ASC
+    </select>
+
+    <!-- 查询学生课堂表现分记录：空白0分视为历史占位，显式0分仍保留 -->
+    <select id="selectPerformances" resultType="com.ruoyi.business.domain.vo.StudentProfileVo$PerformanceItem">
+        SELECT 
+            p.lesson_id AS lessonId,
+            l.lesson_title AS lessonTitle,
+            p.score AS performance,
+            p.create_time AS recordTime
+        FROM biz_classroom_performance p
+        INNER JOIN biz_lesson l ON l.lesson_id = p.lesson_id
+        WHERE p.student_id = #{studentId}
+          AND IFNULL(p.is_absent, 0) = 0
+          AND (p.score != 0 OR (p.score = 0 AND p.reason IS NOT NULL AND TRIM(p.reason) != ''))
+        <if test="academicYearStart != null and academicYearStart != ''">
+            AND p.create_time >= #{academicYearStart}
+        </if>
+        <if test="academicYearEnd != null and academicYearEnd != ''">
+            AND p.create_time &lt;= #{academicYearEnd}
+        </if>
+        ORDER BY p.create_time ASC
+    </select>
+
+    <!-- 查询班级所有学生的历次课程总分 (通过关联 sys_user 获取 dept_id) -->
+    <select id="selectClassStudentScores" resultType="java.util.HashMap">
+        SELECT 
+            a.student_id AS studentId,
+            a.lesson_id AS lessonId,
+            SUM(a.score) AS totalScore,
+            MAX(a.submit_time) AS submitTime
+        FROM biz_student_answer a
+        INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_student s ON s.student_id = a.student_id
+        INNER JOIN sys_user u ON s.user_id = u.user_id
+        WHERE s.entry_year = #{entryYear}
+          AND s.class_code = #{classCode}
+          AND u.dept_id = #{deptId}
+        <if test="academicYearStart != null and academicYearStart != ''">
+            AND a.submit_time >= #{academicYearStart}
+        </if>
+        <if test="academicYearEnd != null and academicYearEnd != ''">
+            AND a.submit_time &lt;= #{academicYearEnd}
+        </if>
+        GROUP BY a.student_id, a.lesson_id
+        ORDER BY a.lesson_id, SUM(a.score) DESC
+    </select>
+
+    <!-- 查询班级学生总数 (通过关联 sys_user 获取 dept_id) -->
+    <select id="selectClassStudentCount" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM biz_student s
+        INNER JOIN sys_user u ON s.user_id = u.user_id
+        WHERE s.entry_year = #{entryYear}
+          AND s.class_code = #{classCode}
+          AND u.dept_id = #{deptId}
+    </select>
+
+</mapper>

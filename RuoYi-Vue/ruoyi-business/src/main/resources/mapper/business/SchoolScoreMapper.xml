@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.SchoolScoreMapper">
+
+    <resultMap type="com.ruoyi.business.domain.vo.SchoolScoreStatsVO" id="SchoolScoreStatsResult">
+        <result property="deptId"       column="dept_id"/>
+        <result property="deptName"     column="dept_name"/>
+        <result property="schoolType"   column="school_type"/>
+        <result property="classCount"   column="class_count"/>
+        <result property="activeStudentCount" column="active_student_count"/>
+        <result property="avgTypingSpeed" column="avg_typing_speed"/>
+        <result property="avgTotalScore"  column="avg_total_score"/>
+        <result property="passRate"       column="pass_rate"/>
+        <result property="excellentRate"  column="excellent_rate"/>
+    </resultMap>
+
+    <!-- 
+      查询逻辑：
+      1. 筛选 biz_lesson 在 [startDate, endDate] 范围内
+      2. 关联 biz_student_answer 获取学生成绩
+      3. 关联 sys_user 获取 dept_id
+      4. 关联 sys_dept 获取 dept_name, school_type
+      5. 聚合计算
+         注意：一个学生可能在多门课程中有成绩。
+         AVG(speed) 应该是所有有效打字记录的平均值。
+         AVG(score) 应该是所有课程总分的平均值。
+         PassRate: 平均分 >= 60 的学生比例？还是所有课程记录中及格的比例？
+         通常 "学校成绩" 指的是该学期所有考试人次的总平均。
+    -->
+    <select id="selectSchoolScoreStats" resultMap="SchoolScoreStatsResult">
+        SELECT
+            d.dept_id,
+            d.dept_name,
+            d.school_type,
+            COUNT(DISTINCT CONCAT(s.entry_year, '-', s.class_code)) AS class_count,
+            COUNT(DISTINCT a.student_id) AS active_student_count,
+            
+            <!-- 平均打字速度：只统计有速度记录的 -->
+            ROUND(AVG(CASE WHEN a.typing_speed > 0 THEN a.typing_speed ELSE NULL END), 0) AS avg_typing_speed,
+            
+            <!-- 平均总分 -->
+            ROUND(AVG(a.score), 1) AS avg_total_score,
+            
+            <!-- 及格率 >= 60 -->
+            ROUND(SUM(CASE WHEN a.score >= 60 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS pass_rate,
+            
+            <!-- 优秀率 >= 90 -->
+            ROUND(SUM(CASE WHEN a.score >= 90 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS excellent_rate
+            
+        FROM biz_student_answer a
+        INNER JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+        INNER JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN sys_user u ON s.user_id = u.user_id
+        INNER JOIN sys_dept d ON u.dept_id = d.dept_id
+        WHERE d.del_flag = '0' 
+          AND d.parent_id != 0 <!-- 排除顶级节点 -->
+          AND a.submit_time BETWEEN #{startDate} AND #{endDate}
+        <if test="deptName != null and deptName != ''">
+            AND d.dept_name like concat('%', #{deptName}, '%')
+        </if>
+        GROUP BY d.dept_id, d.dept_name, d.school_type
+        ORDER BY avg_typing_speed DESC
+    </select>
+
+    <!-- 查询班级详情 -->
+    <select id="selectClassScoreStats" resultMap="SchoolScoreStatsResult">
+        SELECT
+            d.dept_id,
+            <!-- 这里复用 deptName 字段存班级名称 -->
+            CONCAT(s.entry_year, '级', s.class_code, '班') AS dept_name,
+            d.school_type,
+            1 AS class_count,
+            COUNT(DISTINCT a.student_id) AS active_student_count,
+            ROUND(AVG(CASE WHEN a.typing_speed > 0 THEN a.typing_speed ELSE NULL END), 0) AS avg_typing_speed,
+            ROUND(AVG(a.score), 1) AS avg_total_score,
+            ROUND(SUM(CASE WHEN a.score >= 60 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS pass_rate,
+            ROUND(SUM(CASE WHEN a.score >= 90 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS excellent_rate
+        FROM biz_student_answer a
+        INNER JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+        INNER JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN sys_user u ON s.user_id = u.user_id
+        INNER JOIN sys_dept d ON u.dept_id = d.dept_id
+        WHERE u.dept_id = #{deptId}
+          AND a.submit_time BETWEEN #{startDate} AND #{endDate}
+        GROUP BY s.entry_year, s.class_code
+        ORDER BY s.entry_year DESC, s.class_code ASC
+    </select>
+</mapper>

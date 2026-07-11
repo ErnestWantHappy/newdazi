@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizScoringItemMapper">
+    
+    <resultMap type="BizScoringItem" id="BizScoringItemResult">
+        <result property="itemId"      column="item_id"      />
+        <result property="questionId"  column="question_id"  />
+        <result property="itemName"    column="item_name"    />
+        <result property="itemScore"   column="item_score"   />
+        <result property="orderNum"    column="order_num"    />
+        <result property="createTime"  column="create_time"  />
+        <result property="updateTime"  column="update_time"  />
+    </resultMap>
+
+    <sql id="selectBizScoringItemVo">
+        select item_id, question_id, item_name, item_score, order_num, create_time, update_time 
+        from biz_scoring_item
+    </sql>
+
+    <select id="selectBizScoringItemByItemId" parameterType="Long" resultMap="BizScoringItemResult">
+        <include refid="selectBizScoringItemVo"/>
+        where item_id = #{itemId}
+    </select>
+
+    <select id="selectBizScoringItemList" parameterType="BizScoringItem" resultMap="BizScoringItemResult">
+        <include refid="selectBizScoringItemVo"/>
+        <where>  
+            <if test="questionId != null">and question_id = #{questionId}</if>
+            <if test="itemName != null and itemName != ''">and item_name like concat('%', #{itemName}, '%')</if>
+        </where>
+        order by order_num asc
+    </select>
+    
+    <select id="selectItemsByLessonAndQuestion" resultMap="BizScoringItemResult">
+        <include refid="selectBizScoringItemVo"/>
+        where question_id = #{questionId}
+        order by order_num asc
+    </select>
+    
+    <!-- P6: 按题目ID查询评分项 -->
+    <select id="selectItemsByQuestion" resultMap="BizScoringItemResult">
+        <include refid="selectBizScoringItemVo"/>
+        where question_id = #{questionId}
+        order by order_num asc
+    </select>
+
+    <insert id="insertBizScoringItem" parameterType="BizScoringItem" useGeneratedKeys="true" keyProperty="itemId">
+        insert into biz_scoring_item
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="questionId != null">question_id,</if>
+            <if test="itemName != null and itemName != ''">item_name,</if>
+            <if test="itemScore != null">item_score,</if>
+            <if test="orderNum != null">order_num,</if>
+            <if test="createTime != null">create_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="questionId != null">#{questionId},</if>
+            <if test="itemName != null and itemName != ''">#{itemName},</if>
+            <if test="itemScore != null">#{itemScore},</if>
+            <if test="orderNum != null">#{orderNum},</if>
+            <if test="createTime != null">#{createTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBizScoringItem" parameterType="BizScoringItem">
+        update biz_scoring_item
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="itemName != null and itemName != ''">item_name = #{itemName},</if>
+            <if test="itemScore != null">item_score = #{itemScore},</if>
+            <if test="orderNum != null">order_num = #{orderNum},</if>
+        </trim>
+        where item_id = #{itemId}
+    </update>
+
+    <delete id="deleteBizScoringItemByItemId" parameterType="Long">
+        delete from biz_scoring_item where item_id = #{itemId}
+    </delete>
+
+    <delete id="deleteBizScoringItemByItemIds" parameterType="String">
+        delete from biz_scoring_item where item_id in 
+        <foreach item="itemId" collection="array" open="(" separator="," close=")">
+            #{itemId}
+        </foreach>
+    </delete>
+    
+    <delete id="deleteBizScoringItemByQuestion">
+        delete from biz_scoring_item where question_id = #{questionId}
+    </delete>
+</mapper>

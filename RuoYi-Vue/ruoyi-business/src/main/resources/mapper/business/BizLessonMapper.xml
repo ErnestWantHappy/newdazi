@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizLessonMapper">
+
+    <resultMap type="BizLesson" id="BizLessonResult">
+        <result property="lessonId"    column="lesson_id"    />
+        <result property="lessonTitle"    column="lesson_title"    />
+        <result property="grade"    column="grade"    />
+        <result property="semester"    column="semester"    />
+        <result property="lessonNum"    column="lesson_num"    />
+        <result property="shuffleMode"    column="shuffle_mode"    />
+        <result property="randomChoiceCount"    column="random_choice_count"    />
+        <result property="randomJudgmentCount"    column="random_judgment_count"    />
+        <result property="creatorId"    column="creator_id"    />
+        <result property="deptId"    column="dept_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+    </resultMap>
+
+    <sql id="selectBizLessonVo">
+        select lesson_id, lesson_title, grade, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count, creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
+    </sql>
+
+    <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
+        <include refid="selectBizLessonVo"/>
+        <where>
+            <if test="lessonTitle != null  and lessonTitle != ''"> and lesson_title like concat('%', #{lessonTitle}, '%')</if>
+            <if test="grade != null "> and grade = #{grade}</if>
+            <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
+            <if test="createBy != null  and createBy != ''"> and create_by = #{createBy}</if>
+        </where>
+    </select>
+
+    <select id="selectBizLessonByLessonId" parameterType="Long" resultMap="BizLessonResult">
+        <include refid="selectBizLessonVo"/>
+        where lesson_id = #{lessonId}
+    </select>
+
+    <insert id="insertBizLesson" parameterType="BizLesson" useGeneratedKeys="true" keyProperty="lessonId">
+        insert into biz_lesson
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="lessonTitle != null and lessonTitle != ''">lesson_title,</if>
+            <if test="grade != null">grade,</if>
+            <if test="semester != null and semester != ''">semester,</if>
+            <if test="lessonNum != null">lesson_num,</if>
+            <if test="shuffleMode != null">shuffle_mode,</if>
+            <if test="randomChoiceCount != null">random_choice_count,</if>
+            <if test="randomJudgmentCount != null">random_judgment_count,</if>
+            <if test="creatorId != null">creator_id,</if>
+            <if test="deptId != null">dept_id,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null and updateBy != ''">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="lessonTitle != null and lessonTitle != ''">#{lessonTitle},</if>
+            <if test="grade != null">#{grade},</if>
+            <if test="semester != null and semester != ''">#{semester},</if>
+            <if test="lessonNum != null">#{lessonNum},</if>
+            <if test="shuffleMode != null">#{shuffleMode},</if>
+            <if test="randomChoiceCount != null">#{randomChoiceCount},</if>
+            <if test="randomJudgmentCount != null">#{randomJudgmentCount},</if>
+            <if test="creatorId != null">#{creatorId},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null and updateBy != ''">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateBizLesson" parameterType="BizLesson">
+        update biz_lesson
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="lessonTitle != null and lessonTitle != ''">lesson_title = #{lessonTitle},</if>
+            <if test="grade != null">grade = #{grade},</if>
+            <if test="semester != null and semester != ''">semester = #{semester},</if>
+            <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
+            <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
+            <if test="randomChoiceCount != null">random_choice_count = #{randomChoiceCount},</if>
+            <if test="randomJudgmentCount != null">random_judgment_count = #{randomJudgmentCount},</if>
+            <if test="creatorId != null">creator_id = #{creatorId},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
+            <if test="createBy != null and createBy != ''">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where lesson_id = #{lessonId}
+    </update>
+
+    <delete id="deleteBizLessonByLessonId" parameterType="Long">
+        delete from biz_lesson where lesson_id = #{lessonId}
+    </delete>
+
+    <delete id="deleteBizLessonByLessonIds" parameterType="String">
+        delete from biz_lesson where lesson_id in
+        <foreach item="lessonId" collection="array" open="(" separator="," close=")">
+            #{lessonId}
+        </foreach>
+    </delete>
+
+    <!-- 新增：为LessonInfoVo创建一个明确的结果映射 -->
+    <resultMap type="com.ruoyi.business.domain.vo.LessonInfoVo" id="LessonInfoVoResult">
+        <result property="lessonId"    column="lesson_id"    />
+        <result property="lessonTitle"    column="lesson_title"    />
+        <result property="lessonNum"    column="lesson_num"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="courseType"    column="course_type"    />
+        <result property="hasPractical"  column="has_practical"  />
+    </resultMap>
+
+    <!-- 查询我创建的课程 -->
+    <select id="selectLessonsByGradeAndCreator" resultMap="LessonInfoVoResult">
+        SELECT
+            lesson_id,
+            lesson_title,
+            lesson_num,
+            create_time,
+            'self' as course_type,
+            (SELECT count(1) FROM biz_lesson_question lq 
+             LEFT JOIN biz_question q ON lq.question_id = q.question_id 
+             WHERE lq.lesson_id = biz_lesson.lesson_id AND q.question_type = 'practical') > 0 as has_practical
+        FROM
+            biz_lesson
+        WHERE
+            grade = #{grade}
+          AND create_by = #{creatorName}
+          AND dept_id = #{deptId}
+        ORDER BY
+            create_time DESC,
+            lesson_id DESC
+    </select>
+
+    <!-- 查询共享给我的课程（指派给我管理班级的、非我创建的课程） -->
+    <select id="selectSharedLessonsByGradeAndUser" resultMap="LessonInfoVoResult">
+        SELECT DISTINCT
+            l.lesson_id,
+            l.lesson_title,
+            l.lesson_num,
+            l.create_time,
+            'shared' as course_type,
+            (SELECT count(1) FROM biz_lesson_question lq 
+             LEFT JOIN biz_question q ON lq.question_id = q.question_id 
+             WHERE lq.lesson_id = l.lesson_id AND q.question_type = 'practical') > 0 as has_practical
+        FROM biz_lesson l
+        INNER JOIN biz_lesson_assignment la ON l.lesson_id = la.lesson_id
+        INNER JOIN biz_teacher_class tc 
+            ON la.entry_year = tc.entry_year 
+            AND la.class_code = tc.class_code
+            AND la.dept_id = tc.dept_id
+        WHERE
+            tc.user_id = #{userId}
+            AND tc.dept_id = #{deptId}
+            AND l.grade = #{grade}
+            AND l.create_by != #{creatorName}
+        ORDER BY
+            l.create_time DESC,
+            l.lesson_id DESC
+    </select>
+
+    <select id="selectMaxLessonNumByGradeAndCreator" resultType="java.lang.Integer">
+        SELECT IFNULL(MAX(lesson_num), 0)
+        FROM biz_lesson
+        WHERE grade = #{grade}
+          AND create_by = #{creatorName}
+          AND dept_id = #{deptId}
+    </select>
+</mapper>

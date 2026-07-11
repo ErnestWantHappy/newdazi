@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.SchoolStatsMapper">
+
+    <resultMap type="com.ruoyi.business.domain.vo.SchoolClassStatsVO" id="SchoolClassStatsResult">
+        <result property="deptId"       column="dept_id"        />
+        <result property="deptName"     column="dept_name"      />
+        <result property="schoolType"   column="school_type"    />
+        <result property="entryYear"    column="entry_year"     />
+        <result property="classCode"    column="class_code"     />
+        <result property="studentCount" column="student_count"  />
+        <result property="classCount"   column="class_count"    />
+    </resultMap>
+
+    <!-- 查询每个学校每个年级每个班级的学生人数 -->
+    <select id="selectSchoolClassStats" resultMap="SchoolClassStatsResult">
+        SELECT 
+            d.dept_id,
+            d.dept_name,
+            d.school_type,
+            s.entry_year,
+            s.class_code,
+            COUNT(*) AS student_count
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN sys_dept d ON u.dept_id = d.dept_id
+        WHERE d.dept_id IS NOT NULL
+        GROUP BY d.dept_id, d.dept_name, d.school_type, s.entry_year, s.class_code
+        ORDER BY d.dept_name, s.entry_year DESC, s.class_code
+    </select>
+
+    <!-- 查询学校汇总统计：每个学校的班级总数和学生总数 -->
+    <select id="selectSchoolSummary" resultMap="SchoolClassStatsResult">
+        SELECT 
+            d.dept_id,
+            d.dept_name,
+            d.school_type,
+            COUNT(DISTINCT CONCAT(s.entry_year, '-', s.class_code)) AS class_count,
+            COUNT(*) AS student_count
+        FROM biz_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN sys_dept d ON u.dept_id = d.dept_id
+        WHERE d.dept_id IS NOT NULL
+        GROUP BY d.dept_id, d.dept_name, d.school_type
+        ORDER BY d.dept_name
+    </select>
+
+</mapper>

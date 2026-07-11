@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CountyExamMapper">
+    
+    <resultMap type="CountyExam" id="CountyExamResult">
+        <id     property="examId"       column="exam_id"        />
+        <result property="examName"     column="exam_name"      />
+        <result property="schoolType"   column="school_type"    />
+        <result property="examGrade"    column="exam_grade"     />
+        <result property="status"       column="status"         />
+        <result property="shuffleMode"  column="shuffle_mode"   />
+        <result property="creatorId"    column="creator_id"     />
+        <result property="createBy"     column="create_by"      />
+        <result property="createTime"   column="create_time"    />
+        <result property="updateBy"     column="update_by"      />
+        <result property="updateTime"   column="update_time"    />
+        <result property="closeTime"    column="close_time"     />
+        <result property="publishTime"  column="publish_time"   />
+        <result property="delFlag"      column="del_flag"       />
+    </resultMap>
+
+    <sql id="selectCountyExamVo">
+        select exam_id, exam_name, school_type, exam_grade, status, shuffle_mode, creator_id, create_by, create_time, update_by, update_time, close_time, publish_time, del_flag from biz_county_exam
+    </sql>
+
+    <select id="selectCountyExamList" parameterType="CountyExam" resultMap="CountyExamResult">
+        <include refid="selectCountyExamVo"/>
+        <where>
+            del_flag = '0'
+            <if test="examName != null and examName != ''">
+                AND exam_name like concat('%', #{examName}, '%')
+            </if>
+            <if test="schoolType != null and schoolType != ''">
+                AND school_type = #{schoolType}
+            </if>
+            <if test="examGrade != null">
+                AND exam_grade = #{examGrade}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectCountyExamById" parameterType="Long" resultMap="CountyExamResult">
+        <include refid="selectCountyExamVo"/>
+        where exam_id = #{examId}
+    </select>
+
+    <insert id="insertCountyExam" parameterType="CountyExam" useGeneratedKeys="true" keyProperty="examId">
+        insert into biz_county_exam
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="examName != null and examName != ''">exam_name,</if>
+            <if test="schoolType != null">school_type,</if>
+            <if test="examGrade != null">exam_grade,</if>
+            <if test="status != null">status,</if>
+            <if test="shuffleMode != null">shuffle_mode,</if>
+            <if test="creatorId != null">creator_id,</if>
+            <if test="createBy != null">create_by,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="examName != null and examName != ''">#{examName},</if>
+            <if test="schoolType != null">#{schoolType},</if>
+            <if test="examGrade != null">#{examGrade},</if>
+            <if test="status != null">#{status},</if>
+            <if test="shuffleMode != null">#{shuffleMode},</if>
+            <if test="creatorId != null">#{creatorId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <update id="updateCountyExam" parameterType="CountyExam">
+        update biz_county_exam
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="examName != null and examName != ''">exam_name = #{examName},</if>
+            <if test="schoolType != null">school_type = #{schoolType},</if>
+            <if test="examGrade != null">exam_grade = #{examGrade},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
+            <if test="closeTime != null">close_time = #{closeTime},</if>
+            <if test="publishTime != null">publish_time = #{publishTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </trim>
+        where exam_id = #{examId}
+    </update>
+
+    <update id="deleteCountyExamById" parameterType="Long">
+        update biz_county_exam set del_flag = '2' where exam_id = #{examId}
+    </update>
+
+    <update id="deleteCountyExamByIds" parameterType="String">
+        update biz_county_exam set del_flag = '2' where exam_id in
+        <foreach item="examId" collection="array" open="(" separator="," close=")">
+            #{examId}
+        </foreach>
+    </update>
+
+</mapper>

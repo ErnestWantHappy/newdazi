@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CountyExamGraderMapper">
+    
+    <resultMap type="CountyExamGrader" id="CountyExamGraderResult">
+        <id     property="id"           column="id"           />
+        <result property="examId"       column="exam_id"      />
+        <result property="graderId"     column="grader_id"    />
+        <result property="targetCount"  column="target_count" />
+        <result property="gradedCount"  column="graded_count" />
+    </resultMap>
+
+    <select id="selectByExamId" parameterType="Long" resultMap="CountyExamGraderResult">
+        select id, exam_id, grader_id, target_count, graded_count
+        from biz_county_exam_grader
+        where exam_id = #{examId}
+    </select>
+
+    <select id="selectByExamAndGrader" resultMap="CountyExamGraderResult">
+        select id, exam_id, grader_id, target_count, graded_count
+        from biz_county_exam_grader
+        where exam_id = #{examId} and grader_id = #{graderId}
+    </select>
+
+    <insert id="insert" parameterType="CountyExamGrader" useGeneratedKeys="true" keyProperty="id">
+        insert into biz_county_exam_grader (exam_id, grader_id, target_count, graded_count)
+        values (#{examId}, #{graderId}, #{targetCount}, #{gradedCount})
+    </insert>
+
+    <update id="update" parameterType="CountyExamGrader">
+        update biz_county_exam_grader
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="targetCount != null">target_count = #{targetCount},</if>
+            <if test="gradedCount != null">graded_count = #{gradedCount},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteByExamId" parameterType="Long">
+        delete from biz_county_exam_grader where exam_id = #{examId}
+    </delete>
+
+</mapper>

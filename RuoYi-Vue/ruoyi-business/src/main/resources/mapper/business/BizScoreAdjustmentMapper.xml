@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizScoreAdjustmentMapper">
+
+    <resultMap type="com.ruoyi.business.domain.BizScoreAdjustment" id="BizScoreAdjustmentResult">
+        <result property="adjustmentId" column="adjustment_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="teacherId" column="teacher_id"/>
+        <result property="originalHomeworkScore" column="original_homework_score"/>
+        <result property="adjustedHomeworkScore" column="adjusted_homework_score"/>
+        <result property="actionType" column="action_type"/>
+        <result property="reason" column="reason"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ruoyi.business.domain.BizScoreAdjustment" useGeneratedKeys="true" keyProperty="adjustmentId">
+        INSERT INTO biz_score_adjustment (
+            student_id,
+            lesson_id,
+            dept_id,
+            teacher_id,
+            original_homework_score,
+            adjusted_homework_score,
+            action_type,
+            reason,
+            create_by,
+            create_time
+        )
+        VALUES (
+            #{studentId},
+            #{lessonId},
+            #{deptId},
+            #{teacherId},
+            #{originalHomeworkScore},
+            #{adjustedHomeworkScore},
+            #{actionType},
+            #{reason},
+            #{createBy},
+            NOW()
+        )
+    </insert>
+
+    <select id="selectLatestByStudentAndLesson" resultMap="BizScoreAdjustmentResult">
+        SELECT *
+        FROM biz_score_adjustment
+        WHERE student_id = #{studentId}
+          AND lesson_id = #{lessonId}
+          AND dept_id = #{deptId}
+        ORDER BY adjustment_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestByStudentIdsAndLessons" resultMap="BizScoreAdjustmentResult">
+        SELECT a.*
+        FROM biz_score_adjustment a
+        INNER JOIN (
+            SELECT student_id, lesson_id, MAX(adjustment_id) AS adjustment_id
+            FROM biz_score_adjustment
+            WHERE dept_id = #{deptId}
+              AND student_id IN
+              <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+                  #{studentId}
+              </foreach>
+              <if test="lessonIds != null and lessonIds.size() > 0">
+                  AND lesson_id IN
+                  <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+                      #{lessonId}
+                  </foreach>
+              </if>
+            GROUP BY student_id, lesson_id
+        ) latest ON latest.adjustment_id = a.adjustment_id
+    </select>
+</mapper>

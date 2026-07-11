@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizSchoolMapper">
+    
+    <resultMap type="BizSchool" id="BizSchoolResult">
+        <result property="schoolId"    column="school_id"    />
+        <result property="schoolName"    column="school_name"    />
+        <result property="schoolType"    column="school_type"    />
+    </resultMap>
+
+    <sql id="selectBizSchoolVo">
+        select school_id, school_name, school_type from biz_school
+    </sql>
+
+    <select id="selectBizSchoolList" parameterType="BizSchool" resultMap="BizSchoolResult">
+        <include refid="selectBizSchoolVo"/>
+        <where>  
+            <if test="schoolName != null  and schoolName != ''"> and school_name like concat('%', #{schoolName}, '%')</if>
+            <if test="schoolType != null  and schoolType != ''"> and school_type = #{schoolType}</if>
+        </where>
+    </select>
+    
+    <select id="selectBizSchoolBySchoolId" parameterType="Long" resultMap="BizSchoolResult">
+        <include refid="selectBizSchoolVo"/>
+        where school_id = #{schoolId}
+    </select>
+
+    <insert id="insertBizSchool" parameterType="BizSchool">
+        insert into biz_school
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="schoolId != null">school_id,</if>
+            <if test="schoolName != null and schoolName != ''">school_name,</if>
+            <if test="schoolType != null and schoolType != ''">school_type,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="schoolId != null">#{schoolId},</if>
+            <if test="schoolName != null and schoolName != ''">#{schoolName},</if>
+            <if test="schoolType != null and schoolType != ''">#{schoolType},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBizSchool" parameterType="BizSchool">
+        update biz_school
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="schoolName != null and schoolName != ''">school_name = #{schoolName},</if>
+            <if test="schoolType != null and schoolType != ''">school_type = #{schoolType},</if>
+        </trim>
+        where school_id = #{schoolId}
+    </update>
+
+    <delete id="deleteBizSchoolBySchoolId" parameterType="Long">
+        delete from biz_school where school_id = #{schoolId}
+    </delete>
+
+    <delete id="deleteBizSchoolBySchoolIds" parameterType="String">
+        delete from biz_school where school_id in 
+        <foreach item="schoolId" collection="array" open="(" separator="," close=")">
+            #{schoolId}
+        </foreach>
+    </delete>
+</mapper>

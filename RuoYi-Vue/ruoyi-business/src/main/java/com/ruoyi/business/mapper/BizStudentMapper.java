@@ -1,0 +1,102 @@
+package com.ruoyi.business.mapper;
+
+import java.util.List;
+import com.ruoyi.business.domain.BizStudent;
+import org.apache.ibatis.annotations.Param;
+/**
+ * 学生管理Mapper接口
+ * 
+ * @author zdx
+ * @date 2025-06-25
+ */
+public interface BizStudentMapper 
+{
+    /**
+     * 查询学生管理
+     * 
+     * @param studentId 学生管理主键
+     * @return 学生管理
+     */
+    public BizStudent selectBizStudentByStudentId(Long studentId);
+
+    /**
+     * 查询学生管理列表
+     * 
+     * @param bizStudent 学生管理
+     * @return 学生管理集合
+     */
+    public List<BizStudent> selectBizStudentList(BizStudent bizStudent);
+
+    /**
+     * 新增学生管理
+     * 
+     * @param bizStudent 学生管理
+     * @return 结果
+     */
+    public int insertBizStudent(BizStudent bizStudent);
+
+    /**
+     * 修改学生管理
+     * 
+     * @param bizStudent 学生管理
+     * @return 结果
+     */
+    public int updateBizStudent(BizStudent bizStudent);
+
+    /**
+     * 删除学生管理
+     * 
+     * @param studentId 学生管理主键
+     * @return 结果
+     */
+    public int deleteBizStudentByStudentId(Long studentId);
+
+    /**
+     * 批量删除学生管理
+     * 
+     * @param studentIds 需要删除的数据主键集合
+     * @return 结果
+     */
+    public int deleteBizStudentByStudentIds(Long[] studentIds);
+
+    /**
+     * 根据学校ID查询所有不重复的入学年份和班级组合
+     * @param deptId 学校ID
+     * @return 学生信息列表，每个对象只包含entryYear和classCode
+     */
+    public List<BizStudent> selectDistinctYearAndClassByDeptId(Long deptId);
+
+    /**
+     * 根据用户ID查询学生信息
+     * @param userId 用户ID
+     * @return 学生信息
+     */
+    public BizStudent selectBizStudentByUserId(Long userId);
+
+    /**
+     * 成绩汇总页按教师、校区和班级条件查询学生。
+     */
+    public List<BizStudent> selectScoreStudents(@Param("teacherUserId") Long teacherUserId,
+                                                @Param("deptId") Long deptId,
+                                                @Param("entryYear") String entryYear,
+                                                @Param("classCode") String classCode,
+                                                @Param("keyword") String keyword);
+
+    /**
+     * 判断当前教师是否管理指定学生所在班级。
+     */
+    public int countManagedScoreStudent(@Param("teacherUserId") Long teacherUserId,
+                                        @Param("deptId") Long deptId,
+                                        @Param("studentId") Long studentId);
+    /**
+     * 缁熻鎸囧畾瀛︽牎鐝骇鐨勫墿浣欏鐢熶汉鏁?
+     *
+     * @param deptId 瀛︽牎ID
+     * @param entryYear 鍏ュ骞翠唤
+     * @param classCode 鐝骇缂栧彿
+     * @return 瀛︾敓浜烘暟
+     */
+    public int countByDeptIdAndClass(@Param("deptId") Long deptId,
+                                     @Param("entryYear") String entryYear,
+                                     @Param("classCode") String classCode);
+}
