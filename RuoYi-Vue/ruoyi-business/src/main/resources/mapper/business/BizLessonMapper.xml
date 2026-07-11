@@ -31,6 +31,8 @@
             <if test="lessonTitle != null  and lessonTitle != ''"> and lesson_title like concat('%', #{lessonTitle}, '%')</if>
             <if test="grade != null "> and grade = #{grade}</if>
             <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
+            <if test="creatorId != null"> and creator_id = #{creatorId}</if>
+            <if test="deptId != null"> and dept_id = #{deptId}</if>
         </where>
     </select>
 

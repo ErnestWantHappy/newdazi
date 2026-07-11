@@ -63,6 +63,14 @@ public class TokenService
     {
         // 获取请求携带的令牌
         String token = getToken(request);
+        return getLoginUser(token);
+    }
+
+    /**
+     * WebSocket 握手无法设置自定义请求头，因此允许使用已提取的 Cookie 令牌完成同一套校验。
+     */
+    public LoginUser getLoginUser(String token)
+    {
         if (StringUtils.isNotEmpty(token))
         {
             try

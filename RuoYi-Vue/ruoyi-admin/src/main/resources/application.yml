@@ -146,3 +146,14 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
+
+# 电子导学单配置。密钥仅从部署环境注入，禁止写入表单数据。
+guide-sheet:
+  ai:
+    provider: ${GUIDE_SHEET_AI_PROVIDER:deepseek}
+    api-key: ${GUIDE_SHEET_AI_API_KEY:}
+    model: ${GUIDE_SHEET_AI_MODEL:}
+    base-url: ${GUIDE_SHEET_AI_BASE_URL:}
+  teacher-helper:
+    enabled: ${GUIDE_SHEET_HELPER_ENABLED:false}
+    port: ${GUIDE_SHEET_HELPER_PORT:5000}
