@@ -11,6 +11,10 @@ import org.apache.ibatis.annotations.Param;
 public interface CountyExamPaperQuestionMapper {
     int countByExamAndStudent(@Param("examId") Long examId, @Param("studentId") Long studentId);
 
+    int countPracticalByExamStudentQuestion(@Param("examId") Long examId,
+                                            @Param("studentId") Long studentId,
+                                            @Param("questionId") Long questionId);
+
     int batchInsert(@Param("list") List<CountyExamPaperQuestion> list);
 
     List<BizLessonQuestionDetailVo> selectDetailsByExamAndStudent(@Param("examId") Long examId,

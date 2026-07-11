@@ -7,9 +7,9 @@
       </div>
       <div class="header-actions">
         <el-radio-group v-model="query.gradingStatus" @change="() => loadTasks(false)">
-          <el-radio-button label="">全部</el-radio-button>
-          <el-radio-button label="0">待评</el-radio-button>
-          <el-radio-button label="1">已评</el-radio-button>
+          <el-radio-button value="">全部</el-radio-button>
+          <el-radio-button value="0">待评</el-radio-button>
+          <el-radio-button value="1">已评</el-radio-button>
         </el-radio-group>
         <el-button :icon="Refresh" @click="loadTasks">刷新</el-button>
         <el-button type="primary" plain :icon="FullScreen" @click="toggleFullscreen">
@@ -87,12 +87,12 @@
                   :ref="el => setItemInputRef(el, index)"
                   v-model="itemScores[item.itemId]"
                   :min="0"
-                  :max="Number(item.itemScore || maxScore)"
-                  :precision="1"
+                  :max="Number(item.maxScore || 0)"
+                  :precision="0"
                   controls-position="right"
                   @keyup.enter="onItemEnter(index)"
                 />
-                <em>/ {{ item.itemScore || 0 }}</em>
+                <em>/ {{ item.maxScore || 0 }}</em>
               </div>
             </div>
             <div class="score-total">
@@ -108,7 +108,7 @@
                 v-model="manualScore"
                 :min="0"
                 :max="maxScore"
-                :precision="1"
+                :precision="0"
                 controls-position="right"
                 @keyup.enter="submitGrade"
               />

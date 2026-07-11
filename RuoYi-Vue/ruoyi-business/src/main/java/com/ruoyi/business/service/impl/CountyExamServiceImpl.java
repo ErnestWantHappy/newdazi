@@ -13,6 +13,7 @@ import com.ruoyi.business.domain.dto.CountyExamGradeRequest;
 import com.ruoyi.business.domain.dto.CountyExamGraderAllocateRequest;
 import com.ruoyi.business.domain.dto.CountyExamSubmitRequest;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
+import com.ruoyi.business.domain.vo.CountyExamScoringItemVo;
 import com.ruoyi.business.mapper.BizScoringItemMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.CountyExamAnswerMapper;
@@ -24,6 +25,7 @@ import com.ruoyi.business.mapper.CountyExamQuestionMapper;
 import com.ruoyi.business.mapper.CountyExamStudentMapper;
 import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.ICountyExamService;
+import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.exception.ServiceException;
@@ -37,12 +39,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
@@ -238,6 +242,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (questions == null || questions.isEmpty()) {
             throw new ServiceException("请先完成区域抽测组卷");
         }
+        validatePracticalGraderCoverage(examId, questions, graderMapper.selectByExamId(examId));
         List<CountyExamClass> classes = classMapper.selectByExamId(examId);
         if (classes == null || classes.isEmpty()) {
             throw new ServiceException("请先指派参考班级");
@@ -264,12 +269,14 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (!STATUS_OPEN.equals(exam.getStatus())) {
             throw new ServiceException("只有已开启的区域抽测可以关闭");
         }
+        List<BizLessonQuestionDetailVo> questions = questionMapper.selectDetailsByExamId(examId);
+        List<CountyExamGrader> configs = graderMapper.selectByExamId(examId);
+        validatePracticalGraderCoverage(examId, questions, configs);
         int autoSubmitCount = autoSubmitOpenParticipants(exam);
         countyExamMapper.updateStatus(examId, STATUS_CLOSED);
         Map<String, Object> result = new HashMap<String, Object>();
         result.put("status", STATUS_CLOSED);
         result.put("autoSubmitCount", autoSubmitCount);
-        List<CountyExamGrader> configs = graderMapper.selectByExamId(examId);
         if (configs != null && !configs.isEmpty()) {
             result.putAll(generateGradingTasks(examId, configs));
         }
@@ -289,6 +296,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (configs.isEmpty()) {
             throw new ServiceException("请选择评卷教师");
         }
+        validatePracticalGraderCoverage(examId, questionMapper.selectDetailsByExamId(examId), configs);
         graderMapper.deleteByExamId(examId);
         for (CountyExamGrader config : configs) {
             graderMapper.insert(config);
@@ -343,6 +351,8 @@ public class CountyExamServiceImpl implements ICountyExamService {
             throw new ServiceException("只有已关闭且未发布的区域抽测可以调整评卷入口");
         }
         if (enabled) {
+            validatePracticalGraderCoverage(examId, questionMapper.selectDetailsByExamId(examId),
+                    graderMapper.selectByExamId(examId));
             int assignedCount = countAssignedPracticalAnswers(examId);
             if (assignedCount <= 0) {
                 throw new ServiceException("请先配置评卷教师并生成匿名评卷任务");
@@ -371,7 +381,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
             throw new ServiceException("还有 " + ungradedCount + " 份操作题未完成评卷");
         }
         for (CountyExamStudent student : studentMapper.selectParticipants(examId)) {
-            recomputeStudentScore(examId, student.getStudentId(), true, student.getSubmitTime());
+            recomputeStudentScore(examId, student.getStudentId());
         }
         countyExamMapper.updateStatus(examId, STATUS_PUBLISHED);
         Map<String, Object> result = new HashMap<String, Object>();
@@ -394,10 +404,16 @@ public class CountyExamServiceImpl implements ICountyExamService {
     @Override
     public Map<String, Object> getSummary(Long examId) {
         requireManager();
-        requireExam(examId);
+        CountyExam exam = requireExam(examId);
+        List<Map<String, Object>> schools = studentMapper.selectSummaryRows(examId);
+        List<CountyExamStudent> participants = studentMapper.selectParticipants(examId);
         Map<String, Object> result = new HashMap<String, Object>();
-        result.put("schools", studentMapper.selectSummaryRows(examId));
-        result.put("students", studentMapper.selectStudentRows(examId, null));
+        result.put("schools", schools);
+        result.put("overview", buildAnalysisOverview(
+                participants, schools == null ? 0 : schools.size(), exam.getTotalScore()));
+        result.put("distribution", buildScoreDistribution(participants, exam.getTotalScore()));
+        result.put("questions", answerMapper.selectQuestionPerformance(examId));
+        result.put("official", STATUS_PUBLISHED.equals(exam.getStatus()));
         return result;
     }
 
@@ -449,11 +465,13 @@ public class CountyExamServiceImpl implements ICountyExamService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> checkCurrentStudentExam() {
         return getStudentExam(false);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> getCurrentStudentExam() {
         return getStudentExam(true);
     }
@@ -475,14 +493,14 @@ public class CountyExamServiceImpl implements ICountyExamService {
             ensurePaperForStudent(exam, student.getStudentId());
         }
         CountyExamStudent examStudent = startTiming
-                ? ensureStudentTiming(exam, student.getStudentId())
+                ? ensureStudentTiming(exam, lockStudentAttempt(exam.getExamId(), student.getStudentId()))
                 : studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
         Date now = new Date();
         if (STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
             return endedStudentExamPayload(exam, examStudent, "区域抽测已提交");
         }
         if (isTimedOut(examStudent, now)) {
-            autoSubmitStudentExam(exam, student, examStudent);
+            autoSubmitStudentExam(exam, student);
             CountyExamStudent submitted = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
             return endedStudentExamPayload(exam, submitted, "区域抽测作答时间已结束");
         }
@@ -507,6 +525,39 @@ public class CountyExamServiceImpl implements ICountyExamService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long validateStudentWorkUpload(Long examId, Long questionId) {
+        if (examId == null || questionId == null) {
+            throw new ServiceException("操作题上传参数不完整");
+        }
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null) {
+            throw new ServiceException("未找到学生信息");
+        }
+        CountyExam exam = requireExam(examId);
+        if (!STATUS_OPEN.equals(exam.getStatus())) {
+            throw new ServiceException("区域抽测未开启或已关闭");
+        }
+        ensureParticipant(exam, student, loginUser.getDeptId());
+        CountyExamStudent examStudent = lockStudentAttempt(exam.getExamId(), student.getStudentId());
+        examStudent = ensureStudentTiming(exam, examStudent);
+        if (STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
+            throw new ServiceException("区域抽测已最终提交，不能继续上传");
+        }
+        if (isTimedOut(examStudent, new Date())) {
+            autoSubmitStudentExam(exam, student);
+            throw new ServiceException("区域抽测作答时间已结束");
+        }
+        ensurePaperForStudent(exam, student.getStudentId());
+        if (paperQuestionMapper.countPracticalByExamStudentQuestion(
+                examId, student.getStudentId(), questionId) <= 0) {
+            throw new ServiceException("只能上传本人区域抽测试卷中的操作题作品");
+        }
+        return student.getStudentId();
+    }
+
+    @Override
     public Map<String, Object> getGradingEntry() {
         Long userId = SecurityUtils.getUserId();
         Map<String, Object> result = new HashMap<String, Object>();
@@ -526,7 +577,8 @@ public class CountyExamServiceImpl implements ICountyExamService {
         for (Map<String, Object> task : tasks) {
             Long examId = longValue(task.get("examId"));
             Long questionId = longValue(task.get("questionId"));
-            task.put("scoringItems", selectCountyScoringItems(examId, questionId));
+            task.put("scoringItems", selectCountyScoringItems(
+                    examId, questionId, intValue(task.get("questionScore"))));
         }
         return tasks;
     }
@@ -538,7 +590,9 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (detail == null) {
             throw new ServiceException("未找到可评阅的匿名答卷");
         }
-        detail.put("scoringItems", selectCountyScoringItems(longValue(detail.get("examId")), longValue(detail.get("questionId"))));
+        detail.put("scoringItems", selectCountyScoringItems(
+                longValue(detail.get("examId")), longValue(detail.get("questionId")),
+                intValue(detail.get("questionScore"))));
         detail.put("scoringDetails", selectCountyGradingDetails(answerId));
         return detail;
     }
@@ -565,10 +619,14 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (questionScore != null && BigDecimal.valueOf(request.getScore()).compareTo(new BigDecimal(String.valueOf(questionScore))) > 0) {
             throw new ServiceException("得分不能超过题目满分");
         }
+        List<CountyExamScoringItemVo> scoringItems = selectCountyScoringItems(
+                longValue(detail.get("examId")), longValue(detail.get("questionId")),
+                intValue(questionScore));
+        validateCountyScoringDetails(request, scoringItems);
         answerMapper.updateGrade(request.getAnswerId(), request.getScore(), userId);
         saveCountyGradingDetails(request);
         refreshGraderCount(answer.getExamId(), answer.getQuestionId(), userId);
-        recomputeStudentScore(answer.getExamId(), answer.getStudentId(), true, null);
+        recomputeStudentScore(answer.getExamId(), answer.getStudentId());
         Map<String, Object> result = new HashMap<String, Object>();
         result.put("answerId", request.getAnswerId());
         result.put("score", request.getScore());
@@ -669,7 +727,39 @@ public class CountyExamServiceImpl implements ICountyExamService {
         return configs;
     }
 
+    void validatePracticalGraderCoverage(Long examId, List<BizLessonQuestionDetailVo> questions,
+                                         List<CountyExamGrader> configs) {
+        Set<Long> practicalQuestionIds = new HashSet<Long>();
+        if (questions != null) {
+            for (BizLessonQuestionDetailVo question : questions) {
+                if (question != null && "practical".equals(question.getQuestionType())
+                        && question.getQuestionId() != null) {
+                    practicalQuestionIds.add(question.getQuestionId());
+                }
+            }
+        }
+        if (practicalQuestionIds.isEmpty()) {
+            return;
+        }
+
+        Set<Long> configuredQuestionIds = new HashSet<Long>();
+        if (configs != null) {
+            for (CountyExamGrader config : configs) {
+                if (config != null && config.getQuestionId() != null && config.getGraderId() != null
+                        && config.getGraderId() > 0 && practicalQuestionIds.contains(config.getQuestionId())) {
+                    configuredQuestionIds.add(config.getQuestionId());
+                }
+            }
+        }
+        practicalQuestionIds.removeAll(configuredQuestionIds);
+        if (!practicalQuestionIds.isEmpty()) {
+            throw new ServiceException("请先为每一道操作题配置评卷教师，缺少题目：" + practicalQuestionIds
+                    + "（区域抽测ID：" + examId + "）");
+        }
+    }
+
     private Map<String, Object> generateGradingTasks(Long examId, List<CountyExamGrader> configs) {
+        validatePracticalGraderCoverage(examId, questionMapper.selectDetailsByExamId(examId), configs);
         if (answerMapper.countGradedPracticalAnswers(examId) > 0) {
             throw new ServiceException("已有操作题完成评卷，不能重新生成评卷任务");
         }
@@ -739,8 +829,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
         return result;
     }
 
-    private CountyExamStudent ensureStudentTiming(CountyExam exam, Long studentId) {
-        CountyExamStudent examStudent = studentMapper.selectByExamAndStudent(exam.getExamId(), studentId);
+    private CountyExamStudent ensureStudentTiming(CountyExam exam, CountyExamStudent examStudent) {
         if (examStudent == null) {
             throw new ServiceException("未找到区域抽测参考学生记录");
         }
@@ -750,6 +839,14 @@ public class CountyExamServiceImpl implements ICountyExamService {
             examStudent.setDeadlineTime(addMinutes(startTime, normalizeDurationMinutes(exam.getDurationMinutes())));
             examStudent.setAutoSubmit(AUTO_SUBMIT_NO);
             studentMapper.update(examStudent);
+        }
+        return examStudent;
+    }
+
+    private CountyExamStudent lockStudentAttempt(Long examId, Long studentId) {
+        CountyExamStudent examStudent = studentMapper.selectByExamAndStudentForUpdate(examId, studentId);
+        if (examStudent == null) {
+            throw new ServiceException("未找到区域抽测参考学生记录");
         }
         return examStudent;
     }
@@ -813,9 +910,10 @@ public class CountyExamServiceImpl implements ICountyExamService {
         return result;
     }
 
-    private void autoSubmitStudentExam(CountyExam exam, BizStudent student, CountyExamStudent examStudent) {
-        if (examStudent == null || STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
-            return;
+    private boolean autoSubmitStudentExam(CountyExam exam, BizStudent student) {
+        CountyExamStudent examStudent = lockStudentAttempt(exam.getExamId(), student.getStudentId());
+        if (STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
+            return false;
         }
         ensurePaperForStudent(exam, student.getStudentId());
         List<BizLessonQuestionDetailVo> questions = paperQuestionMapper.selectDetailsByExamAndStudent(exam.getExamId(), student.getStudentId());
@@ -844,13 +942,13 @@ public class CountyExamServiceImpl implements ICountyExamService {
                 answerMapper.updateStudentAnswer(answer);
             }
         }
-        recomputeStudentScore(exam.getExamId(), student.getStudentId(), true, now);
-        CountyExamStudent submitted = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
-        if (submitted != null) {
-            submitted.setAutoSubmit(AUTO_SUBMIT_YES);
-            studentMapper.update(submitted);
+        recomputeStudentScore(exam.getExamId(), student.getStudentId());
+        if (studentMapper.markSubmittedIfOpen(
+                examStudent.getId(), now, AUTO_SUBMIT_YES) != 1) {
+            throw new ServiceException("区域抽测提交状态已变化，请刷新后重试");
         }
         triggerCountyPreviewConversionsAfterCommit(pendingPreviewAnswerIds);
+        return true;
     }
 
     private int autoSubmitOpenParticipants(CountyExam exam) {
@@ -863,8 +961,9 @@ public class CountyExamServiceImpl implements ICountyExamService {
             if (student == null) {
                 continue;
             }
-            autoSubmitStudentExam(exam, student, participant);
-            count++;
+            if (autoSubmitStudentExam(exam, student)) {
+                count++;
+            }
         }
         return count;
     }
@@ -883,13 +982,13 @@ public class CountyExamServiceImpl implements ICountyExamService {
             throw new ServiceException("区域抽测未开启或已关闭");
         }
         ensureParticipant(exam, student, loginUser.getDeptId());
-        CountyExamStudent examStudent = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
-        examStudent = ensureStudentTiming(exam, student.getStudentId());
-        if (examStudent != null && STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
+        CountyExamStudent examStudent = lockStudentAttempt(exam.getExamId(), student.getStudentId());
+        if (STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
             throw new ServiceException("区域抽测已最终提交，不能再次修改");
         }
+        examStudent = ensureStudentTiming(exam, examStudent);
         if (isTimedOut(examStudent, new Date())) {
-            autoSubmitStudentExam(exam, student, examStudent);
+            autoSubmitStudentExam(exam, student);
             return endedStudentExamPayload(exam, studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId()), "区域抽测作答时间已结束");
         }
         ensurePaperForStudent(exam, student.getStudentId());
@@ -911,8 +1010,16 @@ public class CountyExamServiceImpl implements ICountyExamService {
                 continue;
             }
             String studentAnswer = requestAnswers.get(question.getQuestionId());
-            if ("typing".equals(question.getQuestionType()) && existing != null && existing.getAnswerTime() != null && !finalSubmit) {
-                throw new ServiceException("打字题已提交，不能重新打字");
+            if ("practical".equals(question.getQuestionType()) && hasRequestAnswer
+                    && StringUtils.isNotEmpty(studentAnswer)
+                    && !isStudentWorkPath(studentAnswer, exam.getExamId(), student.getStudentId(), question.getQuestionId())) {
+                throw new ServiceException("操作题作品路径无效，请重新上传");
+            }
+            if ("typing".equals(question.getQuestionType()) && existing != null && existing.getAnswerTime() != null) {
+                if (hasRequestAnswer && !Objects.equals(existing.getStudentAnswer(), studentAnswer)) {
+                    throw new ServiceException("打字题已提交，不能重新打字");
+                }
+                continue;
             }
             CountyExamAnswer answer = buildAnswer(exam, student, question, studentAnswer, request, now, finalSubmit);
             if (existing == null) {
@@ -925,10 +1032,10 @@ public class CountyExamServiceImpl implements ICountyExamService {
                 pendingPreviewAnswerIds.add(answer.getAnswerId());
             }
         }
-        if (finalSubmit) {
-            recomputeStudentScore(exam.getExamId(), student.getStudentId(), true, now);
-        } else {
-            recomputeStudentScore(exam.getExamId(), student.getStudentId(), false, null);
+        recomputeStudentScore(exam.getExamId(), student.getStudentId());
+        if (finalSubmit && studentMapper.markSubmittedIfOpen(
+                examStudent.getId(), now, AUTO_SUBMIT_NO) != 1) {
+            throw new ServiceException("区域抽测提交状态已变化，请刷新后重试");
         }
         triggerCountyPreviewConversionsAfterCommit(pendingPreviewAnswerIds);
         Map<String, Object> result = new HashMap<String, Object>();
@@ -981,8 +1088,25 @@ public class CountyExamServiceImpl implements ICountyExamService {
         }
         CountyExamSubmitRequest.TypingStatItem stat = request.getTypingStats().get(questionId);
         answer.setTypingSpeed(stat.getTypingSpeed());
-        answer.setAccuracyRate(stat.getAccuracyRate());
-        answer.setCompletionRate(stat.getCompletionRate());
+        answer.setAccuracyRate(normalizePercentage(stat.getAccuracyRate()));
+        answer.setCompletionRate(normalizePercentage(stat.getCompletionRate()));
+    }
+
+    static Double normalizePercentage(Double value) {
+        if (value == null || value.isNaN() || value.isInfinite()) {
+            return null;
+        }
+        return Math.max(0D, Math.min(100D, value));
+    }
+
+    boolean isStudentWorkPath(String path, Long examId, Long studentId, Long questionId) {
+        if (StringUtils.isEmpty(path) || examId == null || studentId == null || questionId == null
+                || path.contains("..") || path.contains("\\") || path.contains("?") || path.contains("#")) {
+            return false;
+        }
+        String prefix = Constants.RESOURCE_PREFIX + "/upload/county-exam/" + examId + "/"
+                + studentId + "/" + questionId + "/";
+        return path.startsWith(prefix) && path.length() > prefix.length();
     }
 
     private void applyPracticalPreview(CountyExamAnswer answer, String studentAnswer) {
@@ -1033,7 +1157,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
         return Math.min((int) Math.round(scoreValue(question) * speedFactor * accuracyRate), scoreValue(question));
     }
 
-    private void recomputeStudentScore(Long examId, Long studentId, boolean markSubmitted, Date submitTime) {
+    private void recomputeStudentScore(Long examId, Long studentId) {
         List<BizLessonQuestionDetailVo> questions = paperQuestionMapper.selectDetailsByExamAndStudent(examId, studentId);
         List<CountyExamAnswer> answers = answerMapper.selectByExamAndStudent(examId, studentId);
         Map<Long, CountyExamAnswer> answerMap = new HashMap<Long, CountyExamAnswer>();
@@ -1058,14 +1182,11 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (student == null) {
             return;
         }
-        student.setTheoryScore(new BigDecimal(theoryScore));
-        student.setTechScore(new BigDecimal(practicalScore));
-        student.setTotalScore(new BigDecimal(theoryScore + typingScore + practicalScore));
-        if (markSubmitted) {
-            student.setStatus(STUDENT_SUBMITTED);
-            student.setSubmitTime(submitTime == null ? new Date() : submitTime);
-        }
-        studentMapper.update(student);
+        studentMapper.updateScores(
+                student.getId(),
+                new BigDecimal(theoryScore + typingScore + practicalScore),
+                new BigDecimal(theoryScore),
+                new BigDecimal(practicalScore));
     }
 
     private void ensureParticipant(CountyExam exam, BizStudent student, Long deptId) {
@@ -1275,11 +1396,12 @@ public class CountyExamServiceImpl implements ICountyExamService {
         }
     }
 
-    private List<BizScoringItem> selectCountyScoringItems(Long examId, Long questionId) {
+    private List<CountyExamScoringItemVo> selectCountyScoringItems(
+            Long examId, Long questionId, int questionScore) {
         if (examId == null || questionId == null) {
-            return new ArrayList<BizScoringItem>();
+            return new ArrayList<CountyExamScoringItemVo>();
         }
-        return jdbcTemplate.query(
+        List<BizScoringItem> items = jdbcTemplate.query(
                 "select item_id, question_id, item_name, item_score, order_num from biz_county_exam_scoring_item where exam_id = ? and question_id = ? order by order_num asc",
                 new Object[]{examId, questionId},
                 (rs, rowNum) -> {
@@ -1291,6 +1413,98 @@ public class CountyExamServiceImpl implements ICountyExamService {
                     item.setOrderNum(rs.getInt("order_num"));
                     return item;
                 });
+        return buildCountyScoringItems(items, questionScore);
+    }
+
+    static List<CountyExamScoringItemVo> buildCountyScoringItems(
+            List<BizScoringItem> items, int questionScore) {
+        List<CountyExamScoringItemVo> result = new ArrayList<CountyExamScoringItemVo>();
+        if (items == null || items.isEmpty() || questionScore < 0) {
+            return result;
+        }
+        int totalWeight = 0;
+        for (BizScoringItem item : items) {
+            if (item == null || item.getItemScore() == null || item.getItemScore() < 0) {
+                return result;
+            }
+            totalWeight += item.getItemScore();
+        }
+        // 历史异常权重不参与分项评分，教师仍可切换为直接打分。
+        if (totalWeight != 100) {
+            return result;
+        }
+
+        List<Integer> maxScores = new ArrayList<Integer>();
+        List<Integer> remainders = new ArrayList<Integer>();
+        List<Integer> indexes = new ArrayList<Integer>();
+        int allocated = 0;
+        for (int i = 0; i < items.size(); i++) {
+            long weightedScore = (long) items.get(i).getItemScore() * questionScore;
+            int maxScore = (int) (weightedScore / 100L);
+            maxScores.add(maxScore);
+            remainders.add((int) (weightedScore % 100L));
+            indexes.add(i);
+            allocated += maxScore;
+        }
+        Collections.sort(indexes, new Comparator<Integer>() {
+            @Override
+            public int compare(Integer left, Integer right) {
+                int remainderCompare = Integer.compare(remainders.get(right), remainders.get(left));
+                return remainderCompare != 0 ? remainderCompare : Integer.compare(left, right);
+            }
+        });
+        for (int i = 0; i < questionScore - allocated; i++) {
+            int index = indexes.get(i);
+            maxScores.set(index, maxScores.get(index) + 1);
+        }
+
+        for (int i = 0; i < items.size(); i++) {
+            BizScoringItem item = items.get(i);
+            CountyExamScoringItemVo vo = new CountyExamScoringItemVo();
+            vo.setItemId(item.getItemId());
+            vo.setQuestionId(item.getQuestionId());
+            vo.setItemName(item.getItemName());
+            vo.setWeightPercent(item.getItemScore());
+            vo.setMaxScore(maxScores.get(i));
+            vo.setOrderNum(item.getOrderNum());
+            result.add(vo);
+        }
+        return result;
+    }
+
+    static void validateCountyScoringDetails(
+            CountyExamGradeRequest request, List<CountyExamScoringItemVo> scoringItems) {
+        if (request.getScoringDetails() == null) {
+            return;
+        }
+        if (scoringItems == null || scoringItems.isEmpty()) {
+            throw new ServiceException("当前题目没有有效评分项，请使用直接打分");
+        }
+        if (request.getScoringDetails().size() != scoringItems.size()) {
+            throw new ServiceException("请完成全部评分项");
+        }
+        Map<Long, Integer> maxScores = new HashMap<Long, Integer>();
+        for (CountyExamScoringItemVo item : scoringItems) {
+            maxScores.put(item.getItemId(), item.getMaxScore());
+        }
+        Set<Long> submittedItemIds = new HashSet<Long>();
+        int detailTotal = 0;
+        for (CountyExamGradeRequest.ScoringDetailRequest detail : request.getScoringDetails()) {
+            if (detail == null || detail.getItemId() == null || detail.getScore() == null) {
+                throw new ServiceException("评分项参数不完整");
+            }
+            Integer maxScore = maxScores.get(detail.getItemId());
+            if (maxScore == null || !submittedItemIds.add(detail.getItemId())) {
+                throw new ServiceException("评分项不属于当前抽测题目或存在重复");
+            }
+            if (detail.getScore() < 0 || detail.getScore() > maxScore) {
+                throw new ServiceException("分项得分超出允许范围");
+            }
+            detailTotal += detail.getScore();
+        }
+        if (detailTotal != request.getScore()) {
+            throw new ServiceException("分项得分合计必须与总分一致");
+        }
     }
 
     private List<Map<String, Object>> selectCountyGradingDetails(Long answerId) {
@@ -1495,6 +1709,87 @@ public class CountyExamServiceImpl implements ICountyExamService {
             return gradeNames[yearsInSchool - 1];
         }
         return "未知年级";
+    }
+
+    static Map<String, Object> buildAnalysisOverview(List<CountyExamStudent> participants,
+                                                      int schoolCount, Integer configuredFullScore) {
+        int fullScore = normalizeAnalysisFullScore(configuredFullScore);
+        int participantCount = 0;
+        int submittedCount = 0;
+        int passCount = 0;
+        double totalScore = 0D;
+        Double maxScore = null;
+        Double minScore = null;
+        if (participants != null) {
+            for (CountyExamStudent participant : participants) {
+                if (participant == null) {
+                    continue;
+                }
+                participantCount++;
+                if (STUDENT_SUBMITTED.equals(participant.getStatus())) {
+                    submittedCount++;
+                }
+                double score = participant.getTotalScore() == null
+                        ? 0D : participant.getTotalScore().doubleValue();
+                totalScore += score;
+                maxScore = maxScore == null ? score : Math.max(maxScore, score);
+                minScore = minScore == null ? score : Math.min(minScore, score);
+                if (score * 100D >= fullScore * 60D) {
+                    passCount++;
+                }
+            }
+        }
+
+        Map<String, Object> overview = new LinkedHashMap<String, Object>();
+        overview.put("schoolCount", Math.max(schoolCount, 0));
+        overview.put("participantCount", participantCount);
+        overview.put("submittedCount", submittedCount);
+        overview.put("averageScore", participantCount == 0 ? 0D : roundOneDecimal(totalScore / participantCount));
+        overview.put("maxScore", maxScore == null ? 0D : roundOneDecimal(maxScore));
+        overview.put("minScore", minScore == null ? 0D : roundOneDecimal(minScore));
+        overview.put("passRate", participantCount == 0 ? 0D
+                : roundOneDecimal(passCount * 100D / participantCount));
+        overview.put("fullScore", fullScore);
+        return overview;
+    }
+
+    static List<Map<String, Object>> buildScoreDistribution(List<CountyExamStudent> participants,
+                                                             Integer configuredFullScore) {
+        int fullScore = normalizeAnalysisFullScore(configuredFullScore);
+        int[] counts = new int[10];
+        if (participants != null) {
+            for (CountyExamStudent participant : participants) {
+                if (participant == null) {
+                    continue;
+                }
+                double score = participant.getTotalScore() == null
+                        ? 0D : participant.getTotalScore().doubleValue();
+                double percentageScore = Math.max(0D, Math.min(100D, score * 100D / fullScore));
+                int bucket = percentageScore >= 100D ? 9 : (int) (percentageScore / 10D);
+                counts[bucket]++;
+            }
+        }
+
+        List<Map<String, Object>> distribution = new ArrayList<Map<String, Object>>(10);
+        for (int i = 0; i < counts.length; i++) {
+            int lowerBound = i * 10;
+            int upperBound = i == counts.length - 1 ? 100 : lowerBound + 9;
+            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            item.put("label", lowerBound + "-" + upperBound);
+            item.put("lowerBound", lowerBound);
+            item.put("upperBound", upperBound);
+            item.put("count", counts[i]);
+            distribution.add(item);
+        }
+        return distribution;
+    }
+
+    private static int normalizeAnalysisFullScore(Integer configuredFullScore) {
+        return configuredFullScore == null || configuredFullScore <= 0 ? 100 : configuredFullScore;
+    }
+
+    private static double roundOneDecimal(double value) {
+        return Math.round(value * 10D) / 10D;
     }
 
     private void writeCell(Row row, int index, Object value) {

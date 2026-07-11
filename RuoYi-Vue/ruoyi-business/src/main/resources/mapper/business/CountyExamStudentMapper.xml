@@ -25,6 +25,14 @@
         where exam_id = #{examId} and student_id = #{studentId}
     </select>
 
+    <select id="selectByExamAndStudentForUpdate" resultMap="CountyExamStudentResult">
+        select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score,
+               status, start_time, deadline_time, auto_submit, submit_time
+        from biz_county_exam_student
+        where exam_id = #{examId} and student_id = #{studentId}
+        for update
+    </select>
+
     <select id="selectByExamId" parameterType="Long" resultMap="CountyExamStudentResult">
         select id, exam_id, student_id, dept_id, class_info, total_score, theory_score, tech_score,
                status, start_time, deadline_time, auto_submit, submit_time
@@ -68,8 +76,12 @@
                    round(avg(ifnull(st.total_score, 0)), 1) as avgScore,
                    max(ifnull(st.total_score, 0)) as maxScore,
                    min(ifnull(st.total_score, 0)) as minScore,
-                   sum(case when ifnull(st.total_score, 0) &gt;= 60 then 1 else 0 end) as passCount
+                   sum(case when ifnull(st.total_score, 0) * 100 &gt;=
+                                      (case when ifnull(e.total_score, 0) &gt; 0
+                                            then e.total_score else 100 end) * 60
+                            then 1 else 0 end) as passCount
             from biz_county_exam_student st
+            inner join biz_county_exam e on e.exam_id = st.exam_id
             where st.exam_id = #{examId}
             group by st.dept_id
         ) stats on stats.dept_id = c.dept_id
@@ -146,5 +158,22 @@
             <if test="submitTime != null">submit_time = #{submitTime},</if>
         </trim>
         where id = #{id}
+    </update>
+
+    <update id="updateScores">
+        update biz_county_exam_student
+        set total_score = #{totalScore},
+            theory_score = #{theoryScore},
+            tech_score = #{techScore}
+        where id = #{id}
+    </update>
+
+    <update id="markSubmittedIfOpen">
+        update biz_county_exam_student
+        set status = '1',
+            submit_time = #{submitTime},
+            auto_submit = #{autoSubmit}
+        where id = #{id}
+          and status = '0'
     </update>
 </mapper>

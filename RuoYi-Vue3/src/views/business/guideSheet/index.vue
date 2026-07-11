@@ -73,9 +73,10 @@
       <el-table-column label="创建时间" align="center" prop="createTime" width="180" />
       <el-table-column label="操作" align="center" width="360" fixed="right">
         <template #default="scope">
-          <!-- 已关闭状态：仅保留预览和引用 -->
+          <!-- 关闭后仍需保留最终结果查看与导出入口。 -->
           <template v-if="scope.row.status === '2'">
             <el-button link type="primary" icon="View" @click="handlePreview(scope.row)">预览</el-button>
+            <el-button link type="primary" icon="DataAnalysis" @click="handleDashboard(scope.row)" v-hasPermi="['business:guideSheet:dashboard']">看板</el-button>
             <el-button link type="primary" icon="CopyDocument" @click="handleCopy(scope.row)">引用</el-button>
           </template>
           <!-- 已发布状态 -->
@@ -108,7 +109,7 @@
 <script setup name="GuideSheet">
 import { ref, reactive, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { listGuideSheet, delGuideSheet, publishGuideSheet, closeGuideSheet, getProgress } from '@/api/business/guideSheet'
+import { listGuideSheet, delGuideSheet, publishGuideSheet, closeGuideSheet } from '@/api/business/guideSheet'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import useUserStore from '@/store/modules/user'
 
@@ -168,35 +169,9 @@ function getList() {
     sheetList.value = response.rows
     total.value = response.total
     loading.value = false
-    // 后端未编译时，通过 /progress 接口获取每个导学单的统计率
-    fetchStatsForSheets(response.rows)
   }).catch(() => {
     loading.value = false
     ElMessage.error('获取导学单列表失败')
-  })
-}
-
-/**
- * 通过 /progress 接口获取每个导学单的完成率和正确率
- * 作为后端未编译时的前端兜底方案
- */
-function fetchStatsForSheets(sheets) {
-  if (!sheets || sheets.length === 0) return
-  const promises = sheets.map(sheet => {
-    return getProgress(sheet.sheetId, undefined).then(res => {
-      const data = res.data || res
-      if (data.total > 0) {
-        sheet.completionRate = Math.round(data.submitted / data.total * 1000) / 10
-      } else {
-        sheet.completionRate = 0
-      }
-      sheet.accuracyRate = data.avgScore ? Math.round(data.avgScore * 10) / 10 : 0
-    }).catch(e => {
-      console.warn('获取导学单统计失败:', sheet.sheetId, e)
-    })
-  })
-  Promise.all(promises).then(() => {
-    sheetList.value = [...sheetList.value]
   })
 }
 

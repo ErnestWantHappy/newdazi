@@ -18,14 +18,15 @@ CREATE TABLE IF NOT EXISTS `biz_guide_sheet` (
   PRIMARY KEY (`sheet_id`),
   KEY `idx_guide_sheet_dept` (`dept_id`),
   KEY `idx_guide_sheet_creator` (`creator_id`),
-  KEY `idx_guide_sheet_status` (`status`)
+  KEY `idx_guide_sheet_status` (`status`),
+  KEY `idx_guide_sheet_lesson` (`lesson_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='电子导学单';
 
 CREATE TABLE IF NOT EXISTS `biz_guide_sheet_assignment` (
   `assignment_id` bigint NOT NULL AUTO_INCREMENT,
   `sheet_id` bigint NOT NULL,
-  `entry_year` varchar(20) NOT NULL,
-  `class_code` varchar(20) NOT NULL,
+  `entry_year` varchar(4) NOT NULL,
+  `class_code` varchar(30) NOT NULL,
   `dept_id` bigint NOT NULL,
   `assign_time` datetime DEFAULT NULL,
   PRIMARY KEY (`assignment_id`),
@@ -73,7 +74,7 @@ CREATE TABLE IF NOT EXISTS `biz_guide_sheet_progress` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `sheet_id` bigint NOT NULL,
   `student_id` bigint NOT NULL,
-  `class_code` varchar(20) NOT NULL,
+  `class_code` varchar(30) NOT NULL,
   `current_page` int NOT NULL DEFAULT 0,
   `is_submitted` char(1) NOT NULL DEFAULT 'N',
   `last_heartbeat` datetime DEFAULT NULL,
@@ -90,15 +91,48 @@ SET form_json = JSON_REMOVE(form_json, '$._aiApiKey', '$._aiProvider', '$._aiMod
 WHERE JSON_VALID(form_json)
   AND JSON_CONTAINS_PATH(form_json, 'one', '$._aiApiKey', '$._aiProvider', '$._aiModel', '$._aiCustomUrl');
 
-SET @guide_parent = (SELECT menu_id FROM sys_menu WHERE menu_name = '教学管理' AND parent_id = 0 LIMIT 1);
+-- 现有业务菜单均为顶级页面，避免依赖并不存在的“教学管理”目录。
+SET @guide_menu = (
+  SELECT menu_id
+  FROM sys_menu
+  WHERE component = 'business/guideSheet/index'
+     OR (path IN ('guide-sheet-list', 'business/guide-sheet-list', '/business/guide-sheet-list')
+         AND menu_type IN ('C', 'M'))
+  ORDER BY CASE WHEN component = 'business/guideSheet/index' THEN 0 ELSE 1 END, menu_id
+  LIMIT 1
+);
 
 INSERT INTO sys_menu
   (menu_name,parent_id,order_num,path,component,route_name,is_frame,is_cache,menu_type,visible,status,perms,icon,create_by,create_time,remark)
-SELECT '导学单管理',@guide_parent,5,'guide-sheet-list','business/guideSheet/index','GuideSheet',1,0,'C','0','0','business:guideSheet:list','guide-sheet','admin',NOW(),'电子导学单管理'
-WHERE @guide_parent IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'business:guideSheet:list');
+SELECT '导学单管理',0,7,'business/guide-sheet-list','business/guideSheet/index','GuideSheet',1,0,'C','0','0','business:guideSheet:list','guide-sheet','admin',NOW(),'电子导学单管理'
+WHERE @guide_menu IS NULL;
 
-SET @guide_menu = (SELECT menu_id FROM sys_menu WHERE perms = 'business:guideSheet:list' LIMIT 1);
+SET @guide_menu = (
+  SELECT menu_id
+  FROM sys_menu
+  WHERE component = 'business/guideSheet/index'
+     OR (path IN ('guide-sheet-list', 'business/guide-sheet-list', '/business/guide-sheet-list')
+         AND menu_type IN ('C', 'M'))
+  ORDER BY CASE WHEN component = 'business/guideSheet/index' THEN 0 ELSE 1 END, menu_id
+  LIMIT 1
+);
+
+-- 兼容功能分支曾使用的目录菜单结构，统一为可直接访问的页面菜单。
+UPDATE sys_menu
+SET menu_name = '导学单管理',
+    parent_id = 0,
+    order_num = 7,
+    path = 'business/guide-sheet-list',
+    component = 'business/guideSheet/index',
+    route_name = 'GuideSheet',
+    is_frame = 1,
+    is_cache = 0,
+    menu_type = 'C',
+    visible = '0',
+    status = '0',
+    perms = 'business:guideSheet:list',
+    icon = 'guide-sheet'
+WHERE menu_id = @guide_menu;
 
 INSERT INTO sys_menu
   (menu_name,parent_id,order_num,path,is_frame,is_cache,menu_type,visible,status,perms,icon,create_by,create_time)

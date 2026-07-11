@@ -52,19 +52,19 @@ export function closeGuideSheet(sheetId) {
   })
 }
 
-export function getProgress(sheetId, classCode) {
+export function getProgress(sheetId, entryYear, classCode) {
   return request({
     url: '/business/guide-sheet/progress',
     method: 'get',
-    params: { sheetId, classCode }
+    params: { sheetId, entryYear, classCode }
   })
 }
 
-export function getUploads(sheetId, classCode) {
+export function getUploads(sheetId, entryYear, classCode) {
   return request({
     url: '/business/guide-sheet/uploads',
     method: 'get',
-    params: { sheetId, classCode }
+    params: { sheetId, entryYear, classCode }
   })
 }
 
@@ -75,11 +75,13 @@ export function getStudentGuideSheet() {
   })
 }
 
-export function submitGuideSheet(data) {
+export function submitGuideSheet(data, signal) {
   return request({
     url: '/business/guide-sheet/student/submit',
     method: 'post',
-    data
+    data,
+    signal,
+    headers: { repeatSubmit: false }
   })
 }
 
@@ -99,11 +101,11 @@ export function sendHeartbeat(data) {
   })
 }
 
-export function exportGuideSheet(sheetId, classCode) {
+export function exportGuideSheet(sheetId, entryYear, classCode) {
   return request({
     url: '/business/guide-sheet/export',
     method: 'get',
-    params: { sheetId, classCode },
+    params: { sheetId, entryYear, classCode },
     responseType: 'blob'
   })
 }
@@ -122,10 +124,25 @@ export function getGuideSheetLessons() {
   })
 }
 
+export function getGuideSheetClassOptions() {
+  return request({
+    url: '/business/guide-sheet/class-options',
+    method: 'get'
+  })
+}
+
 export function getGuideSheetCapabilities() {
   return request({
     url: '/business/guide-sheet/capabilities',
     method: 'get'
+  })
+}
+
+export function saveGuideSheetManualGrades(sheetId, studentId, data) {
+  return request({
+    url: `/business/guide-sheet/${sheetId}/grading/manual/${studentId}`,
+    method: 'put',
+    data
   })
 }
 

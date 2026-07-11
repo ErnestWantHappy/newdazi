@@ -75,26 +75,6 @@
                 <label>完成字数</label>
                 <span>{{ typingStates[question.questionId]?.completedCount || 0 }}</span>
               </div>
-              <div class="stat-item">
-                <label>错误字数</label>
-                <span class="error-text">{{ typingStates[question.questionId]?.errorCount || 0 }}</span>
-              </div>
-              <div class="stat-item">
-                <label>正确字数</label>
-                <span class="success-text">{{ typingStates[question.questionId]?.correctCount || 0 }}</span>
-              </div>
-              <div class="stat-item">
-                <label>正确率</label>
-                <span>{{ typingStates[question.questionId]?.accuracy || 100 }}%</span>
-              </div>
-              <div class="stat-item highlight">
-                <label>打字速度</label>
-                <span>{{ typingStates[question.questionId]?.speed || 0 }} 字/分</span>
-              </div>
-              <div class="stat-item">
-                <label>完成率</label>
-                <span>{{ typingStates[question.questionId]?.progress || 0 }}%</span>
-              </div>
 
               <div class="action-buttons">
                 <el-button
@@ -149,11 +129,7 @@
                   @dragstart.prevent
                   @contextmenu.prevent
                 >
-                  <span
-                    v-for="(char, idx) in question.questionContent || ''"
-                    :key="idx"
-                    :class="getCharClass(question.questionId, idx)"
-                  >{{ char }}</span>
+                  {{ question.questionContent || '' }}
                 </div>
               </div>
 
@@ -274,6 +250,7 @@
                   :disabled="isReadOnly || practicalUploading[question.questionId]"
                   :action="uploadUrl"
                   :headers="uploadHeaders"
+                  :data="{ examId, questionId: question.questionId }"
                   :before-upload="() => beforePracticalUpload(question.questionId)"
                   :on-success="(res) => handleUploadSuccess(question.questionId, res)"
                   :on-error="() => handleUploadError(question.questionId)"
@@ -286,6 +263,19 @@
               </div>
             </article>
           </div>
+        </section>
+
+        <section class="final-submit-bar">
+          <el-button
+            type="primary"
+            size="large"
+            icon="Check"
+            :loading="finalSubmitting"
+            :disabled="isReadOnly"
+            @click="handleFinalSubmit"
+          >
+            最终提交
+          </el-button>
         </section>
       </template>
     </main>
@@ -314,7 +304,7 @@
 <script setup name="StudentCountyExam">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getCurrentCountyExam, saveCountyExamDraft } from '@/api/business/countyExam'
+import { getCurrentCountyExam, saveCountyExamDraft, submitCountyExam } from '@/api/business/countyExam'
 import { updateUserPwd } from '@/api/system/user'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import useUserStore from '@/store/modules/user'
@@ -340,6 +330,7 @@ const answers = ref({})
 const remainingSeconds = ref(0)
 const timer = ref(null)
 const timeoutHandling = ref(false)
+const finalSubmitting = ref(false)
 
 const typingStates = ref({})
 const practicalUploads = ref({})
@@ -431,31 +422,27 @@ function initTypingStates() {
   typingStates.value = {}
   typingQuestions.value.forEach(question => {
     const submitted = submittedAnswers.value[question.questionId]
+    const typingSubmitted = submitted?.typingSubmitted === true
     const draft = loadTypingDraft(question.questionId)
     const text = submitted?.answer || draft || ''
     const localStart = loadTypingStart(question.questionId)
     const durationLimit = (question.typingDuration || 10) * 60
     const now = Date.now()
     const elapsedSeconds = localStart ? Math.max(0, Math.floor((now - localStart) / 1000)) : 0
-    const timeLeft = submitted ? 0 : Math.max(0, durationLimit - elapsedSeconds)
+    const timeLeft = typingSubmitted ? 0 : Math.max(0, durationLimit - elapsedSeconds)
     answers.value[question.questionId] = text
     typingStates.value[question.questionId] = {
       started: !!submitted || !!draft,
-      finished: !!submitted,
-      submitted: !!submitted,
+      finished: typingSubmitted,
+      submitted: typingSubmitted,
       submitting: false,
       startTime: localStart || 0,
       timeLeft,
       durationLimit,
-      completedCount: text.length,
-      errorCount: 0,
-      correctCount: 0,
-      accuracy: 100,
-      speed: 0,
-      progress: 0
+      completedCount: text.length
     }
     updateTypingStats(question.questionId, text)
-    if (!submitted && (text || localStart) && timeLeft > 0) {
+    if (!typingSubmitted && (text || localStart) && timeLeft > 0) {
       startTypingTimer(question.questionId)
     }
   })
@@ -661,23 +648,7 @@ async function submitTypingByQuestionId(questionId) {
 function updateTypingStats(questionId, inputVal) {
   const state = typingStates.value[questionId]
   if (!state) return
-  const question = allQuestions.value.find(item => item.questionId === questionId)
-  const original = question?.questionContent || ''
-  let correct = 0
-  let error = 0
-  for (let i = 0; i < inputVal.length; i++) {
-    if (i >= original.length) break
-    if (inputVal[i] === original[i]) correct++
-    else error++
-  }
   state.completedCount = inputVal.length
-  state.correctCount = correct
-  state.errorCount = error
-  state.accuracy = inputVal.length > 0 ? Number(((correct / inputVal.length) * 100).toFixed(1)) : 100
-  const timeElapsed = Math.max(1, state.durationLimit - state.timeLeft)
-  const minutes = Math.max(timeElapsed / 60, 1 / 60)
-  state.speed = Number((correct / minutes).toFixed(1))
-  state.progress = original.length > 0 ? Number(((correct / original.length) * 100).toFixed(1)) : 0
 }
 
 function buildTypingStats(questionId, text, answerTime) {
@@ -692,17 +663,8 @@ function buildTypingStats(questionId, text, answerTime) {
   return {
     typingSpeed: Math.round(correct / minutes),
     accuracyRate: text.length > 0 ? Number(((correct / text.length) * 100).toFixed(2)) : 0,
-    completionRate: original.length > 0 ? Number(((text.length / original.length) * 100).toFixed(2)) : 0
+    completionRate: original.length > 0 ? Number((Math.min(text.length / original.length, 1) * 100).toFixed(2)) : 0
   }
-}
-
-function getCharClass(questionId, idx) {
-  const inputVal = answers.value[questionId] || ''
-  const question = allQuestions.value.find(item => item.questionId === questionId)
-  const original = question?.questionContent || ''
-  if (idx >= inputVal.length) return 'char-pending'
-  if (inputVal[idx] === original[idx]) return 'char-correct'
-  return 'char-error'
 }
 
 async function submitTheory() {
@@ -726,6 +688,58 @@ async function submitTheory() {
     }
   })
   ElMessage.success('理论测试已提交')
+}
+
+async function handleFinalSubmit() {
+  if (!examId.value || finalSubmitting.value || isReadOnly.value) return
+  try {
+    await ElMessageBox.confirm('最终提交后不能再修改答案，是否继续？', '确认提交', {
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch (error) {
+    return
+  }
+
+  const payload = {}
+  const answerTimes = {}
+  const typingStats = {}
+  theoryQuestions.value.forEach(question => {
+    const answer = answers.value[question.questionId]
+    if (answer) payload[question.questionId] = normalizeQuestionAnswer(question.questionType, answer)
+  })
+  typingQuestions.value.forEach(question => {
+    const state = typingStates.value[question.questionId]
+    if (!state?.started || state.submitted) return
+    const text = answers.value[question.questionId] || ''
+    const fallbackStart = examStartTime.value ? new Date(examStartTime.value).getTime() : Date.now()
+    const answerTime = Math.max(1, Math.round((Date.now() - (state.startTime || fallbackStart)) / 1000))
+    payload[question.questionId] = text
+    answerTimes[question.questionId] = answerTime
+    typingStats[question.questionId] = buildTypingStats(question.questionId, text, answerTime)
+  })
+
+  finalSubmitting.value = true
+  try {
+    await submitCountyExam({
+      examId: examId.value,
+      answers: payload,
+      answerTimes,
+      typingStats
+    })
+    clearExamTimer()
+    clearTypingIntervals()
+    clearTypingDraftTimers()
+    typingQuestions.value.forEach(question => {
+      removeTypingDraft(question.questionId)
+      removeTypingStart(question.questionId)
+    })
+    ElMessage.success('区域抽测已提交')
+    await fetchData()
+  } finally {
+    finalSubmitting.value = false
+  }
 }
 
 function setTheoryAnswer(question, value) {
@@ -838,12 +852,14 @@ function previewLabel(questionId) {
   if (practicalPreviewPaths.value[questionId]) return '可预览'
   const status = practicalPreviewStatuses.value[questionId]
   if (status === 'success') return '可预览'
-  if (status === 'pending' || status === 'converting' || status === 'failed') return '正在转换中'
+  if (status === 'pending' || status === 'converting') return '正在转换中'
+  if (status === 'failed') return '预览暂不可用'
   return '已上传'
 }
 
 function previewTagType(questionId) {
   if (practicalPreviewPaths.value[questionId] || practicalPreviewStatuses.value[questionId] === 'success') return 'success'
+  if (practicalPreviewStatuses.value[questionId] === 'failed') return 'warning'
   return 'info'
 }
 
@@ -1216,19 +1232,6 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.char-pending {
-  color: #606266;
-}
-
-.char-correct {
-  color: #67c23a;
-}
-
-.char-error {
-  color: #f56c6c;
-  background: #fef0f0;
-}
-
 .input-box {
   display: flex;
   flex-direction: column;
@@ -1329,6 +1332,16 @@ onUnmounted(() => {
 .submit-theory-bar {
   text-align: center;
   margin-top: 8px;
+}
+
+.final-submit-bar {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 28px;
+}
+
+.final-submit-bar .el-button {
+  min-width: 180px;
 }
 
 .question-list {

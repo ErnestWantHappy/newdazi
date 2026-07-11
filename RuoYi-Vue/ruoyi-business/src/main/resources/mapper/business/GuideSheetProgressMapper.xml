@@ -20,6 +20,7 @@
         <result property="studentId"    column="student_id"      />
         <result property="studentName"  column="student_name"    />
         <result property="studentNo"    column="student_no"      />
+        <result property="entryYear"    column="entry_year"      />
         <result property="classCode"    column="class_code"      />
         <result property="currentPage"  column="current_page"    />
         <result property="isSubmitted"  column="is_submitted"    />
@@ -29,19 +30,20 @@
     </resultMap>
 
     <select id="selectBySheetAndClass" resultMap="GuideSheetProgressVoResult">
-        SELECT p.id, p.student_id, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
+        SELECT p.id, p.student_id, s.entry_year, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
                p.progress_detail,
                u.nick_name as student_name, s.student_no
         FROM biz_guide_sheet_progress p
         LEFT JOIN biz_student s ON p.student_id = s.student_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE p.sheet_id = #{sheetId}
+          AND s.entry_year = #{entryYear}
           AND p.class_code = #{classCode}
         ORDER BY p.last_heartbeat DESC
     </select>
 
     <select id="selectBySheetId" resultMap="GuideSheetProgressVoResult">
-        SELECT p.id, p.student_id, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
+        SELECT p.id, p.student_id, s.entry_year, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
                p.progress_detail,
                u.nick_name as student_name, s.student_no
         FROM biz_guide_sheet_progress p
@@ -53,7 +55,7 @@
 
     <!-- 获取班级全部学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress -->
     <select id="selectFullProgressBySheetAndClass" resultMap="GuideSheetProgressVoResult">
-        SELECT s.student_id, s.student_no, s.class_code, u.nick_name as student_name,
+        SELECT s.student_id, s.student_no, s.entry_year, s.class_code, u.nick_name as student_name,
                COALESCE(p.current_page, 0) as current_page,
                COALESCE(p.is_submitted, 'N') as is_submitted,
                p.last_heartbeat, p.id,
@@ -64,18 +66,19 @@
                END as progress_detail,
                ans.answer_json
         FROM biz_guide_sheet_assignment a
-        INNER JOIN biz_student s ON BINARY s.class_code = BINARY a.class_code AND BINARY s.entry_year = BINARY a.entry_year
+        INNER JOIN biz_student s ON s.class_code = a.class_code AND s.entry_year = a.entry_year
         INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = a.dept_id
         LEFT JOIN biz_guide_sheet_progress p ON s.student_id = p.student_id AND p.sheet_id = #{sheetId}
         LEFT JOIN biz_guide_sheet_answer ans ON s.student_id = ans.student_id AND ans.sheet_id = #{sheetId}
         WHERE a.sheet_id = #{sheetId}
+          AND a.entry_year = #{entryYear}
           AND a.class_code = #{classCode}
         ORDER BY s.student_no
     </select>
 
     <!-- 获取全部班级学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress -->
     <select id="selectFullProgressBySheetId" resultMap="GuideSheetProgressVoResult">
-        SELECT s.student_id, s.student_no, s.class_code, u.nick_name as student_name,
+        SELECT s.student_id, s.student_no, s.entry_year, s.class_code, u.nick_name as student_name,
                COALESCE(p.current_page, 0) as current_page,
                COALESCE(p.is_submitted, 'N') as is_submitted,
                p.last_heartbeat, p.id,
@@ -86,7 +89,7 @@
                END as progress_detail,
                ans.answer_json
         FROM biz_guide_sheet_assignment a
-        INNER JOIN biz_student s ON BINARY s.class_code = BINARY a.class_code AND BINARY s.entry_year = BINARY a.entry_year
+        INNER JOIN biz_student s ON s.class_code = a.class_code AND s.entry_year = a.entry_year
         INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = a.dept_id
         LEFT JOIN biz_guide_sheet_progress p ON s.student_id = p.student_id AND p.sheet_id = #{sheetId}
         LEFT JOIN biz_guide_sheet_answer ans ON s.student_id = ans.student_id AND ans.sheet_id = #{sheetId}
@@ -105,7 +108,7 @@
         VALUES (#{sheetId}, #{studentId}, #{classCode}, #{currentPage}, #{isSubmitted}, #{lastHeartbeat}, #{progressDetail})
         ON DUPLICATE KEY UPDATE
             current_page = VALUES(current_page),
-            is_submitted = VALUES(is_submitted),
+            is_submitted = IF(is_submitted = 'Y', 'Y', VALUES(is_submitted)),
             last_heartbeat = VALUES(last_heartbeat),
             progress_detail = VALUES(progress_detail)
     </insert>

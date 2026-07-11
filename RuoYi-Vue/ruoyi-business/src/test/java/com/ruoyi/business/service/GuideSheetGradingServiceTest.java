@@ -2,10 +2,12 @@ package com.ruoyi.business.service;
 
 import com.ruoyi.business.config.GuideSheetProperties;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GuideSheetGradingServiceTest
 {
@@ -39,6 +41,32 @@ class GuideSheetGradingServiceTest
         finally
         {
             service.shutdown();
+        }
+    }
+
+    @Test
+    void shouldDowngradeAiGradingToManualWhenServerSecretIsMissing()
+    {
+        GuideSheetProperties properties = new GuideSheetProperties();
+        AiGradingService aiService = new AiGradingService(properties);
+        GuideSheetGradingService service = new GuideSheetGradingService();
+        ReflectionTestUtils.setField(service, "aiGradingService", aiService);
+        String formJson = "{\"widgetList\":[{\"name\":\"q1\",\"type\":\"textarea\","
+                + "\"options\":{\"label\":\"简答题\"},"
+                + "\"scoring\":{\"score\":100,\"type\":\"ai\",\"answer\":\"参考答案\"}}]}";
+
+        try
+        {
+            GuideSheetGradingService.GradingResult result = service.grade(
+                    formJson, "{\"q1\":\"学生答案\"}", 1L, 1L);
+
+            assertEquals(0, result.totalScore);
+            assertEquals(GuideSheetGradingService.STATUS_MANUAL, result.gradingStatus);
+            assertTrue(result.gradingDetail.contains("已转为人工处理"));
+        }
+        finally
+        {
+            aiService.shutdown();
         }
     }
 }

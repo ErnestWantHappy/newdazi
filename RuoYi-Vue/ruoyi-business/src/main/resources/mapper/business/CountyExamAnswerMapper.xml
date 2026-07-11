@@ -120,6 +120,35 @@
           and a.score is not null
     </select>
 
+    <select id="selectQuestionPerformance" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select pq.question_id as questionId,
+               min(pq.order_num) as orderNum,
+               max(pq.question_type) as questionType,
+               max(pq.question_content) as questionContent,
+               max(pq.question_score) as questionScore,
+               count(1) as participantCount,
+               count(a.answer_id) as answeredCount,
+               round(avg(ifnull(a.score, 0)), 1) as avgScore,
+               round(
+                   sum(ifnull(a.score, 0)) * 100 /
+                   nullif(sum(ifnull(pq.question_score, 0)), 0),
+                   1
+               ) as scoreRate,
+               case
+                   when max(pq.question_type) in ('choice', 'judgment') then
+                       round(sum(case when a.is_correct = 1 then 1 else 0 end) * 100 / count(1), 1)
+                   else null
+               end as correctRate
+        from biz_county_exam_paper_question pq
+        left join biz_county_exam_answer a
+          on a.exam_id = pq.exam_id
+         and a.student_id = pq.student_id
+         and a.question_id = pq.question_id
+        where pq.exam_id = #{examId}
+        group by pq.question_id
+        order by min(pq.order_num) asc, pq.question_id asc
+    </select>
+
     <select id="selectGradingTasks" resultType="java.util.HashMap">
         select a.answer_id as answerId,
                a.exam_id as examId,

@@ -1,12 +1,15 @@
 <template>
+  <div class="guide-sheet-dashboard-page">
   <div class="app-container guide-sheet-dashboard">
     <div class="dashboard-header">
       <el-button icon="ArrowLeft" @click="goBack">返回列表</el-button>
       <h2 style="margin:0 16px">{{ sheetTitle || '导学单数据看板' }}</h2>
-      <el-select v-model="classCode" placeholder="选择班级" style="width:160px" size="small" clearable @change="onClassChange">
+      <el-select v-model="classKey" placeholder="选择班级" style="width:180px" size="small" clearable @change="onClassChange">
         <el-option label="全部班级" value="" />
-        <el-option v-for="c in assignedClasses" :key="c.value" :label="c.label" :value="c.value" />
+        <el-option v-for="c in assignedClasses" :key="c.key" :label="c.label" :value="c.key" />
       </el-select>
+      <el-button icon="UploadFilled" size="small" @click="openUploads">上传记录</el-button>
+      <el-button icon="Download" type="primary" size="small" @click="handleExport">导出结果</el-button>
     </div>
 
     <!-- 第一行：填写进度（左）+ 统计概览（右） -->
@@ -121,7 +124,7 @@
                             :class="item.score === item.maxScore ? 'correct' : item.score === 0 ? 'wrong' : 'partial'"
                           >{{ item.fieldTitle || getFieldLabel(item.fieldKey) }} {{ item.score }}/{{ item.maxScore }}</span>
                         </span>
-                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(filterPageGradingDetails(row.progressDetail, selectedPage).details, row.studentId)">详情</el-button>
+                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(filterPageGradingDetails(row.progressDetail, selectedPage).details, row)">详情</el-button>
                       </span>
                     </div>
                     <!-- 自评 -->
@@ -173,7 +176,7 @@
                             :class="item.score === item.maxScore ? 'correct' : item.score === 0 ? 'wrong' : 'partial'"
                           >{{ item.fieldTitle || item.fieldKey }} {{ item.score }}/{{ item.maxScore }}</span>
                         </span>
-                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(parseGradingDetail(row.progressDetail).details, row.studentId)">详情</el-button>
+                        <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(parseGradingDetail(row.progressDetail).details, row)">详情</el-button>
                       </span>
                     </div>
                     <!-- 自评 -->
@@ -254,7 +257,16 @@
       >
         <div class="detail-item-header">
           <span class="detail-item-title">{{ idx + 1 }}. {{ item.fieldTitle || item.fieldKey }}</span>
-          <span class="detail-item-score"
+          <el-input-number
+            v-if="item.matchType === 'manual'"
+            v-model="item.score"
+            :min="0"
+            :max="item.maxScore"
+            :step="1"
+            size="small"
+            controls-position="right"
+          />
+          <span v-else class="detail-item-score"
             :class="item.score === item.maxScore ? 'correct' : item.score === 0 ? 'wrong' : 'partial'"
           >{{ item.score }}/{{ item.maxScore }} 分</span>
           <el-tag v-if="item.desc && item.desc.startsWith('AI评分')" type="warning" size="small">AI评分</el-tag>
@@ -262,6 +274,10 @@
           <el-tag v-else type="success" size="small">自动批改</el-tag>
         </div>
         <div class="detail-item-body">
+          <div class="detail-row">
+            <span class="detail-row-label">学生答案：</span>
+            <span class="detail-answer">{{ formatStudentAnswer(item.studentAnswer) }}</span>
+          </div>
           <div class="detail-row">
             <span class="detail-row-label">参考答案：</span>
             <span class="detail-answer">{{ item.referenceAnswer || '无' }}</span>
@@ -274,16 +290,44 @@
             <span class="detail-row-label">批改结果：</span>
             <span>{{ item.desc }}</span>
           </div>
+          <div class="detail-row" v-if="item.matchType === 'manual'">
+            <span class="detail-row-label">人工评语：</span>
+            <el-input v-model="item.manualComment" maxlength="200" show-word-limit placeholder="可选" />
+          </div>
         </div>
       </div>
     </div>
+    <template #footer>
+      <el-button @click="gradingDetailVisible = false">取消</el-button>
+      <el-button v-if="hasManualItems" type="primary" :loading="manualSaving" @click="saveManualGrades">保存人工评分</el-button>
+    </template>
   </el-dialog>
+
+  <el-dialog v-model="uploadsVisible" title="上传记录" width="760px" append-to-body>
+    <el-table :data="uploads" v-loading="uploadsLoading" stripe>
+      <el-table-column prop="questionName" label="题目" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="fileName" label="文件名" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="fileSize" label="大小" width="110">
+        <template #default="{ row }">{{ formatFileSize(row.fileSize) }}</template>
+      </el-table-column>
+      <el-table-column prop="uploadTime" label="上传时间" width="180" />
+    </el-table>
+  </el-dialog>
+  </div>
 </template>
 
 <script setup name="GuideSheetDashboard">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getGuideSheet, getProgress } from '@/api/business/guideSheet'
+import { ElMessage } from 'element-plus'
+import { saveAs } from 'file-saver'
+import {
+  exportGuideSheet,
+  getGuideSheet,
+  getProgress,
+  getUploads,
+  saveGuideSheetManualGrades
+} from '@/api/business/guideSheet'
 import { Warning } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import websocketClient from '@/plugins/websocket'
@@ -292,10 +336,13 @@ const router = useRouter()
 const route = useRoute()
 
 const sheetTitle = ref('')
-const classCode = ref('')
+const classKey = ref('')
 const deptId = ref(null)
 const broadcastMessage = ref('')
 const assignedClasses = ref([])
+const selectedClass = computed(() => assignedClasses.value.find(item => item.key === classKey.value) || null)
+const entryYear = computed(() => selectedClass.value?.entryYear || '')
+const classCode = computed(() => selectedClass.value?.classCode || '')
 const progressData = ref({ total: 0, submitted: 0, avgScore: 0, list: [] })
 const loading = ref(false)
 
@@ -306,12 +353,81 @@ const selfAssessment = ref({ rateFields: [], studentScores: {} })
 const gradingDetailVisible = ref(false)
 const currentGradingItems = ref([])
 const currentDetailStudentId = ref(null)
+const manualSaving = ref(false)
+const uploadsVisible = ref(false)
+const uploadsLoading = ref(false)
+const uploads = ref([])
+
+const hasManualItems = computed(() => currentGradingItems.value.some(item => item.matchType === 'manual'))
 
 /** 打开批改详情弹窗 */
-function openGradingDetail(items, studentId) {
-  currentGradingItems.value = items || []
-  currentDetailStudentId.value = studentId || null
+function openGradingDetail(items, row) {
+  let studentAnswers = {}
+  try {
+    studentAnswers = row?.answerJson ? JSON.parse(row.answerJson) : {}
+  } catch (e) {
+    studentAnswers = {}
+  }
+  currentGradingItems.value = (items || []).map(item => ({
+    ...item,
+    studentAnswer: studentAnswers[item.fieldKey],
+    manualComment: item.manualComment || ''
+  }))
+  currentDetailStudentId.value = row?.studentId || null
   gradingDetailVisible.value = true
+}
+
+async function saveManualGrades() {
+  const items = currentGradingItems.value
+    .filter(item => item.matchType === 'manual')
+    .map(item => ({
+      fieldKey: item.fieldKey,
+      score: Number(item.score || 0),
+      comment: item.manualComment || ''
+    }))
+  if (!currentDetailStudentId.value || items.length === 0) return
+  manualSaving.value = true
+  try {
+    await saveGuideSheetManualGrades(route.params.sheetId, currentDetailStudentId.value, { items })
+    ElMessage.success('人工评分已保存')
+    gradingDetailVisible.value = false
+    refresh()
+  } finally {
+    manualSaving.value = false
+  }
+}
+
+function formatStudentAnswer(value) {
+  if (value === null || value === undefined || value === '') return '未作答'
+  return Array.isArray(value) ? value.join('、') : String(value)
+}
+
+function formatFileSize(value) {
+  const bytes = Number(value || 0)
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+async function openUploads() {
+  uploadsVisible.value = true
+  uploadsLoading.value = true
+  try {
+    const response = await getUploads(route.params.sheetId, entryYear.value || undefined, classCode.value || undefined)
+    uploads.value = response.data || []
+  } finally {
+    uploadsLoading.value = false
+  }
+}
+
+async function handleExport() {
+  const response = await exportGuideSheet(
+    route.params.sheetId,
+    entryYear.value || undefined,
+    classCode.value || undefined
+  )
+  const suffix = selectedClass.value ? `-${selectedClass.value.label}` : '-全部班级'
+  saveAs(new Blob([response]), `${sheetTitle.value || '导学单'}${suffix}-结果.xlsx`)
 }
 
 /** 获取学生自评数据 */
@@ -593,8 +709,8 @@ function onClassChange() {
   }
   selectedPage.value = 0
   websocketClient.disconnect()
-  if (classCode.value && deptId.value) {
-    websocketClient.connectClassroom(deptId.value, classCode.value)
+  if (entryYear.value && classCode.value && deptId.value) {
+    websocketClient.connectClassroom(deptId.value, entryYear.value, classCode.value)
   }
   refresh()
 }
@@ -623,7 +739,7 @@ function refresh() {
   const sheetId = route.params.sheetId
   if (!sheetId) return
   loading.value = true
-  getProgress(sheetId, classCode.value).then(res => {
+  getProgress(sheetId, entryYear.value || undefined, classCode.value || undefined).then(res => {
     progressData.value = res
     selfAssessment.value = res.selfAssessment || { rateFields: [], studentScores: {} }
     nextTick(() => {
@@ -787,24 +903,15 @@ onMounted(() => {
     getGuideSheet(sheetId).then(res => {
       sheetTitle.value = res.data.sheetTitle || ''
       deptId.value = res.data.deptId
-      const codes = res.data.assignedClassCodes
-      if (Array.isArray(codes)) {
-        assignedClasses.value = codes
-          .filter(c => c != null && c.trim() !== '')
-          .map(c => {
-            const trimmed = c.trim()
-            // 去掉"班"后缀作为value，保持label带"班"便于显示
-            const value = trimmed.endsWith('班') ? trimmed.slice(0, -1) : trimmed
-            return { value, label: trimmed }
-          })
-      } else if (typeof codes === 'string') {
-        assignedClasses.value = codes.split(',').map(c => {
-          const trimmed = c.trim()
-          if (!trimmed) return null
-          const value = trimmed.endsWith('班') ? trimmed.slice(0, -1) : trimmed
-          return { value, label: trimmed }
-        }).filter(Boolean)
-      }
+      const classes = res.data.assignedClasses || []
+      assignedClasses.value = classes
+        .filter(item => item?.classCode)
+        .map(item => ({
+          key: item.key || `${item.entryYear}::${item.classCode}`,
+          entryYear: item.entryYear,
+          classCode: item.classCode,
+          label: item.label || `${item.entryYear}级 ${item.classCode}班`
+        }))
       const { pages, map, fields } = extractTabPages(res.data.formJson)
       tabPages.value = pages
       pageNameMap.value = map

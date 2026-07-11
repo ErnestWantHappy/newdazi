@@ -101,6 +101,8 @@ public interface ICountyExamService {
 
     Map<String, Object> submitStudentExam(CountyExamSubmitRequest request);
 
+    Long validateStudentWorkUpload(Long examId, Long questionId);
+
     Map<String, Object> getGradingEntry();
 
     List<Map<String, Object>> getGradingTasks(String gradingStatus);

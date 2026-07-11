@@ -18,8 +18,8 @@ ALTER TABLE `biz_county_exam_class`
 ALTER TABLE `biz_county_exam_answer`
   ADD COLUMN `submit_time` datetime NULL DEFAULT NULL COMMENT '提交时间' AFTER `file_path`,
   ADD COLUMN `typing_speed` int NULL DEFAULT NULL COMMENT '打字速度' AFTER `submit_time`,
-  ADD COLUMN `accuracy_rate` decimal(6, 4) NULL DEFAULT NULL COMMENT '打字正确率' AFTER `typing_speed`,
-  ADD COLUMN `completion_rate` decimal(6, 4) NULL DEFAULT NULL COMMENT '打字完成率' AFTER `accuracy_rate`,
+  ADD COLUMN `accuracy_rate` decimal(7, 4) NULL DEFAULT NULL COMMENT '打字正确率(%)' AFTER `typing_speed`,
+  ADD COLUMN `completion_rate` decimal(7, 4) NULL DEFAULT NULL COMMENT '打字完成率(%)' AFTER `accuracy_rate`,
   ADD COLUMN `preview_status` varchar(20) NULL DEFAULT NULL COMMENT '预览状态' AFTER `completion_rate`,
   ADD COLUMN `preview_path` varchar(500) NULL DEFAULT NULL COMMENT '预览文件路径' AFTER `preview_status`,
   ADD COLUMN `preview_retry_count` int NULL DEFAULT 0 COMMENT '预览重试次数' AFTER `preview_path`,
@@ -34,7 +34,8 @@ ALTER TABLE `biz_county_exam_student`
 
 ALTER TABLE `biz_county_exam_grader`
   ADD COLUMN `question_id` bigint NULL DEFAULT NULL COMMENT '操作题ID' AFTER `exam_id`,
-  ADD INDEX `idx_county_exam_grader_question` (`exam_id`, `question_id`, `grader_id`);
+  DROP INDEX `uk_exam_grader`,
+  ADD UNIQUE INDEX `uk_county_exam_grader_question` (`exam_id`, `question_id`, `grader_id`);
 
 CREATE TABLE IF NOT EXISTS `biz_county_exam_paper_question` (
   `paper_question_id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -87,3 +88,15 @@ SELECT '区域抽测', 0, 6, 'county-exam', 'business/countyExam/index', NULL, '
 WHERE NOT EXISTS (
   SELECT 1 FROM `sys_menu` WHERE `path` = 'county-exam' AND `component` = 'business/countyExam/index'
 );
+
+-- 管理接口允许管理员和教研员，菜单授权需与后端角色规则一致。
+INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
+SELECT r.role_id, m.menu_id
+FROM `sys_role` r
+JOIN `sys_menu` m ON m.perms = 'business:countyExam:list'
+WHERE r.role_key IN ('admin', 'researcher')
+  AND NOT EXISTS (
+    SELECT 1
+    FROM `sys_role_menu` rm
+    WHERE rm.role_id = r.role_id AND rm.menu_id = m.menu_id
+  );

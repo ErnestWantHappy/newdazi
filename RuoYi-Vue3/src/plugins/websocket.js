@@ -120,8 +120,8 @@ function disconnect() {
   }
 }
 
-function connectClassroom(deptId, classCode) {
-  return connect(`/ws/classroom/${deptId}/${classCode}`)
+function connectClassroom(deptId, entryYear, classCode) {
+  return connect(`/ws/classroom/${deptId}/${entryYear}/${classCode}`)
 }
 
 export default {

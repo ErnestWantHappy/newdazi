@@ -9,6 +9,15 @@
           and student_id = #{studentId}
     </select>
 
+    <select id="countPracticalByExamStudentQuestion" resultType="int">
+        select count(1)
+        from biz_county_exam_paper_question
+        where exam_id = #{examId}
+          and student_id = #{studentId}
+          and question_id = #{questionId}
+          and question_type = 'practical'
+    </select>
+
     <insert id="batchInsert">
         insert into biz_county_exam_paper_question
         (exam_id, student_id, question_id, question_type, question_content, option_a, option_b, option_c, option_d,

@@ -262,7 +262,18 @@
       </el-descriptions>
       <el-tabs v-model="detailDrawer.activeTab" class="detail-tabs" @tab-change="loadDetailTab">
         <el-tab-pane label="学校汇总" name="summary">
+          <AnalysisPanel
+            :official="analysisOfficial"
+            :overview="analysisOverview"
+            :schools="summaryRows"
+            :distribution="analysisDistribution"
+            :questions="analysisQuestions"
+          />
+          <div class="summary-table-title">学校汇总明细</div>
           <el-table :data="summaryRows" border>
+            <el-table-column label="排名" width="70" align="center">
+              <template #default="{ $index }">{{ $index + 1 }}</template>
+            </el-table-column>
             <el-table-column label="学校" prop="deptName" min-width="180" />
             <el-table-column label="选中班级" prop="classInfo" min-width="140" />
             <el-table-column label="人数" prop="studentCount" width="90" />
@@ -411,6 +422,7 @@ import { useRouter } from 'vue-router'
 import { saveAs } from 'file-saver'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PdfPreview from '@/components/PdfPreview/index.vue'
+import AnalysisPanel from './components/AnalysisPanel.vue'
 import {
   addCountyExam,
   allocateCountyExamGraders,
@@ -493,6 +505,10 @@ const detailDrawer = reactive({
   activeTab: 'summary'
 })
 const summaryRows = ref([])
+const analysisOverview = ref({})
+const analysisDistribution = ref([])
+const analysisQuestions = ref([])
+const analysisOfficial = ref(false)
 const studentRows = ref([])
 const studentKeyword = ref('')
 const studentsLoading = ref(false)
@@ -587,10 +603,15 @@ async function handleClose(row) {
   const questions = detailResponse.data?.questions || []
   const graders = detailResponse.data?.graders || []
   const hasPractical = questions.some(item => item.questionType === 'practical')
-  const message = hasPractical && graders.length === 0
-    ? '本场包含操作题但尚未配置评卷教师。关闭后学生不能继续保存或提交，后续仍可先配置评卷再发布。确认关闭？'
-    : '关闭后学生不能继续保存或提交，系统会自动提交所有未提交学生的已保存内容。确认关闭？'
-  await ElMessageBox.confirm(message, '关闭区域抽测', { type: 'warning' })
+  if (hasPractical && graders.length === 0) {
+    ElMessage.warning('请先为每一道操作题配置评卷教师，再关闭区域抽测')
+    return
+  }
+  await ElMessageBox.confirm(
+    '关闭后学生不能继续保存或提交，系统会自动提交所有未提交学生的已保存内容。确认关闭？',
+    '关闭区域抽测',
+    { type: 'warning' }
+  )
   const response = await closeCountyExam(row.examId)
   const autoSubmitCount = response.data?.autoSubmitCount || 0
   ElMessage.success(autoSubmitCount > 0 ? `已关闭，自动提交 ${autoSubmitCount} 名未提交学生` : '已关闭')
@@ -913,6 +934,11 @@ async function openDetail(row) {
   detailDrawer.graders = response.data?.graders || []
   detailDrawer.progress = response.data?.gradingProgress || {}
   detailDrawer.activeTab = 'summary'
+  summaryRows.value = []
+  analysisOverview.value = {}
+  analysisDistribution.value = []
+  analysisQuestions.value = []
+  analysisOfficial.value = detailDrawer.exam?.status === '3'
   detailDrawer.open = true
   loadSummary(row.examId)
 }
@@ -926,6 +952,10 @@ function loadDetailTab(tabName) {
 async function loadSummary(examId) {
   const response = await getCountyExamSummary(examId)
   summaryRows.value = response.data?.schools || []
+  analysisOverview.value = response.data?.overview || {}
+  analysisDistribution.value = response.data?.distribution || []
+  analysisQuestions.value = response.data?.questions || []
+  analysisOfficial.value = response.data?.official === true
 }
 
 function loadStudents() {
@@ -1044,6 +1074,13 @@ getList()
 
   .table-panel {
     padding: 12px;
+  }
+
+  .summary-table-title {
+    margin: 2px 0 10px;
+    color: #303133;
+    font-size: 14px;
+    font-weight: 600;
   }
 
   .drawer-layout {

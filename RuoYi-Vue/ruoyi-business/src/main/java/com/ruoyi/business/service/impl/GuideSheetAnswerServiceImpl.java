@@ -15,6 +15,7 @@ import com.ruoyi.business.mapper.GuideSheetProgressMapper;
 import com.ruoyi.business.service.IGuideSheetAnswerService;
 import com.ruoyi.business.service.GuideSheetGradingService;
 import com.ruoyi.business.service.GuideSheetGradingService.GradingResult;
+import com.ruoyi.common.exception.ServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,15 +69,86 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     }
 
     @Override
-    public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String classCode)
+    public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String entryYear, String classCode)
     {
-        return guideSheetAnswerMapper.selectBySheetIdByClassCode(sheetId, classCode);
+        return guideSheetAnswerMapper.selectBySheetIdByClassCode(sheetId, entryYear, classCode);
     }
 
     @Override
-    public Double getAvgScore(Long sheetId, String classCode)
+    public Double getAvgScore(Long sheetId, String entryYear, String classCode)
     {
-        return guideSheetAnswerMapper.selectAvgScore(sheetId, classCode);
+        return guideSheetAnswerMapper.selectAvgScore(sheetId, entryYear, classCode);
+    }
+
+    @Override
+    @Transactional
+    public BizGuideSheetAnswer saveManualGrades(Long sheetId, Long studentId,
+                                                 List<Map<String, Object>> items)
+    {
+        if (items == null || items.isEmpty())
+        {
+            throw new ServiceException("请填写人工评分");
+        }
+        BizGuideSheetAnswer answer = guideSheetAnswerMapper.selectByStudentAndSheet(studentId, sheetId);
+        if (answer == null || !"2".equals(answer.getStatus()))
+        {
+            throw new ServiceException("学生尚未提交导学单");
+        }
+        try
+        {
+            List<Map<String, Object>> details = objectMapper.readValue(answer.getGradingDetail(),
+                    new TypeReference<List<Map<String, Object>>>() {});
+            Map<String, Map<String, Object>> requested = new LinkedHashMap<>();
+            for (Map<String, Object> item : items)
+            {
+                String fieldKey = item.get("fieldKey") == null ? "" : String.valueOf(item.get("fieldKey")).trim();
+                if (fieldKey.isEmpty() || requested.put(fieldKey, item) != null)
+                {
+                    throw new ServiceException("人工评分字段无效或重复");
+                }
+            }
+
+            Set<String> updated = new HashSet<>();
+            for (Map<String, Object> detail : details)
+            {
+                String fieldKey = String.valueOf(detail.get("fieldKey"));
+                Map<String, Object> requestedItem = requested.get(fieldKey);
+                if (requestedItem == null || !"manual".equals(detail.get("matchType"))) continue;
+
+                int maxScore = numberValue(detail.get("maxScore"), 0);
+                int score = numberValue(requestedItem.get("score"), -1);
+                if (score < 0 || score > maxScore)
+                {
+                    throw new ServiceException("人工评分必须在 0 到 " + maxScore + " 分之间");
+                }
+                String comment = requestedItem.get("comment") == null
+                        ? "" : String.valueOf(requestedItem.get("comment")).trim();
+                detail.put("score", score);
+                detail.put("manualGraded", true);
+                detail.put("desc", comment.isEmpty() ? "人工批改完成" : "人工批改：" + comment);
+                if (!comment.isEmpty()) detail.put("manualComment", comment);
+                updated.add(fieldKey);
+            }
+            if (updated.size() != requested.size())
+            {
+                throw new ServiceException("只能修改待人工批改的评分项");
+            }
+
+            answer.setGradingDetail(objectMapper.writeValueAsString(details));
+            answer.setTotalScore(calculateTotalScoreFromDetail(answer.getGradingDetail()));
+            answer.setGradingStatus(calculateGradingStatus(answer.getGradingDetail()));
+            guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+            return answer;
+        }
+        catch (ServiceException e)
+        {
+            throw e;
+        }
+        catch (Exception e)
+        {
+            log.error("保存导学单人工评分失败 sheetId={} studentId={}", sheetId, studentId, e);
+            throw new ServiceException("保存人工评分失败");
+        }
     }
 
     @Override
@@ -90,13 +162,28 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
                     answer.getStudentId(), answer.getSheetId());
             if (existing != null)
             {
+                boolean draftSave = !"2".equals(answer.getStatus());
+                // 草稿接口不能覆盖最终答卷；显式重新提交会携带 status=2 并重新评分。
+                if ("2".equals(existing.getStatus()) && draftSave)
+                {
+                    throw new ServiceException("导学单已提交，请使用重新提交功能修改答案");
+                }
                 answer.setAnswerId(existing.getAnswerId());
                 answer.setUpdateTime(now);
                 if (answer.getStatus() == null)
                 {
                     answer.setStatus(existing.getStatus() != null ? existing.getStatus() : "1");
                 }
-                guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+                if (draftSave)
+                {
+                    // SQL 条件负责兜住并发提交，避免状态检查后最终答卷被迟到的草稿覆盖。
+                    answer.getParams().put("onlyIfNotSubmitted", true);
+                }
+                int updated = guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+                if (draftSave && updated == 0)
+                {
+                    throw new ServiceException("导学单已提交，请使用重新提交功能修改答案");
+                }
             }
             else
             {
@@ -401,26 +488,41 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     @SuppressWarnings("unchecked")
     private String calculateGradingStatus(String detailJson) {
         try {
-            int autoCount = 0, manualCount = 0;
+            int autoCount = 0, manualCount = 0, completedManualCount = 0;
             if (detailJson != null && !detailJson.isEmpty()) {
                 List<Map<String, Object>> list = objectMapper.readValue(detailJson,
                         new TypeReference<List<Map<String, Object>>>() {});
                 for (Map<String, Object> item : list) {
                     String matchType = (String) item.get("matchType");
                     if ("manual".equals(matchType)) {
-                        manualCount++;
+                        if (Boolean.TRUE.equals(item.get("manualGraded"))) completedManualCount++;
+                        else manualCount++;
                     } else if ("auto".equals(matchType)) {
                         autoCount++;
                     }
                 }
             }
-            if (manualCount > 0 && autoCount > 0) return "partial";
+            if (manualCount > 0 && (autoCount > 0 || completedManualCount > 0)) return "partial";
             if (manualCount > 0) return "manual";
+            if (completedManualCount > 0) return "complete";
             if (autoCount > 0) return "auto";
             return "pending";
         } catch (Exception e) {
             log.warn("计算评分状态失败", e);
             return "partial";
+        }
+    }
+
+    private int numberValue(Object value, int defaultValue)
+    {
+        if (value instanceof Number) return ((Number) value).intValue();
+        try
+        {
+            return value == null ? defaultValue : Integer.parseInt(String.valueOf(value));
+        }
+        catch (NumberFormatException e)
+        {
+            return defaultValue;
         }
     }
 }

@@ -66,6 +66,11 @@ public interface CountyExamAnswerMapper {
 
     int countGradedPracticalAnswers(Long examId);
 
+    /**
+     * 按实际生成的学生试卷统计各题表现，兼容随机抽题模式。
+     */
+    List<Map<String, Object>> selectQuestionPerformance(Long examId);
+
     int clearPracticalGraders(Long examId);
 
     int resetPracticalGrading(Long examId);

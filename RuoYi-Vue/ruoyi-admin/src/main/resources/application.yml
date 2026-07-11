@@ -149,6 +149,9 @@ xss:
 
 # 电子导学单配置。密钥仅从部署环境注入，禁止写入表单数据。
 guide-sheet:
+  websocket:
+    # 生产部署需通过环境变量列出页面的完整 Origin，禁止配置为 *。
+    allowed-origins: ${GUIDE_SHEET_WS_ALLOWED_ORIGINS:http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80}
   ai:
     provider: ${GUIDE_SHEET_AI_PROVIDER:deepseek}
     api-key: ${GUIDE_SHEET_AI_API_KEY:}

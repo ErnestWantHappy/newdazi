@@ -1,0 +1,6 @@
+/.playwright-cli/
+/output/
+/uploadPath/
+/backend-dual-feature*.log
+/frontend-dual-feature*.log
+/sql/ry-vue260709.sql

@@ -15,8 +15,7 @@ public class GuideSheetVo extends BaseEntity
     private String status;
     private Integer maxPages;
     private String teacherMachineIp;
-    private List<String> assignedClassCodes;
-    private List<String> allClassesInGrade;
+    private List<GuideSheetClassOptionVo> assignedClasses;
     private Integer answerCount;
     private Integer submittedCount;
     private String isPublic;
@@ -101,20 +100,12 @@ public class GuideSheetVo extends BaseEntity
         this.teacherMachineIp = teacherMachineIp;
     }
 
-    public List<String> getAssignedClassCodes() {
-        return assignedClassCodes;
+    public List<GuideSheetClassOptionVo> getAssignedClasses() {
+        return assignedClasses;
     }
 
-    public void setAssignedClassCodes(List<String> assignedClassCodes) {
-        this.assignedClassCodes = assignedClassCodes;
-    }
-
-    public List<String> getAllClassesInGrade() {
-        return allClassesInGrade;
-    }
-
-    public void setAllClassesInGrade(List<String> allClassesInGrade) {
-        this.allClassesInGrade = allClassesInGrade;
+    public void setAssignedClasses(List<GuideSheetClassOptionVo> assignedClasses) {
+        this.assignedClasses = assignedClasses;
     }
 
     public Integer getAnswerCount() {

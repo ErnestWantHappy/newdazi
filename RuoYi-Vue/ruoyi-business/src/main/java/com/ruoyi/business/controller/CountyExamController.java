@@ -264,11 +264,17 @@ public class CountyExamController extends BaseController {
      */
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/student/upload")
-    public AjaxResult uploadStudentWork(@RequestParam("file") MultipartFile file) throws Exception {
+    public AjaxResult uploadStudentWork(@RequestParam("examId") Long examId,
+                                        @RequestParam("questionId") Long questionId,
+                                        @RequestParam("file") MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {
             throw new ServiceException("上传文件不能为空，请重新选择文件");
         }
-        String fileName = FileUploadUtils.upload(RuoYiConfig.getUploadPath(), file, MimeTypeUtils.DEFAULT_ALLOWED_EXTENSION, true);
+        Long studentId = countyExamService.validateStudentWorkUpload(examId, questionId);
+        String scopedUploadPath = RuoYiConfig.getUploadPath() + "/county-exam/" + examId
+                + "/" + studentId + "/" + questionId;
+        String fileName = FileUploadUtils.upload(
+                scopedUploadPath, file, MimeTypeUtils.DEFAULT_ALLOWED_EXTENSION, true);
         AjaxResult ajax = AjaxResult.success();
         ajax.put("fileName", fileName);
         ajax.put("newFileName", FileUtils.getName(fileName));

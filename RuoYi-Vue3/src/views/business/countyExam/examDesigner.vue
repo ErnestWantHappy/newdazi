@@ -286,7 +286,7 @@
 
     <div class="footer-toolbar">
       <el-button type="primary" @click="submitForm">保 存</el-button>
-      <el-button @click="router.push('/business/county-exam')">返回抽测列表</el-button>
+      <el-button @click="router.push('/county-exam')">返回抽测列表</el-button>
     </div>
 
     <pdf-preview ref="pdfPreviewRef" />
@@ -445,7 +445,7 @@ function submitForm() {
         return saveCountyExamQuestions(examId.value, questionsPayload);
       }).then(() => {
         proxy.$modal.msgSuccess("组卷已保存");
-        router.push('/business/county-exam');
+        router.push('/county-exam');
       });
     }
   });
@@ -626,7 +626,7 @@ function initialize() {
   const id = route.params.examId;
   if (!id) {
     proxy.$modal.msgError("缺少抽测ID参数");
-    router.push('/business/county-exam');
+    router.push('/county-exam');
     return;
   }
   

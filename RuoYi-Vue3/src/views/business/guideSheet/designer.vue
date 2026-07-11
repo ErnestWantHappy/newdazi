@@ -19,8 +19,8 @@
 
         <div class="toolbar-section toolbar-classes">
           <span class="toolbar-label">班级指派</span>
-          <el-select v-model="form.assignedClassCodes" multiple placeholder="请选择指派班级" size="default">
-            <el-option v-for="cls in classOptions" :key="cls" :label="cls" :value="cls" />
+          <el-select v-model="form.assignedClasses" multiple value-key="key" placeholder="请选择指派班级" size="default">
+            <el-option v-for="cls in classOptions" :key="cls.key" :label="cls.label" :value="cls" />
           </el-select>
         </div>
 
@@ -258,7 +258,7 @@
               <el-select v-model="scoringConfig[row.id].type" size="small" style="width: 140px" @change="onScoringTypeChange(row.id)">
                 <el-option label="精确匹配" value="exact" />
                 <el-option label="包含匹配" value="contains" />
-                <el-option label="AI评分" value="ai" :disabled="!aiConfigured" />
+                <el-option label="AI评分" value="ai" />
               </el-select>
               <div class="scoring-type-hint">{{ scoringTypeHint(scoringConfig[row.id].type) }}</div>
             </template>
@@ -274,7 +274,7 @@
 <script setup name="GuideSheetDesigner">
 import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet, getGuideSheetLessons, getGuideSheetCapabilities } from '@/api/business/guideSheet'
+import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet, getGuideSheetLessons, getGuideSheetClassOptions, getGuideSheetCapabilities } from '@/api/business/guideSheet'
 import { ElMessage } from 'element-plus'
 import { Plus, Minus } from '@element-plus/icons-vue'
 import { pinyin } from 'pinyin-pro'
@@ -313,7 +313,7 @@ function resetToNewForm() {
   form.sheetId = undefined
   form.sheetTitle = ''
   form.lessonId = undefined
-  form.classIds = undefined
+  form.assignedClasses = []
   form.formJson = ''
   form.maxPages = 0
   form.status = undefined
@@ -643,7 +643,7 @@ const form = reactive({
   lessonId: undefined,
   formJson: '',
   maxPages: 0,
-  assignedClassCodes: [],
+  assignedClasses: [],
   status: '0',
   isPublic: 'Y'
 })
@@ -1397,7 +1397,10 @@ function buildSaveData(status) {
     formJson: getFormJsonString(),
     maxPages: form.maxPages,
     status: status,
-    assignedClassCodes: form.assignedClassCodes,
+    assignedClasses: form.assignedClasses.map(item => ({
+      entryYear: item.entryYear,
+      classCode: item.classCode
+    })),
     isPublic: form.isPublic
   }
 }
@@ -1442,7 +1445,7 @@ function handleSaveAndPublish() {
     ElMessage.warning('请输入导学单标题')
     return
   }
-  if (!form.assignedClassCodes?.length) {
+  if (!form.assignedClasses?.length) {
     ElMessage.warning('请至少指派一个班级')
     return
   }
@@ -1516,10 +1519,9 @@ function loadSheet(sheetId) {
     form.lessonId = res.data.lessonId
     form.formJson = res.data.formJson || ''
     form.maxPages = res.data.maxPages || 0
-    form.assignedClassCodes = res.data.assignedClassCodes || []
+    form.assignedClasses = res.data.assignedClasses || []
     form.status = res.data.status || '0'
     form.isPublic = res.data.isPublic || 'Y'
-    classOptions.value = res.data.allClassesInGrade || []
     dirty.value = false
 
     // 将 JSON 回填到设计器
@@ -1561,10 +1563,9 @@ function loadSheetAsTemplate(copyFromId) {
     form.lessonId = res.data.lessonId
     form.formJson = res.data.formJson || ''
     form.maxPages = res.data.maxPages || 0
-    form.assignedClassCodes = []  // 引用时不复制班级指派
+    form.assignedClasses = []  // 引用时不复制班级指派
     form.status = '0'
     form.isPublic = 'Y'
-    classOptions.value = res.data.allClassesInGrade || []
     dirty.value = false
 
     nextTick(() => {
@@ -1590,6 +1591,14 @@ function fetchLessonOptions() {
   getGuideSheetLessons().then(res => {
     lessonOptions.value = res.data || []
   }).catch(() => {})
+}
+
+function fetchClassOptions() {
+  getGuideSheetClassOptions().then(res => {
+    classOptions.value = res.data || []
+  }).catch(() => {
+    classOptions.value = []
+  })
 }
 
 function fetchCapabilities() {
@@ -1650,6 +1659,7 @@ function startInjectPolling() {
 
 onMounted(() => {
   fetchLessonOptions()
+  fetchClassOptions()
   fetchCapabilities()
   const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId

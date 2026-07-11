@@ -1,5 +1,7 @@
 package com.ruoyi.business.config;
 
+import java.util.Arrays;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -14,18 +16,26 @@ public class WebSocketConfig implements WebSocketConfigurer
 {
     private final ClassroomWebSocketHandler handler;
     private final ClassroomWebSocketHandshakeInterceptor interceptor;
+    private final String[] allowedOrigins;
 
     public WebSocketConfig(ClassroomWebSocketHandler handler,
-                           ClassroomWebSocketHandshakeInterceptor interceptor)
+                           ClassroomWebSocketHandshakeInterceptor interceptor,
+                           @Value("${guide-sheet.websocket.allowed-origins}") String allowedOrigins)
     {
         this.handler = handler;
         this.interceptor = interceptor;
+        // 精确白名单由部署环境维护，避免代理部署时退化为允许任意来源。
+        this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toArray(String[]::new);
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry)
     {
-        registry.addHandler(handler, "/ws/classroom/*/*")
-                .addInterceptors(interceptor);
+        registry.addHandler(handler, "/ws/classroom/*/*/*")
+                .addInterceptors(interceptor)
+                .setAllowedOrigins(allowedOrigins);
     }
 }

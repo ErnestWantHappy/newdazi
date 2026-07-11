@@ -117,6 +117,9 @@ service.interceptors.response.use(async res => {
   }
   return res.data
 }, error => {
+  if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') {
+    return Promise.reject(error)
+  }
   console.log('err' + error)
   if (isSessionExpiredError(error)) {
     handleSessionExpired(error?.response?.data?.msg || error?.message)

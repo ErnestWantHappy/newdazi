@@ -202,6 +202,12 @@ public class GuideSheetGradingService {
                                 "auto", "未作答", correctAnswer, null, tabIdxAi));
                         continue;
                     }
+                    if (aiGradingService == null || !aiGradingService.isConfigured()) {
+                        manualCount++;
+                        detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
+                                "manual", "AI评分未配置，已转为人工处理", correctAnswer, null, tabIdxAi));
+                        continue;
+                    }
                     // 调用 AI 评分
                     try {
                         // 频率限制检查

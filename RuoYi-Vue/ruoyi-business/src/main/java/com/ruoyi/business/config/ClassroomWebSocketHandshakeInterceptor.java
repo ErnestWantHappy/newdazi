@@ -9,6 +9,7 @@ import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.framework.web.service.TokenService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
@@ -35,16 +36,18 @@ public class ClassroomWebSocketHandshakeInterceptor implements HandshakeIntercep
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes)
     {
-        if (!(request instanceof ServletServerHttpRequest)) return false;
+        if (!(request instanceof ServletServerHttpRequest)) return reject(response);
         HttpServletRequest servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
-        LoginUser loginUser = tokenService.getLoginUser(readToken(servletRequest));
-        if (loginUser == null || loginUser.getUser() == null) return false;
+        String token = readToken(servletRequest);
+        LoginUser loginUser = tokenService.getLoginUser(token);
+        if (loginUser == null || loginUser.getUser() == null) return reject(response);
 
         String[] segments = request.getURI().getPath().split("/");
-        if (segments.length < 5) return false;
-        String deptId = segments[segments.length - 2];
+        if (segments.length < 6) return reject(response);
+        String deptId = segments[segments.length - 3];
+        String entryYear = segments[segments.length - 2];
         String classCode = segments[segments.length - 1];
-        if (!deptId.equals(String.valueOf(loginUser.getDeptId()))) return false;
+        if (!deptId.equals(String.valueOf(loginUser.getDeptId()))) return reject(response);
 
         boolean teacher = loginUser.getUser().isAdmin() || loginUser.getUser().getRoles().stream()
                 .map(SysRole::getRoleKey)
@@ -52,13 +55,20 @@ public class ClassroomWebSocketHandshakeInterceptor implements HandshakeIntercep
         if (!teacher)
         {
             BizStudent student = studentMapper.selectBizStudentByUserId(loginUser.getUserId());
-            if (student == null || !classCode.equals(student.getClassCode())) return false;
+            if (student == null || !entryYear.equals(student.getEntryYear())
+                    || !classCode.equals(student.getClassCode())) return reject(response);
         }
 
-        attributes.put("roomKey", deptId + "_" + classCode);
+        attributes.put("roomKey", deptId + "_" + entryYear + "_" + classCode);
         attributes.put("userId", loginUser.getUserId());
         attributes.put("teacher", teacher);
         return true;
+    }
+
+    private boolean reject(ServerHttpResponse response)
+    {
+        response.setStatusCode(HttpStatus.FORBIDDEN);
+        return false;
     }
 
     @Override

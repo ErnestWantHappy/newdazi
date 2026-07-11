@@ -179,7 +179,7 @@ export const dynamicRoutes = [
       {
         path: '',
         component: () => import('@/views/business/countyExam/index'),
-        name: 'CountyExam',
+        name: 'CountyExamStatic',
         meta: { title: '区域抽测', icon: 'education' }
       }
     ]
@@ -194,7 +194,7 @@ export const dynamicRoutes = [
         path: ':examId(\\d+)',
         component: () => import('@/views/business/countyExam/examDesigner'),
         name: 'CountyExamDesigner',
-        meta: { title: '区域抽测组卷', activeMenu: '/business/county-exam' }
+        meta: { title: '区域抽测组卷', activeMenu: '/county-exam' }
       }
     ]
   },
@@ -226,20 +226,6 @@ export const dynamicRoutes = [
       }
     ],
     redirect: '/teacher-dashboard/index'
-  },
-  {
-    path: '/business/guide-sheet-list',
-    component: Layout,
-    hidden: true,
-    permissions: ['business:guideSheet:list'],
-    children: [
-      {
-        path: '',
-        component: () => import('@/views/business/guideSheet/index'),
-        name: 'GuideSheet',
-        meta: { title: '导学单管理', icon: 'guide-sheet' }
-      }
-    ]
   },
   {
     path: '/business/guide-sheet',
