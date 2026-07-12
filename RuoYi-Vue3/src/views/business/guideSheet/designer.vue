@@ -548,7 +548,8 @@ function enforceHomeTabConstraints(formJson) {
  */
 function fixUploadURLs(formJson) {
   let needFix = false
-  const uploadEndpoint = '/dev-api/common/upload'
+  // 使用环境变量，避免硬编码 /dev-api
+  const uploadEndpoint = `${import.meta.env.VITE_APP_BASE_API || ''}/common/upload`
 
   function walk(widgetList) {
     if (!Array.isArray(widgetList)) return
@@ -599,7 +600,8 @@ function fixUploadURLs(formJson) {
  */
 function fixUploadURLsInPlace(obj) {
   if (!obj || typeof obj !== 'object') return
-  const uploadEndpoint = '/dev-api/common/upload'
+  // 使用环境变量，避免硬编码 /dev-api
+  const uploadEndpoint = `${import.meta.env.VITE_APP_BASE_API || ''}/common/upload`
   const visited = new Set()
 
   function walk(value) {
@@ -731,7 +733,7 @@ function autoRenameWidgets(formJson) {
       time: '时间', 'time-range': '时间范围',
       rate: '评分', slider: '滑块', switch: '开关', color: '颜色选择',
       'rich-editor': '富文本', 'file-upload': '文件上传', 'picture-upload': '图片上传',
-      'static-text': '静态文本', 'html-text': 'HTML文本'
+      'static-text': '静态文本', 'html-text': 'HTML文本', 'image-add': '图片展示'
     }
 
     function walk(value) {
@@ -791,7 +793,7 @@ function widgetTypeLabel(type) {
     // === 文件上传（不可评分）===
     'file-upload': '文件上传', 'picture-upload': '图片上传',
     // === 展示类（不可评分）===
-    'static-text': '静态文本', 'html-text': 'HTML文本', divider: '分割线',
+    'static-text': '静态文本', 'html-text': 'HTML文本', 'image-add': '图片展示', divider: '分割线',
     // === 容器类 ===
     grid: '栅格容器', 'grid-col': '栅格列',
     tab: '选项卡', 'tab-pane': '选项卡面板',
@@ -1620,6 +1622,40 @@ watch(formJsonVersion, () => {
 
 // 轮询兜底注入：新建导学单时等待 VForm3 初始化完成，直到标签页注入成功
 let injectPollingTimer = null
+
+// DOM 观察器：比 VNode 树遍历更快地检测 FieldPanel，用于注册「图片展示」扩展组件
+let domObserverStarted = false
+let domObserver = null
+function startDomObserver() {
+  if (domObserverStarted) return
+  const container = document.querySelector('.designer-card')
+  if (!container) {
+    setTimeout(startDomObserver, 50)
+    return
+  }
+  domObserverStarted = true
+  domObserver = new MutationObserver(() => {
+    const panelEl = document.querySelector('.panel-container')
+    if (panelEl) {
+      registerCustomImageWidget()
+      if (domObserver) {
+        domObserver.disconnect()
+        domObserver = null
+        domObserverStarted = false
+      }
+    }
+  })
+  domObserver.observe(container, { childList: true, subtree: true })
+  // 安全兜底：10 秒后断开观察器，避免长期占用
+  setTimeout(() => {
+    if (domObserver) {
+      domObserver.disconnect()
+      domObserver = null
+      domObserverStarted = false
+    }
+  }, 10000)
+}
+
 function startInjectPolling() {
   if (tabInjected) return
 
@@ -1632,11 +1668,15 @@ function startInjectPolling() {
     if (attempts > maxAttempts || tabInjected) {
       clearInterval(injectPollingTimer)
       injectPollingTimer = null
+      // 标签页注入完成后，确保自定义图片组件已注册
+      registerCustomImageWidget()
       return
     }
 
     try {
       if (!designerRef.value) return  // VForm3 未就绪，继续轮询
+      // 设计器就绪后即可注册扩展组件（不必等标签页注入）
+      registerCustomImageWidget()
       const json = designerRef.value.getFormJson()
       const { hasTab } = extractTabPages(json)
       if (!hasTab && json.widgetList) {
@@ -1657,10 +1697,143 @@ function startInjectPolling() {
   }, 300)
 }
 
+/**
+ * VForm3 自定义扩展组件：图片展示（image-add）
+ * 来自 DigitalGuide 增量，挂在左侧「自定义扩展字段」面板，不参与自动评分。
+ */
+const IMAGE_ADD_WIDGET_SCHEMA = {
+  type: 'image-add',
+  icon: 'picture-upload-field',
+  formItemFlag: true,
+  options: {
+    name: '',
+    label: '图片展示',
+    labelAlign: '',
+    defaultValue: null,
+    columnWidth: '200px',
+    size: '',
+    labelWidth: null,
+    labelHidden: false,
+    disabled: false,
+    hidden: false,
+    required: false,
+    requiredHint: '',
+    validation: '',
+    validationHint: '',
+    imageWidth: 200,
+    imageHeight: 200,
+    imageUrl: '',
+    customClass: '',
+    onCreated: '',
+    onMounted: '',
+    onChange: '',
+    onValidate: ''
+  }
+}
+
+/**
+ * 向 VForm3 设计器 FieldPanel 注册「图片展示」组件。
+ * 通过组件树找到 widget-panel，写入 customFields，并修补 i18n 与 schema 查找。
+ */
+function registerCustomImageWidget() {
+  try {
+    if (!designerRef.value) return
+    const vFormInstance = designerRef.value
+
+    let fieldPanel = null
+    const root = vFormInstance.$.subTree
+    if (!root) return
+
+    function findFieldPanel(vnode) {
+      if (!vnode || fieldPanel) return
+      if (vnode.component) {
+        const comp = vnode.component
+        const name = comp.type && (comp.type.name || comp.type.__name)
+        if (name === 'FieldPanel' || name === 'WidgetPanel' || name === 'widget-panel') {
+          fieldPanel = comp
+          return
+        }
+        if (comp.subTree) {
+          findFieldPanel(comp.subTree)
+        }
+      }
+      if (vnode.children && Array.isArray(vnode.children)) {
+        for (const child of vnode.children) {
+          findFieldPanel(child)
+          if (fieldPanel) return
+        }
+      }
+      if (vnode.dynamicChildren && Array.isArray(vnode.dynamicChildren)) {
+        for (const child of vnode.dynamicChildren) {
+          findFieldPanel(child)
+          if (fieldPanel) return
+        }
+      }
+    }
+    findFieldPanel(root)
+
+    if (!fieldPanel) return
+
+    // FieldPanel 为 Options API，customFields 在 data 中
+    const customFields = fieldPanel.data.customFields
+    if (customFields && Array.isArray(customFields)) {
+      const alreadyRegistered = customFields.some(f => f.type === 'image-add')
+      if (!alreadyRegistered) {
+        customFields.push({
+          key: 'image_add_' + Date.now(),
+          ...IMAGE_ADD_WIDGET_SCHEMA,
+          displayName: '图片展示'
+        })
+      }
+    }
+
+    // image-add 不在 VForm3 内置 locale，需覆盖 proxy.i18n2t 才能显示中文标签
+    if (!fieldPanel._i18nPatched) {
+      fieldPanel._i18nPatched = true
+      const proxy = fieldPanel.proxy
+      const originalI18n2t = proxy.i18n2t
+      proxy.i18n2t = function(d, e) {
+        if (d === 'designer.widgetLabel.image-add') {
+          return '图片展示'
+        }
+        return originalI18n2t.call(this, d, e)
+      }
+      if (customFields && customFields.length > 0) {
+        const lastItem = customFields[customFields.length - 1]
+        customFields.push({ ...lastItem, key: 'image_add_force_' + Date.now() })
+        customFields.pop()
+      }
+    }
+
+    // 属性面板依赖 getFieldWidgetByType；补丁保证 image-add 能打开配置项
+    const designer = fieldPanel.props.designer
+    if (designer && designer.getFieldWidgetByType) {
+      if (!designer._imageAddPatched) {
+        designer._imageAddPatched = true
+        const originalGetFieldWidgetByType = designer.getFieldWidgetByType
+        designer.getFieldWidgetByType = function(type) {
+          if (type === 'image-add') {
+            return {
+              key: 'image_add',
+              ...IMAGE_ADD_WIDGET_SCHEMA,
+              displayName: '图片展示'
+            }
+          }
+          return originalGetFieldWidgetByType.call(this, type)
+        }
+      }
+    }
+  } catch (e) {
+    // 设计器尚未就绪时静默忽略，由轮询/DOM 观察器重试
+  }
+}
+
 onMounted(() => {
   fetchLessonOptions()
   fetchClassOptions()
   fetchCapabilities()
+  // 尽快注册「图片展示」扩展组件
+  nextTick(startDomObserver)
   const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId
   if (copyFrom) {
@@ -1677,10 +1850,11 @@ onMounted(() => {
     nextTick(startInjectPolling)
   }
 
-  // 轮询兜底：每 5 秒检测一次字段变化 + 确保标签页不被删除
+  // 轮询兜底：字段刷新 + 标签页约束 + 扩展组件注册
   pollingTimer = setInterval(() => {
     refreshScoredFields()
     ensureTabWidget()
+    registerCustomImageWidget()
   }, 5000)
 })
 
@@ -1693,7 +1867,12 @@ onBeforeUnmount(() => {
     clearInterval(injectPollingTimer)
     injectPollingTimer = null
   }
-  })
+  if (domObserver) {
+    domObserver.disconnect()
+    domObserver = null
+    domObserverStarted = false
+  }
+})
 
 // 监听路由变化：从其他页面跳转到新建表单时，重置为空白状态
 watch(
@@ -1710,6 +1889,8 @@ onActivated(() => {
   if (!route.params.sheetId) {
     nextTick(() => resetToNewForm())
   }
+  // 缓存激活后重新挂观察器，保证扩展组件仍可用
+  nextTick(startDomObserver)
 })
 </script>
 
