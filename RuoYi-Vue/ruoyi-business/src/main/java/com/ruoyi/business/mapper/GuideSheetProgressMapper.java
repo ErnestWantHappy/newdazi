@@ -8,7 +8,6 @@ import org.apache.ibatis.annotations.Param;
 public interface GuideSheetProgressMapper
 {
     public List<GuideSheetProgressVo> selectBySheetAndClass(@Param("sheetId") Long sheetId,
-                                                              @Param("entryYear") String entryYear,
                                                               @Param("classCode") String classCode);
 
     public List<GuideSheetProgressVo> selectBySheetId(@Param("sheetId") Long sheetId);
@@ -17,7 +16,6 @@ public interface GuideSheetProgressMapper
      * 获取班级全部学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress
      */
     public List<GuideSheetProgressVo> selectFullProgressBySheetAndClass(@Param("sheetId") Long sheetId,
-                                                                         @Param("entryYear") String entryYear,
                                                                          @Param("classCode") String classCode);
 
     /**

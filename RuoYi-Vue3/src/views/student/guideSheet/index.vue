@@ -52,7 +52,7 @@
             <el-button icon="Check" type="primary" size="large" @click="handleSubmit" :loading="submitting">
               提交导学单
             </el-button>
-            <el-button icon="Refresh" size="large" @click="handleSave()" :loading="saving" :disabled="submitted">
+            <el-button icon="Refresh" size="large" @click="handleSave" :loading="saving">
               保存草稿
             </el-button>
           </div>
@@ -71,9 +71,9 @@
           />
         </div>
 
-        <div v-if="teacherHelperEnabled && teacherMachineIp" class="upload-hint">
+        <div v-if="teacherMachineIp" class="upload-hint">
           <el-alert type="info" :closable="false" show-icon>
-            <template #title>文件上传地址：{{ teacherMachineIp }}:{{ teacherHelperPort }}</template>
+            <template #title>文件上传地址：{{ teacherMachineIp }}:5000</template>
             图片/视频等大文件将直接上传到教师机本地服务器
           </el-alert>
         </div>
@@ -142,23 +142,18 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getStudentGuideSheet, submitGuideSheet, sendHeartbeat, getStudentGrading } from '@/api/business/guideSheet'
-import { setTeacherMachineConfig } from '@/utils/teacherMachine'
-import websocketClient from '@/plugins/websocket'
-import { getAuthorizationHeader } from '@/utils/session'
+import { setTeacherMachineIp } from '@/utils/teacherMachine'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, CircleCheckFilled } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
 
 const router = useRouter()
 const userStore = useUserStore()
-const guideSheetSubmitUrl = `${import.meta.env.VITE_APP_BASE_API || ''}/business/guide-sheet/student/submit`
 
 const loading = ref(true)
 const hasSheet = ref(false)
 const sheetTitle = ref('')
 const teacherMachineIp = ref('')
-const teacherHelperEnabled = ref(false)
-const teacherHelperPort = ref(5000)
 const sheetId = ref(null)
 const formJsonObj = ref(null)
 const answerData = ref({})
@@ -204,15 +199,6 @@ function getCurrentTabIndex() {
   }
 }
 
-function activateTab(page) {
-  nextTick(() => {
-    const formEl = renderRef.value?.$el
-    const tabs = formEl?.querySelectorAll('.el-tabs__item') || []
-    const target = tabs[Math.max(0, Number(page || 1) - 1)]
-    if (target) target.click()
-  })
-}
-
 function switchToHome() {
   router.replace('/student/index')
 }
@@ -227,66 +213,48 @@ function handleCommand(cmd) {
   }
 }
 
-function snapshotCurrentFormData() {
-  const currentData = renderRef.value?.getFormData(false) || {}
-  // VForm3 使用独立内部模型，保存前必须读取当前快照，不能复用初始化数据。
-  const snapshot = JSON.parse(JSON.stringify(currentData))
-  answerData.value = snapshot
-  return snapshot
-}
-
-function handleSave(options = {}) {
-  const silent = Boolean(options?.silent)
-  if (submitted.value) {
-    if (!silent) ElMessage.warning('导学单已提交，如需修改请重新提交')
-    return
-  }
+function handleSave() {
   if (!renderRef.value) return
   // 取消上一次未完成的保存请求（ARCH-04 防抖）
   if (abortController) {
     abortController.abort()
   }
-  const controller = new AbortController()
-  abortController = controller
+  abortController = new AbortController()
   saving.value = true
   const pageIndex = getCurrentTabIndex() + 1  // 1-based
-  const currentData = snapshotCurrentFormData()
   const data = {
     sheetId: sheetId.value,
-    answerJson: JSON.stringify(currentData),
+    answerJson: JSON.stringify(answerData.value),
     currentPage: pageIndex,
     action: 'save'
   }
-  submitGuideSheet(data, controller.signal).then(() => {
-    if (!silent) ElMessage.success('草稿已保存')
+  submitGuideSheet(data).then(() => {
+    ElMessage.success('草稿已保存')
   }).catch((err) => {
     if (err?.name !== 'AbortError' && err?.code !== 'ERR_CANCELED') {
       console.warn('保存草稿失败', err)
     }
-  }).finally(() => {
-    if (abortController === controller) {
-      abortController = null
-      saving.value = false
-    }
-  })
+  }).finally(() => { saving.value = false })
 }
 
 function handleSubmit() {
   if (!renderRef.value) return
   submitting.value = true
+  // 分页批改：提交前先同步当前标签页索引
   updateCurrentTabIndex()
   renderRef.value.getFormData().then(formData => {
-    answerData.value = JSON.parse(JSON.stringify(formData || {}))
-    const pageIndex = getCurrentTabIndex() + 1
+    const pageIndex = getCurrentTabIndex() + 1  // 1-based (传给后端 currentPage)
+    const tabIndex = currentTabIndex.value       // 0-based (传给后端 tabIndex)
     const data = {
       sheetId: sheetId.value,
       answerJson: JSON.stringify(formData),
       currentPage: pageIndex,
-      action: 'submit'
+      action: 'submit',
+      tabIndex: tabIndex  // 分页批改：提交当前标签页索引，后端仅评分此页
     }
     submitGuideSheet(data).then(() => {
       submitted.value = true
-      ElMessage.success('导学单已提交并批改')
+      ElMessage.success('当前页已提交并批改')
       // 立即获取评分结果
       fetchGradingResult()
     }).finally(() => { submitting.value = false })
@@ -400,10 +368,6 @@ onMounted(() => {
   studentName.value = userStore.nickName || userStore.name || '同学'
 
   getStudentGuideSheet().then(res => {
-    if (res.blockedByCountyExam) {
-      router.replace('/student/county-exam')
-      return
-    }
     hasSheet.value = res.hasSheet || false
     if (hasSheet.value) {
       sheetTitle.value = res.sheetTitle || ''
@@ -419,18 +383,8 @@ onMounted(() => {
       }
       maxPages.value = res.maxPages || 0
       teacherMachineIp.value = res.teacherMachineIp || ''
-      teacherHelperEnabled.value = Boolean(res.teacherHelperEnabled)
-      teacherHelperPort.value = res.teacherHelperPort || 5000
       if (teacherMachineIp.value) {
-        setTeacherMachineConfig(teacherMachineIp.value, teacherHelperPort.value, teacherHelperEnabled.value)
-      }
-      if (res.deptId && res.entryYear && res.classCode) {
-        websocketClient.connectClassroom(res.deptId, res.entryYear, res.classCode)
-        websocketClient.on('message', payload => {
-          if (payload?.type === 'message') teacherMsg.value = payload.content || ''
-          if (payload?.type === 'refresh') window.location.reload()
-          if (payload?.type === 'page_change') activateTab(payload.page)
-        })
+        setTeacherMachineIp(teacherMachineIp.value)
       }
       const existing = res.existingAnswer
       if (existing && existing.status === '2' && existing.answerJson) {
@@ -456,7 +410,7 @@ onMounted(() => {
       }, 30000)
       // 自动保存定时器
       autoSaveTimer = setInterval(() => {
-        if (!submitted.value) handleSave({ silent: true })
+        handleSave()
       }, 30000)
       // 标签页切换监听：每 500ms 检测一次 DOM 中活跃标签页的变化
       nextTick(() => {
@@ -481,31 +435,22 @@ onMounted(() => {
 })
 
 function onBeforeUnload() {
-  if (submitted.value || !renderRef.value) return
-  const currentData = snapshotCurrentFormData()
-  if (Object.keys(currentData).length > 0) {
+  if (answerData.value && Object.keys(answerData.value).length > 0) {
     const pageIndex = getCurrentTabIndex() + 1  // 1-based
     const data = {
       sheetId: sheetId.value,
-      answerJson: JSON.stringify(currentData),
+      answerJson: JSON.stringify(answerData.value),
       currentPage: pageIndex,
       action: 'save'
     }
-    // keepalive 允许页面卸载时继续发送，同时保留后端所需的登录令牌。
-    fetch(guideSheetSubmitUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthorizationHeader()
-      },
-      body: JSON.stringify(data),
-      keepalive: true
-    }).catch(() => {})
+    navigator.sendBeacon
+      ? navigator.sendBeacon('/dev-api/business/guide-sheet/student/submit',
+          new Blob([JSON.stringify(data)], { type: 'application/json' }))
+      : submitGuideSheet(data)
   }
 }
 
 onBeforeUnmount(() => {
-  websocketClient.disconnect()
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (autoSaveTimer) clearInterval(autoSaveTimer)
   if (tabWatchTimer) clearInterval(tabWatchTimer)

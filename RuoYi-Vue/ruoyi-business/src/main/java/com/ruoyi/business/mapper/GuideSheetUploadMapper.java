@@ -9,7 +9,6 @@ public interface GuideSheetUploadMapper
     public List<BizGuideSheetUpload> selectBySheetId(Long sheetId);
 
     public List<BizGuideSheetUpload> selectBySheetAndClass(@Param("sheetId") Long sheetId,
-                                                             @Param("entryYear") String entryYear,
                                                              @Param("classCode") String classCode);
 
     public int insertBizGuideSheetUpload(BizGuideSheetUpload upload);

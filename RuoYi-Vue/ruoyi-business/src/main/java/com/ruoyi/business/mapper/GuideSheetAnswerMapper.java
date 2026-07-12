@@ -14,11 +14,9 @@ public interface GuideSheetAnswerMapper
                                                         @Param("sheetId") Long sheetId);
 
     public List<BizGuideSheetAnswer> selectBySheetIdByClassCode(@Param("sheetId") Long sheetId,
-                                                                       @Param("entryYear") String entryYear,
                                                                        @Param("classCode") String classCode);
 
     public Double selectAvgScore(@Param("sheetId") Long sheetId,
-                                  @Param("entryYear") String entryYear,
                                   @Param("classCode") String classCode);
 
     public int insertBizGuideSheetAnswer(BizGuideSheetAnswer answer);

@@ -16,20 +16,15 @@ import com.ruoyi.business.domain.BizGuideSheet;
 import com.ruoyi.business.domain.BizGuideSheetAnswer;
 import com.ruoyi.business.domain.BizGuideSheetProgress;
 import com.ruoyi.business.domain.BizGuideSheetUpload;
-import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizStudent;
-import com.ruoyi.business.config.GuideSheetProperties;
 import com.ruoyi.business.domain.vo.GuideSheetExportVo;
 import com.ruoyi.business.domain.vo.GuideSheetProgressVo;
 import com.ruoyi.business.domain.vo.GuideSheetVo;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.GuideSheetProgressMapper;
 import com.ruoyi.business.mapper.GuideSheetUploadMapper;
-import com.ruoyi.business.service.ICountyExamService;
 import com.ruoyi.business.service.IGuideSheetAnswerService;
 import com.ruoyi.business.service.IGuideSheetService;
-import com.ruoyi.business.service.IBizLessonService;
-import com.ruoyi.business.service.AiGradingService;
 import com.ruoyi.business.service.GuideSheetGradingService;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
@@ -38,7 +33,6 @@ import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
-import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,24 +65,11 @@ public class GuideSheetController extends BaseController
     @Autowired
     private GuideSheetProgressMapper guideSheetProgressMapper;
 
-    @Autowired
-    private IBizLessonService bizLessonService;
-
-    @Autowired
-    private AiGradingService aiGradingService;
-
-    @Autowired
-    private GuideSheetProperties guideSheetProperties;
-
-    @Autowired
-    private ICountyExamService countyExamService;
-
     @PreAuthorize("@ss.hasPermi('business:guideSheet:list')")
     @GetMapping("/list")
     public TableDataInfo list(BizGuideSheet bizGuideSheet,
                                @RequestParam(value = "creatorFilter", required = false) String creatorFilter)
     {
-        bizGuideSheet.setDeptId(SecurityUtils.getDeptId());
         if ("self".equals(creatorFilter)) {
             bizGuideSheet.setCreatorId(SecurityUtils.getUserId());
         }
@@ -121,43 +102,12 @@ public class GuideSheetController extends BaseController
         return success(list);
     }
 
-    @PreAuthorize("@ss.hasAnyPermi('business:guideSheet:list,business:guideSheet:add,business:guideSheet:edit')")
-    @GetMapping("/lessons")
-    public AjaxResult getLessonOptions()
-    {
-        BizLesson query = new BizLesson();
-        query.setCreatorId(SecurityUtils.getUserId());
-        query.setDeptId(SecurityUtils.getDeptId());
-        return success(bizLessonService.selectBizLessonList(query));
-    }
-
-    @PreAuthorize("@ss.hasAnyPermi('business:guideSheet:list,business:guideSheet:add,business:guideSheet:edit')")
-    @GetMapping("/class-options")
-    public AjaxResult getClassOptions()
-    {
-        return success(guideSheetService.getAvailableClasses(SecurityUtils.getDeptId()));
-    }
-
-    @GetMapping("/capabilities")
-    public AjaxResult getCapabilities()
-    {
-        return success()
-                .put("aiConfigured", aiGradingService.isConfigured())
-                .put("aiProvider", aiGradingService.getProviderCode())
-                .put("teacherHelperEnabled", guideSheetProperties.getTeacherHelper().isEnabled())
-                .put("teacherHelperPort", guideSheetProperties.getTeacherHelper().getPort());
-    }
-
-    @PreAuthorize("@ss.hasPermi('business:guideSheet:list')")
     @GetMapping(value = "/{sheetId}")
     public AjaxResult getInfo(@PathVariable("sheetId") Long sheetId)
     {
         GuideSheetVo vo = guideSheetService.selectGuideSheetDetail(sheetId);
         if (vo == null) {
             return error("导学单不存在");
-        }
-        if (!isSameDepartment(vo.getDeptId())) {
-            return error("无权访问该导学单");
         }
         // 可见性校验：公开导学单任何人可看，私有导学单仅创建者可看
         if (!"Y".equals(vo.getIsPublic())) {
@@ -193,9 +143,6 @@ public class GuideSheetController extends BaseController
         }
         LoginUser loginUser = SecurityUtils.getLoginUser();
         vo.setDeptId(loginUser.getUser().getDeptId());
-        if (!canManageSheet(vo.getSheetId())) {
-            return error("无权修改该导学单");
-        }
         guideSheetService.saveGuideSheetDetail(vo);
         return success(vo);
     }
@@ -205,9 +152,6 @@ public class GuideSheetController extends BaseController
     @DeleteMapping("/{sheetIds}")
     public AjaxResult remove(@PathVariable Long[] sheetIds)
     {
-        for (Long sheetId : sheetIds) {
-            if (!canManageSheet(sheetId)) return error("无权删除导学单：" + sheetId);
-        }
         return toAjax(guideSheetService.deleteBizGuideSheetBySheetIds(sheetIds));
     }
 
@@ -221,7 +165,6 @@ public class GuideSheetController extends BaseController
         {
             return error("导学单不存在");
         }
-        if (!canManageSheet(sheetId)) return error("无权发布该导学单");
         if (!"0".equals(existing.getStatus()))
         {
             return error("仅草稿状态的导学单可以发布");
@@ -248,7 +191,6 @@ public class GuideSheetController extends BaseController
         {
             return error("导学单不存在");
         }
-        if (!canManageSheet(sheetId)) return error("无权关闭该导学单");
         if (!"1".equals(existing.getStatus()))
         {
             return error("仅已发布状态的导学单可以关闭");
@@ -270,12 +212,6 @@ public class GuideSheetController extends BaseController
         {
             return error("您不是学生用户");
         }
-        if (hasPendingCountyExam())
-        {
-            return AjaxResult.success().put("hasSheet", false)
-                    .put("blockedByCountyExam", true)
-                    .put("message", "请先完成区域抽测");
-        }
         GuideSheetVo vo = guideSheetService.getStudentGuideSheet(
                 deptId, student.getEntryYear(), student.getClassCode());
         if (vo == null)
@@ -295,11 +231,6 @@ public class GuideSheetController extends BaseController
                 .put("formJson", safeFormJson)
                 .put("maxPages", vo.getMaxPages())
                 .put("teacherMachineIp", vo.getTeacherMachineIp())
-                .put("deptId", deptId)
-                .put("entryYear", student.getEntryYear())
-                .put("classCode", student.getClassCode())
-                .put("teacherHelperEnabled", guideSheetProperties.getTeacherHelper().isEnabled())
-                .put("teacherHelperPort", guideSheetProperties.getTeacherHelper().getPort())
                 .put("existingAnswer", existingAnswer);
     }
 
@@ -316,7 +247,6 @@ public class GuideSheetController extends BaseController
         {
             return error("您不是学生用户");
         }
-        if (hasPendingCountyExam()) return error("请先完成区域抽测");
         Long sheetId = request.get("sheetId") != null
                 ? Long.valueOf(request.get("sheetId").toString()) : null;
         String answerJson = request.get("answerJson") != null
@@ -332,9 +262,6 @@ public class GuideSheetController extends BaseController
         if (sheetId == null)
         {
             return error("参数错误");
-        }
-        if (!isCurrentStudentSheet(student, sheetId)) {
-            return error("该导学单未向您发布");
         }
 
         BizGuideSheetAnswer answer = new BizGuideSheetAnswer();
@@ -368,21 +295,7 @@ public class GuideSheetController extends BaseController
         {
             return error("您不是学生用户");
         }
-        if (hasPendingCountyExam()) return error("请先完成区域抽测");
-        if (upload == null || upload.getSheetId() == null
-                || StringUtils.isEmpty(upload.getQuestionName())
-                || StringUtils.isEmpty(upload.getFileName())
-                || upload.getFileSize() == null || upload.getFileSize() < 0
-                || StringUtils.isEmpty(upload.getTeacherMachineIp())
-                || StringUtils.isEmpty(upload.getStoredPath())
-                || StringUtils.isEmpty(upload.getAccessUrl()))
-        {
-            return error("上传记录参数不完整");
-        }
         upload.setStudentId(student.getStudentId());
-        if (!isCurrentStudentSheet(student, upload.getSheetId())) {
-            return error("该导学单未向您发布");
-        }
         upload.setUploadTime(new Date());
         guideSheetUploadMapper.insertBizGuideSheetUpload(upload);
         return success("上传记录已保存");
@@ -390,21 +303,18 @@ public class GuideSheetController extends BaseController
 
     @GetMapping("/progress")
     public AjaxResult getProgress(@RequestParam("sheetId") Long sheetId,
-                                   @RequestParam(value = "entryYear", required = false) String entryYear,
                                    @RequestParam(value = "classCode", required = false) String classCode)
     {
-        if (!canManageSheet(sheetId)) return error("无权查看该导学单看板");
-        if (hasIncompleteClassFilter(entryYear, classCode)) return error("入学年份和班级编号必须同时提供");
         // 前端可能传带"班"后缀的 classCode，数据库存储的是纯数字，需统一处理
         if (classCode != null && classCode.endsWith("班")) {
             classCode = classCode.substring(0, classCode.length() - 1);
         }
-        List<GuideSheetProgressVo> list = guideSheetService.getProgress(sheetId, entryYear, classCode);
+        List<GuideSheetProgressVo> list = guideSheetService.getProgress(sheetId, classCode);
         int total = list.size();
         long submitted = list.stream().filter(p -> "Y".equals(p.getIsSubmitted())).count();
 
         // 获取平均分
-        Double avgScore = guideSheetAnswerService.getAvgScore(sheetId, entryYear, classCode);
+        Double avgScore = guideSheetAnswerService.getAvgScore(sheetId, classCode);
 
         // 提取自评数据：从 formJson 中找 rate 类型组件，从学生 answerJson 中提取对应值
         Map<String, Object> selfAssessmentData = extractSelfAssessment(sheetId, list);
@@ -563,7 +473,6 @@ public class GuideSheetController extends BaseController
         {
             return error("您不是学生用户");
         }
-        if (hasPendingCountyExam()) return error("请先完成区域抽测");
         Long sheetId = request.get("sheetId") != null
                 ? Long.valueOf(request.get("sheetId").toString()) : null;
         Integer currentPage = request.get("currentPage") != null
@@ -572,9 +481,6 @@ public class GuideSheetController extends BaseController
         if (sheetId == null)
         {
             return error("参数错误");
-        }
-        if (!isCurrentStudentSheet(student, sheetId)) {
-            return error("该导学单未向您发布");
         }
 
         // 归属校验：学生是否属于该导学单的指派班级
@@ -600,15 +506,12 @@ public class GuideSheetController extends BaseController
 
     @GetMapping("/uploads")
     public AjaxResult getUploads(@RequestParam("sheetId") Long sheetId,
-                                  @RequestParam(value = "entryYear", required = false) String entryYear,
                                   @RequestParam(value = "classCode", required = false) String classCode)
     {
-        if (!canManageSheet(sheetId)) return error("无权查看上传记录");
-        if (hasIncompleteClassFilter(entryYear, classCode)) return error("入学年份和班级编号必须同时提供");
         List<BizGuideSheetUpload> list;
         if (classCode != null && !classCode.isEmpty())
         {
-            list = guideSheetUploadMapper.selectBySheetAndClass(sheetId, entryYear, classCode);
+            list = guideSheetUploadMapper.selectBySheetAndClass(sheetId, classCode);
         }
         else
         {
@@ -618,28 +521,19 @@ public class GuideSheetController extends BaseController
     }
 
     /**
-     * 导出导学单提交结果为 Excel
+     * 导出导学单答案数据为 Excel
      */
     @PreAuthorize("@ss.hasPermi('business:guideSheet:export')")
     @Log(title = "导学单管理", businessType = BusinessType.EXPORT)
     @GetMapping("/export")
     public void export(HttpServletResponse response,
                        @RequestParam("sheetId") Long sheetId,
-                       @RequestParam(value = "entryYear", required = false) String entryYear,
                        @RequestParam(value = "classCode", required = false) String classCode)
     {
-        if (!canManageSheet(sheetId)) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            return;
-        }
-        if (hasIncompleteClassFilter(entryYear, classCode)) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
         List<BizGuideSheetAnswer> answerList;
         if (classCode != null && !classCode.isEmpty())
         {
-            answerList = guideSheetAnswerService.getBySheetIdByClassCode(sheetId, entryYear, classCode);
+            answerList = guideSheetAnswerService.getBySheetIdByClassCode(sheetId, classCode);
         }
         else
         {
@@ -648,8 +542,8 @@ public class GuideSheetController extends BaseController
 
         // 获取导学单标题用于 Sheet 名
         BizGuideSheet sheet = guideSheetService.getBySheetId(sheetId);
-        String sheetName = sheet != null ? sheet.getSheetTitle() : "导学单";
-        String exportName = sheetName + "_提交结果";
+        String sheetName = sheet != null ? sheet.getSheetTitle() : "导学单答案";
+        String exportName = sheetName + "_答案数据";
 
         // 批量查询学生信息（修复 N+1 问题：100 答案 101 次查询 → 2 次查询）
         java.util.Map<Long, BizStudent> studentMap = new java.util.HashMap<>();
@@ -780,8 +674,6 @@ public class GuideSheetController extends BaseController
         {
             return error("您不是学生用户");
         }
-        if (hasPendingCountyExam()) return error("请先完成区域抽测");
-        if (!isCurrentStudentSheet(student, sheetId)) return error("该导学单未向您发布");
         BizGuideSheetAnswer existing = guideSheetAnswerService.getByStudentAndSheet(
                 student.getStudentId(), sheetId);
         if (existing == null)
@@ -818,7 +710,6 @@ public class GuideSheetController extends BaseController
         {
             return error("导学单不存在");
         }
-        if (!canManageSheet(answer.getSheetId())) return error("无权重新评分");
         try
         {
             GuideSheetGradingService.GradingResult gradingResult = gradingService.grade(
@@ -833,24 +724,8 @@ public class GuideSheetController extends BaseController
         catch (Exception e)
         {
             log.error("重新评分失败 answerId={}", answerId, e);
-            return error("评分失败，请稍后重试");
+            return error("评分失败: " + e.getMessage());
         }
-    }
-
-    @PreAuthorize("@ss.hasPermi('business:guideSheet:edit')")
-    @PutMapping("/{sheetId}/grading/manual/{studentId}")
-    public AjaxResult saveManualGrades(@PathVariable Long sheetId, @PathVariable Long studentId,
-                                       @RequestBody Map<String, Object> request)
-    {
-        if (!canManageSheet(sheetId)) return error("无权人工批改该导学单");
-        Object rawItems = request.get("items");
-        if (!(rawItems instanceof List)) return error("请填写人工评分");
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) rawItems;
-        BizGuideSheetAnswer answer = guideSheetAnswerService.saveManualGrades(sheetId, studentId, items);
-        return success().put("totalScore", answer.getTotalScore())
-                .put("gradingStatus", answer.getGradingStatus())
-                .put("gradingDetail", answer.getGradingDetail());
     }
 
     /**
@@ -865,7 +740,6 @@ public class GuideSheetController extends BaseController
         {
             return error("导学单不存在");
         }
-        if (!canManageSheet(sheetId)) return error("无权批量评分");
         List<BizGuideSheetAnswer> answerList = guideSheetAnswerService.getBySheetId(sheetId);
         int count = 0;
         for (BizGuideSheetAnswer answer : answerList)
@@ -888,38 +762,5 @@ public class GuideSheetController extends BaseController
             }
         }
         return success().put("count", count).put("total", answerList.size());
-    }
-
-    private boolean canManageSheet(Long sheetId)
-    {
-        BizGuideSheet sheet = guideSheetService.getBySheetId(sheetId);
-        if (sheet == null) return false;
-        Long userId = SecurityUtils.getUserId();
-        return SecurityUtils.isAdmin(userId)
-                || (isSameDepartment(sheet.getDeptId()) && userId.equals(sheet.getCreatorId()));
-    }
-
-    private boolean isSameDepartment(Long deptId)
-    {
-        return SecurityUtils.isAdmin(SecurityUtils.getUserId())
-                || (deptId != null && deptId.equals(SecurityUtils.getDeptId()));
-    }
-
-    private boolean isCurrentStudentSheet(BizStudent student, Long sheetId)
-    {
-        GuideSheetVo current = guideSheetService.getStudentGuideSheet(
-                SecurityUtils.getDeptId(), student.getEntryYear(), student.getClassCode());
-        return current != null && sheetId.equals(current.getSheetId());
-    }
-
-    private boolean hasPendingCountyExam()
-    {
-        Map<String, Object> current = countyExamService.checkCurrentStudentExam();
-        return Boolean.TRUE.equals(current.get("hasExam")) && !Boolean.TRUE.equals(current.get("ended"));
-    }
-
-    private boolean hasIncompleteClassFilter(String entryYear, String classCode)
-    {
-        return StringUtils.isBlank(entryYear) != StringUtils.isBlank(classCode);
     }
 }

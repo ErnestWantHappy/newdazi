@@ -52,19 +52,19 @@ export function closeGuideSheet(sheetId) {
   })
 }
 
-export function getProgress(sheetId, entryYear, classCode) {
+export function getProgress(sheetId, classCode) {
   return request({
     url: '/business/guide-sheet/progress',
     method: 'get',
-    params: { sheetId, entryYear, classCode }
+    params: { sheetId, classCode }
   })
 }
 
-export function getUploads(sheetId, entryYear, classCode) {
+export function getUploads(sheetId, classCode) {
   return request({
     url: '/business/guide-sheet/uploads',
     method: 'get',
-    params: { sheetId, entryYear, classCode }
+    params: { sheetId, classCode }
   })
 }
 
@@ -75,13 +75,11 @@ export function getStudentGuideSheet() {
   })
 }
 
-export function submitGuideSheet(data, signal) {
+export function submitGuideSheet(data) {
   return request({
     url: '/business/guide-sheet/student/submit',
     method: 'post',
-    data,
-    signal,
-    headers: { repeatSubmit: false }
+    data
   })
 }
 
@@ -101,11 +99,11 @@ export function sendHeartbeat(data) {
   })
 }
 
-export function exportGuideSheet(sheetId, entryYear, classCode) {
+export function exportGuideSheet(sheetId, classCode) {
   return request({
     url: '/business/guide-sheet/export',
     method: 'get',
-    params: { sheetId, entryYear, classCode },
+    params: { sheetId, classCode },
     responseType: 'blob'
   })
 }
@@ -114,35 +112,6 @@ export function getCreatorList() {
   return request({
     url: '/business/guide-sheet/creators',
     method: 'get'
-  })
-}
-
-export function getGuideSheetLessons() {
-  return request({
-    url: '/business/guide-sheet/lessons',
-    method: 'get'
-  })
-}
-
-export function getGuideSheetClassOptions() {
-  return request({
-    url: '/business/guide-sheet/class-options',
-    method: 'get'
-  })
-}
-
-export function getGuideSheetCapabilities() {
-  return request({
-    url: '/business/guide-sheet/capabilities',
-    method: 'get'
-  })
-}
-
-export function saveGuideSheetManualGrades(sheetId, studentId, data) {
-  return request({
-    url: `/business/guide-sheet/${sheetId}/grading/manual/${studentId}`,
-    method: 'put',
-    data
   })
 }
 

@@ -1,14 +1,14 @@
 package com.ruoyi.business.service;
 
-import com.ruoyi.business.config.GuideSheetProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 导学单评分引擎单测（对齐 DigitalGuide：AI 配置来自 formJson，非服务端密钥）。
+ */
 class GuideSheetGradingServiceTest
 {
     @Test
@@ -29,26 +29,9 @@ class GuideSheetGradingServiceTest
     }
 
     @Test
-    void shouldRejectAiRequestWhenServerSecretIsMissing()
+    void shouldDowngradeAiGradingToManualWhenApiKeyMissing()
     {
-        GuideSheetProperties properties = new GuideSheetProperties();
-        AiGradingService service = new AiGradingService(properties);
-        try
-        {
-            assertFalse(service.isConfigured());
-            assertThrows(IllegalStateException.class, () -> service.grade("评分", 10));
-        }
-        finally
-        {
-            service.shutdown();
-        }
-    }
-
-    @Test
-    void shouldDowngradeAiGradingToManualWhenServerSecretIsMissing()
-    {
-        GuideSheetProperties properties = new GuideSheetProperties();
-        AiGradingService aiService = new AiGradingService(properties);
+        AiGradingService aiService = new AiGradingService();
         GuideSheetGradingService service = new GuideSheetGradingService();
         ReflectionTestUtils.setField(service, "aiGradingService", aiService);
         String formJson = "{\"widgetList\":[{\"name\":\"q1\",\"type\":\"textarea\","
@@ -62,7 +45,8 @@ class GuideSheetGradingServiceTest
 
             assertEquals(0, result.totalScore);
             assertEquals(GuideSheetGradingService.STATUS_MANUAL, result.gradingStatus);
-            assertTrue(result.gradingDetail.contains("已转为人工处理"));
+            assertTrue(result.gradingDetail.contains("AI评分失败")
+                    || result.gradingDetail.contains("未配置API Key"));
         }
         finally
         {
