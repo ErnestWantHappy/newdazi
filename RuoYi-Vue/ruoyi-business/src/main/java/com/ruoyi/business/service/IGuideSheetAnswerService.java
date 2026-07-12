@@ -15,15 +15,19 @@ public interface IGuideSheetAnswerService
      * 按导学单ID和班级编号查询答案列表
      *
      * @param sheetId 导学单ID
+     * @param entryYear 入学年份
      * @param classCode 班级编号
      * @return 答案列表
      */
-    public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String classCode);
+    public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String entryYear, String classCode);
 
     /**
      * 获取已提交答案的平均分
      */
-    public Double getAvgScore(Long sheetId, String classCode);
+    public Double getAvgScore(Long sheetId, String entryYear, String classCode);
+
+    public BizGuideSheetAnswer saveManualGrades(Long sheetId, Long studentId,
+                                                 List<java.util.Map<String, Object>> items);
 
     public int saveAnswer(BizGuideSheetAnswer answer);
 

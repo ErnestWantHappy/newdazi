@@ -3,18 +3,21 @@ package com.ruoyi.business.service.impl;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.ruoyi.business.domain.BizGuideSheet;
 import com.ruoyi.business.domain.BizGuideSheetAnswer;
 import com.ruoyi.business.domain.BizGuideSheetAssignment;
 import com.ruoyi.business.domain.BizGuideSheetProgress;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.vo.GuideSheetClassOptionVo;
 import com.ruoyi.business.domain.vo.GuideSheetProgressVo;
 import com.ruoyi.business.domain.vo.GuideSheetVo;
 import com.ruoyi.business.mapper.*;
 import com.ruoyi.business.service.IGuideSheetService;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.utils.SecurityUtils;
-import com.ruoyi.system.mapper.SysDeptMapper;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +30,7 @@ import org.springframework.util.CollectionUtils;
 public class GuideSheetServiceImpl implements IGuideSheetService
 {
     private static final Logger log = LoggerFactory.getLogger(GuideSheetServiceImpl.class);
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
     private GuideSheetMapper guideSheetMapper;
@@ -44,7 +48,7 @@ public class GuideSheetServiceImpl implements IGuideSheetService
     private BizStudentMapper bizStudentMapper;
 
     @Autowired
-    private SysDeptMapper deptMapper;
+    private GuideSheetUploadMapper guideSheetUploadMapper;
 
     @Override
     public BizGuideSheet getBySheetId(Long sheetId)
@@ -70,35 +74,15 @@ public class GuideSheetServiceImpl implements IGuideSheetService
         vo.setTeacherMachineIp(sheet.getTeacherMachineIp());
         vo.setIsPublic(sheet.getIsPublic());
 
-        List<String> assignedClassCodes = guideSheetAssignmentMapper.selectClassCodesBySheetId(sheetId);
-        if (!CollectionUtils.isEmpty(assignedClassCodes))
-        {
-            assignedClassCodes = assignedClassCodes.stream()
-                    .filter(StringUtils::isNotBlank)
-                    .map(code -> code.endsWith("班") ? code : code + "班")
-                    .distinct()
-                    .sorted()
-                    .collect(Collectors.toList());
-        }
-        vo.setAssignedClassCodes(assignedClassCodes);
-
-        LoginUser loginUser = SecurityUtils.getLoginUser();
-        Long deptId = null;
-        if (loginUser != null && loginUser.getUser() != null)
-        {
-            deptId = loginUser.getUser().getDeptId();
-        }
-        if (deptId != null)
-        {
-            List<BizStudent> students = bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId);
-            List<String> allClasses = students.stream()
-                    .filter(s -> s.getClassCode() != null)
-                    .map(s -> s.getClassCode() + "班")
-                    .distinct()
-                    .sorted()
-                    .collect(Collectors.toList());
-            vo.setAllClassesInGrade(allClasses);
-        }
+        BizGuideSheetAssignment assignmentQuery = new BizGuideSheetAssignment();
+        assignmentQuery.setSheetId(sheetId);
+        assignmentQuery.setDeptId(sheet.getDeptId());
+        List<GuideSheetClassOptionVo> assignedClasses = guideSheetAssignmentMapper
+                .selectBizGuideSheetAssignmentList(assignmentQuery)
+                .stream()
+                .map(item -> new GuideSheetClassOptionVo(item.getEntryYear(), item.getClassCode()))
+                .collect(Collectors.toList());
+        vo.setAssignedClasses(assignedClasses);
 
         return vo;
     }
@@ -131,7 +115,8 @@ public class GuideSheetServiceImpl implements IGuideSheetService
     {
         for (Long sheetId : sheetIds)
         {
-            // 级联删除：先删子表（答案、指派、进度），最后删主表
+            // 所有子记录都由应用层清理，避免没有外键时遗留孤儿数据。
+            guideSheetUploadMapper.deleteBySheetId(sheetId);
             guideSheetAnswerMapper.deleteBySheetId(sheetId);
             guideSheetAssignmentMapper.deleteBySheetId(sheetId);
             guideSheetProgressMapper.deleteBySheetId(sheetId);
@@ -153,7 +138,7 @@ public class GuideSheetServiceImpl implements IGuideSheetService
         sheet.setLessonId(vo.getLessonId());
         sheet.setCreatorId(loginUser.getUserId());
         sheet.setDeptId(deptId);
-        sheet.setFormJson(vo.getFormJson());
+        sheet.setFormJson(stripLegacySecrets(vo.getFormJson()));
         sheet.setStatus(vo.getStatus() != null ? vo.getStatus() : "0");
         sheet.setMaxPages(vo.getMaxPages());
         sheet.setTeacherMachineIp(vo.getTeacherMachineIp());
@@ -174,20 +159,31 @@ public class GuideSheetServiceImpl implements IGuideSheetService
         vo.setSheetId(sheetId);
 
         guideSheetAssignmentMapper.deleteBySheetId(sheetId);
-        List<String> classCodes = vo.getAssignedClassCodes();
-        if (!CollectionUtils.isEmpty(classCodes))
+        List<GuideSheetClassOptionVo> selectedClasses = vo.getAssignedClasses();
+        if (!CollectionUtils.isEmpty(selectedClasses))
         {
-            String entryYear = calculateEntryYear(vo.getDeptId());
+            Map<String, GuideSheetClassOptionVo> availableClasses = getAvailableClasses(deptId).stream()
+                    .collect(Collectors.toMap(GuideSheetClassOptionVo::getKey, item -> item));
+            Set<String> selectedKeys = new LinkedHashSet<>();
             List<BizGuideSheetAssignment> assignments = new ArrayList<>();
-            for (String classCode : classCodes)
+            for (GuideSheetClassOptionVo selectedClass : selectedClasses)
             {
-                if (StringUtils.isBlank(classCode)) continue;
-                String pureClassCode = classCode.replace("班", "").trim();
+                if (selectedClass == null || StringUtils.isBlank(selectedClass.getEntryYear())
+                        || StringUtils.isBlank(selectedClass.getClassCode()))
+                {
+                    throw new IllegalArgumentException("班级指派信息不完整");
+                }
+                String key = selectedClass.getKey();
+                if (!availableClasses.containsKey(key))
+                {
+                    throw new IllegalArgumentException("班级不存在或不属于当前学校：" + selectedClass.getLabel());
+                }
+                if (!selectedKeys.add(key)) continue;
                 BizGuideSheetAssignment assignment = new BizGuideSheetAssignment();
                 assignment.setSheetId(sheetId);
                 assignment.setDeptId(deptId);
-                assignment.setClassCode(pureClassCode);
-                assignment.setEntryYear(entryYear);
+                assignment.setClassCode(selectedClass.getClassCode());
+                assignment.setEntryYear(selectedClass.getEntryYear());
                 assignment.setAssignTime(new Date());
                 assignments.add(assignment);
             }
@@ -248,27 +244,31 @@ public class GuideSheetServiceImpl implements IGuideSheetService
     }
 
     @Override
-    public List<GuideSheetProgressVo> getProgress(Long sheetId, String classCode)
+    public List<GuideSheetProgressVo> getProgress(Long sheetId, String entryYear, String classCode)
     {
         if (classCode != null && !classCode.isEmpty())
         {
-            return guideSheetProgressMapper.selectFullProgressBySheetAndClass(sheetId, classCode);
+            return guideSheetProgressMapper.selectFullProgressBySheetAndClass(sheetId, entryYear, classCode);
         }
         return guideSheetProgressMapper.selectFullProgressBySheetId(sheetId);
     }
 
-    private String calculateEntryYear(Long deptId)
+    @Override
+    public List<GuideSheetClassOptionVo> getAvailableClasses(Long deptId)
     {
-        Calendar now = Calendar.getInstance();
-        int currentYear = now.get(Calendar.YEAR);
-        int currentMonth = now.get(Calendar.MONTH) + 1;
-        int currentDay = now.get(Calendar.DAY_OF_MONTH);
-        int academicStartYear = currentYear;
-        if (currentMonth < 7 || (currentMonth == 7 && currentDay < 20))
+        if (deptId == null) return Collections.emptyList();
+        Map<String, GuideSheetClassOptionVo> options = new LinkedHashMap<>();
+        for (BizStudent student : bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId))
         {
-            academicStartYear = currentYear - 1;
+            if (StringUtils.isBlank(student.getEntryYear()) || StringUtils.isBlank(student.getClassCode())) continue;
+            GuideSheetClassOptionVo option = new GuideSheetClassOptionVo(
+                    student.getEntryYear().trim(), student.getClassCode().trim());
+            options.put(option.getKey(), option);
         }
-        return String.valueOf(academicStartYear);
+        List<GuideSheetClassOptionVo> result = new ArrayList<>(options.values());
+        result.sort(Comparator.comparing(GuideSheetClassOptionVo::getEntryYear).reversed()
+                .thenComparing(GuideSheetClassOptionVo::getClassCode));
+        return result;
     }
 
     @Override
@@ -281,5 +281,24 @@ public class GuideSheetServiceImpl implements IGuideSheetService
     public List<String> getAssignedClasses(Long sheetId)
     {
         return guideSheetAssignmentMapper.selectClassCodesBySheetId(sheetId);
+    }
+
+    private String stripLegacySecrets(String formJson)
+    {
+        if (StringUtils.isBlank(formJson)) return formJson;
+        try
+        {
+            Map<String, Object> form = objectMapper.readValue(formJson,
+                    new TypeReference<Map<String, Object>>() { });
+            form.remove("_aiApiKey");
+            form.remove("_aiProvider");
+            form.remove("_aiModel");
+            form.remove("_aiCustomUrl");
+            return objectMapper.writeValueAsString(form);
+        }
+        catch (Exception e)
+        {
+            throw new IllegalArgumentException("导学单表单JSON格式无效", e);
+        }
     }
 }

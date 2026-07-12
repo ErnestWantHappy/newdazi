@@ -19,8 +19,8 @@
 
         <div class="toolbar-section toolbar-classes">
           <span class="toolbar-label">班级指派</span>
-          <el-select v-model="form.assignedClassCodes" multiple placeholder="请选择指派班级" size="default">
-            <el-option v-for="cls in classOptions" :key="cls" :label="cls" :value="cls" />
+          <el-select v-model="form.assignedClasses" multiple value-key="key" placeholder="请选择指派班级" size="default">
+            <el-option v-for="cls in classOptions" :key="cls.key" :label="cls.label" :value="cls" />
           </el-select>
         </div>
 
@@ -58,45 +58,9 @@
           <span class="scoring-title">评分配置</span>
           <div class="scoring-header-right">
             <el-button size="small" icon="Refresh" text @click="refreshScoredFields">刷新字段</el-button>
-            <el-select
-              v-if="scoringEnabled"
-              v-model="aiProvider"
-              size="small"
-              style="width: 130px"
-              placeholder="选择供应商"
-            >
-              <el-option label="DeepSeek" value="deepseek" />
-              <el-option label="豆包" value="doubao" />
-              <el-option label="千问" value="qwen" />
-              <el-option label="智谱清言" value="zhipu" />
-              <el-option label="自定义" value="custom" />
-            </el-select>
-            <el-input
-              v-if="scoringEnabled && aiProvider === 'custom'"
-              v-model="aiCustomUrl"
-              size="small"
-              placeholder="自定义API地址"
-              style="width: 200px"
-              clearable
-            />
-            <el-input
-              v-if="scoringEnabled"
-              v-model="aiModel"
-              size="small"
-              placeholder="模型名（可选，留空使用默认）"
-              style="width: 180px"
-              clearable
-            />
-            <el-input
-              v-if="scoringEnabled"
-              v-model="aiApiKey"
-              type="password"
-              placeholder="请输入API-Key"
-              show-password
-              size="small"
-              style="width: 200px"
-              clearable
-            />
+            <el-tag v-if="scoringEnabled" :type="aiConfigured ? 'success' : 'warning'" effect="plain">
+              {{ aiConfigured ? `AI评分已配置 · ${aiProvider}` : 'AI评分未配置，将转人工处理' }}
+            </el-tag>
             <el-switch v-model="scoringEnabled" active-text="启用自动评分" />
           </div>
         </div>
@@ -132,7 +96,7 @@
                     v-if="row.type === 'select'"
                     size="small" round
                     :type="!scoringConfig[row.id]?.answer ? 'primary' : ''"
-                    
+
                     @click="scoringConfig[row.id].answer = ''"
                   >未设置</el-button>
                   <el-button
@@ -140,7 +104,7 @@
                     :key="opt.value"
                     :type="scoringConfig[row.id]?.answer === opt.value ? 'primary' : ''"
                     size="small" round
-                    
+
                     @click="scoringConfig[row.id].answer = opt.value"
                   >{{ indexToLetter(idx) }}.{{ opt.label }}</el-button>
                 </div>
@@ -154,7 +118,7 @@
                     :key="opt.value"
                     :type="isCheckboxChecked(row.id, opt.value) ? 'primary' : ''"
                     size="small" round
-                    
+
                     @click="toggleCheckboxAnswer(row.id, opt.value, !isCheckboxChecked(row.id, opt.value))"
                   >{{ indexToLetter(idx) }}.{{ opt.label }}</el-button>
                 </div>
@@ -166,7 +130,7 @@
                   <el-button
                     size="small" round
                     :type="!scoringConfig[row.id]?._cascaderPath?.length ? 'primary' : ''"
-                    
+
                     @click="scoringConfig[row.id]._cascaderPath = ''"
                   >未设置</el-button>
                   <el-button
@@ -174,7 +138,7 @@
                     :key="opt.path.join('-')"
                     :type="arraysEqual(scoringConfig[row.id]?._cascaderPath, opt.path) ? 'primary' : ''"
                     size="small" round
-                    
+
                     @click="scoringConfig[row.id]._cascaderPath = opt.path"
                   >{{ opt.label }}</el-button>
                 </div>
@@ -186,13 +150,13 @@
                   <el-button
                     :type="scoringConfig[row.id]?.answer === 'true' ? 'success' : ''"
                     size="small" round
-                    
+
                     @click="scoringConfig[row.id].answer = 'true'"
                   >开</el-button>
                   <el-button
                     :type="scoringConfig[row.id]?.answer === 'false' ? 'danger' : ''"
                     size="small" round
-                    
+
                     @click="scoringConfig[row.id].answer = 'false'"
                   >关</el-button>
                 </div>
@@ -203,7 +167,7 @@
                 <div class="answer-number-row">
                   <el-input-number
                     v-model="scoringConfig[row.id].answer"
-                    
+
                     :controls="false"
                     size="small"
                     style="width:100%"
@@ -217,7 +181,7 @@
                   <el-date-picker
                     v-model="scoringConfig[row.id].answer"
                     type="date"
-                    
+
                     placeholder="选择日期"
                     value-format="YYYY-MM-DD"
                     size="small"
@@ -231,13 +195,13 @@
                 <div class="answer-color-row">
                   <el-color-picker
                     v-model="scoringConfig[row.id].answer"
-                    
+
                     show-alpha
                     size="small"
                   />
                   <el-input
                     v-model="scoringConfig[row.id].answer"
-                    
+
                     size="small"
                     style="width: 100px"
                     placeholder="#000000"
@@ -279,7 +243,7 @@
               <template v-else>
                 <el-input
                   v-model="scoringConfig[row.id].answer"
-                  
+
                   :placeholder="row.type === 'textarea' ? '输入参考答案...' : '输入参考答案...'"
                   :type="row.type === 'textarea' ? 'textarea' : 'text'"
                   size="small"
@@ -294,7 +258,7 @@
               <el-select v-model="scoringConfig[row.id].type" size="small" style="width: 140px" @change="onScoringTypeChange(row.id)">
                 <el-option label="精确匹配" value="exact" />
                 <el-option label="包含匹配" value="contains" />
-                <el-option label="AI评分" value="ai" :disabled="!aiApiKey" />
+                <el-option label="AI评分" value="ai" />
               </el-select>
               <div class="scoring-type-hint">{{ scoringTypeHint(scoringConfig[row.id].type) }}</div>
             </template>
@@ -310,16 +274,13 @@
 <script setup name="GuideSheetDesigner">
 import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet } from '@/api/business/guideSheet'
-import { listLesson } from '@/api/business/lesson'
+import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet, getGuideSheetLessons, getGuideSheetClassOptions, getGuideSheetCapabilities } from '@/api/business/guideSheet'
 import { ElMessage } from 'element-plus'
 import { Plus, Minus } from '@element-plus/icons-vue'
 import { pinyin } from 'pinyin-pro'
-import useUserStore from '@/store/modules/user'
 
 const router = useRouter()
 const route = useRoute()
-const userStore = useUserStore()
 
 const saving = ref(false)
 const dirty = ref(false)  // 标记表单是否有未保存的修改
@@ -332,19 +293,13 @@ const scoringEnabled = ref(false)
 const scoredFields = ref([])
 const scoringConfig = reactive({})
 const formJsonVersion = ref(0)
-const aiApiKey = ref('')
+const aiConfigured = ref(false)
 const aiProvider = ref('deepseek')
-const aiModel = ref('')
-const aiCustomUrl = ref('')
 const rawFormJson = ref(null)  // 保存原始 formJson 用于提取字段选项
 
 let pollingTimer = null
 /** 标记：新建导学单时是否已注入标签页组件（防止重复注入） */
 let tabInjected = false
-/** 标记：是否正在进行拖拽操作（防止 enforceHomeTabConstraints 在拖拽中修改 widgetList 导致重复） */
-let isDragging = false
-/** 标记：拖拽结束后是否需要修复（延迟到 dragend 后执行） */
-let pendingDragFix = false
 
 // noCache 场景：组件每次重建时重置 tabInjected，确保 VForm3 的 onFormJsonChange 能正常注入标签页
 onBeforeMount(() => {
@@ -358,7 +313,7 @@ function resetToNewForm() {
   form.sheetId = undefined
   form.sheetTitle = ''
   form.lessonId = undefined
-  form.classIds = undefined
+  form.assignedClasses = []
   form.formJson = ''
   form.maxPages = 0
   form.status = undefined
@@ -369,10 +324,6 @@ function resetToNewForm() {
   scoringEnabled.value = false
   tabInjected = false
   dirty.value = false
-  aiApiKey.value = userStore.aiApiKey || ''
-  aiProvider.value = 'deepseek'
-  aiModel.value = ''
-  aiCustomUrl.value = ''
 
   // 使用 setTimeout 确保 VForm3 已完全初始化
   setTimeout(() => {
@@ -479,18 +430,14 @@ function deepClone(obj) {
  * 复用 enforceHomeTabConstraints 逻辑，避免重复代码
  */
 function ensureTabWidget() {
-  if (!designerRef.value || isDragging) return
+  if (!designerRef.value) return
   try {
     const json = designerRef.value.getFormJson()
     if (!json.widgetList) return
 
-    const fixResult = enforceHomeTabConstraints(json)
-    if (fixResult === 'inject') {
-      const cloned = deepClone(json)
-      cloned.widgetList.unshift(createTabWidget())
-      designerRef.value.setFormJson(cloned)
-    } else if (fixResult) {
-      designerRef.value.setFormJson(json)
+    const fixedJson = enforceHomeTabConstraints(json)
+    if (fixedJson) {
+      designerRef.value.setFormJson(fixedJson)
     }
   } catch (e) {
     // 忽略
@@ -498,78 +445,101 @@ function ensureTabWidget() {
 }
 
 /**
- * 强制执行 HomeTab 约束（in-place 修改，不克隆）：
+ * 强制执行 HomeTab 约束：
  * 1. HomeTab 必须存在且位于 widgetList 首位
  * 2. HomeTab 不可删除、不可移动
  * 3. 所有其他组件必须嵌入 HomeTab 的第一个 tab-pane 内
- * 返回 false（无需修复）、true（已修复）或 'inject'（需要注入 HomeTab）
+ * 返回修复后的克隆对象（需 setFormJson），无违规返回 null
  */
 function enforceHomeTabConstraints(formJson) {
-  if (!formJson || !Array.isArray(formJson.widgetList)) return false
+  if (!formJson || !Array.isArray(formJson.widgetList)) return null
 
   const wl = formJson.widgetList
-  let fixed = false
+  let needFix = false
 
   // 1. 查找 HomeTab widget（通过 type === 'tab' 且 options.name === 'HomeTab'）
   const tabIndex = wl.findIndex(w => w.type === 'tab' && w.options && w.options.name === 'HomeTab')
 
   if (tabIndex === -1) {
-    // HomeTab 不存在 → 注入到首位（需要克隆，因为要创建新对象）
-    return 'inject'
+    // HomeTab 不存在 → 注入到首位
+    const cloned = deepClone(formJson)
+    cloned.widgetList.unshift(createTabWidget())
+    return cloned
   }
 
   if (tabIndex !== 0) {
-    // 将 HomeTab 移到首位
-    const [tab] = wl.splice(tabIndex, 1)
-    wl.unshift(tab)
-    fixed = true
+    needFix = true
   }
 
-  const tabWidget = wl[0]
+  const tabWidget = wl[tabIndex]
 
-  // 2. 确保 internal 标记存在（防止 VForm3 序列化/反序列化时剥离）
+  // 3. 确保 internal 标记存在（防止 VForm3 序列化/反序列化时剥离）
   if (tabWidget.internal !== true) {
-    tabWidget.internal = true
-    fixed = true
+    needFix = true
   }
 
-  // 3. 确保 HomeTab 至少有一个 tab-pane
+  // 4. 确保 HomeTab 至少有一个 tab-pane
   if (!Array.isArray(tabWidget.tabs) || tabWidget.tabs.length === 0) {
+    needFix = true
+  }
+
+  // 5. 检查 widgetList 中是否有非 HomeTab 的 widget
+  if (wl.length > 1) {
+    needFix = true
+  }
+
+  if (!needFix) return null
+
+  // 有违规，克隆后修复
+  const cloned = deepClone(formJson)
+  const cwl = cloned.widgetList
+
+  // 找到克隆后的 HomeTab
+  const cTabIndex = cwl.findIndex(w => w.type === 'tab' && w.options && w.options.name === 'HomeTab')
+  if (cTabIndex === -1) {
+    cwl.unshift(createTabWidget())
+    return cloned
+  }
+
+  // 确保 HomeTab 在首位
+  if (cTabIndex !== 0) {
+    const [ctw] = cwl.splice(cTabIndex, 1)
+    cwl.unshift(ctw)
+  }
+
+  const cTab = cwl[0]
+
+  // 显式确保 internal 标记（防止 VForm3 序列化/反序列化时剥离）
+  cTab.internal = true
+
+  // 确保至少有一个 tab-pane
+  if (!Array.isArray(cTab.tabs) || cTab.tabs.length === 0) {
     const paneId = 'tab-pane-' + Math.random().toString(36).substring(2, 10)
-    tabWidget.tabs = [{
+    cTab.tabs = [{
       id: paneId, type: 'tab-pane', category: 'container', icon: 'tab-pane',
       internal: true, widgetList: [],
       options: { name: 'tab1', label: 'tab 1', hidden: false, active: false, disabled: false, customClass: '' }
     }]
-    fixed = true
   }
 
   // 确保第一个 tab-pane 也有 internal 标记
-  if (tabWidget.tabs[0] && tabWidget.tabs[0].internal !== true) {
-    tabWidget.tabs[0].internal = true
-    fixed = true
+  if (cTab.tabs[0]) {
+    cTab.tabs[0].internal = true
   }
 
-  const targetPane = tabWidget.tabs[0]
+  const targetPane = cTab.tabs[0]
   if (!Array.isArray(targetPane.widgetList)) {
     targetPane.widgetList = []
-    fixed = true
   }
 
-  // 4. 将所有非 HomeTab 的 widget 直接移动到 tab-pane 内（in-place，不克隆）
-  if (wl.length > 1) {
-    // 从顶层移除所有非 HomeTab widget，直接 push 到 tab-pane
-    const nonTabWidgets = wl.splice(1, wl.length - 1)
-    for (const w of nonTabWidgets) {
-      // 避免重复添加（检查是否已在 tab-pane 中）
-      if (!targetPane.widgetList.includes(w)) {
-        targetPane.widgetList.push(w)
-      }
-    }
-    fixed = true
+  // 将所有非 HomeTab 的 widget 移动到 tab-pane 内
+  const nonTabWidgets = cwl.slice(1)
+  for (const w of nonTabWidgets) {
+    targetPane.widgetList.push(w)
   }
+  cwl.splice(1, cwl.length - 1)
 
-  return fixed
+  return cloned
 }
 
 /**
@@ -673,7 +643,7 @@ const form = reactive({
   lessonId: undefined,
   formJson: '',
   maxPages: 0,
-  assignedClassCodes: [],
+  assignedClasses: [],
   status: '0',
   isPublic: 'Y'
 })
@@ -697,9 +667,6 @@ const designerConfig = ref({
  */
 function onFormJsonChange(formJson) {
   try {
-    // 尽早注册自定义扩展组件（VForm3 初始化时 FieldPanel 可能尚未就绪，但函数内有容错）
-    registerCustomImageWidget()
-
     if (formJson) {
       // 标记表单已修改
       dirty.value = true
@@ -719,30 +686,13 @@ function onFormJsonChange(formJson) {
       }
 
       // 强制执行 HomeTab 约束：不可删除、不可移动、所有组件嵌入其中
-      // 如果正在拖拽中，标记需要修复但延迟到拖拽结束后执行
-      const fixResult = enforceHomeTabConstraints(formJson)
-      if (fixResult) {
-        if (fixResult === 'inject') {
-          // HomeTab 不存在，需要注入
-          const cloned = deepClone(formJson)
-          cloned.widgetList.unshift(createTabWidget())
-          nextTick(() => {
-            designerRef.value?.setFormJson(cloned)
-          })
-          return
-        }
-
-        if (isDragging) {
-          // 拖拽中：标记需要修复，但不立即执行 setFormJson（避免与 sortable 冲突）
-          pendingDragFix = true
-          // 不 return，继续处理其他逻辑（autoRenameWidgets 等需要读取当前 JSON）
-        } else {
-          // 非拖拽中：直接通过 setFormJson 触发重渲染
-          nextTick(() => {
-            designerRef.value?.setFormJson(formJson)
-          })
-          return
-        }
+      const fixedJson = enforceHomeTabConstraints(formJson)
+      if (fixedJson) {
+        // 有违规需要修复，通过 setFormJson 触发重渲染
+        nextTick(() => {
+          designerRef.value?.setFormJson(fixedJson)
+        })
+        return
       }
 
       // 修复图片上传组件的 uploadURL（默认空字符串导致 404）
@@ -781,7 +731,7 @@ function autoRenameWidgets(formJson) {
       time: '时间', 'time-range': '时间范围',
       rate: '评分', slider: '滑块', switch: '开关', color: '颜色选择',
       'rich-editor': '富文本', 'file-upload': '文件上传', 'picture-upload': '图片上传',
-      'static-text': '静态文本', 'html-text': 'HTML文本', 'image-add': '图片展示'
+      'static-text': '静态文本', 'html-text': 'HTML文本'
     }
 
     function walk(value) {
@@ -841,7 +791,7 @@ function widgetTypeLabel(type) {
     // === 文件上传（不可评分）===
     'file-upload': '文件上传', 'picture-upload': '图片上传',
     // === 展示类（不可评分）===
-    'static-text': '静态文本', 'html-text': 'HTML文本', 'image-add': '图片展示', divider: '分割线',
+    'static-text': '静态文本', 'html-text': 'HTML文本', divider: '分割线',
     // === 容器类 ===
     grid: '栅格容器', 'grid-col': '栅格列',
     tab: '选项卡', 'tab-pane': '选项卡面板',
@@ -1426,18 +1376,11 @@ function getFormJsonString() {
     collectSnapshot(json.widgetList || [])
     json._scoringConfig = scoringSnapshot
 
-    // 将 AI 配置写入 formJson
-    if (scoringEnabled.value && aiApiKey.value) {
-      json._aiApiKey = aiApiKey.value
-      json._aiProvider = aiProvider.value
-      if (aiModel.value) json._aiModel = aiModel.value
-      if (aiCustomUrl.value) json._aiCustomUrl = aiCustomUrl.value
-    } else {
-      delete json._aiApiKey
-      delete json._aiProvider
-      delete json._aiModel
-      delete json._aiCustomUrl
-    }
+    // 兼容清理旧数据，AI密钥和供应商配置只允许存在于服务端环境。
+    delete json._aiApiKey
+    delete json._aiProvider
+    delete json._aiModel
+    delete json._aiCustomUrl
     return JSON.stringify(json)
   }
   return form.formJson || ''
@@ -1454,7 +1397,10 @@ function buildSaveData(status) {
     formJson: getFormJsonString(),
     maxPages: form.maxPages,
     status: status,
-    assignedClassCodes: form.assignedClassCodes,
+    assignedClasses: form.assignedClasses.map(item => ({
+      entryYear: item.entryYear,
+      classCode: item.classCode
+    })),
     isPublic: form.isPublic
   }
 }
@@ -1497,6 +1443,20 @@ function handleSave() {
 function handleSaveAndPublish() {
   if (!form.sheetTitle) {
     ElMessage.warning('请输入导学单标题')
+    return
+  }
+  if (!form.assignedClasses?.length) {
+    ElMessage.warning('请至少指派一个班级')
+    return
+  }
+  try {
+    const formJson = JSON.parse(getFormJsonString() || '{}')
+    if (!Array.isArray(formJson.widgetList) || formJson.widgetList.length === 0) {
+      ElMessage.warning('请先设计表单内容')
+      return
+    }
+  } catch (e) {
+    ElMessage.warning('表单内容格式无效，请重新保存设计')
     return
   }
   if (!validateScoringTotal()) return
@@ -1559,10 +1519,9 @@ function loadSheet(sheetId) {
     form.lessonId = res.data.lessonId
     form.formJson = res.data.formJson || ''
     form.maxPages = res.data.maxPages || 0
-    form.assignedClassCodes = res.data.assignedClassCodes || []
+    form.assignedClasses = res.data.assignedClasses || []
     form.status = res.data.status || '0'
     form.isPublic = res.data.isPublic || 'Y'
-    classOptions.value = res.data.allClassesInGrade || []
     dirty.value = false
 
     // 将 JSON 回填到设计器
@@ -1572,20 +1531,12 @@ function loadSheet(sheetId) {
           const parsed = JSON.parse(form.formJson)
           // 修复图片上传组件的 uploadURL（兼容旧数据）
           fixUploadURLsInPlace(parsed)
-          // 在 setFormJson 之前提取评分配置和 AI API Key
+          // 在 setFormJson 之前提取评分配置。
           // （防止 setFormJson 触发 onFormJsonChange 时覆盖尚未恢复的 scoringConfig）
-          if (parsed._aiApiKey) {
-            aiApiKey.value = parsed._aiApiKey
-          }
-          if (parsed._aiProvider) {
-            aiProvider.value = parsed._aiProvider
-          }
-          if (parsed._aiModel) {
-            aiModel.value = parsed._aiModel
-          }
-          if (parsed._aiCustomUrl) {
-            aiCustomUrl.value = parsed._aiCustomUrl
-          }
+          delete parsed._aiApiKey
+          delete parsed._aiProvider
+          delete parsed._aiModel
+          delete parsed._aiCustomUrl
           extractScoredFields(parsed)
           // 检查是否有评分配置（递归检查 widgetList 或 _scoringConfig 快照）
           const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
@@ -1612,14 +1563,9 @@ function loadSheetAsTemplate(copyFromId) {
     form.lessonId = res.data.lessonId
     form.formJson = res.data.formJson || ''
     form.maxPages = res.data.maxPages || 0
-    form.assignedClassCodes = []  // 引用时不复制班级指派
+    form.assignedClasses = []  // 引用时不复制班级指派
     form.status = '0'
     form.isPublic = 'Y'
-    classOptions.value = res.data.allClassesInGrade || []
-    aiApiKey.value = userStore.aiApiKey || ''
-    aiProvider.value = 'deepseek'
-    aiModel.value = ''
-    aiCustomUrl.value = ''
     dirty.value = false
 
     nextTick(() => {
@@ -1642,14 +1588,26 @@ function loadSheetAsTemplate(copyFromId) {
 }
 
 function fetchLessonOptions() {
-  const params = { pageNum: 1, pageSize: 200 }
-  // 按当前用户过滤课程
-  if (userStore.name) {
-    params.createBy = userStore.name
-  }
-  listLesson(params).then(res => {
-    lessonOptions.value = res.rows || []
+  getGuideSheetLessons().then(res => {
+    lessonOptions.value = res.data || []
   }).catch(() => {})
+}
+
+function fetchClassOptions() {
+  getGuideSheetClassOptions().then(res => {
+    classOptions.value = res.data || []
+  }).catch(() => {
+    classOptions.value = []
+  })
+}
+
+function fetchCapabilities() {
+  getGuideSheetCapabilities().then(res => {
+    aiConfigured.value = Boolean(res.aiConfigured)
+    aiProvider.value = res.aiProvider || 'deepseek'
+  }).catch(() => {
+    aiConfigured.value = false
+  })
 }
 
 // 监听 formJsonVersion 变化，延迟刷新评分字段列表
@@ -1662,40 +1620,6 @@ watch(formJsonVersion, () => {
 
 // 轮询兜底注入：新建导学单时等待 VForm3 初始化完成，直到标签页注入成功
 let injectPollingTimer = null
-
-// DOM 观察器：比 VNode 树遍历更快地检测 FieldPanel 渲染，实现自定义组件零延迟注册
-let domObserverStarted = false
-let domObserver = null
-function startDomObserver() {
-  if (domObserverStarted) return
-  const container = document.querySelector('.designer-card')
-  if (!container) {
-    setTimeout(startDomObserver, 50)
-    return
-  }
-  domObserverStarted = true
-  domObserver = new MutationObserver(() => {
-    const panelEl = document.querySelector('.panel-container')
-    if (panelEl) {
-      registerCustomImageWidget()
-      // 注册成功后断开观察器，等待下次 keep-alive 激活时重新连接
-      if (domObserver) {
-        domObserver.disconnect()
-        domObserver = null
-        domObserverStarted = false
-      }
-    }
-  })
-  domObserver.observe(container, { childList: true, subtree: true })
-  // 安全兜底：10秒后断开观察器
-  setTimeout(() => {
-    if (domObserver) {
-      domObserver.disconnect()
-      domObserver = null
-      domObserverStarted = false
-    }
-  }, 10000)
-}
 function startInjectPolling() {
   if (tabInjected) return
 
@@ -1708,17 +1632,11 @@ function startInjectPolling() {
     if (attempts > maxAttempts || tabInjected) {
       clearInterval(injectPollingTimer)
       injectPollingTimer = null
-      // 标签页注入完成后，注册自定义扩展组件
-      registerCustomImageWidget()
       return
     }
 
     try {
       if (!designerRef.value) return  // VForm3 未就绪，继续轮询
-
-      // 一旦 VForm3 designer 就绪，立即注册自定义扩展组件（不等标签页注入）
-      registerCustomImageWidget()
-
       const json = designerRef.value.getFormJson()
       const { hasTab } = extractTabPages(json)
       if (!hasTab && json.widgetList) {
@@ -1739,214 +1657,10 @@ function startInjectPolling() {
   }, 300)
 }
 
-/**
- * VForm3 自定义扩展组件 schema —— 图片上传组件
- * 参照 VForm3 源码中 widgetsConfig.js 的字段组件规范定义
- */
-const IMAGE_ADD_WIDGET_SCHEMA = {
-  type: 'image-add',
-  icon: 'picture-upload-field',
-  formItemFlag: true,
-  options: {
-    name: '',
-    label: '图片展示',
-    labelAlign: '',
-    defaultValue: null,
-    columnWidth: '200px',
-    size: '',
-    labelWidth: null,
-    labelHidden: false,
-    disabled: false,
-    hidden: false,
-    required: false,
-    requiredHint: '',
-    validation: '',
-    validationHint: '',
-    imageWidth: 200,
-    imageHeight: 200,
-    imageUrl: '',
-    customClass: '',
-    onCreated: '',
-    onMounted: '',
-    onChange: '',
-    onValidate: ''
-  }
-}
-
-/**
- * 向 VForm3 设计器的"自定义扩展字段"面板注册图片上传组件
- * 通过遍历 VForm3 设计器组件树，找到 widget-panel (FieldPanel) 组件实例，
- * 将 widget schema 注入其 customFields 数据数组，使其在左侧面板中可见
- */
-function registerCustomImageWidget() {
-  try {
-    if (!designerRef.value) return
-    const vFormInstance = designerRef.value
-
-    // 通过 VForm3 设计器组件的子组件树查找 widget-panel (FieldPanel)
-    // VForm3 组件结构: VFormDesigner > el-container > el-aside > widget-panel
-    let fieldPanel = null
-    const root = vFormInstance.$.subTree
-    if (!root) return
-
-    function findFieldPanel(vnode) {
-      if (!vnode || fieldPanel) return
-      if (vnode.component) {
-        const comp = vnode.component
-        const name = comp.type && (comp.type.name || comp.type.__name)
-        // VForm3 预构建包中 widget-panel 组件可能的名称
-        if (name === 'FieldPanel' || name === 'WidgetPanel' || name === 'widget-panel') {
-          fieldPanel = comp
-          return
-        }
-        if (comp.subTree) {
-          findFieldPanel(comp.subTree)
-        }
-      }
-      if (vnode.children && Array.isArray(vnode.children)) {
-        for (const child of vnode.children) {
-          findFieldPanel(child)
-          if (fieldPanel) return
-        }
-      }
-      if (vnode.dynamicChildren && Array.isArray(vnode.dynamicChildren)) {
-        for (const child of vnode.dynamicChildren) {
-          findFieldPanel(child)
-          if (fieldPanel) return
-        }
-      }
-    }
-    findFieldPanel(root)
-
-    if (!fieldPanel) return
-
-    // 检查是否已注册过，避免重复
-    // 注意：FieldPanel 使用 Options API，customFields 在 data 中而非 setupState
-    const customFields = fieldPanel.data.customFields
-    if (customFields && Array.isArray(customFields)) {
-      const alreadyRegistered = customFields.some(f => f.type === 'image-add')
-      if (!alreadyRegistered) {
-        // 生成唯一 key 并添加到 customFields
-        customFields.push({
-          key: 'image_add_' + Date.now(),
-          ...IMAGE_ADD_WIDGET_SCHEMA,
-          displayName: '图片展示'
-        })
-      }
-    }
-
-    // 修复：组件库中"图片展示"无可视化文字的问题
-    // FieldPanel 渲染时使用 i18n2t('designer.widgetLabel.${type}', ...) 获取显示文字
-    // 由于 'image-add' 不在内置 locale 中，i18n2t 返回 null，导致文字为空
-    // 关键：必须覆盖 fieldPanel.proxy.i18n2t（Vue 3 的渲染代理），而非 fieldPanel.i18n2t（组件实例）
-    // 因为 Vue 3 的 render 函数通过 proxy 访问方法，proxy 不会自动反映实例上的方法覆盖
-    if (!fieldPanel._i18nPatched) {
-      fieldPanel._i18nPatched = true
-      const proxy = fieldPanel.proxy
-      const originalI18n2t = proxy.i18n2t
-      proxy.i18n2t = function(d, e) {
-        if (d === 'designer.widgetLabel.image-add') {
-          return '图片展示'
-        }
-        return originalI18n2t.call(this, d, e)
-      }
-      // 强制触发 FieldPanel 重新渲染
-      // 通过修改 customFields 数组来触发响应式更新
-      if (customFields && customFields.length > 0) {
-        const lastItem = customFields[customFields.length - 1]
-        customFields.push({ ...lastItem, key: 'image_add_force_' + Date.now() })
-        customFields.pop()
-      }
-    }
-
-    // 关键修复：注入 widget schema 到 designer 的查找逻辑中
-    // VForm3 的 hasConfig → getFieldWidgetByType 需要能在模块级数组中找到 widget schema
-    // 否则属性面板无法渲染任何属性编辑器，导致组件无法像原生组件一样被设置
-    const designer = fieldPanel.props.designer
-    if (designer && designer.getFieldWidgetByType) {
-      const originalGetFieldWidgetByType = designer.getFieldWidgetByType
-      // 检查是否已打补丁，避免重复包装
-      if (!designer._imageAddPatched) {
-        designer._imageAddPatched = true
-        designer.getFieldWidgetByType = function(type) {
-          if (type === 'image-add') {
-            return {
-              key: 'image_add',
-              ...IMAGE_ADD_WIDGET_SCHEMA,
-              displayName: '图片展示'
-            }
-          }
-          return originalGetFieldWidgetByType.call(this, type)
-        }
-      }
-    }
-  } catch (e) {
-    // 静默忽略注册失败
-  }
-}
-
-/**
- * 设置拖拽检测：监听 VForm3 设计器中的鼠标事件来检测 sortable 拖拽
- * 防止 sortable 拖拽组件出标签页时与 enforceHomeTabConstraints 冲突
- * 导致重复组件和 category undefined 错误
- */
-let dragDetectionSetup = false
-function setupDragDetection() {
-  if (dragDetectionSetup) return
-  try {
-    // 监听 document 上的 mousedown/mouseup 来检测拖拽
-    // Sortable.js 使用鼠标事件模拟拖拽，mousedown 开始，mouseup 结束
-    const onMouseDown = (e) => {
-      // 检查是否在拖拽手柄上（.drag-handler 或 sortable 相关元素）
-      const target = e.target
-      if (target.closest('.drag-handler') || target.closest('.field-wrapper') || target.closest('.transition-group-el')) {
-        isDragging = true
-        pendingDragFix = false
-      }
-    }
-
-    const onMouseUp = () => {
-      if (isDragging) {
-        // 延迟重置 isDragging，确保 sortable 的 onEnd 回调先执行
-        setTimeout(() => {
-          isDragging = false
-          // 拖拽结束后，如果有待修复的约束，立即执行
-          if (pendingDragFix && designerRef.value) {
-            pendingDragFix = false
-            try {
-              const json = designerRef.value.getFormJson()
-              if (json && json.widgetList) {
-                const fixResult = enforceHomeTabConstraints(json)
-                if (fixResult === 'inject') {
-                  const cloned = deepClone(json)
-                  cloned.widgetList.unshift(createTabWidget())
-                  designerRef.value.setFormJson(cloned)
-                } else if (fixResult) {
-                  designerRef.value.setFormJson(json)
-                }
-              }
-            } catch (e) {
-              // 静默忽略
-            }
-          }
-        }, 200)
-      }
-    }
-
-    document.addEventListener('mousedown', onMouseDown, true)
-    document.addEventListener('mouseup', onMouseUp, true)
-
-    dragDetectionSetup = true
-  } catch (e) {
-    // 静默忽略
-  }
-}
 onMounted(() => {
   fetchLessonOptions()
-
-  // 启动 DOM 观察器，快速检测 FieldPanel 并注册自定义组件
-  nextTick(startDomObserver)
-
+  fetchClassOptions()
+  fetchCapabilities()
   const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId
   if (copyFrom) {
@@ -1963,15 +1677,10 @@ onMounted(() => {
     nextTick(startInjectPolling)
   }
 
-  // 设置拖拽检测：防止拖拽组件出标签页时与 enforceHomeTabConstraints 冲突
-  setupDragDetection()
-
-  // 轮询兜底：每 5 秒检测一次字段变化 + 确保标签页不被删除 + 注册自定义组件 + 拖拽检测
+  // 轮询兜底：每 5 秒检测一次字段变化 + 确保标签页不被删除
   pollingTimer = setInterval(() => {
     refreshScoredFields()
     ensureTabWidget()
-    registerCustomImageWidget()
-    setupDragDetection()
   }, 5000)
 })
 
@@ -1983,11 +1692,6 @@ onBeforeUnmount(() => {
   if (injectPollingTimer) {
     clearInterval(injectPollingTimer)
     injectPollingTimer = null
-  }
-  if (domObserver) {
-    domObserver.disconnect()
-    domObserver = null
-    domObserverStarted = false
   }
   })
 
@@ -2006,8 +1710,6 @@ onActivated(() => {
   if (!route.params.sheetId) {
     nextTick(() => resetToNewForm())
   }
-  // keep-alive 激活时重新设置 DOM 观察器，确保自定义组件快速注册
-  nextTick(startDomObserver)
 })
 </script>
 

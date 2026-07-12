@@ -34,9 +34,12 @@
                u.file_name, u.file_size, u.mime_type, u.teacher_machine_ip,
                u.stored_path, u.access_url, u.upload_time
         FROM biz_guide_sheet_upload u
+        INNER JOIN biz_guide_sheet g ON u.sheet_id = g.sheet_id
         INNER JOIN biz_student s ON u.student_id = s.student_id
+        INNER JOIN sys_user su ON s.user_id = su.user_id AND su.dept_id = g.dept_id
         WHERE u.sheet_id = #{sheetId}
         <if test="classCode != null and classCode != ''">
+            AND s.entry_year = #{entryYear}
             AND s.class_code = #{classCode}
         </if>
         ORDER BY u.upload_time DESC

@@ -2,6 +2,7 @@ package com.ruoyi.business.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ruoyi.business.config.GuideSheetProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -39,8 +40,10 @@ public class AiGradingService {
     private static final int CALL_TIMEOUT_SECONDS = 60;
 
     private final ExecutorService executor;
+    private final GuideSheetProperties properties;
 
-    public AiGradingService() {
+    public AiGradingService(GuideSheetProperties properties) {
+        this.properties = properties;
         this.executor = new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
                 MAX_POOL_SIZE,
@@ -99,11 +102,16 @@ public class AiGradingService {
      * @return 评分结果（含分数和评语）
      * @throws Exception 评分失败
      */
-    public AiGradeResult grade(AiProviderConfig provider, String apiKey, String model,
-                               String customUrl, String prompt, int maxScore) throws Exception {
-        String apiUrl = provider.getApiUrl(customUrl);
+    public AiGradeResult grade(String prompt, int maxScore) throws Exception {
+        GuideSheetProperties.Ai config = properties.getAi();
+        if (!config.isConfigured()) {
+            throw new IllegalStateException("AI评分未配置");
+        }
+        AiProviderConfig provider = AiProviderConfig.fromCode(config.getProvider());
+        String model = provider.getModel(config.getModel());
+        String apiUrl = provider.getApiUrl(config.getBaseUrl());
         Future<AiGradeResult> future = executor.submit(() ->
-                callApi(apiUrl, apiKey, model, prompt, maxScore));
+                callApi(apiUrl, config.getApiKey(), model, prompt, maxScore));
 
         try {
             return future.get(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -114,6 +122,14 @@ public class AiGradingService {
             Throwable cause = e.getCause();
             throw cause instanceof Exception ? (Exception) cause : new RuntimeException(cause);
         }
+    }
+
+    public boolean isConfigured() {
+        return properties.getAi().isConfigured();
+    }
+
+    public String getProviderCode() {
+        return AiProviderConfig.fromCode(properties.getAi().getProvider()).getCode();
     }
 
     /**
@@ -185,7 +201,7 @@ public class AiGradingService {
         conn.disconnect();
 
         if (statusCode != 200) {
-            log.error("AI评分API返回错误 status={} body={}", statusCode, responseBody);
+            log.error("AI评分API返回错误 status={}", statusCode);
             throw new RuntimeException("AI评分API返回错误: " + statusCode);
         }
 
@@ -200,7 +216,7 @@ public class AiGradingService {
             if (content == null || content.isEmpty()) {
                 throw new RuntimeException("AI评分返回内容为空");
             }
-            log.info("AI评分响应 model={} content={}", model, content);
+            log.debug("AI评分响应解析开始 model={}", model);
 
             String aiComment = null;
 
@@ -223,7 +239,7 @@ public class AiGradingService {
                         return new AiGradeResult(s, aiComment);
                     }
                 } catch (Exception e) {
-                    log.warn("解析AI评分JSON失败，尝试其他方式: jsonStr={}", jsonStr, e);
+                    log.warn("解析AI评分JSON失败，尝试其他方式");
                 }
             }
 

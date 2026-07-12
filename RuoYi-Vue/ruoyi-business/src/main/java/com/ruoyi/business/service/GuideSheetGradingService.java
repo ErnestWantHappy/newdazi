@@ -125,7 +125,7 @@ public class GuideSheetGradingService {
             Map<String, Integer> fieldTabIndexMap = new LinkedHashMap<>();
             flattenWidgetsWithTabIndex(widgetList, flatWidgets, fieldTabIndexMap, -1);
 
-            
+
 
             // 4. 遍历每个字段进行评分
             boolean isPageGrading = targetTabIndex != null;
@@ -150,7 +150,7 @@ public class GuideSheetGradingService {
                 ScoringEntry scoringEntry = null;
                 if (hasSnapshot) {
                     Map<String, Object> snapCfg = scoringSnapshot.get(fieldLabel);
-                    
+
                     if (snapCfg != null) {
                         scoringEntry = new ScoringEntry();
                         scoringEntry.score = toInt(snapCfg.get("score"), 0);
@@ -178,7 +178,7 @@ public class GuideSheetGradingService {
                 // 人工批改 → 不计分，标记待处理
                 if (GRADING_TYPE_MANUAL.equals(answerType)) {
                     manualCount++;
-                    
+
                     Integer tabIdx1 = fieldTabIndexMap.get(fieldKey);
                     detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
                             "manual", "待人工批改", correctAnswer, null, tabIdx1));
@@ -202,6 +202,12 @@ public class GuideSheetGradingService {
                                 "auto", "未作答", correctAnswer, null, tabIdxAi));
                         continue;
                     }
+                    if (aiGradingService == null || !aiGradingService.isConfigured()) {
+                        manualCount++;
+                        detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
+                                "manual", "AI评分未配置，已转为人工处理", correctAnswer, null, tabIdxAi));
+                        continue;
+                    }
                     // 调用 AI 评分
                     try {
                         // 频率限制检查
@@ -211,25 +217,19 @@ public class GuideSheetGradingService {
                                     "manual", "AI评分频率限制：5分钟内已调用" + RATE_LIMIT_MAX_CALLS + "次，请稍后再试", correctAnswer, null, tabIdxAi));
                             continue;
                         }
-                        String aiApiKey = (String) formObj.get("_aiApiKey");
-                        String aiProviderCode = (String) formObj.get("_aiProvider");
-                        String aiModel = (String) formObj.get("_aiModel");
-                        String aiCustomUrl = (String) formObj.get("_aiCustomUrl");
-                        AiProviderConfig provider = AiProviderConfig.fromCode(aiProviderCode);
-                        String model = provider.getModel(aiModel);
                         String prompt = buildAiPrompt(fieldLabel, correctAnswer,
                                 String.valueOf(studentAnswer).trim(), maxScore);
-                        AiGradingService.AiGradeResult aiResult = aiGradingService.grade(provider, aiApiKey, model, aiCustomUrl, prompt, maxScore);
+                        AiGradingService.AiGradeResult aiResult = aiGradingService.grade(prompt, maxScore);
                         recordRateLimit(studentId, sheetId);
                         totalScore += aiResult.score;
                         autoCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, aiResult.score, maxScore,
-                                "auto", "AI评分(" + provider.getCode() + "): " + aiResult.score + "/" + maxScore, correctAnswer, aiResult.comment, tabIdxAi));
+                                "auto", "AI评分(" + aiGradingService.getProviderCode() + "): " + aiResult.score + "/" + maxScore, correctAnswer, aiResult.comment, tabIdxAi));
                     } catch (Exception e) {
                         log.error("AI评分调用失败 fieldKey={}", fieldKey, e);
                         manualCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
-                                "manual", "AI评分失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"), correctAnswer, null, tabIdxAi));
+                                "manual", "AI评分暂不可用，已转为人工处理", correctAnswer, null, tabIdxAi));
                     }
                     continue;
                 }
@@ -455,15 +455,11 @@ public class GuideSheetGradingService {
     }
 
     /**
-     * 判断是否是真正的控件对象（而非 options 等配置对象）。
-     * 控件对象包含 formItemFlag、key、widgetList、tabs 或 category 等特征属性。
+     * VForm不同版本的内部标记不稳定，业务字段以 name/id 与 type 作为稳定边界。
      */
     private boolean isRealWidget(Map<String, Object> map) {
-        return map.containsKey("formItemFlag")
-                || map.containsKey("key")
-                || map.containsKey("widgetList")
-                || map.containsKey("tabs")
-                || map.containsKey("category");
+        return (map.containsKey("name") || map.containsKey("id"))
+                && map.containsKey("type");
     }
 
     /**

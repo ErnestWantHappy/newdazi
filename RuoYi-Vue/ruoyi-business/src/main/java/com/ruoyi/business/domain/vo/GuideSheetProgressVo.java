@@ -9,6 +9,7 @@ public class GuideSheetProgressVo
     private Long studentId;
     private String studentName;
     private String studentNo;
+    private String entryYear;
     private String classCode;
     private Integer currentPage;
     private String isSubmitted;
@@ -60,6 +61,14 @@ public class GuideSheetProgressVo
 
     public void setClassCode(String classCode) {
         this.classCode = classCode;
+    }
+
+    public String getEntryYear() {
+        return entryYear;
+    }
+
+    public void setEntryYear(String entryYear) {
+        this.entryYear = entryYear;
     }
 
     public Integer getCurrentPage() {

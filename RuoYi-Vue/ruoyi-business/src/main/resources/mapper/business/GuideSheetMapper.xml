@@ -40,10 +40,13 @@
                ) as submitted_count,
                COALESCE(
                    (SELECT COUNT(DISTINCT st.student_id)
-                    FROM biz_guide_sheet_assignment sa
-                    INNER JOIN biz_student st ON sa.class_code COLLATE utf8mb4_general_ci = st.class_code COLLATE utf8mb4_general_ci
-                       AND sa.entry_year COLLATE utf8mb4_general_ci = st.entry_year
-                    WHERE sa.sheet_id = s.sheet_id), 0
+                     FROM biz_guide_sheet_assignment sa
+                     INNER JOIN biz_student st ON sa.class_code = st.class_code
+                        AND sa.entry_year = st.entry_year
+                     INNER JOIN sys_user su ON st.user_id = su.user_id
+                        AND su.dept_id = sa.dept_id
+                     WHERE sa.sheet_id = s.sheet_id
+                       AND sa.dept_id = s.dept_id), 0
                ) as total_assigned,
                COALESCE(
                    (SELECT ROUND(AVG(a.total_score), 1) FROM biz_guide_sheet_answer a

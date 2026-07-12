@@ -48,9 +48,12 @@
                a.current_page, a.status, a.total_score, a.grading_status,
                a.grading_detail, a.submit_time, a.create_time, a.update_time
         FROM biz_guide_sheet_answer a
+        INNER JOIN biz_guide_sheet g ON a.sheet_id = g.sheet_id
         INNER JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = g.dept_id
         WHERE a.sheet_id = #{sheetId}
         <if test="classCode != null and classCode != ''">
+            AND s.entry_year = #{entryYear}
             AND s.class_code = #{classCode}
         </if>
         ORDER BY s.student_no
@@ -59,13 +62,15 @@
     <select id="selectAvgScore" resultType="java.lang.Double">
         SELECT COALESCE(AVG(a.total_score), 0)
         FROM biz_guide_sheet_answer a
+        INNER JOIN biz_guide_sheet g ON a.sheet_id = g.sheet_id
+        INNER JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = g.dept_id
         WHERE a.sheet_id = #{sheetId}
         AND a.status = '2'
         AND a.total_score IS NOT NULL
         <if test="classCode != null and classCode != ''">
-            AND a.student_id IN (
-                SELECT s.student_id FROM biz_student s WHERE s.class_code = #{classCode}
-            )
+            AND s.entry_year = #{entryYear}
+            AND s.class_code = #{classCode}
         </if>
     </select>
 
@@ -114,6 +119,9 @@
             update_time = now()
         </trim>
         where answer_id = #{answerId}
+        <if test="params.onlyIfNotSubmitted != null and params.onlyIfNotSubmitted">
+            and (status is null or status != '2')
+        </if>
     </update>
 
     <delete id="deleteBizGuideSheetAnswerByAnswerIds" parameterType="String">

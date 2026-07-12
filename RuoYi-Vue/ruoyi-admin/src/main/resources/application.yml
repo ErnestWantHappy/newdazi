@@ -76,8 +76,8 @@ spring:
   # 服务模块
   devtools:
     restart:
-      # 热部署开关
-      enabled: true
+      # LibreOffice 进程池无法安全热重启，避免开发态后端卡在销毁阶段
+      enabled: false
   # redis 配置
   redis:
     # 地址
