@@ -2,60 +2,84 @@
   <div class="student-dashboard">
     <!-- 顶部导航栏 -->
     <header class="dashboard-header">
-      <div class="header-left">
-        <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
-        <span class="platform-name">智慧课堂 - 学生端</span>
-        <div class="view-toggle">
-          <el-button size="small" type="primary" disabled>主页</el-button>
-          <el-button size="small" plain @click="switchToGuideSheet">电子导学单</el-button>
-        </div>
-      </div>
-      <div class="header-right">
-        <div class="header-actions">
-          <el-button
-            type="primary"
-            link
-            icon="Timer"
-            @click="handleCommand('history')"
-            >历史成绩</el-button
-          >
-          <el-button
-            type="danger"
-            link
-            icon="Edit"
-            @click="handleCommand('wrong_book')"
-            >我的错题</el-button
-          >
-        </div>
-        <el-divider direction="vertical" class="header-divider" />
-        <el-dropdown trigger="click" @command="handleCommand">
-          <div class="user-info">
-            <el-avatar :size="36" shape="circle" icon="UserFilled" />
-            <span class="user-name">{{
-              studentInfo.studentName || "同学"
-            }}</span>
-            <el-icon><CaretBottom /></el-icon>
+      <div class="dashboard-header__inner">
+        <div class="header-left">
+          <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
+          <span class="platform-name">智慧课堂 - 学生端</span>
+          <div v-if="hasGuideSheet" class="view-toggle" role="tablist" aria-label="课程内容切换">
+            <el-button
+              size="small"
+              :type="activeLearningMode === 'daily' ? 'primary' : 'default'"
+              :plain="activeLearningMode !== 'daily'"
+              @click="switchToDailyCourse"
+            >日常课程题目</el-button>
+            <el-button
+              size="small"
+              :type="activeLearningMode === 'guide' ? 'primary' : 'default'"
+              :plain="activeLearningMode !== 'guide'"
+              @click="switchToGuideSheet"
+            >电子导学单</el-button>
           </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="password">修改密码</el-dropdown-item>
-              <el-dropdown-item divided command="logout"
-                >退出登录</el-dropdown-item
-              >
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        </div>
+        <div class="header-right">
+          <div class="header-actions">
+            <el-button
+              type="primary"
+              link
+              icon="Timer"
+              @click="handleCommand('history')"
+              >历史成绩</el-button
+            >
+            <el-button
+              type="danger"
+              link
+              icon="Edit"
+              @click="handleCommand('wrong_book')"
+              >我的错题</el-button
+            >
+          </div>
+          <el-divider direction="vertical" class="header-divider" />
+          <el-dropdown trigger="click" @command="handleCommand">
+            <div class="user-info">
+              <el-avatar :size="36" shape="circle" icon="UserFilled" />
+              <span class="user-name">{{
+                studentInfo.studentName || "同学"
+              }}</span>
+              <el-icon><CaretBottom /></el-icon>
+            </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item divided command="logout"
+                  >退出登录</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </div>
     </header>
 
     <!-- 加载中 -->
-    <div v-if="loading" class="loading-container">
+    <div v-if="loading && activeLearningMode === 'daily'" class="loading-container">
       <el-icon class="is-loading"><Loading /></el-icon>
       <p>正在加载课程内容...</p>
     </div>
 
+    <el-result
+      v-else-if="accessCheckFailed"
+      icon="warning"
+      title="暂时无法进入课程"
+      sub-title="系统未能确认区域抽测状态，请检查网络后重试。为保证抽测优先级，当前不会加载日常课程。"
+      class="access-error-state"
+    >
+      <template #extra>
+        <el-button type="primary" :loading="loading" @click="fetchData">重新检查</el-button>
+      </template>
+    </el-result>
+
     <!-- 主内容区 -->
-    <main v-else class="main-content">
+    <main v-else v-show="activeLearningMode === 'daily'" class="main-content">
       <!-- 课程信息Banner -->
       <div class="lesson-banner" v-if="hasLesson">
         <div class="banner-content">
@@ -95,6 +119,30 @@
 
       <!-- 无课程提示 -->
       <el-empty v-if="!hasLesson" description="暂无课程，请休息一下吧~" />
+
+      <!-- 课堂考勤：展示课程名、签到状态、教师说明；不计作业分 -->
+      <div v-else-if="lessonMode === 'attendance'" class="task-container attendance-panel">
+        <el-card shadow="never" class="attendance-card">
+          <div class="attendance-header">
+            <el-tag type="warning" effect="dark">课堂考勤</el-tag>
+            <h2 class="attendance-title">{{ lessonTitle }}</h2>
+          </div>
+          <p v-if="teacherNote" class="attendance-note">{{ teacherNote }}</p>
+          <p v-else class="attendance-note muted">教师暂无额外说明，请完成签到即可。</p>
+          <div class="attendance-status">
+            <template v-if="checkedIn">
+              <el-result icon="success" title="已签到" :sub-title="checkinTimeText">
+              </el-result>
+            </template>
+            <template v-else>
+              <el-button type="primary" size="large" :loading="checkinLoading" @click="handleStudentCheckin">
+                立即签到
+              </el-button>
+              <p class="attendance-hint">签到不计作业分，不计入作业均分。</p>
+            </template>
+          </div>
+        </el-card>
+      </div>
 
       <div v-else class="task-container">
         <!-- 空状态提示 -->
@@ -455,6 +503,7 @@
                   v-if="!practicalUploads[q.questionId]"
                   class="work-uploader"
                   :action="uploadUrl"
+                  :data="{ lessonId, questionId: q.questionId }"
                   :headers="uploadHeaders"
                   :limit="1"
                   :on-success="(res) => handleUploadSuccess(q.questionId, res)"
@@ -520,6 +569,14 @@
         </div>
       </div>
     </main>
+
+    <student-guide-sheet
+      v-if="hasGuideSheet && activeLearningMode === 'guide'"
+      ref="guideSheetRef"
+      embedded
+      :expected-binding-id="guideSheetBindingId"
+      @switch-mode="activeLearningMode = 'daily'"
+    />
 
     <!-- 修改密码弹窗 -->
     <el-dialog
@@ -842,6 +899,7 @@ import {
   submitAnswers as submitAnswersApi,
   getHistoryScores,
   getWrongQuestions,
+  studentCheckin,
 } from "@/api/business/studentHome";
 import { checkCurrentCountyExam } from "@/api/business/countyExam";
 import { updateUserPwd } from "@/api/system/user";
@@ -849,6 +907,7 @@ import useUserStore from "@/store/modules/user";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import PdfPreview from "@/components/PdfPreview/index.vue";
+import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -860,6 +919,16 @@ const loading = ref(true);
 const hasLesson = ref(false);
 const lessonId = ref(null);
 const lessonTitle = ref("");
+const lessonMode = ref("assessment");
+const teacherNote = ref("");
+const checkedIn = ref(false);
+const checkinTime = ref(null);
+const checkinLoading = ref(false);
+const hasGuideSheet = ref(false);
+const guideSheetBindingId = ref(null);
+const activeLearningMode = ref("daily");
+const guideSheetRef = ref(null);
+const accessCheckFailed = ref(false);
 const allQuestions = ref([]);
 const lessonConfig = ref({
   shuffleMode: 0,
@@ -867,6 +936,15 @@ const lessonConfig = ref({
   randomJudgmentCount: 0,
 });
 const studentInfo = ref({});
+
+const checkinTimeText = computed(() => {
+  if (!checkinTime.value) return "签到成功";
+  try {
+    return `签到时间：${new Date(checkinTime.value).toLocaleString()}`;
+  } catch (e) {
+    return "签到成功";
+  }
+});
 
 // 确定性随机：使用 seed 生成固定随机序列
 function seededRandom(seed) {
@@ -897,8 +975,6 @@ function applyRandomShuffle(questions, config, studentId, lessonIdVal) {
   
   // 生成唯一种子：studentId + lessonId
   const seed = (studentId || 0) * 10000 + (lessonIdVal || 0);
-  console.log('🎲 随机出题 seed计算:', { studentId, lessonIdVal, seed, shuffleMode, randomChoiceCount, randomJudgmentCount });
-  
   // 分类
   const typing = questions.filter(q => q.questionType === 'typing');
   const practical = questions.filter(q => q.questionType === 'practical');
@@ -1078,7 +1154,6 @@ async function loadWrongQuestions() {
   wrongResults.value = {};
   try {
     const res = await getWrongQuestions(selectedWrongLessonId.value);
-    console.log("Wrong questions data:", res);
     let list = [];
     if (Array.isArray(res)) {
       list = res;
@@ -1294,7 +1369,7 @@ const typingMyScore = computed(() => {
 });
 
 // 上传配置
-const uploadUrl = import.meta.env.VITE_APP_BASE_API + "/common/upload";
+const uploadUrl = import.meta.env.VITE_APP_BASE_API + "/business/student-home/practical-upload";
 const uploadHeaders = computed(() => ({
   Authorization: "Bearer " + userStore.token,
 }));
@@ -1302,17 +1377,35 @@ const uploadHeaders = computed(() => ({
 // 加载数据
 async function fetchData() {
   loading.value = true;
+  accessCheckFailed.value = false;
   try {
-    const countyExamRes = await checkCurrentCountyExam().catch(() => ({ data: { hasExam: false } }));
+    // 区域抽测检查失败时停止加载日常课程，避免网络异常导致优先级失效。
+    const countyExamRes = await checkCurrentCountyExam();
     if (countyExamRes.data?.hasExam && !countyExamRes.data?.ended) {
       router.replace("/student/county-exam");
       return;
     }
     const res = await getCurrentLesson();
+    if (res.blockedByCountyExam) {
+      router.replace("/student/county-exam");
+      return;
+    }
     hasLesson.value = res.hasLesson || false;
+    hasGuideSheet.value = false;
+    guideSheetBindingId.value = null;
+    lessonMode.value = "assessment";
+    teacherNote.value = "";
+    checkedIn.value = false;
+    checkinTime.value = null;
     if (res.hasLesson) {
       lessonId.value = res.lessonId;
       lessonTitle.value = res.lessonTitle;
+      lessonMode.value = res.lessonMode === "attendance" ? "attendance" : "assessment";
+      teacherNote.value = res.teacherNote || "";
+      checkedIn.value = Boolean(res.checkedIn);
+      checkinTime.value = res.checkinTime || null;
+      guideSheetBindingId.value = res.guideSheetBindingId || res.guideSheetBinding?.bindingId || null;
+      hasGuideSheet.value = Boolean(res.guideSheetEnabled && guideSheetBindingId.value);
       
       // 保存课程随机配置
       lessonConfig.value = {
@@ -1323,16 +1416,6 @@ async function fetchData() {
       
       // 应用随机逻辑
       const rawQuestions = res.questions || [];
-      
-      // Debug: 打印操作题评分标准
-      rawQuestions.filter(q => q.questionType === 'practical').forEach(q => {
-        console.log('📋 操作题评分标准 Debug:', {
-          questionId: q.questionId,
-          questionContent: q.questionContent?.substring(0, 30),
-          scoringItems: q.scoringItems,
-          scoringItemsLength: q.scoringItems?.length
-        });
-      });
       
       const studentId = res.studentInfo?.studentId || 0;
       allQuestions.value = applyRandomShuffle(
@@ -1349,9 +1432,34 @@ async function fetchData() {
       initTheoryState(); // 初始化理论测试状态（检查是否已提交）
     }
   } catch (err) {
-    console.error(err);
+    // 抽测状态无法确认时保持关闭，禁止回落到日常课程。
+    accessCheckFailed.value = true;
+    hasLesson.value = false;
+    hasGuideSheet.value = false;
+    guideSheetBindingId.value = null;
+    lessonMode.value = "assessment";
+    teacherNote.value = "";
+    checkedIn.value = false;
+    checkinTime.value = null;
+    allQuestions.value = [];
+    activeLearningMode.value = 'daily';
   } finally {
     loading.value = false;
+  }
+}
+
+async function handleStudentCheckin() {
+  if (!lessonId.value || checkinLoading.value) return;
+  checkinLoading.value = true;
+  try {
+    const res = await studentCheckin(lessonId.value);
+    checkedIn.value = true;
+    checkinTime.value = res.checkinTime || new Date().toISOString();
+    ElMessage.success(res.msg || "签到成功");
+  } catch (e) {
+    // request 拦截器通常已提示
+  } finally {
+    checkinLoading.value = false;
   }
 }
 
@@ -1638,13 +1746,6 @@ function autoSubmitTyping(qid) {
 
   const submitTimes = { [qid]: timeSpent };
 
-  console.log("=== 前端提交调试 Start ===");
-  console.log("题目ID:", qid);
-  console.log("提交内容:", answers.value[qid]);
-  console.log("实际耗时:", timeSpent, "秒");
-  console.log("当前统计状态:", JSON.parse(JSON.stringify(state)));
-  console.log("=== 前端提交调试 End ===");
-
   // 打字详情统计
   const typingStats = {
     [qid]: {
@@ -1776,7 +1877,7 @@ function getFileName(filePath) {
 function downloadMaterial(filePath) {
   if (!filePath) return;
   const baseUrl = import.meta.env.VITE_APP_BASE_API;
-  const fullUrl = baseUrl + filePath;
+  const fullUrl = `${baseUrl}/common/download/resource?resource=${encodeURIComponent(filePath)}`;
   // 使用a标签下载
   const link = document.createElement("a");
   link.href = fullUrl;
@@ -1839,12 +1940,13 @@ function handleUploadExceed() {
 }
 
 function getPracticalPreviewLabel(questionId) {
+  // C3：交卷成功与预览成功解耦的文案
   const status = practicalPreviewStatuses.value[questionId];
   if (practicalPreviewPaths.value[questionId]) return "可预览";
   if (status === "success") return "可预览";
-  if (status === "pending") return "待转换";
-  if (status === "converting") return "转换中";
-  if (status === "failed") return "预览暂不可用";
+  if (status === "pending") return "已交卷·预览排队";
+  if (status === "converting") return "已交卷·预览转换中";
+  if (status === "failed") return "已交卷·预览暂不可用";
   return "待处理";
 }
 
@@ -1865,7 +1967,7 @@ function downloadSubmittedWork(questionId) {
   const filePath = practicalUploads.value[questionId];
   if (!filePath) return;
   const link = document.createElement("a");
-  link.href = import.meta.env.VITE_APP_BASE_API + filePath;
+  link.href = `${import.meta.env.VITE_APP_BASE_API}/common/download/resource?resource=${encodeURIComponent(filePath)}`;
   link.download = getFileName(filePath);
   link.target = "_blank";
   document.body.appendChild(link);
@@ -1887,7 +1989,6 @@ function previewWork(questionId) {
 
   if (previewStatus === "success" && previewPath) {
     const resourceUrl = previewApi + encodeURIComponent(previewPath);
-    console.log("【Preview】Actual Preview URL:", resourceUrl);
     pdfPreviewRef.value?.open(resourceUrl);
     return;
   }
@@ -1895,13 +1996,13 @@ function previewWork(questionId) {
   if (previewStatus === "pending" || previewStatus === "converting") {
     ElMessage.info(
       previewStatus === "pending"
-        ? "作品已上传，正在排队转换，请稍候再试"
-        : "作品已上传，正在转换预览，请稍候再试"
+        ? "交卷已成功，预览排队中，请稍候再试或先下载原文件"
+        : "交卷已成功，预览转换中，请稍候再试或先下载原文件"
     );
     return;
   }
 
-  ElMessage.warning("作品已上传，预览暂不可用，请下载原文件查看");
+  ElMessage.warning("交卷已成功，预览暂不可用，请下载原文件查看");
 }
 
 // 删除已上传作品
@@ -1950,7 +2051,6 @@ async function loadHistoryScores() {
   historyLoading.value = true;
   try {
     const res = await getHistoryScores(historyYear.value);
-    console.log("History data:", res);
     // 兼容可能的数据结构：可能是直接数组，也可能是 {code, data}
     let list = [];
     if (Array.isArray(res)) {
@@ -1980,7 +2080,12 @@ function formatDateTime(dateStr) {
 }
 
 function switchToGuideSheet() {
-  router.push('/student/guide-sheet');
+  if (hasGuideSheet.value) activeLearningMode.value = 'guide';
+}
+
+async function switchToDailyCourse() {
+  const canLeave = await guideSheetRef.value?.ensureCanLeave?.()
+  if (canLeave !== false) activeLearningMode.value = 'daily'
 }
 
 onMounted(() => {
@@ -2005,13 +2110,20 @@ onUnmounted(() => {
   height: 64px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: 0 32px;
   position: sticky;
   top: 0;
   z-index: 2000;
+}
+
+.dashboard-header__inner {
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header-left {
@@ -2075,8 +2187,46 @@ onUnmounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
+.attendance-panel {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.attendance-card {
+  border-radius: 12px;
+}
+.attendance-header {
+  text-align: center;
+  margin-bottom: 12px;
+}
+.attendance-title {
+  margin: 12px 0 0;
+  font-size: 24px;
+  color: #1f2d3d;
+}
+.attendance-note {
+  text-align: center;
+  color: #303133;
+  line-height: 1.6;
+  margin: 8px 0 20px;
+}
+.attendance-note.muted {
+  color: #909399;
+}
+.attendance-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.attendance-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
+}
 .lesson-banner {
   margin-bottom: 24px;
 }
@@ -2750,5 +2900,83 @@ onUnmounted(() => {
   color: #f56c6c;
   font-weight: bold;
   font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    height: auto;
+    min-height: 64px;
+    padding: 8px 12px;
+  }
+  .dashboard-header__inner {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-left {
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+  .logo {
+    height: 28px;
+  }
+  .platform-name {
+    overflow: hidden;
+    max-width: 96px;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .view-toggle {
+    margin-left: auto;
+  }
+  .view-toggle :deep(.el-button) {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+  .header-right {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid #edf0f2;
+    padding-top: 6px;
+  }
+  .header-actions {
+    display: flex;
+    min-width: 0;
+  }
+  .header-actions :deep(.el-button) {
+    margin-left: 8px;
+  }
+  .header-divider {
+    margin: 0 8px;
+  }
+  .header-right .user-info {
+    padding: 4px;
+  }
+  .user-name {
+    display: none;
+  }
+  .main-content {
+    padding: 12px;
+  }
+  .banner-content {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .lesson-banner h1 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .platform-name {
+    display: none;
+  }
+  .view-toggle :deep(.el-button) {
+    font-size: 12px;
+  }
 }
 </style>

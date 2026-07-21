@@ -23,6 +23,23 @@
         <el-input v-model="searchKeyword" placeholder="姓名、学号或账号" clearable style="width: 170px" @keyup.enter="handleQuery" />
         
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
+        <el-button
+          v-if="guideSheetContext?.enabled"
+          type="success"
+          plain
+          :loading="guideContextLoading"
+          @click="openGuideSheetScores"
+        >
+          电子导学单成绩
+        </el-button>
+        <!-- D1：导学单分独立说明常驻，避免教师误并入作业均分 -->
+        <el-tooltip
+          v-if="guideSheetContext?.enabled"
+          content="电子导学单成绩独立统计，不进入作业均分、排名与课程总分。"
+          placement="bottom"
+        >
+          <el-tag type="info" effect="plain" class="guide-score-hint-tag">导学单分不计入作业均分</el-tag>
+        </el-tooltip>
         
         <!-- 选中课程提示 -->
         <span v-if="selectedLessonIds.length > 0" class="selected-tip">
@@ -511,7 +528,7 @@
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore } from '@/api/business/score';
+import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore, getGuideSheetScoreContext } from '@/api/business/score';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
@@ -543,6 +560,9 @@ const rawData = ref([]);
 const tableData = ref([]);
 const selectedLessonIds = ref([]);
 const searchKeyword = ref('');
+const guideSheetContext = ref(null);
+const guideContextLoading = ref(false);
+let guideContextRequestId = 0;
 
 // 图表相关 - 仅保留答题分析图表
 const analysisChartRef = ref(null);
@@ -799,7 +819,8 @@ onMounted(async () => {
       classOptions.value = window._allClasses
         .filter(c => (c.entry_year || c.entryYear) === urlEntryYear)
         .map(c => ({ classCode: c.class_code || c.classCode }))
-        .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
+        // 班级号可能含字母，禁止 parseInt 产生 NaN 打乱排序
+        .sort((a, b) => naturalCodeCompare(a.classCode, b.classCode));
     }
     
     const lessonRes = await getScoreLessons(urlEntryYear);
@@ -828,6 +849,7 @@ function loadClasses() {
 }
 
 function onYearChange(val) {
+  guideSheetContext.value = null;
   queryParams.value.classCode = null;
   tableData.value = [];
   rawData.value = [];
@@ -839,7 +861,8 @@ function onYearChange(val) {
     classOptions.value = window._allClasses
       .filter(c => c && (c.entry_year || c.entryYear) === val && (c.class_code || c.classCode))
       .map(c => ({ classCode: c.class_code || c.classCode }))
-      .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
+      // 班级号可能含字母，禁止 parseInt 产生 NaN 打乱排序
+      .sort((a, b) => naturalCodeCompare(a.classCode, b.classCode));
   }
   
   if (val) {
@@ -856,8 +879,51 @@ function onYearChange(val) {
 }
 
 function onClassChange() {
+  guideSheetContext.value = null;
   tableData.value = [];
   rawData.value = [];
+}
+
+async function refreshGuideSheetContext() {
+  const requestId = ++guideContextRequestId;
+  guideSheetContext.value = null;
+  if (selectedLessonIds.value.length !== 1 || !queryParams.value.entryYear || !queryParams.value.classCode) {
+    guideContextLoading.value = false;
+    return;
+  }
+  guideContextLoading.value = true;
+  try {
+    const response = await getGuideSheetScoreContext(
+      selectedLessonIds.value[0],
+      queryParams.value.entryYear,
+      queryParams.value.classCode
+    );
+    if (requestId !== guideContextRequestId) return;
+    const context = response.data || response;
+    const bindingId = context?.bindingId ?? context?.currentBindingId;
+    const enabled = context?.enabled ?? context?.guideSheetEnabled;
+    guideSheetContext.value = enabled && bindingId ? { ...context, enabled: true, bindingId } : null;
+  } catch (_error) {
+    // 后端权限是最终边界，失败时不暴露成绩入口。
+    if (requestId === guideContextRequestId) guideSheetContext.value = null;
+  } finally {
+    if (requestId === guideContextRequestId) guideContextLoading.value = false;
+  }
+}
+
+function openGuideSheetScores() {
+  const context = guideSheetContext.value;
+  if (!context?.bindingId) return;
+  router.push({
+    name: 'GuideSheetDashboard',
+    params: { bindingId: context.bindingId },
+    query: {
+      from: 'score',
+      lessonId: selectedLessonIds.value[0],
+      entryYear: queryParams.value.entryYear,
+      classCode: queryParams.value.classCode
+    }
+  });
 }
 
 // 获取正确率颜色
@@ -880,6 +946,7 @@ function handleQuery() {
   }
   
   loading.value = true;
+  refreshGuideSheetContext();
   
   getScoreSummary(
     queryParams.value.entryYear,
@@ -1007,8 +1074,10 @@ function processData() {
     
     return {
       ...student,
-      studentNo: parseInt(student.studentNo), // P0: 强制转化为数字，修复排序问题
-      className: Number(className),
+      // 学号保留原字符串：字母数字学号 parseInt 会变 NaN，展示与排序都坏
+      studentNo: student.studentNo == null ? '' : String(student.studentNo),
+      // 班级号同样可能非纯数字（如 9A），Number() 会 NaN
+      className: className == null || className === '' ? '' : String(className),
       filteredTotal: multiMode ? avgHomework : Math.round(sumTotal), // 多课模式展示均分，避免总分口径混乱
       filteredAverage: filteredAverage,
       avgTyping: avgTyping,
@@ -1020,7 +1089,14 @@ function processData() {
       totalPerformance: multiMode ? avgPerformance : sumPerformance,
       finalTotal: filteredAverage
     };
-  });
+  }).sort((a, b) => naturalCodeCompare(a.studentNo, b.studentNo));
+}
+
+/** 学号/班级号自然序：纯数字按数值，字母数字按数字段拆分比较，永不产生 NaN */
+function naturalCodeCompare(a, b) {
+  const sa = a == null ? '' : String(a);
+  const sb = b == null ? '' : String(b);
+  return sa.localeCompare(sb, 'zh-CN', { numeric: true, sensitivity: 'base' });
 }
 
 // 渲染图表
@@ -1062,8 +1138,6 @@ watch(() => selectedLessonIds.value, (newIds) => {
     if (newIds.length === 1) {
         if (!isGradeMode.value) {
             loadAnalysis(newIds[0]);
-        } else {
-             // console.log('[DEBUG] Single lesson but Grade Mode -> Skipping Analysis');
         }
     } else {
         analysisData.value = [];
@@ -1072,14 +1146,6 @@ watch(() => selectedLessonIds.value, (newIds) => {
     analysisData.value = [];
   }
 }, { deep: true });
-
-watch(() => queryParams.value.classCode, (cod) => {
-    // console.log('[DEBUG] Class Code Changed:', cod);
-});
-
-watch(analysisData, (val) => {
-    // console.log('[DEBUG] Analysis Data updated, length:', val?.length);
-});
 
 // 跳转到学生个人画像页面
 function showStudentProfile(row) {
@@ -1593,6 +1659,10 @@ async function handleExportWithColumns(selectedColumns) {
     font-weight: bold;
   }
   
+  .guide-score-hint-tag {
+    margin-left: 4px;
+    vertical-align: middle;
+  }
   .selected-tip {
     margin-left: 15px;
     color: #67C23A;

@@ -16,17 +16,18 @@ spring:
                 url: 
                 username: 
                 password: 
-            # 初始连接数
-            initialSize: 5
+            # 初始连接数（全县交卷高峰需预留足够连接）
+            initialSize: 10
             # 最小连接池数量
-            minIdle: 10
-            # 最大连接池数量
-            maxActive: 20
-            # 配置获取连接等待超时的时间
-            maxWait: 60000
+            minIdle: 20
+            # 最大连接池数量：原 20 在 5 并发交卷即可打满，县考峰值需放大
+            # 与 Tomcat 线程解耦，按「同时占用连接的业务请求」估算，不按 max-threads=800 配满
+            maxActive: 100
+            # 获取连接等待超时：过长会让前端一直挂起，30s 内失败便于快速重试/排障
+            maxWait: 30000
             # 配置连接超时时间
             connectTimeout: 30000
-            # 配置网络超时时间
+            # 配置网络超时时间（业务 SQL 应远小于此值；LibreOffice 转换不占用 JDBC 连接）
             socketTimeout: 60000
             # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒
             timeBetweenEvictionRunsMillis: 60000
@@ -40,9 +41,9 @@ spring:
             testOnBorrow: false
             testOnReturn: false
             webStatFilter: 
-                enabled: true
+                enabled: ${DRUID_STAT_ENABLED:false}
             statViewServlet:
-                enabled: true
+                enabled: ${DRUID_STAT_ENABLED:false}
                 # 设置白名单，不填则允许所有访问
                 allow:
                 url-pattern: /druid/*

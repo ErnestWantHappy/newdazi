@@ -99,4 +99,45 @@ public interface BizLessonAssignmentMapper
     Long selectCurrentLessonByClass(@Param("entryYear") String entryYear, 
                                      @Param("classCode") String classCode,
                                      @Param("deptId") Long deptId);
+
+    /** 查询某课程全部指派记录（含入学年/班号/学校） */
+    List<BizLessonAssignment> selectAssignmentsByLessonId(@Param("lessonId") Long lessonId);
+
+    /** 锁定班级当前指派，推进事务必须先调用 */
+    BizLessonAssignment selectCurrentAssignmentForUpdate(@Param("entryYear") String entryYear,
+                                                          @Param("classCode") String classCode,
+                                                          @Param("deptId") Long deptId);
+
+    /** 仅在仍指向预期课程时切到下一课，防止重复推进 */
+    int advanceCurrentAssignment(@Param("assignmentId") Long assignmentId,
+                                 @Param("currentLessonId") Long currentLessonId,
+                                 @Param("nextLessonId") Long nextLessonId,
+                                 @Param("assignerId") Long assignerId,
+                                 @Param("assignTime") java.util.Date assignTime);
+
+    /** 首次达标时写入班级独立计时点 */
+    int markAutoAdvanceReady(@Param("assignmentId") Long assignmentId,
+                             @Param("readyTime") java.util.Date readyTime);
+
+    /** 未达标或策略变化时清除班级计时点 */
+    int clearAssignmentReadyTime(@Param("assignmentId") Long assignmentId);
+
+    /** 清除某教师本校全部常规课的班级计时点 */
+    int clearReadyTimesByTeacher(@Param("teacherId") Long teacherId,
+                                 @Param("creatorName") String creatorName,
+                                 @Param("deptId") Long deptId);
+
+    /** 记录推进前课程，用于短时补交和审计 */
+    int insertAdvanceHistory(@Param("assignment") BizLessonAssignment assignment,
+                             @Param("nextLessonId") Long nextLessonId,
+                             @Param("advancedBy") Long advancedBy,
+                             @Param("advanceSource") String advanceSource,
+                             @Param("advancedTime") java.util.Date advancedTime);
+
+    /** 判断学生所在班级是否在指定时间后从该课程推进离开 */
+    int countRecentAdvanceHistory(@Param("lessonId") Long lessonId,
+                                  @Param("entryYear") String entryYear,
+                                  @Param("classCode") String classCode,
+                                  @Param("deptId") Long deptId,
+                                  @Param("advancedAfter") java.util.Date advancedAfter);
 }

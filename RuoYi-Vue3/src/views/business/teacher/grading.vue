@@ -117,22 +117,24 @@
              ></iframe>
              <el-alert
                 v-else-if="currentStudent.previewStatus === 'pending'"
-                title="文件已提交，等待启动转换"
+                title="作品已交卷，预览排队中"
+                description="交卷已成功；预览转换与批改评分互不阻断，可先下载源文件。"
                 type="info"
                 :closable="false"
                 show-icon
              />
              <el-alert
                 v-else-if="currentStudent.previewStatus === 'converting'"
-                title="文件正在转换中，暂时无法预览"
+                title="预览转换中"
+                description="交卷已成功，正在生成 PDF 预览，请稍候或下载源文件批改。"
                 type="info"
                 :closable="false"
                 show-icon
              />
              <el-alert
                 v-else-if="currentStudent.previewStatus === 'failed'"
-                title="文件转换失败，请先下载源文件查看"
-                :description="currentStudent.previewErrorMessage || '可稍后重试转换，或点击上方按钮批量重转当前班级失败文件。'"
+                title="预览失败（交卷仍有效）"
+                :description="(currentStudent.previewErrorMessage || '转换失败') + '。可下载源文件批改，或使用「重新转换本班异常文件」。'"
                 type="warning"
                 :closable="false"
                 show-icon
@@ -535,7 +537,7 @@ const currentEntryYear = computed(() => {
 
 function getFileUrl(path) {
     if (!path) return '';
-    return import.meta.env.VITE_APP_BASE_API + path;
+    return import.meta.env.VITE_APP_BASE_API + '/common/download/resource?resource=' + encodeURIComponent(path);
 }
 
 // P2: 从文件路径中提取文件名

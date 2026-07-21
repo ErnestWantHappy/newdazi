@@ -62,6 +62,18 @@ public class LessonInfoVo {
     /** 是否包含操作题 */
     private boolean hasPractical;
 
+    /** 课程用途：assessment 常规课 / attendance 课堂考勤 */
+    private String lessonMode;
+
+    /** 是否开启自动推进下一课（仅常规课） */
+    private Boolean autoAdvanceEnabled;
+
+    /** 自动推进阈值百分比，默认 50 */
+    private Integer autoAdvanceThresholdPct;
+
+    /** 自动推进延迟小时数 */
+    private java.math.BigDecimal autoAdvanceDelayHours;
+
     public String getCourseType() {
         return courseType;
     }
@@ -76,6 +88,38 @@ public class LessonInfoVo {
 
     public void setHasPractical(boolean hasPractical) {
         this.hasPractical = hasPractical;
+    }
+
+    public String getLessonMode() {
+        return lessonMode;
+    }
+
+    public void setLessonMode(String lessonMode) {
+        this.lessonMode = lessonMode;
+    }
+
+    public Boolean getAutoAdvanceEnabled() {
+        return autoAdvanceEnabled;
+    }
+
+    public void setAutoAdvanceEnabled(Boolean autoAdvanceEnabled) {
+        this.autoAdvanceEnabled = autoAdvanceEnabled;
+    }
+
+    public Integer getAutoAdvanceThresholdPct() {
+        return autoAdvanceThresholdPct;
+    }
+
+    public void setAutoAdvanceThresholdPct(Integer autoAdvanceThresholdPct) {
+        this.autoAdvanceThresholdPct = autoAdvanceThresholdPct;
+    }
+
+    public java.math.BigDecimal getAutoAdvanceDelayHours() {
+        return autoAdvanceDelayHours;
+    }
+
+    public void setAutoAdvanceDelayHours(java.math.BigDecimal autoAdvanceDelayHours) {
+        this.autoAdvanceDelayHours = autoAdvanceDelayHours;
     }
 
     /** 已指派的班级列表, 例如: ["1班", "5班"] */

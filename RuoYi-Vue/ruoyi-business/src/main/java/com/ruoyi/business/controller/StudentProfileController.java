@@ -2,21 +2,29 @@ package com.ruoyi.business.controller;
 
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.business.domain.vo.StudentProfileVo;
 import com.ruoyi.business.service.IStudentProfileService;
+import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.SecurityUtils;
 
 /**
  * 学生成绩画像 Controller
  */
 @RestController
 @RequestMapping("/business/student-profile")
+@PreAuthorize("@ss.hasPermi('business:score:list')")
 public class StudentProfileController extends BaseController {
 
     @Autowired
     private IStudentProfileService studentProfileService;
+
+    @Autowired
+    private BizStudentMapper studentMapper;
 
     /**
      * 获取学生画像汇总数据
@@ -27,6 +35,7 @@ public class StudentProfileController extends BaseController {
         @RequestParam(required = false) String academicYearStart,
         @RequestParam(required = false) String academicYearEnd
     ) {
+        assertCanViewStudent(studentId);
         StudentProfileVo profile = studentProfileService.getStudentProfile(studentId, academicYearStart, academicYearEnd);
         if (profile == null) {
             return AjaxResult.error("未找到学生信息");
@@ -43,6 +52,7 @@ public class StudentProfileController extends BaseController {
         @RequestParam(required = false) String academicYearStart,
         @RequestParam(required = false) String academicYearEnd
     ) {
+        assertCanViewStudent(studentId);
         List<StudentProfileVo.CourseScoreItem> list = studentProfileService.getCourseScores(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
@@ -56,6 +66,7 @@ public class StudentProfileController extends BaseController {
         @RequestParam(required = false) String academicYearStart,
         @RequestParam(required = false) String academicYearEnd
     ) {
+        assertCanViewStudent(studentId);
         List<StudentProfileVo.TypingSpeedItem> list = studentProfileService.getTypingSpeeds(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
@@ -69,6 +80,7 @@ public class StudentProfileController extends BaseController {
         @RequestParam(required = false) String academicYearStart,
         @RequestParam(required = false) String academicYearEnd
     ) {
+        assertCanViewStudent(studentId);
         List<StudentProfileVo.PerformanceItem> list = studentProfileService.getPerformances(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
@@ -82,6 +94,7 @@ public class StudentProfileController extends BaseController {
         @RequestParam(required = false) String academicYearStart,
         @RequestParam(required = false) String academicYearEnd
     ) {
+        assertCanViewStudent(studentId);
         List<StudentProfileVo.RankItem> list = studentProfileService.getRankChanges(studentId, academicYearStart, academicYearEnd);
         return AjaxResult.success(list);
     }
@@ -103,5 +116,18 @@ public class StudentProfileController extends BaseController {
         @RequestParam String classCode
     ) {
         return AjaxResult.success(studentProfileService.getStudentList(entryYear, classCode));
+    }
+
+    private void assertCanViewStudent(Long studentId) {
+        if (studentId == null) {
+            throw new ServiceException("学生不能为空");
+        }
+        Long userId = SecurityUtils.getUserId();
+        if (SecurityUtils.isAdmin(userId)) {
+            return;
+        }
+        if (studentMapper.countManagedScoreStudent(userId, SecurityUtils.getDeptId(), studentId) <= 0) {
+            throw new ServiceException("只能查看自己管理班级的学生");
+        }
     }
 }

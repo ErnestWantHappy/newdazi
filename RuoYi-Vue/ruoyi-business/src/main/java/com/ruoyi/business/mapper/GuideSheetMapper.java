@@ -1,22 +1,27 @@
 package com.ruoyi.business.mapper;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import com.ruoyi.business.domain.BizGuideSheet;
+import org.apache.ibatis.annotations.Param;
 
 public interface GuideSheetMapper
 {
-    public List<BizGuideSheet> selectBizGuideSheetList(BizGuideSheet bizGuideSheet);
+    List<BizGuideSheet> selectBizGuideSheetList(BizGuideSheet guideSheet);
 
-    public BizGuideSheet selectBizGuideSheetBySheetId(Long sheetId);
+    BizGuideSheet selectBizGuideSheetBySheetId(Long sheetId);
 
-    public int insertBizGuideSheet(BizGuideSheet bizGuideSheet);
+    int insertBizGuideSheet(BizGuideSheet guideSheet);
 
-    public int updateBizGuideSheet(BizGuideSheet bizGuideSheet);
+    /**
+     * 按版本更新模板，返回0表示模板已归档或发生并发修改。
+     */
+    int updateBizGuideSheet(BizGuideSheet guideSheet);
 
-    public int deleteBizGuideSheetBySheetId(Long sheetId);
+    int archiveBySheetId(@Param("sheetId") Long sheetId,
+                         @Param("updateBy") String updateBy,
+                         @Param("updateTime") Date updateTime);
 
-    public int deleteBizGuideSheetBySheetIds(Long[] sheetIds);
-
-    public List<Map<String, Object>> selectCreatorList(Long deptId);
+    List<Map<String, Object>> selectCreatorList(Long countyDeptId);
 }

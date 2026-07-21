@@ -1,5 +1,15 @@
 <template>
   <div class="app-container county-exam-page">
+    <!-- E2：状态流水线（默认展开，降低教研员迷路成本） -->
+    <el-alert
+      class="status-pipeline"
+      type="info"
+      :closable="false"
+      show-icon
+      title="状态流水线：草稿 → 开启 → 关闭 → 已发布"
+      description="草稿可配置组卷与参考班；开启后学生作答；关闭后评卷；发布后成绩对学校可见。评卷入口与「关闭/发布」独立控制。"
+    />
+
     <div class="toolbar-panel">
       <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="72px">
         <el-form-item label="抽测名称" prop="examName">
@@ -448,6 +458,7 @@ const { proxy } = getCurrentInstance()
 const router = useRouter()
 const pdfPreviewRef = ref(null)
 
+// E3：状态文案与按钮边界保持「开启/关闭/评卷/发布」语义一致
 const statusOptions = [
   { label: '草稿', value: '0' },
   { label: '开启', value: '1' },
@@ -577,19 +588,43 @@ async function handleDelete(row) {
 }
 
 async function handleOpen(row) {
+  // E1：开启前核对清单（参考班、组卷、时长）
+  const detailResponse = await getCountyExam(row.examId).catch(() => ({ data: {} }))
+  const detail = detailResponse.data || {}
+  const questions = detail.questions || []
+  const classes = detail.classes || detail.assignedClasses || []
+  const classCount = Array.isArray(classes) ? classes.length : (detail.classCount || 0)
+  const questionCount = Array.isArray(questions) ? questions.length : (detail.questionCount || 0)
+  if (questionCount <= 0) {
+    ElMessage.warning('开启前请先完成组卷（至少 1 道题）')
+    return
+  }
+  if (classCount <= 0) {
+    ElMessage.warning('开启前请先选择参考班级（每校最多 1 个班）')
+    return
+  }
+  const checklist = [
+    `抽测名称：${row.examName || '-'}`,
+    `组卷题目：${questionCount} 道`,
+    `参考班级：${classCount} 个`,
+    '开启后将冻结组卷与参考班级，并为学生生成试卷',
+    '学生端优先阻断日常课程与导学单',
+    '请确认作答时长（默认 40 分钟）'
+  ].join('\n')
   const { value } = await ElMessageBox.prompt(
-    '开启后将冻结组卷和参考班级，并为参考学生生成个人试卷。请输入本场区域抽测作答时长。',
-    '开启区域抽测',
+    checklist + '\n\n请输入本场区域抽测作答时长（分钟）：',
+    '开启前核对',
     {
       type: 'warning',
-      inputValue: String(row.durationMinutes || 40),
+      inputValue: String(row.durationMinutes || detail.durationMinutes || 40),
       inputPlaceholder: '默认 40',
       inputValidator: value => {
         const duration = Number(value)
         return Number.isInteger(duration) && duration > 0 ? true : '作答时长必须是大于 0 的整数'
       },
-      confirmButtonText: '开启',
-      cancelButtonText: '取消'
+      confirmButtonText: '确认开启',
+      cancelButtonText: '取消',
+      customClass: 'county-open-checklist'
     }
   )
   const durationMinutes = Number(value)
@@ -686,9 +721,12 @@ function gradeToEntryYear(grade) {
   const now = new Date()
   const currentYear = now.getFullYear()
   const month = now.getMonth() + 1
+  const day = now.getDate()
   
-  // 当前学年起始年（9月开学）
-  const academicStartYear = month >= 9 ? currentYear : currentYear - 1
+  // 平台统一在 7 月 20 日切换新学年，避免暑期抽测选到上一届学生。
+  const academicStartYear = month > 7 || (month === 7 && day >= 20)
+    ? currentYear
+    : currentYear - 1
   
   let gradeInSection
   if (grade >= 1 && grade <= 6) {
@@ -1035,7 +1073,7 @@ function handlePreviewQuestionFile(row) {
     ElMessage.warning('该操作题暂无可预览文档')
     return
   }
-  pdfPreviewRef.value?.open(import.meta.env.VITE_APP_BASE_API + row.previewPath)
+  pdfPreviewRef.value?.open(import.meta.env.VITE_APP_BASE_API + '/common/resource/view?resource=' + encodeURIComponent(row.previewPath))
 }
 
 function questionProgress(questionId) {
@@ -1067,6 +1105,9 @@ getList()
     background: #fff;
   }
 
+  .status-pipeline {
+    margin-bottom: 12px;
+  }
   .toolbar-panel {
     padding: 16px 16px 0;
     margin-bottom: 12px;

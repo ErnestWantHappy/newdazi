@@ -100,6 +100,13 @@
             <artifactId>fastjson2</artifactId>
         </dependency>
 
+        <!-- 学生端表单中的富文本必须经过结构化 HTML 白名单清洗。 -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

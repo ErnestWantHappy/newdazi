@@ -8,6 +8,15 @@ export function getCurrentLesson() {
   })
 }
 
+/** 学生课堂签到（不计作业分） */
+export function studentCheckin(lessonId) {
+  return request({
+    url: '/business/student-home/checkin',
+    method: 'post',
+    data: { lessonId }
+  })
+}
+
 // 提交学生答案
 export function submitAnswers(data) {
   return request({

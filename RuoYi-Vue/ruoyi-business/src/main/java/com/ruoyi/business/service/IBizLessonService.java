@@ -75,4 +75,14 @@ public interface IBizLessonService
     public LessonDetailVo selectLessonDetailsByLessonId(Long lessonId);
 
     public LessonDetailVo saveLessonDetails(LessonDetailVo lessonDetailVo);
+
+    /**
+     * 读取教师统一课程推进策略（全校常规课共用一套）
+     */
+    public java.util.Map<String, Object> getTeacherAdvancePolicy();
+
+    /**
+     * 保存教师统一课程推进策略，并同步到该教师全部常规课
+     */
+    public java.util.Map<String, Object> updateTeacherAdvancePolicy(LessonDetailVo config);
 }

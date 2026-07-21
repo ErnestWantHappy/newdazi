@@ -55,7 +55,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="studentNo" label="学号" width="100" align="center" sortable :sort-method="(a, b) => Number(a.studentNo) - Number(b.studentNo)" />
+      <el-table-column prop="studentNo" label="学号" width="100" align="center" sortable :sort-method="(a, b) => String(a.studentNo ?? '').localeCompare(String(b.studentNo ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' })" />
       
       <el-table-column prop="studentName" label="姓名" width="90" align="center" show-overflow-tooltip sortable>
         <template #default="scope">

@@ -1,40 +1,63 @@
 <template>
+  <div class="guide-sheet-designer-shell">
+  <BeginnerGuideWizard
+    v-show="editorMode === 'beginner'"
+    :form="form"
+    :form-json="rawFormJson"
+    :invalid-raw="invalidFormJson"
+    :grade-options="biz_grade"
+    :semester-options="biz_semester"
+    :saving="saving"
+    :loading="loadingSheet"
+    :ai-available="aiConfigured"
+    :draft-key="draftKey"
+    @update-metadata="handleBeginnerMetadata"
+    @update-form-json="handleBeginnerFormJson"
+    @save="handleBeginnerSave"
+    @advanced="enterAdvancedMode"
+    @back="goBack"
+  />
+  <AdvancedModeBridge v-if="editorMode === 'advanced'" @return-beginner="returnToBeginnerMode">
   <div class="app-container">
-    <!-- 上块：导学单设置 -->
-    <el-card class="filter-card" shadow="never">
+    <!-- 模板设置只描述模板本身，课程和班级统一由课程设计器管理。 -->
+    <el-card class="filter-card metadata-card" shadow="never">
+      <div class="metadata-heading">
+        <div>
+          <span class="metadata-kicker">模板信息</span>
+          <strong>{{ form.sheetId ? '编辑导学单模板' : '新建导学单模板' }}</strong>
+        </div>
+        <el-tag type="info" effect="plain">模板与课程投放已解耦</el-tag>
+      </div>
       <div class="toolbar-row">
         <div class="toolbar-section toolbar-title">
           <span class="toolbar-label">导学单标题</span>
-          <el-input v-model="form.sheetTitle" placeholder="请输入导学单标题" size="large" />
+          <el-input v-model="form.sheetTitle" maxlength="100" show-word-limit placeholder="请输入导学单标题" size="large" @input="markDirty" />
         </div>
-
-        <div class="toolbar-section toolbar-settings">
-          <span class="toolbar-label">关联课程</span>
-          <div class="settings-row">
-            <el-select v-model="form.lessonId" placeholder="关联课程" clearable filterable size="default">
-              <el-option v-for="l in lessonOptions" :key="l.lessonId" :label="l.lessonTitle" :value="l.lessonId" />
-            </el-select>
-          </div>
-        </div>
-
-        <div class="toolbar-section toolbar-classes">
-          <span class="toolbar-label">班级指派</span>
-          <el-select v-model="form.assignedClasses" multiple value-key="key" placeholder="请选择指派班级" size="default">
-            <el-option v-for="cls in classOptions" :key="cls.key" :label="cls.label" :value="cls" />
+        <div class="toolbar-section toolbar-compact">
+          <span class="toolbar-label">年级</span>
+          <el-select v-model="form.grade" placeholder="年级" style="width: 120px" @change="markDirty">
+            <el-option v-for="dict in biz_grade" :key="dict.value" :label="dict.label" :value="Number(dict.value)" />
           </el-select>
         </div>
-
+        <div class="toolbar-section toolbar-compact">
+          <span class="toolbar-label">学期</span>
+          <el-select v-model="form.semester" placeholder="学期" style="width: 120px" @change="markDirty">
+            <el-option v-for="dict in biz_semester" :key="dict.value" :label="dict.label" :value="dict.value" />
+          </el-select>
+        </div>
+        <div class="toolbar-section toolbar-compact">
+          <span class="toolbar-label">第几课</span>
+          <el-input-number v-model="form.lessonNum" :min="1" :max="30" controls-position="right" style="width: 110px" @change="markDirty" />
+        </div>
         <div class="toolbar-section toolbar-public">
-          <span class="toolbar-label">是否公开</span>
-          <el-radio-group v-model="form.isPublic" size="default">
-            <el-radio value="Y">是</el-radio>
-            <el-radio value="N">否</el-radio>
+          <span class="toolbar-label">可见范围</span>
+          <el-radio-group v-model="form.isPublic" size="default" @change="markDirty">
+            <el-radio-button value="Y">公共导学单</el-radio-button>
+            <el-radio-button value="N">我的私有</el-radio-button>
           </el-radio-group>
         </div>
-
         <div class="toolbar-section toolbar-actions">
-          <el-button type="primary" icon="Check" @click="handleSave">保存</el-button>
-          <el-button type="success" icon="Upload" @click="handleSaveAndPublish" :loading="saving">保存并发布</el-button>
+          <el-button type="primary" icon="Check" :loading="saving" @click="handleSave">保存模板</el-button>
           <el-button icon="View" @click="openPreview">预览</el-button>
           <el-button icon="ArrowLeft" @click="goBack" :loading="saving">返回列表</el-button>
         </div>
@@ -59,7 +82,7 @@
           <div class="scoring-header-right">
             <el-button size="small" icon="Refresh" text @click="refreshScoredFields">刷新字段</el-button>
             <el-tag v-if="scoringEnabled" :type="aiConfigured ? 'success' : 'warning'" effect="plain">
-              {{ aiConfigured ? `AI评分已配置 · ${aiProvider}` : 'AI评分未配置，将转人工处理' }}
+              {{ aiConfigured ? 'AI评分已配置' : 'AI评分未配置，将转人工处理' }}
             </el-tag>
             <el-switch v-model="scoringEnabled" active-text="启用自动评分" />
           </div>
@@ -269,23 +292,30 @@
     </el-card>
 
     </div>
+  </AdvancedModeBridge>
+  </div>
 </template>
 
 <script setup name="GuideSheetDesigner">
-import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, nextTick, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet, getGuideSheetLessons, getGuideSheetClassOptions, getGuideSheetCapabilities } from '@/api/business/guideSheet'
+import { getGuideSheet, updateGuideSheet, addGuideSheet, getGuideSheetCapabilities } from '@/api/business/guideSheet'
 import { ElMessage } from 'element-plus'
 import { Plus, Minus } from '@element-plus/icons-vue'
 import { pinyin } from 'pinyin-pro'
+import AdvancedModeBridge from './components/AdvancedModeBridge.vue'
+import BeginnerGuideWizard from './components/BeginnerGuideWizard.vue'
+import { createBeginnerFormJson, DEFAULT_STRUCTURE_PRESET_ID } from './utils/presetFactories.js'
+import { hasRenderableWidgets, parseFormJsonSafely } from './utils/formJsonBridge.js'
+import { useBeginnerGuideDesigner } from './composables/useBeginnerGuideDesigner.js'
 
 const router = useRouter()
 const route = useRoute()
+const { proxy } = getCurrentInstance()
+const { biz_grade, biz_semester } = proxy.useDict('biz_grade', 'biz_semester')
 
 const saving = ref(false)
 const dirty = ref(false)  // 标记表单是否有未保存的修改
-const lessonOptions = ref([])
-const classOptions = ref([])
 const designerRef = ref(null)
 
 // 评分相关
@@ -294,7 +324,6 @@ const scoredFields = ref([])
 const scoringConfig = reactive({})
 const formJsonVersion = ref(0)
 const aiConfigured = ref(false)
-const aiProvider = ref('deepseek')
 const rawFormJson = ref(null)  // 保存原始 formJson 用于提取字段选项
 
 let pollingTimer = null
@@ -312,20 +341,31 @@ onBeforeMount(() => {
 function resetToNewForm() {
   form.sheetId = undefined
   form.sheetTitle = ''
-  form.lessonId = undefined
-  form.assignedClasses = []
+  form.grade = undefined
+  form.semester = undefined
+  form.lessonNum = 1
   form.formJson = ''
   form.maxPages = 0
-  form.status = undefined
-  form.isPublic = 'Y'
+  form.isPublic = 'N'
+  form.versionNo = null
+  form.teachingTopic = ''
+  form.estimatedMinutes = 20
   scoredFields.value = []
   Object.keys(scoringConfig).forEach(k => delete scoringConfig[k])
   rawFormJson.value = null
+  invalidFormJson.value = ''
   scoringEnabled.value = false
   tabInjected = false
   dirty.value = false
 
-  // 使用 setTimeout 确保 VForm3 已完全初始化
+  // 新手模式先生成可直接编辑的课堂结构，高级设计器按需挂载。
+  if (editorMode.value === 'beginner') {
+    const initialJson = createBeginnerFormJson(DEFAULT_STRUCTURE_PRESET_ID)
+    rawFormJson.value = initialJson
+    form.formJson = JSON.stringify(initialJson)
+    return
+  }
+
   setTimeout(() => {
     if (designerRef.value && !tabInjected) {
       designerRef.value.setFormJson({ widgetList: [createTabWidget()] })
@@ -426,123 +466,6 @@ function deepClone(obj) {
 }
 
 /**
- * 轮询兜底：确保 HomeTab 标签页约束不被破坏
- * 复用 enforceHomeTabConstraints 逻辑，避免重复代码
- */
-function ensureTabWidget() {
-  if (!designerRef.value) return
-  try {
-    const json = designerRef.value.getFormJson()
-    if (!json.widgetList) return
-
-    const fixedJson = enforceHomeTabConstraints(json)
-    if (fixedJson) {
-      designerRef.value.setFormJson(fixedJson)
-    }
-  } catch (e) {
-    // 忽略
-  }
-}
-
-/**
- * 强制执行 HomeTab 约束：
- * 1. HomeTab 必须存在且位于 widgetList 首位
- * 2. HomeTab 不可删除、不可移动
- * 3. 所有其他组件必须嵌入 HomeTab 的第一个 tab-pane 内
- * 返回修复后的克隆对象（需 setFormJson），无违规返回 null
- */
-function enforceHomeTabConstraints(formJson) {
-  if (!formJson || !Array.isArray(formJson.widgetList)) return null
-
-  const wl = formJson.widgetList
-  let needFix = false
-
-  // 1. 查找 HomeTab widget（通过 type === 'tab' 且 options.name === 'HomeTab'）
-  const tabIndex = wl.findIndex(w => w.type === 'tab' && w.options && w.options.name === 'HomeTab')
-
-  if (tabIndex === -1) {
-    // HomeTab 不存在 → 注入到首位
-    const cloned = deepClone(formJson)
-    cloned.widgetList.unshift(createTabWidget())
-    return cloned
-  }
-
-  if (tabIndex !== 0) {
-    needFix = true
-  }
-
-  const tabWidget = wl[tabIndex]
-
-  // 3. 确保 internal 标记存在（防止 VForm3 序列化/反序列化时剥离）
-  if (tabWidget.internal !== true) {
-    needFix = true
-  }
-
-  // 4. 确保 HomeTab 至少有一个 tab-pane
-  if (!Array.isArray(tabWidget.tabs) || tabWidget.tabs.length === 0) {
-    needFix = true
-  }
-
-  // 5. 检查 widgetList 中是否有非 HomeTab 的 widget
-  if (wl.length > 1) {
-    needFix = true
-  }
-
-  if (!needFix) return null
-
-  // 有违规，克隆后修复
-  const cloned = deepClone(formJson)
-  const cwl = cloned.widgetList
-
-  // 找到克隆后的 HomeTab
-  const cTabIndex = cwl.findIndex(w => w.type === 'tab' && w.options && w.options.name === 'HomeTab')
-  if (cTabIndex === -1) {
-    cwl.unshift(createTabWidget())
-    return cloned
-  }
-
-  // 确保 HomeTab 在首位
-  if (cTabIndex !== 0) {
-    const [ctw] = cwl.splice(cTabIndex, 1)
-    cwl.unshift(ctw)
-  }
-
-  const cTab = cwl[0]
-
-  // 显式确保 internal 标记（防止 VForm3 序列化/反序列化时剥离）
-  cTab.internal = true
-
-  // 确保至少有一个 tab-pane
-  if (!Array.isArray(cTab.tabs) || cTab.tabs.length === 0) {
-    const paneId = 'tab-pane-' + Math.random().toString(36).substring(2, 10)
-    cTab.tabs = [{
-      id: paneId, type: 'tab-pane', category: 'container', icon: 'tab-pane',
-      internal: true, widgetList: [],
-      options: { name: 'tab1', label: 'tab 1', hidden: false, active: false, disabled: false, customClass: '' }
-    }]
-  }
-
-  // 确保第一个 tab-pane 也有 internal 标记
-  if (cTab.tabs[0]) {
-    cTab.tabs[0].internal = true
-  }
-
-  const targetPane = cTab.tabs[0]
-  if (!Array.isArray(targetPane.widgetList)) {
-    targetPane.widgetList = []
-  }
-
-  // 将所有非 HomeTab 的 widget 移动到 tab-pane 内
-  const nonTabWidgets = cwl.slice(1)
-  for (const w of nonTabWidgets) {
-    targetPane.widgetList.push(w)
-  }
-  cwl.splice(1, cwl.length - 1)
-
-  return cloned
-}
-
-/**
  * 递归遍历 widgetList，修复 picture-upload 组件的 uploadURL
  * VForm3 默认 uploadURL 为空字符串，导致上传请求 404
  */
@@ -624,31 +547,73 @@ function fixUploadURLsInPlace(obj) {
 }
 
 // 设计器中隐藏的无评分价值字段
-const bannedWidgets = [
-  'button', 'alert',
-  'file-upload',
-  'fold', 'snippet', 'type-editor',
-  // 隐藏不需要的输入/时间/数值/富文本字段（单行输入 input 恢复显示）
-  'text', 'number',
-  'time', 'time-range', 'date', 'date-range', 'daterange',
-  'slider', 'switch',
-  'rich-editor',
-  'picture-upload'
-]
+const bannedWidgets = []
 
 // pinyin 命名计数器，key=widgetType, value=当前编号
 const pinyinCounters = reactive({})
 
 const form = reactive({
   sheetId: undefined,
+  versionNo: null,
   sheetTitle: '',
-  lessonId: undefined,
+  grade: undefined,
+  semester: undefined,
+  lessonNum: 1,
   formJson: '',
   maxPages: 0,
-  assignedClasses: [],
-  status: '0',
-  isPublic: 'Y'
+  isPublic: 'N',
+  teachingTopic: '',
+  estimatedMinutes: 20
 })
+
+const {
+  editorMode,
+  loadingSheet,
+  invalidFormJson,
+  draftKey,
+  handleBeginnerMetadata,
+  handleBeginnerFormJson,
+  enterAdvancedMode,
+  returnToBeginnerMode,
+  handleBeginnerSave
+} = useBeginnerGuideDesigner({
+  route,
+  router,
+  form,
+  rawFormJson,
+  dirty,
+  saveTemplate,
+  hydrateAdvancedDesigner,
+  readAdvancedFormJson: getFormJsonString
+})
+
+function markDirty() {
+  dirty.value = true
+}
+
+function hydrateAdvancedDesigner(attempt = 0) {
+  if (!designerRef.value) {
+    if (attempt < 20) setTimeout(() => hydrateAdvancedDesigner(attempt + 1), 100)
+    return
+  }
+  try {
+    const parsed = deepClone(rawFormJson.value) || createBeginnerFormJson(DEFAULT_STRUCTURE_PRESET_ID, {
+      topic: form.teachingTopic,
+      estimatedMinutes: form.estimatedMinutes
+    })
+    fixUploadURLsInPlace(parsed)
+    extractScoredFields(parsed)
+    const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
+      || scoredFields.value.some(field => Number(scoringConfig[field.id]?.score || 0) > 0)
+    scoringEnabled.value = hasScoring
+    tabInjected = true
+    designerRef.value.setFormJson(parsed)
+    nextTick(startDomObserver)
+  } catch {
+    ElMessage.warning('高级设计器暂时无法载入，请返回新手模式继续编辑')
+  }
+}
+
 
 // 表单设计器配置
 const designerConfig = ref({
@@ -687,16 +652,6 @@ function onFormJsonChange(formJson) {
         }
       }
 
-      // 强制执行 HomeTab 约束：不可删除、不可移动、所有组件嵌入其中
-      const fixedJson = enforceHomeTabConstraints(formJson)
-      if (fixedJson) {
-        // 有违规需要修复，通过 setFormJson 触发重渲染
-        nextTick(() => {
-          designerRef.value?.setFormJson(fixedJson)
-        })
-        return
-      }
-
       // 修复图片上传组件的 uploadURL（默认空字符串导致 404）
       const urlFixedJson = fixUploadURLs(formJson)
       if (urlFixedJson) {
@@ -715,8 +670,8 @@ function onFormJsonChange(formJson) {
       extractScoredFieldsPreserveConfig(formJson)
       formJsonVersion.value++
     }
-  } catch (e) {
-    console.warn('onFormJsonChange error:', e)
+  } catch {
+    // 高级组件的瞬时事件不应中断教师当前编辑。
   }
 }
 
@@ -769,8 +724,8 @@ function autoRenameWidgets(formJson) {
     }
 
     walk(formJson.widgetList)
-  } catch (e) {
-    console.warn('autoRenameWidgets error:', e)
+  } catch {
+    // 旧模板字段不完整时保留原名称，由教师继续编辑。
   }
 }
 
@@ -1391,91 +1346,98 @@ function getFormJsonString() {
 /**
  * 构建保存数据
  */
-function buildSaveData(status) {
+function buildSaveData() {
   return {
     sheetId: form.sheetId,
+    versionNo: form.versionNo,
     sheetTitle: form.sheetTitle,
-    lessonId: form.lessonId,
+    grade: form.grade,
+    semester: form.semester,
+    lessonNum: form.lessonNum,
     formJson: getFormJsonString(),
     maxPages: form.maxPages,
-    status: status,
-    assignedClasses: form.assignedClasses.map(item => ({
-      entryYear: item.entryYear,
-      classCode: item.classCode
-    })),
     isPublic: form.isPublic
   }
 }
 
 /**
- * 校验评分配置总分是否为100（仅在启用评分时校验）
+ * 校验评分配置是否可用于批改，不限定导学单必须采用百分制。
  */
 function validateScoringTotal() {
   if (!scoringEnabled.value) return true
   const total = scoredFields.value.reduce((sum, f) => sum + (scoringConfig[f.id]?.score || 0), 0)
-  if (total !== 100) {
-    ElMessage.warning(`评分配置总分必须为100，当前总分：${total}`)
-    return false
-  }
-  const zeroScoreField = scoredFields.value.find(f => (scoringConfig[f.id]?.score || 0) === 0)
-  if (zeroScoreField) {
-    ElMessage.warning(`"${zeroScoreField.title}"的分值不能为0，请设置分值`)
+  if (total <= 0) {
+    ElMessage.warning('启用自动评分后，请至少为一道题设置分值')
     return false
   }
   return true
 }
 
-function handleSave() {
-  if (!form.sheetId && !form.sheetTitle) {
+function validateMetadata() {
+  if (!form.sheetTitle?.trim()) {
     ElMessage.warning('请输入导学单标题')
-    return
+    return false
   }
-  if (!validateScoringTotal()) return
-  const data = buildSaveData(form.sheetId ? form.status : '0')
-  saving.value = true
-  const apiCall = form.sheetId ? updateGuideSheet(data) : addGuideSheet(data)
-  apiCall.then(res => {
-    if (!form.sheetId && res?.sheetId) form.sheetId = res.sheetId
-    if (!form.sheetId && res?.data?.sheetId) form.sheetId = res.data.sheetId
-    dirty.value = false
-    ElMessage.success('保存成功')
-  }).finally(() => { saving.value = false })
+  if (form.grade === undefined || form.grade === null || form.grade === '') {
+    ElMessage.warning('请选择年级')
+    return false
+  }
+  if (form.semester === undefined || form.semester === null || form.semester === '') {
+    ElMessage.warning('请选择学期')
+    return false
+  }
+  if (!form.lessonNum) {
+    ElMessage.warning('请设置第几课')
+    return false
+  }
+  if (!form.isPublic) {
+    ElMessage.warning('请选择模板可见范围')
+    return false
+  }
+  return true
 }
 
-function handleSaveAndPublish() {
-  if (!form.sheetTitle) {
-    ElMessage.warning('请输入导学单标题')
-    return
+function validateFormContent(formJsonValue) {
+  const parsed = parseFormJsonSafely(formJsonValue)
+  if (!parsed.ok) {
+    ElMessage.warning('导学单内容暂时无法读取，请先创建可编辑副本')
+    return false
   }
-  if (!form.assignedClasses?.length) {
-    ElMessage.warning('请至少指派一个班级')
-    return
+  if (!hasRenderableWidgets(parsed.formJson)) {
+    ElMessage.warning('请先添加至少一个教学模块，再保存模板')
+    return false
   }
-  try {
-    const formJson = JSON.parse(getFormJsonString() || '{}')
-    if (!Array.isArray(formJson.widgetList) || formJson.widgetList.length === 0) {
-      ElMessage.warning('请先设计表单内容')
-      return
-    }
-  } catch (e) {
-    ElMessage.warning('表单内容格式无效，请重新保存设计')
-    return
-  }
-  if (!validateScoringTotal()) return
-  // 先保存为草稿，再调用发布接口（发布接口要求 status 必须为 '0'）
-  const data = buildSaveData('0')
+  return true
+}
+
+async function saveTemplate(showSuccess = true) {
+  if (!validateMetadata() || !validateScoringTotal()) return false
+  const data = buildSaveData()
+  if (!validateFormContent(data.formJson)) return false
   saving.value = true
-  const apiCall = form.sheetId ? updateGuideSheet(data) : addGuideSheet(data)
-  apiCall.then(res => {
-    if (!form.sheetId && res?.sheetId) form.sheetId = res.sheetId
-    if (!form.sheetId && res?.data?.sheetId) form.sheetId = res.data.sheetId
+  try {
+    const res = await (form.sheetId ? updateGuideSheet(data) : addGuideSheet(data))
+    const saved = res?.data && typeof res.data === 'object' ? res.data : res
+    if (!form.sheetId && saved?.sheetId) form.sheetId = saved.sheetId
+    if (!form.sheetId && (typeof res?.data === 'number' || typeof res?.data === 'string')) form.sheetId = res.data
+    if (saved?.versionNo != null) form.versionNo = saved.versionNo
     dirty.value = false
-    return publishGuideSheet(form.sheetId)
-  }).then(() => {
-    ElMessage.success('保存并发布成功')
-  }).catch(() => {
-    ElMessage.warning('保存成功，但发布失败，请检查表单内容和班级指派')
-  }).finally(() => { saving.value = false })
+    if (showSuccess) {
+      // 明确告知可在课程设计中选用，避免教师以为「建了却用不上」
+      ElMessage.success({
+        message: '导学单已保存，可在课程设计中启用并选择。',
+        duration: 3000,
+        showClose: true
+      })
+    }
+    return true
+  } finally {
+    saving.value = false
+  }
+}
+
+function handleSave() {
+  saveTemplate(true)
 }
 
 function openPreview() {
@@ -1485,73 +1447,32 @@ function openPreview() {
   }
 }
 
-function goBack() {
+async function goBack() {
   if (saving.value) return
-  // 新建表单且无标题：直接返回，不保存（避免 sheet_title 空值导致数据库错误）
-  if (!form.sheetId && !form.sheetTitle) {
-    router.push({ path: '/business/guide-sheet-list' })
-    return
-  }
-  // 无未保存的修改：直接返回，不重复保存
-  if (!dirty.value) {
-    router.push({ path: '/business/guide-sheet-list' })
-    return
-  }
-  if (!validateScoringTotal()) return
-  saving.value = true
-  const data = buildSaveData(form.sheetId ? form.status : '0')
-  const apiCall = form.sheetId ? updateGuideSheet(data) : addGuideSheet(data)
-  apiCall.then(res => {
-    if (!form.sheetId && res?.sheetId) form.sheetId = res.sheetId
-    if (!form.sheetId && res?.data?.sheetId) form.sheetId = res.data.sheetId
-    dirty.value = false
-  }).finally(() => {
-    saving.value = false
-    router.push({ path: '/business/guide-sheet-list' })
-  })
+  router.push({ path: '/business/guide-sheet-list' })
 }
 
 /**
  * 加载已有导学单数据
  */
 function loadSheet(sheetId) {
-  getGuideSheet(sheetId).then(res => {
-    form.sheetId = res.data.sheetId
-    form.sheetTitle = res.data.sheetTitle || ''
-    form.lessonId = res.data.lessonId
-    form.formJson = res.data.formJson || ''
-    form.maxPages = res.data.maxPages || 0
-    form.assignedClasses = res.data.assignedClasses || []
-    form.status = res.data.status || '0'
-    form.isPublic = res.data.isPublic || 'Y'
-    dirty.value = false
-
-    // 将 JSON 回填到设计器
-    nextTick(() => {
-      if (designerRef.value && form.formJson) {
-        try {
-          const parsed = JSON.parse(form.formJson)
-          // 修复图片上传组件的 uploadURL（兼容旧数据）
-          fixUploadURLsInPlace(parsed)
-          // 在 setFormJson 之前提取评分配置。
-          // （防止 setFormJson 触发 onFormJsonChange 时覆盖尚未恢复的 scoringConfig）
-          delete parsed._aiApiKey
-          delete parsed._aiProvider
-          delete parsed._aiModel
-          delete parsed._aiCustomUrl
-          extractScoredFields(parsed)
-          // 检查是否有评分配置（递归检查 widgetList 或 _scoringConfig 快照）
-          const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
-            || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
-          if (hasScoring) scoringEnabled.value = true
-          // 设置表单（会触发 onFormJsonChange → extractScoredFieldsPreserveConfig，此时 scoringConfig 已恢复）
-          designerRef.value.setFormJson(parsed)
-        } catch (e) {
-          console.warn('表单JSON解析失败', e)
-        }
-      }
+  loadingSheet.value = true
+  getGuideSheet(sheetId)
+    .then(res => {
+      const data = res.data || res
+      form.sheetId = data.sheetId
+      form.versionNo = data.versionNo
+      form.sheetTitle = data.sheetTitle || ''
+      form.grade = data.grade
+      form.semester = data.semester
+      form.lessonNum = data.lessonNum || 1
+      form.formJson = data.formJson || ''
+      form.maxPages = data.maxPages || 0
+      form.isPublic = data.isPublic || 'N'
+      applyLoadedFormJson(form.formJson)
+      dirty.value = false
     })
-  })
+    .finally(() => { loadingSheet.value = false })
 }
 
 /**
@@ -1559,54 +1480,54 @@ function loadSheet(sheetId) {
  */
 function loadSheetAsTemplate(copyFromId) {
   tabInjected = true  // 模板已有表单结构，无需注入标签页
-  getGuideSheet(copyFromId).then(res => {
-    form.sheetId = undefined  // 清空ID，保存时创建新记录
-    form.sheetTitle = (res.data.sheetTitle || '') + '的副本'
-    form.lessonId = res.data.lessonId
-    form.formJson = res.data.formJson || ''
-    form.maxPages = res.data.maxPages || 0
-    form.assignedClasses = []  // 引用时不复制班级指派
-    form.status = '0'
-    form.isPublic = 'Y'
-    dirty.value = false
-
-    nextTick(() => {
-      if (designerRef.value && form.formJson) {
-        try {
-          const parsed = JSON.parse(form.formJson)
-          // 修复图片上传组件的 uploadURL（兼容旧数据）
-          fixUploadURLsInPlace(parsed)
-          extractScoredFields(parsed)
-          const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
-            || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
-          if (hasScoring) scoringEnabled.value = true
-          designerRef.value.setFormJson(parsed)
-        } catch (e) {
-          console.warn('模板表单JSON解析失败', e)
-        }
-      }
+  loadingSheet.value = true
+  getGuideSheet(copyFromId)
+    .then(res => {
+      const data = res.data || res
+      form.sheetId = undefined  // 清空ID，保存时创建新记录
+      form.versionNo = null
+      form.sheetTitle = (data.sheetTitle || '') + '的副本'
+      form.grade = data.grade
+      form.semester = data.semester
+      form.lessonNum = data.lessonNum || 1
+      form.formJson = data.formJson || ''
+      form.maxPages = data.maxPages || 0
+      form.isPublic = 'N'
+      applyLoadedFormJson(form.formJson)
+      dirty.value = false
     })
-  })
+    .finally(() => { loadingSheet.value = false })
 }
 
-function fetchLessonOptions() {
-  getGuideSheetLessons().then(res => {
-    lessonOptions.value = res.data || []
-  }).catch(() => {})
-}
-
-function fetchClassOptions() {
-  getGuideSheetClassOptions().then(res => {
-    classOptions.value = res.data || []
-  }).catch(() => {
-    classOptions.value = []
-  })
+function applyLoadedFormJson(value) {
+  rawFormJson.value = null
+  invalidFormJson.value = ''
+  if (!value) return
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed.widgetList)) throw new Error('invalid structure')
+    // 历史密钥字段只做兼容清理，永远不再回填到浏览器状态。
+    delete parsed._aiApiKey
+    delete parsed._aiProvider
+    delete parsed._aiModel
+    delete parsed._aiCustomUrl
+    fixUploadURLsInPlace(parsed)
+    rawFormJson.value = parsed
+    form.teachingTopic = parsed.formConfig?.beginnerTeachingTopic || ''
+    form.estimatedMinutes = Number(parsed.formConfig?.beginnerEstimatedMinutes || 20)
+    extractScoredFields(parsed)
+    scoringEnabled.value = Object.keys(parsed._scoringConfig || {}).length > 0
+      || scoredFields.value.some(field => Number(scoringConfig[field.id]?.score || 0) > 0)
+    if (editorMode.value === 'advanced') nextTick(() => hydrateAdvancedDesigner())
+  } catch {
+    invalidFormJson.value = value
+  }
 }
 
 function fetchCapabilities() {
   getGuideSheetCapabilities().then(res => {
-    aiConfigured.value = Boolean(res.aiConfigured)
-    aiProvider.value = res.aiProvider || 'deepseek'
+    const data = res.data || res
+    aiConfigured.value = Boolean(data.aiConfigured)
   }).catch(() => {
     aiConfigured.value = false
   })
@@ -1620,13 +1541,11 @@ watch(formJsonVersion, () => {
   })
 })
 
-// 轮询兜底注入：新建导学单时等待 VForm3 初始化完成，直到标签页注入成功
-let injectPollingTimer = null
-
 // DOM 观察器：比 VNode 树遍历更快地检测 FieldPanel，用于注册「图片展示」扩展组件
 let domObserverStarted = false
 let domObserver = null
 function startDomObserver() {
+  if (editorMode.value !== 'advanced') return
   if (domObserverStarted) return
   const container = document.querySelector('.designer-card')
   if (!container) {
@@ -1654,47 +1573,6 @@ function startDomObserver() {
       domObserverStarted = false
     }
   }, 10000)
-}
-
-function startInjectPolling() {
-  if (tabInjected) return
-
-  let attempts = 0
-  const maxAttempts = 20  // 20 * 300ms = 6秒，超时停止
-
-  injectPollingTimer = setInterval(() => {
-    attempts++
-    // 仅超时或已注入时停止轮询；designerRef 未就绪时继续等待
-    if (attempts > maxAttempts || tabInjected) {
-      clearInterval(injectPollingTimer)
-      injectPollingTimer = null
-      // 标签页注入完成后，确保自定义图片组件已注册
-      registerCustomImageWidget()
-      return
-    }
-
-    try {
-      if (!designerRef.value) return  // VForm3 未就绪，继续轮询
-      // 设计器就绪后即可注册扩展组件（不必等标签页注入）
-      registerCustomImageWidget()
-      const json = designerRef.value.getFormJson()
-      const { hasTab } = extractTabPages(json)
-      if (!hasTab && json.widgetList) {
-        const clonedJson = deepClone(json)
-        clonedJson.widgetList.unshift(createTabWidget())
-        designerRef.value.setFormJson(clonedJson)
-        tabInjected = true
-        clearInterval(injectPollingTimer)
-        injectPollingTimer = null
-      } else if (hasTab) {
-        tabInjected = true
-        clearInterval(injectPollingTimer)
-        injectPollingTimer = null
-      }
-    } catch (e) {
-      // ignore, VForm3 not ready
-    }
-  }, 300)
 }
 
 /**
@@ -1829,11 +1707,7 @@ function registerCustomImageWidget() {
 }
 
 onMounted(() => {
-  fetchLessonOptions()
-  fetchClassOptions()
   fetchCapabilities()
-  // 尽快注册「图片展示」扩展组件
-  nextTick(startDomObserver)
   const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId
   if (copyFrom) {
@@ -1846,14 +1720,12 @@ onMounted(() => {
     // 新建导学单：显式重置所有状态为空白，确保不残留任何旧数据
     // resetToNewForm 内部会通过 setTimeout 注入 HomeTab 标签页
     resetToNewForm()
-    // 轮询作为兜底：确保即使 VForm3 初始化延迟也能注入标签页
-    nextTick(startInjectPolling)
   }
 
-  // 轮询兜底：字段刷新 + 标签页约束 + 扩展组件注册
+  // 高级模式才运行 VForm3 的兼容轮询，避免新手流程产生后台开销。
   pollingTimer = setInterval(() => {
+    if (editorMode.value !== 'advanced') return
     refreshScoredFields()
-    ensureTabWidget()
     registerCustomImageWidget()
   }, 5000)
 })
@@ -1862,10 +1734,6 @@ onBeforeUnmount(() => {
   if (pollingTimer) {
     clearInterval(pollingTimer)
     pollingTimer = null
-  }
-  if (injectPollingTimer) {
-    clearInterval(injectPollingTimer)
-    injectPollingTimer = null
   }
   if (domObserver) {
     domObserver.disconnect()
@@ -1886,15 +1754,19 @@ watch(
 
 // keep-alive 缓存激活时：若为新建表单，重置为仅含 HomeTab 标签页的空白状态
 onActivated(() => {
-  if (!route.params.sheetId) {
+  if (!route.params.sheetId && !dirty.value && !form.sheetTitle) {
     nextTick(() => resetToNewForm())
   }
-  // 缓存激活后重新挂观察器，保证扩展组件仍可用
-  nextTick(startDomObserver)
+  if (editorMode.value === 'advanced') nextTick(startDomObserver)
 })
+
 </script>
 
 <style scoped>
+.guide-sheet-designer-shell {
+  min-width: 0;
+}
+
 /* 上块：导学单设置卡片 */
 .filter-card {
   margin-bottom: 16px;
@@ -1902,6 +1774,36 @@ onActivated(() => {
 
 .filter-card :deep(.el-card__body) {
   padding: 16px 20px;
+}
+
+.metadata-card {
+  border: 0;
+  border-top: 4px solid #1c7d86;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(35, 78, 86, 0.08);
+}
+
+.metadata-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.metadata-heading strong {
+  display: block;
+  margin-top: 2px;
+  color: #193b50;
+  font-size: 17px;
+}
+
+.metadata-kicker {
+  color: #2a8c86;
+  font-size: 11px;
+  letter-spacing: 2px;
 }
 
 .toolbar-row {
@@ -1925,8 +1827,12 @@ onActivated(() => {
 }
 
 .toolbar-title {
-  width: 300px;
+  width: 320px;
   flex-shrink: 0;
+}
+
+.toolbar-compact {
+  flex: 0 0 auto;
 }
 
 .toolbar-settings {
@@ -1946,7 +1852,7 @@ onActivated(() => {
 }
 
 .toolbar-public {
-  width: 140px;
+  width: 210px;
   flex-shrink: 0;
 }
 
@@ -2025,15 +1931,75 @@ onActivated(() => {
 
 /* 下块：表单设计器卡片 */
 .designer-card {
-  overflow: visible;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .designer-card :deep(.el-card__body) {
   padding: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/*
+ * VForm3 根节点 class 也叫 main-container，会误吃到若依布局
+ * 「侧栏宽度 margin-left:200px」，导致设计器整体右偏、左侧大留白。
+ * 仅在导学单设计器卡片内清零，不影响全局业务页布局。
+ */
+.designer-card :deep(.el-container.main-container),
+.designer-card :deep(.main-container.full-height) {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .designer-card :deep(.v-form-designer) {
   width: 100%;
+  min-width: 0;
+}
+
+/* 三栏：组件库 / 画布 / 属性，占满卡片宽度 */
+.designer-card :deep(.el-container.main-container > .el-container) {
+  width: 100%;
+  min-width: 0;
+}
+
+.designer-card :deep(.side-panel) {
+  flex: 0 0 260px;
+  width: 260px !important;
+  max-width: 260px;
+}
+
+.designer-card :deep(.center-layout-container) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
+}
+
+.designer-card :deep(.form-widget-main) {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* 右侧属性栏固定宽度，避免被挤出视口 */
+.designer-card :deep(.el-container.main-container > .el-container > .el-aside:last-child) {
+  flex: 0 0 300px;
+  width: 300px !important;
+  max-width: 300px;
+  min-width: 220px;
+}
+
+/* 窄屏：允许整卡横向滚动，保证三栏仍可操作 */
+@media (max-width: 1280px) {
+  .designer-card {
+    overflow-x: auto;
+  }
+  .designer-card :deep(.el-container.main-container) {
+    min-width: 900px;
+  }
 }
 
 /* 拖拽放置区域高亮 */

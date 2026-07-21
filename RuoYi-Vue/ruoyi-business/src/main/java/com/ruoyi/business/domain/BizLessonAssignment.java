@@ -44,6 +44,10 @@ public class BizLessonAssignment extends BaseEntity
     @Excel(name = "指派时间", width = 30, dateFormat = "yyyy-MM-dd")
     private Date assignTime;
 
+    /** 当前班级首次达到自动推进阈值的时间，各班独立计时 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date autoAdvanceReadyTime;
+
     public void setAssignmentId(Long assignmentId) 
     {
         this.assignmentId = assignmentId;
@@ -114,6 +118,16 @@ public class BizLessonAssignment extends BaseEntity
         return assignTime;
     }
 
+    public Date getAutoAdvanceReadyTime()
+    {
+        return autoAdvanceReadyTime;
+    }
+
+    public void setAutoAdvanceReadyTime(Date autoAdvanceReadyTime)
+    {
+        this.autoAdvanceReadyTime = autoAdvanceReadyTime;
+    }
+
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
@@ -123,6 +137,7 @@ public class BizLessonAssignment extends BaseEntity
             .append("classCode", getClassCode())
             .append("assignerId", getAssignerId())
             .append("assignTime", getAssignTime())
+            .append("autoAdvanceReadyTime", getAutoAdvanceReadyTime())
             .toString();
     }
 }

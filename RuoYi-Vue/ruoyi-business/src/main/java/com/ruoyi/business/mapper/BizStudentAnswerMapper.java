@@ -22,6 +22,11 @@ public interface BizStudentAnswerMapper
     int insertAnswer(BizStudentAnswer answer);
 
     /**
+     * 原子新增或覆盖同一学生、课程、题目的答案，并回填 answerId。
+     */
+    int upsertAnswer(BizStudentAnswer answer);
+
+    /**
      * 批量插入答题记录
      */
     void batchInsert(List<BizStudentAnswer> answers);

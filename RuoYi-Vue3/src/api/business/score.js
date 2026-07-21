@@ -91,3 +91,12 @@ export function cancelManualHomeworkScore(data) {
     data
   })
 }
+
+// 查询当前课程班级可访问的电子导学单成绩上下文
+export function getGuideSheetScoreContext(lessonId, entryYear, classCode) {
+  return request({
+    url: '/business/score/guide-sheet-context',
+    method: 'get',
+    params: { lessonId, entryYear, classCode }
+  })
+}

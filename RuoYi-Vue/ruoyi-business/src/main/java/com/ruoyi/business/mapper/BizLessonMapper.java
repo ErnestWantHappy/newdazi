@@ -68,6 +68,12 @@ public interface BizLessonMapper
      */
     List<LessonInfoVo> selectLessonsByGradeAndCreator(@Param("grade") Long grade, @Param("creatorName") String creatorName, @Param("deptId") Long deptId);
 
+    List<LessonInfoVo> selectScoreLessons(@Param("grade") Long grade,
+                                          @Param("entryYear") String entryYear,
+                                          @Param("creatorName") String creatorName,
+                                          @Param("userId") Long userId,
+                                          @Param("deptId") Long deptId);
+
     /**
      * 查询共享给指定教师的课程（指派给其管理班级的、非其创建的课程）
      * @param grade 年级
@@ -88,4 +94,37 @@ public interface BizLessonMapper
     Integer selectMaxLessonNumByGradeAndCreator(@Param("grade") Long grade,
                                                 @Param("creatorName") String creatorName,
                                                 @Param("deptId") Long deptId);
+
+    /** 清除自动推进达标时间 */
+    int clearAutoAdvanceReadyTime(@Param("lessonId") Long lessonId);
+
+    /** 扫描开启自动推进且当前仍有班级指派的测评课 */
+    List<BizLesson> selectAutoAdvanceCandidates();
+
+    /**
+     * 读取教师在本校的统一推进策略（任取一门常规课的配置；全校统一口径）
+     */
+    BizLesson selectAdvancePolicyByCreator(@Param("creatorName") String creatorName, @Param("deptId") Long deptId);
+
+    /** 读取教师在本校持久化的统一推进策略 */
+    BizLesson selectAdvancePolicyByTeacher(@Param("teacherId") Long teacherId, @Param("deptId") Long deptId);
+
+    /** 新增或更新教师在本校的统一推进策略 */
+    int upsertAdvancePolicy(@Param("teacherId") Long teacherId,
+                            @Param("deptId") Long deptId,
+                            @Param("autoAdvanceEnabled") Boolean autoAdvanceEnabled,
+                            @Param("autoAdvanceThresholdPct") Integer autoAdvanceThresholdPct,
+                            @Param("autoAdvanceDelayHours") java.math.BigDecimal autoAdvanceDelayHours,
+                            @Param("updateBy") String updateBy);
+
+    /**
+     * 将统一推进策略写回该教师本校全部常规课
+     */
+    int updateAdvancePolicyByCreator(@Param("teacherId") Long teacherId,
+                                     @Param("creatorName") String creatorName,
+                                     @Param("deptId") Long deptId,
+                                     @Param("autoAdvanceEnabled") Boolean autoAdvanceEnabled,
+                                     @Param("autoAdvanceThresholdPct") Integer autoAdvanceThresholdPct,
+                                     @Param("autoAdvanceDelayHours") java.math.BigDecimal autoAdvanceDelayHours,
+                                     @Param("updateBy") String updateBy);
 }

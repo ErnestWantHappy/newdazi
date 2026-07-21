@@ -51,6 +51,36 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
     </insert>
 
+    <!-- 唯一索引配合原子 upsert，避免并发首次提交先查后插产生重复键。 -->
+    <insert id="upsertAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer"
+            useGeneratedKeys="true" keyProperty="answerId">
+        INSERT INTO biz_student_answer
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time,
+         submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path,
+         preview_retry_count, preview_last_retry_time, preview_error_message)
+        VALUES
+        (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer}, #{isCorrect}, #{score},
+         #{answerTime}, #{submitTime}, #{typingSpeed}, #{accuracyRate}, #{completionRate},
+         #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime},
+         #{previewErrorMessage})
+        ON DUPLICATE KEY UPDATE
+            answer_id = LAST_INSERT_ID(answer_id),
+            -- 同一操作题文件的重试不得把已成功/失败的转换状态重新覆盖为 pending。
+            preview_status = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_status, VALUES(preview_status)),
+            preview_path = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_path, VALUES(preview_path)),
+            preview_retry_count = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_retry_count, VALUES(preview_retry_count)),
+            preview_last_retry_time = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_last_retry_time, VALUES(preview_last_retry_time)),
+            preview_error_message = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_error_message, VALUES(preview_error_message)),
+            is_correct = VALUES(is_correct),
+            score = VALUES(score),
+            answer_time = VALUES(answer_time),
+            submit_time = VALUES(submit_time),
+            typing_speed = VALUES(typing_speed),
+            accuracy_rate = VALUES(accuracy_rate),
+            completion_rate = VALUES(completion_rate),
+            student_answer = VALUES(student_answer)
+    </insert>
+
     <!-- 批量插入答题记录 -->
     <insert id="batchInsert" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="answerId">
         INSERT INTO biz_student_answer 

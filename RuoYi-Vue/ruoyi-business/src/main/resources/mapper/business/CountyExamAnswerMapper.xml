@@ -278,11 +278,16 @@
     </update>
 
     <update id="updateGrade">
-        update biz_county_exam_answer
-        set score = #{score},
-            grading_status = '1',
-            grader_id = #{graderId}
-        where answer_id = #{answerId}
+        update biz_county_exam_answer a
+        inner join biz_county_exam e on e.exam_id = a.exam_id
+        set a.score = #{score},
+            a.grading_status = '1',
+            a.grader_id = #{graderId}
+        where a.answer_id = #{answerId}
+          and a.grader_id = #{graderId}
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+          and e.del_flag = '0'
     </update>
 
     <update id="batchUpdateGrader">

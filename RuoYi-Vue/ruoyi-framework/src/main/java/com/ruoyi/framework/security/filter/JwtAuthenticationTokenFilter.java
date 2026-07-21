@@ -1,6 +1,7 @@
 package com.ruoyi.framework.security.filter;
 
 import java.io.IOException;
+import javax.servlet.http.Cookie;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -32,6 +33,11 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter
             throws ServletException, IOException
     {
         LoginUser loginUser = tokenService.getLoginUser(request);
+        if (loginUser == null && isCookieTokenFileRequest(request))
+        {
+            // 图片和文件链接无法附带 Authorization，请求仅在专用只读接口回退同源 Cookie。
+            loginUser = tokenService.getLoginUser(readCookieToken(request));
+        }
         if (StringUtils.isNotNull(loginUser) && StringUtils.isNull(SecurityUtils.getAuthentication()))
         {
             tokenService.verifyToken(loginUser);
@@ -40,5 +46,35 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
         }
         chain.doFilter(request, response);
+    }
+
+    private boolean isCookieTokenFileRequest(HttpServletRequest request)
+    {
+        if (!"GET".equalsIgnoreCase(request.getMethod()))
+        {
+            return false;
+        }
+        String contextPath = request.getContextPath() == null ? "" : request.getContextPath();
+        String uri = request.getRequestURI();
+        return uri.startsWith(contextPath + "/business/guide-sheet/student/uploads/")
+                || uri.equals(contextPath + "/common/resource/view")
+                || uri.equals(contextPath + "/common/download/resource");
+    }
+
+    private String readCookieToken(HttpServletRequest request)
+    {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null)
+        {
+            return null;
+        }
+        for (Cookie cookie : cookies)
+        {
+            if ("Admin-Token".equals(cookie.getName()))
+            {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 }

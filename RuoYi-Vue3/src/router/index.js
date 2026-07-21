@@ -248,7 +248,7 @@ export const dynamicRoutes = [
     permissions: ['business:guideSheet:dashboard'],
     children: [
       {
-        path: ':sheetId(\\d+)',
+        path: ':bindingId(\\d+)',
         component: () => import('@/views/business/guideSheet/dashboard'),
         name: 'GuideSheetDashboard',
         meta: { title: '导学单看板', activeMenu: '/business/guide-sheet-list' }

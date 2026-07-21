@@ -11,7 +11,8 @@ import usePermissionStore from "@/store/modules/permission";
 
 NProgress.configure({ showSpinner: false });
 
-const whiteList = ["/login", "/register", "/student/index"];
+// 学生首页必须登录；未登录访问 /student/index 应进入登录流程，不能免鉴权直入
+const whiteList = ["/login", "/register"];
 
 const isWhiteList = (path) => {
   return whiteList.some((pattern) => isPathMatch(pattern, path));
