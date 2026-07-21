@@ -6,13 +6,18 @@ import org.apache.ibatis.annotations.Param;
 
 public interface GuideSheetUploadMapper
 {
-    public List<BizGuideSheetUpload> selectBySheetId(Long sheetId);
+    BizGuideSheetUpload selectByUploadId(Long uploadId);
 
-    public List<BizGuideSheetUpload> selectBySheetAndClass(@Param("sheetId") Long sheetId,
-                                                             @Param("entryYear") String entryYear,
-                                                             @Param("classCode") String classCode);
+    List<BizGuideSheetUpload> selectByBindingId(Long bindingId);
 
-    public int insertBizGuideSheetUpload(BizGuideSheetUpload upload);
+    List<BizGuideSheetUpload> selectByBindingAndClass(@Param("bindingId") Long bindingId,
+                                                      @Param("deptId") Long deptId,
+                                                      @Param("entryYear") String entryYear,
+                                                      @Param("classCode") String classCode);
 
-    public int deleteBySheetId(Long sheetId);
+    int insertBizGuideSheetUpload(BizGuideSheetUpload upload);
+
+    BizGuideSheetUpload selectByClientUploadId(@Param("bindingId") Long bindingId,
+                                               @Param("studentId") Long studentId,
+                                               @Param("clientUploadId") String clientUploadId);
 }

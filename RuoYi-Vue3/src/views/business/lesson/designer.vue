@@ -45,13 +45,32 @@
               <span style="margin-left: 8px; color: #909399; font-size: 12px;">系统根据已创建课程自动计算</span>
             </el-form-item>
 
-            <!-- 核心修复：将 v-model 指向 form 内部的属性 -->
+            <el-form-item label="课程用途">
+              <el-radio-group v-model="form.lessonMode">
+                <el-radio value="assessment">常规课</el-radio>
+                <el-radio value="attendance">课堂考勤</el-radio>
+              </el-radio-group>
+              <div style="color: #909399; font-size: 12px; margin-top: 4px; line-height: 1.5;">
+                常规课可出题、绑导学单；课堂考勤可不选题，学生仅签到，不计入作业均分。
+              </div>
+            </el-form-item>
+            <el-form-item v-if="form.lessonMode === 'attendance'" label="教师说明">
+              <el-input
+                v-model="form.teacherNote"
+                type="textarea"
+                :rows="2"
+                maxlength="500"
+                show-word-limit
+                placeholder="可选：本节课说明，学生端可见"
+              />
+            </el-form-item>
+
             <el-form-item label="指派班级" prop="assignedClasses">
               <el-checkbox-group v-model="form.assignedClasses">
                 <el-checkbox 
                   v-for="cls in filteredManagedClasses" 
                   :key="cls.id" 
-                  :label="cls.classCode + '班'"
+                  :value="cls.classCode + '班'"
                 >
                   {{ cls.classCode }}班
                 </el-checkbox>
@@ -67,6 +86,18 @@
                 请先选择年级
               </div>
             </el-form-item>
+
+            <lesson-guide-sheet-panel
+              v-model:enabled="form.guideSheetEnabled"
+              v-model:sourceSheetId="form.guideSheetSourceSheetId"
+              v-model:replaceRequested="form.guideSheetReplaceRequested"
+              :current-binding="initialGuideSheetBinding"
+              :grade="form.grade"
+              :semester="form.semester"
+              :lesson-num="form.lessonNum"
+              :grade-options="biz_grade"
+              :semester-options="biz_semester"
+            />
 
             <!-- 出题模式设置 -->
             <el-divider content-position="left">出题设置</el-divider>
@@ -110,9 +141,13 @@
           </el-form>
 
           <el-divider />
-          <h4 :style="{ color: totalScore === 100 ? '#67C23A' : '#F56C6C' }">
-            已选题目列表 (当前总分: {{ totalScore }} / 100)
-            <span v-if="totalScore !== 100" style="font-size: 12px; font-weight: normal; margin-left: 10px;">
+          <h4 :style="{ color: selectedQuestions.length === 0 ? '#607d8b' : totalScore === 100 ? '#67C23A' : '#F56C6C' }">
+            已选普通题目
+            <template v-if="selectedQuestions.length > 0">（当前总分：{{ totalScore }} / 100）</template>
+            <span v-if="selectedQuestions.length === 0" style="font-size: 12px; font-weight: normal; margin-left: 10px;">
+              未选择普通题，电子导学单将按独立口径计分
+            </span>
+            <span v-else-if="totalScore !== 100" style="font-size: 12px; font-weight: normal; margin-left: 10px;">
               (还差 {{ 100 - totalScore }} 分)
             </span>
             <span v-else style="font-size: 12px; font-weight: normal; margin-left: 10px;">
@@ -215,9 +250,10 @@
         <el-card>
            <template #header>
              <div class="card-header">
-               <span>题库选题区</span>
+               <span>教学资源库</span>
              </div>
            </template>
+          <div class="resource-tabs">
           <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="68px">
             <el-form-item label="题干" prop="questionContent">
               <el-input v-model="queryParams.questionContent" placeholder="请输入题干关键词" clearable @keyup.enter="handleQuery"/>
@@ -306,13 +342,14 @@
                </template>
              </el-table-column>
           </el-table>
-          <pagination
+           <pagination
              v-show="total > 0"
              :total="total"
              v-model:page="queryParams.pageNum"
              v-model:limit="queryParams.pageSize"
              @pagination="getQuestionList"
            />
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -323,6 +360,7 @@
     </div>
 
     <pdf-preview ref="pdfPreviewRef" />
+
   </div>
 </template>
 
@@ -334,6 +372,7 @@ import { listQuestion } from "@/api/business/question";
 import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
+import LessonGuideSheetPanel from './components/LessonGuideSheetPanel.vue';
 
 const { proxy } = getCurrentInstance();
 const route = useRoute();
@@ -357,9 +396,19 @@ const form = ref({
   shuffleMode: 0,      // 出题模式: 0=固定, 1=随机排序, 2=随机抽取
   randomChoiceCount: 0,   // 随机抽取选择题数
   randomJudgmentCount: 0, // 随机抽取判断题数
+  lessonMode: 'assessment', // assessment 常规课 / attendance 课堂考勤
+  // 自动推进在教师首页设置，设计器仅保留字段以便保存时透传已有配置
+  autoAdvanceEnabled: false,
+  autoAdvanceThresholdPct: 50,
+  autoAdvanceDelayHours: 2,
+  teacherNote: '',
+  guideSheetEnabled: false,
+  guideSheetSourceSheetId: null,
+  guideSheetReplaceRequested: false,
 });
 const selectedQuestions = ref([]);
 const myManagedClasses = ref([]); // 教师管理的班级列表
+const initialGuideSheetBinding = ref(null);
 
 const questionBankList = ref([]);
 const queryParams = ref({
@@ -523,8 +572,19 @@ function sortQuestions() {
 function submitForm() {
   proxy.$refs["lessonRef"].validate(valid => {
     if (valid) {
-      // 校验总分必须为100
-      if (totalScore.value !== 100) {
+      if (form.value.guideSheetEnabled && !form.value.guideSheetSourceSheetId) {
+        proxy.$modal.msgError('已开启电子导学单，请先选择一份导学单模板。');
+        return;
+      }
+      const isAttendance = form.value.lessonMode === 'attendance'
+      const canKeepClosedGuideSheet = Boolean(form.value.lessonId && initialGuideSheetBinding.value)
+      // 考勤课允许 0 题且不绑导学单；常规课仍要求至少一类内容
+      if (!isAttendance && selectedQuestions.value.length === 0 && !form.value.guideSheetEnabled && !canKeepClosedGuideSheet) {
+        proxy.$modal.msgError('请至少选择普通题目或开启电子导学单；若仅考勤请将课程用途设为「课堂考勤」。');
+        return;
+      }
+      // 电子导学单独立计分，仅普通题存在时校验 100 分。
+      if (selectedQuestions.value.length > 0 && totalScore.value !== 100) {
         proxy.$modal.msgError(`当前总分为 ${totalScore.value} 分，必须凑满 100 分才能保存！`);
         return;
       }
@@ -532,9 +592,14 @@ function submitForm() {
       // 提交前确保排序
       sortQuestions();
       
+      // 考勤课强制关闭自动推进，避免误开
+      const isAttendanceSubmit = form.value.lessonMode === 'attendance'
       // 构造提交数据
       const data = {
         ...form.value,
+        autoAdvanceEnabled: isAttendanceSubmit ? false : Boolean(form.value.autoAdvanceEnabled),
+        autoAdvanceThresholdPct: Number(form.value.autoAdvanceThresholdPct) || 50,
+        autoAdvanceDelayHours: Number(form.value.autoAdvanceDelayHours) || 2,
         questions: selectedQuestions.value,
         // 直接提交班级名称列表（后端会自动根据grade计算entryYear）
         assignedClassCodes: form.value.assignedClasses 
@@ -566,7 +631,9 @@ function submitForm() {
 
 function initialize() {
   const { lessonId } = route.params;
-  const { grade, classes } = route.query;
+  const { grade, classes, semester, guideSheetId } = route.query;
+  const presetGuideSheetId = Number.parseInt(guideSheetId, 10);
+  const hasPresetGuideSheet = Number.isInteger(presetGuideSheetId) && presetGuideSheetId > 0;
 
   // 先加载教师管理的班级
   loadMyManagedClasses();
@@ -589,32 +656,52 @@ function initialize() {
         shuffleMode: detail.shuffleMode ?? 0,
         randomChoiceCount: detail.randomChoiceCount ?? 0,
         randomJudgmentCount: detail.randomJudgmentCount ?? 0,
+        lessonMode: detail.lessonMode === 'attendance' ? 'attendance' : 'assessment',
+        teacherNote: detail.teacherNote || '',
+        autoAdvanceEnabled: detail.lessonMode === 'attendance'
+          ? false
+          : (detail.autoAdvanceEnabled === true || detail.autoAdvanceEnabled === 1 || detail.autoAdvanceEnabled === '1'),
+        autoAdvanceThresholdPct: detail.autoAdvanceThresholdPct != null ? Number(detail.autoAdvanceThresholdPct) : 50,
+        autoAdvanceDelayHours: detail.autoAdvanceDelayHours != null ? Number(detail.autoAdvanceDelayHours) : 2,
+        guideSheetEnabled: Boolean(detail.guideSheetEnabled),
+        guideSheetSourceSheetId: detail.guideSheetSourceSheetId ?? detail.currentGuideSheetBinding?.sourceSheetId ?? null,
+        guideSheetReplaceRequested: false,
       };
+      initialGuideSheetBinding.value = detail.currentGuideSheetBinding || null;
       selectedQuestions.value = (detail.questions || []).map((item, index) => ({
         ...item,
         questionScore: item.questionScore != null ? item.questionScore : 0,
         orderNum: item.orderNum != null ? item.orderNum : index + 1,
       }));
-      console.log('🔍 课程设计器加载题目数据:', {
-        totalQuestions: selectedQuestions.value.length,
-        questions: selectedQuestions.value.map(q => ({ id: q.questionId, type: q.questionType, score: q.questionScore, content: q.questionContent?.substring(0, 30) }))
-      });
       sortQuestions(); // 加载详情后排序
       getQuestionList();
     });
   } else {
     isAddMode.value = true;
+    const purpose = route.query.purpose || (route.query.lessonMode === 'attendance' ? 'attendance' : 'assessment');
+    const initMode = purpose === 'attendance' || route.query.lessonMode === 'attendance' ? 'attendance' : 'assessment';
+    // purpose=guide：默认开启导学单；可从模板库带入 sheetId
+    const enableGuide = hasPresetGuideSheet || purpose === 'guide';
     form.value = {
       lessonId: null,
       lessonTitle: null,
       grade: grade ? parseInt(grade, 10) : null,
-      semester: getDefaultSemester(),
+      semester: semester !== undefined ? String(semester) : getDefaultSemester(),
       lessonNum: route.query.nextNum ? parseInt(route.query.nextNum, 10) : 1,
       assignedClasses: [],
       shuffleMode: 0,
       randomChoiceCount: 0,
       randomJudgmentCount: 0,
+      lessonMode: initMode,
+      teacherNote: '',
+      autoAdvanceEnabled: false,
+      autoAdvanceThresholdPct: 50,
+      autoAdvanceDelayHours: 2,
+      guideSheetEnabled: enableGuide,
+      guideSheetSourceSheetId: hasPresetGuideSheet ? presetGuideSheetId : null,
+      guideSheetReplaceRequested: false,
     };
+    initialGuideSheetBinding.value = null;
     
     // 如果URL有预设班级 (e.g. ["1班"])，尝试设置
     if (classes) {
@@ -823,6 +910,17 @@ onMounted(() => {
 
 
 <style scoped>
+
+.resource-tabs :deep(.el-tabs__header) {
+  margin-bottom: 18px;
+}
+
+.resource-tabs :deep(.el-tabs__item) {
+  height: 44px;
+  padding: 0 24px;
+  font-weight: 650;
+}
+
 .footer-toolbar {
   position: fixed;
   bottom: 0;
@@ -887,8 +985,20 @@ onMounted(() => {
   font-style: italic;
 }
 .app-container {
-  padding-bottom: 80px; /* Prevent footer from obscuring content */
+  /* 固定底栏 56px + 资源表「添加」按钮行高余量，1920 下避免底栏遮挡操作 */
+  padding-bottom: 120px;
 }
+
+/* 资源列表底部预留，防止最后一行操作按钮被 fixed 工具栏遮住 */
+.resource-tabs {
+  padding-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .resource-tabs { overflow-x: auto; }
+}
+
+
 </style>
 
 

@@ -11,19 +11,13 @@ import java.util.concurrent.ThreadPoolExecutor;
 /**
  * 异步任务线程池配置
  * 用于文件转换等耗时异步任务
- * 
- * 重要：线程池大小必须与 LibreOffice 实例数匹配
- * - 核心线程数 = LibreOffice 实例数（5个）
- * - 最大线程数 = LibreOffice 实例数（5个），严格限制实际并发
- * - 队列容量默认 800，最低 500，全县级平台高并发时排队等待而非拒绝
- * 
- * 注意：此线程池仅服务于操作题 Word→PDF 转换，
- * 选择题/判断题/打字题的提交走普通 HTTP 线程池，不受此配置影响。
- * 
- * 设计原理：
- * 1. 线程数 ≈ LibreOffice 实例数，避免大量线程争抢少量实例导致超时
- * 2. 多出的并发任务进入队列有序排队，LibreOffice 空闲时自动消费
- * 3. CallerRunsPolicy 作为兜底，队列满时由调用线程执行（背压机制）
+ *
+ * 拆成两级线程池，避免交卷 HTTP 线程被预览转换拖死：
+ * 1. conversionDispatchExecutor：领取 pending→converting、投递真正转换任务（轻量 DB）
+ * 2. conversionExecutor：实际 LibreOffice 转换，线程数 = 实例数
+ *
+ * 注意：选择题/判断题/打字题的提交走普通 HTTP 线程池，不受 conversionExecutor 影响。
+ * 交卷成功与预览 PDF 生成解耦——交卷只保证答案落库，预览可排队稍后完成。
  */
 @Configuration
 @EnableAsync
@@ -34,6 +28,36 @@ public class AsyncConfig {
 
     @Value("${ruoyi.conversion.queue-capacity:800}")
     private int conversionQueueCapacity;
+
+    @Value("${ruoyi.conversion.dispatch-core-size:10}")
+    private int dispatchCoreSize;
+
+    @Value("${ruoyi.conversion.dispatch-max-size:20}")
+    private int dispatchMaxSize;
+
+    @Value("${ruoyi.conversion.dispatch-queue-capacity:2000}")
+    private int dispatchQueueCapacity;
+
+    /**
+     * 转换领取/投递线程池：只做短 SQL 与任务入队，不跑 LibreOffice。
+     * 交卷 afterCommit 只往这里丢任务，保证 HTTP 尽快返回。
+     */
+    @Bean("conversionDispatchExecutor")
+    public ThreadPoolTaskExecutor conversionDispatchExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        int core = Math.max(dispatchCoreSize, 4);
+        int max = Math.max(dispatchMaxSize, core);
+        executor.setCorePoolSize(core);
+        executor.setMaxPoolSize(max);
+        executor.setQueueCapacity(Math.max(dispatchQueueCapacity, 500));
+        executor.setThreadNamePrefix("conv-dispatch-");
+        // 领取本身很快；队列满时由调用方线程执行一次领取，避免静默丢任务
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
 
     /**
      * 文件转换专用线程池（仅用于操作题 docx→pdf 转换）
@@ -51,8 +75,9 @@ public class AsyncConfig {
         executor.setQueueCapacity(Math.max(conversionQueueCapacity, 500));
         // 线程名前缀
         executor.setThreadNamePrefix("conversion-");
-        // 拒绝策略：由调用线程执行（兜底背压）
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 禁止 CallerRuns：队列满时绝不能在 Tomcat/领取线程上跑 LibreOffice（会占满连接与请求）
+        // 拒绝后由定时重试/教师重转把 converting/pending 任务捞回
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         // 等待所有任务完成后再关闭
         executor.setWaitForTasksToCompleteOnShutdown(true);
         // 等待时间（秒），给足时间让队列中的转换任务完成

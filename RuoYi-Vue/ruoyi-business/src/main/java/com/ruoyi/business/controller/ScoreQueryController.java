@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -20,9 +21,13 @@ import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizScoreAdjustmentMapper;
+import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
+import com.ruoyi.business.service.GuideSheetAccessService;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.system.mapper.SysDeptMapper;
@@ -37,6 +42,7 @@ import java.io.IOException;
  */
 @RestController
 @RequestMapping("/business/score")
+@PreAuthorize("@ss.hasPermi('business:score:list')")
 public class ScoreQueryController extends BaseController {
     private static final String ADJUST_ACTION = "ADJUST";
     private static final String CANCEL_ACTION = "CANCEL";
@@ -62,6 +68,12 @@ public class ScoreQueryController extends BaseController {
     @Autowired
     private BizScoreAdjustmentMapper scoreAdjustmentMapper;
 
+    @Autowired
+    private GuideSheetAccessService guideSheetAccessService;
+
+    @Autowired
+    private BizTeacherClassMapper teacherClassMapper;
+
     /**
      * 设置/取消某节课缺考请假
      */
@@ -73,6 +85,11 @@ public class ScoreQueryController extends BaseController {
 
         Long deptId = SecurityUtils.getDeptId();
         Long teacherId = SecurityUtils.getUserId();
+
+        String scopeError = validateManualScoreScope(studentId, lessonId);
+        if (scopeError != null) {
+            return AjaxResult.error(scopeError);
+        }
 
         com.ruoyi.business.domain.BizClassroomPerformance performance = performanceMapper.selectByStudentAndLesson(studentId, lessonId);
         if (performance == null) {
@@ -89,7 +106,6 @@ public class ScoreQueryController extends BaseController {
             performance.setIsAbsent(isAbsent ? 1 : 0);
             if (isAbsent) {
                 performance.setScore(0); // 清空表现分
-                System.out.println("将之前的原因修改为缺考");
             }
             performanceMapper.update(performance);
         }
@@ -172,7 +188,10 @@ public class ScoreQueryController extends BaseController {
     public AjaxResult getClasses() {
         Long userId = SecurityUtils.getUserId();
         Long deptId = SecurityUtils.getDeptId();
-        return AjaxResult.success(studentMapper.selectDistinctYearAndClassByDeptId(deptId));
+        if (SecurityUtils.isAdmin(userId)) {
+            return AjaxResult.success(teacherClassMapper.selectAvailableClasses(deptId));
+        }
+        return AjaxResult.success(teacherClassMapper.selectTeacherClassListWithCount(userId, deptId));
     }
     
     /**
@@ -190,18 +209,31 @@ public class ScoreQueryController extends BaseController {
         
         String creator = SecurityUtils.getUsername();
         
-        System.out.println("[课程下拉DEBUG] entryYear: " + entryYear);
-        System.out.println("[课程下拉DEBUG] schoolType: " + schoolType + " (1=小学, 2=初中, 3=高中)");
-        System.out.println("[课程下拉DEBUG] 计算的年级 gradeNum: " + gradeNum);
-        System.out.println("[课程下拉DEBUG] creator: " + creator);
-        
-        List<?> lessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator, deptId);
-        System.out.println("[课程下拉DEBUG] 查询结果数量: " + (lessons != null ? lessons.size() : "null"));
-        if (lessons != null && !lessons.isEmpty()) {
-            System.out.println("[课程下拉DEBUG] 第一个课程: " + lessons.get(0));
-        }
-        
+        List<?> lessons = lessonMapper.selectScoreLessons(
+                (long) gradeNum, entryYear, creator, SecurityUtils.getUserId(), deptId);
         return AjaxResult.success(lessons);
+    }
+
+    /**
+     * 返回成绩页已锁定课程和班级的导学单上下文。
+     */
+    @GetMapping("/guide-sheet-context")
+    public AjaxResult getGuideSheetContext(@RequestParam Long lessonId,
+                                           @RequestParam String entryYear,
+                                           @RequestParam String classCode) {
+        BizLessonGuideSheetBinding binding = guideSheetAccessService.requireLessonClassBindingContext(
+                lessonId, entryYear, classCode);
+        if (binding == null) {
+            return AjaxResult.success().put("enabled", false);
+        }
+        return AjaxResult.success()
+                .put("enabled", "Y".equals(binding.getEnabled()))
+                .put("bindingId", binding.getBindingId())
+                .put("lessonId", binding.getLessonId())
+                .put("sourceSheetId", binding.getSourceSheetId())
+                .put("title", binding.getSnapshotTitle())
+                .put("entryYear", entryYear)
+                .put("classCode", classCode);
     }
     
     /**
@@ -266,6 +298,7 @@ public class ScoreQueryController extends BaseController {
         int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, lessonId);
+        selectedLessonIds = validateSelectedLessonIds(entryYear, gradeNum, selectedLessonIds);
 
         List<BizStudent> students;
         long total = 0;
@@ -288,22 +321,46 @@ public class ScoreQueryController extends BaseController {
     }
 
     private List<Long> parseLessonIds(String lessonIds, Long lessonId) {
-        List<Long> result = new ArrayList<>();
-        if (lessonIds != null && !lessonIds.trim().isEmpty()) {
-            for (String id : lessonIds.split(",")) {
-                if (id != null && !id.trim().isEmpty()) {
-                    result.add(Long.parseLong(id.trim()));
+        try {
+            LinkedHashSet<Long> result = new LinkedHashSet<>();
+            if (lessonIds != null && !lessonIds.trim().isEmpty()) {
+                for (String id : lessonIds.split(",")) {
+                    if (id != null && !id.trim().isEmpty()) {
+                        result.add(Long.parseLong(id.trim()));
+                    }
                 }
+            } else if (lessonId != null) {
+                result.add(lessonId);
             }
-        } else if (lessonId != null) {
-            result.add(lessonId);
+            return new ArrayList<>(result);
+        } catch (NumberFormatException e) {
+            throw new ServiceException("课程参数格式错误");
         }
-        return result;
+    }
+
+    /** 只允许查询成绩页已返回给当前教师的常规课，空选择等价于全部可见课程。 */
+    private List<Long> validateSelectedLessonIds(String entryYear, int gradeNum, List<Long> selectedLessonIds) {
+        Long userId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getDeptId();
+        List<LessonInfoVo> visibleLessons = lessonMapper.selectScoreLessons(
+                (long) gradeNum, entryYear, SecurityUtils.getUsername(), userId, deptId);
+        LinkedHashSet<Long> visibleIds = visibleLessons == null ? new LinkedHashSet<>()
+                : visibleLessons.stream()
+                .map(LessonInfoVo::getLessonId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (selectedLessonIds == null || selectedLessonIds.isEmpty()) {
+            return new ArrayList<>(visibleIds);
+        }
+        if (!visibleIds.containsAll(selectedLessonIds)) {
+            throw new ServiceException("包含无权查看或不计成绩的课程");
+        }
+        return selectedLessonIds;
     }
 
     private List<Map<String, Object>> buildScoreSummaryRows(List<BizStudent> students, List<Long> lessonIds,
                                                             Long deptId, int gradeNum) {
-        if (students == null || students.isEmpty()) {
+        if (students == null || students.isEmpty() || lessonIds == null || lessonIds.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -409,6 +466,14 @@ public class ScoreQueryController extends BaseController {
                 if (Boolean.TRUE.equals(score.get("isAbsent"))) {
                     continue;
                 }
+                // 考勤课不进入作业均分分母（selectScoreLessons 已排除；此处双保险）
+                Long scoreLessonId = score.get("lessonId") == null ? null : ((Number) score.get("lessonId")).longValue();
+                if (scoreLessonId != null) {
+                    BizLesson scoreLesson = lessonCache.computeIfAbsent(scoreLessonId, lessonMapper::selectBizLessonByLessonId);
+                    if (scoreLesson != null && "attendance".equalsIgnoreCase(scoreLesson.getLessonMode())) {
+                        continue;
+                    }
+                }
                 homeworkTotal += numberToInt(score.get("totalScore"));
                 performanceTotal += numberToInt(score.get("performanceScore"));
                 finalTotal += numberToInt(score.get("finalScore"));
@@ -501,6 +566,15 @@ public class ScoreQueryController extends BaseController {
         }
         if (lesson.getDeptId() != null && !deptId.equals(lesson.getDeptId())) {
             return "不能修改其他学校的课程成绩";
+        }
+        if ("attendance".equalsIgnoreCase(lesson.getLessonMode())) {
+            return "课堂考勤不计作业分，不能在成绩页改分";
+        }
+        try {
+            guideSheetAccessService.assertCanViewLessonClass(
+                    lessonId, student.getEntryYear(), student.getClassCode());
+        } catch (ServiceException e) {
+            return e.getMessage();
         }
         return null;
     }
@@ -749,6 +823,7 @@ public class ScoreQueryController extends BaseController {
         String schoolType = dept != null ? dept.getSchoolType() : "1";
         int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, null);
+        selectedLessonIds = validateSelectedLessonIds(entryYear, gradeNum, selectedLessonIds);
         List<String> selectedColumns = parseExportColumns(columns);
         Set<String> selectedColumnSet = new HashSet<>(selectedColumns);
         List<BizStudent> studentList = studentMapper.selectScoreStudents(userId, deptId, entryYear, classCode, keyword);
@@ -756,7 +831,8 @@ public class ScoreQueryController extends BaseController {
         
         // 3. 获取所有课程信息（用于表头）
         String creator = SecurityUtils.getUsername();
-        List<LessonInfoVo> allLessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator, deptId);
+        List<LessonInfoVo> allLessons = lessonMapper.selectScoreLessons(
+                (long) gradeNum, entryYear, creator, userId, deptId);
         List<LessonInfoVo> targetLessons = new ArrayList<>();
         
         if (selectedLessonIds.isEmpty()) {
@@ -995,18 +1071,19 @@ public class ScoreQueryController extends BaseController {
     public AjaxResult getQuestionAnalysis(@PathVariable Long lessonId, 
                                         @RequestParam(required = false) String classCode,
                                         @RequestParam(required = false) String entryYear) {
+        if (org.apache.commons.lang3.StringUtils.isBlank(classCode)
+                || org.apache.commons.lang3.StringUtils.isBlank(entryYear)) {
+            throw new ServiceException("入学年份和班级编号必须同时提供");
+        }
+        guideSheetAccessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
         // 1. 查询课程的所有题目详情
         List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         
         Long deptId = SecurityUtils.getDeptId();
         
         // 2. 查询该课程的答题记录 (根据筛选条件)
-        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers;
-        if ((classCode != null && !classCode.isEmpty()) || (entryYear != null && !entryYear.isEmpty())) {
-            allAnswers = studentAnswerMapper.selectByLessonAndClass(lessonId, classCode, entryYear, deptId);
-        } else {
-            allAnswers = studentAnswerMapper.selectByLessonId(lessonId);
-        }
+        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers =
+                studentAnswerMapper.selectByLessonAndClass(lessonId, classCode.trim(), entryYear.trim(), deptId);
         
         // 3. 按题目ID分组答题记录
         Map<Long, List<com.ruoyi.business.domain.BizStudentAnswer>> answerMap = new HashMap<>();
@@ -1082,13 +1159,19 @@ public class ScoreQueryController extends BaseController {
      */
     @GetMapping("/studentAnswerMatrix")
     public List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> getStudentAnswerMatrix(Long lessonId, String classCode, String entryYear) {
+        if (lessonId == null || org.apache.commons.lang3.StringUtils.isBlank(classCode)
+                || org.apache.commons.lang3.StringUtils.isBlank(entryYear)) {
+            throw new ServiceException("课程、入学年份和班级编号必须同时提供");
+        }
+        guideSheetAccessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
         // 获取学校类型并计算年级
         Long deptId = SecurityUtils.getDeptId();
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
         int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         
-        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear, deptId);
+        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(
+                lessonId, classCode.trim(), entryYear.trim(), deptId);
         
         // 格式化 className 为 年级+班级号 (如 "601")
         for (com.ruoyi.business.domain.vo.StudentAnswerMatrixVo vo : result) {

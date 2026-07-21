@@ -16,15 +16,30 @@ ruoyi:
   libre-office:
     home: C:\Program Files\LibreOffice
     instance-count: 5
-    process-warn-threshold: 10
-    max-tasks-per-process: 30
+    # 每个实例通常有 soffice + soffice.bin，5 实例常态约 10 进程；
+    # 阈值过低会在高峰误触发整池重建，导致 converting 任务卡住。
+    # 按「实例数×4 + 余量」：5×4+5=25，避免正常并发被误杀。
+    process-warn-threshold: 25
+    # 每实例处理 N 个任务后回收进程；过小会在 100～200 并发中途整池轮换卡住
+    # 县考高峰单波可达数百份，提到 200 减少中途回收
+    max-tasks-per-process: 200
     task-execution-timeout: 300000
     task-queue-timeout: 120000
     process-timeout: 120000
     max-retry: 1
-  # 操作题预览转换队列容量
+    # 方案 B 自愈：连续服务级失败达到阈值才主动重建（配合分钟级健康巡检）
+    failure-threshold: 3
+    # 两次整池重建最小间隔，防止抖动反复杀池（毫秒）
+    rebuild-cooldown-ms: 120000
+    # 在途转换挂起超过该时间视为半死信号；应明显小于 task-execution-timeout
+    soft-hang-timeout-ms: 120000
+  # 操作题预览转换队列：交卷与预览解耦，高峰只排队不拖垮提交
   conversion:
     queue-capacity: 800
+    # 领取 pending→converting 的调度池（不做 LibreOffice）
+    dispatch-core-size: 10
+    dispatch-max-size: 20
+    dispatch-queue-capacity: 2000
 
 # 开发环境配置
 server:
@@ -48,6 +63,13 @@ server:
 logging:
   level:
     com.ruoyi: debug
+    # 导学单 JSON 含学生答卷和评分配置，禁止作为 MyBatis SQL 参数写入日志
+    com.ruoyi.business.mapper.GuideSheetAnswerMapper: info
+    com.ruoyi.business.mapper.GuideSheetBindingMapper: info
+    com.ruoyi.business.mapper.GuideSheetDraftMapper: info
+    com.ruoyi.business.mapper.GuideSheetMapper: info
+    com.ruoyi.business.mapper.GuideSheetProgressMapper: info
+    com.ruoyi.business.mapper.GuideSheetUploadMapper: info
     org.springframework: warn
 
 # 用户配置
@@ -134,7 +156,7 @@ pagehelper:
 # Swagger配置
 swagger:
   # 是否开启swagger
-  enabled: true
+  enabled: ${SWAGGER_ENABLED:false}
   # 请求前缀
   pathMapping: /dev-api
 
@@ -146,6 +168,14 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
+
+# 学生提交配置。课程推进后保留短暂补交窗口，当前课仍会立即切换。
+student:
+  submission-grace-minutes: ${STUDENT_SUBMISSION_GRACE_MINUTES:15}
+
+# Swagger 示例接口默认不注册，仅本机显式开启。
+demo:
+  enabled: ${DEMO_ENABLED:false}
 
 # 电子导学单配置。密钥仅从部署环境注入，禁止写入表单数据。
 guide-sheet:

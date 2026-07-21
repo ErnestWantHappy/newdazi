@@ -12,6 +12,7 @@ import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.file.FileUploadUtils;
@@ -24,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 区域抽测 Controller
@@ -36,6 +38,9 @@ public class CountyExamController extends BaseController {
 
     @Autowired
     private ICountyExamService countyExamService;
+
+    @Autowired
+    private RedisCache redisCache;
 
     /**
      * 查询区域抽测列表
@@ -271,10 +276,13 @@ public class CountyExamController extends BaseController {
             throw new ServiceException("上传文件不能为空，请重新选择文件");
         }
         Long studentId = countyExamService.validateStudentWorkUpload(examId, questionId);
+        // 区域评卷匿名化不能只停留在页面，磁盘路径也不得包含学生ID。
         String scopedUploadPath = RuoYiConfig.getUploadPath() + "/county-exam/" + examId
-                + "/" + studentId + "/" + questionId;
+                + "/" + questionId + "/" + UUID.randomUUID();
         String fileName = FileUploadUtils.upload(
                 scopedUploadPath, file, MimeTypeUtils.DEFAULT_ALLOWED_EXTENSION, true);
+        redisCache.setCacheObject("student:county-exam-upload-owner:" + fileName, studentId, 60,
+                java.util.concurrent.TimeUnit.MINUTES);
         AjaxResult ajax = AjaxResult.success();
         ajax.put("fileName", fileName);
         ajax.put("newFileName", FileUtils.getName(fileName));

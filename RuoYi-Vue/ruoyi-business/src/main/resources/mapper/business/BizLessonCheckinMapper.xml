@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizLessonCheckinMapper">
+
+    <resultMap type="com.ruoyi.business.domain.BizLessonCheckin" id="BizLessonCheckinResult">
+        <result property="checkinId" column="checkin_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="checkinTime" column="checkin_time"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="classCode" column="class_code"/>
+    </resultMap>
+
+    <select id="selectByLessonAndStudent" resultMap="BizLessonCheckinResult">
+        SELECT checkin_id, lesson_id, student_id, dept_id, checkin_time, create_by, create_time
+        FROM biz_lesson_checkin
+        WHERE lesson_id = #{lessonId} AND student_id = #{studentId}
+        LIMIT 1
+    </select>
+
+    <!-- 幂等签到：同一学生同一课只记一次 -->
+    <insert id="insertIgnore" parameterType="com.ruoyi.business.domain.BizLessonCheckin" useGeneratedKeys="true" keyProperty="checkinId">
+        INSERT IGNORE INTO biz_lesson_checkin
+        (lesson_id, student_id, dept_id, checkin_time, create_by, create_time)
+        VALUES
+        (#{lessonId}, #{studentId}, #{deptId}, #{checkinTime}, #{createBy}, #{createTime})
+    </insert>
+
+    <!-- 姓名在 sys_user.nick_name；biz_student 无 student_name 列 -->
+    <select id="selectRosterByLessonAndClass" resultMap="BizLessonCheckinResult">
+        SELECT
+            s.student_id,
+            u.nick_name AS student_name,
+            s.student_no,
+            s.class_code,
+            c.checkin_id,
+            c.lesson_id,
+            c.dept_id,
+            c.checkin_time,
+            c.create_by,
+            c.create_time
+        FROM biz_student s
+        LEFT JOIN sys_user u ON u.user_id = s.user_id
+        LEFT JOIN biz_lesson_checkin c
+            ON c.student_id = s.student_id
+           AND c.lesson_id = #{lessonId}
+        WHERE u.dept_id = #{deptId}
+          AND s.entry_year = #{entryYear}
+          AND s.class_code = #{classCode}
+        ORDER BY
+            CASE WHEN c.checkin_id IS NULL THEN 1 ELSE 0 END,
+            c.checkin_time ASC,
+            CAST(s.student_no AS UNSIGNED) ASC,
+            s.student_no ASC,
+            s.student_id ASC
+    </select>
+
+    <select id="countByLesson" resultType="int">
+        SELECT COUNT(1) FROM biz_lesson_checkin WHERE lesson_id = #{lessonId}
+    </select>
+</mapper>

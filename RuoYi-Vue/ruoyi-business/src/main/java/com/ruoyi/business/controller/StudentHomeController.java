@@ -4,23 +4,33 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Date;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.model.LoginUser;
+import com.ruoyi.common.config.RuoYiConfig;
+import com.ruoyi.common.core.redis.RedisCache;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.file.FileUploadUtils;
+import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
+import com.ruoyi.business.domain.vo.StudentLessonQuestionVo;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
@@ -28,6 +38,12 @@ import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.domain.BizLessonCheckin;
+import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
+import com.ruoyi.business.mapper.BizLessonCheckinMapper;
+import com.ruoyi.business.service.ICountyExamService;
+import com.ruoyi.business.service.GuideSheetAccessService;
+import com.ruoyi.business.service.GuideSheetStudentViewService;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import org.slf4j.Logger;
@@ -63,6 +79,21 @@ public class StudentHomeController extends BaseController
     @Autowired
     private com.ruoyi.business.service.AsyncConversionService asyncConversionService;
 
+    @Autowired
+    private ICountyExamService countyExamService;
+
+    @Autowired
+    private GuideSheetAccessService guideSheetAccessService;
+
+    @Autowired
+    private GuideSheetStudentViewService studentViewService;
+
+    @Autowired
+    private BizLessonCheckinMapper lessonCheckinMapper;
+
+    @Value("${student.submission-grace-minutes:15}")
+    private long submissionGraceMinutes;
+
     /**
      * 获取学生当前课程信息
      * 根据学生的入学年份和班级，查询被指派的当前课程及其题目
@@ -84,6 +115,12 @@ public class StudentHomeController extends BaseController
         if (student == null) {
             log.warn("【学生首页】用户 {} 不是学生", userId);
             return AjaxResult.error("您不是学生用户");
+        }
+        if (hasPendingCountyExam()) {
+            return AjaxResult.success()
+                    .put("hasLesson", false)
+                    .put("blockedByCountyExam", true)
+                    .put("message", "请先完成区域抽测");
         }
 
         String entryYear = student.getEntryYear();
@@ -121,22 +158,14 @@ public class StudentHomeController extends BaseController
 
         // 3. 查询课程基本信息
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        BizLessonGuideSheetBinding guideSheetBinding = guideSheetAccessService.requireCurrentStudentBinding(student);
 
         // 4. 查询课程题目列表
-        List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+        List<StudentLessonQuestionVo> questions = studentViewService.toStudentLessonQuestions(
+                lessonQuestionMapper.selectDetailsByLessonId(lessonId));
 
         log.info("【学生首页】课程 {} 包含 {} 道题目", lessonId, questions.size());
         
-        // Debug: 打印操作题的评分标准
-        for (BizLessonQuestionDetailVo q : questions) {
-            if ("practical".equals(q.getQuestionType())) {
-                log.info("【Debug】操作题 ID:{}, 评分标准数量: {}, 内容: {}", 
-                    q.getQuestionId(), 
-                    q.getScoringItems() != null ? q.getScoringItems().size() : "null",
-                    q.getScoringItems());
-            }
-        }
-
         // 5. 查询学生已提交的答题记录
         List<BizStudentAnswer> submittedAnswers = studentAnswerMapper.selectByStudentAndLesson(student.getStudentId(), lessonId);
         // 转换为Map: { questionId: { answer, score } }
@@ -151,16 +180,92 @@ public class StudentHomeController extends BaseController
             answersMap.put(sa.getQuestionId(), info);
         }
 
+        String lessonMode = lesson != null && "attendance".equalsIgnoreCase(lesson.getLessonMode())
+                ? "attendance" : "assessment";
+        BizLessonCheckin checkin = lessonCheckinMapper.selectByLessonAndStudent(lessonId, student.getStudentId());
+        boolean checkedIn = checkin != null;
+
         return AjaxResult.success()
                 .put("hasLesson", true)
                 .put("lessonId", lessonId)
                 .put("lessonTitle", lesson != null ? lesson.getLessonTitle() : "")
+                .put("lessonMode", lessonMode)
+                .put("teacherNote", lesson != null ? lesson.getTeacherNote() : null)
+                .put("checkedIn", checkedIn)
+                .put("checkinTime", checkin == null ? null : checkin.getCheckinTime())
+                // 考勤课永不触发自动推进；前端/后续任务可据此跳过
+                .put("autoAdvanceDisabled", "attendance".equals(lessonMode))
                 .put("shuffleMode", lesson != null ? lesson.getShuffleMode() : 0)
                 .put("randomChoiceCount", lesson != null ? lesson.getRandomChoiceCount() : 0)
                 .put("randomJudgmentCount", lesson != null ? lesson.getRandomJudgmentCount() : 0)
+                .put("guideSheetEnabled", guideSheetBinding != null)
+                .put("guideSheetBindingId", guideSheetBinding == null ? null : guideSheetBinding.getBindingId())
+                .put("guideSheetTitle", guideSheetBinding == null ? null : guideSheetBinding.getSnapshotTitle())
                 .put("questions", questions)
                 .put("submittedAnswers", answersMap)  // 新增：学生已提交的答案
                 .put("studentInfo", studentInfo);
+    }
+
+    /**
+     * 学生课堂签到（考勤课主路径；测评课也可点签到但不计作业分）
+     */
+    @PostMapping("/checkin")
+    @Transactional(rollbackFor = Exception.class)
+    public AjaxResult checkin(@RequestBody Map<String, Object> body)
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (loginUser == null) {
+            return AjaxResult.error("用户未登录");
+        }
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null) {
+            return AjaxResult.error("您不是学生用户");
+        }
+        if (hasPendingCountyExam()) {
+            return AjaxResult.error("请先完成区域抽测");
+        }
+        Long lessonId = null;
+        if (body != null && body.get("lessonId") != null) {
+            lessonId = Long.valueOf(String.valueOf(body.get("lessonId")));
+        }
+        if (lessonId == null) {
+            return AjaxResult.error("缺少课程ID");
+        }
+
+        Long deptId = loginUser.getDeptId();
+        Long currentLessonId = lessonAssignmentMapper.selectCurrentLessonByClass(
+                student.getEntryYear(), student.getClassCode(), deptId);
+        if (!lessonId.equals(currentLessonId)) {
+            return AjaxResult.error("只能签到当前指派课程");
+        }
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(deptId)) {
+            return AjaxResult.error("课程不存在或无权签到");
+        }
+
+        BizLessonCheckin existing = lessonCheckinMapper.selectByLessonAndStudent(lessonId, student.getStudentId());
+        if (existing != null) {
+            return AjaxResult.success("已签到")
+                    .put("checkedIn", true)
+                    .put("checkinTime", existing.getCheckinTime())
+                    .put("lessonMode", "attendance".equalsIgnoreCase(lesson.getLessonMode()) ? "attendance" : "assessment");
+        }
+
+        Date now = new Date();
+        BizLessonCheckin row = new BizLessonCheckin();
+        row.setLessonId(lessonId);
+        row.setStudentId(student.getStudentId());
+        row.setDeptId(deptId);
+        row.setCheckinTime(now);
+        row.setCreateBy(loginUser.getUsername());
+        row.setCreateTime(now);
+        lessonCheckinMapper.insertIgnore(row);
+
+        BizLessonCheckin saved = lessonCheckinMapper.selectByLessonAndStudent(lessonId, student.getStudentId());
+        return AjaxResult.success("签到成功")
+                .put("checkedIn", true)
+                .put("checkinTime", saved != null ? saved.getCheckinTime() : now)
+                .put("lessonMode", "attendance".equalsIgnoreCase(lesson.getLessonMode()) ? "attendance" : "assessment");
     }
 
     /**
@@ -201,6 +306,60 @@ public class StudentHomeController extends BaseController
     @Autowired
     private BizQuestionMapper questionMapper;
 
+    @Autowired
+    private RedisCache redisCache;
+
+    private static final String[] PRACTICAL_ALLOWED_EXTENSIONS = {
+            "doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx"
+    };
+
+    /**
+     * 学生操作题专用上传：上传前同时校验课程归属、补交窗口和题目类型。
+     */
+    @PreAuthorize("@studentSs.isStudent()")
+    @PostMapping("/practical-upload")
+    public AjaxResult uploadPracticalWork(@RequestParam("lessonId") Long lessonId,
+                                          @RequestParam("questionId") Long questionId,
+                                          @RequestParam("file") MultipartFile file) throws Exception
+    {
+        if (file == null || file.isEmpty())
+        {
+            throw new ServiceException("上传文件不能为空，请重新选择文件");
+        }
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null)
+        {
+            throw new ServiceException("未找到学生信息");
+        }
+        if (hasPendingCountyExam())
+        {
+            throw new ServiceException("请先完成区域抽测");
+        }
+        String accessError = validateSubmissionAccess(student, loginUser.getDeptId(), lessonId);
+        if (accessError != null)
+        {
+            throw new ServiceException(accessError);
+        }
+        BizLessonQuestionDetailVo question = lessonQuestionMapper.selectDetailsByLessonId(lessonId).stream()
+                .filter(item -> questionId != null && questionId.equals(item.getQuestionId()))
+                .findFirst()
+                .orElse(null);
+        if (question == null || !"practical".equalsIgnoreCase(question.getQuestionType()))
+        {
+            throw new ServiceException("题目不存在或不是操作题");
+        }
+
+        // 随机目录和随机文件名均不包含学生标识，避免磁盘路径泄露身份。
+        String scopedUploadPath = RuoYiConfig.getUploadPath() + "/student-answer/" + UUID.randomUUID();
+        String fileName = FileUploadUtils.upload(scopedUploadPath, file, PRACTICAL_ALLOWED_EXTENSIONS, true);
+        redisCache.setCacheObject(practicalUploadOwnerKey(fileName), student.getStudentId(), 60,
+                java.util.concurrent.TimeUnit.MINUTES);
+        return AjaxResult.success()
+                .put("fileName", fileName)
+                .put("newFileName", FileUtils.getName(fileName));
+    }
+
     /**
      * 提交学生答案
      */
@@ -218,6 +377,9 @@ public class StudentHomeController extends BaseController
         if (student == null) {
             return AjaxResult.error("您不是学生用户");
         }
+        if (hasPendingCountyExam()) {
+            return AjaxResult.error("请先完成区域抽测");
+        }
 
         Long lessonId = request.getLessonId();
         Map<Long, String> answers = request.getAnswers();
@@ -225,6 +387,19 @@ public class StudentHomeController extends BaseController
         Long deptId = loginUser.getDeptId();
         if (lessonId == null || answers == null || answers.isEmpty()) {
             return AjaxResult.error("参数错误");
+        }
+
+        String accessError = validateSubmissionAccess(student, deptId, lessonId);
+        if (accessError != null) {
+            return AjaxResult.error(accessError);
+        }
+        BizLesson requestedLesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        // 纯考勤课无题可答；若已升级加题则允许提交
+        if ("attendance".equalsIgnoreCase(requestedLesson.getLessonMode())) {
+            List<BizLessonQuestionDetailVo> attendanceQs = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+            if (attendanceQs == null || attendanceQs.isEmpty()) {
+                return AjaxResult.error("当前为考勤课，请使用签到，无需提交作业答案");
+            }
         }
 
         log.info("【学生答题】学生 {} 开始提交课程 {} 的答案，共 {} 道题", studentId, lessonId, answers.size());
@@ -323,14 +498,6 @@ public class StudentHomeController extends BaseController
                             double rawScore = question.getQuestionScore() * speedFactor * accuracyRate;
                             score = (int) Math.round(rawScore);
                             
-                            // 打印调试日志
-                            log.info("=== 打字评分调试 (v5) Start ===");
-                            log.info("题目ID: {}, 满分: {}, 原文字数: {}, baseSpeed: {}, 自定义时长: {}分钟", 
-                                    question.getQuestionId(), question.getQuestionScore(), originalLength, baseSpeed, duration);
-                            log.info("目标字数: {}, 正确字数: {}, 速度系数: {}, 正确率: {}", targetCount, correctCount, speedFactor, accuracyRate);
-                            log.info("得分: {} (原始: {})", score, rawScore);
-                            log.info("=== 打字评分调试 (v5) End ===");
-                            
                             // 确保不超过满分
                             score = Math.min(score, question.getQuestionScore().intValue());
                         } else {
@@ -357,6 +524,7 @@ public class StudentHomeController extends BaseController
             if ("practical".equals(question.getQuestionType())) {
                 // 操作题：保存文件路径，异步转换为PDF
                 if (studentAnswer != null && !studentAnswer.trim().isEmpty()) {
+                    validatePracticalAnswerPath(studentId, lessonId, questionId, studentAnswer);
                     String lowerCaseAnswer = studentAnswer.toLowerCase();
                     answer.setPreviewRetryCount(0);
                     answer.setPreviewLastRetryTime(null);
@@ -394,20 +562,13 @@ public class StudentHomeController extends BaseController
                 totalScore += score;
             }
 
-            BizStudentAnswer existingAnswer = studentAnswerMapper.selectLatestByStudentLessonQuestion(studentId, lessonId, questionId);
-            boolean isNewAnswer = existingAnswer == null;
-            if (existingAnswer != null) {
-                answer.setAnswerId(existingAnswer.getAnswerId());
-                studentAnswerMapper.updateAnswerById(answer);
-            } else {
-                studentAnswerMapper.insertAnswer(answer);
-            }
+            studentAnswerMapper.upsertAnswer(answer);
 
             if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
                 if (answer.getStudentAnswer() != null && !answer.getStudentAnswer().trim().isEmpty()) {
                     pendingConversionAnswerIds.add(answer.getAnswerId());
-                    log.info("【操作题】{} answerId={}，已登记待转换，事务提交后触发异步任务",
-                            isNewAnswer ? "新增提交" : "更新提交", answer.getAnswerId());
+                    log.info("【操作题】提交已保存 answerId={}，已登记待转换，事务提交后触发异步任务",
+                            answer.getAnswerId());
                 }
             }
         }
@@ -426,11 +587,12 @@ public class StudentHomeController extends BaseController
             return;
         }
 
+        // afterCommit 只负责「调度」领取，不在 HTTP 线程上同步 claim/投递 LibreOffice
         java.util.LinkedHashSet<Long> uniqueAnswerIds = new java.util.LinkedHashSet<>(answerIds);
         Runnable conversionTrigger = () -> {
             for (Long answerId : uniqueAnswerIds) {
-                boolean claimed = asyncConversionService.triggerSubmitPreviewConversion(answerId);
-                log.info("【操作题】answerId={}，afterCommit 已触发首次转换领取，claimed={}", answerId, claimed);
+                asyncConversionService.scheduleSubmitPreviewConversion(answerId);
+                log.info("【操作题】answerId={}，afterCommit 已调度首次转换领取", answerId);
             }
         };
 
@@ -444,7 +606,7 @@ public class StudentHomeController extends BaseController
             return;
         }
 
-        log.warn("【操作题】当前事务同步未激活，直接触发异步转换，answerIds={}", uniqueAnswerIds);
+        log.warn("【操作题】当前事务同步未激活，直接调度异步转换，answerIds={}", uniqueAnswerIds);
         conversionTrigger.run();
     }
 
@@ -484,6 +646,77 @@ public class StudentHomeController extends BaseController
         return trimmed; // 其他情况返回原值
     }
 
+    private boolean hasPendingCountyExam()
+    {
+        Map<String, Object> current = countyExamService.checkCurrentStudentExam();
+        return Boolean.TRUE.equals(current.get("hasExam")) && !Boolean.TRUE.equals(current.get("ended"));
+    }
+
+    private String validateSubmissionAccess(BizStudent student, Long deptId, Long lessonId)
+    {
+        if (student == null || deptId == null || lessonId == null)
+        {
+            return "课程参数错误";
+        }
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(deptId))
+        {
+            return "课程不存在或不属于当前学校";
+        }
+        Long currentLessonId = lessonAssignmentMapper.selectCurrentLessonByClass(
+                student.getEntryYear(), student.getClassCode(), deptId);
+        if (lessonId.equals(currentLessonId))
+        {
+            return null;
+        }
+        Date graceStart = new Date(System.currentTimeMillis()
+                - java.util.concurrent.TimeUnit.MINUTES.toMillis(Math.max(submissionGraceMinutes, 0L)));
+        int recentAdvance = lessonAssignmentMapper.countRecentAdvanceHistory(
+                lessonId, student.getEntryYear(), student.getClassCode(), deptId, graceStart);
+        return recentAdvance > 0 ? null : "该课程已结束，补交时间已超过" + submissionGraceMinutes + "分钟";
+    }
+
+    private void validatePracticalAnswerPath(Long studentId, Long lessonId, Long questionId, String resource)
+    {
+        String normalized = resource == null ? "" : resource.trim().replace('\\', '/');
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        // 已保存的本人历史答案允许幂等重试，兼容升级前由通用上传生成的旧路径。
+        BizStudentAnswer existing = studentAnswerMapper.selectLatestByStudentLessonQuestion(
+                studentId, lessonId, questionId);
+        if (existing != null && normalized.equals(existing.getStudentAnswer()))
+        {
+            return;
+        }
+        if (!lower.startsWith("/profile/upload/student-answer/") || lower.contains("../"))
+        {
+            throw new ServiceException("操作题作品路径非法，请重新上传");
+        }
+        boolean allowedExtension = false;
+        for (String extension : PRACTICAL_ALLOWED_EXTENSIONS)
+        {
+            if (lower.endsWith("." + extension))
+            {
+                allowedExtension = true;
+                break;
+            }
+        }
+        if (!allowedExtension)
+        {
+            throw new ServiceException("操作题作品格式不支持，请重新上传");
+        }
+
+        Object owner = redisCache.getCacheObject(practicalUploadOwnerKey(normalized));
+        if (owner == null || !String.valueOf(studentId).equals(String.valueOf(owner)))
+        {
+            throw new ServiceException("操作题作品不属于当前学生，请重新上传");
+        }
+    }
+
+    private String practicalUploadOwnerKey(String resource)
+    {
+        return "student:practical-upload-owner:" + resource;
+    }
+
     /**
      * 获取学生历史成绩单
      * 默认返回今年的所有课程成绩
@@ -501,6 +734,7 @@ public class StudentHomeController extends BaseController
         if (student == null) {
             return AjaxResult.error("未找到学生信息");
         }
+        guideSheetAccessService.assertNoPendingCountyExam();
 
         // 默认今年
         if (year == null) {
@@ -598,6 +832,7 @@ public class StudentHomeController extends BaseController
         if (student == null) {
             return AjaxResult.error("未找到学生信息");
         }
+        guideSheetAccessService.assertNoPendingCountyExam();
         
         List<BizLessonQuestionDetailVo> list = studentAnswerMapper.selectWrongQuestions(student.getStudentId(), lessonId);
         return AjaxResult.success(list);

@@ -61,12 +61,34 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status)
     {
+        removeSession(session);
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception)
+    {
+        removeSession(session);
+        if (session.isOpen())
+        {
+            try
+            {
+                session.close(CloseStatus.SERVER_ERROR);
+            }
+            catch (Exception e)
+            {
+                log.debug("课堂异常连接关闭失败 sessionId={}", session.getId());
+            }
+        }
+    }
+
+    private void removeSession(WebSocketSession session)
+    {
         String roomKey = String.valueOf(session.getAttributes().get("roomKey"));
         Map<String, WebSocketSession> room = rooms.get(roomKey);
         if (room != null)
         {
             room.remove(session.getId());
-            if (room.isEmpty()) rooms.remove(roomKey);
+            if (room.isEmpty()) rooms.remove(roomKey, room);
         }
     }
 
@@ -76,7 +98,11 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
         if (room == null) return;
         for (WebSocketSession target : room.values())
         {
-            if (!target.isOpen()) continue;
+            if (!target.isOpen())
+            {
+                removeSession(target);
+                continue;
+            }
             try
             {
                 target.sendMessage(new TextMessage(payload));
@@ -84,6 +110,7 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
             catch (Exception e)
             {
                 log.warn("课堂消息发送失败 sessionId={}", target.getId());
+                removeSession(target);
             }
         }
     }

@@ -7,28 +7,30 @@ import org.apache.ibatis.annotations.Param;
 
 public interface GuideSheetProgressMapper
 {
-    public List<GuideSheetProgressVo> selectBySheetAndClass(@Param("sheetId") Long sheetId,
-                                                              @Param("entryYear") String entryYear,
-                                                              @Param("classCode") String classCode);
+    List<GuideSheetProgressVo> selectByBindingAndClass(@Param("bindingId") Long bindingId,
+                                                       @Param("deptId") Long deptId,
+                                                       @Param("entryYear") String entryYear,
+                                                       @Param("classCode") String classCode);
 
-    public List<GuideSheetProgressVo> selectBySheetId(@Param("sheetId") Long sheetId);
-
-    /**
-     * 获取班级全部学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress
-     */
-    public List<GuideSheetProgressVo> selectFullProgressBySheetAndClass(@Param("sheetId") Long sheetId,
-                                                                         @Param("entryYear") String entryYear,
-                                                                         @Param("classCode") String classCode);
+    List<GuideSheetProgressVo> selectByBindingId(Long bindingId);
 
     /**
-     * 获取全部班级学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress
+     * 通过课程指派补齐尚未开始填写的学生。
      */
-    public List<GuideSheetProgressVo> selectFullProgressBySheetId(@Param("sheetId") Long sheetId);
+    List<GuideSheetProgressVo> selectFullProgressByBindingAndClass(@Param("bindingId") Long bindingId,
+                                                                   @Param("deptId") Long deptId,
+                                                                   @Param("entryYear") String entryYear,
+                                                                   @Param("classCode") String classCode);
 
-    public BizGuideSheetProgress selectBySheetAndStudent(@Param("sheetId") Long sheetId,
-                                                           @Param("studentId") Long studentId);
+    List<GuideSheetProgressVo> selectFullProgressByBindingId(Long bindingId);
 
-    public int insertOrUpdate(BizGuideSheetProgress progress);
+    BizGuideSheetProgress selectByBindingAndStudent(@Param("bindingId") Long bindingId,
+                                                     @Param("studentId") Long studentId);
 
-    public int deleteBySheetId(Long sheetId);
+    int insertOrUpdate(BizGuideSheetProgress progress);
+
+    /**
+     * 上传发生在首次自动保存之前时补齐看板起始行，已存在的数据不得被回退。
+     */
+    int insertStartedIfAbsent(BizGuideSheetProgress progress);
 }

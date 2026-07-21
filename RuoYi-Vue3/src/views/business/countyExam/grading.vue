@@ -323,7 +323,7 @@ function previewStatusLabel(task) {
 
 function openFile(path) {
   if (!path) return
-  window.open(import.meta.env.VITE_APP_BASE_API + path, '_blank')
+  window.open(import.meta.env.VITE_APP_BASE_API + '/common/download/resource?resource=' + encodeURIComponent(path), '_blank')
 }
 
 function trimText(text, length) {

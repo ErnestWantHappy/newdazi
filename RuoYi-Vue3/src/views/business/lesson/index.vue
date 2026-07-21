@@ -125,64 +125,24 @@
       @pagination="getList"
     />
 
-    <!-- 添加或修改课程/作业信息对话框 -->
-    <el-dialog :title="title" v-model="open" width="500px" append-to-body>
-      <el-form ref="lessonRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="课程/作业标题" prop="lessonTitle">
-          <el-input v-model="form.lessonTitle" placeholder="请输入课程/作业标题" />
-        </el-form-item>
-        <el-form-item label="年级 (例如: 1, 2, 3, 4, 5, 6)" prop="grade">
-          <el-select v-model="form.grade" placeholder="请选择年级 (例如: 1, 2, 3, 4, 5, 6)">
-            <el-option
-              v-for="dict in biz_grade"
-              :key="dict.value"
-              :label="dict.label"
-              :value="parseInt(dict.value)"
-            ></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="学期 (0上册, 1下册)" prop="semester">
-          <el-select v-model="form.semester" placeholder="请选择学期 (0上册, 1下册)">
-            <el-option
-              v-for="dict in biz_semester"
-              :key="dict.value"
-              :label="dict.label"
-              :value="dict.value"
-            ></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="第几课 (例如: 1, 2, 3)" prop="lessonNum">
-          <el-input v-model="form.lessonNum" placeholder="请输入第几课 (例如: 1, 2, 3)" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button type="primary" @click="submitForm">确 定</el-button>
-          <el-button @click="cancel">取 消</el-button>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup name="Lesson">
-import { listLesson, getLesson, delLesson, addLesson, updateLesson } from "@/api/business/lesson"
+import { listLesson, delLesson } from "@/api/business/lesson"
 
 const { proxy } = getCurrentInstance()
 const { biz_semester, biz_grade } = proxy.useDict('biz_semester', 'biz_grade')
 const router = useRouter(); // 新增
 const lessonList = ref([])
-const open = ref(false)
 const loading = ref(true)
 const showSearch = ref(true)
 const ids = ref([])
 const single = ref(true)
 const multiple = ref(true)
 const total = ref(0)
-const title = ref("")
 
 const data = reactive({
-  form: {},
   queryParams: {
     pageNum: 1,
     pageSize: 10,
@@ -191,15 +151,10 @@ const data = reactive({
     semester: null,
     lessonNum: null,
     creatorId: null,
-  },
-  rules: {
-    lessonTitle: [
-      { required: true, message: "课程/作业标题不能为空", trigger: "blur" }
-    ],
   }
 })
 
-const { queryParams, form, rules } = toRefs(data)
+const { queryParams } = toRefs(data)
 
 /** 查询课程/作业信息列表 */
 function getList() {
@@ -209,29 +164,6 @@ function getList() {
     total.value = response.total
     loading.value = false
   })
-}
-
-// 取消按钮
-function cancel() {
-  open.value = false
-  reset()
-}
-
-// 表单重置
-function reset() {
-  form.value = {
-    lessonId: null,
-    lessonTitle: null,
-    grade: null,
-    semester: null,
-    lessonNum: null,
-    creatorId: null,
-    createBy: null,
-    createTime: null,
-    updateBy: null,
-    updateTime: null
-  }
-  proxy.resetForm("lessonRef")
 }
 
 /** 搜索按钮操作 */
@@ -262,27 +194,6 @@ function handleAdd() {
 function handleUpdate(row) {
   const lessonId = row.lessonId || ids.value[0];
   router.push("/business/lesson-auth/designer/" + lessonId);
-}
-
-/** 提交按钮 */
-function submitForm() {
-  proxy.$refs["lessonRef"].validate(valid => {
-    if (valid) {
-      if (form.value.lessonId != null) {
-        updateLesson(form.value).then(response => {
-          proxy.$modal.msgSuccess("修改成功")
-          open.value = false
-          getList()
-        })
-      } else {
-        addLesson(form.value).then(response => {
-          proxy.$modal.msgSuccess("新增成功")
-          open.value = false
-          getList()
-        })
-      }
-    }
-  })
 }
 
 /** 删除按钮操作 */

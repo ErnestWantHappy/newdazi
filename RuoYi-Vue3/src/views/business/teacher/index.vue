@@ -11,7 +11,12 @@
       <template #header>
         <div class="card-header">
           <span>课程设置</span>
-          <!-- 顶部批量入口保留，但在卡片中提供了更便捷的操作 -->
+          <div class="header-actions">
+            <el-button type="primary" plain icon="DArrowRight" :loading="advanceLoading" @click="handleOneClickAdvance">
+              手动一键课堂推进
+            </el-button>
+            <el-button icon="Setting" @click="openCourseSettings">设置</el-button>
+          </div>
         </div>
       </template>
       <div v-if="loading" class="loading-state">正在加载教学数据...</div>
@@ -50,6 +55,7 @@
                 <div class="lesson-count-tag">
                   第{{ lesson.lessonNum }}课
                 </div>
+                <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
               </div>
             </div>
             
@@ -58,6 +64,16 @@
                <div class="action-btn design" @click.stop="handleEditLesson(lesson.lessonId)" title="设计课程">
                   <el-icon><Edit /></el-icon>
                   <span>设计</span>
+               </div>
+               <!-- 课堂考勤：查看签到名单 -->
+               <div
+                 v-if="lesson.lessonMode === 'attendance'"
+                 class="action-btn grade"
+                 @click.stop="openCheckinRoster(lesson, group)"
+                 title="签到名单"
+               >
+                  <el-icon><Check /></el-icon>
+                  <span>签到</span>
                </div>
                <!-- 只有包含操作题时才显示批改 -->
                <div 
@@ -69,7 +85,12 @@
                   <el-icon><Check /></el-icon>
                   <span>批改</span>
                </div>
-               <div class="action-btn score" @click.stop="goToScoreAnalysis(lesson, group)" title="查看成绩">
+               <div
+                 v-if="lesson.lessonMode !== 'attendance'"
+                 class="action-btn score"
+                 @click.stop="goToScoreAnalysis(lesson, group)"
+                 title="查看成绩"
+               >
                   <el-icon><DataLine /></el-icon>
                   <span>成绩</span>
                </div>
@@ -97,6 +118,118 @@
 
     <!-- 班级选择弹窗 -->
     <ClassSelectionDialog ref="classDialogRef" />
+
+    <!-- 手动一键课堂推进：年级 + 多选班级（默认全选当前为常规课的班级） -->
+    <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进" width="480px" destroy-on-close>
+      <p class="settings-intro">
+        默认已选中当前年级所有<strong>常规课班级</strong>，可取消部分班级；当前为考勤课的班级不会参与推进。需有成绩人数达到设置中的统一比例（默认 50%）。
+      </p>
+      <el-form label-width="80px">
+        <el-form-item label="年级">
+          <el-select v-model="advanceForm.entryYear" placeholder="请选择年级" style="width: 100%" @change="onAdvanceGradeChange">
+            <el-option
+              v-for="g in advanceGradeOptions"
+              :key="g.entryYear"
+              :label="`${g.entryYear}级（${g.gradeName}）`"
+              :value="g.entryYear"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="班级">
+          <div class="class-multi-tools">
+            <el-button link type="primary" :disabled="!advanceClassOptions.length" @click="selectAllAdvanceClasses">全选</el-button>
+            <el-button link :disabled="!advanceForm.classCodes.length" @click="advanceForm.classCodes = []">清空</el-button>
+            <span class="class-multi-count">已选 {{ advanceForm.classCodes.length }} / {{ advanceClassOptions.length }}</span>
+          </div>
+          <el-select
+            v-model="advanceForm.classCodes"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择班级（可多选）"
+            style="width: 100%"
+            :disabled="!advanceForm.entryYear"
+          >
+            <el-option
+              v-for="cls in advanceClassOptions"
+              :key="cls"
+              :label="formatClassLabel(cls)"
+              :value="normalizeClassCode(cls)"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="advanceDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="advanceLoading" @click="confirmOneClickAdvance">确认推进</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 统一课程推进设置（全校常规课共用一套） -->
+    <el-dialog v-model="settingsVisible" title="课程推进设置" width="480px" destroy-on-close>
+      <p class="settings-intro">
+        以下设置对您的<strong>全部常规课</strong>统一生效。开启后，班级有成绩达到比例并等待指定时间，会自动切到下一课；也可随时用右上角「手动一键课堂推进」立即切换。
+      </p>
+      <el-form v-loading="policyLoading" label-width="120px" class="policy-form">
+        <el-form-item label="自动推进">
+          <el-switch v-model="policyForm.autoAdvanceEnabled" active-text="开启" inactive-text="关闭" />
+        </el-form-item>
+        <el-form-item label="有成绩达到">
+          <el-input-number
+            v-model="policyForm.autoAdvanceThresholdPct"
+            :min="30"
+            :max="100"
+            :step="5"
+            controls-position="right"
+            style="width: 140px"
+          />
+          <span class="settings-unit">%</span>
+        </el-form-item>
+        <el-form-item label="等待时间">
+          <el-input-number
+            v-model="policyForm.autoAdvanceDelayHours"
+            :min="0.5"
+            :max="24"
+            :step="0.5"
+            :precision="1"
+            controls-position="right"
+            style="width: 140px"
+            :disabled="!policyForm.autoAdvanceEnabled"
+          />
+          <span class="settings-unit">小时后自动推进</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="settingsVisible = false">取消</el-button>
+        <el-button type="primary" :loading="policySaving" @click="saveAdvancePolicy">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 考勤签到名单 -->
+    <el-dialog v-model="checkinDialogVisible" :title="checkinDialogTitle" width="640px" destroy-on-close>
+      <div v-if="checkinMeta.total != null" class="checkin-summary">
+        已签到 {{ checkinMeta.checkedInCount || 0 }} / {{ checkinMeta.total || 0 }} 人
+      </div>
+      <el-table v-loading="checkinLoading" :data="checkinRows" size="small" max-height="420">
+        <el-table-column label="学号" prop="studentNo" width="120" />
+        <el-table-column label="姓名" prop="studentName" min-width="100" />
+        <el-table-column label="班级" prop="classCode" width="80">
+          <template #default="{ row }">{{ row.classCode }}班</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.checkinId ? 'success' : 'info'" size="small">
+              {{ row.checkinId ? '已签到' : '未签到' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="签到时间" min-width="160">
+          <template #default="{ row }">
+            {{ row.checkinTime ? formatCheckinTime(row.checkinTime) : '—' }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -105,9 +238,15 @@ import { computed, ref, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
-import { delLesson } from '@/api/business/lesson';
+import {
+  delLesson,
+  getLessonCheckinRoster,
+  getAdvancePolicy,
+  updateAdvancePolicy,
+  manualAdvanceLesson
+} from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, MoreFilled } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
@@ -117,6 +256,59 @@ const classDialogRef = ref(null);
 const expandedGradeKeys = ref(new Set());
 const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
 const pendingCountyGradingCount = computed(() => countyGradingEntry.value.pendingTaskCount ?? countyGradingEntry.value.taskCount ?? 0);
+const checkinDialogVisible = ref(false);
+const checkinDialogTitle = ref('签到名单');
+const checkinLoading = ref(false);
+const checkinRows = ref([]);
+const checkinMeta = ref({});
+
+// 统一推进设置
+const settingsVisible = ref(false);
+const policyLoading = ref(false);
+const policySaving = ref(false);
+const policyForm = ref({
+  autoAdvanceEnabled: false,
+  autoAdvanceThresholdPct: 50,
+  autoAdvanceDelayHours: 2
+});
+
+// 手动一键课堂推进（多选班级，默认全选当前为常规课的班级）
+const advanceDialogVisible = ref(false);
+const advanceLoading = ref(false);
+const advanceForm = ref({ entryYear: '', classCodes: [] });
+
+function getAdvanceClassesForGroup(group) {
+  const managedClasses = new Set((group?.allClassesInGrade || []).map(normalizeClassCode).filter(Boolean));
+  const classCodes = (group?.lessons || [])
+    .filter(lesson => lesson.lessonMode !== 'attendance')
+    .flatMap(lesson => lesson.assignedClasses || [])
+    .map(normalizeClassCode)
+    .filter(classCode => classCode && managedClasses.has(classCode));
+  return [...new Set(classCodes)].sort((left, right) => Number(left) - Number(right));
+}
+
+const advanceGradeOptions = computed(() =>
+  (gradeGroups.value || []).filter(group => getAdvanceClassesForGroup(group).length > 0)
+);
+
+const advanceClassOptions = computed(() => {
+  const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
+  return getAdvanceClassesForGroup(group);
+});
+
+function normalizeClassCode(cls) {
+  return String(cls || '').replace('班', '').trim();
+}
+
+function formatClassLabel(cls) {
+  const code = normalizeClassCode(cls);
+  return code ? `${code}班` : String(cls || '');
+}
+
+/** 默认选中当前年级所有当前为常规课的班级，考勤班级不进入请求。 */
+function selectAllAdvanceClasses() {
+  advanceForm.value.classCodes = advanceClassOptions.value.map(normalizeClassCode).filter(Boolean);
+}
 
 function compareLessonsByLatest(a, b) {
   const timeA = a.createTime ? new Date(a.createTime).getTime() : 0;
@@ -174,9 +366,8 @@ function goToCountyExamGrading() {
   router.push('/business/county-exam-grading');
 }
 
-/** 处理新增课程 */
+/** 新建课：直接进入设计器，在设计页选择「常规课 / 课堂考勤」 */
 function handleAddNewLesson(group) {
-  // 自动计算下一课序号
   const maxLessonNum = group.lessons && group.lessons.length > 0
     ? Math.max(...group.lessons.map(l => l.lessonNum || 0))
     : 0;
@@ -191,9 +382,159 @@ function handleAddNewLesson(group) {
   });
 }
 
+async function openCourseSettings() {
+  settingsVisible.value = true;
+  policyLoading.value = true;
+  try {
+    const res = await getAdvancePolicy();
+    const data = res.data || res || {};
+    policyForm.value = {
+      autoAdvanceEnabled: Boolean(data.autoAdvanceEnabled),
+      autoAdvanceThresholdPct: Number(data.autoAdvanceThresholdPct) || 50,
+      autoAdvanceDelayHours: Number(data.autoAdvanceDelayHours) || 2
+    };
+  } catch (e) {
+    policyForm.value = {
+      autoAdvanceEnabled: false,
+      autoAdvanceThresholdPct: 50,
+      autoAdvanceDelayHours: 2
+    };
+  } finally {
+    policyLoading.value = false;
+  }
+}
+
+async function saveAdvancePolicy() {
+  policySaving.value = true;
+  try {
+    await updateAdvancePolicy({
+      autoAdvanceEnabled: Boolean(policyForm.value.autoAdvanceEnabled),
+      autoAdvanceThresholdPct: Number(policyForm.value.autoAdvanceThresholdPct) || 50,
+      autoAdvanceDelayHours: Number(policyForm.value.autoAdvanceDelayHours) || 2
+    });
+    ElMessage.success('已保存，全部常规课已同步');
+    settingsVisible.value = false;
+  } catch (e) {
+    // 全局拦截器提示
+  } finally {
+    policySaving.value = false;
+  }
+}
+
+/** 右上角：手动一键课堂推进（默认多选当前年级全部常规课班级） */
+async function handleOneClickAdvance() {
+  if (!advanceGradeOptions.value.length) {
+    ElMessage.warning('暂无可推进的常规课班级');
+    return;
+  }
+  // 带出统一阈值，便于确认文案准确
+  try {
+    const res = await getAdvancePolicy();
+    const data = res.data || res || {};
+    policyForm.value.autoAdvanceThresholdPct = Number(data.autoAdvanceThresholdPct) || 50;
+  } catch (e) {
+    policyForm.value.autoAdvanceThresholdPct = 50;
+  }
+  const first = advanceGradeOptions.value[0];
+  advanceForm.value = {
+    entryYear: first.entryYear || '',
+    classCodes: []
+  };
+  // 等 options 就绪后默认全选当前年级的常规课班级
+  advanceDialogVisible.value = true;
+  selectAllAdvanceClasses();
+}
+
+function onAdvanceGradeChange() {
+  // 切换年级后默认全选该年级当前为常规课的班级
+  selectAllAdvanceClasses();
+}
+
+async function confirmOneClickAdvance() {
+  const entryYear = advanceForm.value.entryYear;
+  const classCodes = (advanceForm.value.classCodes || []).map(normalizeClassCode).filter(Boolean);
+  if (!entryYear) {
+    ElMessage.warning('请选择年级');
+    return;
+  }
+  if (!classCodes.length) {
+    ElMessage.warning('请至少选择一个班级');
+    return;
+  }
+  const threshold = Number(policyForm.value.autoAdvanceThresholdPct) || 50;
+  const classLabel = classCodes.length === advanceClassOptions.value.length
+    ? `全部 ${classCodes.length} 个班`
+    : `${classCodes.length} 个班（${classCodes.map(c => c + '班').join('、')}）`;
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${classLabel} 的当前课程推进到下一课？\n需各班有成绩人数达到 ${threshold}%。未达标的班级会跳过并提示。`,
+      '手动一键课堂推进',
+      { type: 'warning', confirmButtonText: '确认推进', cancelButtonText: '取消' }
+    );
+  } catch {
+    return;
+  }
+  advanceLoading.value = true;
+  try {
+    const res = await manualAdvanceLesson({
+      entryYear,
+      classCodes
+    });
+    const msg = res.msg || res.data?.message || '推进完成';
+    const failed = Number(res.data?.failed || 0);
+    if (failed > 0) {
+      ElMessage.warning(msg);
+    } else {
+      ElMessage.success(msg);
+    }
+    advanceDialogVisible.value = false;
+    fetchDashboardData();
+  } catch (e) {
+    // 全局拦截器已提示业务错误
+  } finally {
+    advanceLoading.value = false;
+  }
+}
+
 /** 处理修改课程 (设计) */
 function handleEditLesson(lessonId) {
   router.push(`/business/lesson-auth/designer/${lessonId}`);
+}
+
+function formatCheckinTime(value) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch (e) {
+    return String(value || '');
+  }
+}
+
+/** 查看考勤课签到名单 */
+async function openCheckinRoster(lesson, group) {
+  const selectedClass = await classDialogRef.value.open(group.allClassesInGrade, lesson.lessonId, 'score');
+  if (!selectedClass) return;
+  const pureClass = String(selectedClass).replace('班', '').trim();
+  checkinDialogTitle.value = `${lesson.lessonTitle || '课程'} · ${pureClass}班签到`;
+  checkinDialogVisible.value = true;
+  checkinLoading.value = true;
+  checkinRows.value = [];
+  checkinMeta.value = {};
+  try {
+    const res = await getLessonCheckinRoster({
+      lessonId: lesson.lessonId,
+      entryYear: group.entryYear,
+      classCode: pureClass
+    });
+    checkinRows.value = res.data || [];
+    checkinMeta.value = {
+      total: res.total,
+      checkedInCount: res.checkedInCount
+    };
+  } catch (e) {
+    checkinDialogVisible.value = false;
+  } finally {
+    checkinLoading.value = false;
+  }
 }
 
 /** 跳转批改 */
@@ -370,6 +711,55 @@ onActivated(() => {
   overflow: hidden; /* 防止溢出 */
 }
 
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.attendance-mode-tag {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #e6a23c;
+  font-weight: 600;
+}
+.checkin-summary {
+  margin-bottom: 10px;
+  color: #606266;
+  font-size: 13px;
+}
+.settings-intro {
+  margin: 0 0 16px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.settings-unit {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 13px;
+}
+.policy-form {
+  padding-right: 8px;
+}
+.class-multi-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+.class-multi-count {
+  margin-left: auto;
+  color: #909399;
+  font-size: 12px;
+}
 .lesson-count-tag {
   font-size: 12px; 
   color: #909399;

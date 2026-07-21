@@ -46,6 +46,30 @@ public class BizLesson extends BaseEntity
     /** 随机抽取判断题数量 (模式2时有效) */
     private Integer randomJudgmentCount;
 
+    /**
+     * 课程用途：assessment=测评课（默认），attendance=考勤课。
+     * 考勤课允许 0 题、不绑导学单；后续加题后可升级为测评课。
+     */
+    private String lessonMode;
+
+    /** 教师课堂说明（学生可见，考勤课常用） */
+    private String teacherNote;
+
+    /**
+     * 是否开启自动推进下一课（仅测评课有效；考勤课强制关闭）。
+     * 默认关闭；开启后默认阈值 50%、延迟 2 小时。
+     */
+    private Boolean autoAdvanceEnabled;
+
+    /** 有成绩人数占班级比例阈值（30～100），达到后开始计延迟 */
+    private Integer autoAdvanceThresholdPct;
+
+    /** 达标后延迟小时数（0.5～24），再自动切换下一课指派 */
+    private java.math.BigDecimal autoAdvanceDelayHours;
+
+    /** 阈值首次达标时间（服务端写入，用于延迟判定） */
+    private java.util.Date autoAdvanceReadyTime;
+
     /** 课程包含的题目列表 (非数据库字段) */
     private List<BizLessonQuestion> questions;
 
@@ -131,6 +155,54 @@ public class BizLesson extends BaseEntity
         this.randomJudgmentCount = randomJudgmentCount;
     }
 
+    public String getLessonMode() {
+        return lessonMode;
+    }
+
+    public void setLessonMode(String lessonMode) {
+        this.lessonMode = lessonMode;
+    }
+
+    public String getTeacherNote() {
+        return teacherNote;
+    }
+
+    public void setTeacherNote(String teacherNote) {
+        this.teacherNote = teacherNote;
+    }
+
+    public Boolean getAutoAdvanceEnabled() {
+        return autoAdvanceEnabled;
+    }
+
+    public void setAutoAdvanceEnabled(Boolean autoAdvanceEnabled) {
+        this.autoAdvanceEnabled = autoAdvanceEnabled;
+    }
+
+    public Integer getAutoAdvanceThresholdPct() {
+        return autoAdvanceThresholdPct;
+    }
+
+    public void setAutoAdvanceThresholdPct(Integer autoAdvanceThresholdPct) {
+        this.autoAdvanceThresholdPct = autoAdvanceThresholdPct;
+    }
+
+    public java.math.BigDecimal getAutoAdvanceDelayHours() {
+        return autoAdvanceDelayHours;
+    }
+
+    public void setAutoAdvanceDelayHours(java.math.BigDecimal autoAdvanceDelayHours) {
+        this.autoAdvanceDelayHours = autoAdvanceDelayHours;
+    }
+
+    public java.util.Date getAutoAdvanceReadyTime() {
+        return autoAdvanceReadyTime;
+    }
+
+    public void setAutoAdvanceReadyTime(java.util.Date autoAdvanceReadyTime) {
+        this.autoAdvanceReadyTime = autoAdvanceReadyTime;
+    }
+
     public List<BizLessonQuestion> getQuestions()
     {
         return questions;
@@ -149,6 +221,8 @@ public class BizLesson extends BaseEntity
                 .append("grade", getGrade())
                 .append("semester", getSemester())
                 .append("lessonNum", getLessonNum())
+                .append("lessonMode", getLessonMode())
+                .append("teacherNote", getTeacherNote())
                 .append("creatorId", getCreatorId())
                 .append("createBy", getCreateBy())
                 .append("createTime", getCreateTime())

@@ -15,7 +15,7 @@
       <!-- 班级列：直接显示 formattedClassName -->
       <el-table-column prop="formattedClassName" label="班级" width="100" fixed sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
       
-      <el-table-column prop="studentNo" label="学号" width="100" fixed sortable :sort-method="(a, b) => Number(a.studentNo) - Number(b.studentNo)" />
+      <el-table-column prop="studentNo" label="学号" width="100" fixed sortable :sort-method="(a, b) => String(a.studentNo ?? '').localeCompare(String(b.studentNo ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' })" />
       <el-table-column prop="studentName" label="姓名" width="100" fixed />
       
       <!-- 新增：正确率列 -->

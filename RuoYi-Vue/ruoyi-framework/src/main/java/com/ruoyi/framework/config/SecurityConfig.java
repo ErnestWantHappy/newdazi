@@ -1,6 +1,7 @@
 package com.ruoyi.framework.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -67,6 +68,12 @@ public class SecurityConfig
     private PermitAllUrlProperties permitAllUrl;
 
     /**
+     * Swagger 仅在本机显式开启时对外提供静态页面和接口文档。
+     */
+    @Value("${swagger.enabled:false}")
+    private boolean swaggerEnabled;
+
+    /**
      * 身份验证实现
      */
     @Bean
@@ -114,13 +121,19 @@ public class SecurityConfig
                 requests.antMatchers("/login", "/register", "/captchaImage").permitAll()
                     // WebSocket 握手由课堂拦截器使用 Cookie 令牌完成细粒度授权
                     .antMatchers("/ws/**").permitAll()
-                    // 静态资源，可匿名访问
-                    .antMatchers(HttpMethod.GET, "/", "/*.html", "/**/*.html", "/**/*.css", "/**/*.js", "/profile/**").permitAll()
-                    // 文件预览接口，允许匿名访问
-                    .antMatchers("/common/resource/view", "/common/download/resource").permitAll()
-                    .antMatchers("/swagger-ui.html", "/swagger-resources/**", "/webjars/**", "/*/api-docs", "/druid/**").permitAll()
-                    // 除上面外的所有请求全部需要鉴权认证
-                    .anyRequest().authenticated();
+                    // 头像不包含学生作业；其余 profile 文件禁止绕过业务授权接口直接读取。
+                    .antMatchers(HttpMethod.GET, "/profile/avatar/**").permitAll()
+                    .antMatchers("/profile/**").denyAll();
+                if (!swaggerEnabled)
+                {
+                    // 必须先于通用 html 白名单收口；仅关闭 Docket 仍会暴露 Swagger 静态首页。
+                    requests.antMatchers("/swagger-ui/**", "/swagger-resources/**", "/v2/api-docs", "/v3/api-docs/**",
+                        "/webjars/**").denyAll();
+                }
+                // 静态页面资源可匿名访问，业务文件和运维控制台必须登录。
+                requests.antMatchers(HttpMethod.GET, "/", "/*.html", "/**/*.html", "/**/*.css", "/**/*.js").permitAll();
+                // 除上面外的所有请求全部需要鉴权认证
+                requests.anyRequest().authenticated();
             })
             // 添加Logout filter
             .logout(logout -> logout.logoutUrl("/logout").logoutSuccessHandler(logoutSuccessHandler))

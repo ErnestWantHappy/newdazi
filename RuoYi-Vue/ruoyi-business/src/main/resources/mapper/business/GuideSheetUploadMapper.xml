@@ -5,78 +5,78 @@
 <mapper namespace="com.ruoyi.business.mapper.GuideSheetUploadMapper">
 
     <resultMap type="BizGuideSheetUpload" id="BizGuideSheetUploadResult">
-        <result property="uploadId"          column="upload_id"          />
-        <result property="answerId"          column="answer_id"          />
-        <result property="sheetId"           column="sheet_id"           />
-        <result property="studentId"         column="student_id"         />
-        <result property="questionName"      column="question_name"      />
-        <result property="fileName"          column="file_name"          />
-        <result property="fileSize"          column="file_size"          />
-        <result property="mimeType"          column="mime_type"          />
-        <result property="teacherMachineIp"  column="teacher_machine_ip" />
-        <result property="storedPath"        column="stored_path"        />
-        <result property="accessUrl"         column="access_url"         />
-        <result property="uploadTime"        column="upload_time"        />
+        <id property="uploadId" column="upload_id" />
+        <result property="answerId" column="answer_id" />
+        <result property="bindingId" column="binding_id" />
+        <result property="sourceSheetId" column="source_sheet_id" />
+        <result property="studentId" column="student_id" />
+        <result property="questionName" column="question_name" />
+        <result property="fileName" column="file_name" />
+        <result property="fileSize" column="file_size" />
+        <result property="mimeType" column="mime_type" />
+        <result property="teacherMachineIp" column="teacher_machine_ip" />
+        <result property="storedPath" column="stored_path" />
+        <result property="accessUrl" column="access_url" />
+        <result property="clientUploadId" column="client_upload_id" />
+        <result property="uploadTime" column="upload_time" />
     </resultMap>
 
-    <sql id="selectBizGuideSheetUploadVo">
-        select upload_id, answer_id, sheet_id, student_id, question_name, file_name, file_size, mime_type, teacher_machine_ip, stored_path, access_url, upload_time from biz_guide_sheet_upload
+    <sql id="selectGuideSheetUploadColumns">
+        upload_id, answer_id, binding_id, source_sheet_id, student_id,
+        question_name, file_name, file_size, mime_type, teacher_machine_ip,
+        stored_path, access_url, client_upload_id, upload_time
     </sql>
 
-    <select id="selectBySheetId" parameterType="Long" resultMap="BizGuideSheetUploadResult">
-        <include refid="selectBizGuideSheetUploadVo"/>
-        where sheet_id = #{sheetId}
-        order by upload_time desc
+    <select id="selectByUploadId" parameterType="Long" resultMap="BizGuideSheetUploadResult">
+        SELECT <include refid="selectGuideSheetUploadColumns" />
+        FROM biz_guide_sheet_upload
+        WHERE upload_id = #{uploadId}
+        LIMIT 1
     </select>
 
-    <select id="selectBySheetAndClass" resultMap="BizGuideSheetUploadResult">
-        SELECT u.upload_id, u.answer_id, u.sheet_id, u.student_id, u.question_name,
-               u.file_name, u.file_size, u.mime_type, u.teacher_machine_ip,
-               u.stored_path, u.access_url, u.upload_time
-        FROM biz_guide_sheet_upload u
-        INNER JOIN biz_guide_sheet g ON u.sheet_id = g.sheet_id
-        INNER JOIN biz_student s ON u.student_id = s.student_id
-        INNER JOIN sys_user su ON s.user_id = su.user_id AND su.dept_id = g.dept_id
-        WHERE u.sheet_id = #{sheetId}
-        <if test="classCode != null and classCode != ''">
-            AND s.entry_year = #{entryYear}
-            AND s.class_code = #{classCode}
-        </if>
-        ORDER BY u.upload_time DESC
+    <select id="selectByBindingId" parameterType="Long" resultMap="BizGuideSheetUploadResult">
+        SELECT <include refid="selectGuideSheetUploadColumns" />
+        FROM biz_guide_sheet_upload
+        WHERE binding_id = #{bindingId}
+        ORDER BY upload_time DESC, upload_id DESC
     </select>
 
-    <insert id="insertBizGuideSheetUpload" parameterType="BizGuideSheetUpload">
-        insert into biz_guide_sheet_upload
-        <trim prefix="(" suffix=")" suffixOverrides=",">
-            <if test="answerId != null">answer_id,</if>
-            <if test="sheetId != null">sheet_id,</if>
-            <if test="studentId != null">student_id,</if>
-            <if test="questionName != null">question_name,</if>
-            <if test="fileName != null">file_name,</if>
-            <if test="fileSize != null">file_size,</if>
-            <if test="mimeType != null">mime_type,</if>
-            <if test="teacherMachineIp != null">teacher_machine_ip,</if>
-            <if test="storedPath != null">stored_path,</if>
-            <if test="accessUrl != null">access_url,</if>
-            <if test="uploadTime != null">upload_time,</if>
-        </trim>
-        <trim prefix="values (" suffix=")" suffixOverrides=",">
-            <if test="answerId != null">#{answerId},</if>
-            <if test="sheetId != null">#{sheetId},</if>
-            <if test="studentId != null">#{studentId},</if>
-            <if test="questionName != null">#{questionName},</if>
-            <if test="fileName != null">#{fileName},</if>
-            <if test="fileSize != null">#{fileSize},</if>
-            <if test="mimeType != null">#{mimeType},</if>
-            <if test="teacherMachineIp != null">#{teacherMachineIp},</if>
-            <if test="storedPath != null">#{storedPath},</if>
-            <if test="accessUrl != null">#{accessUrl},</if>
-            <if test="uploadTime != null">#{uploadTime},</if>
-        </trim>
+    <select id="selectByBindingAndClass" resultMap="BizGuideSheetUploadResult">
+        SELECT DISTINCT
+            gu.upload_id, gu.answer_id, gu.binding_id, gu.source_sheet_id, gu.student_id,
+            gu.question_name, gu.file_name, gu.file_size, gu.mime_type,
+            gu.teacher_machine_ip, gu.stored_path, gu.access_url, gu.client_upload_id, gu.upload_time
+        FROM biz_guide_sheet_upload gu
+        INNER JOIN biz_guide_sheet_progress p
+                ON p.binding_id = gu.binding_id
+               AND p.student_id = gu.student_id
+        WHERE gu.binding_id = #{bindingId}
+          AND p.dept_id = #{deptId}
+          AND p.entry_year = #{entryYear}
+          AND p.class_code = #{classCode}
+        ORDER BY gu.upload_time DESC, gu.upload_id DESC
+    </select>
+
+    <select id="selectByClientUploadId" resultMap="BizGuideSheetUploadResult">
+        SELECT <include refid="selectGuideSheetUploadColumns" />
+        FROM biz_guide_sheet_upload
+        WHERE binding_id = #{bindingId}
+          AND student_id = #{studentId}
+          AND client_upload_id = #{clientUploadId}
+        LIMIT 1
+    </select>
+
+    <insert id="insertBizGuideSheetUpload" parameterType="BizGuideSheetUpload"
+            useGeneratedKeys="true" keyProperty="uploadId">
+        INSERT INTO biz_guide_sheet_upload (
+            answer_id, binding_id, source_sheet_id, student_id, question_name,
+            file_name, file_size, mime_type, teacher_machine_ip, stored_path,
+            access_url, client_upload_id, upload_time
+        ) VALUES (
+            #{answerId}, #{bindingId}, #{sourceSheetId}, #{studentId}, #{questionName},
+            #{fileName}, COALESCE(#{fileSize}, 0), #{mimeType}, #{teacherMachineIp},
+            #{storedPath}, #{accessUrl}, #{clientUploadId}, #{uploadTime}
+        )
     </insert>
-
-    <delete id="deleteBySheetId" parameterType="Long">
-        delete from biz_guide_sheet_upload where sheet_id = #{sheetId}
-    </delete>
 
 </mapper>

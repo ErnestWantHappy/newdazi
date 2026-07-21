@@ -17,6 +17,11 @@ public interface CountyExamMapper {
     CountyExam selectCountyExamById(Long examId);
 
     /**
+     * 在事务内锁定抽测主记录，串行化状态切换与评卷写入。
+     */
+    CountyExam selectCountyExamByIdForUpdate(Long examId);
+
+    /**
      * 查询县考列表
      */
     List<CountyExam> selectCountyExamList(CountyExam countyExam);
@@ -32,9 +37,16 @@ public interface CountyExamMapper {
     int updateCountyExam(CountyExam countyExam);
 
     /**
+     * 只允许修改草稿阶段的业务配置，避免普通编辑接口改写状态字段。
+     */
+    int updateDraftFields(CountyExam countyExam);
+
+    /**
      * 更新区域抽测状态。
      */
-    int updateStatus(@Param("examId") Long examId, @Param("status") String status);
+    int updateStatus(@Param("examId") Long examId,
+                     @Param("expectedStatus") String expectedStatus,
+                     @Param("status") String status);
 
     /**
      * 更新匿名评卷开关。
