@@ -16,6 +16,7 @@ SOURCE county_exam_grading_enabled.sql;
 -- 2. 电子导学单：先建立模板/课程快照/答卷分层，再补新手模式、草稿与约束。
 SOURCE guide_sheet_v2_template_binding.sql;
 SOURCE guide_sheet_beginner_mode.sql;
+SOURCE guide_sheet_menu_permissions.sql;
 
 -- 3. 课程模式、考勤、自动推进与当前课程唯一约束。
 SOURCE lesson_attendance_mode.sql;
