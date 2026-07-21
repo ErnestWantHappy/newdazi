@@ -80,10 +80,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <!-- 新增：根据课程ID查询所有被指派的班级编号 -->
-    <select id="selectClassCodesByLessonId" parameterType="java.lang.Long" resultType="java.lang.String">
+    <select id="selectClassCodesByLessonIdAndEntryYear" resultType="java.lang.String">
         SELECT DISTINCT class_code
         FROM biz_lesson_assignment
         WHERE lesson_id = #{lessonId}
+          AND entry_year = #{entryYear}
         ORDER BY CAST(class_code AS UNSIGNED) ASC, class_code ASC
     </select>
 
@@ -182,11 +183,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="countRecentAdvanceHistory" resultType="int">
         select count(1)
         from biz_lesson_assignment_history
-        where lesson_id = #{lessonId}
+        where (lesson_id = #{lessonId} or next_lesson_id = #{lessonId})
           and entry_year = #{entryYear}
           and class_code = #{classCode}
           and dept_id = #{deptId}
           and advanced_time &gt;= #{advancedAfter}
+    </select>
+
+    <select id="countHistoricalAssignment" resultType="int">
+        select count(1)
+        from biz_lesson_assignment_history
+        where lesson_id = #{lessonId}
+          and entry_year = #{entryYear}
+          and class_code = #{classCode}
+          and dept_id = #{deptId}
     </select>
 
 </mapper>

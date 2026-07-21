@@ -13,6 +13,7 @@ import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.GuideSheetMapper;
@@ -49,6 +50,9 @@ public class GuideSheetAccessService
 
     @Autowired
     private BizStudentMapper studentMapper;
+
+    @Autowired
+    private BizStudentAnswerMapper studentAnswerMapper;
 
     @Autowired
     private OrganizationBoundaryService organizationBoundaryService;
@@ -166,11 +170,12 @@ public class GuideSheetAccessService
         {
             throw new ServiceException("课程不存在或不属于当前学校");
         }
-        boolean currentAssignment = isLessonAssignedToClass(
+        assertLessonEntryYear(lesson, entryYear);
+        boolean classEvidence = isLessonAssignedToClass(
                 lesson.getLessonId(), currentDeptId, entryYear, normalizedClassCode);
         boolean historicalResult = !progressMapper.selectByBindingAndClass(
                 bindingId, currentDeptId, entryYear, normalizedClassCode).isEmpty();
-        if (!currentAssignment && !historicalResult)
+        if (!classEvidence && !historicalResult)
         {
             throw new ServiceException("该课程没有当前或历史班级数据");
         }
@@ -241,6 +246,7 @@ public class GuideSheetAccessService
         {
             throw new ServiceException("课程不存在或不属于当前学校");
         }
+        assertLessonEntryYear(lesson, entryYear);
         if (!isLessonAssignedToClass(lessonId, currentDeptId, entryYear, normalizedClassCode))
         {
             throw new ServiceException("该课程未指派给当前班级");
@@ -298,19 +304,29 @@ public class GuideSheetAccessService
         BizLessonAssignment query = new BizLessonAssignment();
         query.setLessonId(lessonId);
         List<BizLessonAssignment> assignments = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
-        if (assignments == null)
+        if (assignments != null)
         {
-            return false;
-        }
-        for (BizLessonAssignment assignment : assignments)
-        {
-            if (deptId.equals(assignment.getDeptId()) && entryYear.equals(assignment.getEntryYear())
-                    && classCode.equals(assignment.getClassCode()))
+            for (BizLessonAssignment assignment : assignments)
             {
-                return true;
+                if (deptId.equals(assignment.getDeptId()) && entryYear.equals(assignment.getEntryYear())
+                        && classCode.equals(assignment.getClassCode()))
+                {
+                    return true;
+                }
             }
         }
-        return false;
+        // 推进后当前指派会移动到下一课；历史记录或真实答卷都能证明原课程班级范围。
+        return lessonAssignmentMapper.countHistoricalAssignment(lessonId, entryYear, classCode, deptId) > 0
+                || studentAnswerMapper.existsLessonClassAnswer(lessonId, classCode, entryYear, deptId) > 0;
+    }
+
+    private void assertLessonEntryYear(BizLesson lesson, String entryYear)
+    {
+        // 先核对课程自身的稳定届别，避免异常指派或历史数据扩大跨届访问范围。
+        if (StringUtils.isBlank(lesson.getEntryYear()) || !entryYear.equals(lesson.getEntryYear()))
+        {
+            throw new ServiceException("课程届别与请求入学年份不一致");
+        }
     }
 
     private void assertTeacherClassScope(BizLesson lesson, Long deptId, String entryYear,

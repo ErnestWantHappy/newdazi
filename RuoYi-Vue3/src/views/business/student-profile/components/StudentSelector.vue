@@ -55,6 +55,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { listStudent } from '@/api/business/student'
 import { getClasses, getStudentProfileSummary, getStudentsByClass } from '@/api/business/studentProfile'
+import { createAcademicYearOption, resolveAcademicStartYear } from '@/utils/academicYear'
 
 const props = defineProps({
   studentId: { type: Number, default: null },
@@ -65,30 +66,17 @@ const emit = defineEmits(['update:studentId', 'update:academicYear', 'change'])
 
 // === 学年逻辑 ===
 const academicYearOptions = computed(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
-  const currentAcademicStartYear = month >= 9 ? year : year - 1
+  const currentAcademicStartYear = resolveAcademicStartYear()
   
   const options = []
   for (let i = 0; i < 4; i++) {
     const y = currentAcademicStartYear - i
-    options.push({
-      value: `${y}`,
-      label: `${y}-${y + 1} 学年`,
-      start: `${y}-09-01`,
-      end: `${y + 1}-08-31`
-    })
+    options.push(createAcademicYearOption(y))
   }
   return options
 })
 
-const defaultAcademicYear = computed(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
-  return `${month >= 9 ? year : year - 1}`
-})
+const defaultAcademicYear = computed(() => String(resolveAcademicStartYear()))
 
 const currentAcademicYear = ref(defaultAcademicYear.value)
 

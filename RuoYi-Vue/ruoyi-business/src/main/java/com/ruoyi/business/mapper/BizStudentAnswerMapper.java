@@ -161,6 +161,12 @@ public interface BizStudentAnswerMapper
                                             @Param("entryYear") String entryYear,
                                             @Param("deptId") Long deptId);
 
+    /** 历史答卷证明该课程曾真实用于指定届别和班级。 */
+    int existsLessonClassAnswer(@Param("lessonId") Long lessonId,
+                                @Param("classCode") String classCode,
+                                @Param("entryYear") String entryYear,
+                                @Param("deptId") Long deptId);
+
     /**
      * 查询达到自动重试条件的失败操作题记录
      */

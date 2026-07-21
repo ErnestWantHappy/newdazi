@@ -383,11 +383,13 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
     }
 
     /**
-     * 下一课：同学校、同创建教师、同年级、课次号更大的最近一节测评课（非考勤）。
+     * 下一课：同学校、同创建教师、同届别、课次号更大的最近一节常规课。
+     * grade 是创建时快照，跨学年后不能再代表课程稳定届别，因此不能参与推进过滤。
      */
     private BizLesson findNextLesson(BizLesson current)
     {
-        if (current.getCreatorId() == null || current.getDeptId() == null || current.getGrade() == null
+        if (current.getCreatorId() == null || current.getDeptId() == null
+                || StringUtils.isBlank(current.getEntryYear())
                 || current.getLessonNum() == null)
         {
             return null;
@@ -395,7 +397,7 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         BizLesson query = new BizLesson();
         query.setCreatorId(current.getCreatorId());
         query.setDeptId(current.getDeptId());
-        query.setGrade(current.getGrade());
+        query.setEntryYear(current.getEntryYear());
         List<BizLesson> list = lessonMapper.selectBizLessonList(query);
         if (list == null || list.isEmpty())
         {

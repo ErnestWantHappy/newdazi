@@ -121,6 +121,7 @@ class LessonAutoAdvanceServiceImplTest
         lesson.setLessonNum(number);
         lesson.setLessonMode(mode);
         lesson.setGrade(7L);
+        lesson.setEntryYear("2025");
         lesson.setDeptId(10L);
         lesson.setCreatorId(40L);
         lesson.setAutoAdvanceEnabled(Boolean.TRUE);

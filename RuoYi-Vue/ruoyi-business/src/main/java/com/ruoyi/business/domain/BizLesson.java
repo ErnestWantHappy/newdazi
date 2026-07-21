@@ -24,6 +24,9 @@ public class BizLesson extends BaseEntity
     /** 年级 (例如: 1, 2, 3, 4, 5, 6) */
     private Long grade;
 
+    /** 课程永久所属的入学年份；grade 是创建时快照，课程归届不能依赖它反推。 */
+    private String entryYear;
+
     /** 学期 (0上册, 1下册) */
     private String semester;
 
@@ -97,6 +100,14 @@ public class BizLesson extends BaseEntity
 
     public void setGrade(Long grade) {
         this.grade = grade;
+    }
+
+    public String getEntryYear() {
+        return entryYear;
+    }
+
+    public void setEntryYear(String entryYear) {
+        this.entryYear = entryYear;
     }
 
     public String getSemester() {
@@ -219,6 +230,7 @@ public class BizLesson extends BaseEntity
                 .append("lessonId", getLessonId())
                 .append("lessonTitle", getLessonTitle())
                 .append("grade", getGrade())
+                .append("entryYear", getEntryYear())
                 .append("semester", getSemester())
                 .append("lessonNum", getLessonNum())
                 .append("lessonMode", getLessonMode())

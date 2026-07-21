@@ -65,7 +65,8 @@ public interface BizLessonAssignmentMapper
      * @param lessonId 课程ID
      * @return 班级编号列表
      */
-    List<String> selectClassCodesByLessonId(Long lessonId);
+    List<String> selectClassCodesByLessonIdAndEntryYear(@Param("lessonId") Long lessonId,
+                                                         @Param("entryYear") String entryYear);
 
     /**
      * 根据课程ID删除所有指派记录
@@ -140,4 +141,10 @@ public interface BizLessonAssignmentMapper
                                   @Param("classCode") String classCode,
                                   @Param("deptId") Long deptId,
                                   @Param("advancedAfter") java.util.Date advancedAfter);
+
+    /** 历史推进记录同样证明课程曾真实指派给该届班级。 */
+    int countHistoricalAssignment(@Param("lessonId") Long lessonId,
+                                  @Param("entryYear") String entryYear,
+                                  @Param("classCode") String classCode,
+                                  @Param("deptId") Long deptId);
 }

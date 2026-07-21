@@ -17,7 +17,7 @@
             <el-row>
               <el-col :span="12">
                 <el-form-item label="年级" prop="grade">
-                  <el-select v-model="form.grade" placeholder="请选择年级" style="width:100%" :disabled="isAddMode">
+                  <el-select v-model="form.grade" placeholder="请选择年级" style="width:100%" :disabled="isAddMode" @change="handleGradeChange">
                     <el-option
                       v-for="dict in biz_grade"
                       :key="dict.value"
@@ -365,7 +365,7 @@
 </template>
 
 <script setup name="LessonDesigner">
-import { ref, computed, onMounted, getCurrentInstance, watch } from 'vue';
+import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
 import { listQuestion } from "@/api/business/question";
@@ -373,6 +373,7 @@ import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
 import LessonGuideSheetPanel from './components/LessonGuideSheetPanel.vue';
+import { calculateEntryYearFromGrade } from '@/utils/academicYear';
 
 const { proxy } = getCurrentInstance();
 const route = useRoute();
@@ -390,6 +391,7 @@ const form = ref({
   lessonId: null,
   lessonTitle: null,
   grade: null,
+  entryYear: null,
   semester: null,
   lessonNum: 1,
   assignedClasses: [], // 改为存储 "entryYear-classCode" 格式
@@ -482,45 +484,13 @@ const hasInconsistentScores = computed(() => {
   return false;
 });
 
-// 根据年级数字(1-12)计算对应的入学年份
-function gradeToEntryYear(grade) {
-  if (!grade) return null;
-  
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const month = now.getMonth() + 1;
-  
-  // 计算当前学年起始年（9月开学）
-  const academicStartYear = month >= 9 ? currentYear : currentYear - 1;
-  
-  // 根据年级判断学部类型和该学部内的年级序号
-  let gradeInSection; // 该学部内的年级序号（1-6或1-3）
-  
-  if (grade >= 1 && grade <= 6) {
-    // 小学：1-6年级
-    gradeInSection = grade;
-  } else if (grade >= 7 && grade <= 9) {
-    // 初中：7-9年级，转换为1-3
-    gradeInSection = grade - 6;
-  } else if (grade >= 10 && grade <= 12) {
-    // 高中：10-12年级，转换为1-3
-    gradeInSection = grade - 9;
-  } else {
-    return null;
-  }
-  
-  // 入学年份 = 当前学年起始年 - (该学部内年级序号 - 1)
-  // 例如：2025学年，一年级/七年级/高一 的入学年份都是2025
-  return String(academicStartYear - gradeInSection + 1);
-}
-
 // 过滤后的班级列表（根据选择的入学年份过滤）
 const filteredManagedClasses = computed(() => {
   if (!form.value.grade) {
     return [];
   }
-  // 使用 gradeToEntryYear 转换年级为入学年份
-  const targetEntryYear = gradeToEntryYear(form.value.grade);
+  // 课程归属以显式入学年份为准；仅兼容尚未返回该字段的旧接口。
+  const targetEntryYear = form.value.entryYear || calculateEntryYearFromGrade(form.value.grade);
   
   if (!targetEntryYear) {
     return [];
@@ -533,13 +503,12 @@ const filteredManagedClasses = computed(() => {
   return result;
 });
 
-// 监听年级变化，清空已选班级，防止跨年级指派错误
-// 注意：oldVal为null时是初始化阶段，不清空
-watch(() => form.value.grade, (newVal, oldVal) => {
-  if (oldVal !== null && newVal !== oldVal) {
-    form.value.assignedClasses = [];
+// 普通编辑只能调整内容年级，已持久化的课程届别保持不变。
+function handleGradeChange(newGrade) {
+  if (!form.value.entryYear) {
+    form.value.entryYear = calculateEntryYearFromGrade(newGrade);
   }
-});
+}
 
 // ... (省略中间代码)
 
@@ -601,7 +570,7 @@ function submitForm() {
         autoAdvanceThresholdPct: Number(form.value.autoAdvanceThresholdPct) || 50,
         autoAdvanceDelayHours: Number(form.value.autoAdvanceDelayHours) || 2,
         questions: selectedQuestions.value,
-        // 直接提交班级名称列表（后端会自动根据grade计算entryYear）
+        // 入学年份随表单显式提交，避免跨学年时再由年级反推错届。
         assignedClassCodes: form.value.assignedClasses 
       };
 
@@ -631,7 +600,7 @@ function submitForm() {
 
 function initialize() {
   const { lessonId } = route.params;
-  const { grade, classes, semester, guideSheetId } = route.query;
+  const { grade, entryYear, classes, semester, guideSheetId } = route.query;
   const presetGuideSheetId = Number.parseInt(guideSheetId, 10);
   const hasPresetGuideSheet = Number.isInteger(presetGuideSheetId) && presetGuideSheetId > 0;
 
@@ -650,6 +619,7 @@ function initialize() {
         lessonId: detail.lessonId,
         lessonTitle: detail.lessonTitle,
         grade: detail.grade,
+        entryYear: detail.entryYear ? String(detail.entryYear) : null,
         semester: detail.semester ?? getDefaultSemester(),
         lessonNum: detail.lessonNum,
         assignedClasses: assignedClasses,
@@ -680,12 +650,14 @@ function initialize() {
     isAddMode.value = true;
     const purpose = route.query.purpose || (route.query.lessonMode === 'attendance' ? 'attendance' : 'assessment');
     const initMode = purpose === 'attendance' || route.query.lessonMode === 'attendance' ? 'attendance' : 'assessment';
+    const initialGrade = grade ? parseInt(grade, 10) : null;
     // purpose=guide：默认开启导学单；可从模板库带入 sheetId
     const enableGuide = hasPresetGuideSheet || purpose === 'guide';
     form.value = {
       lessonId: null,
       lessonTitle: null,
-      grade: grade ? parseInt(grade, 10) : null,
+      grade: initialGrade,
+      entryYear: entryYear ? String(entryYear) : calculateEntryYearFromGrade(initialGrade),
       semester: semester !== undefined ? String(semester) : getDefaultSemester(),
       lessonNum: route.query.nextNum ? parseInt(route.query.nextNum, 10) : 1,
       assignedClasses: [],

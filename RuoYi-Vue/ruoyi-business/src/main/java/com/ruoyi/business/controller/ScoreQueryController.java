@@ -27,6 +27,7 @@ import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.service.GuideSheetAccessService;
+import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.core.domain.entity.SysDept;
@@ -199,18 +200,10 @@ public class ScoreQueryController extends BaseController {
      */
     @GetMapping("/lessons")
     public AjaxResult getLessons(@RequestParam String entryYear) {
-        // 获取当前用户的学校类型
         Long deptId = SecurityUtils.getDeptId();
-        SysDept dept = deptMapper.selectDeptById(deptId);
-        String schoolType = dept != null ? dept.getSchoolType() : "1"; // 默认小学
-        
-        // 根据入学年份和学校类型计算年级
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
-        
         String creator = SecurityUtils.getUsername();
-        
         List<?> lessons = lessonMapper.selectScoreLessons(
-                (long) gradeNum, entryYear, creator, SecurityUtils.getUserId(), deptId);
+                entryYear, creator, SecurityUtils.getUserId(), deptId);
         return AjaxResult.success(lessons);
     }
 
@@ -243,37 +236,11 @@ public class ScoreQueryController extends BaseController {
      * 高中: 入学对应10年级，到12年级
      */
     private int calculateGrade(int entryYear, String schoolType) {
-        java.time.LocalDate now = java.time.LocalDate.now();
-        int currentYear = now.getYear();
-        int currentMonth = now.getMonthValue();
-        int currentDay = now.getDayOfMonth();
-        
-        // 判断是否已过8月15日（学年分界）
-        boolean afterAug15 = (currentMonth > 8) || (currentMonth == 8 && currentDay >= 15);
-        
-        // 计算在校年数（不含入学年）
-        int yearsInSchool = currentYear - entryYear;
-        if (afterAug15) {
-            yearsInSchool += 1;
+        try {
+            return AcademicYearUtils.resolveAbsoluteGrade(entryYear, schoolType, java.time.LocalDate.now());
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException(e.getMessage());
         }
-        
-        // 根据学校类型计算年级
-        int gradeOffset;
-        switch (schoolType) {
-            case "1": // 小学
-                gradeOffset = 0; // 1年级入学
-                break;
-            case "2": // 初中
-                gradeOffset = 6; // 7年级入学
-                break;
-            case "3": // 高中
-                gradeOffset = 9; // 10年级入学
-                break;
-            default:
-                gradeOffset = 0;
-        }
-        
-        return yearsInSchool + gradeOffset;
     }
 
     /**
@@ -298,7 +265,7 @@ public class ScoreQueryController extends BaseController {
         int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, lessonId);
-        selectedLessonIds = validateSelectedLessonIds(entryYear, gradeNum, selectedLessonIds);
+        selectedLessonIds = validateSelectedLessonIds(entryYear, selectedLessonIds);
 
         List<BizStudent> students;
         long total = 0;
@@ -339,11 +306,11 @@ public class ScoreQueryController extends BaseController {
     }
 
     /** 只允许查询成绩页已返回给当前教师的常规课，空选择等价于全部可见课程。 */
-    private List<Long> validateSelectedLessonIds(String entryYear, int gradeNum, List<Long> selectedLessonIds) {
+    private List<Long> validateSelectedLessonIds(String entryYear, List<Long> selectedLessonIds) {
         Long userId = SecurityUtils.getUserId();
         Long deptId = SecurityUtils.getDeptId();
         List<LessonInfoVo> visibleLessons = lessonMapper.selectScoreLessons(
-                (long) gradeNum, entryYear, SecurityUtils.getUsername(), userId, deptId);
+                entryYear, SecurityUtils.getUsername(), userId, deptId);
         LinkedHashSet<Long> visibleIds = visibleLessons == null ? new LinkedHashSet<>()
                 : visibleLessons.stream()
                 .map(LessonInfoVo::getLessonId)
@@ -823,7 +790,7 @@ public class ScoreQueryController extends BaseController {
         String schoolType = dept != null ? dept.getSchoolType() : "1";
         int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, null);
-        selectedLessonIds = validateSelectedLessonIds(entryYear, gradeNum, selectedLessonIds);
+        selectedLessonIds = validateSelectedLessonIds(entryYear, selectedLessonIds);
         List<String> selectedColumns = parseExportColumns(columns);
         Set<String> selectedColumnSet = new HashSet<>(selectedColumns);
         List<BizStudent> studentList = studentMapper.selectScoreStudents(userId, deptId, entryYear, classCode, keyword);
@@ -832,7 +799,7 @@ public class ScoreQueryController extends BaseController {
         // 3. 获取所有课程信息（用于表头）
         String creator = SecurityUtils.getUsername();
         List<LessonInfoVo> allLessons = lessonMapper.selectScoreLessons(
-                (long) gradeNum, entryYear, creator, userId, deptId);
+                entryYear, creator, userId, deptId);
         List<LessonInfoVo> targetLessons = new ArrayList<>();
         
         if (selectedLessonIds.isEmpty()) {

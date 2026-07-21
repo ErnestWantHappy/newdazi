@@ -11,6 +11,7 @@ import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.GuideSheetProgressMapper;
 import com.ruoyi.common.core.domain.entity.SysUser;
@@ -43,6 +44,8 @@ class GuideSheetAccessServiceTest
     private BizLessonAssignmentMapper lessonAssignmentMapper;
     @Mock
     private BizTeacherClassMapper teacherClassMapper;
+    @Mock
+    private BizStudentAnswerMapper studentAnswerMapper;
     @Mock
     private ICountyExamService countyExamService;
     @Mock
@@ -148,6 +151,7 @@ class GuideSheetAccessServiceTest
         lesson.setLessonId(3L);
         lesson.setDeptId(10L);
         lesson.setCreatorId(40L);
+        lesson.setEntryYear("2025");
         BizLessonAssignment assignment = new BizLessonAssignment();
         assignment.setLessonId(3L);
         assignment.setDeptId(10L);
@@ -159,6 +163,40 @@ class GuideSheetAccessServiceTest
                 .thenReturn(Collections.singletonList(assignment));
 
         assertSame(binding, service.requireBindingClassAccess(7L, "2025", "1班"));
+    }
+
+    @Test
+    void historicalAnswerKeepsExactLessonClassReadableAfterAssignmentAdvances()
+    {
+        login(40L, 10L, "creator");
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(3L);
+        lesson.setDeptId(10L);
+        lesson.setCreatorId(40L);
+        lesson.setEntryYear("2024");
+        when(lessonMapper.selectBizLessonByLessonId(3L)).thenReturn(lesson);
+        when(lessonAssignmentMapper.selectBizLessonAssignmentList(any())).thenReturn(Collections.emptyList());
+        when(studentAnswerMapper.existsLessonClassAnswer(3L, "1", "2024", 10L)).thenReturn(1);
+
+        service.assertCanViewLessonClass(3L, "2024", "1班");
+
+        assertThrows(ServiceException.class,
+                () -> service.assertCanViewLessonClass(3L, "2025", "1班"));
+    }
+
+    @Test
+    void lessonEntryYearMismatchFailsClosedBeforeClassEvidence()
+    {
+        login(40L, 10L, "creator");
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(3L);
+        lesson.setDeptId(10L);
+        lesson.setCreatorId(40L);
+        lesson.setEntryYear("2024");
+        when(lessonMapper.selectBizLessonByLessonId(3L)).thenReturn(lesson);
+
+        assertThrows(ServiceException.class,
+                () -> service.assertCanViewLessonClass(3L, "2025", "1班"));
     }
 
     private void login(Long userId, Long deptId, String username)

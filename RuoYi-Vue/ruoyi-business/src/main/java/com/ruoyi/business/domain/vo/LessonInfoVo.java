@@ -13,6 +13,9 @@ public class LessonInfoVo {
     /** 第几课 */
     private Integer lessonNum;
 
+    /** 课程永久所属入学年份，前端跳转成绩时以课程自身值为准。 */
+    private String entryYear;
+
     /** 创建时间，用于教师首页按最新课程排序 */
     private java.util.Date createTime;
 
@@ -46,6 +49,14 @@ public class LessonInfoVo {
 
     public void setLessonNum(Integer lessonNum) {
         this.lessonNum = lessonNum;
+    }
+
+    public String getEntryYear() {
+        return entryYear;
+    }
+
+    public void setEntryYear(String entryYear) {
+        this.entryYear = entryYear;
     }
 
     public java.util.Date getCreateTime() {

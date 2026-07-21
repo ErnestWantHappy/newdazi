@@ -533,6 +533,7 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import { isSessionExpiredError } from '@/utils/session';
+import { calculateGradeNumber } from '@/utils/academicYear';
 
 import StudentRankList from './components/GradeOverview/StudentRankList.vue';
 import ClassScoreChart from './components/charts/ClassScoreChart.vue';
@@ -1003,15 +1004,8 @@ function filterStudents() {
 }
 
 function calculateGrade(entryYear) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const currentDay = now.getDate();
-  
-  const afterAug15 = (currentMonth > 8) || (currentMonth === 8 && currentDay >= 15);
-  const schoolYear = afterAug15 ? currentYear : currentYear - 1;
-  
-  return schoolYear - entryYear + 7;
+  // 本页历史上按初中年级展示；日期边界统一使用平台的 7 月 20 日规则。
+  return calculateGradeNumber(entryYear, '2') || 0;
 }
 
 function processData() {
@@ -1225,18 +1219,8 @@ function loadMatrix(lessonId) {
     getStudentAnswerMatrix(lessonId, queryParams.value.classCode, queryParams.value.entryYear).then(res => {
         // 数据转换：将 results 数组转换为 component 需要的 answersMap 对象列表
         // 同时处理班级显示名称 "601"
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        // 计算年级：如果当前月份 >= 9，则年级 = 当前年份 - 入学年份 + 1; 否则 = 当前年份 - 入学年份
-        // 或者是：当前系统通常认定9月1日升级。
-        // FIXME: 简单按年计算，如果需要更精确的逻辑（比如考虑学期），这里可能需要调整。
-        // 这里假设 queryParams.value.entryYear 是准确的入学年份
         const entryYear = parseInt(queryParams.value.entryYear || 0);
-        let grade = 0;
-        if (entryYear > 0) {
-             grade = currentYear - entryYear + (currentMonth >= 9 ? 1 : 0);
-        }
+        const grade = calculateGradeNumber(entryYear, '2') || 0;
 
         const processedData = (res || []).map(student => {
             const answersMap = {};

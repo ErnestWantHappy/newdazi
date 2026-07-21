@@ -8,6 +8,7 @@
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
         <result property="grade"    column="grade"    />
+        <result property="entryYear"    column="entry_year"    />
         <result property="semester"    column="semester"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="shuffleMode"    column="shuffle_mode"    />
@@ -28,7 +29,7 @@
     </resultMap>
 
     <sql id="selectBizLessonVo">
-        select lesson_id, lesson_title, grade, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count,
+        select lesson_id, lesson_title, grade, entry_year, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count,
                lesson_mode, teacher_note, auto_advance_enabled, auto_advance_threshold_pct, auto_advance_delay_hours, auto_advance_ready_time,
                creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
@@ -38,6 +39,7 @@
         <where>
             <if test="lessonTitle != null  and lessonTitle != ''"> and lesson_title like concat('%', #{lessonTitle}, '%')</if>
             <if test="grade != null "> and grade = #{grade}</if>
+            <if test="entryYear != null and entryYear != ''"> and entry_year = #{entryYear}</if>
             <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
             <if test="creatorId != null"> and creator_id = #{creatorId}</if>
             <if test="deptId != null"> and dept_id = #{deptId}</if>
@@ -54,6 +56,7 @@
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="lessonTitle != null and lessonTitle != ''">lesson_title,</if>
             <if test="grade != null">grade,</if>
+            <if test="entryYear != null and entryYear != ''">entry_year,</if>
             <if test="semester != null and semester != ''">semester,</if>
             <if test="lessonNum != null">lesson_num,</if>
             <if test="shuffleMode != null">shuffle_mode,</if>
@@ -75,6 +78,7 @@
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="lessonTitle != null and lessonTitle != ''">#{lessonTitle},</if>
             <if test="grade != null">#{grade},</if>
+            <if test="entryYear != null and entryYear != ''">#{entryYear},</if>
             <if test="semester != null and semester != ''">#{semester},</if>
             <if test="lessonNum != null">#{lessonNum},</if>
             <if test="shuffleMode != null">#{shuffleMode},</if>
@@ -100,6 +104,7 @@
         <trim prefix="SET" suffixOverrides=",">
             <if test="lessonTitle != null and lessonTitle != ''">lesson_title = #{lessonTitle},</if>
             <if test="grade != null">grade = #{grade},</if>
+            <if test="entryYear != null and entryYear != ''">entry_year = #{entryYear},</if>
             <if test="semester != null and semester != ''">semester = #{semester},</if>
             <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
             <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
@@ -128,7 +133,7 @@
 
     <!-- 教师统一推进策略：读一门常规课配置即可 -->
     <select id="selectAdvancePolicyByCreator" resultMap="BizLessonResult">
-        select lesson_id, lesson_title, grade, semester, lesson_num,
+        select lesson_id, lesson_title, grade, entry_year, semester, lesson_num,
                shuffle_mode, random_choice_count, random_judgment_count,
                lesson_mode, teacher_note, auto_advance_enabled, auto_advance_threshold_pct,
                auto_advance_delay_hours, auto_advance_ready_time,
@@ -182,7 +187,7 @@
 
     <!-- 待扫描：开启自动推进且为测评课的当前指派课程 -->
     <select id="selectAutoAdvanceCandidates" resultMap="BizLessonResult">
-        select distinct l.lesson_id, l.lesson_title, l.grade, l.semester, l.lesson_num,
+        select distinct l.lesson_id, l.lesson_title, l.grade, l.entry_year, l.semester, l.lesson_num,
                l.shuffle_mode, l.random_choice_count, l.random_judgment_count,
                l.lesson_mode, l.teacher_note, l.auto_advance_enabled, l.auto_advance_threshold_pct,
                l.auto_advance_delay_hours, l.auto_advance_ready_time,
@@ -209,6 +214,7 @@
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
         <result property="lessonNum"    column="lesson_num"    />
+        <result property="entryYear"    column="entry_year"    />
         <result property="createTime"    column="create_time"    />
         <result property="courseType"    column="course_type"    />
         <result property="hasPractical"  column="has_practical"  />
@@ -218,12 +224,13 @@
         <result property="autoAdvanceDelayHours"    column="auto_advance_delay_hours"    />
     </resultMap>
 
-    <!-- 查询我创建的课程 -->
-    <select id="selectLessonsByGradeAndCreator" resultMap="LessonInfoVoResult">
+    <!-- 课程归届以持久化 entry_year 为准，grade 只是创建时的课程内容年级快照。 -->
+    <select id="selectLessonsByEntryYearAndCreator" resultMap="LessonInfoVoResult">
         SELECT
             lesson_id,
             lesson_title,
             lesson_num,
+            entry_year,
             create_time,
             'self' as course_type,
             (SELECT count(1) FROM biz_lesson_question lq 
@@ -236,7 +243,7 @@
         FROM
             biz_lesson
         WHERE
-            grade = #{grade}
+            entry_year = #{entryYear}
           AND create_by = #{creatorName}
           AND dept_id = #{deptId}
         ORDER BY
@@ -250,6 +257,7 @@
             l.lesson_id,
             l.lesson_title,
             l.lesson_num,
+            l.entry_year,
             l.create_time,
             CASE WHEN l.creator_id = #{userId} OR l.create_by = #{creatorName}
                  THEN 'self' ELSE 'shared' END AS course_type,
@@ -264,10 +272,11 @@
         FROM biz_lesson l
         WHERE l.dept_id = #{deptId}
           AND IFNULL(l.lesson_mode, 'assessment') &lt;&gt; 'attendance'
+          AND l.entry_year = #{entryYear}
           AND (
-              (l.grade = #{grade} AND (l.creator_id = #{userId} OR l.create_by = #{creatorName}))
+              (l.entry_year = #{entryYear} AND (l.creator_id = #{userId} OR l.create_by = #{creatorName}))
               OR (
-                  l.grade = #{grade}
+                  l.entry_year = #{entryYear}
                   AND EXISTS (
                       SELECT 1
                       FROM biz_lesson_assignment la
@@ -303,16 +312,44 @@
                         )
                     )
               )
+              OR EXISTS (
+                  SELECT 1
+                  FROM biz_lesson_assignment_history h
+                  INNER JOIN biz_teacher_class tc
+                          ON tc.dept_id = h.dept_id
+                         <!-- 历史表沿用 MySQL 8 默认排序规则，需显式对齐旧业务表后再比较。 -->
+                         AND tc.entry_year = h.entry_year COLLATE utf8mb4_general_ci
+                         AND tc.class_code = h.class_code COLLATE utf8mb4_general_ci
+                  WHERE (h.lesson_id = l.lesson_id OR h.next_lesson_id = l.lesson_id)
+                    AND h.dept_id = #{deptId}
+                    AND h.entry_year = #{entryYear}
+                    AND tc.user_id = #{userId}
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM biz_student_answer ans
+                  INNER JOIN biz_student s ON s.student_id = ans.student_id
+                  INNER JOIN sys_user su ON su.user_id = s.user_id
+                  INNER JOIN biz_teacher_class tc
+                          ON tc.dept_id = su.dept_id
+                         AND tc.entry_year = s.entry_year
+                         AND tc.class_code = s.class_code
+                  WHERE ans.lesson_id = l.lesson_id
+                    AND su.dept_id = #{deptId}
+                    AND s.entry_year = #{entryYear}
+                    AND tc.user_id = #{userId}
+              )
           )
         ORDER BY l.create_time DESC, l.lesson_id DESC
     </select>
 
     <!-- 查询共享给我的课程（指派给我管理班级的、非我创建的课程） -->
-    <select id="selectSharedLessonsByGradeAndUser" resultMap="LessonInfoVoResult">
+    <select id="selectSharedLessonsByEntryYearAndUser" resultMap="LessonInfoVoResult">
         SELECT DISTINCT
             l.lesson_id,
             l.lesson_title,
             l.lesson_num,
+            l.entry_year,
             l.create_time,
             'shared' as course_type,
             (SELECT count(1) FROM biz_lesson_question lq 
@@ -331,17 +368,18 @@
         WHERE
             tc.user_id = #{userId}
             AND tc.dept_id = #{deptId}
-            AND l.grade = #{grade}
+            AND l.entry_year = #{entryYear}
+            AND la.entry_year = #{entryYear}
             AND l.create_by != #{creatorName}
         ORDER BY
             l.create_time DESC,
             l.lesson_id DESC
     </select>
 
-    <select id="selectMaxLessonNumByGradeAndCreator" resultType="java.lang.Integer">
+    <select id="selectMaxLessonNumByEntryYearAndCreator" resultType="java.lang.Integer">
         SELECT IFNULL(MAX(lesson_num), 0)
         FROM biz_lesson
-        WHERE grade = #{grade}
+        WHERE entry_year = #{entryYear}
           AND create_by = #{creatorName}
           AND dept_id = #{deptId}
     </select>

@@ -2,12 +2,18 @@ package com.ruoyi.business.service.impl;
 
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
+import com.ruoyi.business.domain.vo.GradeGroupVo;
 import com.ruoyi.business.domain.vo.LessonDetailVo;
+import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
+import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
+import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.exception.ServiceException;
 import org.junit.jupiter.api.Test;
@@ -21,11 +27,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import com.ruoyi.system.mapper.SysDeptMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,6 +52,10 @@ class BizLessonServiceImplTest
     private BizLessonMapper bizLessonMapper;
     @Mock
     private BizLessonAssignmentMapper lessonAssignmentMapper;
+    @Mock
+    private BizTeacherClassMapper teacherClassMapper;
+    @Mock
+    private SysDeptMapper deptMapper;
 
     @InjectMocks
     private BizLessonServiceImpl service;
@@ -169,12 +184,85 @@ class BizLessonServiceImplTest
         assertEquals(50, attendance.getAutoAdvanceThresholdPct());
     }
 
+    @Test
+    void dashboardKeepsLessonsInTheirPersistedCohortAcrossAcademicYears()
+    {
+        loginTeacher();
+        int academicStartYear = AcademicYearUtils.resolveAcademicStartYear(LocalDate.now());
+        String ninthGradeEntryYear = String.valueOf(academicStartYear - 2);
+        String eighthGradeEntryYear = String.valueOf(academicStartYear - 1);
+        SysDept school = new SysDept();
+        school.setDeptId(10L);
+        school.setSchoolType("2");
+        when(deptMapper.selectDeptById(10L)).thenReturn(school);
+        when(teacherClassMapper.selectBizTeacherClassList(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Arrays.asList(teacherClass(ninthGradeEntryYear, "1"),
+                        teacherClass(eighthGradeEntryYear, "1")));
+
+        LessonInfoVo ninthGradeLesson = lessonInfo(24L, ninthGradeEntryYear);
+        LessonInfoVo eighthGradeLesson = lessonInfo(25L, eighthGradeEntryYear);
+        when(bizLessonMapper.selectLessonsByEntryYearAndCreator(ninthGradeEntryYear, "teacher", 10L))
+                .thenReturn(Collections.singletonList(ninthGradeLesson));
+        when(bizLessonMapper.selectLessonsByEntryYearAndCreator(eighthGradeEntryYear, "teacher", 10L))
+                .thenReturn(Collections.singletonList(eighthGradeLesson));
+        when(bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(8L),
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("teacher")))
+                .thenReturn(Collections.emptyList());
+        when(lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Collections.emptyList());
+
+        List<GradeGroupVo> groups = service.getTeacherDashboardData();
+
+        GradeGroupVo ninthGradeGroup = groups.stream()
+                .filter(g -> ninthGradeEntryYear.equals(g.getEntryYear())).findFirst().orElse(null);
+        GradeGroupVo eighthGradeGroup = groups.stream()
+                .filter(g -> eighthGradeEntryYear.equals(g.getEntryYear())).findFirst().orElse(null);
+        assertNotNull(ninthGradeGroup);
+        assertNotNull(eighthGradeGroup);
+        assertEquals(Collections.singletonList(ninthGradeLesson), ninthGradeGroup.getLessons());
+        assertEquals(Collections.singletonList(eighthGradeLesson), eighthGradeGroup.getLessons());
+        assertEquals("九年级", ninthGradeGroup.getGradeName());
+        assertEquals("八年级", eighthGradeGroup.getGradeName());
+    }
+
+    @Test
+    void persistedLessonEntryYearCannotDriftDuringEdit()
+    {
+        BizLesson existing = new BizLesson();
+        existing.setEntryYear("2024");
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                service, "preserveLessonEntryYear", existing, "2024"));
+        assertThrows(ServiceException.class, () -> ReflectionTestUtils.invokeMethod(
+                service, "preserveLessonEntryYear", existing, "2025"));
+    }
+
     private BizLessonQuestionDetailVo question(long score)
     {
         BizLessonQuestionDetailVo question = new BizLessonQuestionDetailVo();
         question.setQuestionId(9L);
         question.setQuestionScore(score);
         return question;
+    }
+
+    private BizTeacherClass teacherClass(String entryYear, String classCode)
+    {
+        BizTeacherClass teacherClass = new BizTeacherClass();
+        teacherClass.setUserId(8L);
+        teacherClass.setDeptId(10L);
+        teacherClass.setEntryYear(entryYear);
+        teacherClass.setClassCode(classCode);
+        return teacherClass;
+    }
+
+    private LessonInfoVo lessonInfo(Long lessonId, String entryYear)
+    {
+        LessonInfoVo lesson = new LessonInfoVo();
+        lesson.setLessonId(lessonId);
+        lesson.setEntryYear(entryYear);
+        return lesson;
     }
 
     private void validate(LessonDetailVo detail)

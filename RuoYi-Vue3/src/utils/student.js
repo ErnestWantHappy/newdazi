@@ -1,3 +1,5 @@
+import { calculateYearsInSection } from './academicYear.js'
+
 /**
  * 根据学生账号和当前日期计算学生当前年级
  * @param {string} studentAccount - 学生账号, 例如 "2022710422"
@@ -15,20 +17,8 @@ export function calculateGrade(studentAccount) {
     return "未知年级";
   }
 
-  // 2. 获取当前的真实年份和月份
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1; // getMonth() 返回 0-11, 所以要 +1
-
-  // 3. 根据9月开学季规则计算年级
-  // 核心逻辑：新学年是从每年的9月份开始的
-  let grade = currentYear - entryYear;
-  if (currentMonth >= 9) {
-    // 如果当前是9月或之后, 年级 = 当前年份 - 入学年份 + 1
-    grade = grade + 1;
-  }
-  // 如果当前是9月之前 (1-8月), 年级 = 当前年份 - 入学年份
-  // grade 的值已经正确, 无需操作
+  // 2. 全平台统一在 7 月 20 日（含当天）切换新学年
+  const grade = calculateYearsInSection(entryYear);
 
   // 4. 将数字年级转换为中文描述
   const gradeMap = {

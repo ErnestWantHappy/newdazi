@@ -1,7 +1,6 @@
 package com.ruoyi.business.service.impl;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -23,6 +22,7 @@ import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
+import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -94,6 +94,10 @@ public class BizLessonServiceImpl implements IBizLessonService
     public int insertBizLesson(BizLesson bizLesson)
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (StringUtils.isBlank(bizLesson.getEntryYear()))
+        {
+            bizLesson.setEntryYear(calculateEntryYearFromGrade(bizLesson.getGrade()));
+        }
         bizLesson.setCreatorId(loginUser.getUserId());
         bizLesson.setDeptId(loginUser.getDeptId());
         bizLesson.setCreateBy(loginUser.getUsername());
@@ -108,6 +112,8 @@ public class BizLessonServiceImpl implements IBizLessonService
     {
         BizLesson existing = bizLessonMapper.selectBizLessonByLessonId(bizLesson.getLessonId());
         assertCanManageLesson(existing);
+        preserveLessonEntryYear(existing, bizLesson.getEntryYear());
+        bizLesson.setEntryYear(existing.getEntryYear());
         bizLesson.setCreatorId(existing.getCreatorId());
         bizLesson.setDeptId(existing.getDeptId());
         bizLesson.setUpdateBy(SecurityUtils.getUsername());
@@ -211,12 +217,12 @@ public class BizLessonServiceImpl implements IBizLessonService
 
             if (currentGradeId > 0) {
                 // 查询我创建的课程
-                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByGradeAndCreator(currentGradeId, username, deptId);
+                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByEntryYearAndCreator(entryYear, username, deptId);
                 log.info("【教师首页数据】为该年级查询到 {} 门自建课程。", selfLessons.size());
 
                 // 查询共享给我的课程
-                List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByGradeAndUser(
-                        currentGradeId, loginUser.getUserId(), deptId, username);
+                List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
+                        entryYear, loginUser.getUserId(), deptId, username);
                 log.info("【教师首页数据】为该年级查询到 {} 门共享课程。", sharedLessons.size());
 
                 // 合并并按创建时间降序排列（最新创建的在前）
@@ -238,7 +244,8 @@ public class BizLessonServiceImpl implements IBizLessonService
                  
                 // 填充每个课程的已指派班级
                 for (LessonInfoVo lesson : allLessons) {
-                    List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lesson.getLessonId());
+                    List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                            lesson.getLessonId(), entryYear);
                     if (classCodes != null && !classCodes.isEmpty()) {
                         List<String> formattedCodes = classCodes.stream()
                             .filter(StringUtils::isNotBlank)
@@ -282,7 +289,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         assertCanManageLesson(lesson);
 
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
-        List<String> assignedClassCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lessonId);
+        List<String> assignedClassCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                lessonId, lesson.getEntryYear());
         if (CollectionUtils.isEmpty(assignedClassCodes)) {
             assignedClassCodes = new ArrayList<>();
         } else {
@@ -294,27 +302,22 @@ public class BizLessonServiceImpl implements IBizLessonService
                     .collect(Collectors.toList());
         }
 
-        List<String> allClassesInGrade = new ArrayList<>();
-        if (lesson.getGrade() != null) {
-            SysDept school = deptMapper.selectDeptById(deptId);
-            List<BizStudent> students = bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId);
-            for (BizStudent student : students) {
-                Map<String, Long> gradeInfo = calculateGradeInfo(student.getEntryYear(), school.getSchoolType());
-                Long currentGradeId = gradeInfo.values().stream().findFirst().orElse(null);
-                if (currentGradeId != null && currentGradeId >= 0 && lesson.getGrade().equals(currentGradeId)) {
-                    allClassesInGrade.add(student.getClassCode() + "班");
-                }
-            }
-            allClassesInGrade = allClassesInGrade.stream()
-                    .filter(StringUtils::isNotBlank)
-                    .distinct()
-                    .sorted()
-                    .collect(Collectors.toList()); // 新增：班级列表去重排序，保证展示稳定
-        }
+        BizTeacherClass classQuery = new BizTeacherClass();
+        classQuery.setUserId(loginUser.getUserId());
+        classQuery.setDeptId(deptId);
+        classQuery.setEntryYear(lesson.getEntryYear());
+        List<String> allClassesInGrade = teacherClassMapper.selectBizTeacherClassList(classQuery).stream()
+                .map(BizTeacherClass::getClassCode)
+                .filter(StringUtils::isNotBlank)
+                .map(code -> code.endsWith("班") ? code : code + "班")
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
 
         detailVo.setLessonId(lesson.getLessonId());
         detailVo.setLessonTitle(lesson.getLessonTitle());
         detailVo.setGrade(lesson.getGrade());
+        detailVo.setEntryYear(lesson.getEntryYear());
         detailVo.setSemester(lesson.getSemester());
         detailVo.setLessonNum(lesson.getLessonNum());
         detailVo.setShuffleMode(lesson.getShuffleMode() != null ? lesson.getShuffleMode() : 0);
@@ -348,22 +351,38 @@ public class BizLessonServiceImpl implements IBizLessonService
         Long userId = loginUser.getUserId();
         Long deptId = loginUser.getUser().getDeptId();
 
+        BizLesson existingLesson = null;
         if (lessonDetailVo.getLessonId() != null)
         {
-            assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonDetailVo.getLessonId()));
+            existingLesson = bizLessonMapper.selectBizLessonByLessonId(lessonDetailVo.getLessonId());
+            assertCanManageLesson(existingLesson);
         }
         validateLessonContent(lessonDetailVo);
+
+        String entryYear = StringUtils.trimToNull(lessonDetailVo.getEntryYear());
+        if (existingLesson != null)
+        {
+            preserveLessonEntryYear(existingLesson, entryYear);
+            entryYear = existingLesson.getEntryYear();
+        }
+        if (StringUtils.isBlank(entryYear))
+        {
+            entryYear = calculateEntryYearFromGrade(lessonDetailVo.getGrade());
+        }
+        validateEntryYear(entryYear);
+        lessonDetailVo.setEntryYear(entryYear);
 
         BizLesson lessonToSave = new BizLesson();
         lessonToSave.setLessonId(lessonDetailVo.getLessonId());
         lessonToSave.setDeptId(deptId);
         lessonToSave.setLessonTitle(lessonDetailVo.getLessonTitle());
         lessonToSave.setGrade(lessonDetailVo.getGrade());
+        lessonToSave.setEntryYear(entryYear);
         lessonToSave.setSemester(lessonDetailVo.getSemester());
         Integer lessonNum = lessonDetailVo.getLessonNum();
         if (lessonToSave.getLessonId() == null && (lessonNum == null || lessonNum <= 0)) {
-            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByGradeAndCreator(
-                    lessonDetailVo.getGrade(), username, deptId);
+            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByEntryYearAndCreator(
+                    entryYear, username, deptId);
             lessonNum = (maxLessonNum == null ? 0 : maxLessonNum) + 1;
         }
         lessonToSave.setLessonNum(lessonNum);
@@ -420,7 +439,6 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonAssignmentMapper.deleteByLessonId(lessonId);
         List<String> classCodes = lessonDetailVo.getAssignedClassCodes();
         if (!CollectionUtils.isEmpty(classCodes)) {
-            String entryYear = calculateEntryYearFromGrade(lessonDetailVo.getGrade());
             validateAssignedClasses(userId, deptId, entryYear, classCodes);
             List<BizLessonAssignment> assignments = new ArrayList<>();
             for (String classCode : classCodes) {
@@ -708,16 +726,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         }
         try {
             int entryYearInt = Integer.parseInt(entryYear);
-            Calendar now = Calendar.getInstance();
-            int currentYear = now.get(Calendar.YEAR);
-            int currentMonth = now.get(Calendar.MONTH) + 1;
-            int currentDay = now.get(Calendar.DAY_OF_MONTH);
-
-            int gradeNum = (currentYear - entryYearInt);
-
-            if (currentMonth > 7 || (currentMonth == 7 && currentDay >= 20)) {
-                gradeNum += 1;
-            }
+            int gradeNum = AcademicYearUtils.resolveAcademicStartYear(java.time.LocalDate.now())
+                    - entryYearInt + 1;
 
             if (gradeNum <= 0) {
                 gradeInfo.put("新生", 0L);
@@ -760,26 +770,34 @@ public class BizLessonServiceImpl implements IBizLessonService
     }
 
     private String calculateEntryYearFromGrade(Long grade) {
-        if (grade == null) return null;
-        Calendar now = Calendar.getInstance();
-        int currentYear = now.get(Calendar.YEAR);
-        int currentMonth = now.get(Calendar.MONTH) + 1;
-        int currentDay = now.get(Calendar.DAY_OF_MONTH);
-
-        int gradeNum = grade.intValue();
-        if (grade > 9) {
-            gradeNum = grade.intValue() - 9;
-        } else if (grade > 6) {
-            gradeNum = grade.intValue() - 6;
+        if (grade == null) {
+            throw new ServiceException("课程年级不能为空");
         }
-
-        // 入学年份 = 当前学年起始年 - (学段内年级序号 - 1)
-        // 例如：2025学年，七年级(gradeNum=1)的入学年份是 2025 - (1-1) = 2025
-        int academicStartYear = currentYear;
-        if (currentMonth < 7 || (currentMonth == 7 && currentDay < 20)) {
-            academicStartYear = currentYear - 1;
+        try {
+            return AcademicYearUtils.resolveEntryYear(grade.intValue(), java.time.LocalDate.now());
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException(e.getMessage());
         }
-        int entryYear = academicStartYear - gradeNum + 1;
-        return String.valueOf(entryYear);
+    }
+
+    private void preserveLessonEntryYear(BizLesson existing, String requestedEntryYear)
+    {
+        if (existing == null || StringUtils.isBlank(existing.getEntryYear()))
+        {
+            throw new ServiceException("课程所属入学年份缺失，请先执行学年迁移");
+        }
+        if (StringUtils.isNotBlank(requestedEntryYear)
+                && !existing.getEntryYear().equals(requestedEntryYear.trim()))
+        {
+            throw new ServiceException("课程所属入学年份不可修改，如需跨届使用请复制为新课程");
+        }
+    }
+
+    private void validateEntryYear(String entryYear)
+    {
+        if (StringUtils.isBlank(entryYear) || !entryYear.matches("\\d{4}"))
+        {
+            throw new ServiceException("课程所属入学年份格式错误");
+        }
     }
 }

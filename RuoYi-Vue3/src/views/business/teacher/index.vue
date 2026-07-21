@@ -61,7 +61,7 @@
             
             <!-- 右侧：竖排操作栏 (25%) -->
             <div class="folder-actions">
-               <div class="action-btn design" @click.stop="handleEditLesson(lesson.lessonId)" title="设计课程">
+               <div class="action-btn design" @click.stop="handleEditLesson(lesson, group)" title="设计课程">
                   <el-icon><Edit /></el-icon>
                   <span>设计</span>
                </div>
@@ -375,6 +375,7 @@ function handleAddNewLesson(group) {
     path: '/business/lesson-auth/designer',
     query: {
       grade: group.gradeId,
+      entryYear: group.entryYear,
       gradeName: group.gradeName,
       classes: JSON.stringify(group.allClassesInGrade),
       nextNum: maxLessonNum + 1
@@ -497,8 +498,11 @@ async function confirmOneClickAdvance() {
 }
 
 /** 处理修改课程 (设计) */
-function handleEditLesson(lessonId) {
-  router.push(`/business/lesson-auth/designer/${lessonId}`);
+function handleEditLesson(lesson, group) {
+  router.push({
+    path: `/business/lesson-auth/designer/${lesson.lessonId}`,
+    query: { entryYear: lesson.entryYear || group.entryYear }
+  });
 }
 
 function formatCheckinTime(value) {
@@ -561,11 +565,16 @@ async function goToScoreAnalysis(lesson, group) {
   if (!selectedClass) return; // 用户取消
 
   // 2. 跳转
+  const entryYear = lesson.entryYear || group.entryYear;
+  if (String(entryYear) !== String(group.entryYear)) {
+    ElMessage.error('课程所属入学年份与当前分组不一致，请刷新后重试');
+    return;
+  }
   router.push({
     path: '/business/score',
     query: {
       lessonId: lesson.lessonId,
-      entryYear: group.entryYear,
+      entryYear,
       classCode: selectedClass
     }
   });

@@ -15,6 +15,8 @@ public class LessonDetailVo extends BaseEntity {
     private Long lessonId;
     private String lessonTitle;
     private Long grade;
+    /** 课程永久所属入学年份，新建由教师首页分组显式传入，编辑时原值回显。 */
+    private String entryYear;
     private String semester;
     private Integer lessonNum;
     
@@ -86,6 +88,14 @@ public class LessonDetailVo extends BaseEntity {
 
     public void setGrade(Long grade) {
         this.grade = grade;
+    }
+
+    public String getEntryYear() {
+        return entryYear;
+    }
+
+    public void setEntryYear(String entryYear) {
+        this.entryYear = entryYear;
     }
 
     public String getSemester() {

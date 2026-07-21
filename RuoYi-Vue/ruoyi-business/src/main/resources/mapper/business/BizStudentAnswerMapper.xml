@@ -576,6 +576,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND (ans.student_id IS NOT NULL OR p.performance_id IS NOT NULL)
     </select>
 
+    <select id="existsLessonClassAnswer" resultType="int">
+        SELECT EXISTS(
+            SELECT 1
+            FROM biz_student_answer a
+            INNER JOIN biz_student s ON s.student_id = a.student_id
+            INNER JOIN sys_user u ON u.user_id = s.user_id
+            WHERE a.lesson_id = #{lessonId}
+              AND s.entry_year = #{entryYear}
+              AND s.class_code = #{classCode}
+              AND u.dept_id = #{deptId}
+            LIMIT 1
+        )
+    </select>
+
     <select id="selectRecoverablePracticalAnswersForRetry" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
