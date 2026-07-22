@@ -215,50 +215,50 @@ public class BizLessonServiceImpl implements IBizLessonService
 
             gradeGroup.setAllClassesInGrade(yearClassMap.get(entryYear));
 
-            if (currentGradeId > 0) {
-                // 查询我创建的课程
-                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByEntryYearAndCreator(entryYear, username, deptId);
-                log.info("【教师首页数据】为该年级查询到 {} 门自建课程。", selfLessons.size());
+            // 按稳定 entry_year 装课：已毕业(gradeId=-1)/新生(0) 也必须查课，
+            // 禁止用「当前年级号 > 0」误杀历史届课程卡片。
+            List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByEntryYearAndCreator(entryYear, username, deptId);
+            log.info("【教师首页数据】届别 {}（{}）自建课程 {} 门。", entryYear, gradeGroup.getGradeName(),
+                    selfLessons == null ? 0 : selfLessons.size());
 
-                // 查询共享给我的课程
-                List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
-                        entryYear, loginUser.getUserId(), deptId, username);
-                log.info("【教师首页数据】为该年级查询到 {} 门共享课程。", sharedLessons.size());
+            List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
+                    entryYear, loginUser.getUserId(), deptId, username);
+            log.info("【教师首页数据】届别 {} 共享课程 {} 门。", entryYear,
+                    sharedLessons == null ? 0 : sharedLessons.size());
 
-                // 合并并按创建时间降序排列（最新创建的在前）
-                List<LessonInfoVo> allLessons = new ArrayList<>();
+            List<LessonInfoVo> allLessons = new ArrayList<>();
+            if (selfLessons != null) {
                 allLessons.addAll(selfLessons);
-                allLessons.addAll(sharedLessons);
-                // 自建和共享课程合并后统一排序，确保最新课程固定在左上角。
-                allLessons.sort((a, b) -> {
-                    long timeA = a.getCreateTime() == null ? 0L : a.getCreateTime().getTime();
-                    long timeB = b.getCreateTime() == null ? 0L : b.getCreateTime().getTime();
-                    int byCreateTime = Long.compare(timeB, timeA);
-                    if (byCreateTime != 0) {
-                        return byCreateTime;
-                    }
-                    long idA = a.getLessonId() == null ? 0L : a.getLessonId();
-                    long idB = b.getLessonId() == null ? 0L : b.getLessonId();
-                    return Long.compare(idB, idA);
-                });
-                 
-                // 填充每个课程的已指派班级
-                for (LessonInfoVo lesson : allLessons) {
-                    List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
-                            lesson.getLessonId(), entryYear);
-                    if (classCodes != null && !classCodes.isEmpty()) {
-                        List<String> formattedCodes = classCodes.stream()
-                            .filter(StringUtils::isNotBlank)
-                            .map(code -> code.endsWith("班") ? code : code + "班")
-                            .collect(Collectors.toList());
-                        lesson.setAssignedClasses(formattedCodes);
-                    }
-                }
-
-                gradeGroup.setLessons(allLessons);
-            } else {
-                gradeGroup.setLessons(new ArrayList<>());
             }
+            if (sharedLessons != null) {
+                allLessons.addAll(sharedLessons);
+            }
+            // 自建和共享课程合并后统一排序，确保最新课程固定在左上角。
+            allLessons.sort((a, b) -> {
+                long timeA = a.getCreateTime() == null ? 0L : a.getCreateTime().getTime();
+                long timeB = b.getCreateTime() == null ? 0L : b.getCreateTime().getTime();
+                int byCreateTime = Long.compare(timeB, timeA);
+                if (byCreateTime != 0) {
+                    return byCreateTime;
+                }
+                long idA = a.getLessonId() == null ? 0L : a.getLessonId();
+                long idB = b.getLessonId() == null ? 0L : b.getLessonId();
+                return Long.compare(idB, idA);
+            });
+
+            for (LessonInfoVo lesson : allLessons) {
+                List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                        lesson.getLessonId(), entryYear);
+                if (classCodes != null && !classCodes.isEmpty()) {
+                    List<String> formattedCodes = classCodes.stream()
+                        .filter(StringUtils::isNotBlank)
+                        .map(code -> code.endsWith("班") ? code : code + "班")
+                        .collect(Collectors.toList());
+                    lesson.setAssignedClasses(formattedCodes);
+                }
+            }
+
+            gradeGroup.setLessons(allLessons);
 
             result.add(gradeGroup);
         }

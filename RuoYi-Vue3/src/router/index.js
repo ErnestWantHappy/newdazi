@@ -171,16 +171,19 @@ export const dynamicRoutes = [
       }
     ]
   },
+  // 区域抽测列表只走 sys_menu 动态菜单，避免教研员侧栏出现两个「区域抽测」。
+  // 保留隐藏静态路由，兼容书签 /business/county-exam 与角色兜底进入。
   {
     path: '/business/county-exam',
     component: Layout,
     roles: ['admin', 'researcher'],
+    hidden: true,
     children: [
       {
         path: '',
         component: () => import('@/views/business/countyExam/index'),
         name: 'CountyExamStatic',
-        meta: { title: '区域抽测', icon: 'education' }
+        meta: { title: '区域抽测', icon: 'education', activeMenu: '/county-exam' }
       }
     ]
   },

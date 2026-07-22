@@ -228,6 +228,41 @@ class BizLessonServiceImplTest
     }
 
     @Test
+    void dashboardLoadsLessonsForGraduatedEntryYear()
+    {
+        // 小学 2020 级在 7 月 20 日后为「已毕业」(gradeId=-1)，旧逻辑因 gradeId>0 才装课导致空卡片。
+        loginTeacher();
+        int academicStartYear = AcademicYearUtils.resolveAcademicStartYear(LocalDate.now());
+        String graduatedEntryYear = String.valueOf(academicStartYear - 6);
+        SysDept school = new SysDept();
+        school.setDeptId(10L);
+        school.setSchoolType("1");
+        when(deptMapper.selectDeptById(10L)).thenReturn(school);
+        when(teacherClassMapper.selectBizTeacherClassList(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Collections.singletonList(teacherClass(graduatedEntryYear, "1")));
+
+        LessonInfoVo graduatedLesson = lessonInfo(201L, graduatedEntryYear);
+        when(bizLessonMapper.selectLessonsByEntryYearAndCreator(graduatedEntryYear, "teacher", 10L))
+                .thenReturn(Collections.singletonList(graduatedLesson));
+        when(bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(8L),
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("teacher")))
+                .thenReturn(Collections.emptyList());
+        when(lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Collections.singletonList("1"));
+
+        List<GradeGroupVo> groups = service.getTeacherDashboardData();
+
+        GradeGroupVo graduatedGroup = groups.stream()
+                .filter(g -> graduatedEntryYear.equals(g.getEntryYear())).findFirst().orElse(null);
+        assertNotNull(graduatedGroup);
+        assertEquals("已毕业", graduatedGroup.getGradeName());
+        assertEquals(Long.valueOf(-1L), graduatedGroup.getGradeId());
+        assertEquals(Collections.singletonList(graduatedLesson), graduatedGroup.getLessons());
+    }
+
+    @Test
     void persistedLessonEntryYearCannotDriftDuringEdit()
     {
         BizLesson existing = new BizLesson();

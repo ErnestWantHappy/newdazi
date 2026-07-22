@@ -166,9 +166,10 @@
 
     <el-dialog title="配置匿名评卷" v-model="allocateDialog.open" width="920px" append-to-body>
       <el-alert
-        title="按操作题配置评卷教师和份数。不填份数表示该题剩余答卷自动均分；考试关闭后会生成匿名评卷任务。"
+        title="按操作题配置评卷教师和份数。可用「一键均分」预填份数；不填/0 表示关闭抽测生成任务时对该题剩余答卷自动均分。教师首页仅在有待评任务时显示「区域抽测评卷」入口（须先关闭抽测并生成任务）。搜索教师姓名/账号可跨校、跨学段命中（含小学部与初中部双账号）。"
         type="info"
         :closable="false"
+        show-icon
       />
       <div class="grading-progress-summary">
         <div class="progress-card">
@@ -195,12 +196,13 @@
       <div class="grader-toolbar">
         <el-input
           v-model="allocateDialog.keyword"
-          placeholder="搜索教师姓名、账号或学校"
+          placeholder="搜索教师姓名、账号或学校（如：郑东旭）"
           clearable
-          style="width: 260px"
+          style="width: 300px"
           @keyup.enter="loadAssignableGraders"
         />
         <el-button icon="Search" :loading="allocateDialog.teacherLoading" @click="loadAssignableGraders">搜索教师</el-button>
+        <el-button type="success" plain icon="Finished" @click="evenlyAllocateAllQuestions">一键均分全部操作题</el-button>
       </div>
       <div v-loading="allocateDialog.loading" class="allocate-question-list">
         <el-empty v-if="practicalAllocateQuestions.length === 0" description="本场区域抽测没有操作题" />
@@ -217,7 +219,10 @@
                 待评 {{ questionProgress(question.questionId).pendingCount || 0 }}
               </span>
             </div>
-            <el-button type="primary" link icon="Plus" @click="addGraderRow(question.questionId)">添加教师</el-button>
+            <div class="allocate-question-actions">
+              <el-button type="success" link @click="evenlyAllocateQuestion(question.questionId)">一键均分</el-button>
+              <el-button type="primary" link icon="Plus" @click="addGraderRow(question.questionId)">添加教师</el-button>
+            </div>
           </div>
           <el-table :data="allocateDialog.configs[question.questionId] || []" border size="small">
             <el-table-column label="评卷教师" min-width="260">
@@ -908,6 +913,70 @@ function removeGraderRow(questionId, index) {
   allocateDialog.configs[questionId]?.splice(index, 1)
 }
 
+/**
+ * 可分配规模：有提交用该题提交数，否则用参考人数（关闭生成任务时仍以真实答卷为准）。
+ */
+function allocatePoolSize(questionId) {
+  const submitted = Number(questionProgress(questionId).submittedCount) || 0
+  if (submitted > 0) {
+    return submitted
+  }
+  return Number(allocateDialog.progress.participantCount) || 0
+}
+
+/**
+ * 将可分配份数均分写入该操作题下各评卷教师行（余数前几人 +1）。
+ * @param {boolean} silent 批量调用时不弹 toast
+ * @returns {{ ok: boolean, reason?: string, pool?: number, graders?: number }}
+ */
+function evenlyAllocateQuestion(questionId, silent = false) {
+  const rows = (allocateDialog.configs[questionId] || []).filter(row => row.graderId)
+  if (rows.length === 0) {
+    if (!silent) {
+      ElMessage.warning('请先为该操作题选择至少一位评卷教师，再一键均分')
+    }
+    return { ok: false, reason: 'no-grader' }
+  }
+  const pool = allocatePoolSize(questionId)
+  if (pool <= 0) {
+    if (!silent) {
+      ElMessage.warning('当前无可分配规模（参考人数与提交数均为 0），可先不填份数，关闭抽测时自动均分')
+    }
+    return { ok: false, reason: 'empty-pool' }
+  }
+  const base = Math.floor(pool / rows.length)
+  let remainder = pool % rows.length
+  for (const row of rows) {
+    row.targetCount = base + (remainder > 0 ? 1 : 0)
+    if (remainder > 0) {
+      remainder -= 1
+    }
+  }
+  if (!silent) {
+    ElMessage.success(`已按 ${pool} 份均分给 ${rows.length} 位教师`)
+  }
+  return { ok: true, pool, graders: rows.length }
+}
+
+function evenlyAllocateAllQuestions() {
+  if (practicalAllocateQuestions.value.length === 0) {
+    ElMessage.warning('本场没有操作题')
+    return
+  }
+  let successCount = 0
+  for (const question of practicalAllocateQuestions.value) {
+    const result = evenlyAllocateQuestion(question.questionId, true)
+    if (result.ok) {
+      successCount += 1
+    }
+  }
+  if (successCount === 0) {
+    ElMessage.warning('请先为操作题选择评卷教师（且参考人数或提交数大于 0），再一键均分')
+    return
+  }
+  ElMessage.success(`已对 ${successCount} 道操作题完成一键均分`)
+}
+
 function teacherLabel(teacher) {
   const name = teacher.nickName || teacher.userName || teacher.userId
   const dept = teacher.deptName ? ` - ${teacher.deptName}` : ''
@@ -1211,6 +1280,13 @@ getList()
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 10px;
+  }
+
+  .allocate-question-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
   }
 
   .question-progress {

@@ -6,3 +6,8 @@
 /backend-dual-feature*.log
 /frontend-dual-feature*.log
 /sql/ry-vue260709.sql
+
+# 本机私密（密码/Token）；禁止提交
+**/secrets.local.md
+**/*.local.md
+contexts/secrets.local.md

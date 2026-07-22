@@ -693,7 +693,9 @@ public class CountyExamServiceImpl implements ICountyExamService {
     @Override
     public List<Map<String, Object>> getAssignableGraders(String keyword) {
         requireManager();
+        // 全平台有效教师均可评卷；有关键字时提高命中上限，避免 limit 过小静默截断导致「有账号选不到」。
         String likeKeyword = StringUtils.isEmpty(keyword) ? null : "%" + keyword.trim() + "%";
+        int limit = likeKeyword == null ? 200 : 500;
         return jdbcTemplate.queryForList(
                 "select distinct u.user_id as userId, u.user_name as userName, u.nick_name as nickName, " +
                         "d.dept_name as deptName " +
@@ -705,7 +707,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
                         "and r.del_flag = '0' and r.status = '0' and r.role_key = 'teacher' " +
                         "and (? is null or u.nick_name like ? or u.user_name like ? or d.dept_name like ?) " +
                         "order by d.dept_name asc, u.nick_name asc, u.user_id asc " +
-                        "limit 80",
+                        "limit " + limit,
                 likeKeyword, likeKeyword, likeKeyword, likeKeyword);
     }
 
