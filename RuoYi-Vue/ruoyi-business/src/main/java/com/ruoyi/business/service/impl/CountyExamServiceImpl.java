@@ -694,9 +694,10 @@ public class CountyExamServiceImpl implements ICountyExamService {
     public List<Map<String, Object>> getAssignableGraders(String keyword) {
         requireManager();
         // 全平台有效教师均可评卷；有关键字时提高命中上限，避免 limit 过小静默截断导致「有账号选不到」。
+        // 兼教多校（如小学部+初中部同一 user_id）时，deptNames 汇总可选校，避免误以为「只有小学部账号」。
         String likeKeyword = StringUtils.isEmpty(keyword) ? null : "%" + keyword.trim() + "%";
         int limit = likeKeyword == null ? 200 : 500;
-        return jdbcTemplate.queryForList(
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "select distinct u.user_id as userId, u.user_name as userName, u.nick_name as nickName, " +
                         "d.dept_name as deptName " +
                         "from sys_user u " +
@@ -705,10 +706,44 @@ public class CountyExamServiceImpl implements ICountyExamService {
                         "left join sys_dept d on u.dept_id = d.dept_id " +
                         "where u.del_flag = '0' and u.status = '0' " +
                         "and r.del_flag = '0' and r.status = '0' and r.role_key = 'teacher' " +
-                        "and (? is null or u.nick_name like ? or u.user_name like ? or d.dept_name like ?) " +
+                        "and (? is null or u.nick_name like ? or u.user_name like ? or d.dept_name like ? " +
+                        "     or exists ( " +
+                        "         select 1 from sys_user_dept ud " +
+                        "         inner join sys_dept d2 on d2.dept_id = ud.dept_id " +
+                        "         where ud.user_id = u.user_id and d2.del_flag = '0' and d2.dept_name like ? " +
+                        "     )) " +
                         "order by d.dept_name asc, u.nick_name asc, u.user_id asc " +
                         "limit " + limit,
-                likeKeyword, likeKeyword, likeKeyword, likeKeyword);
+                likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword);
+        if (rows == null || rows.isEmpty()) {
+            return rows;
+        }
+        // 附加可选学校名称（若存在 sys_user_dept 多校关系）
+        for (Map<String, Object> row : rows) {
+            Long userId = longValue(row.get("userId"));
+            if (userId == null) {
+                continue;
+            }
+            try {
+                List<String> names = jdbcTemplate.queryForList(
+                        "select distinct d.dept_name from sys_user_dept ud " +
+                                "inner join sys_dept d on d.dept_id = ud.dept_id " +
+                                "where ud.user_id = ? and d.del_flag = '0' and d.status = '0' " +
+                                "order by d.dept_name",
+                        String.class, userId);
+                if (names != null && !names.isEmpty()) {
+                    row.put("deptNames", names);
+                    if (StringUtils.isEmpty((String) row.get("deptName"))) {
+                        row.put("deptName", String.join(" / ", names));
+                    } else if (names.size() > 1) {
+                        row.put("deptName", String.join(" / ", names));
+                    }
+                }
+            } catch (Exception ex) {
+                // 无 sys_user_dept 表或历史库时忽略，仍返回主部门
+            }
+        }
+        return rows;
     }
 
     private List<CountyExamGrader> buildGraderConfigs(Long examId, CountyExamGraderAllocateRequest request) {

@@ -123,6 +123,34 @@ export const constantRoutes = [
         meta: { title: '学生画像', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/business/research-activity',
+    component: Layout,
+    hidden: true,
+    roles: ['teacher', 'researcher', 'admin'],
+    children: [
+      {
+        path: 'detail/:topicId(\\d+)',
+        component: () => import('@/views/business/researchActivity/detail.vue'),
+        name: 'ResearchActivityDetail',
+        meta: { title: '教研活动详情', activeMenu: '/research-activity', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/business/research-notifications',
+    component: Layout,
+    hidden: true,
+    roles: ['teacher', 'researcher', 'admin'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/researchActivity/notifications.vue'),
+        name: 'ResearchActivityNotifications',
+        meta: { title: '教研活动通知', activeMenu: '/research-activity', noCache: true }
+      }
+    ]
   }
   
 ]

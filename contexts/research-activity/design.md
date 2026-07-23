@@ -179,9 +179,10 @@ RuoYi-Vue3/src/
 | `title` | varchar(200) | 必填 |
 | `content_html` | longtext | 后端清洗后的 HTML |
 | `content_text` | text | 清洗后纯文本，用于摘要和搜索 |
-| `notice_level` | char(1) | `0`不通知、`1`普通、`2`重要 |
+| `notice_level` | char(1) | `0`不通知、`1`统一站内通知；`2`仅历史兼容 |
 | `notice_scope` | char(1) | `0`无、`1`学段、`2`指定教师 |
 | `notice_stages` | varchar(20) | 学段代码逗号串，如 `1,2`；指定教师时为空 |
+| `activity_time` | datetime | 可空；活动开始前持续显示在教师首页 |
 | `is_pinned` | char(1) | `N/Y` |
 | `view_count` | bigint | 默认 0 |
 | `reply_count` | bigint | 默认 0 |
@@ -263,7 +264,7 @@ RuoYi-Vue3/src/
 | `user_id` | bigint | 具体教师账号 |
 | `source_type` | char(1) | `S`学段、`U`指定教师 |
 | `source_value` | varchar(32) | 学段代码或空 |
-| `notice_level` | char(1) | 通知时的普通/重要快照 |
+| `notice_level` | char(1) | 通知级别快照；新数据固定为 `1` |
 | `read_flag` | char(1) | `N/Y` |
 | `read_time` | datetime | 可空 |
 | `notify_time` | datetime | 首次/再次通知时间 |
@@ -366,8 +367,8 @@ RuoYi-Vue3/src/
 
 | 方法 | 路径 | 说明 |
 | :--- | :--- | :--- |
-| GET | `/search/topics` | 主题关键词、类型、发布人、日期筛选 |
-| GET | `/search/resources` | 课程结构、关键词、作者、日期筛选；默认页面 |
+| GET | `/search/topics` | 主题关键词、类型、发布人、创建时间和活动时间独立筛选 |
+| GET | `/search/resources` | 课程结构、关键词、作者、创建时间筛选 |
 
 资源搜索返回资源留言级结果，而不是附件级重复行。流程：
 
@@ -585,19 +586,21 @@ ${ruoyi.profile}-private/research-activity/{topicId}/{postId-or-uploadToken}/{yy
 
 ### 15.1 接收人生成
 
-- 学段：按 `sys_dept.school_type` 查询所有启用 teacher 角色账号。
+- 学段：同时按主学校 `sys_user.dept_id` 和多校关系 `sys_user_dept` 查询所有启用 teacher 角色账号；任一可选学校命中学段即纳入，最终按 `user_id` 去重。
 - 指定教师：服务端按提交 ID 再次 JOIN 验证。
 - 账号而不是自然人去重；唯一键为主题+用户。
 - 首次发布与再次通知均批量写入，建议每批不超过 500 行。
 - 新增教师不会获得旧通知；再次通知时可重新选择并加入。
 
-### 15.2 未读排序
+### 15.2 教师首页待办查询与排序
 
 ```sql
-ORDER BY notice_level DESC, notify_time DESC
+WHERE (activity_time IS NULL AND read_flag='N') OR activity_time > NOW()
+ORDER BY CASE WHEN activity_time IS NULL THEN 1 ELSE 0 END,
+         activity_time ASC, notify_time DESC
 ```
 
-查询必须 JOIN 未删除主题；返回 DTO 不包含其他接收人名单。顶部通知栏 limit 后端钳制在 1—10。
+有活动时间的通知在活动开始前不受已读状态影响；无活动时间时仍按未读提醒。达到活动时间后只从首页移除，全部通知历史不删除。查询必须 JOIN 未删除主题；返回 DTO 不包含其他接收人名单。顶部通知栏 limit 后端钳制在 1—10，未读角标只统计仍有效且未读的通知。
 
 ### 15.3 首页容错
 
@@ -612,11 +615,12 @@ ORDER BY notice_level DESC, notify_time DESC
 - 页面标题“教研活动”。
 - 关键词输入框和搜索按钮。
 - 教师显示“发起分享”；教研员/管理员显示“发布活动”。
-- 检索视图：默认“课程资源”，另一项“活动主题”。
+- 检索视图：默认“活动主题”，另一项“课程资源”。
+- 时间筛选：活动主题并列显示“创建时间”和“活动时间”，分别提交 `beginTime/endTime` 与 `activityBeginTime/activityEndTime`；课程资源只显示创建时间。
 
 课程资源筛选：学段 → 年级联动、学期、课次类型、第几课、作者、时间。筛选条支持“重置”，不将高级筛选隐藏到难发现的弹窗。
 
-资源卡片直接提供下载/打开入口；反思显示 2—3 行摘要，点击卡片进入完整主题。
+有活动时间的通知卡片在右上角显示“活动时间：yyyy-MM-dd HH:mm:ss”。资源卡片直接提供下载/打开入口；反思显示 2—3 行摘要，点击卡片进入完整主题。
 
 ### 16.2 主题详情
 
@@ -652,7 +656,7 @@ ORDER BY notice_level DESC, notify_time DESC
 <el-card>课程设置...</el-card>
 ```
 
-空状态保持紧凑。重要通知使用左侧强调条和“重要”标签，不使用持续弹窗或自动滚动。
+空状态保持紧凑并显示“暂无待办教研活动通知”。通知统一样式；设置活动时间时在条目右侧明确显示，已读后在活动开始前仍保留，不使用持续弹窗或自动滚动。
 
 ### 16.4 路由
 
@@ -783,4 +787,3 @@ ORDER BY notice_level DESC, notify_time DESC
 - **原因**：当前项目已经具备图片、粘贴、会话处理和 HTML 存储链路，改动最小。
 - **风险**：Vue 封装声明面向 Quill 1.x；必须先验证表格和回显。
 - **回退**：验证失败后，取得用户确认，只在教研活动模块引入 WangEditor。
-

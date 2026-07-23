@@ -1,5 +1,6 @@
 <template>
   <div class="app-container teacher-dashboard">
+    <ResearchNotificationBar />
     <div v-if="countyGradingEntry.hasTask" class="county-grading-entry" @click="goToCountyExamGrading">
       <div>
         <strong>区域抽测评卷</strong>
@@ -234,6 +235,7 @@
 </template>
 
 <script setup name="TeacherDashboard">
+import ResearchNotificationBar from '@/views/business/researchActivity/components/ResearchNotificationBar.vue'
 import { computed, ref, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';

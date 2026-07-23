@@ -200,12 +200,12 @@ public class CommonController
             // 本地资源路径
             Path downloadPath = resolveProfileResource(authorizedResource);
             
-            // 调试日志
-            log.info("【预览】请求资源: {} -> 实际路径: {}", resource, downloadPath);
+            // 资源预览会被教研活动图片复用，日志只记录业务资源标识，禁止泄露服务器绝对路径。
+            log.info("【预览】请求资源: {}", resource);
             
             java.io.File file = downloadPath.toFile();
             if (!file.exists()) {
-                log.error("【预览】文件不存在: {}", file.getAbsolutePath());
+                log.error("【预览】文件不存在: {}", resource);
                 response.sendError(404, "文件不存在");
                 return;
             }
@@ -219,6 +219,8 @@ public class CommonController
                 contentType = MediaType.IMAGE_JPEG_VALUE;
             } else if (lowerRes.endsWith(".png")) {
                 contentType = MediaType.IMAGE_PNG_VALUE;
+            } else if (lowerRes.endsWith(".webp")) {
+                contentType = "image/webp";
             }
             
             response.setContentType(contentType);

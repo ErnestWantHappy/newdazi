@@ -979,7 +979,13 @@ function evenlyAllocateAllQuestions() {
 
 function teacherLabel(teacher) {
   const name = teacher.nickName || teacher.userName || teacher.userId
-  const dept = teacher.deptName ? ` - ${teacher.deptName}` : ''
+  // 兼教多校时后端可能返回 deptNames；展示全部学校避免误以为「只有小学部账号」
+  let dept = ''
+  if (Array.isArray(teacher.deptNames) && teacher.deptNames.length > 0) {
+    dept = ` - ${teacher.deptNames.join(' / ')}`
+  } else if (teacher.deptName) {
+    dept = ` - ${teacher.deptName}`
+  }
   return `${name}（${teacher.userName || teacher.userId}）${dept}`
 }
 

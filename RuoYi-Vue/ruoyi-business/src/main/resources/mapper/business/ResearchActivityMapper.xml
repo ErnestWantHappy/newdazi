@@ -1,0 +1,517 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.ResearchActivityMapper">
+
+    <resultMap id="TopicResult" type="com.ruoyi.business.domain.vo.ResearchTopicVo">
+        <id property="topicId" column="topic_id"/>
+        <result property="topicType" column="topic_type"/>
+        <result property="title" column="title"/>
+        <result property="contentHtml" column="content_html"/>
+        <result property="contentText" column="content_text"/>
+        <result property="noticeLevel" column="notice_level"/>
+        <result property="noticeScope" column="notice_scope"/>
+        <result property="noticeStages" column="notice_stages"/>
+        <result property="activityTime" column="activity_time"/>
+        <result property="isPinned" column="is_pinned"/>
+        <result property="viewCount" column="view_count"/>
+        <result property="replyCount" column="reply_count"/>
+        <result property="downloadCount" column="download_count"/>
+        <result property="lastActivityTime" column="last_activity_time"/>
+        <result property="creatorId" column="creator_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="creatorName" column="creator_name"/>
+        <result property="creatorUserName" column="creator_user_name"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="edited" column="edited"/>
+    </resultMap>
+
+    <resultMap id="TopicEntityResult" type="com.ruoyi.business.domain.BizResearchTopic">
+        <id property="topicId" column="topic_id"/>
+        <result property="topicType" column="topic_type"/>
+        <result property="title" column="title"/>
+        <result property="contentHtml" column="content_html"/>
+        <result property="contentText" column="content_text"/>
+        <result property="noticeLevel" column="notice_level"/>
+        <result property="noticeScope" column="notice_scope"/>
+        <result property="noticeStages" column="notice_stages"/>
+        <result property="activityTime" column="activity_time"/>
+        <result property="isPinned" column="is_pinned"/>
+        <result property="viewCount" column="view_count"/>
+        <result property="replyCount" column="reply_count"/>
+        <result property="downloadCount" column="download_count"/>
+        <result property="lastActivityTime" column="last_activity_time"/>
+        <result property="creatorId" column="creator_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="PostResult" type="com.ruoyi.business.domain.vo.ResearchPostVo">
+        <id property="postId" column="post_id"/>
+        <result property="topicId" column="topic_id"/>
+        <result property="postType" column="post_type"/>
+        <result property="contentHtml" column="content_html"/>
+        <result property="contentText" column="content_text"/>
+        <result property="schoolType" column="school_type"/>
+        <result property="grade" column="grade"/>
+        <result property="semester" column="semester"/>
+        <result property="lessonKind" column="lesson_kind"/>
+        <result property="lessonNo" column="lesson_no"/>
+        <result property="courseTitle" column="course_title"/>
+        <result property="isPinned" column="is_pinned"/>
+        <result property="authorId" column="author_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="authorName" column="author_name"/>
+        <result property="authorUserName" column="author_user_name"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="topicTitle" column="topic_title"/>
+        <result property="edited" column="edited"/>
+    </resultMap>
+
+    <resultMap id="PostEntityResult" type="com.ruoyi.business.domain.BizResearchPost">
+        <id property="postId" column="post_id"/>
+        <result property="topicId" column="topic_id"/>
+        <result property="postType" column="post_type"/>
+        <result property="contentHtml" column="content_html"/>
+        <result property="contentText" column="content_text"/>
+        <result property="schoolType" column="school_type"/>
+        <result property="grade" column="grade"/>
+        <result property="semester" column="semester"/>
+        <result property="lessonKind" column="lesson_kind"/>
+        <result property="lessonNo" column="lesson_no"/>
+        <result property="courseTitle" column="course_title"/>
+        <result property="isPinned" column="is_pinned"/>
+        <result property="authorId" column="author_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="ResourceResult" type="com.ruoyi.business.domain.vo.ResearchResourceVo">
+        <id property="resourceId" column="resource_id"/>
+        <result property="postId" column="post_id"/>
+        <result property="resourceType" column="resource_type"/>
+        <result property="resourceName" column="resource_name"/>
+        <result property="originalFileName" column="original_file_name"/>
+        <result property="storedPath" column="stored_path"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="mimeType" column="mime_type"/>
+        <result property="linkUrl" column="link_url"/>
+        <result property="extractCode" column="extract_code"/>
+        <result property="expireTime" column="expire_time"/>
+        <result property="description" column="description"/>
+        <result property="accessCount" column="access_count"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="TeacherOptionResult" type="com.ruoyi.business.domain.vo.ResearchTeacherOptionVo">
+        <id property="userId" column="user_id"/>
+        <result property="nickName" column="nick_name"/>
+        <result property="userName" column="user_name"/>
+        <result property="phonenumber" column="phonenumber"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="schoolType" column="school_type"/>
+    </resultMap>
+
+    <resultMap id="NotificationResult" type="com.ruoyi.business.domain.vo.ResearchNotificationVo">
+        <id property="recipientId" column="recipient_id"/>
+        <result property="topicId" column="topic_id"/>
+        <result property="topicTitle" column="topic_title"/>
+        <result property="noticeLevel" column="notice_level"/>
+        <result property="readFlag" column="read_flag"/>
+        <result property="activityTime" column="activity_time"/>
+        <result property="readTime" column="read_time"/>
+        <result property="notifyTime" column="notify_time"/>
+        <result property="creatorName" column="creator_name"/>
+    </resultMap>
+
+    <sql id="topicEntityColumns">
+        topic_id, topic_type, title, content_html, content_text, notice_level, notice_scope,
+        notice_stages, activity_time, is_pinned, view_count, reply_count, download_count, last_activity_time,
+        creator_id, dept_id, del_flag, create_by, create_time, update_by, update_time
+    </sql>
+
+    <insert id="insertTopic" parameterType="com.ruoyi.business.domain.BizResearchTopic"
+            useGeneratedKeys="true" keyProperty="topicId">
+        INSERT INTO biz_research_topic
+          (topic_type,title,content_html,content_text,notice_level,notice_scope,notice_stages,activity_time,
+           is_pinned,view_count,reply_count,download_count,last_activity_time,
+           creator_id,dept_id,del_flag,create_by,create_time,update_by,update_time)
+        VALUES
+          (#{topicType},#{title},#{contentHtml},#{contentText},#{noticeLevel},#{noticeScope},#{noticeStages},#{activityTime},
+           #{isPinned},0,0,0,#{lastActivityTime},#{creatorId},#{deptId},#{delFlag},
+           #{createBy},#{createTime},#{updateBy},#{updateTime})
+    </insert>
+
+    <update id="updateTopic" parameterType="com.ruoyi.business.domain.BizResearchTopic">
+        UPDATE biz_research_topic
+        SET topic_type=#{topicType}, title=#{title}, content_html=#{contentHtml}, content_text=#{contentText},
+            notice_level=#{noticeLevel}, notice_scope=#{noticeScope}, notice_stages=#{noticeStages}, activity_time=#{activityTime},
+            update_by=#{updateBy}, update_time=#{updateTime}
+        WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+
+    <select id="selectTopicById" resultMap="TopicResult">
+        SELECT t.*, u.nick_name AS creator_name, u.user_name AS creator_user_name,
+               d.dept_name, IF(t.update_time IS NOT NULL AND t.update_time &gt; t.create_time,1,0) AS edited
+        FROM biz_research_topic t
+        LEFT JOIN sys_user u ON u.user_id=t.creator_id
+        LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
+        WHERE t.topic_id=#{topicId} AND t.del_flag='0'
+    </select>
+
+    <select id="selectTopicByIdAny" resultMap="TopicEntityResult">
+        SELECT <include refid="topicEntityColumns"/> FROM biz_research_topic WHERE topic_id=#{topicId}
+    </select>
+
+    <select id="selectTopicForUpdate" resultMap="TopicEntityResult">
+        SELECT <include refid="topicEntityColumns"/> FROM biz_research_topic
+        WHERE topic_id=#{topicId} FOR UPDATE
+    </select>
+
+    <select id="selectTopicList" resultMap="TopicResult">
+        SELECT t.*, u.nick_name AS creator_name, u.user_name AS creator_user_name,
+               d.dept_name, IF(t.update_time IS NOT NULL AND t.update_time &gt; t.create_time,1,0) AS edited
+        FROM biz_research_topic t
+        LEFT JOIN sys_user u ON u.user_id=t.creator_id
+        LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
+        WHERE t.del_flag='0'
+        <if test="topicType != null and topicType != ''">AND t.topic_type=#{topicType}</if>
+        <if test="authorId != null">AND t.creator_id=#{authorId}</if>
+        <if test="beginTime != null">AND t.create_time &gt;= #{beginTime}</if>
+        <if test="endTime != null">AND t.create_time &lt;= #{endTime}</if>
+        <if test="activityBeginTime != null">AND t.activity_time &gt;= #{activityBeginTime}</if>
+        <if test="activityEndTime != null">AND t.activity_time &lt;= #{activityEndTime}</if>
+        <if test="keywordLike != null and keywordLike != ''">
+            AND (t.title LIKE #{keywordLike} ESCAPE '!'
+              OR t.content_text LIKE #{keywordLike} ESCAPE '!'
+              OR u.nick_name LIKE #{keywordLike} ESCAPE '!')
+        </if>
+        ORDER BY t.is_pinned DESC, t.last_activity_time DESC, t.topic_id DESC
+    </select>
+
+    <select id="selectHiddenTopicList" resultMap="TopicResult">
+        SELECT t.*, u.nick_name AS creator_name, u.user_name AS creator_user_name,
+               d.dept_name, IF(t.update_time IS NOT NULL AND t.update_time &gt; t.create_time,1,0) AS edited
+        FROM biz_research_topic t
+        LEFT JOIN sys_user u ON u.user_id=t.creator_id
+        LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
+        WHERE t.del_flag='2'
+        ORDER BY t.update_time DESC,t.topic_id DESC
+    </select>
+
+    <update id="updateTopicDeleteFlag">
+        UPDATE biz_research_topic SET del_flag=#{delFlag}, update_by=#{updateBy}, update_time=NOW()
+        WHERE topic_id=#{topicId}
+    </update>
+    <update id="updateTopicPinned">
+        UPDATE biz_research_topic SET is_pinned=#{isPinned}, update_by=#{updateBy}, update_time=NOW()
+        WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+    <update id="incrementTopicView">
+        UPDATE biz_research_topic SET view_count=view_count+1 WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+    <update id="incrementTopicReply">
+        UPDATE biz_research_topic
+        SET reply_count=reply_count+1, last_activity_time=NOW()
+        WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+    <update id="decrementTopicReply">
+        UPDATE biz_research_topic
+        SET reply_count=GREATEST(reply_count-1,0), last_activity_time=NOW()
+        WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+    <update id="refreshTopicLastActivity">
+        UPDATE biz_research_topic SET last_activity_time=NOW() WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+    <update id="incrementTopicDownload">
+        UPDATE biz_research_topic SET download_count=download_count+1 WHERE topic_id=#{topicId} AND del_flag='0'
+    </update>
+
+    <insert id="insertPost" parameterType="com.ruoyi.business.domain.BizResearchPost"
+            useGeneratedKeys="true" keyProperty="postId">
+        INSERT INTO biz_research_post
+          (topic_id,post_type,content_html,content_text,school_type,grade,semester,lesson_kind,lesson_no,
+           course_title,is_pinned,author_id,dept_id,del_flag,create_by,create_time,update_by,update_time)
+        VALUES
+          (#{topicId},#{postType},#{contentHtml},#{contentText},#{schoolType},#{grade},#{semester},
+           #{lessonKind},#{lessonNo},#{courseTitle},#{isPinned},#{authorId},#{deptId},#{delFlag},
+           #{createBy},#{createTime},#{updateBy},#{updateTime})
+    </insert>
+
+    <update id="updatePost" parameterType="com.ruoyi.business.domain.BizResearchPost">
+        UPDATE biz_research_post
+        SET content_html=#{contentHtml}, content_text=#{contentText}, school_type=#{schoolType}, grade=#{grade},
+            semester=#{semester}, lesson_kind=#{lessonKind}, lesson_no=#{lessonNo}, course_title=#{courseTitle},
+            update_by=#{updateBy}, update_time=#{updateTime}
+        WHERE post_id=#{postId} AND del_flag='0'
+    </update>
+
+    <select id="selectPostById" resultMap="PostResult">
+        SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
+               d.dept_name, t.title AS topic_title,
+               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+        FROM biz_research_post p
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
+        LEFT JOIN sys_user u ON u.user_id=p.author_id
+        LEFT JOIN sys_dept d ON d.dept_id=p.dept_id
+        WHERE p.post_id=#{postId} AND p.del_flag='0'
+    </select>
+
+    <select id="selectPostByIdAny" resultMap="PostEntityResult">
+        SELECT * FROM biz_research_post WHERE post_id=#{postId}
+    </select>
+
+    <select id="selectPostForUpdate" resultMap="PostEntityResult">
+        SELECT * FROM biz_research_post WHERE post_id=#{postId} FOR UPDATE
+    </select>
+
+    <select id="selectPostList" resultMap="PostResult">
+        SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
+               d.dept_name, t.title AS topic_title,
+               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+        FROM biz_research_post p
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
+        LEFT JOIN sys_user u ON u.user_id=p.author_id
+        LEFT JOIN sys_dept d ON d.dept_id=p.dept_id
+        WHERE p.topic_id=#{topicId} AND p.del_flag='0'
+        <if test="postType != null and postType != ''">AND p.post_type=#{postType}</if>
+        ORDER BY (p.post_type='RESOURCE' AND p.is_pinned='Y') DESC, p.create_time DESC, p.post_id DESC
+    </select>
+
+    <select id="selectHiddenPostList" resultMap="PostResult">
+        SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
+               d.dept_name, t.title AS topic_title,
+               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+        FROM biz_research_post p
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id
+        LEFT JOIN sys_user u ON u.user_id=p.author_id
+        LEFT JOIN sys_dept d ON d.dept_id=p.dept_id
+        WHERE p.del_flag='2'
+        ORDER BY p.update_time DESC,p.post_id DESC
+    </select>
+
+    <select id="selectResourcePostList" resultMap="PostResult">
+        SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
+               d.dept_name, t.title AS topic_title,
+               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+        FROM biz_research_post p
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
+        LEFT JOIN sys_user u ON u.user_id=p.author_id
+        LEFT JOIN sys_dept d ON d.dept_id=p.dept_id
+        WHERE p.del_flag='0' AND p.post_type='RESOURCE'
+        <if test="schoolType != null and schoolType != ''">AND p.school_type=#{schoolType}</if>
+        <if test="grade != null">AND p.grade=#{grade}</if>
+        <if test="semester != null and semester != ''">AND p.semester=#{semester}</if>
+        <if test="lessonKind != null and lessonKind != ''">AND p.lesson_kind=#{lessonKind}</if>
+        <if test="lessonNo != null">AND p.lesson_no=#{lessonNo}</if>
+        <if test="authorId != null">AND p.author_id=#{authorId}</if>
+        <if test="beginTime != null">AND p.create_time &gt;= #{beginTime}</if>
+        <if test="endTime != null">AND p.create_time &lt;= #{endTime}</if>
+        <if test="keywordLike != null and keywordLike != ''">
+            AND (p.course_title LIKE #{keywordLike} ESCAPE '!'
+              OR t.title LIKE #{keywordLike} ESCAPE '!'
+              OR p.content_text LIKE #{keywordLike} ESCAPE '!'
+              OR u.nick_name LIKE #{keywordLike} ESCAPE '!')
+        </if>
+        ORDER BY p.is_pinned DESC,
+        <if test="keyword != null and keyword != ''">
+          CASE
+            WHEN p.course_title=#{keyword} THEN 0
+            WHEN p.course_title LIKE #{keywordPrefix} ESCAPE '!' THEN 1
+            WHEN p.course_title LIKE #{keywordLike} ESCAPE '!' THEN 2
+            WHEN t.title LIKE #{keywordLike} ESCAPE '!' THEN 3
+            ELSE 4
+          END ASC,
+        </if>
+        COALESCE(p.update_time,p.create_time) DESC, p.post_id DESC
+    </select>
+
+    <update id="updatePostDeleteFlag">
+        UPDATE biz_research_post SET del_flag=#{delFlag}, update_by=#{updateBy}, update_time=NOW()
+        WHERE post_id=#{postId}
+    </update>
+    <update id="updatePostPinned">
+        UPDATE biz_research_post SET is_pinned=#{isPinned}, update_by=#{updateBy}, update_time=NOW()
+        WHERE post_id=#{postId} AND post_type='RESOURCE' AND del_flag='0'
+    </update>
+
+    <insert id="insertResource" parameterType="com.ruoyi.business.domain.BizResearchResource"
+            useGeneratedKeys="true" keyProperty="resourceId">
+        INSERT INTO biz_research_resource
+          (post_id,resource_type,resource_name,original_file_name,stored_path,file_size,mime_type,
+           link_url,extract_code,expire_time,description,access_count,sort_order,del_flag,
+           create_by,create_time,update_by,update_time)
+        VALUES
+          (#{postId},#{resourceType},#{resourceName},#{originalFileName},#{storedPath},#{fileSize},#{mimeType},
+           #{linkUrl},#{extractCode},#{expireTime},#{description},0,#{sortOrder},#{delFlag},
+           #{createBy},#{createTime},#{updateBy},#{updateTime})
+    </insert>
+
+    <select id="selectResourceById" resultMap="ResourceResult">
+        SELECT r.*
+        FROM biz_research_resource r
+        JOIN biz_research_post p ON p.post_id=r.post_id AND p.del_flag='0'
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
+        WHERE r.resource_id=#{resourceId} AND r.del_flag='0'
+    </select>
+    <select id="selectResourcesByPostId" resultMap="ResourceResult">
+        SELECT * FROM biz_research_resource
+        WHERE post_id=#{postId} AND del_flag='0'
+        ORDER BY resource_type ASC, sort_order ASC, resource_id ASC
+    </select>
+    <select id="selectResourcesByPostIds" resultMap="ResourceResult">
+        SELECT * FROM biz_research_resource
+        WHERE del_flag='0' AND post_id IN
+        <foreach collection="postIds" item="postId" open="(" close=")" separator=",">#{postId}</foreach>
+        ORDER BY post_id ASC, resource_type ASC, sort_order ASC, resource_id ASC
+    </select>
+    <update id="softDeleteResourcesByPost">
+        UPDATE biz_research_resource SET del_flag='2', update_by=#{updateBy}, update_time=NOW()
+        WHERE post_id=#{postId} AND del_flag='0'
+        <if test="resourceType != null and resourceType != ''">AND resource_type=#{resourceType}</if>
+    </update>
+    <update id="incrementResourceAccess">
+        UPDATE biz_research_resource SET access_count=access_count+1
+        WHERE resource_id=#{resourceId} AND del_flag='0'
+    </update>
+
+    <sql id="enabledTeacherJoin">
+        FROM sys_user u
+        JOIN sys_user_role ur ON ur.user_id=u.user_id
+        JOIN sys_role r ON r.role_id=ur.role_id AND r.role_key='teacher' AND r.status='0' AND r.del_flag='0'
+        LEFT JOIN sys_dept d ON d.dept_id=u.dept_id
+        WHERE u.status='0' AND u.del_flag='0'
+    </sql>
+
+    <select id="selectTeacherOptions" resultMap="TeacherOptionResult">
+        SELECT DISTINCT u.user_id,u.nick_name,u.user_name,u.phonenumber,u.dept_id,d.dept_name,d.school_type
+        <include refid="enabledTeacherJoin"/>
+        <if test="schoolType != null and schoolType != ''">
+          AND (d.school_type=#{schoolType} OR EXISTS (
+            SELECT 1 FROM sys_user_dept ud
+            JOIN sys_dept md ON md.dept_id=ud.dept_id AND md.del_flag='0' AND md.status='0'
+            WHERE ud.user_id=u.user_id AND md.school_type=#{schoolType}
+          ))
+        </if>
+        <if test="keywordLike != null and keywordLike != ''">
+          AND (u.nick_name LIKE #{keywordLike} ESCAPE '!'
+            OR u.user_name LIKE #{keywordLike} ESCAPE '!'
+            OR u.phonenumber LIKE #{keywordLike} ESCAPE '!'
+            OR d.dept_name LIKE #{keywordLike} ESCAPE '!'
+            OR EXISTS (
+              SELECT 1 FROM sys_user_dept ud
+              JOIN sys_dept md ON md.dept_id=ud.dept_id AND md.del_flag='0'
+              WHERE ud.user_id=u.user_id AND md.dept_name LIKE #{keywordLike} ESCAPE '!'
+            ))
+        </if>
+        ORDER BY d.dept_name ASC,u.nick_name ASC,u.user_id ASC
+    </select>
+
+    <select id="selectTeachersByStages" resultMap="TeacherOptionResult">
+        SELECT DISTINCT u.user_id,u.nick_name,u.user_name,u.phonenumber,u.dept_id,d.dept_name,
+          COALESCE((
+            SELECT MIN(md.school_type)
+            FROM sys_user_dept ud
+            JOIN sys_dept md ON md.dept_id=ud.dept_id AND md.del_flag='0' AND md.status='0'
+            WHERE ud.user_id=u.user_id AND md.school_type IN
+            <foreach collection="stageCodes" item="stage" open="(" close=")" separator=",">#{stage}</foreach>
+          ),d.school_type) AS school_type
+        <include refid="enabledTeacherJoin"/>
+        AND (d.school_type IN
+          <foreach collection="stageCodes" item="stage" open="(" close=")" separator=",">#{stage}</foreach>
+          OR EXISTS (
+            SELECT 1 FROM sys_user_dept ud
+            JOIN sys_dept md ON md.dept_id=ud.dept_id AND md.del_flag='0' AND md.status='0'
+            WHERE ud.user_id=u.user_id AND md.school_type IN
+            <foreach collection="stageCodes" item="stage" open="(" close=")" separator=",">#{stage}</foreach>
+          ))
+        ORDER BY u.user_id ASC
+    </select>
+
+    <select id="selectEnabledTeachersByIds" resultMap="TeacherOptionResult">
+        SELECT DISTINCT u.user_id,u.nick_name,u.user_name,u.phonenumber,u.dept_id,d.dept_name,d.school_type
+        <include refid="enabledTeacherJoin"/>
+        AND u.user_id IN
+        <foreach collection="userIds" item="userId" open="(" close=")" separator=",">#{userId}</foreach>
+        ORDER BY u.user_id ASC
+    </select>
+
+    <insert id="upsertNoticeRecipients">
+        INSERT INTO biz_research_notice_recipient
+          (topic_id,user_id,source_type,source_value,notice_level,read_flag,read_time,notify_time,
+           create_by,create_time,update_by,update_time)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+          (#{item.topicId},#{item.userId},#{item.sourceType},#{item.sourceValue},#{item.noticeLevel},
+           'N',NULL,#{item.notifyTime},#{item.createBy},#{item.createTime},#{item.updateBy},#{item.updateTime})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+          source_type=VALUES(source_type), source_value=VALUES(source_value), notice_level=VALUES(notice_level),
+          read_flag='N', read_time=NULL, notify_time=VALUES(notify_time),
+          update_by=VALUES(update_by), update_time=VALUES(update_time)
+    </insert>
+
+    <select id="countUnreadNotifications" resultType="long">
+        SELECT COUNT(*)
+        FROM biz_research_notice_recipient n
+        JOIN biz_research_topic t ON t.topic_id=n.topic_id AND t.del_flag='0'
+        WHERE n.user_id=#{userId} AND n.read_flag='N'
+          AND (t.activity_time IS NULL OR t.activity_time &gt; NOW())
+    </select>
+    <select id="selectUnreadNotifications" resultMap="NotificationResult">
+        SELECT n.recipient_id,n.topic_id,t.title AS topic_title,n.notice_level,n.read_flag,
+               t.activity_time,n.read_time,n.notify_time,u.nick_name AS creator_name
+        FROM biz_research_notice_recipient n
+        JOIN biz_research_topic t ON t.topic_id=n.topic_id AND t.del_flag='0'
+        LEFT JOIN sys_user u ON u.user_id=t.creator_id
+        WHERE n.user_id=#{userId}
+          AND ((t.activity_time IS NULL AND n.read_flag='N') OR t.activity_time &gt; NOW())
+        ORDER BY CASE WHEN t.activity_time IS NULL THEN 1 ELSE 0 END ASC,
+                 t.activity_time ASC,n.notify_time DESC,n.recipient_id DESC
+        LIMIT #{limit}
+    </select>
+    <select id="selectNotificationList" resultMap="NotificationResult">
+        SELECT n.recipient_id,n.topic_id,t.title AS topic_title,n.notice_level,n.read_flag,
+               t.activity_time,n.read_time,n.notify_time,u.nick_name AS creator_name
+        FROM biz_research_notice_recipient n
+        JOIN biz_research_topic t ON t.topic_id=n.topic_id AND t.del_flag='0'
+        LEFT JOIN sys_user u ON u.user_id=t.creator_id
+        WHERE n.user_id=#{userId}
+        ORDER BY n.read_flag ASC,n.notify_time DESC,n.recipient_id DESC
+    </select>
+    <update id="markNotificationRead">
+        UPDATE biz_research_notice_recipient
+        SET read_flag='Y',read_time=COALESCE(read_time,NOW()),update_time=NOW()
+        WHERE recipient_id=#{recipientId} AND user_id=#{userId}
+    </update>
+    <update id="markAllNotificationsRead">
+        UPDATE biz_research_notice_recipient
+        SET read_flag='Y',read_time=COALESCE(read_time,NOW()),update_time=NOW()
+        WHERE user_id=#{userId} AND read_flag='N'
+    </update>
+</mapper>

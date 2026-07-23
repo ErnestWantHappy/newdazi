@@ -14,7 +14,28 @@
       <i ref="uploadRef" class="editor-img-uploader"></i>
     </el-upload>
   </div>
-  <div class="editor">
+  <div class="editor" :class="{ 'editor--table-enabled': enableTable }">
+    <div v-if="enableTable" class="editor-table-tools">
+      <el-button size="small" plain data-testid="editor-insert-table" @click="handleTableCommand('insertTable')">
+        插入 3×3 表格
+      </el-button>
+      <el-dropdown trigger="click" @command="handleTableCommand">
+        <el-button size="small" plain data-testid="editor-table-menu">
+          调整表格<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="insertRowAbove">上方插入行</el-dropdown-item>
+            <el-dropdown-item command="insertRowBelow">下方插入行</el-dropdown-item>
+            <el-dropdown-item command="insertColumnLeft">左侧插入列</el-dropdown-item>
+            <el-dropdown-item command="insertColumnRight">右侧插入列</el-dropdown-item>
+            <el-dropdown-item command="deleteRow" divided>删除当前行</el-dropdown-item>
+            <el-dropdown-item command="deleteColumn">删除当前列</el-dropdown-item>
+            <el-dropdown-item command="deleteTable">删除表格</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
     <quill-editor
       ref="quillEditorRef"
       v-model:content="content"
@@ -29,6 +50,7 @@
 <script setup>
 import axios from 'axios'
 import { QuillEditor } from "@vueup/vue-quill"
+import { ArrowDown } from '@element-plus/icons-vue'
 import "@vueup/vue-quill/dist/vue-quill.snow.css"
 import {
   handleSessionExpired,
@@ -40,7 +62,14 @@ import {
 const { proxy } = getCurrentInstance()
 
 const quillEditorRef = ref()
-const uploadUrl = ref(import.meta.env.VITE_APP_BASE_API + "/common/upload") // 上传的图片服务器地址
+const quillInstance = shallowRef(null)
+const pendingImageUploads = ref(0)
+const uploadUrl = computed(() => {
+  if (/^https?:\/\//i.test(props.uploadAction)) {
+    return props.uploadAction
+  }
+  return import.meta.env.VITE_APP_BASE_API + props.uploadAction
+})
 const headers = ref(refreshAuthorizationHeader())
 
 const props = defineProps({
@@ -72,10 +101,30 @@ const props = defineProps({
   type: {
     type: String,
     default: "url",
+  },
+  /* 是否启用 Quill 2 表格模块；默认关闭，避免影响现有编辑页面 */
+  enableTable: {
+    type: Boolean,
+    default: false,
+  },
+  /* 图片上传地址 */
+  uploadAction: {
+    type: String,
+    default: "/common/upload",
+  },
+  /* 允许的图片 MIME；默认值保持历史行为 */
+  allowedImageTypes: {
+    type: Array,
+    default: () => ["image/jpeg", "image/jpg", "image/png", "image/svg"],
+  },
+  /* 图片总数上限；空值表示不限制 */
+  maxImageCount: {
+    type: Number,
+    default: null,
   }
 })
 
-const options = ref({
+const options = computed(() => ({
   theme: "snow",
   bounds: document.body,
   debug: "warn",
@@ -93,10 +142,11 @@ const options = ref({
       ["clean"],                                      // 清除文本格式
       ["link", "image", "video"]                      // 链接、图片、视频
     ],
+    ...(props.enableTable ? { table: true } : {}),
   },
   placeholder: "请输入内容",
   readOnly: props.readOnly
-})
+}))
 
 const styles = computed(() => {
   let style = {}
@@ -122,8 +172,9 @@ function refreshHeaders() {
 
 // 如果设置了上传地址则自定义图片上传事件
 onMounted(() => {
+  quillInstance.value = quillEditorRef.value.getQuill()
   if (props.type == 'url') {
-    let quill = quillEditorRef.value.getQuill()
+    let quill = quillInstance.value
     let toolbar = quill.getModule("toolbar")
     toolbar.addHandler("image", (value) => {
       if (value) {
@@ -136,29 +187,66 @@ onMounted(() => {
   }
 })
 
-// 上传前校检格式和大小
-function handleBeforeUpload(file) {
-  refreshHeaders()
-  const type = ["image/jpeg", "image/jpg", "image/png", "image/svg"]
-  const isJPG = type.includes(file.type)
-  //检验文件格式
-  if (!isJPG) {
-    proxy.$modal.msgError(`图片格式错误!`)
+onBeforeUnmount(() => {
+  if (quillInstance.value) {
+    quillInstance.value.root.removeEventListener('paste', handlePasteCapture, true)
+  }
+})
+
+function getQuill() {
+  return quillInstance.value || quillEditorRef.value?.getQuill()
+}
+
+function handleTableCommand(command) {
+  const quill = getQuill()
+  const table = quill?.getModule('table')
+  if (!table || typeof table[command] !== 'function') {
+    proxy.$modal.msgError('当前编辑器无法执行表格操作')
+    return
+  }
+  quill.focus()
+  if (!quill.getSelection()) {
+    quill.setSelection(Math.max(0, quill.getLength() - 1), 0)
+  }
+  if (command === 'insertTable') {
+    table.insertTable(3, 3)
+  } else {
+    table[command]()
+  }
+}
+
+function currentImageCount() {
+  return getQuill()?.root?.querySelectorAll('img').length || 0
+}
+
+function validateImage(file) {
+  if (!props.allowedImageTypes.includes(file.type)) {
+    proxy.$modal.msgError('图片格式错误!')
     return false
   }
-  // 校检文件大小
-  if (props.fileSize) {
-    const isLt = file.size / 1024 / 1024 < props.fileSize
-    if (!isLt) {
-      proxy.$modal.msgError(`上传文件大小不能超过 ${props.fileSize} MB!`)
-      return false
-    }
+  if (props.fileSize && file.size / 1024 / 1024 > props.fileSize) {
+    proxy.$modal.msgError(`上传文件大小不能超过 ${props.fileSize} MB!`)
+    return false
+  }
+  if (props.maxImageCount != null
+      && currentImageCount() + pendingImageUploads.value >= props.maxImageCount) {
+    proxy.$modal.msgError(`每条内容最多上传 ${props.maxImageCount} 张图片`)
+    return false
   }
   return true
 }
 
+// 上传前校检格式和大小
+function handleBeforeUpload(file) {
+  refreshHeaders()
+  const valid = validateImage(file)
+  if (valid) pendingImageUploads.value += 1
+  return valid
+}
+
 // 上传成功处理
 function handleUploadSuccess(res, file) {
+  pendingImageUploads.value = Math.max(0, pendingImageUploads.value - 1)
   // 如果上传成功
   if (res.code == 200) {
     // 获取富文本实例
@@ -166,7 +254,11 @@ function handleUploadSuccess(res, file) {
     // 获取光标位置
     let length = quill.selection.savedRange.index
     // 插入图片，res.url为服务器返回的图片链接地址
-    quill.insertEmbed(length, "image", import.meta.env.VITE_APP_BASE_API + "/common/resource/view?resource=" + encodeURIComponent(res.fileName))
+    // 专用业务接口返回已受控的公开相对路径；公共上传仍沿用历史资源查看地址。
+    const imageUrl = props.uploadAction === '/common/upload'
+      ? import.meta.env.VITE_APP_BASE_API + "/common/resource/view?resource=" + encodeURIComponent(res.fileName)
+      : import.meta.env.VITE_APP_BASE_API + res.url
+    quill.insertEmbed(length, "image", imageUrl)
     // 调整光标到最后
     quill.setSelection(length + 1)
   } else if (isSessionExpiredCode(res.code)) {
@@ -178,6 +270,7 @@ function handleUploadSuccess(res, file) {
 
 // 上传失败处理
 function handleUploadError(err) {
+  pendingImageUploads.value = Math.max(0, pendingImageUploads.value - 1)
   if (isSessionExpiredError(err)) {
     handleSessionExpired()
   } else {
@@ -202,6 +295,8 @@ function handlePasteCapture(e) {
 
 function insertImage(file) {
   refreshHeaders()
+  if (!validateImage(file)) return
+  pendingImageUploads.value += 1
   const formData = new FormData()
   formData.append("file", file)
   axios.post(uploadUrl.value, formData, {
@@ -215,11 +310,42 @@ function insertImage(file) {
     handleUploadError(err)
   })
 }
+
+defineExpose({
+  getQuill,
+  handleTableCommand,
+})
 </script>
 
 <style>
 .editor-img-uploader {
   display: none;
+}
+.editor-table-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 0;
+}
+.editor--table-enabled .ql-editor table {
+  width: 100%;
+  margin: 8px 0;
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.editor--table-enabled .ql-editor td,
+.editor--table-enabled .ql-editor th {
+  min-width: 72px;
+  height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  vertical-align: top;
+}
+.editor--table-enabled .ql-editor td:focus,
+.editor--table-enabled .ql-editor th:focus {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: -2px;
 }
 .editor, .ql-toolbar {
   white-space: pre-wrap !important;
