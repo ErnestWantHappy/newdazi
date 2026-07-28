@@ -83,7 +83,7 @@ flowchart LR
 | FE-03 | `TopicComposer.vue` | Vue 组件 | 新建/编辑主题及通知配置 |
 | FE-04 | `PostComposer.vue` | Vue 组件 | 三类留言的一体化发布表单 |
 | FE-05 | `ResourceFields.vue` | Vue 组件 | 课程字段、一个主课件、最多三个云盘链接 |
-| FE-06 | `ResearchRichEditor.vue` | Vue 组件 | 封装现有 Editor 的表格、图片限制和专用上传地址 |
+| FE-06 | `ResearchRichEditor.vue` | Vue 组件 | 封装现有 Editor 的表格、图片限制、批量上传、拖拽缩放和专用上传地址 |
 | FE-07 | `ResearchNotificationBar.vue` | Vue 组件 | 教师首页顶部未读通知和跳转 |
 | FE-08 | `researchActivity.js` | API 模块 | 封装主题、留言、资源、搜索和通知请求 |
 | BE-01 | `ResearchActivityController` | REST Controller | 主题、留言、搜索、通知入口和参数协议 |
@@ -328,9 +328,9 @@ RuoYi-Vue3/src/
 | 方法 | 路径 | 说明 |
 | :--- | :--- | :--- |
 | GET | `/topics/{topicId}/posts` | 按类型、排序分页查询留言；批量查询资源项避免 N+1 |
-| POST | `/topics/{topicId}/posts` | JSON 新增普通留言或活动纪实 |
+| POST | `/topics/{topicId}/posts` | JSON 新增课堂反思（`COMMENT`）或活动纪实 |
 | POST | `/topics/{topicId}/resource-posts` | multipart 新增课程资源，包含 JSON `payload` 和可选 `file` |
-| PUT | `/posts/{postId}` | 编辑普通留言/纪实，或不更换主文件的资源文本/链接 |
+| PUT | `/posts/{postId}` | 编辑课堂反思（`COMMENT`）/纪实，或不更换主文件的资源文本/链接 |
 | PUT | `/resource-posts/{postId}` | multipart 编辑资源并按 `fileAction` 保留、删除或替换主文件 |
 | DELETE | `/posts/{postId}` | 作者软删除或管理性隐藏 |
 | PUT | `/posts/{postId}/restore` | 教研员/管理员恢复 |
@@ -520,7 +520,7 @@ maxImageCount: null
 toolbarPreset: 'default'
 ```
 
-教研活动传入：`enableTable=true`、专用图片上传地址、10 MiB、JPG/PNG/WebP、最多 20 张。表格操作采用编辑器外的 Element Plus 小型下拉菜单，不把复杂 DOM 强塞进 Quill 默认 toolbar 配置。
+教研活动传入：`enableTable=true`、`enableImageBatch=true`、`enableImageResize=true`、专用图片上传地址、10 MiB、JPG/PNG/WebP、最多 20 张。批量图片按文件选择顺序串行上传和插入，单张失败不阻断其余文件；点击图片后通过右下角控制点拖拽缩放，使用数值型 `width` 属性持久化并由后端白名单保留。表格操作采用编辑器外的 Element Plus 小型下拉菜单，不把复杂 DOM 强塞进 Quill 默认 toolbar 配置。
 
 ### 12.3 后端 HTML 白名单
 

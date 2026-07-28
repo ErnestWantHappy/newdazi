@@ -21,7 +21,7 @@
 
     <div class="post-toolbar">
       <el-radio-group v-model="postType" @change="loadPosts">
-        <el-radio-button value="">全部</el-radio-button><el-radio-button value="RESOURCE">课程资源</el-radio-button><el-radio-button value="MOMENT">活动纪实</el-radio-button><el-radio-button value="COMMENT">普通留言</el-radio-button>
+        <el-radio-button value="">全部</el-radio-button><el-radio-button value="RESOURCE">课程资源</el-radio-button><el-radio-button value="MOMENT">活动纪实</el-radio-button><el-radio-button value="COMMENT">课堂反思</el-radio-button>
       </el-radio-group>
       <el-button type="primary" icon="Plus" v-hasPermi="['business:researchActivity:add']" @click="editingPost = null; postDialog = true">发布留言</el-button>
     </div>
@@ -30,14 +30,14 @@
         <ResourceCard v-if="post.postType === 'RESOURCE'" :post="post" :manager="manager" @action="handlePostAction" />
         <el-card v-else class="post-card" shadow="never">
           <div class="post-head">
-            <div><el-tag :type="post.postType === 'MOMENT' ? 'success' : 'info'">{{ post.postType === 'MOMENT' ? '活动纪实' : '普通留言' }}</el-tag><span>{{ post.authorName }} · {{ post.deptName || '未标注学校' }}</span></div>
+            <div><el-tag :type="post.postType === 'MOMENT' ? 'success' : 'info'">{{ post.postType === 'MOMENT' ? '活动纪实' : '课堂反思' }}</el-tag><span>{{ post.authorName }} · {{ post.deptName || '未标注学校' }}</span></div>
             <el-dropdown v-if="post.owner || manager" @command="handlePostAction($event, post)"><el-button link icon="MoreFilled" /><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="post.owner" command="edit">编辑</el-dropdown-item><el-dropdown-item command="delete">隐藏</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </div>
           <div class="rich-content" v-html="post.contentHtml" />
           <div class="meta">{{ post.createTime }}<template v-if="post.edited"> · 已编辑</template></div>
         </el-card>
       </template>
-      <el-empty v-if="!postsLoading && !posts.length" description="暂无留言" />
+      <el-empty v-if="!postsLoading && !posts.length" description="暂无教研内容" />
     </div>
     <pagination v-show="total > 0" :total="total" v-model:page="pageNum" v-model:limit="pageSize" @pagination="loadPosts" />
 

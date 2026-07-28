@@ -49,7 +49,13 @@ const teacherLoading = ref(false)
 const teachers = ref([])
 const emptyForm = () => ({ topicType: 'SHARE', title: '', contentHtml: '', noticeLevel: '1', noticeScope: '1', activityTime: null, stageCodes: [], teacherUserIds: [] })
 const form = reactive(emptyForm())
-const nonemptyHtml = (_rule, value, callback) => /<img\b|<table\b|\S/.test(String(value || '').replace(/<[^>]*>/g, ' ')) ? callback() : callback(new Error('请输入主题正文'))
+// 先判断原 HTML 是否含图片/表格，再剥标签查文字；否则纯图正文会被误判为空
+const nonemptyHtml = (_rule, value, callback) => {
+  const html = String(value || '')
+  if (/<img\b|<table\b/i.test(html)) return callback()
+  if (/\S/.test(html.replace(/<[^>]*>/g, ' '))) return callback()
+  callback(new Error('请输入主题正文'))
+}
 const rules = {
   topicType: [{ required: true, message: '请选择主题类型', trigger: 'change' }],
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],

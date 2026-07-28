@@ -95,7 +95,8 @@ class ResearchActivityServiceTest
 
         service.createTopic(request);
 
-        verify(mapper).insertTopic(argThat(topic -> "1".equals(topic.getNoticeLevel())));
+        verify(mapper).insertTopic(argThat(topic -> "1".equals(topic.getNoticeLevel())
+                && "".equals(topic.getUpdateBy()) && topic.getUpdateTime() == null));
         verify(mapper).upsertNoticeRecipients(argThat(items -> items.size() == 1
                 && "1".equals(items.get(0).getNoticeLevel())));
     }
@@ -158,6 +159,7 @@ class ResearchActivityServiceTest
         when(mapper.selectResourcesByPostId(30L)).thenReturn(Collections.emptyList());
 
         assertDoesNotThrow(() -> service.createResourcePost(9L, request, file));
+        verify(mapper).insertPost(argThat(post -> "".equals(post.getUpdateBy()) && post.getUpdateTime() == null));
         verify(mapper, times(4)).insertResource(any());
     }
 

@@ -2,7 +2,7 @@ package com.ruoyi.business.domain.dto;
 
 import javax.validation.constraints.NotBlank;
 
-/** 普通留言或活动纪实请求。 */
+/** 课堂反思或活动纪实请求。 */
 public class ResearchPostSaveRequest
 {
     @NotBlank(message = "请选择留言类型")

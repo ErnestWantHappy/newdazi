@@ -36,7 +36,9 @@ public class ResearchActivityResourceController extends BaseController
     public AjaxResult uploadImage(@RequestParam("file") MultipartFile file)
     {
         String fileName = service.uploadImage(file);
-        return AjaxResult.success().put("fileName", fileName).put("url", fileName);
+        // /profile/** 被安全配置禁止直接读取；富文本图片必须经过支持同源 Cookie 鉴权的预览接口。
+        String previewUrl = "/common/resource/view?resource=" + fileName;
+        return AjaxResult.success().put("fileName", fileName).put("url", previewUrl);
     }
 
     @GetMapping("/resources/{resourceId}/download")

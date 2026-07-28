@@ -1,9 +1,9 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="post?.postId ? '编辑留言' : '发布留言'" width="900px" destroy-on-close @close="close">
+  <el-dialog :model-value="modelValue" :title="dialogTitle" width="900px" destroy-on-close @close="close">
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-      <el-form-item v-if="!post?.postId" label="留言类型" prop="postType">
+      <el-form-item v-if="!post?.postId" label="内容类型" prop="postType">
         <el-radio-group v-model="form.postType">
-          <el-radio-button value="COMMENT">普通留言</el-radio-button>
+          <el-radio-button value="COMMENT">课堂反思</el-radio-button>
           <el-radio-button value="MOMENT">活动纪实</el-radio-button>
           <el-radio-button value="RESOURCE">课程资源</el-radio-button>
         </el-radio-group>
@@ -29,7 +29,15 @@ const submitting = ref(false)
 const selectedFile = ref(null)
 const form = reactive({ postType: 'COMMENT', contentHtml: '' })
 const resourceForm = ref(createResourceForm())
-const nonemptyHtml = (_rule, value, callback) => /<img\b|<table\b|\S/.test(String(value || '').replace(/<[^>]*>/g, ' ')) ? callback() : callback(new Error('请输入正文'))
+const postTypeName = computed(() => ({ COMMENT: '课堂反思', MOMENT: '活动纪实', RESOURCE: '课程资源' })[form.postType] || '内容')
+const dialogTitle = computed(() => `${props.post?.postId ? '编辑' : '发布'}${postTypeName.value}`)
+// 先判断原 HTML 是否含图片/表格，再剥标签查文字；否则纯图正文会被误判为空
+const nonemptyHtml = (_rule, value, callback) => {
+  const html = String(value || '')
+  if (/<img\b|<table\b/i.test(html)) return callback()
+  if (/\S/.test(html.replace(/<[^>]*>/g, ' '))) return callback()
+  callback(new Error('请输入正文'))
+}
 const rules = { contentHtml: [{ validator: nonemptyHtml, trigger: 'change' }] }
 
 watch(() => props.modelValue, open => {
@@ -58,7 +66,7 @@ async function submit() {
       if (props.post?.postId) await updateResearchPost(props.post.postId, payload)
       else await createResearchPost(props.topicId, payload)
     }
-    ElMessage.success(props.post?.postId ? '留言已更新' : '留言已发布')
+    ElMessage.success(`${postTypeName.value}${props.post?.postId ? '已更新' : '已发布'}`)
     emit('saved'); close()
   } catch (error) {
     if (!error?.response) ElMessage.error(error?.message || '请检查表单')

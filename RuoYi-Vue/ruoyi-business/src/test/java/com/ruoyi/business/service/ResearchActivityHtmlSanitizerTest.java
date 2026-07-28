@@ -75,4 +75,23 @@ class ResearchActivityHtmlSanitizerTest
         assertThrows(ServiceException.class,
                 () -> sanitizer.sanitize("<script>alert(1)</script><img src='data:image/png;base64,AAAA'>"));
     }
+
+    @Test
+    void allowsImageOnlyContent()
+    {
+        ResearchActivityHtmlSanitizer.SanitizedHtml result = sanitizer.sanitize(
+                "<p><img src='/common/resource/view?resource=a.png' alt='活动现场'></p>");
+        assertEquals(1, result.getImageCount());
+        assertTrue(result.getHtml().contains("resource=a.png"));
+        assertEquals("", result.getText());
+    }
+
+    @Test
+    void allowsTableOnlyContent()
+    {
+        ResearchActivityHtmlSanitizer.SanitizedHtml result = sanitizer.sanitize(
+                "<table><tbody><tr><td><br></td></tr></tbody></table>");
+        assertTrue(result.getHtml().contains("<table>"));
+        assertEquals(0, result.getImageCount());
+    }
 }

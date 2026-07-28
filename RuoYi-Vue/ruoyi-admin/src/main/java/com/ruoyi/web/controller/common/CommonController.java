@@ -193,7 +193,7 @@ public class CommonController
         try
         {
             String authorizedResource = resourceAccessService.assertCanRead(resource);
-            if (!FileUtils.checkAllowDownload(resource))
+            if (!isAllowedPreviewResource(resource))
             {
                 throw new Exception(StringUtils.format("资源文件({})非法，不允许预览。 ", resource));
             }
@@ -244,6 +244,21 @@ public class CommonController
                 response.sendError(HttpServletResponse.SC_NOT_FOUND, "文件不存在或不可读取");
             }
         }
+    }
+
+    boolean isAllowedPreviewResource(String resource)
+    {
+        if (FileUtils.checkAllowDownload(resource))
+        {
+            return true;
+        }
+        if (StringUtils.isEmpty(resource) || StringUtils.contains(resource, ".."))
+        {
+            return false;
+        }
+        String normalized = resource.replace('\\', '/').toLowerCase(Locale.ROOT);
+        return normalized.startsWith("/profile/upload/research-activity/images/")
+                && normalized.endsWith(".webp");
     }
 
     boolean isPrivateGuideSheetResource(String resource)

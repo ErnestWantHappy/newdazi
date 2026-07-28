@@ -61,7 +61,10 @@ public class ResearchActivityHtmlSanitizer
         filterTableAttributes(body);
 
         String text = body.text().trim();
-        if (StringUtils.isBlank(text))
+        int imageCount = body.select("img").size();
+        boolean hasTable = !body.select("table").isEmpty();
+        // 活动纪实等场景允许「仅图片/仅表格」：无可见文字时，只要还有有效媒体或表格即可
+        if (StringUtils.isBlank(text) && imageCount == 0 && !hasTable)
         {
             throw new ServiceException("正文去除格式后不能为空");
         }
@@ -69,7 +72,6 @@ public class ResearchActivityHtmlSanitizer
         {
             throw new ServiceException("正文文字内容过长，请精简后重试");
         }
-        int imageCount = body.select("img").size();
         if (imageCount > ResearchActivityConstants.MAX_IMAGES)
         {
             throw new ServiceException("每条内容最多包含20张图片");

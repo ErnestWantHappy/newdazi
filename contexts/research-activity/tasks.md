@@ -161,7 +161,7 @@
     - _Requirements: REQ-01, REQ-11, REQ-12_
     - _Dependencies: 3.3_
 
-- [x] 4. 主题与普通留言后端
+- [x] 4. 主题与课堂反思后端
 
   - [x] 4.1 实现主题服务
     - 新增信息流、详情、立即创建、本人编辑、软删除、恢复和置顶。
@@ -171,7 +171,7 @@
     - _Requirements: REQ-02, REQ-03, REQ-11_
     - _Dependencies: 3.1, 3.3_
 
-  - [x] 4.2 实现普通留言和活动纪实服务
+  - [x] 4.2 实现课堂反思和活动纪实服务
     - 新增、编辑、软删除、恢复、类型筛选和最新排序。
     - 留言成功/删除时正确维护回复数和最后互动时间。
     - 管理角色可以隐藏，不可编辑正文。
@@ -311,16 +311,18 @@
 - [x] 8. Vue3 富文本和基础组件
 
   - [x] 8.1 以可选配置增强公共 Editor
-    - 增加 `enableTable/uploadAction/allowedImageTypes/maxImageCount` 等 props。
+    - 增加 `enableTable/uploadAction/allowedImageTypes/maxImageCount/enableImageBatch/enableImageResize` 等 props。
     - 默认值必须与现状一致，避免影响现有使用者。
     - 增加中文表格菜单和 Quill 2 table 操作。
+    - 批量图片按选择顺序上传，单张失败不阻断；图片拖拽宽度保存后可回显和再次编辑。
     - 组件卸载时移除 paste listener，避免重复绑定。
     - _Requirements: REQ-03_
     - _Dependencies: 1.3, 5.6_
 
   - [x] 8.2 新建 `ResearchRichEditor`
-    - 传入专用图片上传、10 MiB、JPG/PNG/WebP、最多 20 张和表格开关。
+    - 传入专用图片上传、10 MiB、JPG/PNG/WebP、最多 20 张、批量上传、拖拽缩放和表格开关。
     - 显示清晰上传/表格错误，不支持视频和 base64 图片。
+    - _Evidence: 2026-07-23 浏览器专项 8/8，通过多选顺序、部分失败、缩放保存、刷新和再编辑闭环；报告见 `output/playwright/research-activity-batch-resize-e2e.json`。_
     - _Requirements: REQ-03_
     - _Dependencies: 8.1_
 
@@ -353,7 +355,7 @@
 
   - [x] 9.3 实现主题详情和三类留言
     - 主题正文、统计、筛选、最新排序和置顶资源。
-    - 普通留言、活动纪实、课程资源切换。
+    - 课堂反思、活动纪实、课程资源切换。
     - 作者编辑/软删除；管理角色隐藏/恢复/置顶，不提供编辑他人正文按钮。
     - _Requirements: REQ-04, REQ-11_
     - _Dependencies: 4.2, 8.2_
@@ -482,7 +484,7 @@
 | UAT-03 | 教研员按小学+初中发布活动通知 | 两学段启用教师账号各一条未读 |
 | UAT-04 | 教师首页打开 | 通知栏为第一内容块，最近通知优先 |
 | UAT-05 | 点击通知 | 标记已读并直达主题 |
-| UAT-06 | 教师发布普通留言和活动纪实 | 成功，类型/图片/时间正确 |
+| UAT-06 | 教师发布课堂反思和活动纪实 | 成功，类型/图片/时间正确 |
 | UAT-07 | 发布数字课课程资源 | 必填字段、反思、文件/链接同卡显示 |
 | UAT-08 | 发布专题课和复习课 | 不要求数字课次，搜索筛选正确 |
 | UAT-09 | 上传恰好 50 MiB ZIP | 成功 |

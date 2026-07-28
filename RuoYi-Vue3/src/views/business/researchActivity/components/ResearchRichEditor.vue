@@ -5,6 +5,8 @@
     :min-height="minHeight"
     :read-only="readOnly"
     :enable-table="true"
+    :enable-image-batch="true"
+    :enable-image-resize="true"
     upload-action="/business/research-activity/images"
     :allowed-image-types="['image/jpeg', 'image/jpg', 'image/png', 'image/webp']"
     :file-size="10"

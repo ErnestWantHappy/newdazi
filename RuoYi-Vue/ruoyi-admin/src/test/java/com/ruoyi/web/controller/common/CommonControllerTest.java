@@ -45,4 +45,14 @@ class CommonControllerTest
         assertFalse(controller.isPrivateGuideSheetResource("/profile/avatar/teacher.png"));
         assertFalse(controller.isPrivateGuideSheetResource("/download/report.xlsx"));
     }
+
+    @Test
+    void researchActivityWebpUsesScopedPreviewAllowance()
+    {
+        assertTrue(controller.isAllowedPreviewResource(
+                "/profile/upload/research-activity/images/2026/07/23/example.webp"));
+        assertFalse(controller.isAllowedPreviewResource(
+                "/profile/upload/research-activity/images/../../secret.webp"));
+        assertFalse(controller.isAllowedPreviewResource("/profile/upload/other/example.webp"));
+    }
 }

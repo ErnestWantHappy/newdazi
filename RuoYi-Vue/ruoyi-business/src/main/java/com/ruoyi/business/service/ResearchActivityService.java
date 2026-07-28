@@ -108,8 +108,9 @@ public class ResearchActivityService
         topic.setDelFlag(ResearchActivityConstants.DEL_NORMAL);
         topic.setCreateBy(SecurityUtils.getUsername());
         topic.setCreateTime(now);
-        topic.setUpdateBy(SecurityUtils.getUsername());
-        topic.setUpdateTime(now);
+        // 新建内容尚未被编辑，更新时间留空才能可靠地区分“刚创建”和“已编辑”。
+        topic.setUpdateBy("");
+        topic.setUpdateTime(null);
         mapper.insertTopic(topic);
 
         if (!ResearchActivityConstants.NOTICE_NONE.equals(request.getNoticeLevel()))
@@ -204,7 +205,7 @@ public class ResearchActivityService
         if (!ResearchActivityConstants.POST_COMMENT.equals(request.getPostType())
                 && !ResearchActivityConstants.POST_MOMENT.equals(request.getPostType()))
         {
-            throw new ServiceException("普通留言接口只支持普通留言或活动纪实");
+            throw new ServiceException("课堂反思接口只支持课堂反思或活动纪实");
         }
         SanitizedHtml clean = sanitizer.sanitize(request.getContentHtml());
         BizResearchPost post = basePost(topicId, request.getPostType(), clean);
@@ -649,8 +650,9 @@ public class ResearchActivityService
         post.setDelFlag(ResearchActivityConstants.DEL_NORMAL);
         post.setCreateBy(SecurityUtils.getUsername());
         post.setCreateTime(now);
-        post.setUpdateBy(SecurityUtils.getUsername());
-        post.setUpdateTime(now);
+        // MySQL 时间精度不足以用大小关系判断同一秒内的编辑，因此新建时不写更新时间。
+        post.setUpdateBy("");
+        post.setUpdateTime(null);
         return post;
     }
 

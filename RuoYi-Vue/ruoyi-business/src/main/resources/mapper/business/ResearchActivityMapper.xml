@@ -177,7 +177,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectTopicById" resultMap="TopicResult">
         SELECT t.*, u.nick_name AS creator_name, u.user_name AS creator_user_name,
-               d.dept_name, IF(t.update_time IS NOT NULL AND t.update_time &gt; t.create_time,1,0) AS edited
+               d.dept_name, IF(t.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_topic t
         LEFT JOIN sys_user u ON u.user_id=t.creator_id
         LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
@@ -195,7 +195,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectTopicList" resultMap="TopicResult">
         SELECT t.*, u.nick_name AS creator_name, u.user_name AS creator_user_name,
-               d.dept_name, IF(t.update_time IS NOT NULL AND t.update_time &gt; t.create_time,1,0) AS edited
+               d.dept_name, IF(t.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_topic t
         LEFT JOIN sys_user u ON u.user_id=t.creator_id
         LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
@@ -216,7 +216,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectHiddenTopicList" resultMap="TopicResult">
         SELECT t.*, u.nick_name AS creator_name, u.user_name AS creator_user_name,
-               d.dept_name, IF(t.update_time IS NOT NULL AND t.update_time &gt; t.create_time,1,0) AS edited
+               d.dept_name, IF(t.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_topic t
         LEFT JOIN sys_user u ON u.user_id=t.creator_id
         LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
@@ -274,7 +274,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectPostById" resultMap="PostResult">
         SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
                d.dept_name, t.title AS topic_title,
-               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+               IF(p.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_post p
         JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
         LEFT JOIN sys_user u ON u.user_id=p.author_id
@@ -293,7 +293,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectPostList" resultMap="PostResult">
         SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
                d.dept_name, t.title AS topic_title,
-               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+               IF(p.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_post p
         JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
         LEFT JOIN sys_user u ON u.user_id=p.author_id
@@ -306,7 +306,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectHiddenPostList" resultMap="PostResult">
         SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
                d.dept_name, t.title AS topic_title,
-               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+               IF(p.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_post p
         JOIN biz_research_topic t ON t.topic_id=p.topic_id
         LEFT JOIN sys_user u ON u.user_id=p.author_id
@@ -318,7 +318,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectResourcePostList" resultMap="PostResult">
         SELECT p.*, u.nick_name AS author_name, u.user_name AS author_user_name,
                d.dept_name, t.title AS topic_title,
-               IF(p.update_time IS NOT NULL AND p.update_time &gt; p.create_time,1,0) AS edited
+               IF(p.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_post p
         JOIN biz_research_topic t ON t.topic_id=p.topic_id AND t.del_flag='0'
         LEFT JOIN sys_user u ON u.user_id=p.author_id
