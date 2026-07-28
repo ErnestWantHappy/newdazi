@@ -443,35 +443,39 @@
 - 前端：纯函数测试 7/7，`npm run build:prod` 通过；多校通知、双时间筛选和卡片时间专项浏览器/API 冒烟 12/12，报告 `output/playwright/research-activity-multischool-filter-smoke.json`。
 - 性能：20,000 条代表资源结构化筛选 P95 34.801 ms、关键词 P95 41.864 ms；精确标题优先，测试数据清理余量 0。
 - 文档：`contexts/context.md` 已升级 v2.43，并同步 requirements/design/tasks 的多校投递与双时间筛选口径。
-- 第 11 阶段仍未勾选：本轮提示词明确只授权本机开发，内网 3009/3010 发布须由后续新任务明确授权。
+- 第 11 阶段已于 2026-07-28 获用户明确授权并完成，正式备份、SQL、release、探活、服务器验收和回滚证据见下方及 `contexts/context.md` §11.6。
 
-- [ ] 11. 内网发布（仅在开发完成并进入发布任务时）
+- [x] 11. 内网发布（仅在开发完成并进入发布任务时）
 
-  - [ ] 11.1 发布前只读检查和备份
+  - [x] 11.1 发布前只读检查和备份
     - 按 `AGENTS.md` 读取 10.52.1.123 当前数据库、Nginx、NSSM 和 release。
     - 备份目标库和相关配置到新备份目录，计算 SHA-256。
     - 核对磁盘空间足以存储课件和新 release。
+    - _Evidence: 正式库与 NSSM/Nginx/release/磁盘完成只读核对；备份目录 `20260728_151230_1488206_research_activity`，整库 SHA-256 `F47C9C…A3`。_
     - _Requirements: REQ-12_
     - _Dependencies: 10.6_
 
-  - [ ] 11.2 执行 SQL 和配置变更
+  - [x] 11.2 执行 SQL 和配置变更
     - 在正式库执行 `research_activity_v1.sql`，复核四表、索引、菜单和权限。
     - 修改 3010 对应 Nginx 配置前保存副本，设置 60m 并执行 `nginx -t`。
     - 不修改 80 端口主站和无关服务。
+    - _Evidence: 四个教研活动 SQL 已执行并复核，四表、15 索引、8 权限点正确；3010 为 60m 且 `nginx -t` 成功，80 站点仍为 50m。_
     - _Requirements: REQ-01, REQ-06, REQ-12_
     - _Dependencies: 11.1_
 
-  - [ ] 11.3 发布新 release 并探活
+  - [x] 11.3 发布新 release 并探活
     - 上传 jar/dist 到新 `releases/<时间戳>_<hash>/`。
     - 切换 NSSM 3009 和 Nginx 3010，保留上一 release。
     - 探活 API、菜单和静态资源。
+    - _Evidence: 以提交 `1488206` 发布 `20260728_151733_1488206`；NSSM Running、Nginx 指向新前端，3009/3010 连续探活均为 200。_
     - _Requirements: REQ-12_
     - _Dependencies: 11.2_
 
-  - [ ] 11.4 正式环境验收和回滚说明
+  - [x] 11.4 正式环境验收和回滚说明
     - 教师/教研员线上冒烟，重点复核通知顶部、50 MiB、下载、搜索和权限。
     - 汇报 HTTP 状态、表/菜单数量、构建哈希和截图，不泄露凭据。
     - 写明切回旧 release 的命令/路径；应用回滚保留新业务表，不执行 DROP。
+    - _Evidence: 服务器主流程 15/15、图片闭环 15/15、批量上传/缩放 8/8；教研员/教师/学生真实验收通过。管理员菜单与权限已查库，因无 Web 密码/登录态未做交互登录，此缺口已在 context 明示。回滚点为 `20260723_graduated_grading_r2`。_
     - _Requirements: REQ-01—REQ-12_
     - _Dependencies: 11.3_
 
