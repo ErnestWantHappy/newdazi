@@ -1,6 +1,7 @@
 /.playwright-cli/
 /output/
 /uploadPath/
+/uploadPath-private/
 /RuoYi-Vue/uploadPath/upload/
 /RuoYi-Vue/uploadPath-private/
 /backend-dual-feature*.log
