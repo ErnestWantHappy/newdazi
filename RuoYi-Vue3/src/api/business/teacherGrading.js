@@ -34,6 +34,15 @@ export function retryFailedPreviews(data) {
   })
 }
 
+// 获取当前课程班级的操作题批改期限状态
+export function getPracticalDeadlineStatus(lessonId, entryYear, classCode) {
+  return request({
+    url: '/business/teacher/grading/deadline-status',
+    method: 'get',
+    params: { lessonId, entryYear, classCode }
+  })
+}
+
 // 批改打分
 export function gradeSubmission(data) {
   return request({

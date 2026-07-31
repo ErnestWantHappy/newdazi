@@ -1,16 +1,19 @@
 # 信息科技学业测评平台 (Context)
 
-> **版本**：v2.48
-> **更新时间**：2026-07-28
+> **版本**：v2.54
+> **更新时间**：2026-07-31
 > **核心定位**：中小学信息科技 **教学 + 多维度测评**（选择/判断/操作/打字、批改、学情、导学单、区域抽测）。  
 > **文档用途**：多 AI / 人工接力的 **业务真相**；操作纪律见 `AGENTS.md`。  
 > **文档恢复**：2026-07-22 按方案 A，以热修/发布壳为底座，从 Git `main`（`a88cdcd` 重写前完整版，约 1113 行）回填业务语言、角色、流程、库表、规则与技术细节；机位锁等否决项仅作摘要，不恢复为待实现。
 
-> **当前焦点（2026-07-28：教研活动已部署，等待确认下一个开发功能）**
-> 1. **Git 与发布基线**：现有分支 `codex/research-activity-v1` 已提交并 push；教研活动功能提交 `9019cce`、交接规范提交 `1488206`，服务器以完整提交 `14882068287f349378b9ee52476bbe21c6c7e994` 为唯一应用发布基线；未新建分支、未创建 PR。
-> 2. **线上状态**：新 release `D:\program\3009dazipingtai\releases\20260728_151733_1488206` 已切换，NSSM `NewDaziBackend3009` 为 Running，Nginx 3010 指向新前端且 `client_max_body_size 60m`、`nginx -t` 成功；3009/3010 连续探活均为 200。
-> 3. **迁移与验收**：正式库 `ry-vue` 已执行四个教研活动 SQL；四表、15 个索引、8 个唯一权限点及角色授权正确，重复接收人/菜单、旧图片 URL 和测试数据余量均为 0。服务器教研员/教师/学生主流程 15/15、图片闭环 15/15、批量上传/缩放 8/8 通过。
-> 4. **唯一未闭环项**：管理员菜单与 8 个权限点已从正式库核验，但项目未提供管理员 Web 密码，且无可复用浏览器登录态，因此未做管理员交互登录；不得猜密码或重置账号。其余部署已完成，当前停止开发，等待用户指定下一个功能。
+> **当前焦点（2026-07-31：本机交卷死锁与历史孤儿答案已修复，待正式服务器迁移/发布）**
+> 0. **修复结论**：`AI_FIX_20260731_001` 已完成交卷死锁修复。交卷写入从控制器长事务拆为 `StudentAnswerSubmissionService` 短事务，使用 `READ_COMMITTED`、固定题目顺序逐条原子 upsert，并在事务代理外对死锁最多退避重试 3 次。50 VU 同参数复测 2,766 请求全部成功，612 次交卷 0 失败，业务码 500/超时/网络错误均为 0，P95 549.06 ms；最终日志死锁及重试次数均为 0，答案唯一键重复组为 0。失败的批量 upsert 试验已否决且未保留。新增 `AnswerDeletionGuardService`：课程、学生、整班存在答题记录时禁止硬删除，避免继续制造孤儿答案。
+> 1. **免抽测闭环**：教师在一个 Vue3 页面选择学年、学期和年级，系统自动纳入真实任教班级，不允许人工排除；按“使用到 50% 以上学生才计有效课、每班达到应使用课数 80%、操作题非空提交达到 80%”生成预览并一次提交。申请、班级、课程和附件保存不可变快照；同一教师/学年/学期/年级只允许一份申请。教研员/管理员可设置各年级应使用课数、查看详情并 PASS/FAIL 审核。
+> 2. **监管与显示修复**：学校→教师→课程监管支持真实使用日期范围、倒序/正序，并在课程层展示使用日期和创建/修改时间；历史课程空时间明确显示“历史数据未记录/暂无记录”，没有伪造回填。新增课程由数据库默认值和服务层双保险写入创建时间，编辑才更新修改时间，批量自动推进不再污染修改时间。选择/判断/打字/操作题统一走中文映射，未知编码安全显示“其他题型”。
+> 3. **本机数据库**：历史 471 条缺学生、1,960 条缺课程答案合并后为 2,388 条（43 条同时缺两者）；7 月 28 日本地旧库和 7 月 29 日服务器完整备份对缺失的 88 个学生 ID、19 个课程 ID 可恢复数均为 0。已执行幂等 `sql/archive_orphan_student_answers_v1.sql`：目标/归档/移出在线表均为 2,388，归档表 `biz_student_answer_orphan_archive`、元数据表 `biz_student_answer_orphan_archive_meta`；在线缺学生、缺课程和答案唯一键重复组均为 0，在线答案 173,678 行。执行前完整备份为 `D:\dmwprogram\newdazipingtai\backups\20260731_190135_before_AI_FIX_20260731_001_d827415\xueyeceping_server_20260729_before_AI_FIX_20260731_001.sql`，63,025,548 bytes，SHA-256 `94A7C92A194BD5CD4E023FB3A277F8F737000BF4DF7B61B6509953967A41B29C`。旧库 `xueyeceping1` 未改动。
+> 4. **验收证据**：后端业务测试 230/230（Windows 使用 `-DforkCount=0`）和 admin clean package 均成功；50 VU 修复回归 2,766/2,766 请求成功。隔离测试数据 dry-run/execute 清理通过，清理后核心表逐项恢复测试前计数，运行标记、附件和 Redis 测试登录态均为 0；孤儿归档脚本二次执行目标/归档/删除均为 0，证明幂等。完整报告：`output/stress/multi-role-concurrency/AI_FIX_20260731_001/fix-report.md`。
+> 5. **浏览器与运行状态**：最终 fat jar 已在本机 8080 运行，Vue3 dev 在 80 运行，前后端均 HTTP 200。原独立测试的三角色浏览器证据继续有效；本轮修改仅涉及后端事务、删除防护和本机数据治理，无前端改动。
+> 6. **历史与发布边界**：206 门课程缺 `create_time`、225 门缺 `update_time`，课程 139、158、246 时间证据、课程 1 归属、课程 34 跨校指派冲突继续待治理。本轮未 commit、未 push、未发布 `10.52.1.123`；正式服务器仍是 `1488206`，且尚未获得本轮代码和 `archive_orphan_student_answers_v1.sql`。正式发布须重新只读核对服务器孤儿数量、完整备份并计算 SHA-256，再执行 SQL/后检、发布新 release，从 50 VU 或等价课堂并发回归；不得直接照搬本机行数。
 
 ---
 
@@ -24,7 +27,7 @@
 | 发布根目录 | `D:\program\3009dazipingtai\`（`releases\`、`backups\`） |
 | Windows 用户名 | `Administrator`（密码见 secrets.local） |
 | MySQL | 用户 `root`；业务库 **`ry-vue`**（2026-07-22 只读核实）；密码见 secrets.local |
-| 本机开发库 | `xueyeceping1` @ localhost |
+| 本机开发库 | `xueyeceping_server_20260729` @ localhost（服务器克隆 + 监管增量；旧 `xueyeceping1` 保留） |
 | 私密凭据 | `contexts/secrets.local.md`（**禁止 git add / 禁止写入本文件密码**） |
 | 当前开发分支 | `codex/research-activity-v1`（功能 `9019cce`、规范/发布基线 `1488206` 已 push；用户要求不再新建分支） |
 
@@ -163,6 +166,32 @@
 - **数据清理**：本轮 `[AI测试]` 主题/留言、通知、资源记录余量为 0；删除 23 个测试图片和 7 个测试 ZIP。保留主题 15 正文正在引用的用户图片/附件，未误删业务数据。
 - 性能：本机生成并清理 20,000 条代表资源；结构化筛选 P95 34.801 ms、关键词 P95 41.864 ms，精确课程标题排首位，清理余量 0；报告 `output/stress/research-activity-performance.json`。
 - **正式发布**：以已 push 的完整提交 `14882068287f349378b9ee52476bbe21c6c7e994` 构建并发布到 `20260728_151733_1488206`；数据库/配置备份、四个 SQL、Nginx 60m、NSSM/Nginx 切换、探活和服务器专项回归均完成，详见 §11.6。应用回滚切回上一 release，新表保留不 DROP；正文 URL SQL 为向前兼容修复，无需回滚。
+
+### 2.9 课程与成绩监管、操作题限期批改（2026-07-29 二次审查完成）
+
+- **专题文档**：`contexts/teaching-supervision/requirements.md`、`design.md`、`tasks.md`、`adr/adr-001-course-class-fact-and-deadline-model.md`。
+- **数据模型**：`biz_lesson_class_scope` 固化课程班级事实；`biz_practical_grading_deadline` 固化首次触发和当前有效截止；`biz_practical_grading_deadline_audit` 保存延期/重新开放审计。动态参与和批改数量仍从现有学生、答案和表现表计算。
+- **迁移文件**：执行前 `sql/teaching_supervision_v1_preflight.sql`，执行 `sql/teaching_supervision_v1.sql`，执行后 `sql/teaching_supervision_v1_postcheck.sql`。目标环境必须重新备份和复核，不能因本机已执行而跳过。
+- **服务器复制源备份**：`D:\dmwprogram\newdazipingtai\backups\20260729_180020_server_before_local_clone_d827415\ry-vue_server_full.sql`，62,283,806 bytes，SHA-256 `350E73232CB17F0C4D8EC0B973EAE47837976B1752E70ABE8CE686ADA5236BED`。原本机库迁移前备份仍保留在 `20260728_174812` 目录。
+- **期限规则**：含操作题的课程班级在有效学生中已有答题记录人数首次达到 50% 时触发；分母 0 不触发。全局配置 `business.practicalGrading.deadlineDays=21` 只影响以后触发；`business.practicalGrading.goLiveTime` 固定历史初始化时间。实时提交使用事务提交后检查，Quartz `practicalGradingDeadlineTask.reconcileTriggers` 每 10 分钟补偿。
+- **状态与锁定**：状态为 `NO_PRACTICAL / NOT_TRIGGERED / GRADING / DUE_SOON / COMPLETED / OVERDUE / REOPENED`；即将到期为 72 小时。教师评分在原数据权限校验后、任何写入前检查期限；逾期只读。教研员/管理员调整必须填写原因，乐观更新期限并在同一事务写审计。
+- **监管口径**：监管学年与平台统一在 7 月 20 日切换；课程严格按 `biz_lesson.dept_id` 归校；服务端分页到学生层。学校/教师/课程先按课程预聚合；状态筛选先按 `lesson_id + dept_id + entry_year + class_code` 一次计算班级状态，再筛课程和班级，避免多班答案串算及相关子查询性能退化。旧课程无创建/修改时间时，仅用课程班级事实证据时间做监管学年归档，不回填课程字段。成绩沿用现有作业分（含最新人工改分）+课堂表现、请假排除、考勤课不计均分口径。
+- **事实生命周期**：课程改派先将同课程其他当前事实置为非当前，再删除旧指派并写入新事实；删除课程时在同一事务按审计→期限→事实→课程的依赖顺序清理，避免新增事实表产生孤儿记录。
+- **权限**：`business:teachingSupervision:view/export`、`business:practicalDeadline:config/adjust` 独立；控制器同时要求教研员/管理员角色和对应权限，方法级权限不能绕过角色边界。研究员本机已授权 4 项，教师和学生监管/配置 API 均实测 403。研究员读取学生操作题附件仍走资源归属校验。
+- **验收证据**：当前本机库为服务器克隆 `xueyeceping_server_20260729`，迁移后事实 873、当前事实 129、历史期限 473，重复组、零分母、无操作题期限和孤儿事实均为 0；后端 clean package 成功，业务 213/213、admin 3/3；Vue3 学年边界测试 3/3、生产构建成功。2025 学年 7 种状态课程接口均 200，耗时 0.754～2.408 秒；`NO_PRACTICAL=108`、`NOT_TRIGGERED=20`、`GRADING=66`、`COMPLETED=55`，其余当前为 0，四种有数据状态的抽样班级与课程筛选一致。学校汇总分页总数 19，三次耗时 3.991～4.387 秒；教师层 1.539 秒、课程层 0.827 秒。此前 Playwright/API 26/26 报告和截图仍在 `output/playwright/teaching-supervision-*`；本次只读复核未重跑会改期限的完整浏览器链。最终 fat jar 已在本机 8080 重启并探活。
+- **构建/重启要求**：后端改动涉及业务模块、Quartz 和 Mapper，发布必须重新打 fat jar 并重启；前端必须重新 `build:prod` 并切换 dist。只部署代码而未执行目标库迁移，功能不可用。
+- **部署与回滚**：本轮未 commit、未 push、未发布服务器。发布时必须在目标库重新备份后执行增量 SQL，再创建新 release。应用回滚切回上一 jar/dist，并先停用新增 Quartz 任务；数据库回滚优先恢复发布前备份，不直接 DROP 含审计的新表。
+
+### 2.10 教师免抽测、真实使用日期与课程时间治理（v2.52，本机完成）
+
+- **专题文档**：需求、设计、任务跟踪见 `contexts/teaching-supervision/requirements.md`、`design.md`、`tasks.md`；快照与真实活动决策见 `adr/adr-002-exemption-snapshot-and-real-activity.md`。
+- **迁移顺序**：目标库依次执行 `sql/teaching_exemption_v1_preflight.sql`、`sql/teaching_exemption_v1.sql`、`sql/teaching_exemption_v1_postcheck.sql`。迁移创建标准、申请、班级快照、课程快照、附件 5 表，补齐菜单与角色权限，并只修复未来课程时间默认值；历史空时间保持原样。
+- **本机备份与后检**：迁移前完整备份为 `D:\dmwprogram\newdazipingtai\backups\20260730_233001_local_before_teaching_exemption_d827415\xueyeceping_server_20260729_before_teaching_exemption.sql`，62,678,787 bytes，SHA-256 `8095118C6486663DF9EF98F3AF14A4E5C51565F4AF79E1A68F8F5071371D5354`。后检确认 5 表存在；重复标准/申请、非法状态、孤儿和快照汇总异常均为 0；课程总数 228，迁移前后仍有创建时间空 206、修改时间空 225、两者均空 206。
+- **统计与快照**：任教班级由当前管班、当前/历史指派和课程班级事实并集确定；参与只认答题、签到和课堂表现。教师预览 2025 学年第二学期六年级实测 9 班、76 课，操作题已批率 42.82%；12 并发提交仅 1 成功、11 被拒绝。申请经教研员审核和标准写入回读后，按测试备注和主键精确清理，申请及两级快照余量为 0。
+- **接口与权限**：教师和教研员关键接口均返回 200；监管使用日期查询返回 14 所学校。教师调用审核、学生调用审核或教师预览均为 403。教研员拥有 `business:exemption:review/standard`，教师拥有 `business:exemption:apply`，学生相关权限为 0。申请附件读取继续经过资源归属判断。
+- **性能与查询计划**：免抽测预览连续 25 次为 350～642 ms，P50 395 ms、P95 516 ms；监管学校查询连续 15 次为 1.123～1.276 s，P50 1.177 s、P95 1.276 s。统计 SQL 先按教师、学校、学年学期和班级范围收窄，再聚合三类活动；索引/执行路径审查未发现无界相关子查询。本轮修复了历史指派表与现表联合时的排序规则冲突。
+- **自动化与浏览器**：`mvn -pl ruoyi-business -am test -DforkCount=0` 为 226/226；`mvn -pl ruoyi-admin -am clean package -DskipTests` 成功。Vue3 学年/学期与题型测试 6/6，生产构建成功（2675 modules；仅既有 vform `eval` 和大 chunk 警告）。系统 Chrome 浏览器冒烟覆盖教师预览、教研员标准/审核入口和监管日期下钻，截图保存在 `output/playwright/`。
+- **重启、部署与回滚**：本机 fat jar 已重启并监听 8080，Vue3 dev 监听 80，两端 HTTP 200。正式发布必须重新构建 jar/dist、在服务器备份并执行两组监管/免抽测迁移后切换新 release。应用回滚切回旧 jar/dist；数据库若必须回滚，优先恢复发布前备份，不直接删除已有申请快照。本轮未 commit、未 push、未发布服务器。
 
 
 ## 三、历史交付（仍有效，摘要）

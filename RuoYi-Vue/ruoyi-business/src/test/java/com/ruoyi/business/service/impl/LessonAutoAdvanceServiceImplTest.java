@@ -13,6 +13,7 @@ import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,7 @@ class LessonAutoAdvanceServiceImplTest
     @Mock private BizStudentAnswerMapper studentAnswerMapper;
     @Mock private BizStudentMapper studentMapper;
     @Mock private BizTeacherClassMapper teacherClassMapper;
+    @Mock private LessonClassScopeMapper lessonClassScopeMapper;
 
     @InjectMocks
     private LessonAutoAdvanceServiceImpl service;

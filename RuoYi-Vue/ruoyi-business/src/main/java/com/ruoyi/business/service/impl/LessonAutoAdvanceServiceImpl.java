@@ -22,6 +22,7 @@ import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.service.LessonAutoAdvanceService;
 import com.ruoyi.common.exception.ServiceException;
@@ -42,6 +43,9 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
 
     @Autowired
     private BizLessonAssignmentMapper assignmentMapper;
+
+    @Autowired
+    private LessonClassScopeMapper lessonClassScopeMapper;
 
     @Autowired
     private BizStudentAnswerMapper studentAnswerMapper;
@@ -359,6 +363,15 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         {
             return 0;
         }
+        lessonClassScopeMapper.markAssignmentInactive(
+                current.getLessonId(), locked.getDeptId(), locked.getEntryYear(), locked.getClassCode());
+        BizLessonAssignment nextAssignment = new BizLessonAssignment();
+        nextAssignment.setLessonId(next.getLessonId());
+        nextAssignment.setDeptId(locked.getDeptId());
+        nextAssignment.setEntryYear(locked.getEntryYear());
+        nextAssignment.setClassCode(locked.getClassCode());
+        nextAssignment.setAssignTime(now);
+        lessonClassScopeMapper.upsertCurrentAssignment(nextAssignment);
         assignmentMapper.insertAdvanceHistory(locked, next.getLessonId(), operatorId, source, now);
         log.info("课程推进：lesson {} -> {} class {}-{} dept {}",
                 current.getLessonId(), next.getLessonId(), a.getEntryYear(), a.getClassCode(), a.getDeptId());

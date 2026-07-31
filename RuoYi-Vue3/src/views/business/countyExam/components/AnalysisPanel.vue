@@ -89,6 +89,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import { questionTypeLabel } from '@/utils/questionType'
 
 const props = defineProps({
   official: { type: Boolean, default: false },
@@ -123,7 +124,7 @@ function decimalValue(value) {
 }
 
 function questionTypeText(value) {
-  return ({ choice: '选择题', judgment: '判断题', typing: '打字题', practical: '操作题' })[value] || '题目'
+  return questionTypeLabel(value)
 }
 
 function shortText(value, maxLength = 18) {

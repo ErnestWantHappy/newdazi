@@ -908,6 +908,7 @@ import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import PdfPreview from "@/components/PdfPreview/index.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
+import { questionTypeLabel } from "@/utils/questionType";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -2026,7 +2027,7 @@ function deleteWork(questionId) {
 }
 
 function getQuestionTypeLabel(type) {
-  return { choice: "选择题", judgment: "判断题" }[type] || type;
+  return questionTypeLabel(type);
 }
 
 function handleCommand(cmd) {

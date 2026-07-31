@@ -105,20 +105,17 @@ npm run dev
 - 回复中 **永不回显** `secrets.local.md` 中的密码。  
 - 能本机复现的编译/单测优先本机；只有菜单/数据/发布状态必须以服务器为准时再连远程。
 
-### 3.5 本机数据库迁移基线（2026-07-15）
+### 3.5 本机数据库迁移基线（2026-07-30）
 
-本机库 `xueyeceping1` 已执行并复核以下增量 SQL：
+当前本机开发库为 `xueyeceping_server_20260729`，由内网服务器 `ry-vue` 完整复制后执行 `sql/teaching_supervision_v1.sql` 和 `sql/teaching_exemption_v1.sql` 得到；后端 `application-druid.yml` 已切换到该库。旧库 `xueyeceping1` 完整保留，不再作为当前联调基线。
 
-- `sql/lesson_auto_advance.sql`
-- `sql/lesson_assignment_current_unique_fix.sql`
-- `sql/typing_answer_dedup_fix.sql`
-- `sql/practical_preview_retry_quartz_job.sql`
-- `sql/libreoffice_health_check_quartz_job.sql`
-- `sql/libreoffice_maintenance_quartz_job.sql`
+复制源备份位于 `D:\dmwprogram\newdazipingtai\backups\20260729_180020_server_before_local_clone_d827415\ry-vue_server_full.sql`，62,283,806 bytes，SHA-256 `350E73232CB17F0C4D8EC0B973EAE47837976B1752E70ABE8CE686ADA5236BED`。
 
-`sql/practical_preview_retry_fields.sql` 对应的 3 个字段此前已存在，因此本次未重复执行这个非幂等加列脚本。复核结果：当前课重复组和学生答案重复组均为 0；推进策略表、推进历史表及两个唯一索引均存在；课堂推进、操作题预览重试、LibreOffice 健康巡检和每日维护各只有 1 条启用且禁止并发的任务。
+免抽测迁移前的本机备份位于 `D:\dmwprogram\newdazipingtai\backups\20260730_233001_local_before_teaching_exemption_d827415\xueyeceping_server_20260729_before_teaching_exemption.sql`，62,678,787 bytes，SHA-256 `8095118C6486663DF9EF98F3AF14A4E5C51565F4AF79E1A68F8F5071371D5354`。
 
-以上仅代表 **2026-07-15 本机库状态**，不能据此跳过服务器或生产库迁移；目标环境仍须先查重复、备份并按发布清单执行。
+复核结果：课程班级事实 873 条、当前事实 129 条、历史批改期限 473 条；免抽测 5 张表已创建，测试申请、班级快照、课程快照均已精确清理为 0；重复事实、重复期限、重复免抽测标准/申请、零分母期限、无操作题期限、孤儿事实和快照汇总异常均为 0。研究员拥有监管 4 项和免抽测审核/标准权限，教师拥有申请权限，学生免抽测权限为 0。206 门历史课程缺 `create_time`、225 门缺 `update_time`，不得以执行迁移当天时间回填；课程 139、158、246 的时间证据仍待治理。课程 1 的归属和课程 34 的 4 条跨学校指派冲突同样保持待治理。
+
+以上仅代表 **2026-07-30 本机库状态**。正式服务器尚未执行本轮监管和免抽测迁移，发布时仍须分别重新前检、备份、执行增量 SQL 和后检，不能因本机已完成而跳过。
 
 ---
 

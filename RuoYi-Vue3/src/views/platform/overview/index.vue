@@ -135,6 +135,7 @@
 import * as echarts from 'echarts'
 import { Refresh } from '@element-plus/icons-vue'
 import { getPlatformOverview } from '@/api/business/platformOverview'
+import { questionTypeLabel } from '@/utils/questionType'
 
 const overview = ref({})
 const trendChartRef = ref(null)
@@ -248,8 +249,7 @@ function formatNumber(value) {
 }
 
 function formatQuestionType(type) {
-  const map = { choice: '选择题', judgment: '判断题', typing: '打字题', practical: '操作题' }
-  return map[type] || type || '未分类'
+  return questionTypeLabel(type)
 }
 
 function formatExamStatus(status) {

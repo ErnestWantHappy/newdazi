@@ -3,6 +3,7 @@ package com.ruoyi.business.service;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.business.domain.BizLesson;
@@ -93,12 +94,37 @@ public class ResourceAccessService
             return resource;
         }
 
+        Map<String, Object> exemptionOwner =
+                resourceAccessMapper.selectExemptionAttachmentOwner(resource);
+        if (exemptionOwner != null)
+        {
+            assertExemptionAttachmentAccess(exemptionOwner, loginUser);
+            return resource;
+        }
+
         // 通用上传没有独立归属表。只给课程内容维护角色读取未落业务表的草稿文件，学生一律拒绝。
-        if (isAdmin(loginUser) || SecurityUtils.hasRole("teacher") || SecurityUtils.hasRole("researcher"))
+        if (isAdmin(loginUser) || hasRole(loginUser, "teacher") || hasRole(loginUser, "researcher"))
         {
             return resource;
         }
         throw new ServiceException("无权访问该文件");
+    }
+
+    private void assertExemptionAttachmentAccess(Map<String, Object> owner, LoginUser loginUser)
+    {
+        if (isAdmin(loginUser) || hasRole(loginUser, "researcher"))
+        {
+            return;
+        }
+        Long teacherId = numberAsLong(owner.get("teacherId"));
+        Long deptId = numberAsLong(owner.get("deptId"));
+        if (hasRole(loginUser, "teacher")
+                && loginUser.getUserId().equals(teacherId)
+                && sameDept(loginUser.getDeptId(), deptId))
+        {
+            return;
+        }
+        throw new ServiceException("无权访问该免抽测申请附件");
     }
 
     private void assertStudentAnswerAccess(BizStudentAnswer answer, LoginUser loginUser)
@@ -114,6 +140,11 @@ public class ResourceAccessService
             return;
         }
         if (isAdmin(loginUser))
+        {
+            return;
+        }
+        // 教研员监管接口已做只读权限校验，资源层允许其跨校预览学生作品。
+        if (hasRole(loginUser, "researcher"))
         {
             return;
         }
@@ -181,7 +212,7 @@ public class ResourceAccessService
 
     private void assertCountyQuestionAccess(String resource, LoginUser loginUser)
     {
-        if (isAdmin(loginUser) || SecurityUtils.hasRole("researcher"))
+        if (isAdmin(loginUser) || hasRole(loginUser, "researcher"))
         {
             return;
         }
@@ -241,8 +272,25 @@ public class ResourceAccessService
         return loginUser.getUser() != null && loginUser.getUser().isAdmin();
     }
 
+    private boolean hasRole(LoginUser loginUser, String roleKey)
+    {
+        return loginUser.getUser() != null
+                && loginUser.getUser().getRoles() != null
+                && loginUser.getUser().getRoles().stream()
+                        .anyMatch(role -> roleKey.equals(role.getRoleKey()));
+    }
+
     private boolean sameDept(Long left, Long right)
     {
         return left != null && left.equals(right);
+    }
+
+    private Long numberAsLong(Object value)
+    {
+        if (value instanceof Number)
+        {
+            return ((Number) value).longValue();
+        }
+        return value == null ? null : Long.valueOf(String.valueOf(value));
     }
 }

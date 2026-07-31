@@ -21,7 +21,10 @@ import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
+import com.ruoyi.business.mapper.LessonClassScopeMapper;
+import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
+import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.common.core.domain.entity.SysDept;
@@ -64,6 +67,12 @@ public class BizLessonServiceImpl implements IBizLessonService
     private BizLessonAssignmentMapper lessonAssignmentMapper;
 
     @Autowired
+    private LessonClassScopeMapper lessonClassScopeMapper;
+
+    @Autowired
+    private PracticalGradingDeadlineMapper practicalGradingDeadlineMapper;
+
+    @Autowired
     private BizTeacherClassMapper teacherClassMapper;
 
     @Autowired
@@ -74,6 +83,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private LessonGuideSheetBindingService lessonGuideSheetBindingService;
+
+    @Autowired
+    private AnswerDeletionGuardService answerDeletionGuardService;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -130,12 +142,14 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonIds(Long[] lessonIds)
     {
+        answerDeletionGuardService.assertLessonsDeletable(lessonIds);
         for (Long lessonId : lessonIds) {
             assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonId));
             assertLessonHasNoGuideSheetHistory(lessonId);
             // 级联删除关联数据
             lessonQuestionMapper.deleteByLessonId(lessonId);
             lessonAssignmentMapper.deleteByLessonId(lessonId);
+            deleteSupervisionFacts(lessonId);
         }
         int affected = bizLessonMapper.deleteBizLessonByLessonIds(lessonIds);
         if (affected != lessonIds.length)
@@ -149,8 +163,12 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonId(Long lessonId)
     {
+        answerDeletionGuardService.assertLessonsDeletable(new Long[] { lessonId });
         assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonId));
         assertLessonHasNoGuideSheetHistory(lessonId);
+        lessonQuestionMapper.deleteByLessonId(lessonId);
+        lessonAssignmentMapper.deleteByLessonId(lessonId);
+        deleteSupervisionFacts(lessonId);
         int affected = bizLessonMapper.deleteBizLessonByLessonId(lessonId);
         if (affected != 1)
         {
@@ -436,6 +454,7 @@ public class BizLessonServiceImpl implements IBizLessonService
             }
         }
 
+        lessonClassScopeMapper.markLessonAssignmentsInactive(lessonId);
         lessonAssignmentMapper.deleteByLessonId(lessonId);
         List<String> classCodes = lessonDetailVo.getAssignedClassCodes();
         if (!CollectionUtils.isEmpty(classCodes)) {
@@ -448,7 +467,7 @@ public class BizLessonServiceImpl implements IBizLessonService
                 String pureClassCode = classCode.replace("班", "").trim();
                 
                 // 【核心】班级互斥：删除该班级在其他课程的指派
-                lessonAssignmentMapper.deleteOtherAssignmentsByClass(entryYear, pureClassCode, deptId, lessonId);
+                deactivateOtherCurrentAssignments(deptId, entryYear, pureClassCode, lessonId);
                 
                 BizLessonAssignment assignment = new BizLessonAssignment();
                 assignment.setLessonId(lessonId);
@@ -461,6 +480,9 @@ public class BizLessonServiceImpl implements IBizLessonService
             }
             if (!assignments.isEmpty()) {
                 lessonAssignmentMapper.batchInsert(assignments);
+                for (BizLessonAssignment assignment : assignments) {
+                    lessonClassScopeMapper.upsertCurrentAssignment(assignment);
+                }
             }
         }
         BizLessonGuideSheetBinding binding = lessonGuideSheetBindingService.synchronize(
@@ -469,6 +491,28 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonDetailVo.setSourceSheetId(binding == null ? null : binding.getSourceSheetId());
         lessonDetailVo.setGuideSheetEnabled(binding != null && "Y".equals(binding.getEnabled()));
         return lessonDetailVo;
+    }
+
+    /**
+     * 课程物理删除时同步清理本功能新增事实，避免监管对账产生孤儿记录。
+     */
+    private void deleteSupervisionFacts(Long lessonId)
+    {
+        practicalGradingDeadlineMapper.deleteAuditsByLessonId(lessonId);
+        practicalGradingDeadlineMapper.deleteDeadlinesByLessonId(lessonId);
+        lessonClassScopeMapper.deleteByLessonId(lessonId);
+    }
+
+    /**
+     * 课程设计器改派班级时，当前指派表和稳定事实必须在同一事务同步切换。
+     */
+    void deactivateOtherCurrentAssignments(Long deptId, String entryYear,
+                                           String classCode, Long currentLessonId)
+    {
+        lessonClassScopeMapper.markOtherAssignmentsInactive(
+                deptId, entryYear, classCode, currentLessonId);
+        lessonAssignmentMapper.deleteOtherAssignmentsByClass(
+                entryYear, classCode, deptId, currentLessonId);
     }
 
     private void validateLessonContent(LessonDetailVo detailVo)

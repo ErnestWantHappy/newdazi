@@ -55,6 +55,41 @@
       </div>
     </div>
 
+    <el-card
+      v-if="selectedClassCode && deadlineStatus"
+      shadow="never"
+      class="deadline-status-panel"
+      :class="`is-${String(deadlineStatus.statusCode || '').toLowerCase()}`"
+    >
+      <div class="deadline-panel-head">
+        <div>
+          <strong>{{ selectedLessonTitle }} · {{ selectedClassCode }}班操作题批改时限</strong>
+          <el-tag :type="deadlineStatusMeta(deadlineStatus.statusCode).type">
+            {{ deadlineStatusMeta(deadlineStatus.statusCode).label }}
+          </el-tag>
+        </div>
+        <strong>{{ formatDeadlineRemaining(deadlineStatus) }}</strong>
+      </div>
+      <el-alert
+        v-if="!deadlineStatus.canGrade"
+        title="已逾期，操作题批改已锁定"
+        description="已有成绩和学生提交仍可查看；如需继续批改，请联系教研员调整截止时间。"
+        type="error"
+        :closable="false"
+        show-icon
+      />
+      <div class="deadline-panel-grid">
+        <span>已有答题记录：{{ deadlineStatus.answeredStudentCount }}/{{ deadlineStatus.totalStudentCount }}</span>
+        <span>触发时间：{{ formatDeadlineTime(deadlineStatus.triggerTime) }}</span>
+        <span>截止时间：{{ formatDeadlineTime(deadlineStatus.currentDeadlineTime) }}</span>
+        <span>应批/已批/未批：{{ deadlineStatus.dueCount }}/{{ deadlineStatus.gradedCount }}/{{ deadlineStatus.ungradedCount }}</span>
+      </div>
+      <el-progress
+        :percentage="deadlineStatus.dueCount ? Math.round(deadlineStatus.gradedCount * 100 / deadlineStatus.dueCount) : 0"
+        :status="deadlineStatus.statusCode === 'COMPLETED' ? 'success' : undefined"
+      />
+    </el-card>
+
     <!-- 主工作区 -->
     <div class="grading-main" v-loading="loading">
       <!-- 左侧：学生列表 -->
@@ -157,6 +192,7 @@
             <div class="scoring-mode-switch" v-if="scoringItems.length > 0">
                <el-switch 
                   v-model="useItemScoring" 
+                  :disabled="!deadlineStatus?.canGrade"
                   active-text="分项评分" 
                   inactive-text="直接打分"
                   @change="onScoringModeChange"
@@ -168,6 +204,7 @@
                 <div class="input-label">得分：</div>
                 <el-input-number 
                    v-model="currentScore" 
+                   :disabled="!deadlineStatus?.canGrade"
                    :min="0" 
                    :max="currentStudent.maxScore" 
                    :precision="0"
@@ -186,6 +223,7 @@
                         <el-input-number 
                            :ref="el => setItemInputRef(el, index)"
                            v-model="itemScores[item.itemId]" 
+                           :disabled="!deadlineStatus?.canGrade"
                            :min="0" 
                            :max="Math.round(item.itemScore * scalingRatio)" 
                            :precision="0"
@@ -201,7 +239,7 @@
                   </div>
             </div>
             
-            <el-button type="primary" size="large" class="submit-btn" @click="submitScore">
+            <el-button type="primary" size="large" class="submit-btn" :disabled="!deadlineStatus?.canGrade" @click="submitScore">
                提交并下一位 (Enter)
             </el-button>
             
@@ -219,11 +257,12 @@
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
-import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews } from '@/api/business/teacherGrading';
+import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
 import { getToken } from '@/utils/auth';  // P6 fix: use Cookies token
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { FullScreen } from '@element-plus/icons-vue';
+import { deadlineStatusMeta, formatDeadlineRemaining, formatDeadlineTime } from '@/utils/practicalDeadline';
 
 const route = useRoute();
 const loading = ref(false);
@@ -237,6 +276,15 @@ const submissions = ref([]);
 const selectedLessonId = ref(null);
 const selectedClassCode = ref(null);  // P3.5: 选中的班级
 const selectedQuestionId = ref(null);
+const deadlineStatus = ref(null);
+
+const selectedLessonTitle = computed(() => {
+    for (const group of gradeGroups.value) {
+        const lesson = group.lessons?.find(item => item.lessonId === selectedLessonId.value);
+        if (lesson) return lesson.lessonTitle;
+    }
+    return '当前课程';
+});
 
 const currentStudent = ref(null);
 const currentIndex = ref(-1);
@@ -355,6 +403,7 @@ async function onLessonChange(val) {
 // P3.5: 选择班级后加载操作题提交记录
 function onClassChange(val) {
     if (!val) return;
+    loadDeadlineStatus();
     // 如果已选择了题目，则加载该题目的提交记录
     if (selectedQuestionId.value) {
         loadSubmissions();
@@ -540,6 +589,21 @@ function getFileUrl(path) {
     return import.meta.env.VITE_APP_BASE_API + '/common/download/resource?resource=' + encodeURIComponent(path);
 }
 
+async function loadDeadlineStatus() {
+    if (!selectedLessonId.value || !selectedClassCode.value) {
+        deadlineStatus.value = null;
+        return;
+    }
+    const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
+    try {
+        const res = await getPracticalDeadlineStatus(
+            selectedLessonId.value, classInfo?.entryYear || '', selectedClassCode.value);
+        deadlineStatus.value = res.data || null;
+    } catch (e) {
+        deadlineStatus.value = null;
+    }
+}
+
 // P2: 从文件路径中提取文件名
 function getFileName(path) {
     if (!path) return '';
@@ -612,6 +676,10 @@ function loadScoringDetailsForStudent(answerId) {
 
 function submitScore() {
     if (!currentStudent.value) return;
+    if (!deadlineStatus.value?.canGrade) {
+        ElMessage.error('已逾期，操作题批改已锁定；如需继续批改，请联系教研员调整截止时间');
+        return;
+    }
     
     // P6: 如果使用分项评分，计算总分
     let finalScore = currentScore.value;
@@ -669,6 +737,7 @@ function submitScore() {
                     classInfo.practicalUngraded--;
                 }
             }
+            loadDeadlineStatus();
             
             // 自动跳转下一个已提交的学生
             nextSubmittedStudent();
@@ -830,6 +899,44 @@ function autoFocusItem() {
      background: #fff;
      padding: 20px;
   }
+}
+
+.deadline-status-panel {
+  margin: 10px 0;
+  border-left: 5px solid #409eff;
+}
+
+.deadline-status-panel.is-overdue {
+  border-left-color: #f56c6c;
+  background: #fef0f0;
+}
+
+.deadline-status-panel.is-due_soon {
+  border-left-color: #e6a23c;
+}
+
+.deadline-status-panel.is-reopened {
+  border-left-color: #9b59b6;
+}
+
+.deadline-panel-head,
+.deadline-panel-head > div,
+.deadline-panel-grid {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.deadline-panel-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.deadline-panel-grid {
+  flex-wrap: wrap;
+  color: #606266;
+  font-size: 13px;
+  margin: 10px 0;
 }
 
 .grading-header {

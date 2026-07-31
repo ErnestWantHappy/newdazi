@@ -3,6 +3,7 @@ package com.ruoyi.business.controller;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -19,6 +20,7 @@ import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.service.GuideSheetAccessService;
+import com.ruoyi.business.service.PracticalGradingDeadlineService;
 
 /**
  * 教师批改操作题 Controller
@@ -44,6 +46,9 @@ public class TeacherGradingController extends BaseController {
 
     @Autowired
     private GuideSheetAccessService guideSheetAccessService;
+
+    @Autowired
+    private PracticalGradingDeadlineService practicalGradingDeadlineService;
 
     @Autowired
     private com.ruoyi.business.service.PracticalPreviewRetryService practicalPreviewRetryService;
@@ -124,6 +129,7 @@ public class TeacherGradingController extends BaseController {
      * 必须校验答题所属学生/课程是否在当前教师管理范围内，禁止仅凭 answerId 越权改分。
      */
     @PostMapping("/grade")
+    @Transactional(rollbackFor = Exception.class)
     public AjaxResult grade(@RequestBody GradeRequest request) {
         if (request.getAnswerId() == null || request.getScore() == null) {
             return AjaxResult.error("参数不完整");
@@ -144,6 +150,8 @@ public class TeacherGradingController extends BaseController {
             return AjaxResult.error(scopeError);
         }
 
+        // 期限校验必须和改分处于同一事务，避免已逾期后仍写入部分评分明细。
+        practicalGradingDeadlineService.assertCanGrade(request.getAnswerId());
         int rows = studentAnswerMapper.updateScore(request.getAnswerId(), request.getScore());
 
         if (request.getScoringDetails() != null && !request.getScoringDetails().isEmpty()) {
@@ -158,6 +166,22 @@ public class TeacherGradingController extends BaseController {
         }
 
         return rows > 0 ? AjaxResult.success("批改成功") : AjaxResult.error("批改失败");
+    }
+
+    /**
+     * 获取课程班级操作题批改期限状态，页面倒计时统一使用服务端时间计算。
+     */
+    @GetMapping("/deadline-status")
+    public AjaxResult getDeadlineStatus(@RequestParam Long lessonId,
+                                        @RequestParam String entryYear,
+                                        @RequestParam String classCode) {
+        if (StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode)) {
+            throw new ServiceException("入学年份和班级编号不能为空");
+        }
+        guideSheetAccessService.assertCanViewLessonClass(
+                lessonId, entryYear.trim(), classCode.trim());
+        return AjaxResult.success(practicalGradingDeadlineService.getStatus(
+                lessonId, SecurityUtils.getDeptId(), entryYear.trim(), classCode.trim(), true));
     }
 
     /**

@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class BizLessonServiceImplTest
@@ -272,6 +273,42 @@ class BizLessonServiceImplTest
                 service, "preserveLessonEntryYear", existing, "2024"));
         assertThrows(ServiceException.class, () -> ReflectionTestUtils.invokeMethod(
                 service, "preserveLessonEntryYear", existing, "2025"));
+    }
+
+    @Test
+    void ordinaryCreateAlwaysWritesCreateTime()
+    {
+        loginTeacher();
+        BizLesson lesson = new BizLesson();
+        lesson.setEntryYear("2025");
+
+        service.insertBizLesson(lesson);
+
+        ArgumentCaptor<BizLesson> captor = ArgumentCaptor.forClass(BizLesson.class);
+        verify(bizLessonMapper).insertBizLesson(captor.capture());
+        assertNotNull(captor.getValue().getCreateTime());
+    }
+
+    @Test
+    void teacherEditAlwaysWritesUpdateTime()
+    {
+        loginTeacher();
+        BizLesson existing = new BizLesson();
+        existing.setLessonId(10L);
+        existing.setCreatorId(8L);
+        existing.setDeptId(10L);
+        existing.setEntryYear("2025");
+        when(bizLessonMapper.selectBizLessonByLessonId(10L)).thenReturn(existing);
+        when(bizLessonMapper.updateBizLesson(org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        BizLesson update = new BizLesson();
+        update.setLessonId(10L);
+        update.setEntryYear("2025");
+
+        service.updateBizLesson(update);
+
+        ArgumentCaptor<BizLesson> captor = ArgumentCaptor.forClass(BizLesson.class);
+        verify(bizLessonMapper).updateBizLesson(captor.capture());
+        assertNotNull(captor.getValue().getUpdateTime());
     }
 
     private BizLessonQuestionDetailVo question(long score)

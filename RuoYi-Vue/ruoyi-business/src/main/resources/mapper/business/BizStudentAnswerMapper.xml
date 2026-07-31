@@ -134,6 +134,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LIMIT 1
     </select>
 
+    <select id="countByLessonIds" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer
+        WHERE lesson_id IN
+        <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+            #{lessonId}
+        </foreach>
+    </select>
+
+    <select id="countByStudentIds" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer
+        WHERE student_id IN
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+    </select>
+
     <select id="selectByLessonId" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a

@@ -127,8 +127,9 @@
       <el-table :data="analysisData" border stripe>
         <el-table-column label="题目内容" prop="questionContent" min-width="250">
           <template #default="scope">
-            <span v-if="scope.row.questionType === 'choice'" class="question-type-tag choice">[选择]</span>
-            <span v-else class="question-type-tag judgment">[判断]</span>
+            <span class="question-type-tag" :class="scope.row.questionType">
+              [{{ questionTypeLabel(scope.row.questionType) }}]
+            </span>
             {{ scope.row.questionContent }}
           </template>
         </el-table-column>
@@ -534,6 +535,7 @@ import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@eleme
 import * as echarts from 'echarts';
 import { isSessionExpiredError } from '@/utils/session';
 import { calculateGradeNumber } from '@/utils/academicYear';
+import { questionTypeLabel } from '@/utils/questionType';
 
 import StudentRankList from './components/GradeOverview/StudentRankList.vue';
 import ClassScoreChart from './components/charts/ClassScoreChart.vue';
@@ -1345,7 +1347,7 @@ function renderAnalysisChart() {
           
           // 核心指标
           html += `<div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                      <span>类型：<b>${item.questionType === 'choice' ? '选择题' : '判断题'}</b></span>
+                      <span>类型：<b>${questionTypeLabel(item.questionType)}</b></span>
                       <span>正确率：<b style="color:${getAccuracyColor(item.accuracy)}">${item.accuracy}%</b></span>
                       <span>错误率：<b style="color:#F56C6C">${Math.round((item.wrongRate || 0) * 100)}%</b></span>
                    </div>`;

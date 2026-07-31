@@ -28,6 +28,16 @@
         limit 1
     </select>
 
+    <select id="selectExemptionAttachmentOwner" resultType="java.util.LinkedHashMap">
+        select application.teacher_id as teacherId,
+               application.dept_id as deptId
+        from biz_exemption_attachment attachment
+        inner join biz_exemption_application application
+                on application.application_id = attachment.application_id
+        where attachment.resource_path = #{resource}
+        limit 1
+    </select>
+
     <select id="countCurrentLessonQuestionForStudent" resultType="int">
         select count(1)
         from biz_student s

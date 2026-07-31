@@ -177,9 +177,7 @@
         set auto_advance_enabled = #{autoAdvanceEnabled},
             auto_advance_threshold_pct = #{autoAdvanceThresholdPct},
             auto_advance_delay_hours = #{autoAdvanceDelayHours},
-            auto_advance_ready_time = null,
-            update_by = #{updateBy},
-            update_time = now()
+            auto_advance_ready_time = null
         where (creator_id = #{teacherId} or (creator_id is null and create_by = #{creatorName}))
           and dept_id = #{deptId}
           and IFNULL(lesson_mode, 'assessment') &lt;&gt; 'attendance'

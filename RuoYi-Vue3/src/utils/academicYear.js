@@ -10,6 +10,17 @@ export function resolveAcademicStartYear(date = new Date()) {
   return month > 7 || (month === 7 && day >= 20) ? year : year - 1
 }
 
+/**
+ * 学期边界与后端免抽测统计区间一致：7 月 20 日至次年 1 月 31 日为第一学期，
+ * 2 月 1 日至 7 月 19 日为第二学期。
+ */
+export function resolveAcademicSemester(date = new Date()) {
+  const target = normalizeDate(date)
+  const month = target.getMonth() + 1
+  const day = target.getDate()
+  return month > 7 || (month === 7 && day >= 20) || month === 1 ? '1' : '2'
+}
+
 /** 根据入学年份计算当前在本学段内的第几年。 */
 export function calculateYearsInSection(entryYear, date = new Date()) {
   const normalizedEntryYear = Number.parseInt(String(entryYear), 10)

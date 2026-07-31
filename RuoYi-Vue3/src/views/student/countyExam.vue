@@ -316,6 +316,7 @@ import { getCurrentCountyExam, saveCountyExamDraft, submitCountyExam } from '@/a
 import { updateUserPwd } from '@/api/system/user'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import useUserStore from '@/store/modules/user'
+import { questionTypeLabel } from '@/utils/questionType'
 
 const userStore = useUserStore()
 
@@ -853,7 +854,7 @@ function normalizeQuestionAnswer(questionType, answer) {
 }
 
 function questionTypeText(type) {
-  return ({ choice: '选择题', judgment: '判断题' })[type] || type
+  return questionTypeLabel(type)
 }
 
 function previewLabel(questionId) {

@@ -15,6 +15,7 @@ import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.service.IBizStudentService;
 import com.ruoyi.business.service.IBizTeacherClassService;
+import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -54,6 +55,9 @@ public class BizStudentServiceImpl implements IBizStudentService
 
     @Autowired
     private RedisCache redisCache;
+
+    @Autowired
+    private AnswerDeletionGuardService answerDeletionGuardService;
 
     @Override
     public BizStudent selectBizStudentByStudentId(Long studentId)
@@ -175,6 +179,9 @@ public class BizStudentServiceImpl implements IBizStudentService
         int i = 0;
         for (BizStudent student : students) {
             studentIds[i++] = student.getStudentId();
+        }
+        answerDeletionGuardService.assertStudentsDeletable(studentIds);
+        for (BizStudent student : students) {
             if (student.getUserId() != null) {
                 userMapper.deleteUserById(student.getUserId());
                 userRoleMapper.deleteUserRoleByUserId(student.getUserId());
@@ -189,6 +196,7 @@ public class BizStudentServiceImpl implements IBizStudentService
     @Transactional
     public int deleteBizStudentByStudentIds(Long[] studentIds)
     {
+        answerDeletionGuardService.assertStudentsDeletable(studentIds);
         Set<String> affectedClasses = new LinkedHashSet<>();
         for (Long studentId : studentIds) {
             BizStudent student = bizStudentMapper.selectBizStudentByStudentId(studentId);
@@ -214,6 +222,7 @@ public class BizStudentServiceImpl implements IBizStudentService
         if (student == null) {
             return 0;
         }
+        answerDeletionGuardService.assertStudentsDeletable(new Long[] { studentId });
         if (student.getUserId() != null) {
             userMapper.deleteUserById(student.getUserId());
             userRoleMapper.deleteUserRoleByUserId(student.getUserId());

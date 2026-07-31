@@ -47,6 +47,12 @@ public interface BizStudentAnswerMapper
     BizStudentAnswer selectLatestByStudentLessonQuestion(@Param("studentId") Long studentId,
                                                          @Param("lessonId") Long lessonId,
                                                          @Param("questionId") Long questionId);
+
+    /** 统计指定课程下的答题记录，用于阻止破坏成绩历史的硬删除。 */
+    int countByLessonIds(@Param("lessonIds") List<Long> lessonIds);
+
+    /** 统计指定学生的答题记录，用于阻止产生无学生归属的孤儿答案。 */
+    int countByStudentIds(@Param("studentIds") List<Long> studentIds);
     
     /**
      * 查询某课程的所有答题记录

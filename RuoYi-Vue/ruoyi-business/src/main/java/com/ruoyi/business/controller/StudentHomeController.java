@@ -16,8 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -44,6 +43,8 @@ import com.ruoyi.business.mapper.BizLessonCheckinMapper;
 import com.ruoyi.business.service.ICountyExamService;
 import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.business.service.GuideSheetStudentViewService;
+import com.ruoyi.business.service.PracticalGradingDeadlineService;
+import com.ruoyi.business.service.StudentAnswerSubmissionService;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import org.slf4j.Logger;
@@ -87,6 +88,12 @@ public class StudentHomeController extends BaseController
 
     @Autowired
     private GuideSheetStudentViewService studentViewService;
+
+    @Autowired
+    private PracticalGradingDeadlineService practicalGradingDeadlineService;
+
+    @Autowired
+    private StudentAnswerSubmissionService studentAnswerSubmissionService;
 
     @Autowired
     private BizLessonCheckinMapper lessonCheckinMapper;
@@ -364,7 +371,6 @@ public class StudentHomeController extends BaseController
      * 提交学生答案
      */
     @PostMapping("/submit-answers")
-    @Transactional(rollbackFor = Exception.class)
     public AjaxResult submitAnswers(@RequestBody SubmitAnswerRequest request)
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
@@ -420,7 +426,7 @@ public class StudentHomeController extends BaseController
 
         Date now = new Date();
         int totalScore = 0;
-        java.util.List<Long> pendingConversionAnswerIds = new java.util.ArrayList<>();
+        java.util.List<BizStudentAnswer> answersToSave = new java.util.ArrayList<>();
 
         for (Map.Entry<Long, String> entry : answers.entrySet()) {
             Long questionId = entry.getKey();
@@ -562,52 +568,79 @@ public class StudentHomeController extends BaseController
                 totalScore += score;
             }
 
-            studentAnswerMapper.upsertAnswer(answer);
-
-            if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
-                if (answer.getStudentAnswer() != null && !answer.getStudentAnswer().trim().isEmpty()) {
-                    pendingConversionAnswerIds.add(answer.getAnswerId());
-                    log.info("【操作题】提交已保存 answerId={}，已登记待转换，事务提交后触发异步任务",
-                            answer.getAnswerId());
-                }
-            }
+            answersToSave.add(answer);
         }
 
-        triggerPendingPracticalConversionsAfterCommit(pendingConversionAnswerIds);
+        // 固定写入顺序可缩小交叉锁概率；死锁重试必须在独立事务代理之外执行。
+        answersToSave.sort(java.util.Comparator.comparing(BizStudentAnswer::getQuestionId));
+        java.util.List<Long> pendingConversionAnswerIds = persistAnswersWithDeadlockRetry(
+                studentId, lessonId, answersToSave);
+
+        triggerPendingPracticalConversions(pendingConversionAnswerIds);
+        triggerPracticalDeadlineCheck(
+                lessonId, loginUser.getDeptId(), student.getEntryYear(), student.getClassCode());
         log.info("【学生答题】学生 {} 提交课程 {} 答案，得分: {}", student.getStudentId(), lessonId, totalScore);
 
         return AjaxResult.success("提交成功").put("totalScore", totalScore);
     }
 
     /**
-     * 在事务提交后再触发操作题异步转换，避免异步线程读不到尚未提交的答题记录。
+     * 每次重试都通过 Spring 代理开启新事务，确保死锁事务已完整回滚后才重放整单答案。
      */
-    private void triggerPendingPracticalConversionsAfterCommit(java.util.List<Long> answerIds) {
+    private java.util.List<Long> persistAnswersWithDeadlockRetry(
+            Long studentId, Long lessonId, java.util.List<BizStudentAnswer> answersToSave) {
+        final int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return studentAnswerSubmissionService.persistAnswers(studentId, lessonId, answersToSave);
+            } catch (DeadlockLoserDataAccessException e) {
+                if (attempt == maxAttempts) {
+                    throw e;
+                }
+                long delayMillis = 20L * attempt
+                        + java.util.concurrent.ThreadLocalRandom.current().nextLong(20L);
+                log.warn("【学生答题】检测到数据库死锁，准备重试，studentId={}，lessonId={}，attempt={}",
+                        studentId, lessonId, attempt);
+                try {
+                    Thread.sleep(delayMillis);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new ServiceException("提交被中断，请重试");
+                }
+            }
+        }
+        throw new IllegalStateException("答案提交重试状态异常");
+    }
+
+    /**
+     * 独立答案事务返回时已提交，此处再调度转换，异步线程可以稳定读取答题记录。
+     */
+    private void triggerPendingPracticalConversions(java.util.List<Long> answerIds) {
         if (answerIds == null || answerIds.isEmpty()) {
             return;
         }
 
         // afterCommit 只负责「调度」领取，不在 HTTP 线程上同步 claim/投递 LibreOffice
         java.util.LinkedHashSet<Long> uniqueAnswerIds = new java.util.LinkedHashSet<>(answerIds);
-        Runnable conversionTrigger = () -> {
-            for (Long answerId : uniqueAnswerIds) {
-                asyncConversionService.scheduleSubmitPreviewConversion(answerId);
-                log.info("【操作题】answerId={}，afterCommit 已调度首次转换领取", answerId);
-            }
-        };
-
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    conversionTrigger.run();
-                }
-            });
-            return;
+        for (Long answerId : uniqueAnswerIds) {
+            asyncConversionService.scheduleSubmitPreviewConversion(answerId);
+            log.info("【操作题】answerId={}，答案事务提交后已调度首次转换领取", answerId);
         }
+    }
 
-        log.warn("【操作题】当前事务同步未激活，直接调度异步转换，answerIds={}", uniqueAnswerIds);
-        conversionTrigger.run();
+    /**
+     * 答案提交成功后再统计50%阈值，避免当前事务内看不到本次提交。
+     * 期限补偿任务会兜底，因此这里失败不能回滚学生答案。
+     */
+    private void triggerPracticalDeadlineCheck(Long lessonId, Long deptId,
+                                               String entryYear, String classCode) {
+        try {
+            practicalGradingDeadlineService.checkAndCreateDeadline(
+                    lessonId, deptId, entryYear, classCode);
+        } catch (Exception e) {
+            log.error("【操作题期限】提交后触发检查失败，lessonId={}，entryYear={}，classCode={}",
+                    lessonId, entryYear, classCode, e);
+        }
     }
 
     /**

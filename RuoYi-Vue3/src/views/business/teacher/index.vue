@@ -13,6 +13,9 @@
         <div class="card-header">
           <span>课程设置</span>
           <div class="header-actions">
+            <el-button type="success" plain icon="Document" @click="goToExemption">
+              免抽测申请
+            </el-button>
             <el-button type="primary" plain icon="DArrowRight" :loading="advanceLoading" @click="handleOneClickAdvance">
               手动一键课堂推进
             </el-button>
@@ -57,6 +60,37 @@
                   第{{ lesson.lessonNum }}课
                 </div>
                 <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
+                <div v-if="lesson.hasPractical" class="deadline-card-summary">
+                  <template v-if="lesson.practicalDeadlineClasses?.length === 1">
+                    <div class="deadline-summary-title">
+                      {{ lesson.practicalDeadlineClasses[0].classCode }}班
+                      <el-tag
+                        size="small"
+                        :type="deadlineStatusMeta(lesson.practicalDeadlineClasses[0].statusCode).type"
+                      >
+                        {{ deadlineStatusMeta(lesson.practicalDeadlineClasses[0].statusCode).label }}
+                      </el-tag>
+                    </div>
+                    <div class="deadline-summary-line">
+                      答题 {{ lesson.practicalDeadlineClasses[0].answeredStudentCount }}/{{ lesson.practicalDeadlineClasses[0].totalStudentCount }}
+                      · 未批 {{ lesson.practicalDeadlineClasses[0].ungradedCount }}
+                    </div>
+                    <div class="deadline-summary-line">
+                      {{ formatDeadlineRemaining(lesson.practicalDeadlineClasses[0]) }}
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="deadline-summary-title">操作题批改时限（{{ lesson.practicalDeadlineClasses?.length || 0 }}班）</div>
+                    <div class="deadline-summary-line">
+                      未触发 {{ countDeadlineStatus(lesson, 'NOT_TRIGGERED') }} ·
+                      进行中 {{ countActiveDeadlines(lesson) }}
+                    </div>
+                    <div class="deadline-summary-line">
+                      即将到期 {{ countDeadlineStatus(lesson, 'DUE_SOON') }} ·
+                      已逾期 {{ countDeadlineStatus(lesson, 'OVERDUE') }}
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
             
@@ -250,10 +284,25 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Close, Edit, Check, DataLine, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
+import { deadlineStatusMeta, formatDeadlineRemaining } from '@/utils/practicalDeadline';
 
 const router = useRouter();
 const loading = ref(true);
 const gradeGroups = ref([]);
+
+function countDeadlineStatus(lesson, code) {
+  return (lesson.practicalDeadlineClasses || []).filter(item => item.statusCode === code).length;
+}
+
+function countActiveDeadlines(lesson) {
+  return (lesson.practicalDeadlineClasses || []).filter(
+    item => ['GRADING', 'COMPLETED', 'REOPENED'].includes(item.statusCode)
+  ).length;
+}
+
+function goToExemption() {
+  router.push('/teacher-exemption')
+}
 const classDialogRef = ref(null);
 const expandedGradeKeys = ref(new Set());
 const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
@@ -659,8 +708,8 @@ onActivated(() => {
 
 .lesson-folder {
   position: relative;
-  width: 200px; /* 进一步减小宽度 (原220px) */
-  height: 140px; 
+  width: 310px;
+  min-height: 190px;
   border-radius: 8px;
   background-color: #fff;
   box-shadow: 0 2px 6px rgba(0,0,0,0.04);
@@ -776,6 +825,28 @@ onActivated(() => {
   color: #909399;
   text-align: right; /* 页码右对齐好看些 */
   margin-top: 4px;
+}
+
+.deadline-card-summary {
+  margin-top: 6px;
+  padding: 6px;
+  border-radius: 6px;
+  background: #f5f7fa;
+  color: #606266;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.deadline-summary-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #303133;
+  font-weight: 600;
+}
+
+.deadline-summary-line {
+  white-space: nowrap;
 }
 
 /* 已指派班级区域 */

@@ -3,7 +3,9 @@ package com.ruoyi.business.service.impl;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
+import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.service.IBizLessonAssignmentService;
 
@@ -18,6 +20,9 @@ public class BizLessonAssignmentServiceImpl implements IBizLessonAssignmentServi
 {
     @Autowired
     private BizLessonAssignmentMapper bizLessonAssignmentMapper;
+
+    @Autowired
+    private LessonClassScopeMapper lessonClassScopeMapper;
 
     /**
      * 查询课程班级指派
@@ -50,9 +55,15 @@ public class BizLessonAssignmentServiceImpl implements IBizLessonAssignmentServi
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int insertBizLessonAssignment(BizLessonAssignment bizLessonAssignment)
     {
-        return bizLessonAssignmentMapper.insertBizLessonAssignment(bizLessonAssignment);
+        int rows = bizLessonAssignmentMapper.insertBizLessonAssignment(bizLessonAssignment);
+        if (rows > 0)
+        {
+            lessonClassScopeMapper.upsertCurrentAssignment(bizLessonAssignment);
+        }
+        return rows;
     }
 
     /**
@@ -62,9 +73,24 @@ public class BizLessonAssignmentServiceImpl implements IBizLessonAssignmentServi
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int updateBizLessonAssignment(BizLessonAssignment bizLessonAssignment)
     {
-        return bizLessonAssignmentMapper.updateBizLessonAssignment(bizLessonAssignment);
+        BizLessonAssignment before = bizLessonAssignmentMapper.selectBizLessonAssignmentByAssignmentId(
+                bizLessonAssignment.getAssignmentId());
+        int rows = bizLessonAssignmentMapper.updateBizLessonAssignment(bizLessonAssignment);
+        if (rows > 0)
+        {
+            if (before != null)
+            {
+                lessonClassScopeMapper.markAssignmentInactive(
+                        before.getLessonId(), before.getDeptId(), before.getEntryYear(), before.getClassCode());
+            }
+            BizLessonAssignment after = bizLessonAssignmentMapper.selectBizLessonAssignmentByAssignmentId(
+                    bizLessonAssignment.getAssignmentId());
+            lessonClassScopeMapper.upsertCurrentAssignment(after);
+        }
+        return rows;
     }
 
     /**
@@ -74,9 +100,27 @@ public class BizLessonAssignmentServiceImpl implements IBizLessonAssignmentServi
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int deleteBizLessonAssignmentByAssignmentIds(Long[] assignmentIds)
     {
-        return bizLessonAssignmentMapper.deleteBizLessonAssignmentByAssignmentIds(assignmentIds);
+        List<BizLessonAssignment> existing = new java.util.ArrayList<>();
+        for (Long assignmentId : assignmentIds)
+        {
+            BizLessonAssignment assignment =
+                    bizLessonAssignmentMapper.selectBizLessonAssignmentByAssignmentId(assignmentId);
+            if (assignment != null)
+            {
+                existing.add(assignment);
+            }
+        }
+        int rows = bizLessonAssignmentMapper.deleteBizLessonAssignmentByAssignmentIds(assignmentIds);
+        for (BizLessonAssignment assignment : existing)
+        {
+            lessonClassScopeMapper.markAssignmentInactive(
+                    assignment.getLessonId(), assignment.getDeptId(),
+                    assignment.getEntryYear(), assignment.getClassCode());
+        }
+        return rows;
     }
 
     /**
@@ -86,8 +130,18 @@ public class BizLessonAssignmentServiceImpl implements IBizLessonAssignmentServi
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int deleteBizLessonAssignmentByAssignmentId(Long assignmentId)
     {
-        return bizLessonAssignmentMapper.deleteBizLessonAssignmentByAssignmentId(assignmentId);
+        BizLessonAssignment assignment =
+                bizLessonAssignmentMapper.selectBizLessonAssignmentByAssignmentId(assignmentId);
+        int rows = bizLessonAssignmentMapper.deleteBizLessonAssignmentByAssignmentId(assignmentId);
+        if (rows > 0 && assignment != null)
+        {
+            lessonClassScopeMapper.markAssignmentInactive(
+                    assignment.getLessonId(), assignment.getDeptId(),
+                    assignment.getEntryYear(), assignment.getClassCode());
+        }
+        return rows;
     }
 }

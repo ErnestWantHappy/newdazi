@@ -1,5 +1,6 @@
 package com.ruoyi.business.mapper;
 
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -14,6 +15,8 @@ public interface ResourceAccessMapper
     Long selectCountyAnswerIdByResource(@Param("resource") String resource);
 
     Long selectQuestionIdByResource(@Param("resource") String resource);
+
+    Map<String, Object> selectExemptionAttachmentOwner(@Param("resource") String resource);
 
     int countCurrentLessonQuestionForStudent(@Param("studentId") Long studentId,
                                              @Param("questionId") Long questionId);

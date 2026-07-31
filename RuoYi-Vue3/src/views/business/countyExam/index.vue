@@ -438,6 +438,7 @@ import { saveAs } from 'file-saver'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
+import { questionTypeLabel } from '@/utils/questionType'
 import {
   addCountyExam,
   allocateCountyExamGraders,
@@ -1114,7 +1115,7 @@ function shuffleModeText(value) {
 }
 
 function questionTypeText(value) {
-  return ({ choice: '选择题', judgment: '判断题', typing: '打字题', practical: '操作题' })[value] || value || '-'
+  return questionTypeLabel(value)
 }
 
 function questionOptions(row) {

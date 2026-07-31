@@ -5,6 +5,7 @@ import {
   calculateEntryYearFromGrade,
   calculateGradeNumber,
   createAcademicYearOption,
+  resolveAcademicSemester,
   resolveAcademicStartYear
 } from '../academicYear.js'
 
@@ -16,6 +17,13 @@ test('7月20日当天切换新学年', () => {
   assert.equal(resolveAcademicStartYear(localDate(2026, 7, 19)), 2025)
   assert.equal(resolveAcademicStartYear(localDate(2026, 7, 20)), 2026)
   assert.equal(resolveAcademicStartYear(localDate(2026, 7, 21)), 2026)
+})
+
+test('学期边界与免抽测统计区间一致', () => {
+  assert.equal(resolveAcademicSemester(localDate(2026, 1, 31)), '1')
+  assert.equal(resolveAcademicSemester(localDate(2026, 2, 1)), '2')
+  assert.equal(resolveAcademicSemester(localDate(2026, 7, 19)), '2')
+  assert.equal(resolveAcademicSemester(localDate(2026, 7, 20)), '1')
 })
 
 test('初中入学年份与年级在边界日前后保持一致', () => {

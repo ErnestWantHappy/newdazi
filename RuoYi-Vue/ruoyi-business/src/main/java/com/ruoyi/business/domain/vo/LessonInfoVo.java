@@ -136,11 +136,23 @@ public class LessonInfoVo {
     /** 已指派的班级列表, 例如: ["1班", "5班"] */
     private java.util.List<String> assignedClasses;
 
+    /** 每个已指派班级的操作题期限状态，禁止合并成课程级单一截止时间。 */
+    private java.util.List<PracticalGradingStatusVo> practicalDeadlineClasses;
+
     public java.util.List<String> getAssignedClasses() {
         return assignedClasses;
     }
 
     public void setAssignedClasses(java.util.List<String> assignedClasses) {
         this.assignedClasses = assignedClasses;
+    }
+
+    public java.util.List<PracticalGradingStatusVo> getPracticalDeadlineClasses() {
+        return practicalDeadlineClasses;
+    }
+
+    public void setPracticalDeadlineClasses(
+            java.util.List<PracticalGradingStatusVo> practicalDeadlineClasses) {
+        this.practicalDeadlineClasses = practicalDeadlineClasses;
     }
 }
