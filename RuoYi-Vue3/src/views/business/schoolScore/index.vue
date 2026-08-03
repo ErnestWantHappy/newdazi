@@ -1,12 +1,5 @@
 <template>
   <div class="app-container supervision-page">
-    <el-card shadow="never" class="mode-card">
-      <el-tabs v-model="mainTab" @tab-change="handleMainTabChange">
-        <el-tab-pane label="课程与成绩监管" name="supervision" />
-        <el-tab-pane label="免抽测申请" name="exemption" />
-      </el-tabs>
-    </el-card>
-
     <el-card v-show="mainTab === 'supervision'" shadow="never" class="filter-card">
       <template #header>
         <div class="card-header">
@@ -15,6 +8,10 @@
             <span class="scope-note">按真实课堂使用日期查看，课程创建时间仅在详情展示</span>
           </div>
           <div>
+            <el-radio-group v-model="viewMode" size="small" @change="handleViewModeChange">
+              <el-radio-button value="timeline">按时间查看</el-radio-button>
+              <el-radio-button value="school">按学校查看</el-radio-button>
+            </el-radio-group>
             <el-button link @click="filtersExpanded = !filtersExpanded">
               {{ filtersExpanded ? '收起筛选' : '展开筛选' }}
             </el-button>
@@ -101,7 +98,7 @@
       </el-form>
     </el-card>
 
-    <div v-show="mainTab === 'supervision'" class="level-nav">
+    <div v-if="viewMode === 'school'" class="level-nav">
       <el-button link type="primary" @click="goLevel('school')">全部学校</el-button>
       <template v-if="selectedSchool">
         <span>/</span>
@@ -113,7 +110,42 @@
       </template>
     </div>
 
-    <el-card v-show="mainTab === 'supervision'" shadow="never" v-loading="loading">
+    <el-card v-if="viewMode === 'timeline'" shadow="never" v-loading="loading">
+      <el-table :data="rows" border stripe>
+        <el-table-column label="使用日期" min-width="165" fixed>
+          <template #default="{ row }">{{ formatUsageTime(row.usageDate) }}</template>
+        </el-table-column>
+        <el-table-column label="课程名称" prop="lessonTitle" min-width="210" fixed />
+        <el-table-column label="类型" width="105">
+          <template #default="{ row }">{{ row.lessonMode === 'attendance' ? '课堂考勤' : '常规课' }}</template>
+        </el-table-column>
+        <el-table-column label="学校" prop="deptName" min-width="180" />
+        <el-table-column label="教师" prop="teacherName" min-width="110" />
+        <el-table-column label="年级" width="80"><template #default="{ row }">{{ row.grade }}年级</template></el-table-column>
+        <el-table-column label="班级" width="80"><template #default="{ row }">{{ row.classCode }}班</template></el-table-column>
+        <el-table-column label="参与学生" width="105">
+          <template #default="{ row }">{{ row.participantCount }}/{{ row.totalStudentCount }}</template>
+        </el-table-column>
+        <el-table-column label="批改情况" min-width="165">
+          <template #default="{ row }">
+            <el-tag :type="simpleGradingMeta(row).type">{{ simpleGradingMeta(row).label }}</el-tag>
+            <span v-if="row.practicalUngradedCount > 0" class="inline-count">{{ row.practicalUngradedCount }}份未批</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" fixed="right">
+          <template #default="{ row }"><el-button link type="primary" @click="openCourseDetail(row)">课程明细</el-button></template>
+        </el-table-column>
+      </el-table>
+      <pagination
+        v-show="total > 0"
+        :total="total"
+        v-model:page="page.pageNum"
+        v-model:limit="page.pageSize"
+        @pagination="loadCurrent"
+      />
+    </el-card>
+
+    <el-card v-else shadow="never" v-loading="loading">
       <el-table v-if="level === 'school'" :data="rows" border stripe>
         <el-table-column label="学校" prop="deptName" min-width="180" fixed />
         <el-table-column label="课程总数" prop="courseCount" width="100" align="center" />
@@ -518,6 +550,7 @@ import {
   listSupervisionSchools,
   listSupervisionTeachers,
   listSupervisionCourses,
+  listSupervisionTimeline,
   listSupervisionClasses,
   listSupervisionStudents,
   listSupervisionQuestions,
@@ -544,14 +577,12 @@ const currentSemester = resolveAcademicSemester()
 const academicYears = [String(Number(currentAcademicYear) - 2), String(Number(currentAcademicYear) - 1), currentAcademicYear]
 const gradeOptions = Array.from({ length: 9 }, (_, index) => index + 1)
 const statusOptions = [
-  { label: '未触发', value: 'NOT_TRIGGERED' },
-  { label: '批改中', value: 'GRADING' },
-  { label: '即将到期', value: 'DUE_SOON' },
-  { label: '已完成', value: 'COMPLETED' },
-  { label: '已逾期', value: 'OVERDUE' },
-  { label: '重新开放', value: 'REOPENED' }
+  { label: '待批改', value: 'WAITING' },
+  { label: '已批改', value: 'COMPLETED' },
+  { label: '已逾期', value: 'OVERDUE' }
 ]
 const mainTab = ref('supervision')
+const viewMode = ref('timeline')
 const filtersExpanded = ref(true)
 const usageDateRange = ref([])
 const filters = reactive({
@@ -588,15 +619,31 @@ function baseQuery() {
 async function loadCurrent() {
   loading.value = true
   try {
-    const api = level.value === 'school'
-      ? listSupervisionSchools
-      : level.value === 'teacher' ? listSupervisionTeachers : listSupervisionCourses
+    const api = viewMode.value === 'timeline'
+      ? listSupervisionTimeline
+      : level.value === 'school'
+        ? listSupervisionSchools
+        : level.value === 'teacher' ? listSupervisionTeachers : listSupervisionCourses
     const res = await api(baseQuery())
     rows.value = res.rows || []
     total.value = res.total || 0
   } finally {
     loading.value = false
   }
+}
+
+function handleViewModeChange() {
+  page.pageNum = 1
+  loadCurrent()
+}
+
+function simpleGradingMeta(row) {
+  const due = Number(row.practicalDueCount || 0)
+  const ungraded = Number(row.practicalUngradedCount || 0)
+  if (due === 0) return { label: '暂无提交', type: 'info' }
+  if (ungraded === 0) return { label: '已批改', type: 'success' }
+  if (row.statusCode === 'OVERDUE') return { label: '已逾期', type: 'danger' }
+  return { label: '待批改', type: 'warning' }
 }
 
 function reloadCurrent() {
@@ -958,4 +1005,5 @@ onMounted(loadCurrent)
 .dialog-form { margin-top: 20px; }
 .detail-section { margin-top: 16px; }
 .attachment-link { margin-left: 12px; }
+.inline-count { margin-left: 8px; color: #606266; font-size: 12px; }
 </style>

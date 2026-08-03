@@ -3,6 +3,7 @@ package com.ruoyi.business.controller;
 import com.ruoyi.business.domain.vo.GradeGroupVo;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.domain.vo.PracticalGradingStatusVo;
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.service.IBizLessonService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
 import com.ruoyi.common.core.controller.BaseController;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 import com.ruoyi.common.utils.SecurityUtils;
 
 /**
@@ -33,6 +35,9 @@ public class TeacherDashboardController extends BaseController
     @Autowired
     private PracticalGradingDeadlineService deadlineService;
 
+    @Autowired
+    private BizStudentAnswerMapper studentAnswerMapper;
+
     /**
      * 获取教师首页的完整数据
      */
@@ -41,6 +46,7 @@ public class TeacherDashboardController extends BaseController
     {
         List<GradeGroupVo> dashboardData = lessonService.getTeacherDashboardData();
         Long deptId = SecurityUtils.getDeptId();
+        Long userId = SecurityUtils.getUserId();
         for (GradeGroupVo group : dashboardData)
         {
             if (group.getLessons() == null)
@@ -54,14 +60,16 @@ public class TeacherDashboardController extends BaseController
                     continue;
                 }
                 List<PracticalGradingStatusVo> classStatuses = new ArrayList<>();
-                if (lesson.getAssignedClasses() != null)
+                // 历史课程可能缺少指派记录，但已有答题仍需提醒教师批改；
+                // 与批改弹窗复用同一班级事实范围，避免首页红点和弹窗状态不一致。
+                List<Map<String, Object>> classRows = studentAnswerMapper.selectClassStatusByLesson(
+                        lesson.getLessonId(), userId, deptId);
+                for (Map<String, Object> classRow : classRows)
                 {
-                    for (String classLabel : lesson.getAssignedClasses())
-                    {
-                        String classCode = classLabel == null ? "" : classLabel.replace("班", "").trim();
-                        classStatuses.add(deadlineService.getStatus(
-                                lesson.getLessonId(), deptId, group.getEntryYear(), classCode, true));
-                    }
+                    String entryYear = String.valueOf(classRow.get("entryYear"));
+                    String classCode = String.valueOf(classRow.get("classCode"));
+                    classStatuses.add(deadlineService.getStatus(
+                            lesson.getLessonId(), deptId, entryYear, classCode, true));
                 }
                 lesson.setPracticalDeadlineClasses(classStatuses);
             }

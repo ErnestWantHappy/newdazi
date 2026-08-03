@@ -73,6 +73,17 @@ public class TeachingSupervisionController extends BaseController
         return getDataTable(supervisionMapper.selectCourseSummaries(query));
     }
 
+    /**
+     * 跨学校按首次真实使用日期展示课程班级，避免教研员必须逐校下钻才能看到最新课堂。
+     */
+    @GetMapping("/timeline")
+    public TableDataInfo timeline(TeachingSupervisionQuery query)
+    {
+        normalizePeriod(query);
+        startPage();
+        return getDataTable(supervisionMapper.selectTimelineSummaries(query));
+    }
+
     @GetMapping("/classes")
     public TableDataInfo classes(TeachingSupervisionQuery query)
     {

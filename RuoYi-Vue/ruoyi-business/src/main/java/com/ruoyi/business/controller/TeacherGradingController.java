@@ -69,6 +69,18 @@ public class TeacherGradingController extends BaseController {
         Long deptId = SecurityUtils.getDeptId();
         List<java.util.Map<String, Object>> result =
                 studentAnswerMapper.selectClassStatusByLesson(lessonId, userId, deptId);
+        for (java.util.Map<String, Object> row : result)
+        {
+            String entryYear = String.valueOf(row.get("entryYear"));
+            String classCode = String.valueOf(row.get("classCode"));
+            com.ruoyi.business.domain.vo.PracticalGradingStatusVo deadlineStatus =
+                    practicalGradingDeadlineService.getStatus(
+                            lessonId, deptId, entryYear, classCode, false);
+            row.put("deadlineStatusCode", deadlineStatus.getStatusCode());
+            row.put("currentDeadlineTime", deadlineStatus.getCurrentDeadlineTime());
+            row.put("serverNow", deadlineStatus.getServerNow());
+            row.put("canGrade", deadlineStatus.isCanGrade());
+        }
         return AjaxResult.success(result);
     }
 

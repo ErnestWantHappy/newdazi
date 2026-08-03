@@ -5,13 +5,16 @@
         <div class="page-header">
           <div>
             <strong>教师免抽测申请</strong>
-            <div class="muted">系统自动统计全部真实任教班级，班级不能手动排除。</div>
+            <div class="muted">按当前学校分别申请，系统自动统计全部真实任教班级。</div>
           </div>
-          <el-tag type="info">一次提交，教研员直接审核</el-tag>
+          <div class="header-actions">
+            <el-button v-if="creating" @click="cancelCreate">取消新增</el-button>
+            <el-button v-else type="primary" icon="Plus" @click="startCreate">新增申请</el-button>
+          </div>
         </div>
       </template>
 
-      <el-form :model="form" inline label-width="72px">
+      <el-form v-if="creating" :model="form" inline label-width="72px">
         <el-form-item label="学年">
           <el-select v-model="form.academicYear" style="width: 160px">
             <el-option
@@ -34,12 +37,12 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="previewLoading" @click="loadPreview">读取系统统计</el-button>
+          <el-button type="primary" :loading="previewLoading" @click="loadPreview">生成申请预览</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <template v-if="preview">
+    <template v-if="creating && preview">
       <el-card shadow="never" class="section-card">
         <template #header><strong>基本条件与任教班级</strong></template>
         <el-descriptions :column="4" border>
@@ -55,7 +58,15 @@
           :closable="false"
           class="section-gap"
         />
-        <el-empty v-if="preview.classes.length === 0" description="未找到该年级的真实任教班级" />
+        <el-alert
+          v-if="preview.classes.length === 0"
+          title="未找到该年级的真实任教班级，暂不能提交申请"
+          description="请确认当前学校是否正确，并检查教师管班、课程指派或历史课程班级证据。"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="section-gap"
+        />
       </el-card>
 
       <div class="metric-grid">
@@ -268,6 +279,7 @@ const historyLoading = ref(false)
 const detailVisible = ref(false)
 const detail = ref(null)
 const uploadFiles = ref([])
+const creating = ref(false)
 const uploadUrl = `${import.meta.env.VITE_APP_BASE_API}/common/upload`
 const uploadHeaders = computed(() => refreshAuthorizationHeader())
 
@@ -310,10 +322,25 @@ async function submitApplication() {
     })
     proxy.$modal.msgSuccess('免抽测申请已提交')
     uploadFiles.value = []
-    await Promise.all([loadPreview(), loadHistory()])
+    creating.value = false
+    preview.value = null
+    await loadHistory()
   } finally {
     submitting.value = false
   }
+}
+
+function startCreate() {
+  preview.value = null
+  uploadFiles.value = []
+  form.teacherRemark = ''
+  creating.value = true
+}
+
+function cancelCreate() {
+  preview.value = null
+  uploadFiles.value = []
+  creating.value = false
 }
 
 function beforeUpload(file) {
@@ -386,6 +413,10 @@ onMounted(loadHistory)
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 .muted {
   color: #909399;

@@ -123,16 +123,23 @@ INSERT INTO sys_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time)
 SELECT '免抽测申请', 0, 1, 'teacher-exemption', 'business/teacher/exemption/index', '', 'TeacherExemption',
-       1, 0, 'C', '0', '0', 'business:exemption:apply', 'document', 'system', NOW()
+       1, 0, 'C', '0', '0', 'business:exemption:apply', 'documentation', 'system', NOW()
 WHERE NOT EXISTS (
     SELECT 1 FROM sys_menu WHERE perms = 'business:exemption:apply'
 );
 
+-- 使用项目已有的单色 SVG，确保未选中时继承侧栏文字颜色。
+UPDATE sys_menu
+SET icon = 'documentation',
+    update_by = 'system',
+    update_time = NOW()
+WHERE perms = 'business:exemption:apply';
+
 INSERT INTO sys_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time)
-SELECT '免抽测申请审核', 2046, 4, '#', '', '', '',
-       1, 0, 'F', '0', '0', 'business:exemption:review', '#', 'system', NOW()
+SELECT '免抽测申请审核', 0, 2, 'exemption-review', 'business/exemptionReview/index', '', 'ExemptionReview',
+       1, 0, 'C', '0', '0', 'business:exemption:review', 'document', 'system', NOW()
 WHERE NOT EXISTS (
     SELECT 1 FROM sys_menu WHERE perms = 'business:exemption:review'
 );
@@ -140,11 +147,36 @@ WHERE NOT EXISTS (
 INSERT INTO sys_menu
     (menu_name, parent_id, order_num, path, component, query, route_name,
      is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time)
-SELECT '免抽测课数标准', 2046, 5, '#', '', '', '',
+SELECT '免抽测课数标准',
+       (SELECT review_menu.menu_id FROM sys_menu review_menu
+        WHERE review_menu.perms = 'business:exemption:review' LIMIT 1),
+       1, '#', '', '', '',
        1, 0, 'F', '0', '0', 'business:exemption:standard', '#', 'system', NOW()
 WHERE NOT EXISTS (
     SELECT 1 FROM sys_menu WHERE perms = 'business:exemption:standard'
 );
+
+-- 兼容已经执行过旧版脚本的数据库：复用原权限菜单ID改成独立页面，避免角色授权丢失。
+UPDATE sys_menu
+SET menu_name = '免抽测申请审核',
+    parent_id = 0,
+    order_num = 2,
+    path = 'exemption-review',
+    component = 'business/exemptionReview/index',
+    route_name = 'ExemptionReview',
+    menu_type = 'C',
+    icon = 'document',
+    update_by = 'system',
+    update_time = NOW()
+WHERE perms = 'business:exemption:review';
+
+UPDATE sys_menu standard_menu
+INNER JOIN sys_menu review_menu ON review_menu.perms = 'business:exemption:review'
+SET standard_menu.parent_id = review_menu.menu_id,
+    standard_menu.order_num = 1,
+    standard_menu.update_by = 'system',
+    standard_menu.update_time = NOW()
+WHERE standard_menu.perms = 'business:exemption:standard';
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
 SELECT role.role_id, menu.menu_id

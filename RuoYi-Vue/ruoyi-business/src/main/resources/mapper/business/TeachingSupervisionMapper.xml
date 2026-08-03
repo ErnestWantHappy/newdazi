@@ -157,18 +157,20 @@
                    scope.dept_id,
                    scope.entry_year,
                    scope.class_code,
-                   CASE
-                       WHEN practical_lesson.lesson_id IS NULL THEN 'NO_PRACTICAL'
-                       WHEN deadline.deadline_id IS NULL THEN 'NOT_TRIGGERED'
-                       WHEN deadline.current_deadline_time &lt;= NOW() THEN 'OVERDUE'
-                       WHEN deadline.last_adjustment_type = 'REOPEN' THEN 'REOPENED'
-                       WHEN IFNULL(practical_class_metric.due_count, 0) &gt; 0
-                        AND practical_class_metric.due_count = practical_class_metric.graded_count
-                           THEN 'COMPLETED'
-                       WHEN deadline.current_deadline_time &lt;= DATE_ADD(NOW(), INTERVAL 72 HOUR)
-                           THEN 'DUE_SOON'
-                       ELSE 'GRADING'
-                   END AS status_code
+                    CASE
+                        WHEN practical_lesson.lesson_id IS NULL THEN 'NO_PRACTICAL'
+                        WHEN deadline.deadline_id IS NULL THEN 'NOT_TRIGGERED'
+                        WHEN IFNULL(practical_class_metric.due_count, 0) &gt; 0
+                         AND practical_class_metric.due_count = practical_class_metric.graded_count
+                            THEN 'COMPLETED'
+                        WHEN deadline.current_deadline_time &lt;= NOW() THEN 'OVERDUE'
+                        WHEN deadline.last_adjustment_type = 'REOPEN' THEN 'REOPENED'
+                        WHEN deadline.current_deadline_time &lt;= DATE_ADD(NOW(), INTERVAL 72 HOUR)
+                            THEN 'DUE_SOON'
+                        ELSE 'GRADING'
+                    END AS status_code,
+                    IFNULL(practical_class_metric.due_count, 0) AS due_count,
+                    IFNULL(practical_class_metric.graded_count, 0) AS graded_count
             FROM biz_lesson_class_scope scope
             INNER JOIN base_filtered_lesson lesson
                     ON lesson.lesson_id = scope.lesson_id
@@ -193,7 +195,19 @@
                     SELECT 1
                     FROM class_status status
                     WHERE status.lesson_id = lesson.lesson_id
-                      AND status.status_code = #{q.statusCode}
+                    <choose>
+                        <when test="q.statusCode == 'WAITING'">
+                            AND status.due_count &gt; status.graded_count
+                            AND status.status_code IN ('NOT_TRIGGERED', 'GRADING', 'DUE_SOON', 'REOPENED')
+                        </when>
+                        <when test="q.statusCode == 'OVERDUE'">
+                            AND status.status_code = 'OVERDUE'
+                            AND status.due_count &gt; status.graded_count
+                        </when>
+                        <otherwise>
+                            AND status.status_code = #{q.statusCode}
+                        </otherwise>
+                    </choose>
                 )
             </if>
         ),
@@ -321,6 +335,86 @@
         SELECT COUNT(DISTINCT lesson.dept_id)
         FROM filtered_lesson lesson
         INNER JOIN sys_dept dept ON dept.dept_id = lesson.dept_id AND dept.del_flag = '0'
+    </select>
+
+    <select id="selectTimelineSummaries" resultType="java.util.LinkedHashMap">
+        WITH <include refid="filteredLessonCte"/>
+        SELECT scope.scope_id AS scopeId,
+               lesson.lesson_id AS lessonId,
+               lesson.lesson_title AS lessonTitle,
+               lesson.lesson_mode AS lessonMode,
+               lesson.lesson_num AS lessonNum,
+               lesson.grade,
+               scope.entry_year AS entryYear,
+               scope.class_code AS classCode,
+               scope.dept_id AS deptId,
+               dept.dept_name AS deptName,
+               lesson.creator_id AS teacherId,
+               COALESCE(teacher.nick_name, lesson.create_by, '待治理') AS teacherName,
+               class_usage.usage_date AS usageDate,
+               IFNULL(class_usage.participant_count, 0) AS participantCount,
+               (SELECT COUNT(*)
+                FROM biz_student timeline_student
+                INNER JOIN sys_user timeline_user
+                        ON timeline_user.user_id = timeline_student.user_id
+                       AND timeline_user.dept_id = scope.dept_id
+                       AND timeline_user.status = '0'
+                       AND timeline_user.del_flag = '0'
+                WHERE timeline_student.entry_year = scope.entry_year
+                  AND timeline_student.class_code = scope.class_code) AS totalStudentCount,
+               class_state.due_count AS practicalDueCount,
+               class_state.graded_count AS practicalGradedCount,
+               class_state.due_count - class_state.graded_count AS practicalUngradedCount,
+               class_state.status_code AS statusCode,
+               deadline.current_deadline_time AS currentDeadlineTime
+        FROM biz_lesson_class_scope scope
+        INNER JOIN filtered_lesson lesson ON lesson.lesson_id = scope.lesson_id
+        INNER JOIN class_status class_state
+                ON class_state.lesson_id = scope.lesson_id
+               AND class_state.dept_id = scope.dept_id
+               AND class_state.entry_year = scope.entry_year
+               AND class_state.class_code = scope.class_code
+        INNER JOIN sys_dept dept ON dept.dept_id = scope.dept_id
+        LEFT JOIN sys_user teacher ON teacher.user_id = lesson.creator_id
+        LEFT JOIN class_usage_metric class_usage
+               ON class_usage.lesson_id = scope.lesson_id
+              AND class_usage.dept_id = scope.dept_id
+              AND class_usage.entry_year = scope.entry_year
+              AND class_usage.class_code = scope.class_code
+        LEFT JOIN biz_practical_grading_deadline deadline
+               ON deadline.lesson_id = scope.lesson_id
+              AND deadline.dept_id = scope.dept_id
+              AND deadline.entry_year = scope.entry_year
+              AND deadline.class_code = scope.class_code
+        WHERE 1 = 1
+        <if test="q.classCode != null and q.classCode != ''">
+            AND scope.class_code = #{q.classCode}
+        </if>
+        <if test="q.statusCode != null and q.statusCode != ''">
+            <choose>
+                <when test="q.statusCode == 'WAITING'">
+                    AND class_state.due_count &gt; class_state.graded_count
+                    AND class_state.status_code IN ('NOT_TRIGGERED', 'GRADING', 'DUE_SOON', 'REOPENED')
+                </when>
+                <when test="q.statusCode == 'OVERDUE'">
+                    AND class_state.status_code = 'OVERDUE'
+                    AND class_state.due_count &gt; class_state.graded_count
+                </when>
+                <otherwise>
+                    AND class_state.status_code = #{q.statusCode}
+                </otherwise>
+            </choose>
+        </if>
+        <choose>
+            <when test="q.usageSort == 'asc'">
+                ORDER BY class_usage.usage_date IS NULL, class_usage.usage_date ASC,
+                         lesson.lesson_id ASC, CAST(scope.class_code AS UNSIGNED), scope.class_code
+            </when>
+            <otherwise>
+                ORDER BY class_usage.usage_date IS NULL, class_usage.usage_date DESC,
+                         lesson.lesson_id DESC, CAST(scope.class_code AS UNSIGNED), scope.class_code
+            </otherwise>
+        </choose>
     </select>
 
     <select id="selectSchoolSummaries" resultType="java.util.LinkedHashMap">
@@ -501,7 +595,19 @@
             AND scope.class_code = #{q.classCode}
         </if>
         <if test="q.statusCode != null and q.statusCode != ''">
-            AND class_state.status_code = #{q.statusCode}
+            <choose>
+                <when test="q.statusCode == 'WAITING'">
+                    AND class_state.due_count &gt; class_state.graded_count
+                    AND class_state.status_code IN ('NOT_TRIGGERED', 'GRADING', 'DUE_SOON', 'REOPENED')
+                </when>
+                <when test="q.statusCode == 'OVERDUE'">
+                    AND class_state.status_code = 'OVERDUE'
+                    AND class_state.due_count &gt; class_state.graded_count
+                </when>
+                <otherwise>
+                    AND class_state.status_code = #{q.statusCode}
+                </otherwise>
+            </choose>
         </if>
         GROUP BY scope.scope_id, scope.lesson_id, scope.dept_id, scope.entry_year,
                  scope.class_code, scope.current_assigned, class_usage.usage_date, deadline.deadline_id,

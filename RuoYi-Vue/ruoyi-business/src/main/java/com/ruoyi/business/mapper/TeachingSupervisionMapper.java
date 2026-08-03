@@ -11,6 +11,7 @@ public interface TeachingSupervisionMapper
     List<Map<String, Object>> selectSchoolSummaries(@Param("q") TeachingSupervisionQuery query);
     List<Map<String, Object>> selectTeacherSummaries(@Param("q") TeachingSupervisionQuery query);
     List<Map<String, Object>> selectCourseSummaries(@Param("q") TeachingSupervisionQuery query);
+    List<Map<String, Object>> selectTimelineSummaries(@Param("q") TeachingSupervisionQuery query);
     List<Map<String, Object>> selectClassSummaries(@Param("q") TeachingSupervisionQuery query);
     List<Map<String, Object>> selectStudentDetails(@Param("q") TeachingSupervisionQuery query);
     List<Map<String, Object>> selectQuestionDetails(@Param("lessonId") Long lessonId);

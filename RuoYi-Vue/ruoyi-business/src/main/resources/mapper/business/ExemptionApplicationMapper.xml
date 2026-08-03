@@ -13,9 +13,19 @@
         FROM sys_user user
         INNER JOIN sys_dept dept ON dept.dept_id = #{deptId}
         WHERE user.user_id = #{teacherId}
-          AND user.dept_id = #{deptId}
           AND user.status = '0'
           AND user.del_flag = '0'
+          AND dept.status = '0'
+          AND dept.del_flag = '0'
+          AND (
+              user.dept_id = #{deptId}
+              OR EXISTS (
+                  SELECT 1
+                  FROM sys_user_dept user_dept
+                  WHERE user_dept.user_id = user.user_id
+                    AND user_dept.dept_id = #{deptId}
+              )
+          )
     </select>
 
     <select id="selectRequiredLessonCount" resultType="java.lang.Integer">

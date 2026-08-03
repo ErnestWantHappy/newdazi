@@ -12,6 +12,10 @@ export function listSupervisionCourses(query) {
   return request({ url: '/business/schoolScore/courses', method: 'get', params: query })
 }
 
+export function listSupervisionTimeline(query) {
+  return request({ url: '/business/schoolScore/timeline', method: 'get', params: query })
+}
+
 export function listSupervisionClasses(query) {
   return request({ url: '/business/schoolScore/classes', method: 'get', params: query })
 }

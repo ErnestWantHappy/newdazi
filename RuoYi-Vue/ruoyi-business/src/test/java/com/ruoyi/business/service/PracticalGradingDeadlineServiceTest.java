@@ -142,14 +142,29 @@ class PracticalGradingDeadlineServiceTest
     }
 
     @Test
-    void reopenedStatusTakesPriorityBeforeCompleted()
+    void completedStatusTakesPriorityBeforeReopenedLabel()
     {
         Date now = new Date();
         when(deadlineMapper.selectClassMetrics(1L, 10L, "2025", "1"))
                 .thenReturn(metrics(true, 10, 6, 4, 4));
         when(deadlineMapper.selectDeadline(1L, 10L, "2025", "1"))
                 .thenReturn(deadline(now, daysAfter(now, 3), "REOPEN"));
-        assertEquals("REOPENED", service.getStatus(1L, 10L, "2025", "1", false).getStatusCode());
+        assertEquals("COMPLETED", service.getStatus(1L, 10L, "2025", "1", false).getStatusCode());
+    }
+
+    @Test
+    void completedStatusRemainsVisibleAfterDeadlineButEditingStaysLocked()
+    {
+        Date now = new Date();
+        when(deadlineMapper.selectClassMetrics(1L, 10L, "2025", "1"))
+                .thenReturn(metrics(true, 10, 6, 4, 4));
+        when(deadlineMapper.selectDeadline(1L, 10L, "2025", "1"))
+                .thenReturn(deadline(now, new Date(now.getTime() - 1_000L), null));
+
+        PracticalGradingStatusVo status = service.getStatus(1L, 10L, "2025", "1", false);
+
+        assertEquals("COMPLETED", status.getStatusCode());
+        assertFalse(status.isCanGrade());
     }
 
     @Test

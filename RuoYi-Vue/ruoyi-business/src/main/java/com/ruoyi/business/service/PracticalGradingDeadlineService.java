@@ -269,7 +269,14 @@ public class PracticalGradingDeadlineService
             status.setCurrentDeadlineTime(deadline.getCurrentDeadlineTime());
             status.setLastAdjustmentType(deadline.getLastAdjustmentType());
             long remaining = deadline.getCurrentDeadlineTime().getTime() - now.getTime();
-            if (remaining <= 0)
+            boolean completed = due > 0 && due == graded;
+            if (completed)
+            {
+                // 已全部批完是教师最关心的最终业务结论；逾期后仍禁止改分，但不把完成状态改写成逾期。
+                status.setStatusCode("COMPLETED");
+                status.setCanGrade(remaining > 0);
+            }
+            else if (remaining <= 0)
             {
                 status.setStatusCode("OVERDUE");
                 status.setCanGrade(false);
@@ -277,10 +284,6 @@ public class PracticalGradingDeadlineService
             else if ("REOPEN".equals(deadline.getLastAdjustmentType()))
             {
                 status.setStatusCode("REOPENED");
-            }
-            else if (due > 0 && due == graded)
-            {
-                status.setStatusCode("COMPLETED");
             }
             else if (remaining <= DUE_SOON_MILLIS)
             {
