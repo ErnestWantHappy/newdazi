@@ -422,7 +422,7 @@ public class FileConversionUtils {
             File executable = new File(libreOfficeHome, "program" + File.separator + "soffice.exe");
             ProcessBuilder builder = new ProcessBuilder(
                     executable.getAbsolutePath(),
-                    "-env:UserInstallation=" + profileDir.toURI().toString(),
+                    "-env:UserInstallation=" + libreOfficeUserProfileUri(profileDir),
                     "--headless", "--convert-to", "pdf",
                     "--outdir", outputDirectory.getAbsolutePath(),
                     officeFile.getAbsolutePath());
@@ -465,6 +465,12 @@ public class FileConversionUtils {
         String lower = path.toLowerCase(Locale.ROOT);
         return lower.endsWith(".ppt") || lower.endsWith(".pptx")
                 || lower.endsWith(".xls") || lower.endsWith(".xlsx");
+    }
+
+    static String libreOfficeUserProfileUri(File directory) {
+        String normalized = directory.getAbsolutePath().replace('\\', '/');
+        if (normalized.matches("^[A-Za-z]:/.*")) return "file:///" + normalized;
+        return directory.toURI().toASCIIString();
     }
 
     private static void deleteTemporaryDirectory(File directory) {

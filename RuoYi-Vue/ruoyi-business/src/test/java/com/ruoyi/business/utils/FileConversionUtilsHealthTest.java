@@ -2,6 +2,8 @@ package com.ruoyi.business.utils;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -19,6 +21,14 @@ class FileConversionUtilsHealthTest {
         assertTrue(FileConversionUtils.requiresIsolatedCli("student.xlsx"));
         assertFalse(FileConversionUtils.requiresIsolatedCli("student.docx"));
         assertFalse(FileConversionUtils.requiresIsolatedCli("student.pdf"));
+    }
+
+    @Test
+    void windowsOfficeProfileUsesTripleSlashFileUri() {
+        String uri = FileConversionUtils.libreOfficeUserProfileUri(
+                new File("D:\\program\\upload\\.lo-profile-test"));
+        assertTrue(uri.startsWith("file:///"));
+        assertTrue(uri.contains("D:/program/upload/.lo-profile-test"));
     }
 
     @Test
