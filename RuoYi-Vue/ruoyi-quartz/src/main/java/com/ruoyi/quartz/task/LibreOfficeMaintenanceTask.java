@@ -1,6 +1,7 @@
 package com.ruoyi.quartz.task;
 
 import com.ruoyi.business.service.CountyExamPreviewRetryService;
+import com.ruoyi.business.service.PracticalArtifactService;
 import com.ruoyi.business.service.PracticalPreviewRetryService;
 import com.ruoyi.business.utils.FileConversionUtils;
 import org.slf4j.Logger;
@@ -27,6 +28,9 @@ public class LibreOfficeMaintenanceTask {
     @Autowired
     private CountyExamPreviewRetryService countyExamPreviewRetryService;
 
+    @Autowired
+    private PracticalArtifactService practicalArtifactService;
+
     /**
      * 日级全量维护：无条件清理残留并重启服务池。
      */
@@ -51,11 +55,13 @@ public class LibreOfficeMaintenanceTask {
 
         // 重建后立刻捞回：缩短 stuck 窗口，且此时 LO 已可用
         Map<String, Object> daily = practicalPreviewRetryService.retryAfterOfficeRecovered();
+        Map<String, Object> attachments = practicalArtifactService.retryAttachmentsAfterOfficeRecovered();
         Map<String, Object> county = countyExamPreviewRetryService.retryAfterOfficeRecovered();
         String summary = String.format(
-                "%s；联动捞回 日常[匹配%s/触发%s] 区域抽测[匹配%s/触发%s]",
+                "%s；联动捞回 旧答卷[匹配%s/触发%s] 多附件[匹配%s/触发%s] 区域抽测[匹配%s/触发%s]",
                 message,
                 daily.get("matchedCount"), daily.get("triggeredCount"),
+                attachments.get("matchedCount"), attachments.get("triggeredCount"),
                 county.get("matchedCount"), county.get("triggeredCount"));
         log.info("【LibreOffice自愈】{}", summary);
         // 防止 unused 告警语义不清；healthy 仅用于日志上下文

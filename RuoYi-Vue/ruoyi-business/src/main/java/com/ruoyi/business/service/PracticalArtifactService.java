@@ -3,8 +3,10 @@ package com.ruoyi.business.service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -43,6 +45,9 @@ import com.ruoyi.common.utils.file.FileUploadUtils;
 public class PracticalArtifactService
 {
     private static final long STUCK_NORMALIZATION_TIMEOUT_MILLIS = 10L * 60L * 1000L;
+    private static final long AUTO_RETRY_INTERVAL_MILLIS = 60L * 60L * 1000L;
+    private static final long RECOVER_STUCK_NORMALIZATION_TIMEOUT_MILLIS = 2L * 60L * 1000L;
+    private static final int MAX_NORMALIZATION_RETRY_COUNT = 3;
     private static final String CONTEXT_LESSON = "LESSON";
     private static final String TICKET_PREFIX = "student:practical-artifact-ticket:";
 
@@ -332,6 +337,44 @@ public class PracticalArtifactService
             }
         }
         return accepted;
+    }
+
+    /** 小时任务兜底捞回失败或卡住的多附件页图任务。 */
+    public Map<String, Object> retryExpiredAttachments()
+    {
+        return retryRecoverableAttachments(AUTO_RETRY_INTERVAL_MILLIS,
+                STUCK_NORMALIZATION_TIMEOUT_MILLIS);
+    }
+
+    /** Office 进程池重建后立即捞回被中断的多附件任务。 */
+    public Map<String, Object> retryAttachmentsAfterOfficeRecovered()
+    {
+        return retryRecoverableAttachments(0L,
+                RECOVER_STUCK_NORMALIZATION_TIMEOUT_MILLIS);
+    }
+
+    private Map<String, Object> retryRecoverableAttachments(long failedIntervalMillis,
+                                                            long stuckTimeoutMillis)
+    {
+        Date now = new Date();
+        Date failedBefore = new Date(now.getTime() - failedIntervalMillis);
+        Date stuckBefore = new Date(now.getTime() - stuckTimeoutMillis);
+        List<PracticalAttachment> attachments = artifactMapper.selectRecoverableAttachments(
+                failedBefore, stuckBefore, MAX_NORMALIZATION_RETRY_COUNT);
+        int triggeredCount = 0;
+        for (PracticalAttachment attachment : attachments)
+        {
+            if (attachment != null && attachment.getAttachmentId() != null
+                    && conversionService.retry(attachment.getAttachmentId()))
+            {
+                triggeredCount++;
+            }
+        }
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("matchedCount", attachments.size());
+        result.put("triggeredCount", triggeredCount);
+        result.put("skippedCount", Math.max(attachments.size() - triggeredCount, 0));
+        return result;
     }
 
     /** 正常转换可能耗时，只有失败或超过十分钟的卡住任务才允许人工重试。 */

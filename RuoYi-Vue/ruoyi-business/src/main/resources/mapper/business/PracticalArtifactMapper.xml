@@ -231,6 +231,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LIMIT 1
     </select>
 
+    <select id="selectRecoverableAttachments" resultMap="AttachmentResult">
+        SELECT * FROM biz_practical_attachment
+        WHERE normalized_retry_count &lt; #{maxRetryCount}
+          AND (
+            (normalized_status = 'failed'
+              AND COALESCE(normalized_last_retry_time, update_time, create_time) &lt;= #{failedBefore})
+            OR
+            (normalized_status = 'converting'
+              AND COALESCE(normalized_last_retry_time, update_time, create_time) &lt;= #{stuckBefore})
+          )
+        ORDER BY attachment_id ASC
+        LIMIT 200
+    </select>
+
     <update id="resetAttachmentNormalization">
         UPDATE biz_practical_attachment
         SET normalized_status = 'pending',

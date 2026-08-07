@@ -68,6 +68,11 @@ public interface PracticalArtifactMapper
                                                      @Param("rendererVersion") String rendererVersion,
                                                      @Param("excludeAttachmentId") Long excludeAttachmentId);
 
+    List<PracticalAttachment> selectRecoverableAttachments(
+            @Param("failedBefore") Date failedBefore,
+            @Param("stuckBefore") Date stuckBefore,
+            @Param("maxRetryCount") Integer maxRetryCount);
+
     int resetAttachmentNormalization(@Param("attachmentId") Long attachmentId,
                                      @Param("retryTime") Date retryTime);
 
