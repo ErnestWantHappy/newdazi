@@ -419,7 +419,10 @@ public class FileConversionUtils {
                 log.error("【隔离模式转换】无法清理旧 PDF: {}", pdfFile.getAbsolutePath());
                 return null;
             }
-            File executable = new File(libreOfficeHome, "program" + File.separator + "soffice.exe");
+            File consoleExecutable = new File(libreOfficeHome,
+                    "program" + File.separator + "soffice.com");
+            File executable = consoleExecutable.isFile() ? consoleExecutable : new File(libreOfficeHome,
+                    "program" + File.separator + "soffice.exe");
             ProcessBuilder builder = new ProcessBuilder(
                     executable.getAbsolutePath(),
                     "-env:UserInstallation=" + libreOfficeUserProfileUri(profileDir),
