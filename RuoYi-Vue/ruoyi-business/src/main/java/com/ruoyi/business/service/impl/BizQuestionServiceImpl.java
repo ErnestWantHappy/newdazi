@@ -4,6 +4,8 @@ import com.ruoyi.business.domain.BizQuestion;
 import com.ruoyi.business.domain.BizScoringItem; // P6 import
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizScoringItemMapper; // P6 import
+import com.ruoyi.business.mapper.PracticalArtifactMapper;
+import com.ruoyi.business.domain.PracticalQuestionMaterial;
 import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.IBizQuestionService;
 import com.ruoyi.business.utils.FileConversionUtils;
@@ -17,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -38,12 +41,16 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Autowired
     private AsyncConversionService asyncConversionService;
 
+    @Autowired
+    private PracticalArtifactMapper practicalArtifactMapper;
+
     @Override
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
         // P6: 查询评分项 (仅操作题)
         if (question != null && "practical".equals(question.getQuestionType())) {
             question.setScoringItems(bizScoringItemMapper.selectItemsByQuestion(questionId));
+            question.setPracticalMaterials(practicalArtifactMapper.selectMaterialsByQuestion(questionId));
         }
         return question;
     }
@@ -58,6 +65,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int insertBizQuestion(BizQuestion bizQuestion)
     {
         bizQuestion.setCreateTime(DateUtils.getNowDate());
@@ -70,6 +78,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         
         // P6: 保存评分项
         insertScoringItems(bizQuestion);
+        replacePracticalMaterials(bizQuestion);
         
         // 操作题异步转换
         triggerAsyncConversionIfNeeded(bizQuestion);
@@ -78,6 +87,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int updateBizQuestion(BizQuestion bizQuestion)
     {
         // 权限校验：非管理员只能编辑自己创建的题目
@@ -102,6 +112,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         // P6: 更新评分项 (先删后增)
         bizScoringItemMapper.deleteBizScoringItemByQuestion(bizQuestion.getQuestionId());
         insertScoringItems(bizQuestion);
+        replacePracticalMaterials(bizQuestion);
         
         // 操作题异步转换
         triggerAsyncConversionIfNeeded(bizQuestion);
@@ -220,6 +231,13 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             bizQuestion.setFilePath(null);
             bizQuestion.setPreviewPath(null);
         } else if ("practical".equals(questionType)) {
+            if (StringUtils.isEmpty(bizQuestion.getPracticalAllowedExtensions())) {
+                bizQuestion.setPracticalAllowedExtensions(
+                        "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png");
+            }
+            int imageMax = bizQuestion.getPracticalImageMaxCount() == null
+                    ? 10 : bizQuestion.getPracticalImageMaxCount();
+            bizQuestion.setPracticalImageMaxCount(Math.min(Math.max(imageMax, 1), 10));
             handlePracticalQuestionFile(bizQuestion);
             bizQuestion.setWordCount(null);
             bizQuestion.setTypingDuration(null);
@@ -228,6 +246,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             bizQuestion.setTypingDuration(null);
             bizQuestion.setFilePath(null);
             bizQuestion.setPreviewPath(null);
+            bizQuestion.setPracticalAllowedExtensions(null);
+            bizQuestion.setPracticalImageMaxCount(null);
+            bizQuestion.setPracticalMaterials(null);
         }
     }
 
@@ -241,15 +262,19 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             return;
         }
 
-        // 设置为待转换状态，稍后在 insert 之后触发异步转换
-        bizQuestion.setPreviewStatus("pending");
-        
-        // 预先计算 previewPath（PDF URL路径）
         String urlPath = bizQuestion.getFilePath();
-        String fileSystemRelativePath = urlPath.replaceFirst(Constants.RESOURCE_PREFIX, "");
-        String pdfRelativePath = fileSystemRelativePath.replaceAll("(?i)\\.docx?$", ".pdf");
-        String previewUrlPath = Constants.RESOURCE_PREFIX + pdfRelativePath;
-        bizQuestion.setPreviewPath(previewUrlPath);
+        String lower = urlPath.toLowerCase();
+        if (lower.endsWith(".pdf") || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
+            bizQuestion.setPreviewStatus("success");
+            bizQuestion.setPreviewPath(urlPath);
+        } else {
+            // Office 起始文件统一生成 PDF；不再把 Word 后缀规则误用于 PPT/Excel。
+            bizQuestion.setPreviewStatus("pending");
+            String fileSystemRelativePath = urlPath.replaceFirst(Constants.RESOURCE_PREFIX, "");
+            String pdfRelativePath = fileSystemRelativePath.replaceAll("(?i)\\.[^.\\/]+$", ".pdf");
+            bizQuestion.setPreviewPath(Constants.RESOURCE_PREFIX + pdfRelativePath);
+        }
     }
 
     private void calculateWordCount(BizQuestion bizQuestion) {
@@ -283,5 +308,61 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             );
             log.info("【题库】已触发异步转换 questionId={}", bizQuestion.getQuestionId());
         }
+    }
+
+    /**
+     * 题目素材采用独立清单；起始文件可见、补充资源可见、参考答案仅教师可见。
+     */
+    private void replacePracticalMaterials(BizQuestion question)
+    {
+        if (question.getQuestionId() == null) return;
+        practicalArtifactMapper.deleteMaterialsByQuestion(question.getQuestionId());
+        if (!"practical".equals(question.getQuestionType())) return;
+
+        int order = 0;
+        if (StringUtils.isNotEmpty(question.getFilePath()))
+        {
+            PracticalQuestionMaterial starter = buildMaterial(
+                    question.getQuestionId(), "STARTER", order++, question.getFilePath());
+            practicalArtifactMapper.insertQuestionMaterial(starter);
+        }
+        if (question.getPracticalMaterials() == null) return;
+        for (PracticalQuestionMaterial source : question.getPracticalMaterials())
+        {
+            if (source == null || StringUtils.isEmpty(source.getResourcePath())
+                    || "STARTER".equalsIgnoreCase(source.getMaterialType())) continue;
+            String type = "REFERENCE".equalsIgnoreCase(source.getMaterialType())
+                    ? "REFERENCE" : "RESOURCE";
+            String extension = extensionOf(source.getResourcePath());
+            if ("zip".equals(extension) && "STARTER".equals(type))
+            {
+                throw new ServiceException("压缩包只能作为教师资源或参考材料");
+            }
+            PracticalQuestionMaterial material = buildMaterial(
+                    question.getQuestionId(), type, order++, source.getResourcePath());
+            material.setOriginalFileName(StringUtils.isNotEmpty(source.getOriginalFileName())
+                    ? source.getOriginalFileName() : material.getOriginalFileName());
+            practicalArtifactMapper.insertQuestionMaterial(material);
+        }
+    }
+
+    private PracticalQuestionMaterial buildMaterial(Long questionId, String type, int order, String path)
+    {
+        PracticalQuestionMaterial material = new PracticalQuestionMaterial();
+        material.setQuestionId(questionId);
+        material.setMaterialType(type);
+        material.setFileOrder(order);
+        material.setResourcePath(path);
+        material.setOriginalFileName(path.substring(path.lastIndexOf('/') + 1));
+        material.setFileExtension(extensionOf(path));
+        material.setCreateBy(SecurityUtils.getUsername());
+        material.setCreateTime(DateUtils.getNowDate());
+        return material;
+    }
+
+    private String extensionOf(String path)
+    {
+        int dot = path == null ? -1 : path.lastIndexOf('.');
+        return dot < 0 ? "" : path.substring(dot + 1).toLowerCase();
     }
 }

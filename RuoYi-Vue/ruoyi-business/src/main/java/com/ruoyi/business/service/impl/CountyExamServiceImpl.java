@@ -25,6 +25,9 @@ import com.ruoyi.business.mapper.CountyExamQuestionMapper;
 import com.ruoyi.business.mapper.CountyExamStudentMapper;
 import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.ICountyExamService;
+import com.ruoyi.business.utils.ScoringWeightAllocator;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.common.constant.Constants;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -40,7 +43,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -78,6 +80,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
     private static final String AUTO_SUBMIT_NO = "0";
     private static final int DEFAULT_DURATION_MINUTES = 40;
     private static final int REQUIRED_FULL_SCORE = 100;
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Autowired
     private CountyExamMapper countyExamMapper;
@@ -629,7 +632,19 @@ public class CountyExamServiceImpl implements ICountyExamService {
                 longValue(detail.get("examId")), longValue(detail.get("questionId")),
                 intValue(detail.get("questionScore"))));
         detail.put("scoringDetails", selectCountyGradingDetails(answerId));
+        detail.put("normalizedPages", parseNormalizedPages(detail.remove("normalizedPagesJson")));
         return detail;
+    }
+
+    private List<String> parseNormalizedPages(Object value) {
+        if (value == null || String.valueOf(value).trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            return JSON.readValue(String.valueOf(value), new TypeReference<List<String>>() { });
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
     }
 
     @Override
@@ -1036,7 +1051,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
             if (existing == null) {
                 CountyExamAnswer answer = buildAnswer(exam, student, question, null, emptyRequest, now, true);
                 answerMapper.insert(answer);
-                if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
+                if ("pending".equals(answer.getNormalizedStatus()) && answer.getAnswerId() != null) {
                     pendingPreviewAnswerIds.add(answer.getAnswerId());
                 }
             } else if ("practical".equals(question.getQuestionType()) && StringUtils.isEmpty(existing.getStudentAnswer())) {
@@ -1132,7 +1147,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
                 answer.setAnswerId(existing.getAnswerId());
                 answerMapper.updateStudentAnswer(answer);
             }
-            if ("pending".equals(answer.getPreviewStatus()) && answer.getAnswerId() != null) {
+            if ("pending".equals(answer.getNormalizedStatus()) && answer.getAnswerId() != null) {
                 pendingPreviewAnswerIds.add(answer.getAnswerId());
             }
         }
@@ -1226,18 +1241,28 @@ public class CountyExamServiceImpl implements ICountyExamService {
     private void applyPracticalPreview(CountyExamAnswer answer, String studentAnswer) {
         answer.setPreviewRetryCount(0);
         answer.setPreviewLastRetryTime(null);
+        answer.setNormalizedRetryCount(0);
+        answer.setNormalizedLastRetryTime(null);
+        answer.setNormalizedPagesJson(null);
+        answer.setRendererVersion(null);
+        answer.setNormalizedErrorMessage(null);
         if (StringUtils.isEmpty(studentAnswer)) {
             answer.setPreviewStatus(null);
             answer.setPreviewPath(null);
             answer.setPreviewErrorMessage(null);
+            answer.setNormalizedStatus(null);
             return;
         }
+        answer.setNormalizedStatus("pending");
         String lower = studentAnswer.toLowerCase();
-        if (lower.endsWith(".docx") || lower.endsWith(".doc")) {
+        if (lower.endsWith(".docx") || lower.endsWith(".doc")
+                || lower.endsWith(".pptx") || lower.endsWith(".ppt")
+                || lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
             answer.setPreviewStatus("pending");
             answer.setPreviewPath(null);
             answer.setPreviewErrorMessage(null);
-        } else if (lower.endsWith(".pdf")) {
+        } else if (lower.endsWith(".pdf") || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
             answer.setPreviewStatus("success");
             answer.setPreviewPath(studentAnswer);
             answer.setPreviewErrorMessage(null);
@@ -1533,43 +1558,13 @@ public class CountyExamServiceImpl implements ICountyExamService {
     static List<CountyExamScoringItemVo> buildCountyScoringItems(
             List<BizScoringItem> items, int questionScore) {
         List<CountyExamScoringItemVo> result = new ArrayList<CountyExamScoringItemVo>();
-        if (items == null || items.isEmpty() || questionScore < 0) {
+        if (items == null || items.isEmpty()) {
             return result;
         }
-        int totalWeight = 0;
-        for (BizScoringItem item : items) {
-            if (item == null || item.getItemScore() == null || item.getItemScore() < 0) {
-                return result;
-            }
-            totalWeight += item.getItemScore();
-        }
+        List<Integer> maxScores = ScoringWeightAllocator.allocate(items, questionScore);
         // 历史异常权重不参与分项评分，教师仍可切换为直接打分。
-        if (totalWeight != 100) {
+        if (maxScores.size() != items.size()) {
             return result;
-        }
-
-        List<Integer> maxScores = new ArrayList<Integer>();
-        List<Integer> remainders = new ArrayList<Integer>();
-        List<Integer> indexes = new ArrayList<Integer>();
-        int allocated = 0;
-        for (int i = 0; i < items.size(); i++) {
-            long weightedScore = (long) items.get(i).getItemScore() * questionScore;
-            int maxScore = (int) (weightedScore / 100L);
-            maxScores.add(maxScore);
-            remainders.add((int) (weightedScore % 100L));
-            indexes.add(i);
-            allocated += maxScore;
-        }
-        Collections.sort(indexes, new Comparator<Integer>() {
-            @Override
-            public int compare(Integer left, Integer right) {
-                int remainderCompare = Integer.compare(remainders.get(right), remainders.get(left));
-                return remainderCompare != 0 ? remainderCompare : Integer.compare(left, right);
-            }
-        });
-        for (int i = 0; i < questionScore - allocated; i++) {
-            int index = indexes.get(i);
-            maxScores.set(index, maxScores.get(index) + 1);
         }
 
         for (int i = 0; i < items.size(); i++) {

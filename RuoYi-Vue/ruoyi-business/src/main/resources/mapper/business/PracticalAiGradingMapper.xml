@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.PracticalAiGradingMapper">
+    <resultMap id="ConfigResult" type="com.ruoyi.business.domain.TeacherAiConfig">
+        <id property="teacherUserId" column="teacher_user_id"/>
+        <result property="providerCode" column="provider_code"/><result property="modelName" column="model_name"/>
+        <result property="endpointUrl" column="endpoint_url"/><result property="apiKeyCiphertext" column="api_key_ciphertext"/>
+        <result property="apiKeyHint" column="api_key_hint"/><result property="enabled" column="enabled"/>
+        <result property="createTime" column="create_time"/><result property="updateTime" column="update_time"/>
+    </resultMap>
+    <resultMap id="JobResult" type="com.ruoyi.business.domain.PracticalAiJob">
+        <id property="jobId" column="job_id"/><result property="teacherUserId" column="teacher_user_id"/>
+        <result property="deptId" column="dept_id"/><result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/><result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/><result property="providerCode" column="provider_code"/>
+        <result property="modelName" column="model_name"/><result property="promptVersion" column="prompt_version"/>
+        <result property="jobStatus" column="job_status"/><result property="totalCount" column="total_count"/>
+        <result property="successCount" column="success_count"/><result property="failedCount" column="failed_count"/>
+        <result property="skippedCount" column="skipped_count"/><result property="errorMessage" column="error_message"/>
+        <result property="createTime" column="create_time"/><result property="startTime" column="start_time"/>
+        <result property="finishTime" column="finish_time"/>
+    </resultMap>
+    <resultMap id="AiResult" type="com.ruoyi.business.domain.PracticalAiResult">
+        <id property="resultId" column="result_id"/><result property="jobId" column="job_id"/>
+        <result property="answerId" column="answer_id"/><result property="practicalVersionId" column="practical_version_id"/>
+        <result property="rubricSnapshotId" column="rubric_snapshot_id"/><result property="resultStatus" column="result_status"/>
+        <result property="suggestedScore" column="suggested_score"/><result property="scoringDetailsJson" column="scoring_details_json"/>
+        <result property="evidenceJson" column="evidence_json"/><result property="confidence" column="confidence"/>
+        <result property="providerRequestId" column="provider_request_id"/><result property="promptTokens" column="prompt_tokens"/>
+        <result property="completionTokens" column="completion_tokens"/><result property="errorMessage" column="error_message"/>
+        <result property="createTime" column="create_time"/><result property="finishTime" column="finish_time"/>
+    </resultMap>
+
+    <select id="selectConfig" resultMap="ConfigResult">SELECT * FROM biz_teacher_ai_config WHERE teacher_user_id=#{teacherUserId}</select>
+    <select id="selectConfigForUpdate" resultMap="ConfigResult">SELECT * FROM biz_teacher_ai_config WHERE teacher_user_id=#{teacherUserId} FOR UPDATE</select>
+    <insert id="upsertConfig">
+        INSERT INTO biz_teacher_ai_config
+          (teacher_user_id,provider_code,model_name,endpoint_url,api_key_ciphertext,api_key_hint,enabled,create_time,update_time)
+        VALUES (#{teacherUserId},#{providerCode},#{modelName},#{endpointUrl},#{apiKeyCiphertext},#{apiKeyHint},#{enabled},NOW(),NOW())
+        ON DUPLICATE KEY UPDATE provider_code=VALUES(provider_code),model_name=VALUES(model_name),
+          endpoint_url=VALUES(endpoint_url),api_key_ciphertext=VALUES(api_key_ciphertext),
+          api_key_hint=VALUES(api_key_hint),enabled=VALUES(enabled),update_time=NOW()
+    </insert>
+    <delete id="deleteConfig">DELETE FROM biz_teacher_ai_config WHERE teacher_user_id=#{teacherUserId}</delete>
+
+    <insert id="insertJob" useGeneratedKeys="true" keyProperty="jobId">
+        INSERT INTO biz_practical_ai_job
+          (teacher_user_id,dept_id,lesson_id,question_id,entry_year,class_code,provider_code,model_name,
+           prompt_version,job_status,total_count,success_count,failed_count,skipped_count,create_time)
+        VALUES (#{teacherUserId},#{deptId},#{lessonId},#{questionId},#{entryYear},#{classCode},#{providerCode},
+                #{modelName},#{promptVersion},#{jobStatus},#{totalCount},0,0,#{skippedCount},NOW())
+    </insert>
+    <select id="selectJob" resultMap="JobResult">
+        SELECT * FROM biz_practical_ai_job WHERE job_id=#{jobId} AND teacher_user_id=#{teacherUserId}
+    </select>
+    <select id="selectJobForWorker" resultMap="JobResult">SELECT * FROM biz_practical_ai_job WHERE job_id=#{jobId}</select>
+    <select id="selectRunningJob" resultMap="JobResult">
+        SELECT * FROM biz_practical_ai_job
+        WHERE teacher_user_id=#{teacherUserId} AND lesson_id=#{lessonId} AND question_id=#{questionId}
+          AND entry_year=#{entryYear} AND class_code=#{classCode} AND job_status IN ('PENDING','RUNNING')
+        ORDER BY job_id DESC LIMIT 1
+    </select>
+    <update id="updateJobStatus">
+        UPDATE biz_practical_ai_job SET job_status=#{jobStatus}, start_time=COALESCE(#{startTime},start_time),
+          finish_time=#{finishTime}, error_message=#{errorMessage} WHERE job_id=#{jobId}
+    </update>
+    <update id="updateJobCounts">
+        UPDATE biz_practical_ai_job job SET
+          success_count=(SELECT COUNT(*) FROM biz_practical_ai_result r WHERE r.job_id=job.job_id AND r.result_status='SUCCESS'),
+          failed_count=(SELECT COUNT(*) FROM biz_practical_ai_result r WHERE r.job_id=job.job_id AND r.result_status='FAILED')
+        WHERE job_id=#{jobId}
+    </update>
+
+    <insert id="insertResult" useGeneratedKeys="true" keyProperty="resultId">
+        INSERT INTO biz_practical_ai_result
+          (job_id,answer_id,practical_version_id,rubric_snapshot_id,result_status,create_time)
+        VALUES (#{jobId},#{answerId},#{practicalVersionId},#{rubricSnapshotId},#{resultStatus},NOW())
+    </insert>
+    <select id="selectResult" resultMap="AiResult">SELECT * FROM biz_practical_ai_result WHERE result_id=#{resultId}</select>
+    <select id="selectResultsByJob" resultMap="AiResult">SELECT * FROM biz_practical_ai_result WHERE job_id=#{jobId} ORDER BY result_id</select>
+    <update id="updateResult">
+        UPDATE biz_practical_ai_result SET result_status=#{resultStatus},suggested_score=#{suggestedScore},
+          scoring_details_json=#{scoringDetailsJson,jdbcType=VARCHAR},evidence_json=#{evidenceJson,jdbcType=VARCHAR},
+          confidence=#{confidence},provider_request_id=#{providerRequestId},prompt_tokens=#{promptTokens},
+          completion_tokens=#{completionTokens},error_message=#{errorMessage},finish_time=#{finishTime}
+        WHERE result_id=#{resultId} AND practical_version_id=#{practicalVersionId}
+    </update>
+    <update id="resetFailedResults">
+        UPDATE biz_practical_ai_result SET result_status='PENDING',suggested_score=NULL,scoring_details_json=NULL,
+          evidence_json=NULL,confidence=NULL,provider_request_id=NULL,prompt_tokens=NULL,completion_tokens=NULL,
+          error_message=NULL,finish_time=NULL WHERE job_id=#{jobId} AND result_status='FAILED'
+    </update>
+    <update id="updatePendingResultsStatus">
+        UPDATE biz_practical_ai_result SET result_status=#{resultStatus},error_message=#{errorMessage},finish_time=#{finishTime}
+        WHERE job_id=#{jobId} AND result_status='PENDING'
+    </update>
+</mapper>

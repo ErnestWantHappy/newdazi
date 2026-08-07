@@ -1,6 +1,9 @@
 package com.ruoyi.business.controller;
 
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +16,7 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.PracticalRubricSnapshot;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.PracticalSubmissionVo;
 import com.ruoyi.business.mapper.BizLessonMapper;
@@ -20,7 +24,10 @@ import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.service.GuideSheetAccessService;
+import com.ruoyi.business.service.PracticalScoringPolicyService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
+import com.ruoyi.business.service.PracticalArtifactService;
+import com.ruoyi.business.service.PracticalRubricSnapshotService;
 
 /**
  * 教师批改操作题 Controller
@@ -58,6 +65,15 @@ public class TeacherGradingController extends BaseController {
 
     @Autowired
     private com.ruoyi.business.mapper.BizScoringItemMapper scoringItemMapper;
+
+    @Autowired
+    private PracticalScoringPolicyService practicalScoringPolicyService;
+
+    @Autowired
+    private PracticalArtifactService practicalArtifactService;
+
+    @Autowired
+    private PracticalRubricSnapshotService rubricSnapshotService;
 
     /**
      * 获取课程的班级列表（用于批改页面班级选择下拉框）
@@ -113,6 +129,7 @@ public class TeacherGradingController extends BaseController {
         guideSheetAccessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
         List<PracticalSubmissionVo> submissions = studentAnswerMapper.selectPracticalSubmissions(
                 lessonId, questionId, classCode.trim(), entryYear.trim(), deptId);
+        practicalArtifactService.enrichSubmissions(submissions);
         return AjaxResult.success(submissions);
     }
 
@@ -133,6 +150,11 @@ public class TeacherGradingController extends BaseController {
                 request.getLessonId(), request.getEntryYear().trim(), request.getClassCode().trim());
         java.util.Map<String, Object> result = practicalPreviewRetryService.retryFailedPreviewsByQuestionAndClass(
                 request.getLessonId(), request.getQuestionId(), request.getClassCode(), request.getEntryYear(), deptId);
+        List<PracticalSubmissionVo> submissions = studentAnswerMapper.selectPracticalSubmissions(
+                request.getLessonId(), request.getQuestionId(), request.getClassCode().trim(),
+                request.getEntryYear().trim(), deptId);
+        practicalArtifactService.enrichSubmissions(submissions);
+        result.put("normalizedAccepted", practicalArtifactService.retryFailedAttachments(submissions));
         return AjaxResult.success(result);
     }
 
@@ -146,14 +168,8 @@ public class TeacherGradingController extends BaseController {
         if (request.getAnswerId() == null || request.getScore() == null) {
             return AjaxResult.error("参数不完整");
         }
-        if (request.getScore() < 0) {
-            return AjaxResult.error("分数不能为负数");
-        }
-        if (request.getScore() > 100) {
-            return AjaxResult.error("分数不能超过100");
-        }
 
-        BizStudentAnswer answer = studentAnswerMapper.selectById(request.getAnswerId());
+        BizStudentAnswer answer = studentAnswerMapper.selectByIdForUpdate(request.getAnswerId());
         if (answer == null) {
             return AjaxResult.error("答题记录不存在");
         }
@@ -161,23 +177,58 @@ public class TeacherGradingController extends BaseController {
         if (scopeError != null) {
             return AjaxResult.error(scopeError);
         }
+        if (StringUtils.isBlank(answer.getStudentAnswer())) {
+            return AjaxResult.error("学生尚未提交操作题作品");
+        }
+        boolean answerChanged = answer.getPracticalVersionId() != null
+                ? !Objects.equals(request.getPracticalVersionId(), answer.getPracticalVersionId())
+                : request.getSubmitTime() == null || !request.getSubmitTime().equals(answer.getSubmitTime());
+        if (answerChanged || !Objects.equals(request.getExpectedScore(), answer.getScore())) {
+            return AjaxResult.error("答卷或成绩已发生变化，请刷新后重新批改");
+        }
+
+        BizLessonQuestionDetailVo lessonQuestion = findPracticalQuestion(
+                answer.getLessonId(), answer.getQuestionId());
+        if (lessonQuestion == null || lessonQuestion.getQuestionScore() == null
+                || lessonQuestion.getQuestionScore() < 0
+                || lessonQuestion.getQuestionScore() > Integer.MAX_VALUE) {
+            return AjaxResult.error("当前课程的操作题分值配置无效");
+        }
+        PracticalRubricSnapshot rubricSnapshot = rubricSnapshotService.resolve(
+                answer.getPracticalVersionId(), answer.getLessonId(), lessonQuestion,
+                SecurityUtils.getUserId());
+        int questionScore = rubricSnapshot.getQuestionScore();
+
+        List<com.ruoyi.business.domain.BizScoringDetail> scoringDetails =
+                new ArrayList<com.ruoyi.business.domain.BizScoringDetail>();
+        if (request.getScoringDetails() != null) {
+            for (ScoringDetailRequest detail : request.getScoringDetails()) {
+                com.ruoyi.business.domain.BizScoringDetail scoringDetail =
+                        new com.ruoyi.business.domain.BizScoringDetail();
+                if (detail != null) {
+                    scoringDetail.setAnswerId(request.getAnswerId());
+                    scoringDetail.setItemId(detail.getItemId());
+                    scoringDetail.setScore(detail.getScore());
+                }
+                scoringDetails.add(scoringDetail);
+            }
+        }
+        List<com.ruoyi.business.domain.vo.PracticalScoringItemVo> scoringItems =
+                rubricSnapshotService.buildScoringItems(rubricSnapshot);
+        int finalScore = practicalScoringPolicyService.resolveFinalScore(
+                request.getScore(), questionScore, scoringItems, scoringDetails);
 
         // 期限校验必须和改分处于同一事务，避免已逾期后仍写入部分评分明细。
         practicalGradingDeadlineService.assertCanGrade(request.getAnswerId());
-        int rows = studentAnswerMapper.updateScore(request.getAnswerId(), request.getScore());
+        studentAnswerMapper.updateScore(request.getAnswerId(), finalScore);
 
-        if (request.getScoringDetails() != null && !request.getScoringDetails().isEmpty()) {
-            scoringDetailMapper.deleteBizScoringDetailByAnswerId(request.getAnswerId());
-            for (ScoringDetailRequest detail : request.getScoringDetails()) {
-                com.ruoyi.business.domain.BizScoringDetail sd = new com.ruoyi.business.domain.BizScoringDetail();
-                sd.setAnswerId(request.getAnswerId());
-                sd.setItemId(detail.getItemId());
-                sd.setScore(detail.getScore());
-                scoringDetailMapper.insertBizScoringDetail(sd);
-            }
+        // 切回直接打分时也要清除旧分项，避免页面再次打开显示过期明细。
+        scoringDetailMapper.deleteBizScoringDetailByAnswerId(request.getAnswerId());
+        for (com.ruoyi.business.domain.BizScoringDetail detail : scoringDetails) {
+            scoringDetailMapper.insertBizScoringDetail(detail);
         }
 
-        return rows > 0 ? AjaxResult.success("批改成功") : AjaxResult.error("批改失败");
+        return AjaxResult.success("批改成功");
     }
 
     /**
@@ -217,14 +268,31 @@ public class TeacherGradingController extends BaseController {
      */
     @GetMapping("/scoring-items")
     public AjaxResult getScoringItems(@RequestParam Long lessonId,
-                                      @RequestParam Long questionId) {
+                                      @RequestParam Long questionId,
+                                      @RequestParam(required = false) Long practicalVersionId) {
         assertLessonVisibleToCurrentTeacher(lessonId);
-        boolean questionInLesson = lessonQuestionMapper.selectDetailsByLessonId(lessonId).stream()
-                .anyMatch(question -> questionId.equals(question.getQuestionId()));
-        if (!questionInLesson) {
+        BizLessonQuestionDetailVo lessonQuestion = findPracticalQuestion(lessonId, questionId);
+        if (lessonQuestion == null) {
             throw new ServiceException("题目不属于当前课程");
         }
-        return AjaxResult.success(scoringItemMapper.selectItemsByQuestion(questionId));
+        if (lessonQuestion.getQuestionScore() == null || lessonQuestion.getQuestionScore() < 0
+                || lessonQuestion.getQuestionScore() > Integer.MAX_VALUE) {
+            throw new ServiceException("当前课程的操作题分值配置无效");
+        }
+        PracticalRubricSnapshot snapshot = rubricSnapshotService.resolve(
+                practicalVersionId, lessonId, lessonQuestion, SecurityUtils.getUserId());
+        return AjaxResult.success(rubricSnapshotService.buildScoringItems(snapshot));
+    }
+
+    private BizLessonQuestionDetailVo findPracticalQuestion(Long lessonId, Long questionId) {
+        if (lessonId == null || questionId == null) {
+            return null;
+        }
+        return lessonQuestionMapper.selectDetailsByLessonId(lessonId).stream()
+                .filter(question -> questionId.equals(question.getQuestionId()))
+                .filter(question -> "practical".equals(question.getQuestionType()))
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -275,6 +343,10 @@ public class TeacherGradingController extends BaseController {
     public static class GradeRequest {
         private Long answerId;
         private Integer score;
+        private Integer expectedScore;
+        private Long practicalVersionId;
+        @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private Date submitTime;
         private java.util.List<ScoringDetailRequest> scoringDetails;
 
         public Long getAnswerId() { return answerId; }
@@ -282,6 +354,15 @@ public class TeacherGradingController extends BaseController {
 
         public Integer getScore() { return score; }
         public void setScore(Integer score) { this.score = score; }
+
+        public Integer getExpectedScore() { return expectedScore; }
+        public void setExpectedScore(Integer expectedScore) { this.expectedScore = expectedScore; }
+
+        public Long getPracticalVersionId() { return practicalVersionId; }
+        public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
+
+        public Date getSubmitTime() { return submitTime; }
+        public void setSubmitTime(Date submitTime) { this.submitTime = submitTime; }
 
         public java.util.List<ScoringDetailRequest> getScoringDetails() { return scoringDetails; }
         public void setScoringDetails(java.util.List<ScoringDetailRequest> scoringDetails) {

@@ -85,4 +85,19 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /** AI 外部调用独立排队，避免占用文件转换与 Tomcat 请求线程。 */
+    @Bean("practicalAiExecutor")
+    public ThreadPoolTaskExecutor practicalAiExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("practical-ai-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
 }

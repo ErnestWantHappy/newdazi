@@ -132,8 +132,8 @@ public class AsyncConversionService {
             log.warn("【区域抽测转换】领取失败，未找到答题记录，answerId={}", answerId);
             return false;
         }
-        if (!isWordDocument(answer.getStudentAnswer())) {
-            log.info("【区域抽测转换】跳过非 Word 文件，answerId={}, file={}", answerId, answer.getStudentAnswer());
+        if (!isSupportedVisualDocument(answer.getStudentAnswer())) {
+            log.info("【区域抽测转换】跳过不支持的文件，answerId={}, file={}", answerId, answer.getStudentAnswer());
             return false;
         }
 
@@ -201,7 +201,7 @@ public class AsyncConversionService {
             return false;
         }
 
-        Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getPreviewRetryCount());
+        Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getNormalizedRetryCount());
         if (!ignoreRetryLimit && currentRetryCount >= MAX_AUTO_RETRY_COUNT) {
             log.info("【区域抽测转换】达到自动重试上限，跳过 answerId={}, retryCount={}, source={}",
                     answerSnapshot.getAnswerId(), currentRetryCount, triggerSource);
@@ -211,16 +211,16 @@ public class AsyncConversionService {
         Date claimedAt = new Date();
         int updated = countyExamAnswerMapper.claimRetryPreviewConversion(
                 answerSnapshot.getAnswerId(),
-                answerSnapshot.getPreviewStatus(),
+                answerSnapshot.getNormalizedStatus(),
                 currentRetryCount,
-                answerSnapshot.getPreviewLastRetryTime(),
+                answerSnapshot.getNormalizedLastRetryTime(),
                 currentRetryCount + 1,
                 claimedAt
         );
         if (updated <= 0) {
             log.info("【区域抽测转换】重转领取被跳过，answerId={}, source={}, status={}, retryCount={}",
                     answerSnapshot.getAnswerId(), triggerSource,
-                    answerSnapshot.getPreviewStatus(), currentRetryCount);
+                    answerSnapshot.getNormalizedStatus(), currentRetryCount);
             return false;
         }
 
@@ -273,12 +273,11 @@ public class AsyncConversionService {
 
     private void releaseCountyClaimToPending(Long answerId) {
         CountyExamAnswer answer = countyExamAnswerMapper.selectById(answerId);
-        if (answer == null || !"converting".equals(answer.getPreviewStatus())) {
+        if (answer == null || !"converting".equals(answer.getNormalizedStatus())) {
             return;
         }
-        answer.setPreviewStatus("pending");
-        answer.setPreviewPath(null);
-        answer.setPreviewErrorMessage("转换队列繁忙，等待重试");
+        answer.setNormalizedStatus("pending");
+        answer.setNormalizedErrorMessage("转换队列繁忙，等待重试");
         countyExamAnswerMapper.updatePreviewStatus(answer);
         log.info("【区域抽测转换】已回退为 pending 等待重试，answerId={}", answerId);
     }
@@ -493,6 +492,14 @@ public class AsyncConversionService {
         }
         String lowerCaseAnswer = answerFilePath.toLowerCase();
         return lowerCaseAnswer.endsWith(".docx") || lowerCaseAnswer.endsWith(".doc");
+    }
+
+    private boolean isSupportedVisualDocument(String answerFilePath) {
+        if (answerFilePath == null || answerFilePath.trim().isEmpty()) {
+            return false;
+        }
+        String lower = answerFilePath.toLowerCase();
+        return lower.matches(".*\\.(doc|docx|ppt|pptx|xls|xlsx|pdf|jpg|jpeg|png)$");
     }
 
     @Autowired

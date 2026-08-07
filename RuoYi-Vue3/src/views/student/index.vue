@@ -483,39 +483,53 @@
               </div>
 
               <!-- 素材文件下载 -->
-              <div v-if="q.filePath" class="material-section">
+              <div v-if="getStudentMaterials(q).length" class="material-section">
                 <span class="material-label">素材文件：</span>
-                <span class="material-name">{{ getFileName(q.filePath) }}</span>
-                <el-button
-                  type="primary"
-                  size="small"
-                  icon="Download"
-                  @click="downloadMaterial(q.filePath)"
-                >
-                  下载素材
-                </el-button>
+                <div class="material-files">
+                  <div v-for="(material, materialIndex) in getStudentMaterials(q)" :key="material.materialId || materialIndex" class="material-file-row">
+                    <span class="material-name">{{ material.originalFileName || getFileName(material.resourcePath) }}</span>
+                    <el-button type="primary" size="small" icon="Download" @click="downloadMaterial(material.resourcePath)">下载</el-button>
+                  </div>
+                </div>
               </div>
 
               <!-- 作品上传区域 -->
               <div class="upload-section">
                 <span class="upload-label">提交作品：</span>
                 <el-upload
-                  v-if="!practicalUploads[q.questionId]"
                   class="work-uploader"
                   :action="uploadUrl"
                   :data="{ lessonId, questionId: q.questionId }"
                   :headers="uploadHeaders"
-                  :limit="1"
-                  :on-success="(res) => handleUploadSuccess(q.questionId, res)"
+                  :multiple="true"
+                  :limit="getPracticalUploadLimit(q)"
+                  :before-upload="(file) => beforePracticalUpload(q, file)"
+                  :on-success="(res, file) => handleUploadSuccess(q.questionId, res, file)"
                   :on-error="handleUploadError"
-                  :on-exceed="handleUploadExceed"
+                  :on-exceed="() => handleUploadExceed(q)"
                   :show-file-list="false"
-                  accept=".docx,.doc,.pdf,.pptx,.ppt,.xlsx,.xls"
+                  :accept="getPracticalAccept(q)"
                 >
-                  <el-button type="success" icon="Upload">上传作品</el-button>
+                  <el-button type="success" icon="Upload">选择作品文件</el-button>
                 </el-upload>
 
-                <!-- 上传已成功，预览转换由服务器异步完成 -->
+                <div v-if="getPracticalDrafts(q.questionId).length" class="practical-draft-list">
+                  <div v-for="(draft, draftIndex) in getPracticalDrafts(q.questionId)" :key="draft.uploadToken" class="draft-file">
+                    <span>{{ draftIndex + 1 }}. {{ draft.originalFileName }}</span>
+                    <el-button link type="danger" @click="removePracticalDraft(q.questionId, draftIndex)">移除</el-button>
+                  </div>
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :loading="submittingPracticalQuestionId === q.questionId"
+                    @click="commitPracticalArtifact(q)"
+                  >
+                    {{ practicalUploads[q.questionId] ? "提交为新版本" : "确认提交作品" }}
+                  </el-button>
+                  <span class="upload-tip">Office/PDF 仅 1 个；图片可按顺序提交 1～{{ getPracticalUploadLimit(q) }} 张</span>
+                </div>
+
+                <!-- 新版本已提交，预览转换由服务器异步完成 -->
                 <div
                   v-else-if="uploadingQuestionId === q.questionId"
                   class="uploading-status"
@@ -525,11 +539,11 @@
                 </div>
 
                 <!-- 已上传文件展示 -->
-                <div v-else class="uploaded-file">
+                <div v-else-if="practicalUploads[q.questionId]" class="uploaded-file">
                   <el-icon><Document /></el-icon>
                   <div class="uploaded-meta">
                     <span class="file-name">{{
-                      getFileName(practicalUploads[q.questionId])
+                      getPracticalDisplayName(q.questionId)
                     }}</span>
                     <span
                       class="preview-state"
@@ -538,7 +552,7 @@
                       {{ getPracticalPreviewLabel(q.questionId) }}
                     </span>
                   </div>
-                  <el-button-group>
+                  <el-button-group v-if="getPracticalAttachments(q.questionId).length <= 1">
                     <el-button
                       type="primary"
                       size="small"
@@ -562,6 +576,13 @@
                       >删除</el-button
                     >
                   </el-button-group>
+                </div>
+                <div v-if="getPracticalAttachments(q.questionId).length > 1" class="practical-attachment-list">
+                  <div v-for="(attachment, attachmentIndex) in getPracticalAttachments(q.questionId)" :key="attachment.attachmentId || attachmentIndex" class="attachment-row">
+                    <span>{{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}</span>
+                    <el-button link type="primary" @click="previewWork(q.questionId, attachmentIndex)">预览</el-button>
+                    <el-button link type="info" @click="downloadSubmittedWork(q.questionId, attachmentIndex)">下载</el-button>
+                  </div>
                 </div>
               </div>
             </el-card>
@@ -900,6 +921,8 @@ import {
   getHistoryScores,
   getWrongQuestions,
   studentCheckin,
+  submitPracticalArtifact,
+  deletePracticalArtifact,
 } from "@/api/business/studentHome";
 import { checkCurrentCountyExam } from "@/api/business/countyExam";
 import { updateUserPwd } from "@/api/system/user";
@@ -1284,8 +1307,11 @@ const practicalUploads = ref({}); // { questionId: uploadedFilePath }
 const practicalScores = ref({}); // { questionId: score | null } - null表示未批阅
 const practicalPreviewStatuses = ref({}); // { questionId: previewStatus }
 const practicalPreviewPaths = ref({}); // { questionId: previewPath }
+const practicalArtifacts = ref({}); // { questionId: 当前不可变作品版本 }
+const practicalDrafts = ref({}); // { questionId: 暂存文件凭证[] }
 const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { answer, score, previewStatus, previewPath } }
 const uploadingQuestionId = ref(null); // 正在上传/转换的题目ID（用于显示loading）
+const submittingPracticalQuestionId = ref(null);
 const practicalPollingTimers = {};
 
 // 操作题总分
@@ -1477,11 +1503,13 @@ function syncPracticalSubmission(questionId, submitted) {
     practicalScores.value[questionId] = submitted.score;
     practicalPreviewPaths.value[questionId] = submitted.previewPath || "";
     practicalPreviewStatuses.value[questionId] = submitted.previewStatus || (submitted.previewPath ? "success" : "");
+    practicalArtifacts.value[questionId] = submitted.artifact || null;
   } else {
     delete practicalUploads.value[questionId];
     delete practicalScores.value[questionId];
     delete practicalPreviewStatuses.value[questionId];
     delete practicalPreviewPaths.value[questionId];
+    delete practicalArtifacts.value[questionId];
   }
 }
 
@@ -1889,46 +1917,98 @@ function downloadMaterial(filePath) {
   document.body.removeChild(link);
 }
 
-// 上传成功处理
-function handleUploadSuccess(questionId, res) {
+function getPracticalAllowedExtensions(question) {
+  const configured = String(question?.practicalAllowedExtensions || "").toLowerCase()
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return configured.length
+    ? configured
+    : ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"];
+}
+
+function getStudentMaterials(question) {
+  if (Array.isArray(question?.practicalMaterials) && question.practicalMaterials.length) {
+    return question.practicalMaterials;
+  }
+  return question?.filePath ? [{ resourcePath: question.filePath }] : [];
+}
+
+function getPracticalAccept(question) {
+  return getPracticalAllowedExtensions(question).map((item) => `.${item}`).join(",");
+}
+
+function getPracticalUploadLimit(question) {
+  return Math.min(Math.max(Number(question?.practicalImageMaxCount || 10), 1), 10);
+}
+
+function beforePracticalUpload(question, file) {
+  const extension = String(file?.name || "").split(".").pop().toLowerCase();
+  if (!getPracticalAllowedExtensions(question).includes(extension)) {
+    ElMessage.error(`当前题目不允许上传 .${extension || "未知"} 文件`);
+    return false;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error("单个文件不能超过 50MB");
+    return false;
+  }
+  return true;
+}
+
+function getPracticalDrafts(questionId) {
+  return practicalDrafts.value[questionId] || [];
+}
+
+function removePracticalDraft(questionId, index) {
+  const drafts = [...getPracticalDrafts(questionId)];
+  drafts.splice(index, 1);
+  practicalDrafts.value[questionId] = drafts;
+}
+
+// 文件先进入短期暂存区，只有学生明确确认后才生成新版本。
+function handleUploadSuccess(questionId, res, file) {
   if (res.code === 200) {
-    const filePath = res.fileName;
-    practicalUploads.value[questionId] = filePath;
-    practicalScores.value[questionId] = null; // 刚上传，未批阅
-    practicalPreviewStatuses.value[questionId] = "";
-    practicalPreviewPaths.value[questionId] = "";
-
-    // 设置loading状态（后端会进行LibreOffice转换，需要等待）
-    uploadingQuestionId.value = questionId;
-
-    // 提交到后端保存（会触发异步LibreOffice转换）
-    submitAnswersApi({
-      lessonId: lessonId.value,
-      answers: { [questionId]: filePath },
-    })
-      .then(async () => {
-        const submitted = await refreshPracticalSubmission(questionId);
-        const previewStatus = submitted?.previewStatus || "";
-        if (previewStatus === "success" || submitted?.previewPath) {
-          uploadingQuestionId.value = null;
-          ElMessage.success("作品已上传，可以直接预览");
-          return;
-        }
-        if (previewStatus === "failed") {
-          uploadingQuestionId.value = null;
-          ElMessage.warning("作品已上传，但当前文件暂不支持在线预览，请下载原文件查看");
-          return;
-        }
-        ElMessage.info("作品已上传，正在后台转换为预览格式，请稍候...");
-        schedulePracticalPreviewPolling(questionId);
-      })
-      .catch(() => {
-        ElMessage.warning("作品已上传，但保存到服务器失败，请重试");
-        uploadingQuestionId.value = null;
-        clearPracticalPolling(questionId);
-      });
+    practicalDrafts.value[questionId] = [
+      ...getPracticalDrafts(questionId),
+      {
+        uploadToken: res.uploadToken,
+        originalFileName: res.newFileName || file?.name || getFileName(res.fileName),
+        fileKind: res.fileKind,
+        fileExtension: res.fileExtension,
+        fileSize: res.fileSize,
+      },
+    ];
+    ElMessage.success("文件已暂存，请确认提交作品");
   } else {
     ElMessage.error(res.msg || "上传失败");
+  }
+}
+
+async function commitPracticalArtifact(question) {
+  const questionId = question.questionId;
+  const drafts = getPracticalDrafts(questionId);
+  if (!drafts.length || submittingPracticalQuestionId.value) return;
+  submittingPracticalQuestionId.value = questionId;
+  try {
+    await submitPracticalArtifact({
+      lessonId: lessonId.value,
+      questionId,
+      expectedVersionId: practicalArtifacts.value[questionId]?.versionId || null,
+      uploadTokens: drafts.map((item) => item.uploadToken),
+    });
+    practicalDrafts.value[questionId] = [];
+    uploadingQuestionId.value = questionId;
+    const submitted = await refreshPracticalSubmission(questionId);
+    const previewStatus = submitted?.previewStatus || "";
+    if (previewStatus === "success" || submitted?.previewPath) {
+      uploadingQuestionId.value = null;
+      ElMessage.success("作品提交成功，可以直接预览");
+    } else {
+      ElMessage.success("作品提交成功，预览正在后台生成");
+      schedulePracticalPreviewPolling(questionId);
+    }
+  } finally {
+    submittingPracticalQuestionId.value = null;
   }
 }
 
@@ -1936,8 +2016,21 @@ function handleUploadError() {
   ElMessage.error("上传失败，请重试");
 }
 
-function handleUploadExceed() {
-  ElMessage.warning("操作题仅允许上传 1 个文件");
+function handleUploadExceed(question) {
+  ElMessage.warning(`图片作品最多 ${getPracticalUploadLimit(question)} 张，Office/PDF 只能选择 1 个`);
+}
+
+function getPracticalAttachments(questionId) {
+  const attachments = practicalArtifacts.value[questionId]?.attachments;
+  if (Array.isArray(attachments) && attachments.length) return attachments;
+  const resourcePath = practicalUploads.value[questionId];
+  return resourcePath ? [{ resourcePath, previewPath: practicalPreviewPaths.value[questionId], previewStatus: practicalPreviewStatuses.value[questionId] }] : [];
+}
+
+function getPracticalDisplayName(questionId) {
+  const attachments = getPracticalAttachments(questionId);
+  if (attachments.length > 1) return `${attachments.length} 个文件（图片组）`;
+  return attachments[0]?.originalFileName || getFileName(attachments[0]?.resourcePath);
 }
 
 function getPracticalPreviewLabel(questionId) {
@@ -1964,8 +2057,8 @@ function canPreviewPractical(questionId) {
   return !!practicalPreviewPaths.value[questionId];
 }
 
-function downloadSubmittedWork(questionId) {
-  const filePath = practicalUploads.value[questionId];
+function downloadSubmittedWork(questionId, attachmentIndex = 0) {
+  const filePath = getPracticalAttachments(questionId)[attachmentIndex]?.resourcePath;
   if (!filePath) return;
   const link = document.createElement("a");
   link.href = `${import.meta.env.VITE_APP_BASE_API}/common/download/resource?resource=${encodeURIComponent(filePath)}`;
@@ -1977,17 +2070,22 @@ function downloadSubmittedWork(questionId) {
 }
 
 // 预览作品（使用PDF预览组件，借助后端LibreOffice转换）
-function previewWork(questionId) {
-  const filePath = practicalUploads.value[questionId];
+function previewWork(questionId, attachmentIndex = 0) {
+  const attachment = getPracticalAttachments(questionId)[attachmentIndex];
+  const filePath = attachment?.resourcePath;
   if (!filePath) return;
   const baseUrl = import.meta.env.VITE_APP_BASE_API;
-  const previewStatus = practicalPreviewStatuses.value[questionId];
-  const previewPath = practicalPreviewPaths.value[questionId];
+  const previewStatus = attachment?.previewStatus || practicalPreviewStatuses.value[questionId];
+  const previewPath = attachment?.previewPath || practicalPreviewPaths.value[questionId];
 
   // 使用后端专用的预览接口，解决特殊字符文件名导致的404问题
   // 接口地址: /common/resource/view?resource=xxx
   const previewApi = `${baseUrl}/common/resource/view?resource=`;
 
+  if (attachment?.fileKind === "IMAGE" && filePath) {
+    window.open(previewApi + encodeURIComponent(filePath), "_blank", "noopener,noreferrer");
+    return;
+  }
   if (previewStatus === "success" && previewPath) {
     const resourceUrl = previewApi + encodeURIComponent(previewPath);
     pdfPreviewRef.value?.open(resourceUrl);
@@ -2011,16 +2109,17 @@ function deleteWork(questionId) {
   ElMessageBox.confirm("确定删除已上传的作品吗？删除后需重新上传", "提示", {
     type: "warning",
   }).then(() => {
-    // 从后端删除记录
-    submitAnswersApi({
+    deletePracticalArtifact({
       lessonId: lessonId.value,
-      answers: { [questionId]: "" }, // 空字符串表示删除
+      questionId,
+      expectedVersionId: practicalArtifacts.value[questionId]?.versionId || null,
     }).then(() => {
       clearPracticalPolling(questionId);
       delete practicalUploads.value[questionId];
       delete practicalScores.value[questionId];
       delete practicalPreviewStatuses.value[questionId];
       delete practicalPreviewPaths.value[questionId];
+      delete practicalArtifacts.value[questionId];
       ElMessage.success("已删除");
     });
   });
@@ -2652,11 +2751,47 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.material-files {
+  flex: 1;
+}
+
+.material-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+
 .upload-section {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
+}
+
+.practical-draft-list,
+.practical-attachment-list {
+  min-width: 360px;
+  padding: 10px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.draft-file,
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.upload-tip {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .uploaded-file {

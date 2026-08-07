@@ -1,5 +1,9 @@
 package com.ruoyi.business.domain.vo;
 
+import java.util.ArrayList;
+import java.util.List;
+import com.ruoyi.business.domain.PracticalQuestionMaterial;
+
 /**
  * 学生日常课程题目只承载作答所需字段，不复用包含答案和评分配置的教师视图。
  */
@@ -20,6 +24,9 @@ public class StudentLessonQuestionVo
     private Integer wordCount;
     private String previewPath;
     private String filePath;
+    private String practicalAllowedExtensions;
+    private Integer practicalImageMaxCount;
+    private List<PracticalQuestionMaterial> practicalMaterials = new ArrayList<PracticalQuestionMaterial>();
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -51,4 +58,10 @@ public class StudentLessonQuestionVo
     public void setPreviewPath(String previewPath) { this.previewPath = previewPath; }
     public String getFilePath() { return filePath; }
     public void setFilePath(String filePath) { this.filePath = filePath; }
+    public String getPracticalAllowedExtensions() { return practicalAllowedExtensions; }
+    public void setPracticalAllowedExtensions(String practicalAllowedExtensions) { this.practicalAllowedExtensions = practicalAllowedExtensions; }
+    public Integer getPracticalImageMaxCount() { return practicalImageMaxCount; }
+    public void setPracticalImageMaxCount(Integer practicalImageMaxCount) { this.practicalImageMaxCount = practicalImageMaxCount; }
+    public List<PracticalQuestionMaterial> getPracticalMaterials() { return practicalMaterials; }
+    public void setPracticalMaterials(List<PracticalQuestionMaterial> practicalMaterials) { this.practicalMaterials = practicalMaterials; }
 }

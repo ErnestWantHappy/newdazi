@@ -88,6 +88,20 @@ public class ResourceAccessService
             return resource;
         }
 
+        Long referenceQuestionId = resourceAccessMapper.selectReferenceQuestionIdByResource(resource);
+        if (referenceQuestionId != null && referenceQuestionId > 0)
+        {
+            BizQuestion question = questionMapper.selectBizQuestionByQuestionId(referenceQuestionId);
+            if (question != null && (isAdmin(loginUser)
+                    || ((hasRole(loginUser, "teacher") || hasRole(loginUser, "researcher"))
+                        && ("Y".equalsIgnoreCase(question.getIsPublic())
+                            || loginUser.getUserId().equals(question.getCreatorId())))))
+            {
+                return resource;
+            }
+            throw new ServiceException("无权访问该教师参考材料");
+        }
+
         if (resourceAccessMapper.countCountyQuestionResource(resource) > 0)
         {
             assertCountyQuestionAccess(resource, loginUser);

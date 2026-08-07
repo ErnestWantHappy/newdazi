@@ -2,6 +2,9 @@ package com.ruoyi.business.domain.vo;
 
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import java.util.ArrayList;
+import java.util.List;
+import com.ruoyi.business.domain.PracticalAttachment;
 
 /**
  * 操作题提交记录 - 批改用视图对象
@@ -64,6 +67,15 @@ public class PracticalSubmissionVo {
     /** 学生备注 */
     private String remark;
 
+    /** 当前逻辑作品版本；历史未回填数据可空 */
+    private Long practicalVersionId;
+
+    /** 当前提交绑定的评分标准快照。 */
+    private Long rubricSnapshotId;
+
+    /** 当前版本附件，按作品顺序排列 */
+    private List<PracticalAttachment> attachments = new ArrayList<PracticalAttachment>();
+
     // Getters and Setters
     public Long getAnswerId() { return answerId; }
     public void setAnswerId(Long answerId) { this.answerId = answerId; }
@@ -118,4 +130,13 @@ public class PracticalSubmissionVo {
     
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
+
+    public Long getPracticalVersionId() { return practicalVersionId; }
+    public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
+
+    public Long getRubricSnapshotId() { return rubricSnapshotId; }
+    public void setRubricSnapshotId(Long rubricSnapshotId) { this.rubricSnapshotId = rubricSnapshotId; }
+
+    public List<PracticalAttachment> getAttachments() { return attachments; }
+    public void setAttachments(List<PracticalAttachment> attachments) { this.attachments = attachments; }
 }

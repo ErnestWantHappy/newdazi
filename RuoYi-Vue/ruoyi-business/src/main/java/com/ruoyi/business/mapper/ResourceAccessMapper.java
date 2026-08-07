@@ -16,6 +16,8 @@ public interface ResourceAccessMapper
 
     Long selectQuestionIdByResource(@Param("resource") String resource);
 
+    Long selectReferenceQuestionIdByResource(@Param("resource") String resource);
+
     Map<String, Object> selectExemptionAttachmentOwner(@Param("resource") String resource);
 
     int countCurrentLessonQuestionForStudent(@Param("studentId") Long studentId,

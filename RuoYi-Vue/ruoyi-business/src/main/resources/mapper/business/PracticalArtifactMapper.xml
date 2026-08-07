@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.PracticalArtifactMapper">
+
+    <resultMap id="ArtifactResult" type="com.ruoyi.business.domain.PracticalArtifact">
+        <id property="artifactId" column="artifact_id"/>
+        <result property="contextType" column="context_type"/>
+        <result property="contextId" column="context_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="currentVersionId" column="current_version_id"/>
+        <result property="latestVersionNo" column="latest_version_no"/>
+        <result property="lockVersion" column="lock_version"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="VersionResult" type="com.ruoyi.business.domain.PracticalSubmissionVersion">
+        <id property="versionId" column="version_id"/>
+        <result property="artifactId" column="artifact_id"/>
+        <result property="rubricSnapshotId" column="rubric_snapshot_id"/>
+        <result property="versionNo" column="version_no"/>
+        <result property="sourceAnswerId" column="source_answer_id"/>
+        <result property="versionStatus" column="version_status"/>
+        <result property="scoreStatus" column="score_status"/>
+        <result property="scoreSnapshot" column="score_snapshot"/>
+        <result property="scoringDetailsJson" column="scoring_details_json"/>
+        <result property="submittedByUserId" column="submitted_by_user_id"/>
+        <result property="submitTime" column="submit_time"/>
+        <result property="invalidatedTime" column="invalidated_time"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <resultMap id="AttachmentResult" type="com.ruoyi.business.domain.PracticalAttachment">
+        <id property="attachmentId" column="attachment_id"/>
+        <result property="versionId" column="version_id"/>
+        <result property="fileOrder" column="file_order"/>
+        <result property="fileKind" column="file_kind"/>
+        <result property="originalFileName" column="original_file_name"/>
+        <result property="resourcePath" column="resource_path"/>
+        <result property="fileExtension" column="file_extension"/>
+        <result property="mimeType" column="mime_type"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="sha256" column="sha256"/>
+        <result property="securityStatus" column="security_status"/>
+        <result property="previewStatus" column="preview_status"/>
+        <result property="previewPath" column="preview_path"/>
+        <result property="previewRetryCount" column="preview_retry_count"/>
+        <result property="previewLastRetryTime" column="preview_last_retry_time"/>
+        <result property="previewErrorMessage" column="preview_error_message"/>
+        <result property="normalizedStatus" column="normalized_status"/>
+        <result property="normalizedPagesJson" column="normalized_pages_json"/>
+        <result property="rendererVersion" column="renderer_version"/>
+        <result property="normalizedRetryCount" column="normalized_retry_count"/>
+        <result property="normalizedLastRetryTime" column="normalized_last_retry_time"/>
+        <result property="normalizedErrorMessage" column="normalized_error_message"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="MaterialResult" type="com.ruoyi.business.domain.PracticalQuestionMaterial">
+        <id property="materialId" column="material_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="materialType" column="material_type"/>
+        <result property="fileOrder" column="file_order"/>
+        <result property="originalFileName" column="original_file_name"/>
+        <result property="resourcePath" column="resource_path"/>
+        <result property="fileExtension" column="file_extension"/>
+        <result property="mimeType" column="mime_type"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="sha256" column="sha256"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="selectByContext" resultMap="ArtifactResult">
+        SELECT * FROM biz_practical_artifact
+        WHERE context_type = #{contextType}
+          AND context_id = #{contextId}
+          AND student_id = #{studentId}
+          AND question_id = #{questionId}
+    </select>
+
+    <select id="selectByContextForUpdate" resultMap="ArtifactResult">
+        SELECT * FROM biz_practical_artifact
+        WHERE context_type = #{contextType}
+          AND context_id = #{contextId}
+          AND student_id = #{studentId}
+          AND question_id = #{questionId}
+        FOR UPDATE
+    </select>
+
+    <insert id="insertArtifact" useGeneratedKeys="true" keyProperty="artifactId">
+        INSERT INTO biz_practical_artifact
+            (context_type, context_id, student_id, question_id, current_version_id,
+             latest_version_no, lock_version, create_time, update_time)
+        VALUES
+            (#{contextType}, #{contextId}, #{studentId}, #{questionId}, #{currentVersionId},
+             #{latestVersionNo}, #{lockVersion}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="updateCurrentVersion">
+        UPDATE biz_practical_artifact
+        SET current_version_id = #{currentVersionId},
+            latest_version_no = #{latestVersionNo},
+            lock_version = lock_version + 1,
+            update_time = #{updateTime}
+        WHERE artifact_id = #{artifactId}
+          AND lock_version = #{expectedLockVersion}
+    </update>
+
+    <insert id="insertVersion" useGeneratedKeys="true" keyProperty="versionId">
+        INSERT INTO biz_practical_submission_version
+            (artifact_id, rubric_snapshot_id, version_no, source_answer_id, version_status, score_status,
+             score_snapshot, scoring_details_json, submitted_by_user_id, submit_time,
+             invalidated_time, create_time)
+        VALUES
+            (#{artifactId}, #{rubricSnapshotId}, #{versionNo}, #{sourceAnswerId}, #{versionStatus}, #{scoreStatus},
+             #{scoreSnapshot}, #{scoringDetailsJson,jdbcType=VARCHAR}, #{submittedByUserId},
+             #{submitTime}, #{invalidatedTime}, #{createTime})
+    </insert>
+
+    <select id="selectVersionById" resultMap="VersionResult">
+        SELECT * FROM biz_practical_submission_version WHERE version_id = #{versionId}
+    </select>
+
+    <update id="bindVersionAnswer">
+        UPDATE biz_practical_submission_version
+        SET source_answer_id = #{sourceAnswerId}
+        WHERE version_id = #{versionId}
+    </update>
+
+    <update id="supersedeVersion">
+        UPDATE biz_practical_submission_version
+        SET version_status = 'SUPERSEDED',
+            score_status = IF(#{scoreSnapshot} IS NULL, 'UNGRADED', 'INVALIDATED'),
+            score_snapshot = #{scoreSnapshot},
+            scoring_details_json = #{scoringDetailsJson,jdbcType=VARCHAR},
+            invalidated_time = #{invalidatedTime}
+        WHERE version_id = #{versionId}
+          AND version_status = 'CURRENT'
+    </update>
+
+    <update id="deleteCurrentVersion">
+        UPDATE biz_practical_submission_version
+        SET version_status = 'DELETED',
+            score_status = IF(#{scoreSnapshot} IS NULL, 'UNGRADED', 'INVALIDATED'),
+            score_snapshot = #{scoreSnapshot},
+            scoring_details_json = #{scoringDetailsJson,jdbcType=VARCHAR},
+            invalidated_time = #{invalidatedTime}
+        WHERE version_id = #{versionId}
+          AND version_status = 'CURRENT'
+    </update>
+
+    <insert id="insertAttachment" useGeneratedKeys="true" keyProperty="attachmentId">
+        INSERT INTO biz_practical_attachment
+            (version_id, file_order, file_kind, original_file_name, resource_path,
+             file_extension, mime_type, file_size, sha256, security_status,
+             preview_status, preview_path, preview_retry_count, preview_last_retry_time,
+             preview_error_message, normalized_status, normalized_retry_count,
+             create_time, update_time)
+        VALUES
+            (#{versionId}, #{fileOrder}, #{fileKind}, #{originalFileName}, #{resourcePath},
+             #{fileExtension}, #{mimeType}, #{fileSize}, #{sha256}, #{securityStatus},
+             #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime},
+             #{previewErrorMessage}, #{normalizedStatus}, #{normalizedRetryCount},
+             #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="selectAttachmentsByVersion" resultMap="AttachmentResult">
+        SELECT * FROM biz_practical_attachment
+        WHERE version_id = #{versionId}
+        ORDER BY file_order ASC
+    </select>
+
+    <select id="selectAttachmentById" resultMap="AttachmentResult">
+        SELECT * FROM biz_practical_attachment WHERE attachment_id = #{attachmentId}
+    </select>
+
+    <update id="claimAttachmentPreview">
+        UPDATE biz_practical_attachment
+        SET preview_status = 'converting',
+            preview_last_retry_time = #{claimedAt},
+            update_time = #{claimedAt}
+        WHERE attachment_id = #{attachmentId}
+          AND preview_status = 'pending'
+    </update>
+
+    <update id="updateAttachmentPreview">
+        UPDATE biz_practical_attachment
+        SET preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_retry_count = #{previewRetryCount},
+            preview_last_retry_time = #{previewLastRetryTime},
+            preview_error_message = #{previewErrorMessage},
+            update_time = #{updateTime}
+        WHERE attachment_id = #{attachmentId}
+    </update>
+
+    <update id="claimAttachmentNormalization">
+        UPDATE biz_practical_attachment
+        SET normalized_status = 'converting',
+            normalized_last_retry_time = #{claimedAt},
+            update_time = #{claimedAt}
+        WHERE attachment_id = #{attachmentId}
+          AND normalized_status = 'pending'
+    </update>
+
+    <update id="updateAttachmentNormalization">
+        UPDATE biz_practical_attachment
+        SET normalized_status = #{normalizedStatus},
+            normalized_pages_json = #{normalizedPagesJson,jdbcType=VARCHAR},
+            renderer_version = #{rendererVersion},
+            normalized_retry_count = #{normalizedRetryCount},
+            normalized_last_retry_time = #{normalizedLastRetryTime},
+            normalized_error_message = #{normalizedErrorMessage},
+            update_time = #{updateTime}
+        WHERE attachment_id = #{attachmentId}
+    </update>
+
+    <select id="selectReusableNormalization" resultMap="AttachmentResult">
+        SELECT * FROM biz_practical_attachment
+        WHERE sha256 = #{sha256}
+          AND renderer_version = #{rendererVersion}
+          AND normalized_status = 'success'
+          AND normalized_pages_json IS NOT NULL
+          AND attachment_id != #{excludeAttachmentId}
+        ORDER BY attachment_id DESC
+        LIMIT 1
+    </select>
+
+    <update id="resetAttachmentNormalization">
+        UPDATE biz_practical_attachment
+        SET normalized_status = 'pending',
+            normalized_retry_count = normalized_retry_count + 1,
+            normalized_last_retry_time = #{retryTime},
+            normalized_error_message = NULL,
+            update_time = #{retryTime}
+        WHERE attachment_id = #{attachmentId}
+          AND normalized_status IN ('failed', 'converting')
+          AND normalized_retry_count &lt; 3
+    </update>
+
+    <select id="selectMaterialsByQuestion" resultMap="MaterialResult">
+        SELECT * FROM biz_practical_question_material
+        WHERE question_id = #{questionId}
+        ORDER BY material_type, file_order
+    </select>
+
+    <delete id="deleteMaterialsByQuestion">
+        DELETE FROM biz_practical_question_material WHERE question_id = #{questionId}
+    </delete>
+
+    <insert id="insertQuestionMaterial" useGeneratedKeys="true" keyProperty="materialId">
+        INSERT INTO biz_practical_question_material
+            (question_id, material_type, file_order, original_file_name, resource_path,
+             file_extension, mime_type, file_size, sha256, create_by, create_time)
+        VALUES
+            (#{questionId}, #{materialType}, #{fileOrder}, #{originalFileName}, #{resourcePath},
+             #{fileExtension}, #{mimeType}, #{fileSize}, #{sha256}, #{createBy}, #{createTime})
+    </insert>
+</mapper>

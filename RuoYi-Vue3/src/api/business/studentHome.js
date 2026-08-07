@@ -26,6 +26,24 @@ export function submitAnswers(data) {
   })
 }
 
+// 将已暂存文件提交为一个新的操作题作品版本
+export function submitPracticalArtifact(data) {
+  return request({
+    url: '/business/student-home/practical-artifact/submit',
+    method: 'post',
+    data
+  })
+}
+
+// 删除当前操作题作品；服务器仍保留历史版本用于审计
+export function deletePracticalArtifact(data) {
+  return request({
+    url: '/business/student-home/practical-artifact/delete',
+    method: 'post',
+    data
+  })
+}
+
 // 获取学生历史成绩单
 export function getHistoryScores(year) {
   return request({

@@ -45,6 +45,11 @@ import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.business.service.GuideSheetStudentViewService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
 import com.ruoyi.business.service.StudentAnswerSubmissionService;
+import com.ruoyi.business.service.PracticalArtifactService;
+import com.ruoyi.business.domain.dto.PracticalArtifactSubmitRequest;
+import com.ruoyi.business.domain.dto.PracticalArtifactDeleteRequest;
+import com.ruoyi.business.domain.dto.PracticalUploadTicket;
+import com.ruoyi.business.domain.vo.PracticalArtifactVo;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import org.slf4j.Logger;
@@ -94,6 +99,9 @@ public class StudentHomeController extends BaseController
 
     @Autowired
     private StudentAnswerSubmissionService studentAnswerSubmissionService;
+
+    @Autowired
+    private PracticalArtifactService practicalArtifactService;
 
     @Autowired
     private BizLessonCheckinMapper lessonCheckinMapper;
@@ -170,6 +178,14 @@ public class StudentHomeController extends BaseController
         // 4. 查询课程题目列表
         List<StudentLessonQuestionVo> questions = studentViewService.toStudentLessonQuestions(
                 lessonQuestionMapper.selectDetailsByLessonId(lessonId));
+        for (StudentLessonQuestionVo question : questions)
+        {
+            if ("practical".equalsIgnoreCase(question.getQuestionType()))
+            {
+                question.setPracticalMaterials(
+                        practicalArtifactService.getStudentMaterials(question.getQuestionId()));
+            }
+        }
 
         log.info("【学生首页】课程 {} 包含 {} 道题目", lessonId, questions.size());
         
@@ -184,6 +200,11 @@ public class StudentHomeController extends BaseController
             info.put("submitTime", sa.getSubmitTime());
             info.put("previewStatus", sa.getPreviewStatus());
             info.put("previewPath", sa.getPreviewPath());
+            info.put("practicalVersionId", sa.getPracticalVersionId());
+            if (sa.getPracticalVersionId() != null) {
+                info.put("artifact", practicalArtifactService.getCurrentLessonArtifact(
+                        student.getStudentId(), lessonId, sa.getQuestionId()));
+            }
             answersMap.put(sa.getQuestionId(), info);
         }
 
@@ -357,14 +378,85 @@ public class StudentHomeController extends BaseController
             throw new ServiceException("题目不存在或不是操作题");
         }
 
-        // 随机目录和随机文件名均不包含学生标识，避免磁盘路径泄露身份。
-        String scopedUploadPath = RuoYiConfig.getUploadPath() + "/student-answer/" + UUID.randomUUID();
-        String fileName = FileUploadUtils.upload(scopedUploadPath, file, PRACTICAL_ALLOWED_EXTENSIONS, true);
-        redisCache.setCacheObject(practicalUploadOwnerKey(fileName), student.getStudentId(), 60,
-                java.util.concurrent.TimeUnit.MINUTES);
+        PracticalUploadTicket ticket = practicalArtifactService.stageStudentFile(
+                student.getStudentId(), lessonId, question, file);
         return AjaxResult.success()
-                .put("fileName", fileName)
-                .put("newFileName", FileUtils.getName(fileName));
+                .put("fileName", ticket.getResourcePath())
+                .put("newFileName", ticket.getOriginalFileName())
+                .put("uploadToken", ticket.getToken())
+                .put("fileKind", ticket.getFileKind())
+                .put("fileExtension", ticket.getFileExtension())
+                .put("fileSize", ticket.getFileSize());
+    }
+
+    /**
+     * 将一个Office/PDF文件或一组有序图片提交为新的不可变作品版本。
+     */
+    @PreAuthorize("@studentSs.isStudent()")
+    @PostMapping("/practical-artifact/submit")
+    public AjaxResult submitPracticalArtifact(@RequestBody PracticalArtifactSubmitRequest request)
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null)
+        {
+            throw new ServiceException("未找到学生信息");
+        }
+        if (hasPendingCountyExam())
+        {
+            throw new ServiceException("请先完成区域抽测");
+        }
+        String accessError = validateSubmissionAccess(student, loginUser.getDeptId(), request.getLessonId());
+        if (accessError != null)
+        {
+            throw new ServiceException(accessError);
+        }
+        BizLessonQuestionDetailVo question = findPracticalQuestion(
+                request.getLessonId(), request.getQuestionId());
+        PracticalArtifactVo result = practicalArtifactService.submitLessonArtifact(
+                student.getStudentId(), loginUser.getUserId(), question,
+                request.getLessonId(), request.getExpectedVersionId(), request.getUploadTokens());
+        triggerPracticalDeadlineCheck(
+                request.getLessonId(), loginUser.getDeptId(), student.getEntryYear(), student.getClassCode());
+        return AjaxResult.success("作品提交成功", result);
+    }
+
+    /**
+     * 删除当前作品只会取消当前版本，历史版本和旧成绩快照继续保留。
+     */
+    @PreAuthorize("@studentSs.isStudent()")
+    @PostMapping("/practical-artifact/delete")
+    public AjaxResult deletePracticalArtifact(@RequestBody PracticalArtifactDeleteRequest request)
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null)
+        {
+            throw new ServiceException("未找到学生信息");
+        }
+        String accessError = validateSubmissionAccess(student, loginUser.getDeptId(), request.getLessonId());
+        if (accessError != null)
+        {
+            throw new ServiceException(accessError);
+        }
+        findPracticalQuestion(request.getLessonId(), request.getQuestionId());
+        practicalArtifactService.deleteCurrentLessonArtifact(
+                student.getStudentId(), request.getLessonId(), request.getQuestionId(),
+                request.getExpectedVersionId());
+        return AjaxResult.success("当前作品已删除，历史版本仍保留");
+    }
+
+    private BizLessonQuestionDetailVo findPracticalQuestion(Long lessonId, Long questionId)
+    {
+        BizLessonQuestionDetailVo question = lessonQuestionMapper.selectDetailsByLessonId(lessonId).stream()
+                .filter(item -> questionId != null && questionId.equals(item.getQuestionId()))
+                .findFirst()
+                .orElse(null);
+        if (question == null || !"practical".equalsIgnoreCase(question.getQuestionType()))
+        {
+            throw new ServiceException("题目不存在或不是操作题");
+        }
+        return question;
     }
 
     /**

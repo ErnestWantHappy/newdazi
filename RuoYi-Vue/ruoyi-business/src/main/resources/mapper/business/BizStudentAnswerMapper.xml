@@ -28,6 +28,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="previewRetryCount" column="preview_retry_count"/>
         <result property="previewLastRetryTime" column="preview_last_retry_time"/>
         <result property="previewErrorMessage" column="preview_error_message"/>
+        <result property="practicalArtifactId" column="practical_artifact_id"/>
+        <result property="practicalVersionId" column="practical_version_id"/>
     </resultMap>
 
     <resultMap type="com.ruoyi.business.domain.vo.LessonRankingVo" id="LessonRankingVoResult">
@@ -44,11 +46,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 新增单条答题记录 -->
     <insert id="insertAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer" useGeneratedKeys="true" keyProperty="answerId">
         INSERT INTO biz_student_answer
-        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message)
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message, practical_artifact_id, practical_version_id)
         VALUES
         (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer},
          #{isCorrect}, #{score}, #{answerTime}, #{submitTime},
-         #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
+         #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage}, #{practicalArtifactId}, #{practicalVersionId})
     </insert>
 
     <!-- 唯一索引配合原子 upsert，避免并发首次提交先查后插产生重复键。 -->
@@ -57,12 +59,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INSERT INTO biz_student_answer
         (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time,
          submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path,
-         preview_retry_count, preview_last_retry_time, preview_error_message)
+         preview_retry_count, preview_last_retry_time, preview_error_message, practical_artifact_id, practical_version_id)
         VALUES
         (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer}, #{isCorrect}, #{score},
          #{answerTime}, #{submitTime}, #{typingSpeed}, #{accuracyRate}, #{completionRate},
          #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime},
-         #{previewErrorMessage})
+         #{previewErrorMessage}, #{practicalArtifactId}, #{practicalVersionId})
         ON DUPLICATE KEY UPDATE
             answer_id = LAST_INSERT_ID(answer_id),
             -- 同一操作题文件的重试不得把已成功/失败的转换状态重新覆盖为 pending。
@@ -78,6 +80,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             typing_speed = VALUES(typing_speed),
             accuracy_rate = VALUES(accuracy_rate),
             completion_rate = VALUES(completion_rate),
+            practical_artifact_id = COALESCE(VALUES(practical_artifact_id), practical_artifact_id),
+            practical_version_id = COALESCE(VALUES(practical_version_id), practical_version_id),
             student_answer = VALUES(student_answer)
     </insert>
 
@@ -285,10 +289,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.preview_retry_count AS previewRetryCount,
             a.preview_last_retry_time AS previewLastRetryTime,
             a.preview_error_message AS previewErrorMessage,
+            a.practical_version_id AS practicalVersionId,
             a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
-            CASE WHEN a.answer_id IS NOT NULL THEN 1 ELSE 0 END AS submitted
+            CASE WHEN a.answer_id IS NOT NULL
+                       AND a.student_answer IS NOT NULL
+                       AND TRIM(a.student_answer) &lt;&gt; '' THEN 1 ELSE 0 END AS submitted
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         LEFT JOIN (
@@ -390,6 +397,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE answer_id = #{answerId}
     </update>
 
+    <update id="updatePreviewByPracticalVersion">
+        UPDATE biz_student_answer
+        SET preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_error_message = #{previewErrorMessage}
+        WHERE practical_version_id = #{practicalVersionId}
+    </update>
+
+    <update id="clearPracticalAnswer">
+        UPDATE biz_student_answer
+        SET student_answer = '',
+            is_correct = 0,
+            score = NULL,
+            submit_time = #{submitTime},
+            preview_status = NULL,
+            preview_path = NULL,
+            preview_retry_count = 0,
+            preview_last_retry_time = NULL,
+            preview_error_message = NULL,
+            practical_artifact_id = #{practicalArtifactId},
+            practical_version_id = NULL
+        WHERE answer_id = #{answerId}
+    </update>
+
     <update id="claimSubmitPreviewConversion">
         UPDATE biz_student_answer
         SET preview_status = 'converting',
@@ -421,6 +452,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 根据ID查询答题记录 -->
     <select id="selectById" resultMap="BizStudentAnswerResult">
         SELECT * FROM biz_student_answer WHERE answer_id = #{answerId}
+    </select>
+
+    <!-- 批改事务先锁定答卷，后续提交时间和旧分数校验才具有并发意义。 -->
+    <select id="selectByIdForUpdate" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer WHERE answer_id = #{answerId} FOR UPDATE
     </select>
 
     <resultMap id="StudentAnswerMatrixResult" type="com.ruoyi.business.domain.vo.StudentAnswerMatrixVo">

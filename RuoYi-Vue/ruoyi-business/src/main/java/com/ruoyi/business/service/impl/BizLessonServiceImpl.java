@@ -25,6 +25,7 @@ import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
+import com.ruoyi.business.service.PracticalRubricSnapshotService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.common.core.domain.entity.SysDept;
@@ -86,6 +87,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private AnswerDeletionGuardService answerDeletionGuardService;
+
+    @Autowired
+    private PracticalRubricSnapshotService practicalRubricSnapshotService;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -453,6 +457,7 @@ public class BizLessonServiceImpl implements IBizLessonService
                 }
             }
         }
+        practicalRubricSnapshotService.snapshotLesson(lessonId, questions, userId);
 
         lessonClassScopeMapper.markLessonAssignmentsInactive(lessonId);
         lessonAssignmentMapper.deleteByLessonId(lessonId);

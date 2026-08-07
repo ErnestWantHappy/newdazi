@@ -293,9 +293,16 @@ public class FileConversionUtils {
      * @return 转换后的 PDF 文件绝对路径，失败返回 null
      */
     public static String convertDocxToPdfWithLibreOffice(String docxFilePath, String outputDir) {
-        File docxFile = new File(docxFilePath);
-        if (!docxFile.exists()) {
-            log.error("源文件不存在: {}", docxFilePath);
+        return convertOfficeToPdfWithLibreOffice(docxFilePath, outputDir);
+    }
+
+    /**
+     * 使用 LibreOffice 将 Word、PowerPoint 或 Excel 文件转换为 PDF。
+     */
+    public static String convertOfficeToPdfWithLibreOffice(String officeFilePath, String outputDir) {
+        File officeFile = new File(officeFilePath);
+        if (!officeFile.exists()) {
+            log.error("源文件不存在: {}", officeFilePath);
             return null;
         }
 
@@ -305,14 +312,17 @@ public class FileConversionUtils {
             return null;
         }
 
-        String docxFileName = docxFile.getName();
-        String pdfFileName = docxFileName.replaceAll("(?i)\\.docx?$", ".pdf");
+        String officeFileName = officeFile.getName();
+        String pdfFileName = officeFileName.replaceFirst("(?i)\\.[^.]+$", ".pdf");
+        if (pdfFileName.equals(officeFileName)) {
+            pdfFileName = officeFileName + ".pdf";
+        }
         String pdfFilePath = outputDir + File.separator + pdfFileName;
         File pdfFile = new File(pdfFilePath);
 
         for (int attempt = 0; attempt <= maxRetry; attempt++) {
             if (!ensureOfficeManagerReady()) {
-                log.error("【LibreOffice服务】服务不可用，无法进行转换: {}", docxFilePath);
+                log.error("【LibreOffice服务】服务不可用，无法进行转换: {}", officeFilePath);
                 markServiceFailure("服务不可用");
                 return null;
             }
@@ -320,19 +330,19 @@ public class FileConversionUtils {
             long startTime = System.currentTimeMillis();
             beginInFlight(startTime);
             try {
-                if (!executeConversionWithSharedLock(docxFile, pdfFile)) {
+                if (!executeConversionWithSharedLock(officeFile, pdfFile)) {
                     markServiceFailure("服务未就绪");
                     // 仅服务不可用时重建；避免单次抖动整池重启
                     if (attempt < maxRetry && tryRebuildIfNeeded("服务未就绪")) {
                         continue;
                     }
-                    log.error("【服务模式转换】服务未就绪，转换失败: {}", docxFilePath);
+                    log.error("【服务模式转换】服务未就绪，转换失败: {}", officeFilePath);
                     return null;
                 }
 
                 long duration = System.currentTimeMillis() - startTime;
                 if (pdfFile.exists()) {
-                    log.info("【服务模式转换】成功: {} -> {} (耗时: {}ms)", docxFilePath, pdfFilePath, duration);
+                    log.info("【服务模式转换】成功: {} -> {} (耗时: {}ms)", officeFilePath, pdfFilePath, duration);
                     markServiceSuccess();
                     return pdfFilePath;
                 }
@@ -359,14 +369,14 @@ public class FileConversionUtils {
                     }
                 }
 
-                log.error("【服务模式转换】服务级异常重试失败: {}", docxFilePath);
+                log.error("【服务模式转换】服务级异常重试失败: {}", officeFilePath);
                 return null;
             } finally {
                 endInFlight();
             }
         }
 
-        log.error("【服务模式转换】所有重试均失败: {}", docxFilePath);
+        log.error("【服务模式转换】所有重试均失败: {}", officeFilePath);
         return null;
     }
 

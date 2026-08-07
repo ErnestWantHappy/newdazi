@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 // 获取题目的评分项列表
-export function getScoringItems(lessonId, questionId) {
+export function getScoringItems(lessonId, questionId, practicalVersionId) {
   return request({
     url: '/business/teacher/grading/scoring-items',
     method: 'get',
@@ -22,6 +22,6 @@ export function listScoringItems(lessonId, questionId) {
   return request({
     url: '/business/scoring/item/list',
     method: 'get',
-    params: { lessonId, questionId }
+    params: { lessonId, questionId, practicalVersionId }
   })
 }

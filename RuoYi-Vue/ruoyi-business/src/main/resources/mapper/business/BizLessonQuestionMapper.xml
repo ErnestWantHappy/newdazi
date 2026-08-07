@@ -124,6 +124,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="wordCount" column="word_count"/>
         <result property="previewPath" column="preview_path"/>
         <result property="filePath" column="file_path"/>
+        <result property="practicalAllowedExtensions" column="practical_allowed_extensions"/>
+        <result property="practicalImageMaxCount" column="practical_image_max_count"/>
         <collection property="scoringItems" ofType="com.ruoyi.business.domain.BizScoringItem" column="question_id" select="selectScoringItemsByQuestionId"/>
     </resultMap>
     <!-- 查询题目完整信息 -->
@@ -143,7 +145,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.typing_duration,
             q.word_count,
             q.preview_path,
-            q.file_path
+            q.file_path,
+            q.practical_allowed_extensions,
+            q.practical_image_max_count
         FROM
             biz_lesson_question lq
                 LEFT JOIN biz_question q ON lq.question_id = q.question_id

@@ -28,6 +28,12 @@ public class BizLessonQuestionDetailVo extends BizLessonQuestion {
     private String previewPath;
     private String filePath;  // 操作题素材文件路径
 
+    /** 操作题允许提交的扩展名CSV */
+    private String practicalAllowedExtensions;
+
+    /** 图片作品最多张数 */
+    private Integer practicalImageMaxCount;
+
     // 错题本相关
     private String studentAnswer;
     private String analysis;
@@ -119,6 +125,12 @@ public class BizLessonQuestionDetailVo extends BizLessonQuestion {
     public void setFilePath(String filePath) {
         this.filePath = filePath;
     }
+
+    public String getPracticalAllowedExtensions() { return practicalAllowedExtensions; }
+    public void setPracticalAllowedExtensions(String practicalAllowedExtensions) { this.practicalAllowedExtensions = practicalAllowedExtensions; }
+
+    public Integer getPracticalImageMaxCount() { return practicalImageMaxCount; }
+    public void setPracticalImageMaxCount(Integer practicalImageMaxCount) { this.practicalImageMaxCount = practicalImageMaxCount; }
 
     public String getStudentAnswer() {
         return studentAnswer;

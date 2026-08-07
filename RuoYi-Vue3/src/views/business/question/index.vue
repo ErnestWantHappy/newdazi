@@ -481,11 +481,43 @@
 
         <!-- 动态表单项: 操作题专属 -->
         <div v-if="form.questionType === 'practical'">
-          <el-form-item label="操作文件">
-            <file-upload v-model="form.filePath" :file-type="['docx']" :limit="1" />
+          <el-form-item label="学生起始文件">
+            <file-upload
+              v-model="form.filePath"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png']"
+              :file-size="50"
+              :limit="1"
+            />
             <div style="color: #909399; font-size: 12px; margin-top: 6px;">
-              操作文件可不上传；如上传，仅支持 1 个 docx 文件作为参考模板。
+              可不上传；如上传，学生可下载它继续完成作品。
             </div>
+          </el-form-item>
+          <el-form-item label="学生提交格式">
+            <el-checkbox-group v-model="form.practicalAllowedExtensionList">
+              <el-checkbox v-for="item in practicalExtensionOptions" :key="item" :value="item">{{ item.toUpperCase() }}</el-checkbox>
+            </el-checkbox-group>
+          </el-form-item>
+          <el-form-item label="图片上限">
+            <el-input-number v-model="form.practicalImageMaxCount" :min="1" :max="10" />
+            <span style="margin-left: 10px; color: #909399; font-size: 12px;">仅在学生提交图片组时生效</span>
+          </el-form-item>
+          <el-form-item label="补充资源">
+            <file-upload
+              v-model="form.practicalResourceFiles"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip']"
+              :file-size="50"
+              :limit="5"
+            />
+            <div style="color: #909399; font-size: 12px; margin-top: 6px;">学生可见，可包含 ZIP 资源包；不作为学生提交格式。</div>
+          </el-form-item>
+          <el-form-item label="教师参考材料">
+            <file-upload
+              v-model="form.practicalReferenceFiles"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip']"
+              :file-size="50"
+              :limit="5"
+            />
+            <div style="color: #e6a23c; font-size: 12px; margin-top: 6px;">仅教师和后续 AI 批改可见，不会下发给学生。</div>
           </el-form-item>
 
           <el-divider content-position="left"
@@ -779,6 +811,12 @@ function reset() {
     updateBy: null,
     updateTime: null,
     scoringItems: [], // P6
+    practicalAllowedExtensions: "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png",
+    practicalAllowedExtensionList: ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"],
+    practicalImageMaxCount: 10,
+    practicalMaterials: [],
+    practicalResourceFiles: "",
+    practicalReferenceFiles: "",
   };
   proxy.resetForm("questionRef");
 }
@@ -808,6 +846,21 @@ const recommendedDuration = computed(() => {
   if (wordCount <= 0) return 1;
   return Math.ceil(wordCount / typingBaseSpeed.value);
 });
+
+const practicalExtensionOptions = ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"];
+
+function materialPaths(materials, type) {
+  return (materials || [])
+    .filter((item) => item.materialType === type)
+    .map((item) => item.resourcePath)
+    .filter(Boolean)
+    .join(",");
+}
+
+function splitMaterialPaths(value, materialType) {
+  return String(value || "").split(",").map((item) => item.trim()).filter(Boolean)
+    .map((resourcePath) => ({ materialType, resourcePath }));
+}
 
 const typingDurationCustomized = ref(false);
 
@@ -897,6 +950,11 @@ function handleUpdate(row) {
   const _questionId = row.questionId || ids.value[0];
   getQuestion(_questionId).then((response) => {
     form.value = response.data;
+    form.value.practicalAllowedExtensionList = String(
+      form.value.practicalAllowedExtensions || "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png"
+    ).split(",").filter(Boolean);
+    form.value.practicalResourceFiles = materialPaths(form.value.practicalMaterials, "RESOURCE");
+    form.value.practicalReferenceFiles = materialPaths(form.value.practicalMaterials, "REFERENCE");
     typingDurationCustomized.value = form.value.questionType === "typing" && form.value.typingDuration != null;
     open.value = true;
     title.value = "修改题目";
@@ -909,6 +967,10 @@ function submitForm() {
     if (valid) {
       // P6.1: 操作题必须配置评分项，且比例值合计必须为100
       if (form.value.questionType === "practical") {
+        if (!form.value.practicalAllowedExtensionList?.length) {
+          ElMessage.warning("请至少选择一种学生提交格式");
+          return;
+        }
         if (!form.value.scoringItems || form.value.scoringItems.length === 0) {
           ElMessage.warning("操作题必须配置至少一个评分项");
           return;
@@ -919,6 +981,11 @@ function submitForm() {
           );
           return;
         }
+        form.value.practicalAllowedExtensions = form.value.practicalAllowedExtensionList.join(",");
+        form.value.practicalMaterials = [
+          ...splitMaterialPaths(form.value.practicalResourceFiles, "RESOURCE"),
+          ...splitMaterialPaths(form.value.practicalReferenceFiles, "REFERENCE"),
+        ];
       }
 
       // P6: 添加Loading效果

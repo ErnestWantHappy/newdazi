@@ -66,6 +66,15 @@ public class BizQuestion extends BaseEntity
     /** 预览状态：pending/converting/success/failed */
     private String previewStatus;
 
+    /** 操作题允许提交的扩展名CSV */
+    private String practicalAllowedExtensions;
+
+    /** 图片作品最多张数 */
+    private Integer practicalImageMaxCount;
+
+    /** 起始文件、补充资源和教师参考材料 */
+    private java.util.List<PracticalQuestionMaterial> practicalMaterials;
+
     /** P6: 评分项列表 */
     private java.util.List<BizScoringItem> scoringItems;
 
@@ -242,6 +251,15 @@ public class BizQuestion extends BaseEntity
         this.previewStatus = previewStatus;
     }
 
+    public String getPracticalAllowedExtensions() { return practicalAllowedExtensions; }
+    public void setPracticalAllowedExtensions(String practicalAllowedExtensions) { this.practicalAllowedExtensions = practicalAllowedExtensions; }
+
+    public Integer getPracticalImageMaxCount() { return practicalImageMaxCount; }
+    public void setPracticalImageMaxCount(Integer practicalImageMaxCount) { this.practicalImageMaxCount = practicalImageMaxCount; }
+
+    public java.util.List<PracticalQuestionMaterial> getPracticalMaterials() { return practicalMaterials; }
+    public void setPracticalMaterials(java.util.List<PracticalQuestionMaterial> practicalMaterials) { this.practicalMaterials = practicalMaterials; }
+
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
@@ -259,6 +277,8 @@ public class BizQuestion extends BaseEntity
                 .append("analysis", getAnalysis())
                 .append("filePath", getFilePath())
                 .append("previewPath", getPreviewPath())
+                .append("practicalAllowedExtensions", getPracticalAllowedExtensions())
+                .append("practicalImageMaxCount", getPracticalImageMaxCount())
                 .append("isPublic", getIsPublic())
                 .append("creatorId", getCreatorId())
                 .append("createBy", getCreateBy())

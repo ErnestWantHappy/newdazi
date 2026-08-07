@@ -3,10 +3,29 @@
 <mapper namespace="com.ruoyi.business.mapper.ResourceAccessMapper">
 
     <select id="selectStudentAnswerIdByResource" resultType="java.lang.Long">
-        select answer_id
-        from biz_student_answer
-        where student_answer = #{resource} or preview_path = #{resource}
+        select answer_id from (
+            select sa.answer_id
+            from biz_student_answer sa
+            where sa.student_answer = #{resource} or sa.preview_path = #{resource}
+            union all
+            select v.source_answer_id as answer_id
+            from biz_practical_attachment attachment
+            inner join biz_practical_submission_version v on v.version_id = attachment.version_id
+            where v.source_answer_id is not null
+              and (attachment.resource_path = #{resource}
+                   or attachment.preview_path = #{resource}
+                   or JSON_CONTAINS(attachment.normalized_pages_json, JSON_QUOTE(#{resource}), '$'))
+        ) resource_owner
+        where answer_id is not null
         order by answer_id desc
+        limit 1
+    </select>
+
+    <select id="selectReferenceQuestionIdByResource" resultType="java.lang.Long">
+        select question_id
+        from biz_practical_question_material
+        where resource_path = #{resource} and material_type = 'REFERENCE'
+        order by question_id desc
         limit 1
     </select>
 
@@ -16,14 +35,19 @@
         where student_answer = #{resource}
            or file_path = #{resource}
            or preview_path = #{resource}
+           or JSON_CONTAINS(normalized_pages_json, JSON_QUOTE(#{resource}), '$')
         order by answer_id desc
         limit 1
     </select>
 
     <select id="selectQuestionIdByResource" resultType="java.lang.Long">
-        select question_id
-        from biz_question
-        where file_path = #{resource} or preview_path = #{resource}
+        select question_id from (
+            select question_id from biz_question
+            where file_path = #{resource} or preview_path = #{resource}
+            union all
+            select question_id from biz_practical_question_material
+            where resource_path = #{resource} and material_type != 'REFERENCE'
+        ) question_resource
         order by question_id desc
         limit 1
     </select>

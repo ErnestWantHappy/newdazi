@@ -67,6 +67,12 @@ public class BizStudentAnswer extends BaseEntity
     /** 预览失败原因 */
     private String previewErrorMessage;
 
+    /** 操作题逻辑作品ID；非操作题为空 */
+    private Long practicalArtifactId;
+
+    /** 操作题当前提交版本ID；非操作题或历史未回填时为空 */
+    private Long practicalVersionId;
+
     // --- 非数据库字段，用于查询展示 ---
     private String studentName;
     private String studentNo;
@@ -132,4 +138,10 @@ public class BizStudentAnswer extends BaseEntity
 
     public String getPreviewErrorMessage() { return previewErrorMessage; }
     public void setPreviewErrorMessage(String previewErrorMessage) { this.previewErrorMessage = previewErrorMessage; }
+
+    public Long getPracticalArtifactId() { return practicalArtifactId; }
+    public void setPracticalArtifactId(Long practicalArtifactId) { this.practicalArtifactId = practicalArtifactId; }
+
+    public Long getPracticalVersionId() { return practicalVersionId; }
+    public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
 }

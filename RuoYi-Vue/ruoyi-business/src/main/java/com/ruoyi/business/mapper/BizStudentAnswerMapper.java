@@ -103,6 +103,11 @@ public interface BizStudentAnswerMapper
      * 更新答题记录分数（批改打分）
      */
     int updateScore(@Param("answerId") Long answerId, @Param("score") Integer score);
+
+    /**
+     * 锁定答卷后再批改，避免学生重交或其他批改请求并发覆盖。
+     */
+    BizStudentAnswer selectByIdForUpdate(@Param("answerId") Long answerId);
     
     /**
      * P2: 查询学生成绩汇总（按课程分组）
@@ -122,6 +127,17 @@ public interface BizStudentAnswerMapper
      * 更新答题记录的预览状态
      */
     int updatePreviewStatus(BizStudentAnswer answer);
+
+    /** 将当前作品首附件预览状态同步到旧答题字段，供旧页面兼容读取。 */
+    int updatePreviewByPracticalVersion(@Param("practicalVersionId") Long practicalVersionId,
+                                        @Param("previewStatus") String previewStatus,
+                                        @Param("previewPath") String previewPath,
+                                        @Param("previewErrorMessage") String previewErrorMessage);
+
+    /** 清空当前作品兼容字段，但保留答案行和逻辑作品ID。 */
+    int clearPracticalAnswer(@Param("answerId") Long answerId,
+                             @Param("practicalArtifactId") Long practicalArtifactId,
+                             @Param("submitTime") Date submitTime);
 
     /**
      * 领取首次提交后的预览转换任务
