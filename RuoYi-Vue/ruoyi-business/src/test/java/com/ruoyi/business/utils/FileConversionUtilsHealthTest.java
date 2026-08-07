@@ -5,11 +5,21 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * LibreOffice 健康判定纯逻辑测试（不启动真实 Office 进程）。
  */
 class FileConversionUtilsHealthTest {
+
+    @Test
+    void presentationsAndSpreadsheetsUseIsolatedConversion() {
+        assertTrue(FileConversionUtils.requiresIsolatedCli("student.PPTX"));
+        assertTrue(FileConversionUtils.requiresIsolatedCli("student.xlsx"));
+        assertFalse(FileConversionUtils.requiresIsolatedCli("student.docx"));
+        assertFalse(FileConversionUtils.requiresIsolatedCli("student.pdf"));
+    }
 
     @Test
     void healthyWhenServiceUpAndNoHang() {

@@ -19,6 +19,8 @@ import java.nio.charset.Charset;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -45,6 +47,10 @@ public class FileConversionUtils {
     private static long taskQueueTimeout = 120_000L;
     private static long processTimeout = 120_000L;
     private static int maxRetry = 1;
+    /** 演示文稿/表格使用隔离进程，限制并发以免大量 soffice 抢占内存。 */
+    private static final int MAX_ISOLATED_CONVERSIONS = 2;
+    private static final Semaphore ISOLATED_CONVERSION_SLOTS =
+            new Semaphore(MAX_ISOLATED_CONVERSIONS, true);
     /** 连续服务级失败达到该阈值才触发主动自愈 */
     private static int failureThreshold = 3;
     /** 两次整池重建最小间隔，防止抖动反复杀池 */
@@ -110,7 +116,9 @@ public class FileConversionUtils {
     public void init() {
         libreOfficeHome = configuredOfficeHome;
         officeInstanceCount = Math.max(configuredInstanceCount, 1);
-        processWarnThreshold = Math.max(configuredProcessWarnThreshold, officeInstanceCount * 2);
+        // 隔离转换每份会短暂增加 soffice.exe + soffice.bin，健康检查不得把它误判为孤儿进程。
+        processWarnThreshold = Math.max(configuredProcessWarnThreshold,
+                officeInstanceCount * 2 + MAX_ISOLATED_CONVERSIONS * 2);
         maxTasksPerProcess = Math.max(configuredMaxTasksPerProcess, 1);
         taskExecutionTimeout = Math.max(configuredTaskExecutionTimeout, 30_000L);
         taskQueueTimeout = Math.max(configuredTaskQueueTimeout, 30_000L);
@@ -320,6 +328,10 @@ public class FileConversionUtils {
         String pdfFilePath = outputDir + File.separator + pdfFileName;
         File pdfFile = new File(pdfFilePath);
 
+        if (requiresIsolatedCli(officeFilePath)) {
+            return convertWithIsolatedOfficeProcess(officeFile, outputDirectory, pdfFile);
+        }
+
         for (int attempt = 0; attempt <= maxRetry; attempt++) {
             if (!ensureOfficeManagerReady()) {
                 log.error("【LibreOffice服务】服务不可用，无法进行转换: {}", officeFilePath);
@@ -378,6 +390,93 @@ public class FileConversionUtils {
 
         log.error("【服务模式转换】所有重试均失败: {}", officeFilePath);
         return null;
+    }
+
+    /**
+     * 服务器上的 JODConverter 常驻管道对部分 PPT/Excel 会永久卡住；
+     * 这些格式使用独立用户目录的一次性进程，既兼容 WPS/PowerPoint 文件，也不污染常驻 Word 转换池。
+     */
+    private static String convertWithIsolatedOfficeProcess(File officeFile,
+                                                            File outputDirectory,
+                                                            File pdfFile) {
+        boolean acquired = false;
+        Process process = null;
+        File profileDir = new File(outputDirectory,
+                ".lo-profile-" + UUID.randomUUID().toString());
+        File processLog = new File(outputDirectory,
+                ".lo-convert-" + UUID.randomUUID().toString() + ".log");
+        try {
+            acquired = ISOLATED_CONVERSION_SLOTS.tryAcquire(taskQueueTimeout, TimeUnit.MILLISECONDS);
+            if (!acquired) {
+                log.warn("【隔离模式转换】等待槽位超时: {}", officeFile.getAbsolutePath());
+                return null;
+            }
+            if (!profileDir.mkdirs() && !profileDir.isDirectory()) {
+                log.error("【隔离模式转换】用户目录创建失败: {}", profileDir.getAbsolutePath());
+                return null;
+            }
+            if (pdfFile.exists() && !pdfFile.delete()) {
+                log.error("【隔离模式转换】无法清理旧 PDF: {}", pdfFile.getAbsolutePath());
+                return null;
+            }
+            File executable = new File(libreOfficeHome, "program" + File.separator + "soffice.exe");
+            ProcessBuilder builder = new ProcessBuilder(
+                    executable.getAbsolutePath(),
+                    "-env:UserInstallation=" + profileDir.toURI().toString(),
+                    "--headless", "--convert-to", "pdf",
+                    "--outdir", outputDirectory.getAbsolutePath(),
+                    officeFile.getAbsolutePath());
+            builder.redirectErrorStream(true);
+            builder.redirectOutput(ProcessBuilder.Redirect.to(processLog));
+            long startedAt = System.currentTimeMillis();
+            process = builder.start();
+            long timeout = Math.min(taskExecutionTimeout, 120_000L);
+            if (!process.waitFor(timeout, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly();
+                log.warn("【隔离模式转换】超时并终止: {}", officeFile.getAbsolutePath());
+                return null;
+            }
+            long duration = System.currentTimeMillis() - startedAt;
+            if (process.exitValue() == 0 && pdfFile.isFile()) {
+                log.info("【隔离模式转换】成功: {} -> {} (耗时: {}ms)",
+                        officeFile.getAbsolutePath(), pdfFile.getAbsolutePath(), duration);
+                return pdfFile.getAbsolutePath();
+            }
+            log.error("【隔离模式转换】失败 exitCode={}, source={}",
+                    process.exitValue(), officeFile.getAbsolutePath());
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("【隔离模式转换】线程被中断: {}", officeFile.getAbsolutePath());
+            return null;
+        } catch (Exception e) {
+            log.error("【隔离模式转换】异常: {}", officeFile.getAbsolutePath(), e);
+            return null;
+        } finally {
+            if (process != null && process.isAlive()) process.destroyForcibly();
+            if (acquired) ISOLATED_CONVERSION_SLOTS.release();
+            deleteTemporaryDirectory(profileDir);
+            if (processLog.exists() && !processLog.delete()) processLog.deleteOnExit();
+        }
+    }
+
+    static boolean requiresIsolatedCli(String path) {
+        if (path == null) return false;
+        String lower = path.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".ppt") || lower.endsWith(".pptx")
+                || lower.endsWith(".xls") || lower.endsWith(".xlsx");
+    }
+
+    private static void deleteTemporaryDirectory(File directory) {
+        if (directory == null || !directory.exists()) return;
+        File[] children = directory.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) deleteTemporaryDirectory(child);
+                else if (!child.delete()) child.deleteOnExit();
+            }
+        }
+        if (!directory.delete()) directory.deleteOnExit();
     }
 
     /**
