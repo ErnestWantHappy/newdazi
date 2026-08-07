@@ -401,8 +401,10 @@ public class FileConversionUtils {
                                                             File pdfFile) {
         boolean acquired = false;
         Process process = null;
-        File profileDir = new File(outputDirectory,
-                ".lo-profile-" + UUID.randomUUID().toString());
+        // LibreOffice 在 Windows 下会静默忽略过深的用户目录，并以 0 退出但不产出 PDF；
+        // 放到系统临时目录既缩短路径，又继续保证每次转换互相隔离。
+        File profileRoot = new File(System.getProperty("java.io.tmpdir"), "newdazi-lo-profiles");
+        File profileDir = new File(profileRoot, UUID.randomUUID().toString());
         File processLog = new File(outputDirectory,
                 ".lo-convert-" + UUID.randomUUID().toString() + ".log");
         try {
