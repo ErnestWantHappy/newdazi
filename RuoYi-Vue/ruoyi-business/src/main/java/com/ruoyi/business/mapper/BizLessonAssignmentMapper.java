@@ -68,6 +68,10 @@ public interface BizLessonAssignmentMapper
     List<String> selectClassCodesByLessonIdAndEntryYear(@Param("lessonId") Long lessonId,
                                                          @Param("entryYear") String entryYear);
 
+    /** 批量读取教师首页课程的当前指派，避免逐课程查询。 */
+    List<BizLessonAssignment> selectAssignmentsByLessonIds(@Param("lessonIds") List<Long> lessonIds,
+                                                            @Param("deptId") Long deptId);
+
     /**
      * 根据课程ID删除所有指派记录
      * @param lessonId 课程ID

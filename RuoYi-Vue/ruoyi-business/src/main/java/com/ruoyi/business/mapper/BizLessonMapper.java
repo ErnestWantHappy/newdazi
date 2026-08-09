@@ -84,10 +84,12 @@ public interface BizLessonMapper
             @Param("deptId") Long deptId, 
             @Param("creatorName") String creatorName);
 
-    /** 查询当前教师某届已创建课程的最大课次。 */
-    Integer selectMaxLessonNumByEntryYearAndCreator(@Param("entryYear") String entryYear,
-                                                     @Param("creatorName") String creatorName,
-                                                     @Param("deptId") Long deptId);
+    /** 查询当前教师某届、某开设年级已创建课程的最大课次。 */
+    Integer selectMaxLessonNumByEntryYearGradeAndCreator(@Param("entryYear") String entryYear,
+                                                          @Param("grade") Long grade,
+                                                          @Param("creatorId") Long creatorId,
+                                                          @Param("creatorName") String creatorName,
+                                                          @Param("deptId") Long deptId);
 
     /** 清除自动推进达标时间 */
     int clearAutoAdvanceReadyTime(@Param("lessonId") Long lessonId);

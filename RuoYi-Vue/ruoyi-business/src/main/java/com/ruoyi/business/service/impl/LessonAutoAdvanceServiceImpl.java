@@ -395,14 +395,12 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         return pct >= thresholdPct;
     }
 
-    /**
-     * 下一课：同学校、同创建教师、同届别、课次号更大的最近一节常规课。
-     * grade 是创建时快照，跨学年后不能再代表课程稳定届别，因此不能参与推进过滤。
-     */
+    /** 下一课必须同时属于同一届别和同一开设年级，课次重置后不能跨年级串课。 */
     private BizLesson findNextLesson(BizLesson current)
     {
         if (current.getCreatorId() == null || current.getDeptId() == null
                 || StringUtils.isBlank(current.getEntryYear())
+                || current.getGrade() == null
                 || current.getLessonNum() == null)
         {
             return null;
@@ -411,6 +409,7 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         query.setCreatorId(current.getCreatorId());
         query.setDeptId(current.getDeptId());
         query.setEntryYear(current.getEntryYear());
+        query.setGrade(current.getGrade());
         List<BizLesson> list = lessonMapper.selectBizLessonList(query);
         if (list == null || list.isEmpty())
         {
@@ -420,6 +419,10 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         for (BizLesson l : list)
         {
             if (l.getLessonId() == null || l.getLessonId().equals(current.getLessonId()))
+            {
+                continue;
+            }
+            if (!current.getGrade().equals(l.getGrade()))
             {
                 continue;
             }

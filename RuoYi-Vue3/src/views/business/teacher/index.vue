@@ -29,93 +29,111 @@
       </div>
       <div v-for="group in gradeGroups" :key="group.entryYear" class="grade-group">
         <div class="grade-header">
-          <span class="grade-title">{{ group.entryYear }}级 ({{ group.gradeName }})</span>
+          <span class="grade-title">{{ group.entryYear }}级（当前{{ group.gradeName }}）</span>
         </div>
-        <div class="lesson-container">
-          <!-- 课程卡片列表 -->
+        <div
+          v-for="section in getCourseGradeSections(group)"
+          :key="getCourseSectionKey(group, section)"
+          class="course-grade-section"
+          :class="{ 'is-history': section.isHistory }"
+        >
           <div
-            v-for="lesson in getVisibleLessons(group)"
-            :key="lesson.lessonId"
-            class="lesson-folder"
+            class="course-grade-header"
+            :class="{ clickable: section.isHistory }"
+            @click="section.isHistory && toggleHistorySection(group, section)"
           >
-            <!-- 删除按钮 -->
-            <div class="folder-delete" @click.stop="handleDeleteLesson(lesson.lessonId)">
-              <el-icon><Close /></el-icon>
+            <div class="course-grade-heading">
+              <strong>{{ section.gradeName }}课程</strong>
+              <el-tag v-if="section.isCurrent" type="primary" size="small">当前年级</el-tag>
+              <el-tag v-else type="info" size="small">历史课程</el-tag>
+              <span>{{ section.lessons.length }} 门</span>
             </div>
-            
-            <!-- 左侧：课程核心信息 -->
-            <div class="folder-content">
-              <!-- 竖排课程标题 -->
-              <div class="folder-title-vertical" :title="lesson.lessonTitle">
-                {{ lesson.lessonTitle }}
+            <span v-if="section.isHistory" class="history-toggle-text">
+              {{ isCourseSectionExpanded(group, section) ? '收起' : '点击显示' }}
+            </span>
+          </div>
+
+          <div v-show="isCourseSectionExpanded(group, section)" class="lesson-container">
+            <div
+              v-for="lesson in getVisibleLessons(group, section)"
+              :key="lesson.lessonId"
+              class="lesson-folder"
+            >
+              <div class="folder-delete" @click.stop="handleDeleteLesson(lesson.lessonId)">
+                <el-icon><Close /></el-icon>
               </div>
-              
-              <!-- 右侧内容区 -->
-              <div class="folder-info">
-                <!-- 已指派班级竖向排列 -->
-                <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
-                  <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
+
+              <div class="folder-content">
+                <div class="folder-title-vertical" :title="lesson.lessonTitle">
+                  {{ lesson.lessonTitle }}
                 </div>
-                <div class="lesson-count-tag">
-                  第{{ lesson.lessonNum }}课
+                <div class="folder-info">
+                  <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
+                    <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
+                  </div>
+                  <div class="lesson-count-tag">
+                    第{{ lesson.lessonNum }}课
+                  </div>
+                  <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
                 </div>
-                <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
               </div>
-            </div>
-            
-            <!-- 右侧：竖排操作栏 (25%) -->
-            <div class="folder-actions">
-               <div class="action-btn design" @click.stop="handleEditLesson(lesson, group)" title="设计课程">
+
+              <div class="folder-actions">
+                <div class="action-btn design" @click.stop="handleEditLesson(lesson, group)" title="设计课程">
                   <el-icon><Edit /></el-icon>
                   <span>设计</span>
-               </div>
-               <!-- 课堂考勤：查看签到名单 -->
-               <div
-                 v-if="lesson.lessonMode === 'attendance'"
-                 class="action-btn grade"
-                 @click.stop="openCheckinRoster(lesson, group)"
-                 title="签到名单"
-               >
+                </div>
+                <div
+                  v-if="lesson.lessonMode === 'attendance'"
+                  class="action-btn grade"
+                  @click.stop="openCheckinRoster(lesson, group)"
+                  title="签到名单"
+                >
                   <el-icon><Check /></el-icon>
                   <span>签到</span>
-               </div>
-               <!-- 只有包含操作题时才显示批改 -->
-               <div 
-                 v-if="lesson.hasPractical" 
-                 class="action-btn grade" 
-                 @click.stop="goToGrading(lesson, group)"
-                 title="批改作业"
-               >
+                </div>
+                <div
+                  v-if="lesson.hasPractical"
+                  class="action-btn grade"
+                  @click.stop="goToGrading(lesson, group)"
+                  title="批改作业"
+                >
                   <el-icon><Check /></el-icon>
                   <span>批改</span>
                   <span v-if="hasUngradedPractical(lesson)" class="grading-red-dot" aria-label="存在未批操作题"></span>
-               </div>
-               <div
-                 v-if="lesson.lessonMode !== 'attendance'"
-                 class="action-btn score"
-                 @click.stop="goToScoreAnalysis(lesson, group)"
-                 title="查看成绩"
-               >
+                </div>
+                <div
+                  v-if="lesson.lessonMode !== 'attendance'"
+                  class="action-btn score"
+                  @click.stop="goToScoreAnalysis(lesson, group)"
+                  title="查看成绩"
+                >
                   <el-icon><DataLine /></el-icon>
                   <span>成绩</span>
-               </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div
-            v-if="hasHiddenLessons(group)"
-            class="expand-lessons-btn"
-            title="展开更早课程"
-            @click="expandLessons(group)"
-          >
-            <el-icon class="more-icon"><MoreFilled /></el-icon>
-            <div class="more-text">还有 {{ group.lessons.length - 5 }} 节</div>
-          </div>
-           
-          <!-- 新增课程按钮 -->
-          <div class="add-lesson-btn" @click="handleAddNewLesson(group)">
-            <el-icon class="add-icon"><Plus /></el-icon>
-            <div class="add-text">添加课程</div>
+            <div
+              v-if="hasHiddenLessons(group, section)"
+              class="expand-lessons-btn"
+              title="展开更早课程"
+              @click="expandLessons(group, section)"
+            >
+              <el-icon class="more-icon"><MoreFilled /></el-icon>
+              <div class="more-text">还有 {{ section.lessons.length - 5 }} 节</div>
+            </div>
+
+            <div
+              v-if="section.canAdd"
+              class="add-lesson-btn"
+              @click="handleAddNewLesson(group, section)"
+            >
+              <el-icon class="add-icon"><Plus /></el-icon>
+              <div class="add-text">
+                添加{{ section.gradeName }}{{ section.isHistory ? '历史' : '' }}课程
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -242,7 +260,7 @@
 import ResearchNotificationBar from '@/views/business/researchActivity/components/ResearchNotificationBar.vue'
 import { computed, ref, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
-import { getDashboardData } from '@/api/business/teacher';
+import { getDashboardData, getDashboardPracticalStatus } from '@/api/business/teacher';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
 import {
   delLesson,
@@ -267,7 +285,8 @@ function goToExemption() {
   router.push('/teacher-exemption')
 }
 const classDialogRef = ref(null);
-const expandedGradeKeys = ref(new Set());
+const expandedLessonKeys = ref(new Set());
+const expandedHistoryKeys = ref(new Set());
 const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
 const pendingCountyGradingCount = computed(() => countyGradingEntry.value.pendingTaskCount ?? countyGradingEntry.value.taskCount ?? 0);
 const checkinDialogVisible = ref(false);
@@ -294,7 +313,7 @@ const advanceForm = ref({ entryYear: '', classCodes: [] });
 function getAdvanceClassesForGroup(group) {
   const managedClasses = new Set((group?.allClassesInGrade || []).map(normalizeClassCode).filter(Boolean));
   const classCodes = (group?.lessons || [])
-    .filter(lesson => lesson.lessonMode !== 'attendance')
+    .filter(lesson => lesson.lessonMode !== 'attendance' && Number(lesson.grade) === Number(group.gradeId))
     .flatMap(lesson => lesson.assignedClasses || [])
     .map(normalizeClassCode)
     .filter(classCode => classCode && managedClasses.has(classCode));
@@ -333,62 +352,168 @@ function compareLessonsByLatest(a, b) {
   return (b.lessonId || 0) - (a.lessonId || 0);
 }
 
-function getGroupKey(group) {
-  return `${group.entryYear || ''}-${group.gradeId || group.gradeName || ''}`;
+function formatGradeName(gradeId, fallback = '') {
+  const grade = Number(gradeId);
+  const names = ['', '一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '七年级', '八年级', '九年级'];
+  if (grade >= 1 && grade <= 9) return names[grade];
+  if (grade === 10) return '高一';
+  if (grade === 11) return '高二';
+  if (grade === 12) return '高三';
+  return fallback || '年级待核对';
 }
 
-function isGroupExpanded(group) {
-  return expandedGradeKeys.value.has(getGroupKey(group));
-}
-
-function getVisibleLessons(group) {
-  const lessons = group.lessons || [];
-  return isGroupExpanded(group) ? lessons : lessons.slice(0, 5);
-}
-
-function hasHiddenLessons(group) {
-  return !isGroupExpanded(group) && (group.lessons?.length || 0) > 5;
-}
-
-function expandLessons(group) {
-  const next = new Set(expandedGradeKeys.value);
-  next.add(getGroupKey(group));
-  expandedGradeKeys.value = next;
-}
-
-/** 获取首页数据 */
-function fetchDashboardData() {
-  loading.value = true;
-  Promise.all([
-    getDashboardData(),
-    getCountyExamGradingEntry().catch(() => ({ data: { hasTask: false, taskCount: 0 } }))
-  ])
-    .then(([response, gradingResponse]) => {
-      gradeGroups.value = (response.data || []).map(group => ({
-        ...group,
-        lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
-      }));
-      countyGradingEntry.value = gradingResponse.data || { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
-      loading.value = false;
+function getCourseGradeSections(group) {
+  const currentGrade = Number(group.gradeId);
+  const lessonsByGrade = new Map();
+  (group.lessons || []).forEach(lesson => {
+    const grade = Number(lesson.grade);
+    const key = Number.isFinite(grade) && grade > 0 ? grade : 'unknown';
+    if (!lessonsByGrade.has(key)) lessonsByGrade.set(key, []);
+    lessonsByGrade.get(key).push(lesson);
+  });
+  if (currentGrade > 0 && !lessonsByGrade.has(currentGrade)) {
+    lessonsByGrade.set(currentGrade, []);
+  }
+  return [...lessonsByGrade.entries()]
+    .map(([gradeId, lessons]) => {
+      const numericGrade = Number(gradeId);
+      const isCurrent = currentGrade > 0 && numericGrade === currentGrade;
+      return {
+        gradeId: Number.isFinite(numericGrade) ? numericGrade : null,
+        gradeName: isCurrent ? group.gradeName : formatGradeName(numericGrade),
+        isCurrent,
+        isHistory: !isCurrent,
+        canAdd: Number.isFinite(numericGrade) && numericGrade > 0,
+        lessons: [...lessons].sort(compareLessonsByLatest)
+      };
     })
-    .catch(() => {
-      loading.value = false;
+    .sort((left, right) => {
+      if (left.isCurrent) return -1;
+      if (right.isCurrent) return 1;
+      return Number(right.gradeId || -1) - Number(left.gradeId || -1);
     });
+}
+
+function getCourseSectionKey(group, section) {
+  return `${group.entryYear || ''}-${section.gradeId ?? 'unknown'}`;
+}
+
+function isCourseSectionExpanded(group, section) {
+  return section.isCurrent || expandedHistoryKeys.value.has(getCourseSectionKey(group, section));
+}
+
+function toggleHistorySection(group, section) {
+  const key = getCourseSectionKey(group, section);
+  const next = new Set(expandedHistoryKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedHistoryKeys.value = next;
+}
+
+function getVisibleLessons(group, section) {
+  if (section.isHistory || expandedLessonKeys.value.has(getCourseSectionKey(group, section))) {
+    return section.lessons;
+  }
+  return section.lessons.slice(0, 5);
+}
+
+function hasHiddenLessons(group, section) {
+  return section.isCurrent
+    && !expandedLessonKeys.value.has(getCourseSectionKey(group, section))
+    && section.lessons.length > 5;
+}
+
+function expandLessons(group, section) {
+  const next = new Set(expandedLessonKeys.value);
+  next.add(getCourseSectionKey(group, section));
+  expandedLessonKeys.value = next;
+}
+
+let dashboardRequestSeq = 0;
+let countyRequestSeq = 0;
+
+async function fetchCountyGradingData() {
+  const requestSeq = ++countyRequestSeq;
+  try {
+    const response = await getCountyExamGradingEntry();
+    if (requestSeq === countyRequestSeq) {
+      countyGradingEntry.value = response.data || { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
+    }
+  } catch (e) {
+    if (requestSeq === countyRequestSeq) {
+      countyGradingEntry.value = { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
+    }
+  }
+}
+
+async function fetchPracticalStatuses(groups, requestSeq) {
+  const lessonIds = (groups || [])
+    .flatMap(group => group.lessons || [])
+    .filter(lesson => lesson.hasPractical)
+    .map(lesson => lesson.lessonId)
+    .filter(Boolean);
+  if (!lessonIds.length) return;
+  try {
+    const response = await getDashboardPracticalStatus([...new Set(lessonIds)]);
+    if (requestSeq !== dashboardRequestSeq) return;
+    const statusByLesson = response.data || {};
+    gradeGroups.value = gradeGroups.value.map(group => ({
+      ...group,
+      lessons: (group.lessons || []).map(lesson => ({
+        ...lesson,
+        practicalDeadlineClasses: statusByLesson[String(lesson.lessonId)] || []
+      }))
+    }));
+  } catch (e) {
+    // 红点加载失败不影响已经显示的课程卡片。
+  }
+}
+
+/** 先加载课程核心数据，批改红点和区域抽测入口不再阻塞首屏。 */
+async function fetchDashboardData() {
+  const requestSeq = ++dashboardRequestSeq;
+  loading.value = true;
+  try {
+    const response = await getDashboardData();
+    if (requestSeq !== dashboardRequestSeq) return;
+    const groups = (response.data || []).map(group => ({
+      ...group,
+      lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
+    }));
+    gradeGroups.value = groups;
+    loading.value = false;
+    fetchPracticalStatuses(groups, requestSeq);
+  } catch (e) {
+    if (requestSeq === dashboardRequestSeq) {
+      loading.value = false;
+    }
+  }
 }
 
 function goToCountyExamGrading() {
   router.push('/business/county-exam-grading');
 }
 
-/** 新建课：直接进入设计器，在设计页选择「常规课 / 课堂考勤」 */
-function handleAddNewLesson(group) {
-  const maxLessonNum = group.lessons && group.lessons.length > 0
-    ? Math.max(...group.lessons.map(l => l.lessonNum || 0))
+/** 新建课按目标开设年级独立编号；历史入口必须再次说明目标年级。 */
+async function handleAddNewLesson(group, section) {
+  if (section.isHistory) {
+    try {
+      await ElMessageBox.confirm(
+        `将为${group.entryYear}级新增一门${section.gradeName}历史课程，课次会在该年级内继续计算。确认继续？`,
+        '添加历史课程',
+        { type: 'warning', confirmButtonText: '确认添加', cancelButtonText: '取消' }
+      );
+    } catch (e) {
+      return;
+    }
+  }
+  const maxLessonNum = section.lessons.length > 0
+    ? Math.max(...section.lessons.map(l => l.lessonNum || 0))
     : 0;
   router.push({
     path: '/business/lesson-auth/designer',
     query: {
-      grade: group.gradeId,
+      grade: section.gradeId,
       entryYear: group.entryYear,
       gradeName: group.gradeName,
       classes: JSON.stringify(group.allClassesInGrade),
@@ -617,13 +742,24 @@ function handleDeleteLesson(lessonId) {
     .catch(() => {});
 }
 
-onMounted(() => {
+function refreshDashboard() {
   fetchDashboardData();
+  fetchCountyGradingData();
+}
+
+let skipFirstActivatedRefresh = true;
+onMounted(() => {
+  refreshDashboard();
 });
 
 // 从其他页面返回时（如课程设计页），重新加载数据
 onActivated(() => {
-  fetchDashboardData();
+  // KeepAlive 首次挂载会紧接着触发 activated，跳过这一次以免首页重复请求。
+  if (skipFirstActivatedRefresh) {
+    skipFirstActivatedRefresh = false;
+    return;
+  }
+  refreshDashboard();
 });
 </script>
 
@@ -660,6 +796,70 @@ onActivated(() => {
     color: #606266;
     font-size: 13px;
   }
+}
+
+.grade-group {
+  & + & {
+    margin-top: 28px;
+  }
+}
+
+.grade-header {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.grade-title {
+  color: #303133;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.course-grade-section {
+  margin-bottom: 16px;
+  padding: 12px 14px 14px;
+  border: 1px solid #d9ecff;
+  border-radius: 10px;
+  background: #f7fbff;
+
+  &.is-history {
+    border-color: #e4e7ed;
+    background: #fafafa;
+  }
+}
+
+.course-grade-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  margin-bottom: 12px;
+
+  &.clickable {
+    cursor: pointer;
+  }
+}
+
+.course-grade-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  strong {
+    color: #303133;
+    font-size: 15px;
+  }
+
+  > span:last-child {
+    color: #909399;
+    font-size: 12px;
+  }
+}
+
+.history-toggle-text {
+  color: #409eff;
+  font-size: 13px;
 }
 
 .lesson-container {

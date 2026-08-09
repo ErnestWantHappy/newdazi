@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -114,6 +115,20 @@ class LessonAutoAdvanceServiceImplTest
         assertEquals(0, result.get("advanced"));
         assertEquals(1, result.get("skipped"));
         verify(assignmentMapper, never()).selectAssignmentsByLessonId(anyLong());
+    }
+
+    @Test
+    void nextLessonNeverCrossesOpeningGradeWhenLessonNumbersRestart()
+    {
+        BizLesson current = lesson(1L, 1, "assessment");
+        BizLesson differentGrade = lesson(2L, 2, "assessment");
+        differentGrade.setGrade(8L);
+        when(lessonMapper.selectBizLessonList(any(BizLesson.class)))
+                .thenReturn(Arrays.asList(current, differentGrade));
+
+        BizLesson result = ReflectionTestUtils.invokeMethod(service, "findNextLesson", current);
+
+        assertNull(result);
     }
 
     private BizLesson lesson(Long id, int number, String mode)

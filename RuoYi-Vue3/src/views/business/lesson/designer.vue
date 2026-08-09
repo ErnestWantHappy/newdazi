@@ -17,7 +17,7 @@
             <el-row>
               <el-col :span="12">
                 <el-form-item label="年级" prop="grade">
-                  <el-select v-model="form.grade" placeholder="请选择年级" style="width:100%" :disabled="isAddMode" @change="handleGradeChange">
+                  <el-select v-model="form.grade" placeholder="请选择年级" style="width:100%" disabled @change="handleGradeChange">
                     <el-option
                       v-for="dict in biz_grade"
                       :key="dict.value"

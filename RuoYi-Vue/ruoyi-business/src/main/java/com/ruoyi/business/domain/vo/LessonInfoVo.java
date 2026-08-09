@@ -13,6 +13,9 @@ public class LessonInfoVo {
     /** 第几课 */
     private Integer lessonNum;
 
+    /** 课程创建时确定的开设年级，用于届别内的当前/历史课程分栏。 */
+    private Long grade;
+
     /** 课程永久所属入学年份，前端跳转成绩时以课程自身值为准。 */
     private String entryYear;
 
@@ -49,6 +52,14 @@ public class LessonInfoVo {
 
     public void setLessonNum(Integer lessonNum) {
         this.lessonNum = lessonNum;
+    }
+
+    public Long getGrade() {
+        return grade;
+    }
+
+    public void setGrade(Long grade) {
+        this.grade = grade;
     }
 
     public String getEntryYear() {

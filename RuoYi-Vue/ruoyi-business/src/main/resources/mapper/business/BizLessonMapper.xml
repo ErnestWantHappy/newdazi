@@ -211,6 +211,7 @@
     <resultMap type="com.ruoyi.business.domain.vo.LessonInfoVo" id="LessonInfoVoResult">
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
+        <result property="grade"    column="grade"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="entryYear"    column="entry_year"    />
         <result property="createTime"    column="create_time"    />
@@ -227,6 +228,7 @@
         SELECT
             lesson_id,
             lesson_title,
+            grade,
             lesson_num,
             entry_year,
             create_time,
@@ -254,6 +256,7 @@
         SELECT
             l.lesson_id,
             l.lesson_title,
+            l.grade,
             l.lesson_num,
             l.entry_year,
             l.create_time,
@@ -346,6 +349,7 @@
         SELECT DISTINCT
             l.lesson_id,
             l.lesson_title,
+            l.grade,
             l.lesson_num,
             l.entry_year,
             l.create_time,
@@ -374,11 +378,12 @@
             l.lesson_id DESC
     </select>
 
-    <select id="selectMaxLessonNumByEntryYearAndCreator" resultType="java.lang.Integer">
+    <select id="selectMaxLessonNumByEntryYearGradeAndCreator" resultType="java.lang.Integer">
         SELECT IFNULL(MAX(lesson_num), 0)
         FROM biz_lesson
         WHERE entry_year = #{entryYear}
-          AND create_by = #{creatorName}
+          AND grade = #{grade}
+          AND (creator_id = #{creatorId} OR create_by = #{creatorName})
           AND dept_id = #{deptId}
     </select>
 </mapper>

@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import org.mockito.ArgumentCaptor;
 
@@ -210,10 +211,6 @@ class BizLessonServiceImplTest
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(8L),
                 org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("teacher")))
                 .thenReturn(Collections.emptyList());
-        when(lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
-                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
-                .thenReturn(Collections.emptyList());
-
         List<GradeGroupVo> groups = service.getTeacherDashboardData();
 
         GradeGroupVo ninthGradeGroup = groups.stream()
@@ -226,6 +223,12 @@ class BizLessonServiceImplTest
         assertEquals(Collections.singletonList(eighthGradeLesson), eighthGradeGroup.getLessons());
         assertEquals("九年级", ninthGradeGroup.getGradeName());
         assertEquals("八年级", eighthGradeGroup.getGradeName());
+        verify(lessonAssignmentMapper).selectAssignmentsByLessonIds(
+                org.mockito.ArgumentMatchers.argThat(ids -> ids.size() == 2
+                        && ids.contains(24L) && ids.contains(25L)),
+                org.mockito.ArgumentMatchers.eq(10L));
+        verify(lessonAssignmentMapper, never()).selectClassCodesByLessonIdAndEntryYear(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -249,10 +252,6 @@ class BizLessonServiceImplTest
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(8L),
                 org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("teacher")))
                 .thenReturn(Collections.emptyList());
-        when(lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
-                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
-                .thenReturn(Collections.singletonList("1"));
-
         List<GradeGroupVo> groups = service.getTeacherDashboardData();
 
         GradeGroupVo graduatedGroup = groups.stream()
@@ -276,11 +275,24 @@ class BizLessonServiceImplTest
     }
 
     @Test
+    void persistedLessonOpeningGradeCannotDriftDuringEdit()
+    {
+        BizLesson existing = new BizLesson();
+        existing.setGrade(8L);
+
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                service, "preserveLessonGrade", existing, 8L));
+        assertThrows(ServiceException.class, () -> ReflectionTestUtils.invokeMethod(
+                service, "preserveLessonGrade", existing, 9L));
+    }
+
+    @Test
     void ordinaryCreateAlwaysWritesCreateTime()
     {
         loginTeacher();
         BizLesson lesson = new BizLesson();
         lesson.setEntryYear("2025");
+        lesson.setGrade(8L);
 
         service.insertBizLesson(lesson);
 
@@ -298,6 +310,8 @@ class BizLessonServiceImplTest
         existing.setCreatorId(8L);
         existing.setDeptId(10L);
         existing.setEntryYear("2025");
+        existing.setGrade(8L);
+        existing.setLessonNum(3);
         when(bizLessonMapper.selectBizLessonByLessonId(10L)).thenReturn(existing);
         when(bizLessonMapper.updateBizLesson(org.mockito.ArgumentMatchers.any())).thenReturn(1);
         BizLesson update = new BizLesson();
@@ -309,6 +323,25 @@ class BizLessonServiceImplTest
         ArgumentCaptor<BizLesson> captor = ArgumentCaptor.forClass(BizLesson.class);
         verify(bizLessonMapper).updateBizLesson(captor.capture());
         assertNotNull(captor.getValue().getUpdateTime());
+        assertEquals(Long.valueOf(8L), captor.getValue().getGrade());
+        assertEquals(Integer.valueOf(3), captor.getValue().getLessonNum());
+    }
+
+    @Test
+    void newLessonNumberUsesOnlySameCohortAndOpeningGrade()
+    {
+        loginTeacher();
+        BizLesson lesson = new BizLesson();
+        lesson.setEntryYear("2024");
+        lesson.setGrade(9L);
+        when(bizLessonMapper.selectMaxLessonNumByEntryYearGradeAndCreator(
+                "2024", 9L, 8L, "teacher", 10L)).thenReturn(0);
+
+        service.insertBizLesson(lesson);
+
+        ArgumentCaptor<BizLesson> captor = ArgumentCaptor.forClass(BizLesson.class);
+        verify(bizLessonMapper).insertBizLesson(captor.capture());
+        assertEquals(Integer.valueOf(1), captor.getValue().getLessonNum());
     }
 
     private BizLessonQuestionDetailVo question(long score)

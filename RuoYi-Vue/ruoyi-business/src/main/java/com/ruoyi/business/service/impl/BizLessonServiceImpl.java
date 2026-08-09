@@ -3,6 +3,7 @@ package com.ruoyi.business.service.impl;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -110,6 +111,10 @@ public class BizLessonServiceImpl implements IBizLessonService
     public int insertBizLesson(BizLesson bizLesson)
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (bizLesson.getGrade() == null)
+        {
+            throw new ServiceException("课程开设年级不能为空");
+        }
         if (StringUtils.isBlank(bizLesson.getEntryYear()))
         {
             bizLesson.setEntryYear(calculateEntryYearFromGrade(bizLesson.getGrade()));
@@ -117,6 +122,10 @@ public class BizLessonServiceImpl implements IBizLessonService
         bizLesson.setCreatorId(loginUser.getUserId());
         bizLesson.setDeptId(loginUser.getDeptId());
         bizLesson.setCreateBy(loginUser.getUsername());
+        Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByEntryYearGradeAndCreator(
+                bizLesson.getEntryYear(), bizLesson.getGrade(), loginUser.getUserId(),
+                loginUser.getUsername(), loginUser.getDeptId());
+        bizLesson.setLessonNum((maxLessonNum == null ? 0 : maxLessonNum) + 1);
         if (bizLesson.getCreateTime() == null) {
             bizLesson.setCreateTime(new Date());
         }
@@ -129,7 +138,10 @@ public class BizLessonServiceImpl implements IBizLessonService
         BizLesson existing = bizLessonMapper.selectBizLessonByLessonId(bizLesson.getLessonId());
         assertCanManageLesson(existing);
         preserveLessonEntryYear(existing, bizLesson.getEntryYear());
+        preserveLessonGrade(existing, bizLesson.getGrade());
         bizLesson.setEntryYear(existing.getEntryYear());
+        bizLesson.setGrade(existing.getGrade());
+        bizLesson.setLessonNum(existing.getLessonNum());
         bizLesson.setCreatorId(existing.getCreatorId());
         bizLesson.setDeptId(existing.getDeptId());
         bizLesson.setUpdateBy(SecurityUtils.getUsername());
@@ -268,24 +280,13 @@ public class BizLessonServiceImpl implements IBizLessonService
                 return Long.compare(idB, idA);
             });
 
-            for (LessonInfoVo lesson : allLessons) {
-                List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
-                        lesson.getLessonId(), entryYear);
-                if (classCodes != null && !classCodes.isEmpty()) {
-                    List<String> formattedCodes = classCodes.stream()
-                        .filter(StringUtils::isNotBlank)
-                        .map(code -> code.endsWith("班") ? code : code + "班")
-                        .collect(Collectors.toList());
-                    lesson.setAssignedClasses(formattedCodes);
-                }
-            }
-
             gradeGroup.setLessons(allLessons);
 
             result.add(gradeGroup);
         }
 
         result.sort((a, b) -> b.getEntryYear().compareTo(a.getEntryYear()));
+        fillDashboardAssignments(result, deptId);
         log.info("【教师首页数据】数据组装完成，共返回 {} 个年级组的数据。", result.size());
 
         return result;
@@ -386,6 +387,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         {
             preserveLessonEntryYear(existingLesson, entryYear);
             entryYear = existingLesson.getEntryYear();
+            preserveLessonGrade(existingLesson, lessonDetailVo.getGrade());
+            lessonDetailVo.setGrade(existingLesson.getGrade());
         }
         if (StringUtils.isBlank(entryYear))
         {
@@ -401,11 +404,13 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonToSave.setGrade(lessonDetailVo.getGrade());
         lessonToSave.setEntryYear(entryYear);
         lessonToSave.setSemester(lessonDetailVo.getSemester());
-        Integer lessonNum = lessonDetailVo.getLessonNum();
-        if (lessonToSave.getLessonId() == null && (lessonNum == null || lessonNum <= 0)) {
-            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByEntryYearAndCreator(
-                    entryYear, username, deptId);
+        Integer lessonNum;
+        if (lessonToSave.getLessonId() == null) {
+            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByEntryYearGradeAndCreator(
+                    entryYear, lessonDetailVo.getGrade(), userId, username, deptId);
             lessonNum = (maxLessonNum == null ? 0 : maxLessonNum) + 1;
+        } else {
+            lessonNum = existingLesson.getLessonNum();
         }
         lessonToSave.setLessonNum(lessonNum);
         lessonToSave.setShuffleMode(lessonDetailVo.getShuffleMode() != null ? lessonDetailVo.getShuffleMode() : 0);
@@ -840,6 +845,62 @@ public class BizLessonServiceImpl implements IBizLessonService
         {
             throw new ServiceException("课程所属入学年份不可修改，如需跨届使用请复制为新课程");
         }
+    }
+
+    /**
+     * 开设年级决定历史分栏、课次和推进边界，普通编辑只能修改课程内容，不能迁移年级。
+     */
+    private void preserveLessonGrade(BizLesson existing, Long requestedGrade)
+    {
+        if (existing == null || existing.getGrade() == null)
+        {
+            throw new ServiceException("课程开设年级缺失，请先治理历史数据");
+        }
+        if (requestedGrade != null && !existing.getGrade().equals(requestedGrade))
+        {
+            throw new ServiceException("课程开设年级不可修改，如需跨年级使用请复制为新课程");
+        }
+    }
+
+    /** 一次读取全部课程的当前指派，避免教师首页随课程数增长产生 N+1 查询。 */
+    private void fillDashboardAssignments(List<GradeGroupVo> groups, Long deptId)
+    {
+        List<Long> lessonIds = groups.stream()
+                .filter(Objects::nonNull)
+                .flatMap(group -> group.getLessons() == null
+                        ? java.util.stream.Stream.<LessonInfoVo>empty()
+                        : group.getLessons().stream())
+                .map(LessonInfoVo::getLessonId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (lessonIds.isEmpty())
+        {
+            return;
+        }
+        List<BizLessonAssignment> assignments = lessonAssignmentMapper.selectAssignmentsByLessonIds(lessonIds, deptId);
+        if (assignments == null)
+        {
+            assignments = new ArrayList<>();
+        }
+        Map<String, List<String>> classesByLesson = assignments.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getLessonId() != null && StringUtils.isNotBlank(item.getEntryYear()))
+                .collect(Collectors.groupingBy(
+                        item -> item.getLessonId() + "#" + item.getEntryYear(),
+                        Collectors.mapping(BizLessonAssignment::getClassCode,
+                                Collectors.collectingAndThen(
+                                        Collectors.toCollection(LinkedHashSet::new),
+                                        values -> values.stream()
+                                                .filter(StringUtils::isNotBlank)
+                                                .map(code -> code.endsWith("班") ? code : code + "班")
+                                                .collect(Collectors.toList())))));
+        groups.stream()
+                .filter(Objects::nonNull)
+                .filter(group -> group.getLessons() != null)
+                .flatMap(group -> group.getLessons().stream())
+                .forEach(lesson -> lesson.setAssignedClasses(classesByLesson.getOrDefault(
+                        lesson.getLessonId() + "#" + lesson.getEntryYear(), new ArrayList<>())));
     }
 
     private void validateEntryYear(String entryYear)

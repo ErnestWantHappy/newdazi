@@ -7,3 +7,12 @@ export function getDashboardData() {
     method: 'get'
   })
 }
+
+// 教师首页课程先显示，操作题批改红点随后异步补充
+export function getDashboardPracticalStatus(lessonIds) {
+  return request({
+    url: '/business/teacher/dashboard-practical-status',
+    method: 'post',
+    data: lessonIds
+  })
+}

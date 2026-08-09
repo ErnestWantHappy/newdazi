@@ -88,6 +88,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         ORDER BY CAST(class_code AS UNSIGNED) ASC, class_code ASC
     </select>
 
+    <select id="selectAssignmentsByLessonIds" resultMap="BizLessonAssignmentResult">
+        <include refid="selectBizLessonAssignmentVo"/>
+        WHERE dept_id = #{deptId}
+          AND lesson_id IN
+          <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+              #{lessonId}
+          </foreach>
+        ORDER BY lesson_id, CAST(class_code AS UNSIGNED), class_code
+    </select>
+
     <!-- 新增：根据课程ID删除所有指派记录 -->
     <delete id="deleteByLessonId" parameterType="java.lang.Long">
         DELETE FROM biz_lesson_assignment WHERE lesson_id = #{lessonId}
