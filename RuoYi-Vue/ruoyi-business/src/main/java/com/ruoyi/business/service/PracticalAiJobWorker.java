@@ -88,7 +88,7 @@ public class PracticalAiJobWorker
             PracticalAiGradingInput input = new PracticalAiGradingInput();
             input.setRubric(rubric); input.setScoringItems(rubricService.buildScoringItems(rubric));
             loadPages(result.getPracticalVersionId(), input);
-            loadReferencePages(result.getResultId(), rubric, input);
+            loadComparisonPages(jobFor(result.getJobId()), input);
             PracticalAiGradingOutput output = provider.grade(config, apiKey, input);
             BizStudentAnswer latest = answerMapper.selectById(result.getAnswerId());
             if (latest == null || !result.getPracticalVersionId().equals(latest.getPracticalVersionId()))
@@ -135,12 +135,34 @@ public class PracticalAiJobWorker
         input.setPageImages(files); input.setPageLabels(labels);
     }
 
-    /** 参考材料只作为额外视觉证据，并用明确标签与学生作品页面隔开。 */
-    private synchronized void loadReferencePages(Long resultId, PracticalRubricSnapshot rubric,
-                                                 PracticalAiGradingInput input)
+    /** 每个任务使用创建时冻结的空白起始材料和教师参考答案，避免中途替换改变评分依据。 */
+    private synchronized void loadComparisonPages(PracticalAiJob job, PracticalAiGradingInput input)
     {
+        if (job == null || job.getReferenceAnswerJson() == null)
+            throw new ServiceException("AI 任务缺少教师参考答案");
+        renderMaterials(job, job.getStarterMaterialsJson(), "空白起始材料", false, input);
+        int referencePages = renderMaterials(job, job.getReferenceAnswerJson(), "教师参考答案", true, input);
+        if (referencePages == 0) throw new ServiceException("教师参考答案无法转换为可识别页图");
+    }
+
+    private int renderMaterials(PracticalAiJob job, String materialsJson, String labelPrefix,
+                                boolean required, PracticalAiGradingInput input)
+    {
+        if (materialsJson == null || materialsJson.trim().isEmpty()) return 0;
+        int addedPages = 0;
+        List<PracticalQuestionMaterial> materials;
+        try
+        {
+            materials = objectMapper.readValue(materialsJson,
+                    new TypeReference<List<PracticalQuestionMaterial>>() { });
+        }
+        catch (Exception e)
+        {
+            if (required) throw new ServiceException(labelPrefix + "快照无法读取");
+            return 0;
+        }
         int materialIndex = 0;
-        for (PracticalQuestionMaterial material : rubricService.getReferenceMaterials(rubric))
+        for (PracticalQuestionMaterial material : materials)
         {
             materialIndex++;
             try
@@ -169,7 +191,7 @@ public class PracticalAiJobWorker
                         || "xls".equals(extension) || "xlsx".equals(extension))
                 {
                     File outputDir = new File(source.getParentFile(), "ai-reference-pdf");
-                    if (!outputDir.exists() && !outputDir.mkdirs()) throw new ServiceException("参考材料转换目录创建失败");
+                    if (!outputDir.exists() && !outputDir.mkdirs()) throw new ServiceException(labelPrefix + "转换目录创建失败");
                     String pdf = FileConversionUtils.convertOfficeToPdfWithLibreOffice(
                             source.getAbsolutePath(), outputDir.getAbsolutePath());
                     visualSource = new File(pdf); kind = "DOCUMENT";
@@ -177,20 +199,32 @@ public class PracticalAiJobWorker
                 else continue; // 压缩包等教师资源不作为视觉评分输入。
 
                 List<String> pages = pageRenderer.renderForOwner(
-                        "ai-ref-" + rubric.getSnapshotId() + "-" + material.getMaterialId(), kind, visualSource);
+                        "ai-job-" + job.getJobId() + "-" + labelPrefix.hashCode() + "-" + materialIndex,
+                        kind, visualSource);
                 int pageIndex = 0;
                 for (String page : pages)
                 {
                     pageIndex++;
                     input.getPageImages().add(resolveResource(page));
-                    input.getPageLabels().add("参考材料" + materialIndex + "第" + pageIndex + "页（仅供对照）");
+                    input.getPageLabels().add(labelPrefix + materialIndex + "第" + pageIndex + "页（仅供对照）");
+                    addedPages++;
                 }
             }
-            catch (Exception ignored)
+            catch (Exception e)
             {
-                // 单个参考材料不可渲染时仍可依据题干和作品生成建议，最终由教师复核。
+                if (required) throw e instanceof ServiceException
+                        ? (ServiceException) e : new ServiceException(labelPrefix + "无法转换");
+                // 空白起始材料不是必填项；单个文件失败不阻断参考答案对照评分。
             }
         }
+        return addedPages;
+    }
+
+    private PracticalAiJob jobFor(Long jobId)
+    {
+        PracticalAiJob job = aiMapper.selectJobForWorker(jobId);
+        if (job == null) throw new ServiceException("AI 批改任务不存在");
+        return job;
     }
 
     private File resolveResource(String resource)

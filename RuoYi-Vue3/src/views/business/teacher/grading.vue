@@ -46,13 +46,18 @@
           plain
           :loading="aiStarting"
           :disabled="!canStartAiJob"
-          @click="startAiJob"
+          @click="openAiJobDialog"
         >
           批量生成 AI 建议
         </el-button>
+        <el-button v-if="aiJob" type="primary" plain :loading="aiBatchApplying"
+          :disabled="!canBatchApplyAiSuggestions" @click="applyAiSuggestionsInBatch">
+          批量采用 AI 建议
+        </el-button>
         <el-tag v-if="aiJob" :type="aiJobTagType">{{ aiJobStatusText }}</el-tag>
         <el-button v-if="['PENDING','RUNNING'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('pause')">暂停</el-button>
-        <el-button v-if="aiJob?.jobStatus === 'PAUSED'" link type="success" @click="controlAiJob('resume')">继续</el-button>
+        <el-button v-if="aiJob?.jobStatus === 'PAUSED' && aiJobBatchAdoptAllowed" link type="success" @click="controlAiJob('resume')">继续</el-button>
+        <el-tag v-if="aiJob?.jobStatus === 'PAUSED' && !aiJobBatchAdoptAllowed" type="danger">旧任务缺参考答案，请取消后重建</el-tag>
         <el-button v-if="['PENDING','RUNNING','PAUSED'].includes(aiJob?.jobStatus)" link type="danger" @click="controlAiJob('cancel')">取消</el-button>
         <el-button v-if="['FAILED','PARTIAL_FAILED'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('retry')">重试失败项</el-button>
         <el-button
@@ -236,7 +241,15 @@
                   <el-tag size="small" type="warning">仅供教师复核</el-tag>
                </div>
                <div v-if="currentAiSummary" class="ai-summary">{{ currentAiSummary }}</div>
+               <div v-if="currentAiItemDetails.length" class="ai-item-details">
+                  <div v-for="item in currentAiItemDetails" :key="item.itemId" class="ai-item-detail">
+                     <span>{{ item.itemName }}</span>
+                     <strong>{{ item.score }} / {{ item.maxScore }} 分</strong>
+                     <small v-if="item.reason">{{ item.reason }}</small>
+                  </div>
+               </div>
                <div class="ai-confidence">置信度：{{ formatConfidence(currentAiSuggestion.confidence) }}</div>
+               <el-tag v-if="currentAiSuggestion.applyStatus === 'APPLIED'" size="small" type="success">已写入正式成绩</el-tag>
                <el-button size="small" type="success" plain @click="applyAiSuggestion">采用到评分框</el-button>
             </div>
             <el-alert
@@ -351,6 +364,49 @@
         <el-button type="primary" :loading="aiConfigSaving" :disabled="!aiConfig?.masterKeyConfigured" @click="submitAiConfig">加密保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="aiJobDialogVisible" title="开始 AI 批改" width="620px" append-to-body>
+      <el-alert title="请先确认批改范围。AI 会对照空白起始材料和教师参考答案，先生成建议，不会在此步骤写入正式成绩。"
+        type="info" :closable="false" show-icon style="margin-bottom: 16px" />
+      <div v-loading="aiPreflightLoading">
+        <div class="ai-preflight-counts" v-if="aiPreflight">
+          已提交 {{ aiPreflight.submittedCount }} 人，已人工批改 {{ aiPreflight.gradedCount }} 人，
+          未批 {{ aiPreflight.ungradedCount }} 人，可供 AI 识别 {{ aiPreflight.readyCount }} 人。
+        </div>
+        <el-radio-group v-model="aiScopeMode" class="ai-scope-options">
+          <el-radio value="UNGRADED_ONLY">
+            仅批改剩余未批学生（推荐，预计 {{ aiPreflight?.readyUngradedCount || 0 }} 人）
+          </el-radio>
+          <el-radio value="ALL_SUBMITTED">
+            全班重新生成建议（只作对照，不覆盖已有人工成绩）
+          </el-radio>
+        </el-radio-group>
+        <div class="ai-reference-row">
+          <div>
+            <strong>教师参考答案（AI 批改必填）</strong>
+            <div class="ai-reference-name" :class="{ 'is-missing': !aiPreflight?.referenceReady }">
+              {{ aiPreflight?.referenceFileName || '尚未上传' }}
+            </div>
+            <small>支持 Word、PDF、PPT、Excel、JPG、JPEG、PNG，单文件不超过 50 MiB。</small>
+          </div>
+          <el-upload :show-file-list="false" :http-request="uploadAiReference" :accept="aiReferenceAccept">
+            <el-button type="primary" plain :loading="aiReferenceUploading">
+              {{ aiPreflight?.referenceReady ? '替换参考答案' : '上传参考答案' }}
+            </el-button>
+          </el-upload>
+        </div>
+        <el-alert v-if="aiPreflight && !aiPreflight.referenceReady" title="请先上传教师参考答案，才能开始 AI 批改。"
+          type="warning" :closable="false" style="margin-top: 12px" />
+        <div class="ai-starter-note">空白起始材料：{{ aiPreflight?.starterCount || 0 }} 个；没有起始材料时，AI 仍会按题干与参考答案评分。</div>
+      </div>
+      <template #footer>
+        <el-button @click="aiJobDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="aiStarting"
+          :disabled="!aiPreflight?.referenceReady || selectedAiScopeCount <= 0" @click="startAiJob">
+          确认生成建议
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -361,6 +417,7 @@ import { getDashboardData } from '@/api/business/teacher';
 import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
 import { getAiConfig, saveAiConfig, deleteAiConfig, testAiConfig, createAiJob, getAiJob,
+    getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
     pauseAiJob, resumeAiJob, cancelAiJob, retryFailedAiJob } from '@/api/business/practicalAiGrading';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { FullScreen } from '@element-plus/icons-vue';
@@ -399,6 +456,14 @@ const aiConfigVisible = ref(false);
 const aiConfigSaving = ref(false);
 const aiTesting = ref(false);
 const aiStarting = ref(false);
+const aiJobDialogVisible = ref(false);
+const aiPreflightLoading = ref(false);
+const aiReferenceUploading = ref(false);
+const aiBatchApplying = ref(false);
+const aiPreflight = ref(null);
+const aiScopeMode = ref('UNGRADED_ONLY');
+const aiJobBatchAdoptAllowed = ref(false);
+const aiReferenceAccept = '.doc,.docx,.pdf,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png';
 const aiConfig = ref(null);
 const aiConfigForm = ref({ apiKey: '', modelName: 'qwen3.7-plus' });
 const aiJob = ref(null);
@@ -438,11 +503,37 @@ const currentAiSummary = computed(() => {
     if (!currentAiSuggestion.value?.evidenceJson) return '';
     try { return JSON.parse(currentAiSuggestion.value.evidenceJson)?.overallComment || ''; } catch (e) { return ''; }
 });
+const currentAiItemDetails = computed(() => {
+    if (!currentAiSuggestion.value) return [];
+    try {
+        const details = JSON.parse(currentAiSuggestion.value.scoringDetailsJson || '[]');
+        const evidence = JSON.parse(currentAiSuggestion.value.evidenceJson || '{}');
+        const reasons = new Map((evidence.rubricResults || []).map(item => [Number(item.rubricItemId), item.reason || '']));
+        return details.map(detail => {
+            const item = scoringItems.value.find(candidate => Number(candidate.itemId) === Number(detail.itemId));
+            return {
+                itemId: detail.itemId,
+                itemName: item?.itemName || `评分项 ${detail.itemId}`,
+                score: detail.score,
+                maxScore: item?.maxScore ?? '--',
+                reason: reasons.get(Number(detail.itemId)) || ''
+            };
+        });
+    } catch (e) { return []; }
+});
+const selectedAiScopeCount = computed(() => aiScopeMode.value === 'ALL_SUBMITTED'
+    ? (aiPreflight.value?.readyCount || 0) : (aiPreflight.value?.readyUngradedCount || 0));
+const batchApplicableCount = computed(() => submissions.value.filter(student =>
+    student.submitted && student.score == null && aiResultFor(student)?.resultStatus === 'SUCCESS'
+    && aiResultFor(student)?.applyStatus !== 'APPLIED').length);
+const canBatchApplyAiSuggestions = computed(() => Boolean(aiJobBatchAdoptAllowed.value
+    && ['COMPLETED', 'PARTIAL_FAILED'].includes(aiJob.value?.jobStatus)
+    && batchApplicableCount.value > 0 && deadlineStatus.value?.canGrade));
 const canStartAiJob = computed(() => Boolean(
     aiConfig.value?.configured && aiConfig.value?.masterKeyConfigured
     && selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value
     && submittedCount.value > 0 && deadlineStatus.value?.canGrade
-    && !['PENDING', 'RUNNING'].includes(aiJob.value?.jobStatus)
+    && !['PENDING', 'RUNNING', 'PAUSED', 'CANCEL_REQUESTED'].includes(aiJob.value?.jobStatus)
 ));
 const aiJobTagType = computed(() => ['COMPLETED'].includes(aiJob.value?.jobStatus) ? 'success'
     : ['FAILED', 'PARTIAL_FAILED'].includes(aiJob.value?.jobStatus) ? 'danger'
@@ -684,9 +775,10 @@ function loadSubmissions() {
     const previousStudentId = currentStudent.value?.studentId;
     
     loading.value = true;
-    getPracticalSubmissions(selectedLessonId.value, selectedQuestionId.value, selectedClassCode.value, entryYear).then(res => {
+    return getPracticalSubmissions(selectedLessonId.value, selectedQuestionId.value, selectedClassCode.value, entryYear).then(res => {
         submissions.value = res.data;
         loading.value = false;
+        restoreLatestAiJob();
         const preservedStudent = previousStudentId != null
             ? submissions.value.find(s => s.studentId === previousStudentId && s.submitted)
             : null;
@@ -823,17 +915,59 @@ async function testSavedAiConfig() {
     }
 }
 
+function aiScopeParams() {
+    return {
+        lessonId: selectedLessonId.value,
+        questionId: selectedQuestionId.value,
+        entryYear: currentEntryYear.value,
+        classCode: selectedClassCode.value
+    };
+}
+
+async function openAiJobDialog() {
+    aiScopeMode.value = 'UNGRADED_ONLY';
+    aiJobDialogVisible.value = true;
+    await loadAiPreflight();
+}
+
+async function loadAiPreflight() {
+    aiPreflightLoading.value = true;
+    try {
+        const res = await getAiPreflight(aiScopeParams());
+        aiPreflight.value = res.data || {};
+    } finally {
+        aiPreflightLoading.value = false;
+    }
+}
+
+async function uploadAiReference(options) {
+    aiReferenceUploading.value = true;
+    try {
+        const formData = new FormData();
+        formData.append('file', options.file);
+        for (const [key, value] of Object.entries(aiScopeParams())) formData.append(key, value);
+        await uploadAiReferenceAnswer(formData);
+        ElMessage.success('教师参考答案已保存');
+        await loadAiPreflight();
+        options.onSuccess?.();
+    } catch (error) {
+        options.onError?.(error);
+    } finally {
+        aiReferenceUploading.value = false;
+    }
+}
+
 async function startAiJob() {
     aiStarting.value = true;
     try {
         const res = await createAiJob({
-            lessonId: selectedLessonId.value,
-            questionId: selectedQuestionId.value,
-            entryYear: currentEntryYear.value,
-            classCode: selectedClassCode.value
+            ...aiScopeParams(),
+            scopeMode: aiScopeMode.value
         });
         aiJob.value = res.data;
+        aiJobBatchAdoptAllowed.value = true;
         aiResultsByAnswer.value = {};
+        aiJobDialogVisible.value = false;
         ElMessage.success('AI 批改任务已进入后台队列');
         pollAiJob();
     } finally {
@@ -847,6 +981,7 @@ async function pollAiJob() {
     try {
         const res = await getAiJob(aiJob.value.jobId);
         aiJob.value = res.data?.job || aiJob.value;
+        aiJobBatchAdoptAllowed.value = Boolean(res.data?.batchAdoptAllowed);
         const mapped = {};
         for (const result of (res.data?.results || [])) mapped[result.answerId] = result;
         aiResultsByAnswer.value = mapped;
@@ -855,6 +990,48 @@ async function pollAiJob() {
         }
     } catch (e) {
         aiPollTimer = window.setTimeout(pollAiJob, 4000);
+    }
+}
+
+async function restoreLatestAiJob() {
+    if (!selectedLessonId.value || !selectedQuestionId.value || !selectedClassCode.value) return;
+    const scope = aiScopeParams();
+    try {
+        const res = await getLatestAiJob(scope);
+        if (scope.lessonId !== selectedLessonId.value || scope.questionId !== selectedQuestionId.value
+            || scope.classCode !== selectedClassCode.value) return;
+        const detail = res.data;
+        if (!detail?.job) return;
+        aiJob.value = detail.job;
+        aiJobBatchAdoptAllowed.value = Boolean(detail.batchAdoptAllowed);
+        const mapped = {};
+        for (const result of (detail.results || [])) mapped[result.answerId] = result;
+        aiResultsByAnswer.value = mapped;
+        if (['PENDING', 'RUNNING', 'CANCEL_REQUESTED'].includes(aiJob.value.jobStatus)) pollAiJob();
+    } catch (e) {
+        // 恢复任务失败不阻断教师人工批改。
+    }
+}
+
+async function applyAiSuggestionsInBatch() {
+    if (!canBatchApplyAiSuggestions.value) return;
+    try {
+        await ElMessageBox.confirm(
+            `将把 ${batchApplicableCount.value} 名当前仍未批学生的 AI 建议写入正式成绩。已有人工作业分的学生一律跳过，确定继续吗？`,
+            '批量采用 AI 建议',
+            { type: 'warning', confirmButtonText: '仅采用未批学生', cancelButtonText: '取消' }
+        );
+    } catch (e) { return; }
+    aiBatchApplying.value = true;
+    try {
+        const res = await batchApplyAiSuggestions(aiJob.value.jobId);
+        const summary = res.data || {};
+        ElMessage.success(`已采用 ${summary.appliedCount || 0} 人；跳过人工已批 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人`);
+        await loadSubmissions();
+        await loadDeadlineStatus();
+        await pollAiJob();
+    } finally {
+        aiBatchApplying.value = false;
     }
 }
 
@@ -875,6 +1052,8 @@ function resetAiJobView() {
     stopAiPolling();
     aiJob.value = null;
     aiResultsByAnswer.value = {};
+    aiJobBatchAdoptAllowed.value = false;
+    aiPreflight.value = null;
 }
 
 function aiResultFor(student) {
@@ -1236,6 +1415,41 @@ function autoFocusItem() {
   font-size: 13px;
 }
 
+.ai-preflight-counts,
+.ai-starter-note {
+  color: #606266;
+  line-height: 1.7;
+}
+
+.ai-scope-options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.ai-reference-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.ai-reference-name {
+  margin: 6px 0;
+  color: #67c23a;
+  word-break: break-all;
+
+  &.is-missing { color: #f56c6c; }
+}
+
+.ai-starter-note { margin-top: 12px; font-size: 13px; }
+
 .grading-page {
   height: calc(100vh - 84px);
   display: flex;
@@ -1553,6 +1767,16 @@ function autoFocusItem() {
 
      .ai-suggestion-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
      .ai-summary { margin: 8px 0; color: #606266; line-height: 1.5; font-size: 13px; }
+     .ai-item-details { margin: 8px 0; border-top: 1px dashed #b3e19d; }
+     .ai-item-detail {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 8px;
+        padding: 7px 0;
+        border-bottom: 1px dashed #d9ecff;
+
+        small { grid-column: 1 / -1; color: #606266; line-height: 1.4; }
+     }
      .ai-confidence { margin: 6px 0 10px; color: #909399; font-size: 12px; }
   }
   

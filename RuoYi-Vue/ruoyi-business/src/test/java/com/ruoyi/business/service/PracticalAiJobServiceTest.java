@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,8 +17,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.PracticalAttachment;
 import com.ruoyi.business.domain.TeacherAiConfig;
+import com.ruoyi.business.domain.TeacherPracticalReferenceAnswer;
 import com.ruoyi.business.domain.vo.PracticalSubmissionVo;
 import com.ruoyi.business.mapper.PracticalAiGradingMapper;
+import com.ruoyi.business.mapper.PracticalArtifactMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class PracticalAiJobServiceTest
@@ -25,6 +29,9 @@ class PracticalAiJobServiceTest
     @Mock private PracticalAiGradingMapper mapper;
     @Mock private TeacherAiConfigService configService;
     @Mock private PracticalAiJobWorker worker;
+    @Mock private PracticalAiReferenceAnswerService referenceAnswerService;
+    @Mock private PracticalArtifactMapper artifactMapper;
+    @Mock private PracticalFilePolicyService filePolicyService;
     private PracticalAiJobService service;
 
     @BeforeEach
@@ -34,6 +41,15 @@ class PracticalAiJobServiceTest
         ReflectionTestUtils.setField(service, "mapper", mapper);
         ReflectionTestUtils.setField(service, "configService", configService);
         ReflectionTestUtils.setField(service, "worker", worker);
+        ReflectionTestUtils.setField(service, "referenceAnswerService", referenceAnswerService);
+        ReflectionTestUtils.setField(service, "artifactMapper", artifactMapper);
+        ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
+        ReflectionTestUtils.setField(service, "filePolicyService", filePolicyService);
+        TeacherPracticalReferenceAnswer reference = new TeacherPracticalReferenceAnswer();
+        reference.setReferenceId(1L); reference.setOriginalFileName("answer.png");
+        reference.setResourcePath("/profile/upload/answer.png"); reference.setFileExtension("png");
+        org.mockito.Mockito.lenient().when(referenceAnswerService.current(7L, 9L, 10L, 11L)).thenReturn(reference);
+        org.mockito.Mockito.lenient().when(artifactMapper.selectMaterialsByQuestion(11L)).thenReturn(Collections.emptyList());
     }
 
     @Test
@@ -46,7 +62,7 @@ class PracticalAiJobServiceTest
             ((PracticalAiJob) invocation.getArgument(0)).setJobId(55L); return 1;
         }).when(mapper).insertJob(any(PracticalAiJob.class));
 
-        PracticalAiJob job = service.create(7L, 9L, 10L, 11L, "2024", "1",
+        PracticalAiJob job = service.create(7L, 9L, 10L, 11L, "2024", "1", "UNGRADED_ONLY",
                 Arrays.asList(submission(true), submission(false)));
 
         assertEquals(55L, job.getJobId());
@@ -63,12 +79,30 @@ class PracticalAiJobServiceTest
         PracticalAiJob running = new PracticalAiJob(); running.setJobId(88L); running.setJobStatus("RUNNING");
         when(configService.statusForUpdate(7L)).thenReturn(config);
         when(configService.apiKey(config)).thenReturn("secret");
-        when(mapper.selectRunningJob(7L, 10L, 11L, "2024", "1")).thenReturn(running);
+        when(mapper.selectActiveJob(7L, 10L, 11L, "2024", "1")).thenReturn(running);
 
-        assertEquals(88L, service.create(7L, 9L, 10L, 11L, "2024", "1",
+        assertEquals(88L, service.create(7L, 9L, 10L, 11L, "2024", "1", "UNGRADED_ONLY",
                 Collections.singletonList(submission(true))).getJobId());
         verify(mapper, never()).insertJob(any());
         verify(worker, never()).run(any());
+    }
+
+    @Test
+    void shouldFinishPausedJobImmediatelyWhenCancelled()
+    {
+        PracticalAiJob paused = new PracticalAiJob(); paused.setJobId(88L); paused.setJobStatus("PAUSED");
+        when(mapper.selectJob(88L, 7L)).thenReturn(paused);
+
+        service.cancel(88L, 7L);
+
+        verify(mapper).updatePendingResultsStatus(org.mockito.ArgumentMatchers.eq(88L),
+                org.mockito.ArgumentMatchers.eq("CANCELLED"), org.mockito.ArgumentMatchers.eq("教师已取消"),
+                org.mockito.ArgumentMatchers.any());
+        verify(mapper).updateJobCounts(88L);
+        verify(mapper).updateJobStatus(org.mockito.ArgumentMatchers.eq(88L),
+                org.mockito.ArgumentMatchers.eq("CANCELLED"), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.isNull());
+        verifyNoInteractions(worker);
     }
 
     private TeacherAiConfig config()

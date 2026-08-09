@@ -72,7 +72,7 @@ public class BizQuestion extends BaseEntity
     /** 图片作品最多张数 */
     private Integer practicalImageMaxCount;
 
-    /** 起始文件、补充资源和教师参考材料 */
+    /** 起始文件、补充资源和教师参考答案 */
     private java.util.List<PracticalQuestionMaterial> practicalMaterials;
 
     /** P6: 评分项列表 */

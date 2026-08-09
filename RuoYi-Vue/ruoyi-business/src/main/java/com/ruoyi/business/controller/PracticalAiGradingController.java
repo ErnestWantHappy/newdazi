@@ -12,7 +12,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.dto.PracticalAiJobRequest;
@@ -23,6 +26,8 @@ import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.business.service.PracticalAiJobService;
+import com.ruoyi.business.service.PracticalAiReferenceAnswerService;
+import com.ruoyi.business.service.PracticalAiSuggestionApplyService;
 import com.ruoyi.business.service.PracticalArtifactService;
 import com.ruoyi.business.service.TeacherAiConfigService;
 import com.ruoyi.common.core.controller.BaseController;
@@ -43,6 +48,8 @@ public class PracticalAiGradingController extends BaseController
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
     @Autowired private BizStudentAnswerMapper answerMapper;
     @Autowired private PracticalArtifactService artifactService;
+    @Autowired private PracticalAiReferenceAnswerService referenceAnswerService;
+    @Autowired private PracticalAiSuggestionApplyService suggestionApplyService;
 
     @GetMapping("/config")
     public AjaxResult config()
@@ -91,8 +98,48 @@ public class PracticalAiGradingController extends BaseController
         artifactService.enrichSubmissions(submissions);
         PracticalAiJob job = jobService.create(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
                 request.getLessonId(), request.getQuestionId(), request.getEntryYear(),
-                request.getClassCode(), submissions);
+                request.getClassCode(), request.getScopeMode(), submissions);
         return AjaxResult.success(job);
+    }
+
+    @GetMapping("/preflight")
+    public AjaxResult preflight(@RequestParam Long lessonId, @RequestParam Long questionId,
+                                @RequestParam String entryYear, @RequestParam String classCode)
+    {
+        if (StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+            throw new ServiceException("班级和入学年份不能为空");
+        accessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
+        assertPracticalQuestion(lessonId, questionId);
+        List<PracticalSubmissionVo> submissions = answerMapper.selectPracticalSubmissions(
+                lessonId, questionId, classCode.trim(), entryYear.trim(), SecurityUtils.getDeptId());
+        artifactService.enrichSubmissions(submissions);
+        return AjaxResult.success(jobService.preflight(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
+                lessonId, questionId, submissions));
+    }
+
+    @PostMapping(value = "/reference-answer", consumes = "multipart/form-data")
+    public AjaxResult uploadReferenceAnswer(@RequestParam Long lessonId, @RequestParam Long questionId,
+                                            @RequestParam String entryYear, @RequestParam String classCode,
+                                            @RequestPart("file") MultipartFile file)
+    {
+        if (StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+            throw new ServiceException("班级和入学年份不能为空");
+        accessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
+        assertPracticalQuestion(lessonId, questionId);
+        return AjaxResult.success("教师参考答案已保存", referenceAnswerService.upload(
+                SecurityUtils.getUserId(), SecurityUtils.getDeptId(), lessonId, questionId, file));
+    }
+
+    @GetMapping("/jobs/latest")
+    public AjaxResult latestJob(@RequestParam Long lessonId, @RequestParam Long questionId,
+                                @RequestParam String entryYear, @RequestParam String classCode)
+    {
+        if (StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+            throw new ServiceException("班级和入学年份不能为空");
+        accessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
+        assertPracticalQuestion(lessonId, questionId);
+        return AjaxResult.success(jobService.latest(SecurityUtils.getUserId(), lessonId, questionId,
+                entryYear.trim(), classCode.trim()));
     }
 
     @GetMapping("/jobs/{jobId}")
@@ -109,6 +156,13 @@ public class PracticalAiGradingController extends BaseController
     { jobService.cancel(jobId, SecurityUtils.getUserId()); return AjaxResult.success("已请求取消任务"); }
     @PostMapping("/jobs/{jobId}/retry-failed") public AjaxResult retry(@PathVariable Long jobId)
     { jobService.retryFailed(jobId, SecurityUtils.getUserId()); return AjaxResult.success("失败作品已重新入队"); }
+    @PostMapping("/jobs/{jobId}/apply-ungraded") public AjaxResult applyUngraded(@PathVariable Long jobId)
+    {
+        PracticalAiJob job = (PracticalAiJob) jobService.detail(jobId, SecurityUtils.getUserId()).get("job");
+        accessService.assertCanViewLessonClass(job.getLessonId(), job.getEntryYear(), job.getClassCode());
+        return AjaxResult.success("AI 建议批量采用完成", suggestionApplyService.applyUngraded(
+                jobId, SecurityUtils.getUserId(), SecurityUtils.getDeptId()));
+    }
 
     private void validateRequest(PracticalAiJobRequest request)
     {

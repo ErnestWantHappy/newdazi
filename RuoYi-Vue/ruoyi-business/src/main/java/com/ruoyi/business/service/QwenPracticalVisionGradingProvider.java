@@ -152,7 +152,9 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         contract.set("rubric", objectMapper.valueToTree(input.getScoringItems()));
         contract.put("imageCount", input.getPageImages().size());
         contract.set("imageLabels", objectMapper.valueToTree(input.getPageLabels()));
-        return "请逐项核验随后按标签给出的学生作品与参考材料。参考材料只能用于对照；证据中的 page 只填写学生作品页码，不填写参考材料序号。"
+        return "请先识别标签：学生作品是待评分内容；空白起始材料用于判断学生实际完成了哪些修改；教师参考答案表示目标完成状态。"
+             + "必须比较学生作品、空白起始材料和教师参考答案后再逐项评分。教师参考答案只能作为对照，不得当作学生作品；"
+             + "证据中的 page 只填写学生作品页码，不填写空白材料或教师参考答案页码。"
              + "每项分数必须是0到maxScore之间的整数；总分必须等于逐项分数之和且不超过题目满分。\n"
              + "评分输入：" + objectMapper.writeValueAsString(contract) + "\n"
              + "如果 rubric 为空，请按整体完成质量直接给总分并返回空 rubricResults。输出契约："

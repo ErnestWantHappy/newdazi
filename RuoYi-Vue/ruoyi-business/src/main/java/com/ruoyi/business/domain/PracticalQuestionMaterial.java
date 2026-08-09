@@ -3,7 +3,7 @@ package com.ruoyi.business.domain;
 import java.util.Date;
 
 /**
- * 操作题的起始文件、补充资源或教师参考材料。
+ * 操作题的起始文件、补充资源或教师参考答案。
  */
 public class PracticalQuestionMaterial
 {

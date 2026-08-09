@@ -510,14 +510,14 @@
             />
             <div style="color: #909399; font-size: 12px; margin-top: 6px;">学生可见，可包含 ZIP 资源包；不作为学生提交格式。</div>
           </el-form-item>
-          <el-form-item label="教师参考材料">
+          <el-form-item label="教师参考答案">
             <file-upload
               v-model="form.practicalReferenceFiles"
-              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip']"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png']"
               :file-size="50"
               :limit="5"
             />
-            <div style="color: #e6a23c; font-size: 12px; margin-top: 6px;">仅教师和后续 AI 批改可见，不会下发给学生。</div>
+            <div style="color: #e6a23c; font-size: 12px; margin-top: 6px;">仅教师和 AI 批改可见，不会下发给学生；压缩包不能作为可识别答案。</div>
           </el-form-item>
 
           <el-divider content-position="left"

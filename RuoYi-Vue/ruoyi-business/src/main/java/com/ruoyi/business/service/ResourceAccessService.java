@@ -99,7 +99,7 @@ public class ResourceAccessService
             {
                 return resource;
             }
-            throw new ServiceException("无权访问该教师参考材料");
+            throw new ServiceException("无权访问该教师参考答案");
         }
 
         if (resourceAccessMapper.countCountyQuestionResource(resource) > 0)

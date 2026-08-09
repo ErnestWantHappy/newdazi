@@ -14,6 +14,8 @@
         <result property="questionId" column="question_id"/><result property="entryYear" column="entry_year"/>
         <result property="classCode" column="class_code"/><result property="providerCode" column="provider_code"/>
         <result property="modelName" column="model_name"/><result property="promptVersion" column="prompt_version"/>
+        <result property="scopeMode" column="scope_mode"/><result property="referenceAnswerJson" column="reference_answer_json"/>
+        <result property="starterMaterialsJson" column="starter_materials_json"/>
         <result property="jobStatus" column="job_status"/><result property="totalCount" column="total_count"/>
         <result property="successCount" column="success_count"/><result property="failedCount" column="failed_count"/>
         <result property="skippedCount" column="skipped_count"/><result property="errorMessage" column="error_message"/>
@@ -28,6 +30,8 @@
         <result property="evidenceJson" column="evidence_json"/><result property="confidence" column="confidence"/>
         <result property="providerRequestId" column="provider_request_id"/><result property="promptTokens" column="prompt_tokens"/>
         <result property="completionTokens" column="completion_tokens"/><result property="errorMessage" column="error_message"/>
+        <result property="applyStatus" column="apply_status"/><result property="appliedByUserId" column="applied_by_user_id"/>
+        <result property="appliedTime" column="applied_time"/>
         <result property="createTime" column="create_time"/><result property="finishTime" column="finish_time"/>
     </resultMap>
 
@@ -46,18 +50,26 @@
     <insert id="insertJob" useGeneratedKeys="true" keyProperty="jobId">
         INSERT INTO biz_practical_ai_job
           (teacher_user_id,dept_id,lesson_id,question_id,entry_year,class_code,provider_code,model_name,
-           prompt_version,job_status,total_count,success_count,failed_count,skipped_count,create_time)
+           prompt_version,scope_mode,reference_answer_json,starter_materials_json,job_status,total_count,success_count,failed_count,skipped_count,create_time)
         VALUES (#{teacherUserId},#{deptId},#{lessonId},#{questionId},#{entryYear},#{classCode},#{providerCode},
-                #{modelName},#{promptVersion},#{jobStatus},#{totalCount},0,0,#{skippedCount},NOW())
+                #{modelName},#{promptVersion},#{scopeMode},#{referenceAnswerJson,jdbcType=VARCHAR},
+                #{starterMaterialsJson,jdbcType=VARCHAR},#{jobStatus},#{totalCount},0,0,#{skippedCount},NOW())
     </insert>
     <select id="selectJob" resultMap="JobResult">
         SELECT * FROM biz_practical_ai_job WHERE job_id=#{jobId} AND teacher_user_id=#{teacherUserId}
     </select>
     <select id="selectJobForWorker" resultMap="JobResult">SELECT * FROM biz_practical_ai_job WHERE job_id=#{jobId}</select>
-    <select id="selectRunningJob" resultMap="JobResult">
+    <select id="selectActiveJob" resultMap="JobResult">
         SELECT * FROM biz_practical_ai_job
         WHERE teacher_user_id=#{teacherUserId} AND lesson_id=#{lessonId} AND question_id=#{questionId}
-          AND entry_year=#{entryYear} AND class_code=#{classCode} AND job_status IN ('PENDING','RUNNING')
+          AND entry_year=#{entryYear} AND class_code=#{classCode}
+          AND job_status IN ('PENDING','RUNNING','PAUSED','CANCEL_REQUESTED')
+        ORDER BY job_id DESC LIMIT 1
+    </select>
+    <select id="selectLatestJob" resultMap="JobResult">
+        SELECT * FROM biz_practical_ai_job
+        WHERE teacher_user_id=#{teacherUserId} AND lesson_id=#{lessonId} AND question_id=#{questionId}
+          AND entry_year=#{entryYear} AND class_code=#{classCode}
         ORDER BY job_id DESC LIMIT 1
     </select>
     <update id="updateJobStatus">
@@ -94,4 +106,36 @@
         UPDATE biz_practical_ai_result SET result_status=#{resultStatus},error_message=#{errorMessage},finish_time=#{finishTime}
         WHERE job_id=#{jobId} AND result_status='PENDING'
     </update>
+    <update id="updateApplyStatus">
+        UPDATE biz_practical_ai_result
+        SET apply_status=#{applyStatus}, applied_by_user_id=#{appliedByUserId,jdbcType=BIGINT},
+            applied_time=#{appliedTime,jdbcType=TIMESTAMP}
+        WHERE result_id=#{resultId}
+    </update>
+
+    <resultMap id="ReferenceAnswerResult" type="com.ruoyi.business.domain.TeacherPracticalReferenceAnswer">
+        <id property="referenceId" column="reference_id"/><result property="teacherUserId" column="teacher_user_id"/>
+        <result property="deptId" column="dept_id"/><result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/><result property="originalFileName" column="original_file_name"/>
+        <result property="resourcePath" column="resource_path"/><result property="fileExtension" column="file_extension"/>
+        <result property="mimeType" column="mime_type"/><result property="fileSize" column="file_size"/>
+        <result property="sha256" column="sha256"/><result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+    <select id="selectReferenceAnswer" resultMap="ReferenceAnswerResult">
+        SELECT * FROM biz_teacher_practical_reference_answer
+        WHERE teacher_user_id=#{teacherUserId} AND dept_id=#{deptId}
+          AND lesson_id=#{lessonId} AND question_id=#{questionId}
+    </select>
+    <insert id="upsertReferenceAnswer" useGeneratedKeys="true" keyProperty="referenceId">
+        INSERT INTO biz_teacher_practical_reference_answer
+          (teacher_user_id,dept_id,lesson_id,question_id,original_file_name,resource_path,file_extension,
+           mime_type,file_size,sha256,create_time,update_time)
+        VALUES (#{teacherUserId},#{deptId},#{lessonId},#{questionId},#{originalFileName},#{resourcePath},
+                #{fileExtension},#{mimeType},#{fileSize},#{sha256},NOW(),NOW())
+        ON DUPLICATE KEY UPDATE reference_id=LAST_INSERT_ID(reference_id),
+          original_file_name=VALUES(original_file_name),resource_path=VALUES(resource_path),
+          file_extension=VALUES(file_extension),mime_type=VALUES(mime_type),file_size=VALUES(file_size),
+          sha256=VALUES(sha256),update_time=NOW()
+    </insert>
 </mapper>

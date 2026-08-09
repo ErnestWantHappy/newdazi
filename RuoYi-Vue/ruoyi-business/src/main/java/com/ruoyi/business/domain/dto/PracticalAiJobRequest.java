@@ -7,8 +7,10 @@ public class PracticalAiJobRequest
     private Long questionId;
     private String entryYear;
     private String classCode;
+    private String scopeMode;
     public Long getLessonId() { return lessonId; } public void setLessonId(Long v) { lessonId=v; }
     public Long getQuestionId() { return questionId; } public void setQuestionId(Long v) { questionId=v; }
     public String getEntryYear() { return entryYear; } public void setEntryYear(String v) { entryYear=v; }
     public String getClassCode() { return classCode; } public void setClassCode(String v) { classCode=v; }
+    public String getScopeMode() { return scopeMode; } public void setScopeMode(String v) { scopeMode=v; }
 }

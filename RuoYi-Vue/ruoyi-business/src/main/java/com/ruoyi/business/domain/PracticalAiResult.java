@@ -20,6 +20,9 @@ public class PracticalAiResult
     private Integer promptTokens;
     private Integer completionTokens;
     private String errorMessage;
+    private String applyStatus;
+    private Long appliedByUserId;
+    private Date appliedTime;
     private Date createTime;
     private Date finishTime;
 
@@ -37,6 +40,9 @@ public class PracticalAiResult
     public Integer getPromptTokens() { return promptTokens; } public void setPromptTokens(Integer v) { promptTokens=v; }
     public Integer getCompletionTokens() { return completionTokens; } public void setCompletionTokens(Integer v) { completionTokens=v; }
     public String getErrorMessage() { return errorMessage; } public void setErrorMessage(String v) { errorMessage=v; }
+    public String getApplyStatus() { return applyStatus; } public void setApplyStatus(String v) { applyStatus=v; }
+    public Long getAppliedByUserId() { return appliedByUserId; } public void setAppliedByUserId(Long v) { appliedByUserId=v; }
+    public Date getAppliedTime() { return appliedTime; } public void setAppliedTime(Date v) { appliedTime=v; }
     public Date getCreateTime() { return createTime; } public void setCreateTime(Date v) { createTime=v; }
     public Date getFinishTime() { return finishTime; } public void setFinishTime(Date v) { finishTime=v; }
 }

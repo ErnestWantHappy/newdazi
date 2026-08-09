@@ -15,6 +15,9 @@ public class PracticalAiJob
     private String providerCode;
     private String modelName;
     private String promptVersion;
+    private String scopeMode;
+    private String referenceAnswerJson;
+    private String starterMaterialsJson;
     private String jobStatus;
     private Integer totalCount;
     private Integer successCount;
@@ -35,6 +38,9 @@ public class PracticalAiJob
     public String getProviderCode() { return providerCode; } public void setProviderCode(String v) { providerCode=v; }
     public String getModelName() { return modelName; } public void setModelName(String v) { modelName=v; }
     public String getPromptVersion() { return promptVersion; } public void setPromptVersion(String v) { promptVersion=v; }
+    public String getScopeMode() { return scopeMode; } public void setScopeMode(String v) { scopeMode=v; }
+    public String getReferenceAnswerJson() { return referenceAnswerJson; } public void setReferenceAnswerJson(String v) { referenceAnswerJson=v; }
+    public String getStarterMaterialsJson() { return starterMaterialsJson; } public void setStarterMaterialsJson(String v) { starterMaterialsJson=v; }
     public String getJobStatus() { return jobStatus; } public void setJobStatus(String v) { jobStatus=v; }
     public Integer getTotalCount() { return totalCount; } public void setTotalCount(Integer v) { totalCount=v; }
     public Integer getSuccessCount() { return successCount; } public void setSuccessCount(Integer v) { successCount=v; }
