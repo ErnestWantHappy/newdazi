@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.business.domain.PracticalAiJob;
+import com.ruoyi.business.domain.PracticalAiApplyAudit;
 import com.ruoyi.business.domain.PracticalAiEvent;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.TeacherAiConfig;
@@ -50,6 +51,7 @@ public interface PracticalAiGradingMapper
                                    @Param("errorMessage") String errorMessage, @Param("finishTime") Date finishTime);
     int updateApplyStatus(@Param("resultId") Long resultId, @Param("applyStatus") String applyStatus,
                           @Param("appliedByUserId") Long appliedByUserId, @Param("appliedTime") Date appliedTime);
+    int insertApplyAudit(PracticalAiApplyAudit audit);
     int insertEvent(PracticalAiEvent event);
     List<PracticalAiEvent> selectEvents(@Param("jobId") Long jobId,
                                         @Param("afterEventId") Long afterEventId,

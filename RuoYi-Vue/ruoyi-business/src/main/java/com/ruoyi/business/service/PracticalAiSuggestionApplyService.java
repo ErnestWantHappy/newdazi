@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ruoyi.business.domain.PracticalAiApplyAudit;
 import com.ruoyi.business.domain.BizScoringDetail;
 import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.domain.PracticalAiJob;
@@ -24,10 +25,13 @@ import com.ruoyi.business.mapper.PracticalRubricSnapshotMapper;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 
-/** 方案 A：批量采用只写入当前仍未人工评分、且版本未变化的 AI 建议。 */
+/** 批量采用 AI 建议；覆盖模式必须保留正式成绩修改前后的逐份审计。 */
 @Service
 public class PracticalAiSuggestionApplyService
 {
+    public static final String FILL_UNGRADED = "FILL_UNGRADED";
+    public static final String OVERWRITE_ALL = "OVERWRITE_ALL";
+
     @Autowired private PracticalAiGradingMapper aiMapper;
     @Autowired private BizStudentAnswerMapper answerMapper;
     @Autowired private BizScoringDetailMapper detailMapper;
@@ -38,8 +42,10 @@ public class PracticalAiSuggestionApplyService
     @Autowired private ObjectMapper objectMapper;
 
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> applyUngraded(Long jobId, Long teacherUserId, Long deptId)
+    public Map<String, Object> apply(Long jobId, Long teacherUserId, Long deptId, String applyMode)
     {
+        if (!(FILL_UNGRADED.equals(applyMode) || OVERWRITE_ALL.equals(applyMode)))
+            throw new ServiceException("批量采用模式无效");
         PracticalAiJob job = aiMapper.selectJob(jobId, teacherUserId);
         if (job == null || !Objects.equals(deptId, job.getDeptId()))
             throw new ServiceException("AI 批改任务不存在或无权访问");
@@ -48,11 +54,11 @@ public class PracticalAiSuggestionApplyService
         if (!("COMPLETED".equals(job.getJobStatus()) || "PARTIAL_FAILED".equals(job.getJobStatus())))
             throw new ServiceException("AI 建议尚未生成完成");
 
-        int applied = 0, skippedManual = 0, skippedVersion = 0, failed = 0;
+        int applied = 0, filledUngraded = 0, overwritten = 0;
+        int skippedManual = 0, skippedVersion = 0, failed = 0;
         for (PracticalAiResult result : aiMapper.selectResultsByJob(jobId))
         {
             if (!"SUCCESS".equals(result.getResultStatus())) continue;
-            if ("APPLIED".equals(result.getApplyStatus())) { skippedManual++; continue; }
             BizStudentAnswer answer = answerMapper.selectByIdForUpdate(result.getAnswerId());
             if (answer == null || !Objects.equals(job.getLessonId(), answer.getLessonId())
                     || !Objects.equals(job.getQuestionId(), answer.getQuestionId())
@@ -62,7 +68,7 @@ public class PracticalAiSuggestionApplyService
                 aiMapper.updateApplyStatus(result.getResultId(), "SKIPPED_VERSION_CHANGED", null, null);
                 continue;
             }
-            if (answer.getScore() != null)
+            if (answer.getScore() != null && FILL_UNGRADED.equals(applyMode))
             {
                 skippedManual++;
                 aiMapper.updateApplyStatus(result.getResultId(), "SKIPPED_MANUAL_GRADE", null, null);
@@ -78,6 +84,8 @@ public class PracticalAiSuggestionApplyService
                 int finalScore = scoringPolicyService.resolveFinalScore(
                         result.getSuggestedScore(), snapshot.getQuestionScore(), items, details);
                 deadlineService.assertCanGrade(answer.getAnswerId());
+                Integer oldScore = answer.getScore();
+                List<BizScoringDetail> oldDetails = detailMapper.selectDetailsByAnswerId(answer.getAnswerId());
                 answerMapper.updateScore(answer.getAnswerId(), finalScore);
                 detailMapper.deleteBizScoringDetailByAnswerId(answer.getAnswerId());
                 for (BizScoringDetail detail : details)
@@ -85,8 +93,13 @@ public class PracticalAiSuggestionApplyService
                     detail.setAnswerId(answer.getAnswerId());
                     detailMapper.insertBizScoringDetail(detail);
                 }
-                aiMapper.updateApplyStatus(result.getResultId(), "APPLIED", teacherUserId, new Date());
+                PracticalAiApplyAudit audit = buildAudit(job, result, teacherUserId, applyMode,
+                        oldScore, finalScore, oldDetails, details);
+                aiMapper.insertApplyAudit(audit);
+                String applyStatus = OVERWRITE_ALL.equals(applyMode) ? "APPLIED_OVERWRITE" : "APPLIED";
+                aiMapper.updateApplyStatus(result.getResultId(), applyStatus, teacherUserId, new Date());
                 applied++;
+                if (oldScore == null) filledUngraded++; else overwritten++;
             }
             catch (ServiceException e)
             {
@@ -95,9 +108,55 @@ public class PracticalAiSuggestionApplyService
             }
         }
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
-        summary.put("appliedCount", applied); summary.put("skippedManualCount", skippedManual);
+        summary.put("applyMode", applyMode); summary.put("appliedCount", applied);
+        summary.put("filledUngradedCount", filledUngraded); summary.put("overwrittenCount", overwritten);
+        summary.put("skippedManualCount", skippedManual);
         summary.put("skippedVersionCount", skippedVersion); summary.put("failedCount", failed);
         return summary;
+    }
+
+    /** 保留旧接口语义，避免已打开页面或旧客户端误触覆盖模式。 */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> applyUngraded(Long jobId, Long teacherUserId, Long deptId)
+    {
+        return apply(jobId, teacherUserId, deptId, FILL_UNGRADED);
+    }
+
+    private PracticalAiApplyAudit buildAudit(PracticalAiJob job, PracticalAiResult result, Long teacherUserId,
+                                             String applyMode, Integer oldScore, Integer newScore,
+                                             List<BizScoringDetail> oldDetails,
+                                             List<BizScoringDetail> newDetails)
+    {
+        PracticalAiApplyAudit audit = new PracticalAiApplyAudit();
+        audit.setJobId(job.getJobId()); audit.setResultId(result.getResultId());
+        audit.setAnswerId(result.getAnswerId()); audit.setPracticalVersionId(result.getPracticalVersionId());
+        audit.setApplyMode(applyMode); audit.setOldScore(oldScore); audit.setNewScore(newScore);
+        audit.setOldScoringDetailsJson(serializeDetails(oldDetails));
+        audit.setNewScoringDetailsJson(serializeDetails(newDetails));
+        audit.setOperatorUserId(teacherUserId);
+        return audit;
+    }
+
+    private String serializeDetails(List<BizScoringDetail> details)
+    {
+        try
+        {
+            List<Map<String, Object>> values = new ArrayList<Map<String, Object>>();
+            if (details != null)
+            {
+                for (BizScoringDetail detail : details)
+                {
+                    Map<String, Object> value = new LinkedHashMap<String, Object>();
+                    value.put("itemId", detail.getItemId()); value.put("score", detail.getScore());
+                    values.add(value);
+                }
+            }
+            return objectMapper.writeValueAsString(values);
+        }
+        catch (Exception e)
+        {
+            throw new ServiceException("成绩审计快照生成失败");
+        }
     }
 
     private List<BizScoringDetail> parseDetails(PracticalAiResult result)

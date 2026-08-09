@@ -20,4 +20,6 @@ export function pauseAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}
 export function resumeAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}/resume`, method: 'post' }) }
 export function cancelAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}/cancel`, method: 'post' }) }
 export function retryFailedAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}/retry-failed`, method: 'post' }) }
-export function batchApplyAiSuggestions(jobId) { return request({ url: `${base}/jobs/${jobId}/apply-ungraded`, method: 'post' }) }
+export function batchApplyAiSuggestions(jobId, applyMode) {
+  return request({ url: `${base}/jobs/${jobId}/apply`, method: 'post', data: { applyMode } })
+}

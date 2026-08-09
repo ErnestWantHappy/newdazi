@@ -173,6 +173,15 @@
             applied_time=#{appliedTime,jdbcType=TIMESTAMP}
         WHERE result_id=#{resultId}
     </update>
+    <insert id="insertApplyAudit" useGeneratedKeys="true" keyProperty="auditId">
+        INSERT INTO biz_practical_ai_apply_audit
+          (job_id,result_id,answer_id,practical_version_id,apply_mode,old_score,new_score,
+           old_scoring_details_json,new_scoring_details_json,operator_user_id,create_time)
+        VALUES
+          (#{jobId},#{resultId},#{answerId},#{practicalVersionId},#{applyMode},
+           #{oldScore,jdbcType=INTEGER},#{newScore},#{oldScoringDetailsJson,jdbcType=VARCHAR},
+           #{newScoringDetailsJson,jdbcType=VARCHAR},#{operatorUserId},NOW())
+    </insert>
 
     <resultMap id="ReferenceAnswerResult" type="com.ruoyi.business.domain.TeacherPracticalReferenceAnswer">
         <id property="referenceId" column="reference_id"/><result property="teacherUserId" column="teacher_user_id"/>

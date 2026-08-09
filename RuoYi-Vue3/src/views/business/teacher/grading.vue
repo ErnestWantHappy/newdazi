@@ -250,7 +250,9 @@
                   </div>
                </div>
                <div class="ai-confidence">置信度：{{ formatConfidence(currentAiSuggestion.confidence) }}</div>
-               <el-tag v-if="currentAiSuggestion.applyStatus === 'APPLIED'" size="small" type="success">已写入正式成绩</el-tag>
+               <el-tag v-if="['APPLIED', 'APPLIED_OVERWRITE'].includes(currentAiSuggestion.applyStatus)" size="small" type="success">
+                 {{ currentAiSuggestion.applyStatus === 'APPLIED_OVERWRITE' ? '已覆盖正式成绩' : '已写入正式成绩' }}
+               </el-tag>
                <el-button size="small" type="success" plain @click="applyAiSuggestion">采用到评分框</el-button>
             </div>
             <el-alert
@@ -590,10 +592,14 @@ const selectedAiScopeCount = computed(() => aiScopeMode.value === 'ALL_SUBMITTED
     ? (aiPreflight.value?.readyCount || 0) : (aiPreflight.value?.readyUngradedCount || 0));
 const batchApplicableCount = computed(() => submissions.value.filter(student =>
     student.submitted && student.score == null && aiResultFor(student)?.resultStatus === 'SUCCESS'
-    && aiResultFor(student)?.applyStatus !== 'APPLIED').length);
+).length);
+const batchOverwriteExistingCount = computed(() => submissions.value.filter(student =>
+    student.submitted && student.score != null && aiResultFor(student)?.resultStatus === 'SUCCESS'
+).length);
+const batchAdoptableCount = computed(() => batchApplicableCount.value + batchOverwriteExistingCount.value);
 const canBatchApplyAiSuggestions = computed(() => Boolean(aiJobBatchAdoptAllowed.value
     && ['COMPLETED', 'PARTIAL_FAILED'].includes(aiJob.value?.jobStatus)
-    && batchApplicableCount.value > 0 && deadlineStatus.value?.canGrade));
+    && batchAdoptableCount.value > 0 && deadlineStatus.value?.canGrade));
 const canStartAiJob = computed(() => Boolean(
     aiConfig.value?.configured && aiConfig.value?.masterKeyConfigured
     && selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value
@@ -1116,18 +1122,48 @@ async function restoreLatestAiJob() {
 
 async function applyAiSuggestionsInBatch() {
     if (!canBatchApplyAiSuggestions.value) return;
+    let applyMode = 'FILL_UNGRADED';
     try {
         await ElMessageBox.confirm(
-            `将把 ${batchApplicableCount.value} 名当前仍未批学生的 AI 建议写入正式成绩。已有人工作业分的学生一律跳过，确定继续吗？`,
-            '批量采用 AI 建议',
-            { type: 'warning', confirmButtonText: '仅采用未批学生', cancelButtonText: '取消' }
+            `成功建议共 ${batchAdoptableCount.value} 份：未评分 ${batchApplicableCount.value} 份，已有正式成绩 ${batchOverwriteExistingCount.value} 份。请选择采用方式。`,
+            '选择批量采用方式',
+            {
+                type: 'warning',
+                confirmButtonText: `仅补未评分（${batchApplicableCount.value}）`,
+                cancelButtonText: `覆盖已有评分（${batchOverwriteExistingCount.value}）`,
+                distinguishCancelAndClose: true,
+                closeOnClickModal: false
+            }
         );
-    } catch (e) { return; }
+    } catch (action) {
+        if (action !== 'cancel') return;
+        if (batchOverwriteExistingCount.value === 0) {
+            ElMessage.info('当前没有可覆盖的已有正式成绩');
+            return;
+        }
+        try {
+            await ElMessageBox.confirm(
+                `本次将用 AI 建议覆盖 ${batchOverwriteExistingCount.value} 份已有正式成绩，并补齐 ${batchApplicableCount.value} 份未评分成绩。系统会逐份保留覆盖前后的审计记录。`,
+                '确认覆盖已有正式成绩',
+                {
+                    type: 'error',
+                    confirmButtonText: `确认覆盖 ${batchOverwriteExistingCount.value} 份`,
+                    cancelButtonText: '返回',
+                    closeOnClickModal: false
+                }
+            );
+            applyMode = 'OVERWRITE_ALL';
+        } catch (e) { return; }
+    }
     aiBatchApplying.value = true;
     try {
-        const res = await batchApplyAiSuggestions(aiJob.value.jobId);
+        const res = await batchApplyAiSuggestions(aiJob.value.jobId, applyMode);
         const summary = res.data || {};
-        ElMessage.success(`已采用 ${summary.appliedCount || 0} 人；跳过人工已批 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人`);
+        if (applyMode === 'OVERWRITE_ALL') {
+            ElMessage.success(`已采用 ${summary.appliedCount || 0} 人：覆盖已有成绩 ${summary.overwrittenCount || 0} 人，补齐未评分 ${summary.filledUngradedCount || 0} 人；版本变化 ${summary.skippedVersionCount || 0} 人`);
+        } else {
+            ElMessage.success(`已补齐未评分 ${summary.filledUngradedCount || 0} 人；跳过已有成绩 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人`);
+        }
         await loadSubmissions();
         await loadDeadlineStatus();
         await pollAiJob();

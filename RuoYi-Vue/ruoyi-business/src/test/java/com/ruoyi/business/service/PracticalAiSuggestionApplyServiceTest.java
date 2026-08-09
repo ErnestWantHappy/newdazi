@@ -11,10 +11,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.BizScoringDetail;
+import com.ruoyi.business.domain.PracticalAiApplyAudit;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.PracticalRubricSnapshot;
@@ -60,7 +63,8 @@ class PracticalAiSuggestionApplyServiceTest
         when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(result));
         when(answerMapper.selectByIdForUpdate(101L)).thenReturn(answer);
 
-        Map<String, Object> summary = service.applyUngraded(1L, 7L, 9L);
+        Map<String, Object> summary = service.apply(1L, 7L, 9L,
+                PracticalAiSuggestionApplyService.FILL_UNGRADED);
 
         assertEquals(0, summary.get("appliedCount"));
         assertEquals(1, summary.get("skippedManualCount"));
@@ -87,13 +91,57 @@ class PracticalAiSuggestionApplyServiceTest
                 org.mockito.ArgumentMatchers.eq(25), org.mockito.ArgumentMatchers.eq(30),
                 org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.anyList())).thenReturn(25);
 
-        Map<String, Object> summary = service.applyUngraded(1L, 7L, 9L);
+        Map<String, Object> summary = service.apply(1L, 7L, 9L,
+                PracticalAiSuggestionApplyService.FILL_UNGRADED);
 
         assertEquals(1, summary.get("appliedCount"));
+        assertEquals(1, summary.get("filledUngradedCount"));
+        assertEquals(0, summary.get("overwrittenCount"));
         verify(answerMapper).updateScore(101L, 25);
         verify(detailMapper, org.mockito.Mockito.times(2)).insertBizScoringDetail(org.mockito.ArgumentMatchers.any());
+        verify(aiMapper).insertApplyAudit(org.mockito.ArgumentMatchers.any());
         verify(aiMapper).updateApplyStatus(org.mockito.ArgumentMatchers.eq(201L),
                 org.mockito.ArgumentMatchers.eq("APPLIED"), org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldOverwriteExistingScoreAndKeepBeforeAfterAudit()
+    {
+        PracticalAiJob job = job();
+        PracticalAiResult result = result();
+        BizStudentAnswer answer = answer(); answer.setScore(18);
+        PracticalRubricSnapshot snapshot = new PracticalRubricSnapshot();
+        snapshot.setSnapshotId(401L); snapshot.setQuestionScore(30);
+        BizScoringDetail oldFirst = detail(11L, 8); BizScoringDetail oldSecond = detail(12L, 10);
+        when(aiMapper.selectJob(1L, 7L)).thenReturn(job);
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(result));
+        when(answerMapper.selectByIdForUpdate(101L)).thenReturn(answer);
+        when(snapshotMapper.selectByVersionId(301L)).thenReturn(snapshot);
+        when(rubricService.buildScoringItems(snapshot)).thenReturn(Arrays.asList(item(11L, 15), item(12L, 15)));
+        when(scoringPolicyService.resolveFinalScore(
+                org.mockito.ArgumentMatchers.eq(25), org.mockito.ArgumentMatchers.eq(30),
+                org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.anyList())).thenReturn(25);
+        when(detailMapper.selectDetailsByAnswerId(101L)).thenReturn(Arrays.asList(oldFirst, oldSecond));
+
+        Map<String, Object> summary = service.apply(1L, 7L, 9L,
+                PracticalAiSuggestionApplyService.OVERWRITE_ALL);
+
+        assertEquals(1, summary.get("appliedCount"));
+        assertEquals(1, summary.get("overwrittenCount"));
+        assertEquals(0, summary.get("filledUngradedCount"));
+        verify(answerMapper).updateScore(101L, 25);
+        ArgumentCaptor<PracticalAiApplyAudit> auditCaptor = ArgumentCaptor.forClass(PracticalAiApplyAudit.class);
+        verify(aiMapper).insertApplyAudit(auditCaptor.capture());
+        PracticalAiApplyAudit audit = auditCaptor.getValue();
+        assertEquals("OVERWRITE_ALL", audit.getApplyMode());
+        assertEquals(18, audit.getOldScore()); assertEquals(25, audit.getNewScore());
+        assertEquals("[{\"itemId\":11,\"score\":8},{\"itemId\":12,\"score\":10}]",
+                audit.getOldScoringDetailsJson());
+        assertEquals("[{\"itemId\":11,\"score\":10},{\"itemId\":12,\"score\":15}]",
+                audit.getNewScoringDetailsJson());
+        verify(aiMapper).updateApplyStatus(org.mockito.ArgumentMatchers.eq(201L),
+                org.mockito.ArgumentMatchers.eq("APPLIED_OVERWRITE"), org.mockito.ArgumentMatchers.eq(7L),
                 org.mockito.ArgumentMatchers.any());
     }
 
@@ -128,5 +176,10 @@ class PracticalAiSuggestionApplyServiceTest
     private PracticalScoringItemVo item(Long id, int max)
     {
         PracticalScoringItemVo item = new PracticalScoringItemVo(); item.setItemId(id); item.setMaxScore(max); return item;
+    }
+
+    private BizScoringDetail detail(Long itemId, int score)
+    {
+        BizScoringDetail detail = new BizScoringDetail(); detail.setItemId(itemId); detail.setScore(score); return detail;
     }
 }

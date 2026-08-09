@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.dto.PracticalAiJobRequest;
+import com.ruoyi.business.domain.dto.PracticalAiApplyRequest;
 import com.ruoyi.business.domain.dto.TeacherAiConfigRequest;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.PracticalSubmissionVo;
@@ -163,6 +164,17 @@ public class PracticalAiGradingController extends BaseController
     { jobService.cancel(jobId, SecurityUtils.getUserId()); return AjaxResult.success("已请求取消任务"); }
     @PostMapping("/jobs/{jobId}/retry-failed") public AjaxResult retry(@PathVariable Long jobId)
     { jobService.retryFailed(jobId, SecurityUtils.getUserId()); return AjaxResult.success("失败作品已重新入队"); }
+    @PostMapping("/jobs/{jobId}/apply") public AjaxResult apply(@PathVariable Long jobId,
+                                                                @RequestBody PracticalAiApplyRequest request)
+    {
+        PracticalAiJob job = (PracticalAiJob) jobService.detail(jobId, SecurityUtils.getUserId()).get("job");
+        accessService.assertCanViewLessonClass(job.getLessonId(), job.getEntryYear(), job.getClassCode());
+        return AjaxResult.success("AI 建议批量采用完成", suggestionApplyService.apply(
+                jobId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
+                request == null ? null : request.getApplyMode()));
+    }
+
+    /** 兼容旧页面，只允许补齐未评分学生。 */
     @PostMapping("/jobs/{jobId}/apply-ungraded") public AjaxResult applyUngraded(@PathVariable Long jobId)
     {
         PracticalAiJob job = (PracticalAiJob) jobService.detail(jobId, SecurityUtils.getUserId()).get("job");
