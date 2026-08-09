@@ -101,14 +101,17 @@
         :closable="false"
         show-icon
       />
-      <div class="deadline-panel-grid">
-        <span>触发时间：{{ formatDeadlineTime(deadlineStatus.triggerTime) }}</span>
-        <span>截止时间：{{ formatDeadlineTime(deadlineStatus.currentDeadlineTime) }}</span>
+      <div class="deadline-panel-bottom">
+        <div class="deadline-panel-grid">
+          <span>触发：{{ formatDeadlineTime(deadlineStatus.triggerTime) }}</span>
+          <span>截止：{{ formatDeadlineTime(deadlineStatus.currentDeadlineTime) }}</span>
+        </div>
+        <el-progress
+          class="deadline-progress"
+          :percentage="deadlineStatus.dueCount ? Math.round(deadlineStatus.gradedCount * 100 / deadlineStatus.dueCount) : 0"
+          :status="deadlineStatus.statusCode === 'COMPLETED' ? 'success' : undefined"
+        />
       </div>
-      <el-progress
-        :percentage="deadlineStatus.dueCount ? Math.round(deadlineStatus.gradedCount * 100 / deadlineStatus.dueCount) : 0"
-        :status="deadlineStatus.statusCode === 'COMPLETED' ? 'success' : undefined"
-      />
       </div>
     </div>
 
@@ -1758,6 +1761,7 @@ function autoFocusItem() {
 
 .deadline-panel-head,
 .deadline-summary,
+.deadline-panel-bottom,
 .deadline-panel-grid {
   display: flex;
   align-items: center;
@@ -1770,10 +1774,21 @@ function autoFocusItem() {
 }
 
 .deadline-panel-grid {
+  flex: 0 0 auto;
   flex-wrap: wrap;
   color: #606266;
   font-size: 13px;
-  margin: 6px 0;
+  margin-top: 6px;
+}
+
+.deadline-panel-bottom {
+  gap: 18px;
+}
+
+.deadline-progress {
+  flex: 1;
+  min-width: 180px;
+  margin-top: 6px;
 }
 
 .grading-header {
