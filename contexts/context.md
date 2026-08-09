@@ -1,19 +1,19 @@
 # 信息科技学业测评平台 (Context)
 
-> **版本**：v2.70
+> **版本**：v2.71
 > **更新时间**：2026-08-09
 > **核心定位**：中小学信息科技 **教学 + 多维度测评**（选择/判断/操作/打字、批改、学情、导学单、区域抽测）。  
 > **文档用途**：多 AI / 人工接力的 **业务真相**；操作纪律见 `AGENTS.md`。  
 > **文档恢复**：2026-07-22 按方案 A，以热修/发布壳为底座，从 Git `main`（`a88cdcd` 重写前完整版，约 1113 行）回填业务语言、角色、流程、库表、规则与技术细节；机位锁等否决项仅作摘要，不恢复为待实现。
 
-> **当前焦点（2026-08-09：教师首页按课程开设年级分栏与首屏提速已在本机完成，正式服务器尚未发布）**
+> **当前焦点（2026-08-09：教师首页按课程开设年级分栏与首屏提速已发布 10.52.1.123，并通过郑东旭教师账号正式验收）**
 > 0. **产品结论**：教师首页第一层继续按稳定届别 `entry_year` 分组，第二层按课程开设年级 `grade` 分栏。当前年级栏始终存在并默认展开；历史年级栏默认折叠，展开后显示全部历史课，且允许通过带目标年级提示的入口新增历史课。术语、需求、设计、任务和决策见 `contexts/teacher-dashboard-grade-history/`。
 > 1. **课程不变性与课次**：`grade` 已明确为课程开设年级，课程创建后与 `entry_year` 一样不可在普通编辑中改变。新建课程的课次由服务端按“同学校 + 同教师 + 同届别 + 同课程开设年级”取最大值加一；前端只提供同口径建议。当前年级没有课程时从第 1 课开始，上下学期不重置。
 > 2. **推进边界**：自动推进和教师首页手动一键推进寻找下一课时均要求课程开设年级相同；课次重新从 1 开始后不会串入历史年级课程。历史课仍保留设计、指派、批改、成绩和显式新增能力。
 > 3. **首页性能收口**：`/business/teacher/dashboard-data` 只返回届别、课程和批量读取的指派班级，不再同步计算逐课程操作题批改状态；红点改由 `/business/teacher/dashboard-practical-status` 异步补充，区域抽测入口也独立加载。核心失败与辅助失败相互隔离；首次 `mounted + activated` 重复请求已消除，从设计器返回仍会刷新一次。
-> 4. **本机数据治理**：执行前完整备份为 `D:\dmwprogram\newdazipingtai\backups\20260809_163849_local_before_teacher_dashboard_grade_history_bf23575\xueyeceping_server_20260729.sql`，74,808,538 bytes，SHA-256 `43BB5B7A71BE15582730A1E95C83FDFD4D9D49BDFD36FB7B04B13BCDF6D52153`。`sql/teacher_dashboard_opening_grade_lesson_num_v1.sql` 首次和重复执行均成功；只把 2025 级七年级课程 263～266 精确修正为第 1～4 课、八年级课程 267 修正为第 1 课。2024 级八年级 12 门课的重复/缺号存在歧义，本轮明确不自动重排。
-> 5. **验收证据**：后端专项 19/19、业务模块全量 265/265、admin clean package、Vue3 生产构建（2678 modules）均通过。真实本机教师 API/Playwright 冒烟 16/16：核心课程接口约 55.6 ms，批改状态约 2314.8 ms 但不阻塞课程；2024 级当前九年级空栏新建为第 1 课、八年级 12 门历史课折叠/展开正确；2025 级七年级 1～4 与八年级第 1 课分栏正确；辅助状态失败时课程仍保留；首次核心请求 1 次、从设计器每次返回各刷新 1 次；无页面错误和 500。报告 `output/playwright/teacher-home-grade-history-smoke.json`，截图 `teacher-home-grade-history-01-collapsed.png`、`teacher-home-grade-history-02-expanded.png`。
-> 6. **发布、回滚与剩余风险**：本轮未 commit、未 push、未发布 `10.52.1.123`；本机前端 80、后端 8080 已使用新代码验收。正式发布须先核对课程 263～267 前置条件并完整备份，再执行同一幂等 SQL、发布新 JAR/dist、重启后端并做教师首页回归；应用回滚切回上一 release，若必须撤销课次修正则按正式发布前备份做有范围恢复。批改状态接口仍约 2.3 秒，只是已移出首屏阻塞链路，后续可另立批量聚合优化；本机后端启动 stderr 有 5 条既有 LibreOffice `Document is empty` 解析噪声，但启动后 ERROR=0，本次页面/API 无 500，正式发布前仍应复核转换服务。
+> 4. **本机与正式数据治理**：本机备份为 `D:\dmwprogram\newdazipingtai\backups\20260809_163849_local_before_teacher_dashboard_grade_history_bf23575\xueyeceping_server_20260729.sql`，74,808,538 bytes，SHA-256 `43BB5B7A71BE15582730A1E95C83FDFD4D9D49BDFD36FB7B04B13BCDF6D52153`。正式发布前完整备份为 `D:\program\3009dazipingtai\backups\20260809_172512_b1801ac_before_teacher_home_grade_history\ry-vue.sql`，76,162,191 bytes，SHA-256 `57BFDA751798999BEF857836BE407551D08C122C1F7BDB9210783C11DD342B9E`；6 文件清单 SHA-256 `72A63D646131BF87180397DA552DA012507BAC32E9E7F64EB676F7896788B583`。`sql/teacher_dashboard_opening_grade_lesson_num_v1.sql` 在本机和正式库首次、重复执行均成功；只把 2025 级七年级课程 263～266 精确修正为第 1～4 课、八年级课程 267 修正为第 1 课。2024 级八年级 12 门课的重复/缺号存在歧义，本轮明确不自动重排。
+> 5. **验收证据**：后端专项 19/19、业务模块全量 265/265、admin clean package、Vue3 生产构建（2678 modules）均通过。本机教师 API/Playwright 冒烟 16/16。正式环境使用郑东旭教师账号密码并固定初中部 169 复验 16/16：核心课程接口约 106.2 ms，批改状态约 3551.8 ms 但不阻塞课程；2024 级当前九年级空栏新建为第 1 课、八年级 12 门历史课折叠/展开正确；2025 级七年级 1～4 与八年级第 1 课分栏正确；辅助状态失败时课程仍保留；首次核心请求 1 次、从设计器每次返回各刷新 1 次；无页面错误和 500。正式报告 `output/playwright/teacher-home-grade-history-server-b1801ac-smoke.json`，截图 `teacher-home-grade-history-server-b1801ac-01-collapsed.png`、`teacher-home-grade-history-server-b1801ac-02-expanded.png`。
+> 6. **正式发布、回滚与剩余风险**：功能提交 `b1801ac` 已创建但尚未 push。统一 release `D:\program\3009dazipingtai\releases\20260809_172512_b1801ac` 已切换；JAR SHA-256 `054469608B7B0219A4CBC0BAB8D7EA9949E7D2AD1F7831B4779A5D8BEE5A482E`，前端 index SHA-256 `996C658AC2DF1AD5083F6A8B78AA12B6F34E8ECF2085A175D119263C56F785F8`。3009/3010/API 代理均为 200，服务环境变量保持，启动 ERROR=0、stderr=0。应用回滚分别切回后端 `20260809_152820_0a6a6e4`、前端 `20260809_161949_5bcc985`；若需撤销课次修正，应依据正式备份中的 `target-lessons-before.tsv` 做精确恢复，不能直接全库覆盖发布后的新业务数据。批改状态接口正式实测仍约 3.55 秒，但已移出首屏阻塞链路，后续可另立批量聚合优化。
 
 > **上一焦点（2026-08-09：操作题 AI 批改 v4 与教师批改页顶部单卡片布局已发布 10.52.1.123；全班重新生成仍只产出建议，教师可在批量采用时选择“仅补未评分”或经二次确认“覆盖已有评分”，每份覆盖保留前后审计；真实学生准确率与隐私门禁仍未据此解除）**
 > 0. **本轮产品结论**：已确认采用“逻辑作品 + 不可变提交版本 + 多附件 + 统一静态预览 + AI 草稿由教师确认”的路线。Office/PDF 主作品单文件，图片 1～10 张，单文件 50 MiB；压缩包只作教师资源；普通课程先接千问视觉模型，豆包做上线前盲测，区域抽测暂不启用 AI。专题文档见 `contexts/operation-artifact-ai-grading/`。
@@ -61,7 +61,7 @@
 | MySQL | 用户 `root`；业务库 **`ry-vue`**（2026-07-22 只读核实）；密码见 secrets.local |
 | 本机开发库 | `xueyeceping_server_20260729` @ localhost（服务器克隆 + 监管增量；旧 `xueyeceping1` 保留） |
 | 私密凭据 | `contexts/secrets.local.md`（**禁止 git add / 禁止写入本文件密码**） |
-| 当前开发分支 | `codex/research-activity-v1`（当前后端提交 `0a6a6e4`、前端提交 `5bcc985` 已 push，草稿 PR #3 已包含；用户要求不再新建分支） |
+| 当前开发分支 | `codex/research-activity-v1`（教师首页功能提交 `b1801ac` 已创建但尚未 push；此前后端 `0a6a6e4`、前端 `5bcc985` 已 push，草稿 PR #3 已包含；用户要求不再新建分支） |
 
 ### 线上菜单差异快照（2026-07-22 只读 `ry-vue`）
 
@@ -70,7 +70,7 @@
 | 区域抽测菜单 | 存在 `menu_id=2047`，`component=business/countyExam/index`，教研员已授权 |
 | 系统诊断中心 25010 | **已补齐**（执行 `researcher_monitor_menu_fix.sql` 后 =1） |
 | 教研员监控子菜单 | **2 + 109 + 113 + 25010**；111/112/110/114 = 0 |
-| 前端 3010 | **当前前端 release** `20260809_161949_5bcc985`；后端 3009 仍为 `20260809_152820_0a6a6e4`，旧 release 均保留；80 端口站点未改动 |
+| 前端 3010 | **当前统一 release** `20260809_172512_b1801ac`；上一后端 `20260809_152820_0a6a6e4`、上一前端 `20260809_161949_5bcc985` 均保留；80 端口站点未改动 |
 
 修复脚本：`sql/researcher_monitor_menu_fix.sql`（幂等）；`sql/platform_overview_diagnosis_menu.sql` 第 6/7 节已同步口径。
 
