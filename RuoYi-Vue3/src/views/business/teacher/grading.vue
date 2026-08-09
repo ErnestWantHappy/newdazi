@@ -1,8 +1,9 @@
 <template>
   <div class="app-container grading-page" ref="gradingPageRef">
     <!-- 顶部控制栏 -->
-    <div class="grading-header" v-show="!isFullscreen">
-      <div class="left-filters">
+    <div class="grading-header" v-show="!isFullscreen || (selectedClassCode && deadlineStatus)">
+      <div class="grading-toolbar" v-show="!isFullscreen">
+       <div class="left-filters">
         <span class="filter-label">课程：</span>
         <el-select v-model="selectedLessonId" placeholder="请选择课程" @change="onLessonChange" style="width: 200px">
           <el-option-group v-for="group in gradeGroups" :key="group.entryYear" :label="group.entryYear + '级 ' + group.gradeName">
@@ -37,9 +38,9 @@
         <el-select v-else v-model="selectedQuestionId" placeholder="请选择操作题" @change="onQuestionChange" :disabled="!selectedClassCode" style="width: 280px">
           <el-option v-for="q in questions" :key="q.questionId" :label="q.questionContent" :value="q.questionId" />
         </el-select>
-      </div>
+       </div>
       
-      <div class="right-actions">
+       <div class="right-actions">
         <el-button plain @click="openAiConfig">AI 设置</el-button>
         <el-button
           type="success"
@@ -73,21 +74,22 @@
         <el-button type="primary" plain @click="toggleFullscreen">
            <el-icon><FullScreen /></el-icon> {{ isFullscreen ? '退出全屏' : '全屏批改' }}
         </el-button>
+       </div>
       </div>
-    </div>
 
-    <el-card
-      v-if="selectedClassCode && deadlineStatus"
-      shadow="never"
-      class="deadline-status-panel"
-      :class="`is-${String(deadlineStatus.statusCode || '').toLowerCase()}`"
-    >
+      <div
+        v-if="selectedClassCode && deadlineStatus"
+        class="deadline-status-panel"
+        :class="`is-${String(deadlineStatus.statusCode || '').toLowerCase()}`"
+      >
       <div class="deadline-panel-head">
-        <div>
-          <strong>{{ selectedLessonTitle }} · {{ selectedClassCode }}班操作题批改时限</strong>
+        <div class="deadline-summary">
+          <strong>批改进度</strong>
           <el-tag :type="deadlineStatusMeta(deadlineStatus.statusCode).type">
             {{ deadlineStatusMeta(deadlineStatus.statusCode).label }}
           </el-tag>
+          <span>已有答题：{{ deadlineStatus.answeredStudentCount }}/{{ deadlineStatus.totalStudentCount }}</span>
+          <span>应批/已批/未批：{{ deadlineStatus.dueCount }}/{{ deadlineStatus.gradedCount }}/{{ deadlineStatus.ungradedCount }}</span>
         </div>
         <strong>{{ formatDeadlineRemaining(deadlineStatus) }}</strong>
       </div>
@@ -100,16 +102,15 @@
         show-icon
       />
       <div class="deadline-panel-grid">
-        <span>已有答题记录：{{ deadlineStatus.answeredStudentCount }}/{{ deadlineStatus.totalStudentCount }}</span>
         <span>触发时间：{{ formatDeadlineTime(deadlineStatus.triggerTime) }}</span>
         <span>截止时间：{{ formatDeadlineTime(deadlineStatus.currentDeadlineTime) }}</span>
-        <span>应批/已批/未批：{{ deadlineStatus.dueCount }}/{{ deadlineStatus.gradedCount }}/{{ deadlineStatus.ungradedCount }}</span>
       </div>
       <el-progress
         :percentage="deadlineStatus.dueCount ? Math.round(deadlineStatus.gradedCount * 100 / deadlineStatus.dueCount) : 0"
         :status="deadlineStatus.statusCode === 'COMPLETED' ? 'success' : undefined"
       />
-    </el-card>
+      </div>
+    </div>
 
     <!-- 主工作区 -->
     <div ref="gradingMainRef" class="grading-main" v-loading="loading">
@@ -1734,13 +1735,17 @@ function autoFocusItem() {
 }
 
 .deadline-status-panel {
-  margin: 10px 0;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 0 0 12px;
+  border-top: 1px solid #ebeef5;
   border-left: 5px solid #409eff;
+  box-sizing: border-box;
 }
 
 .deadline-status-panel.is-overdue {
   border-left-color: #f56c6c;
-  background: #fef0f0;
+  background: linear-gradient(90deg, #fef0f0 0, rgba(254, 240, 240, 0) 45%);
 }
 
 .deadline-status-panel.is-due_soon {
@@ -1752,7 +1757,7 @@ function autoFocusItem() {
 }
 
 .deadline-panel-head,
-.deadline-panel-head > div,
+.deadline-summary,
 .deadline-panel-grid {
   display: flex;
   align-items: center;
@@ -1761,14 +1766,14 @@ function autoFocusItem() {
 
 .deadline-panel-head {
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .deadline-panel-grid {
   flex-wrap: wrap;
   color: #606266;
   font-size: 13px;
-  margin: 10px 0;
+  margin: 6px 0;
 }
 
 .grading-header {
@@ -1777,9 +1782,29 @@ function autoFocusItem() {
   border-radius: 4px;
   margin-bottom: 10px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+
+  .grading-toolbar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .left-filters {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .right-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+  }
   
   .filter-label {
     font-weight: bold;
