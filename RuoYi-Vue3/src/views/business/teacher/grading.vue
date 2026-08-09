@@ -55,6 +55,7 @@
           批量采用 AI 建议
         </el-button>
         <el-tag v-if="aiJob" :type="aiJobTagType">{{ aiJobStatusText }}</el-tag>
+        <el-button v-if="aiJob" link type="primary" @click="openAiJobDetail">AI 处理详情</el-button>
         <el-button v-if="['PENDING','RUNNING'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('pause')">暂停</el-button>
         <el-button v-if="aiJob?.jobStatus === 'PAUSED' && aiJobBatchAdoptAllowed" link type="success" @click="controlAiJob('resume')">继续</el-button>
         <el-tag v-if="aiJob?.jobStatus === 'PAUSED' && !aiJobBatchAdoptAllowed" type="danger">旧任务缺参考答案，请取消后重建</el-tag>
@@ -407,6 +408,65 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="aiDetailVisible" title="AI 批改处理详情" size="660px" append-to-body>
+      <el-alert
+        v-if="aiProgress?.stalled"
+        title="任务较长时间没有新心跳，可能正在等待模型或文件转换"
+        description="已完成建议不会丢失。可先查看下方当前阶段与错误记录；服务重启后会自动从未完成作品接续。"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="ai-detail-alert"
+      />
+      <div class="ai-detail-summary">
+        <div><strong>{{ aiProgress?.completedCount || 0 }}</strong><span>已结束</span></div>
+        <div><strong>{{ aiProgress?.processingCount || 0 }}</strong><span>处理中</span></div>
+        <div><strong>{{ aiProgress?.waitingCount || 0 }}</strong><span>等待中</span></div>
+        <div><strong>{{ formatDuration((aiProgress?.averageDurationMs || 0) / 1000) }}</strong><span>平均每份</span></div>
+      </div>
+      <el-progress :percentage="aiCompletionPercentage" :status="aiJob?.jobStatus === 'COMPLETED' ? 'success' : undefined" />
+      <div class="ai-current-stage">
+        <div><span>当前处理：</span><strong>{{ aiCurrentStudentName }}</strong></div>
+        <div><span>当前阶段：</span>{{ aiStageText(aiProgress?.currentStage || aiPreparationStage) }}</div>
+        <div><span>已运行：</span>{{ formatDuration(aiProgress?.elapsedSeconds) }}</div>
+        <div><span>预计剩余：</span>{{ formatEta(aiProgress?.estimatedRemainingSeconds) }}</div>
+        <div><span>最近心跳：</span>{{ formatAiTime(aiProgress?.heartbeatTime) }}</div>
+      </div>
+
+      <h4 class="ai-detail-title">逐份处理状态</h4>
+      <el-table :data="aiDetailRows" size="small" max-height="330" stripe empty-text="暂无处理记录">
+        <el-table-column prop="sequence" label="#" width="48" />
+        <el-table-column prop="studentName" label="学生" min-width="100" show-overflow-tooltip />
+        <el-table-column label="状态" width="92">
+          <template #default="scope">
+            <el-tag size="small" :type="aiResultTagType(scope.row.resultStatus)">
+              {{ aiResultStatusText(scope.row.resultStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="阶段" min-width="130">
+          <template #default="scope">{{ aiStageText(scope.row.processingStage) }}</template>
+        </el-table-column>
+        <el-table-column label="耗时" width="82">
+          <template #default="scope">{{ formatDuration((scope.row.durationMs || 0) / 1000) }}</template>
+        </el-table-column>
+        <el-table-column prop="errorMessage" label="说明" min-width="160" show-overflow-tooltip />
+      </el-table>
+
+      <h4 class="ai-detail-title">安全处理日志</h4>
+      <div class="ai-event-list" v-loading="aiEventsLoading">
+        <div v-for="item in aiEvents" :key="item.eventId" class="ai-event-item" :class="`is-${String(item.eventLevel || '').toLowerCase()}`">
+          <span class="ai-event-time">{{ formatAiTime(item.createTime) }}</span>
+          <el-tag size="small" :type="item.eventLevel === 'ERROR' ? 'danger' : item.eventLevel === 'WARN' ? 'warning' : 'info'">
+            {{ aiStageText(item.eventStage) }}
+          </el-tag>
+          <span>{{ aiEventStudentName(item) }}{{ item.eventMessage }}</span>
+        </div>
+        <el-empty v-if="!aiEventsLoading && !aiEvents.length" description="暂无日志" :image-size="55" />
+      </div>
+      <p class="ai-detail-privacy">为保护数据安全，这里不会显示 API Key、完整提示词、模型原始输出或后台异常堆栈。</p>
+    </el-drawer>
   </div>
 </template>
 
@@ -416,7 +476,7 @@ import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
 import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
-import { getAiConfig, saveAiConfig, deleteAiConfig, testAiConfig, createAiJob, getAiJob,
+import { getAiConfig, saveAiConfig, deleteAiConfig, testAiConfig, createAiJob, getAiJob, getAiJobEvents,
     getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
     pauseAiJob, resumeAiJob, cancelAiJob, retryFailedAiJob } from '@/api/business/practicalAiGrading';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -467,6 +527,10 @@ const aiReferenceAccept = '.doc,.docx,.pdf,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png
 const aiConfig = ref(null);
 const aiConfigForm = ref({ apiKey: '', modelName: 'qwen3.7-plus' });
 const aiJob = ref(null);
+const aiProgress = ref(null);
+const aiDetailVisible = ref(false);
+const aiEventsLoading = ref(false);
+const aiEvents = ref([]);
 const aiResultsByAnswer = ref({});
 let aiPollTimer = null;
 let scoringItemsRequestId = 0;
@@ -543,9 +607,28 @@ const aiJobStatusText = computed(() => {
     const labels = { PENDING: 'AI 排队中', RUNNING: 'AI 批改中', COMPLETED: 'AI 建议已完成',
         PARTIAL_FAILED: 'AI 部分失败', FAILED: 'AI 任务失败', PAUSED: 'AI 已暂停',
         CANCEL_REQUESTED: 'AI 正在取消', CANCELLED: 'AI 已取消' };
-    const progress = `${aiJob.value.successCount || 0}/${aiJob.value.totalCount || 0}`;
+    const done = aiProgress.value?.completedCount ?? ((aiJob.value.successCount || 0) + (aiJob.value.failedCount || 0));
+    const progress = `${done}/${aiJob.value.totalCount || 0}`;
     return `${labels[aiJob.value.jobStatus] || aiJob.value.jobStatus} ${progress}`;
 });
+const aiCompletionPercentage = computed(() => {
+    const total = Number(aiJob.value?.totalCount || 0);
+    return total ? Math.min(100, Math.round(Number(aiProgress.value?.completedCount || 0) * 100 / total)) : 0;
+});
+const aiPreparationStage = computed(() => aiProgress.value?.preparationStatus === 'PREPARING'
+    ? 'PREPARING_REFERENCE' : aiJob.value?.jobStatus === 'PENDING' ? 'QUEUED' : 'WAITING');
+const aiCurrentStudentName = computed(() => {
+    const answerId = aiProgress.value?.currentAnswerId;
+    if (!answerId) return aiProgress.value?.preparationStatus === 'PREPARING' ? '公共参考材料' : '暂无';
+    return submissions.value.find(item => Number(item.answerId) === Number(answerId))?.studentName || '当前作品';
+});
+const aiDetailRows = computed(() => Object.values(aiResultsByAnswer.value)
+    .sort((a, b) => Number(a.resultId) - Number(b.resultId))
+    .map((item, index) => ({
+        ...item,
+        sequence: index + 1,
+        studentName: submissions.value.find(student => Number(student.answerId) === Number(item.answerId))?.studentName || '未知学生'
+    })));
 
 // P6.1: 计算当前题目在课程中的设定的总分
 const currentQuestionScore = computed(() => {
@@ -965,6 +1048,7 @@ async function startAiJob() {
             scopeMode: aiScopeMode.value
         });
         aiJob.value = res.data;
+        aiProgress.value = null;
         aiJobBatchAdoptAllowed.value = true;
         aiResultsByAnswer.value = {};
         aiJobDialogVisible.value = false;
@@ -981,10 +1065,12 @@ async function pollAiJob() {
     try {
         const res = await getAiJob(aiJob.value.jobId);
         aiJob.value = res.data?.job || aiJob.value;
+        aiProgress.value = res.data?.progress || aiProgress.value;
         aiJobBatchAdoptAllowed.value = Boolean(res.data?.batchAdoptAllowed);
         const mapped = {};
         for (const result of (res.data?.results || [])) mapped[result.answerId] = result;
         aiResultsByAnswer.value = mapped;
+        if (aiDetailVisible.value) loadAiEvents();
         if (['PENDING', 'RUNNING', 'CANCEL_REQUESTED'].includes(aiJob.value.jobStatus)) {
             aiPollTimer = window.setTimeout(pollAiJob, 2000);
         }
@@ -1003,6 +1089,7 @@ async function restoreLatestAiJob() {
         const detail = res.data;
         if (!detail?.job) return;
         aiJob.value = detail.job;
+        aiProgress.value = detail.progress || null;
         aiJobBatchAdoptAllowed.value = Boolean(detail.batchAdoptAllowed);
         const mapped = {};
         for (const result of (detail.results || [])) mapped[result.answerId] = result;
@@ -1051,9 +1138,77 @@ function stopAiPolling() {
 function resetAiJobView() {
     stopAiPolling();
     aiJob.value = null;
+    aiProgress.value = null;
+    aiDetailVisible.value = false;
+    aiEvents.value = [];
     aiResultsByAnswer.value = {};
     aiJobBatchAdoptAllowed.value = false;
     aiPreflight.value = null;
+}
+
+async function openAiJobDetail() {
+    if (!aiJob.value?.jobId) return;
+    aiDetailVisible.value = true;
+    await Promise.all([pollAiJob(), loadAiEvents()]);
+}
+
+async function loadAiEvents() {
+    if (!aiJob.value?.jobId || aiEventsLoading.value) return;
+    aiEventsLoading.value = true;
+    try {
+        const res = await getAiJobEvents(aiJob.value.jobId);
+        aiEvents.value = Array.isArray(res.data) ? [...res.data].reverse() : [];
+    } finally {
+        aiEventsLoading.value = false;
+    }
+}
+
+function aiStageText(value) {
+    const labels = {
+        QUEUED: '等待执行', WAITING: '等待处理', JOB_STARTED: '任务启动',
+        PREPARING_REFERENCE: '准备参考材料', REFERENCE_READY: '参考材料就绪',
+        PREPARING_STUDENT: '准备学生作品', REQUESTING_MODEL: '等待视觉模型',
+        VALIDATING_RESULT: '校验并保存', COMPLETED: '处理完成', FAILED: '处理失败',
+        PARTIAL_FAILED: '部分失败', PAUSED: '已暂停', RESUMED: '已继续',
+        CANCEL_REQUESTED: '正在取消', CANCELLED: '已取消', RETRY_QUEUED: '失败项重试',
+        AUTO_RECOVERED: '自动接续', JOB_FAILED: '任务失败', LEGACY_MIGRATED: '历史任务'
+    };
+    return labels[value] || value || '等待处理';
+}
+
+function aiResultStatusText(value) {
+    return { PENDING: '等待', PROCESSING: '处理中', SUCCESS: '成功', FAILED: '失败', CANCELLED: '已取消' }[value] || value;
+}
+
+function aiResultTagType(value) {
+    return value === 'SUCCESS' ? 'success' : value === 'FAILED' ? 'danger'
+        : value === 'CANCELLED' ? 'info' : value === 'PROCESSING' ? 'warning' : 'info';
+}
+
+function aiEventStudentName(event) {
+    if (!event?.resultId) return '';
+    const row = aiDetailRows.value.find(item => Number(item.resultId) === Number(event.resultId));
+    return row ? `${row.studentName}：` : '';
+}
+
+function formatDuration(seconds) {
+    const value = Math.max(0, Math.round(Number(seconds) || 0));
+    if (!value) return '--';
+    if (value < 60) return `${value}秒`;
+    const minutes = Math.floor(value / 60);
+    const remain = value % 60;
+    return remain ? `${minutes}分${remain}秒` : `${minutes}分钟`;
+}
+
+function formatEta(seconds) {
+    const value = Number(seconds);
+    return Number.isFinite(value) && value >= 0 ? formatDuration(value) : '完成首份后估算';
+}
+
+function formatAiTime(value) {
+    if (!value) return '--';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false });
 }
 
 function aiResultFor(student) {
@@ -1449,6 +1604,67 @@ function autoFocusItem() {
 }
 
 .ai-starter-note { margin-top: 12px; font-size: 13px; }
+
+.ai-detail-alert { margin-bottom: 16px; }
+
+.ai-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+
+  > div {
+    padding: 12px 8px;
+    text-align: center;
+    border: 1px solid #ebeef5;
+    border-radius: 6px;
+    background: #fafafa;
+  }
+
+  strong { display: block; color: #409eff; font-size: 20px; }
+  span { color: #909399; font-size: 12px; }
+}
+
+.ai-current-stage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  margin: 14px 0 18px;
+  padding: 12px;
+  color: #303133;
+  font-size: 13px;
+  border-radius: 6px;
+  background: #f4f7fb;
+
+  span { color: #909399; }
+}
+
+.ai-detail-title { margin: 20px 0 10px; color: #303133; }
+
+.ai-event-list {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+}
+
+.ai-event-item {
+  display: grid;
+  grid-template-columns: 145px 100px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid #f0f2f5;
+  color: #606266;
+  font-size: 12px;
+
+  &:last-child { border-bottom: 0; }
+  &.is-error { background: #fef0f0; }
+  &.is-warn { background: #fdf6ec; }
+}
+
+.ai-event-time { color: #909399; }
+.ai-detail-privacy { color: #909399; font-size: 12px; line-height: 1.6; }
 
 .grading-page {
   height: calc(100vh - 84px);

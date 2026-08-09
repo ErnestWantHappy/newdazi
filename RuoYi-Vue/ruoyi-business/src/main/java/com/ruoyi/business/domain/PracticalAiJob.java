@@ -18,6 +18,10 @@ public class PracticalAiJob
     private String scopeMode;
     private String referenceAnswerJson;
     private String starterMaterialsJson;
+    private String preparationStatus;
+    private String comparisonPagesJson;
+    private Long currentResultId;
+    private Date heartbeatTime;
     private String jobStatus;
     private Integer totalCount;
     private Integer successCount;
@@ -41,6 +45,10 @@ public class PracticalAiJob
     public String getScopeMode() { return scopeMode; } public void setScopeMode(String v) { scopeMode=v; }
     public String getReferenceAnswerJson() { return referenceAnswerJson; } public void setReferenceAnswerJson(String v) { referenceAnswerJson=v; }
     public String getStarterMaterialsJson() { return starterMaterialsJson; } public void setStarterMaterialsJson(String v) { starterMaterialsJson=v; }
+    public String getPreparationStatus() { return preparationStatus; } public void setPreparationStatus(String v) { preparationStatus=v; }
+    public String getComparisonPagesJson() { return comparisonPagesJson; } public void setComparisonPagesJson(String v) { comparisonPagesJson=v; }
+    public Long getCurrentResultId() { return currentResultId; } public void setCurrentResultId(Long v) { currentResultId=v; }
+    public Date getHeartbeatTime() { return heartbeatTime; } public void setHeartbeatTime(Date v) { heartbeatTime=v; }
     public String getJobStatus() { return jobStatus; } public void setJobStatus(String v) { jobStatus=v; }
     public Integer getTotalCount() { return totalCount; } public void setTotalCount(Integer v) { totalCount=v; }
     public Integer getSuccessCount() { return successCount; } public void setSuccessCount(Integer v) { successCount=v; }

@@ -1,6 +1,7 @@
 package com.ruoyi.business.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -8,6 +9,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.domain.PracticalAiJob;
+import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.PracticalAttachment;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.TeacherPracticalReferenceAnswer;
@@ -103,6 +107,34 @@ class PracticalAiJobServiceTest
                 org.mockito.ArgumentMatchers.eq("CANCELLED"), org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.isNull());
         verifyNoInteractions(worker);
+    }
+
+    @Test
+    void shouldExposeStageEtaAndStalledStateWithoutSensitiveProviderPayload()
+    {
+        PracticalAiJob job = new PracticalAiJob();
+        job.setJobId(99L); job.setJobStatus("RUNNING"); job.setTotalCount(2);
+        job.setStartTime(new Date(System.currentTimeMillis() - 500_000L));
+        job.setHeartbeatTime(new Date(System.currentTimeMillis() - 420_000L));
+        job.setCurrentResultId(1L); job.setReferenceAnswerJson("[{}]");
+        PracticalAiResult processing = new PracticalAiResult();
+        processing.setResultId(1L); processing.setAnswerId(101L);
+        processing.setResultStatus("PROCESSING"); processing.setProcessingStage("REQUESTING_MODEL");
+        PracticalAiResult success = new PracticalAiResult();
+        success.setResultId(2L); success.setAnswerId(102L);
+        success.setResultStatus("SUCCESS"); success.setDurationMs(30_000L);
+        when(mapper.selectJob(99L, 7L)).thenReturn(job);
+        when(mapper.selectResultsByJob(99L)).thenReturn(Arrays.asList(processing, success));
+
+        Map<String, Object> detail = service.detail(99L, 7L);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> progress = (Map<String, Object>) detail.get("progress");
+
+        assertEquals(1, progress.get("processingCount"));
+        assertEquals(1, progress.get("completedCount"));
+        assertEquals("REQUESTING_MODEL", progress.get("currentStage"));
+        assertTrue((Boolean) progress.get("stalled"));
+        assertEquals(30L, progress.get("estimatedRemainingSeconds"));
     }
 
     private TeacherAiConfig config()

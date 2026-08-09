@@ -13,11 +13,12 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.PracticalAiEvent;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.PracticalAttachment;
-import com.ruoyi.business.domain.PracticalRubricSnapshot;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
+import com.ruoyi.business.domain.PracticalRubricSnapshot;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.PracticalAiGradingMapper;
@@ -26,6 +27,7 @@ import com.ruoyi.business.mapper.PracticalRubricSnapshotMapper;
 import com.ruoyi.business.utils.FileConversionUtils;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.StringUtils;
 
 @Service
 public class PracticalAiJobWorker
@@ -44,26 +46,37 @@ public class PracticalAiJobWorker
     public void run(Long jobId)
     {
         PracticalAiJob job = aiMapper.selectJobForWorker(jobId);
-        if (job == null || !("PENDING".equals(job.getJobStatus()) || "RUNNING".equals(job.getJobStatus()))) return;
+        if (job == null || !("PENDING".equals(job.getJobStatus()) || "RUNNING".equals(job.getJobStatus())
+                || "CANCEL_REQUESTED".equals(job.getJobStatus()))) return;
+        if ("CANCEL_REQUESTED".equals(job.getJobStatus()))
+        {
+            cancelRemaining(jobId);
+            return;
+        }
         try
         {
             aiMapper.updateJobStatus(jobId, "RUNNING", new Date(), null, null);
+            event(jobId, null, "INFO", "JOB_STARTED", "AI 批改任务开始或继续执行");
+            List<ComparisonPage> comparisonPages = prepareComparisonPages(job);
             TeacherAiConfig config = configService.status(job.getTeacherUserId());
             String apiKey = configService.apiKey(config);
-            for (PracticalAiResult result : aiMapper.selectResultsByJob(jobId))
+            for (PracticalAiResult candidate : aiMapper.selectResultsByJob(jobId))
             {
-                if (!"PENDING".equals(result.getResultStatus())) continue;
+                if (!"PENDING".equals(candidate.getResultStatus())) continue;
                 PracticalAiJob current = aiMapper.selectJobForWorker(jobId);
-                if ("PAUSED".equals(current.getJobStatus())) return;
+                if (current == null || "PAUSED".equals(current.getJobStatus())) return;
                 if ("CANCEL_REQUESTED".equals(current.getJobStatus()))
                 {
-                    Date now = new Date();
-                    aiMapper.updatePendingResultsStatus(jobId, "CANCELLED", "教师已取消", now);
-                    aiMapper.updateJobCounts(jobId);
-                    aiMapper.updateJobStatus(jobId, "CANCELLED", null, now, null);
+                    cancelRemaining(jobId);
                     return;
                 }
-                gradeOne(config, apiKey, result);
+                // 条件更新保证即使意外重复唤醒，同一份作品也只会被一个线程认领。
+                if (aiMapper.markResultProcessing(candidate.getResultId(), "PREPARING_STUDENT") == 0) continue;
+                PracticalAiResult result = aiMapper.selectResult(candidate.getResultId());
+                aiMapper.updateJobHeartbeat(jobId, result.getResultId());
+                event(jobId, result.getResultId(), "INFO", "PREPARING_STUDENT", "开始准备本份学生作品");
+                gradeOne(jobId, config, apiKey, result, comparisonPages);
+                aiMapper.updateJobHeartbeat(jobId, null);
                 aiMapper.updateJobCounts(jobId);
             }
             finish(jobId);
@@ -71,12 +84,16 @@ public class PracticalAiJobWorker
         catch (Exception e)
         {
             aiMapper.updateJobCounts(jobId);
-            aiMapper.updateJobStatus(jobId, "FAILED", null, new Date(), safeMessage(e));
+            String message = safeMessage(e);
+            aiMapper.updateJobStatus(jobId, "FAILED", null, new Date(), message);
+            event(jobId, null, "ERROR", "JOB_FAILED", message);
         }
     }
 
-    private void gradeOne(TeacherAiConfig config, String apiKey, PracticalAiResult result)
+    private void gradeOne(Long jobId, TeacherAiConfig config, String apiKey, PracticalAiResult result,
+                          List<ComparisonPage> comparisonPages)
     {
+        long startedAt = System.currentTimeMillis();
         try
         {
             BizStudentAnswer answer = answerMapper.selectById(result.getAnswerId());
@@ -86,24 +103,50 @@ public class PracticalAiJobWorker
             if (rubric == null || !result.getRubricSnapshotId().equals(rubric.getSnapshotId()))
                 throw new ServiceException("提交版本未绑定有效评分标准快照");
             PracticalAiGradingInput input = new PracticalAiGradingInput();
-            input.setRubric(rubric); input.setScoringItems(rubricService.buildScoringItems(rubric));
+            input.setRubric(rubric);
+            input.setScoringItems(rubricService.buildScoringItems(rubric));
             loadPages(result.getPracticalVersionId(), input);
-            loadComparisonPages(jobFor(result.getJobId()), input);
+            addComparisonPages(comparisonPages, input);
+
+            updateStage(jobId, result.getResultId(), "REQUESTING_MODEL", "作品页图已准备，正在等待视觉模型返回");
             PracticalAiGradingOutput output = provider.grade(config, apiKey, input);
+            updateStage(jobId, result.getResultId(), "VALIDATING_RESULT", "模型已返回，正在校验分项分数并保存建议");
             BizStudentAnswer latest = answerMapper.selectById(result.getAnswerId());
             if (latest == null || !result.getPracticalVersionId().equals(latest.getPracticalVersionId()))
                 throw new ServiceException("AI 返回前学生已补交，本建议已作废");
-            result.setResultStatus("SUCCESS"); result.setSuggestedScore(output.getSuggestedScore());
-            result.setScoringDetailsJson(output.getScoringDetailsJson()); result.setEvidenceJson(output.getEvidenceJson());
-            result.setConfidence(output.getConfidence()); result.setProviderRequestId(output.getRequestId());
-            result.setPromptTokens(output.getPromptTokens()); result.setCompletionTokens(output.getCompletionTokens());
-            result.setErrorMessage(null); result.setFinishTime(new Date()); aiMapper.updateResult(result);
+            result.setResultStatus("SUCCESS");
+            result.setProcessingStage("COMPLETED");
+            result.setSuggestedScore(output.getSuggestedScore());
+            result.setScoringDetailsJson(output.getScoringDetailsJson());
+            result.setEvidenceJson(output.getEvidenceJson());
+            result.setConfidence(output.getConfidence());
+            result.setProviderRequestId(output.getRequestId());
+            result.setPromptTokens(output.getPromptTokens());
+            result.setCompletionTokens(output.getCompletionTokens());
+            result.setErrorMessage(null);
+            result.setFinishTime(new Date());
+            result.setDurationMs(System.currentTimeMillis() - startedAt);
+            aiMapper.updateResult(result);
+            event(jobId, result.getResultId(), "INFO", "COMPLETED", "本份 AI 建议已完成并保存");
         }
         catch (Exception e)
         {
-            result.setResultStatus("FAILED"); result.setErrorMessage(safeMessage(e));
-            result.setFinishTime(new Date()); aiMapper.updateResult(result);
+            String message = safeMessage(e);
+            result.setResultStatus("FAILED");
+            result.setProcessingStage("FAILED");
+            result.setErrorMessage(message);
+            result.setFinishTime(new Date());
+            result.setDurationMs(System.currentTimeMillis() - startedAt);
+            aiMapper.updateResult(result);
+            event(jobId, result.getResultId(), "ERROR", "FAILED", message);
         }
+    }
+
+    private void updateStage(Long jobId, Long resultId, String stage, String message)
+    {
+        aiMapper.updateResultStage(resultId, stage);
+        aiMapper.updateJobHeartbeat(jobId, resultId);
+        event(jobId, resultId, "INFO", stage, message);
     }
 
     private void loadPages(Long versionId, PracticalAiGradingInput input) throws Exception
@@ -123,32 +166,75 @@ public class PracticalAiJobWorker
             for (String resource : pages)
             {
                 pageIndex++;
-                if (resource == null || !resource.toLowerCase().startsWith("/profile/upload/"))
+                File file = resolveResource(resource);
+                if (!file.toPath().toAbsolutePath().normalize().startsWith(profile))
                     throw new ServiceException("作品页图路径非法");
-                Path file = Paths.get(RuoYiConfig.getProfile(), resource.substring("/profile/".length()))
-                        .toAbsolutePath().normalize();
-                if (!file.startsWith(profile) || !file.toFile().isFile()) throw new ServiceException("作品页图不存在");
-                files.add(file.toFile()); labels.add("附件" + attachmentIndex + "第" + pageIndex + "页");
+                files.add(file);
+                labels.add("附件" + attachmentIndex + "第" + pageIndex + "页");
             }
         }
         if (files.isEmpty()) throw new ServiceException("作品没有可识别页图");
-        input.setPageImages(files); input.setPageLabels(labels);
+        input.setPageImages(files);
+        input.setPageLabels(labels);
     }
 
-    /** 每个任务使用创建时冻结的空白起始材料和教师参考答案，避免中途替换改变评分依据。 */
-    private synchronized void loadComparisonPages(PracticalAiJob job, PracticalAiGradingInput input)
+    /** 公共对照材料只转换一次并持久化页图路径，后续学生直接复用。 */
+    private synchronized List<ComparisonPage> prepareComparisonPages(PracticalAiJob initialJob)
     {
-        if (job == null || job.getReferenceAnswerJson() == null)
+        PracticalAiJob job = aiMapper.selectJobForWorker(initialJob.getJobId());
+        List<ComparisonPage> cached = readPreparedPages(job.getComparisonPagesJson());
+        if ("READY".equals(job.getPreparationStatus()) && !cached.isEmpty() && pagesExist(cached)) return cached;
+        if (StringUtils.isBlank(job.getReferenceAnswerJson()))
             throw new ServiceException("AI 任务缺少教师参考答案");
-        renderMaterials(job, job.getStarterMaterialsJson(), "空白起始材料", false, input);
-        int referencePages = renderMaterials(job, job.getReferenceAnswerJson(), "教师参考答案", true, input);
+
+        aiMapper.updateJobPreparation(job.getJobId(), "PREPARING", null, null);
+        event(job.getJobId(), null, "INFO", "PREPARING_REFERENCE", "正在准备空白材料与教师参考答案（每个任务仅执行一次）");
+        List<ComparisonPage> pages = new ArrayList<ComparisonPage>();
+        renderMaterials(job, job.getStarterMaterialsJson(), "空白起始材料", false, pages);
+        int referencePages = renderMaterials(job, job.getReferenceAnswerJson(), "教师参考答案", true, pages);
         if (referencePages == 0) throw new ServiceException("教师参考答案无法转换为可识别页图");
+        try
+        {
+            aiMapper.updateJobPreparation(job.getJobId(), "READY", objectMapper.writeValueAsString(pages), null);
+        }
+        catch (Exception e)
+        {
+            throw new ServiceException("对照材料页图缓存保存失败");
+        }
+        event(job.getJobId(), null, "INFO", "REFERENCE_READY", "教师参考答案与空白材料已准备完成，后续作品将复用");
+        return pages;
+    }
+
+    private List<ComparisonPage> readPreparedPages(String json)
+    {
+        if (StringUtils.isBlank(json)) return new ArrayList<ComparisonPage>();
+        try { return objectMapper.readValue(json, new TypeReference<List<ComparisonPage>>() { }); }
+        catch (Exception e) { return new ArrayList<ComparisonPage>(); }
+    }
+
+    private boolean pagesExist(List<ComparisonPage> pages)
+    {
+        try
+        {
+            for (ComparisonPage page : pages) resolveResource(page.getResourcePath());
+            return true;
+        }
+        catch (Exception e) { return false; }
+    }
+
+    private void addComparisonPages(List<ComparisonPage> pages, PracticalAiGradingInput input)
+    {
+        for (ComparisonPage page : pages)
+        {
+            input.getPageImages().add(resolveResource(page.getResourcePath()));
+            input.getPageLabels().add(page.getLabel());
+        }
     }
 
     private int renderMaterials(PracticalAiJob job, String materialsJson, String labelPrefix,
-                                boolean required, PracticalAiGradingInput input)
+                                boolean required, List<ComparisonPage> target)
     {
-        if (materialsJson == null || materialsJson.trim().isEmpty()) return 0;
+        if (StringUtils.isBlank(materialsJson)) return 0;
         int addedPages = 0;
         List<PracticalQuestionMaterial> materials;
         try
@@ -168,35 +254,32 @@ public class PracticalAiJobWorker
             try
             {
                 File source = resolveResource(material.getResourcePath());
-                String extension = material.getFileExtension();
-                if (extension == null || extension.trim().isEmpty())
-                {
-                    String path = material.getResourcePath();
-                    int dot = path == null ? -1 : path.lastIndexOf('.');
-                    extension = dot < 0 ? "" : path.substring(dot + 1);
-                }
-                extension = extension.toLowerCase(Locale.ROOT);
+                String extension = extensionOf(material);
                 String kind;
                 File visualSource;
                 if ("jpg".equals(extension) || "jpeg".equals(extension) || "png".equals(extension))
                 {
-                    kind = "IMAGE"; visualSource = source;
+                    kind = "IMAGE";
+                    visualSource = source;
                 }
                 else if ("pdf".equals(extension))
                 {
-                    kind = "DOCUMENT"; visualSource = source;
+                    kind = "DOCUMENT";
+                    visualSource = source;
                 }
                 else if ("doc".equals(extension) || "docx".equals(extension)
                         || "ppt".equals(extension) || "pptx".equals(extension)
                         || "xls".equals(extension) || "xlsx".equals(extension))
                 {
                     File outputDir = new File(source.getParentFile(), "ai-reference-pdf");
-                    if (!outputDir.exists() && !outputDir.mkdirs()) throw new ServiceException(labelPrefix + "转换目录创建失败");
+                    if (!outputDir.exists() && !outputDir.mkdirs())
+                        throw new ServiceException(labelPrefix + "转换目录创建失败");
                     String pdf = FileConversionUtils.convertOfficeToPdfWithLibreOffice(
                             source.getAbsolutePath(), outputDir.getAbsolutePath());
-                    visualSource = new File(pdf); kind = "DOCUMENT";
+                    visualSource = new File(pdf);
+                    kind = "DOCUMENT";
                 }
-                else continue; // 压缩包等教师资源不作为视觉评分输入。
+                else continue;
 
                 List<String> pages = pageRenderer.renderForOwner(
                         "ai-job-" + job.getJobId() + "-" + labelPrefix.hashCode() + "-" + materialIndex,
@@ -205,26 +288,32 @@ public class PracticalAiJobWorker
                 for (String page : pages)
                 {
                     pageIndex++;
-                    input.getPageImages().add(resolveResource(page));
-                    input.getPageLabels().add(labelPrefix + materialIndex + "第" + pageIndex + "页（仅供对照）");
+                    target.add(new ComparisonPage(page,
+                            labelPrefix + materialIndex + "第" + pageIndex + "页（仅供对照）"));
                     addedPages++;
                 }
+                aiMapper.updateJobHeartbeat(job.getJobId(), null);
             }
             catch (Exception e)
             {
                 if (required) throw e instanceof ServiceException
                         ? (ServiceException) e : new ServiceException(labelPrefix + "无法转换");
-                // 空白起始材料不是必填项；单个文件失败不阻断参考答案对照评分。
+                event(job.getJobId(), null, "WARN", "PREPARING_REFERENCE", "一个非必填空白材料无法转换，已跳过");
             }
         }
         return addedPages;
     }
 
-    private PracticalAiJob jobFor(Long jobId)
+    private String extensionOf(PracticalQuestionMaterial material)
     {
-        PracticalAiJob job = aiMapper.selectJobForWorker(jobId);
-        if (job == null) throw new ServiceException("AI 批改任务不存在");
-        return job;
+        String extension = material.getFileExtension();
+        if (StringUtils.isBlank(extension))
+        {
+            String path = material.getResourcePath();
+            int dot = path == null ? -1 : path.lastIndexOf('.');
+            extension = dot < 0 ? "" : path.substring(dot + 1);
+        }
+        return extension.toLowerCase(Locale.ROOT);
     }
 
     private File resolveResource(String resource)
@@ -242,8 +331,43 @@ public class PracticalAiJobWorker
     {
         aiMapper.updateJobCounts(jobId);
         PracticalAiJob job = aiMapper.selectJobForWorker(jobId);
+        if (job == null || "PAUSED".equals(job.getJobStatus())) return;
+        if ("CANCEL_REQUESTED".equals(job.getJobStatus()))
+        {
+            cancelRemaining(jobId);
+            return;
+        }
         String status = job.getFailedCount() != null && job.getFailedCount() > 0 ? "PARTIAL_FAILED" : "COMPLETED";
         aiMapper.updateJobStatus(jobId, status, null, new Date(), null);
+        event(jobId, null, "INFO", status, "PARTIAL_FAILED".equals(status)
+                ? "任务已结束，部分作品失败，可单独查看原因并重试" : "全部 AI 建议已生成完成");
+    }
+
+    private void cancelRemaining(Long jobId)
+    {
+        Date now = new Date();
+        aiMapper.updatePendingResultsStatus(jobId, "CANCELLED", "教师已取消", now);
+        aiMapper.updateJobCounts(jobId);
+        aiMapper.updateJobStatus(jobId, "CANCELLED", null, now, null);
+        event(jobId, null, "WARN", "CANCELLED", "教师已取消任务，已完成建议保留，未完成作品不再处理");
+    }
+
+    private void event(Long jobId, Long resultId, String level, String stage, String message)
+    {
+        try
+        {
+            PracticalAiEvent event = new PracticalAiEvent();
+            event.setJobId(jobId);
+            event.setResultId(resultId);
+            event.setEventLevel(level);
+            event.setEventStage(stage);
+            event.setEventMessage(message == null ? "" : (message.length() > 480 ? message.substring(0, 480) : message));
+            aiMapper.insertEvent(event);
+        }
+        catch (Exception ignored)
+        {
+            // 可视化日志写入失败不能反向阻断正式 AI 建议处理。
+        }
     }
 
     private String safeMessage(Exception e)
@@ -251,5 +375,22 @@ public class PracticalAiJobWorker
         String message = e instanceof ServiceException ? e.getMessage() : "AI 批改处理失败";
         if (message == null) message = "AI 批改处理失败";
         return message.length() > 480 ? message.substring(0, 480) : message;
+    }
+
+    public static class ComparisonPage
+    {
+        private String resourcePath;
+        private String label;
+
+        public ComparisonPage() { }
+        public ComparisonPage(String resourcePath, String label)
+        {
+            this.resourcePath = resourcePath;
+            this.label = label;
+        }
+        public String getResourcePath() { return resourcePath; }
+        public void setResourcePath(String resourcePath) { this.resourcePath = resourcePath; }
+        public String getLabel() { return label; }
+        public void setLabel(String label) { this.label = label; }
     }
 }

@@ -148,6 +148,13 @@ public class PracticalAiGradingController extends BaseController
         return AjaxResult.success(jobService.detail(jobId, SecurityUtils.getUserId()));
     }
 
+    @GetMapping("/jobs/{jobId}/events")
+    public AjaxResult events(@PathVariable Long jobId,
+                             @RequestParam(required = false, defaultValue = "0") Long afterEventId)
+    {
+        return AjaxResult.success(jobService.events(jobId, SecurityUtils.getUserId(), afterEventId));
+    }
+
     @PostMapping("/jobs/{jobId}/pause") public AjaxResult pause(@PathVariable Long jobId)
     { jobService.pause(jobId, SecurityUtils.getUserId()); return AjaxResult.success("任务已暂停"); }
     @PostMapping("/jobs/{jobId}/resume") public AjaxResult resume(@PathVariable Long jobId)

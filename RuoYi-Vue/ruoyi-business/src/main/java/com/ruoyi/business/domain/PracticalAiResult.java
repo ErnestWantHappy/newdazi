@@ -12,6 +12,11 @@ public class PracticalAiResult
     private Long practicalVersionId;
     private Long rubricSnapshotId;
     private String resultStatus;
+    private String processingStage;
+    private Date processingStartedTime;
+    private Date stageUpdatedTime;
+    private Long durationMs;
+    private Integer attemptCount;
     private Integer suggestedScore;
     private String scoringDetailsJson;
     private String evidenceJson;
@@ -32,6 +37,11 @@ public class PracticalAiResult
     public Long getPracticalVersionId() { return practicalVersionId; } public void setPracticalVersionId(Long v) { practicalVersionId=v; }
     public Long getRubricSnapshotId() { return rubricSnapshotId; } public void setRubricSnapshotId(Long v) { rubricSnapshotId=v; }
     public String getResultStatus() { return resultStatus; } public void setResultStatus(String v) { resultStatus=v; }
+    public String getProcessingStage() { return processingStage; } public void setProcessingStage(String v) { processingStage=v; }
+    public Date getProcessingStartedTime() { return processingStartedTime; } public void setProcessingStartedTime(Date v) { processingStartedTime=v; }
+    public Date getStageUpdatedTime() { return stageUpdatedTime; } public void setStageUpdatedTime(Date v) { stageUpdatedTime=v; }
+    public Long getDurationMs() { return durationMs; } public void setDurationMs(Long v) { durationMs=v; }
+    public Integer getAttemptCount() { return attemptCount; } public void setAttemptCount(Integer v) { attemptCount=v; }
     public Integer getSuggestedScore() { return suggestedScore; } public void setSuggestedScore(Integer v) { suggestedScore=v; }
     public String getScoringDetailsJson() { return scoringDetailsJson; } public void setScoringDetailsJson(String v) { scoringDetailsJson=v; }
     public String getEvidenceJson() { return evidenceJson; } public void setEvidenceJson(String v) { evidenceJson=v; }

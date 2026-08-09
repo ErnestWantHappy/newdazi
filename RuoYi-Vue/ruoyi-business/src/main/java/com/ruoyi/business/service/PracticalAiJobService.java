@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.ruoyi.business.domain.PracticalAiJob;
+import com.ruoyi.business.domain.PracticalAiEvent;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
@@ -80,6 +81,8 @@ public class PracticalAiJobService
             result.setRubricSnapshotId(submission.getRubricSnapshotId()); result.setResultStatus("PENDING");
             mapper.insertResult(result);
         }
+        addEvent(job.getJobId(), null, "INFO", "QUEUED",
+                "任务已创建，共有 " + eligible + " 份作品进入 AI 队列");
         afterCommit(job.getJobId());
         return job;
     }
@@ -87,10 +90,19 @@ public class PracticalAiJobService
     public Map<String, Object> detail(Long jobId, Long teacherUserId)
     {
         PracticalAiJob job = requireOwned(jobId, teacherUserId);
+        List<PracticalAiResult> results = mapper.selectResultsByJob(jobId);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("job", job); result.put("results", mapper.selectResultsByJob(jobId));
+        result.put("job", job); result.put("results", results);
+        result.put("progress", progress(job, results));
         result.put("batchAdoptAllowed", StringUtils.isNotBlank(job.getReferenceAnswerJson()));
         return result;
+    }
+
+    public List<PracticalAiEvent> events(Long jobId, Long teacherUserId, Long afterEventId)
+    {
+        requireOwned(jobId, teacherUserId);
+        long safeAfterId = afterEventId == null || afterEventId < 0 ? 0L : afterEventId;
+        return mapper.selectEvents(jobId, safeAfterId, 200);
     }
 
     public Map<String, Object> latest(Long teacherUserId, Long lessonId, Long questionId,
@@ -133,6 +145,7 @@ public class PracticalAiJobService
         if (!"RUNNING".equals(job.getJobStatus()) && !"PENDING".equals(job.getJobStatus()))
             throw new ServiceException("当前任务不能暂停");
         mapper.updateJobStatus(jobId, "PAUSED", null, null, null);
+        addEvent(jobId, null, "WARN", "PAUSED", "教师已暂停任务；当前模型请求完成后停止处理下一份");
     }
 
     public void resume(Long jobId, Long teacherUserId)
@@ -142,6 +155,7 @@ public class PracticalAiJobService
         if (StringUtils.isBlank(job.getReferenceAnswerJson()))
             throw new ServiceException("旧任务缺少教师参考答案，不能继续；请取消后重新发起");
         mapper.updateJobStatus(jobId, "PENDING", null, null, null);
+        addEvent(jobId, null, "INFO", "RESUMED", "教师已继续任务，将从未完成作品接续");
         worker.run(jobId);
     }
 
@@ -156,9 +170,11 @@ public class PracticalAiJobService
             mapper.updatePendingResultsStatus(jobId, "CANCELLED", "教师已取消", now);
             mapper.updateJobCounts(jobId);
             mapper.updateJobStatus(jobId, "CANCELLED", null, now, null);
+            addEvent(jobId, null, "WARN", "CANCELLED", "教师已取消任务，已完成建议保留");
             return;
         }
         mapper.updateJobStatus(jobId, "CANCEL_REQUESTED", null, null, null);
+        addEvent(jobId, null, "WARN", "CANCEL_REQUESTED", "已收到取消请求；当前模型请求完成后停止");
     }
 
     public void retryFailed(Long jobId, Long teacherUserId)
@@ -171,7 +187,69 @@ public class PracticalAiJobService
         int count = mapper.resetFailedResults(jobId);
         if (count == 0) throw new ServiceException("没有可重试的失败作品");
         mapper.updateJobStatus(jobId, "PENDING", null, null, null);
+        addEvent(jobId, null, "INFO", "RETRY_QUEUED", count + " 份失败作品已重新进入队列");
         worker.run(jobId);
+    }
+
+    private Map<String, Object> progress(PracticalAiJob job, List<PracticalAiResult> results)
+    {
+        int waiting = 0, processing = 0, completed = 0;
+        long durationTotal = 0L;
+        int durationCount = 0;
+        PracticalAiResult current = null;
+        for (PracticalAiResult item : results)
+        {
+            if ("PENDING".equals(item.getResultStatus())) waiting++;
+            else if ("PROCESSING".equals(item.getResultStatus())) processing++;
+            else completed++;
+            if (item.getDurationMs() != null && item.getDurationMs() > 0)
+            {
+                durationTotal += item.getDurationMs();
+                durationCount++;
+            }
+            if (job.getCurrentResultId() != null && job.getCurrentResultId().equals(item.getResultId())) current = item;
+        }
+        long now = System.currentTimeMillis();
+        Date basis = job.getStartTime() == null ? job.getCreateTime() : job.getStartTime();
+        Date end = job.getFinishTime() == null ? new Date(now) : job.getFinishTime();
+        long elapsedSeconds = basis == null ? 0L : Math.max(0L, (end.getTime() - basis.getTime()) / 1000L);
+        long averageMs = durationCount == 0 ? 0L : durationTotal / durationCount;
+        long estimatedRemainingSeconds = averageMs == 0L ? -1L
+                : Math.max(0L, averageMs * (waiting + processing) / 1000L);
+        Date heartbeat = job.getHeartbeatTime() == null ? basis : job.getHeartbeatTime();
+        boolean stalled = "RUNNING".equals(job.getJobStatus()) && heartbeat != null
+                && now - heartbeat.getTime() > 6L * 60L * 1000L;
+
+        Map<String, Object> progress = new LinkedHashMap<String, Object>();
+        progress.put("waitingCount", waiting);
+        progress.put("processingCount", processing);
+        progress.put("completedCount", completed);
+        progress.put("elapsedSeconds", elapsedSeconds);
+        progress.put("averageDurationMs", averageMs);
+        progress.put("estimatedRemainingSeconds", estimatedRemainingSeconds);
+        progress.put("stalled", stalled);
+        progress.put("heartbeatTime", heartbeat);
+        progress.put("preparationStatus", job.getPreparationStatus());
+        progress.put("currentResultId", current == null ? null : current.getResultId());
+        progress.put("currentAnswerId", current == null ? null : current.getAnswerId());
+        progress.put("currentStage", current == null ? null : current.getProcessingStage());
+        progress.put("currentStageUpdatedTime", current == null ? null : current.getStageUpdatedTime());
+        return progress;
+    }
+
+    private void addEvent(Long jobId, Long resultId, String level, String stage, String message)
+    {
+        try
+        {
+            PracticalAiEvent event = new PracticalAiEvent();
+            event.setJobId(jobId); event.setResultId(resultId); event.setEventLevel(level);
+            event.setEventStage(stage); event.setEventMessage(message);
+            mapper.insertEvent(event);
+        }
+        catch (Exception ignored)
+        {
+            // 日志属于辅助信息，不能让暂停、继续或取消等主操作失败。
+        }
     }
 
     private PracticalAiJob requireOwned(Long jobId, Long teacherUserId)

@@ -78,6 +78,15 @@
 - `biz_practical_ai_result` 新增采用状态、采用教师和时间。批量采用锁定每份答卷后再次检查正式成绩为空、提交版本一致、评分快照有效、分项合法和期限开放；不满足者逐份跳过。
 - “批量采用”是教师明确确认动作，不等同于 AI 自动写分。采用后的正式成绩仍可由教师按现有人工批改流程修改。
 
+### P5.2 可观测处理与安全接续（2026-08-09 方案 A）
+
+- `biz_practical_ai_job` 增加公共材料准备状态、对照页图缓存、当前结果和心跳；`biz_practical_ai_result` 增加处理阶段、阶段时间、单份耗时和尝试次数。
+- 新增 `biz_practical_ai_event`，只保存教师可理解的安全事件。结果事件通过 `result_id` 在前端映射学生姓名，后端日志不冗余学生身份信息。
+- 工作器先认领单份结果为 `PROCESSING`，再依次更新 `PREPARING_STUDENT → REQUESTING_MODEL → VALIDATING_RESULT → COMPLETED/FAILED`；条件更新防止重复工作器处理同一结果。
+- 教师参考答案和空白起始材料先统一生成 `ComparisonPage(resourcePath,label)` 列表并写回任务，后续学生只加载缓存，不重复执行 Office 转换和页图渲染。
+- `ApplicationReadyEvent` 触发恢复器：取消请求直接收口；中断的 `PROCESSING` 退回 `PENDING`；任务随后由原异步线程池接续。暂停任务保持暂停，已经结束的结果不重跑。
+- 详情接口直接从任务与逐份结果计算进度、平均耗时和 ETA；模型首次完成前不伪造 ETA。心跳超过 6 分钟只告警，不自动制造并发恢复。
+
 ## 3. AI 输出契约
 
 ```json
@@ -116,6 +125,7 @@
 - `ADR-002-qwen-draft-only-ai-grading.md`：百炼千问作为首期单一生产适配器；教师 Key 后端加密；AI 仅生成版本化建议，正式成绩必须人工确认。
 - `ADR-003-office-conversion-isolation-and-recovery.md`：Word 保留常驻池，PPT/Excel 使用短用户目录的一次性进程；新附件加入定时与自愈恢复队列。
 - `ADR-004-ai-scope-reference-and-safe-batch-adoption.md`：任务前确认范围，冻结教师参考答案/空白材料，刷新恢复任务；批量采用只写当前未人工评分答卷。
+- `ADR-005-ai-job-observability-and-recovery.md`：持久化阶段/心跳/安全事件，公共对照页图单次准备，服务重启只接续未完成结果。
 
 ## 6. 正式发布与回滚
 

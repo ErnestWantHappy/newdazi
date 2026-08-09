@@ -16,6 +16,8 @@
         <result property="modelName" column="model_name"/><result property="promptVersion" column="prompt_version"/>
         <result property="scopeMode" column="scope_mode"/><result property="referenceAnswerJson" column="reference_answer_json"/>
         <result property="starterMaterialsJson" column="starter_materials_json"/>
+        <result property="preparationStatus" column="preparation_status"/><result property="comparisonPagesJson" column="comparison_pages_json"/>
+        <result property="currentResultId" column="current_result_id"/><result property="heartbeatTime" column="heartbeat_time"/>
         <result property="jobStatus" column="job_status"/><result property="totalCount" column="total_count"/>
         <result property="successCount" column="success_count"/><result property="failedCount" column="failed_count"/>
         <result property="skippedCount" column="skipped_count"/><result property="errorMessage" column="error_message"/>
@@ -26,6 +28,9 @@
         <id property="resultId" column="result_id"/><result property="jobId" column="job_id"/>
         <result property="answerId" column="answer_id"/><result property="practicalVersionId" column="practical_version_id"/>
         <result property="rubricSnapshotId" column="rubric_snapshot_id"/><result property="resultStatus" column="result_status"/>
+        <result property="processingStage" column="processing_stage"/><result property="processingStartedTime" column="processing_started_time"/>
+        <result property="stageUpdatedTime" column="stage_updated_time"/><result property="durationMs" column="duration_ms"/>
+        <result property="attemptCount" column="attempt_count"/>
         <result property="suggestedScore" column="suggested_score"/><result property="scoringDetailsJson" column="scoring_details_json"/>
         <result property="evidenceJson" column="evidence_json"/><result property="confidence" column="confidence"/>
         <result property="providerRequestId" column="provider_request_id"/><result property="promptTokens" column="prompt_tokens"/>
@@ -33,6 +38,12 @@
         <result property="applyStatus" column="apply_status"/><result property="appliedByUserId" column="applied_by_user_id"/>
         <result property="appliedTime" column="applied_time"/>
         <result property="createTime" column="create_time"/><result property="finishTime" column="finish_time"/>
+    </resultMap>
+    <resultMap id="AiEvent" type="com.ruoyi.business.domain.PracticalAiEvent">
+        <id property="eventId" column="event_id"/><result property="jobId" column="job_id"/>
+        <result property="resultId" column="result_id"/><result property="eventLevel" column="event_level"/>
+        <result property="eventStage" column="event_stage"/><result property="eventMessage" column="event_message"/>
+        <result property="createTime" column="create_time"/>
     </resultMap>
 
     <select id="selectConfig" resultMap="ConfigResult">SELECT * FROM biz_teacher_ai_config WHERE teacher_user_id=#{teacherUserId}</select>
@@ -72,9 +83,27 @@
           AND entry_year=#{entryYear} AND class_code=#{classCode}
         ORDER BY job_id DESC LIMIT 1
     </select>
+    <select id="selectRecoverableJobs" resultMap="JobResult">
+        SELECT * FROM biz_practical_ai_job
+        WHERE job_status IN ('PENDING','RUNNING','CANCEL_REQUESTED')
+        ORDER BY job_id
+    </select>
     <update id="updateJobStatus">
         UPDATE biz_practical_ai_job SET job_status=#{jobStatus}, start_time=COALESCE(#{startTime},start_time),
-          finish_time=#{finishTime}, error_message=#{errorMessage} WHERE job_id=#{jobId}
+          finish_time=#{finishTime}, error_message=#{errorMessage}, heartbeat_time=NOW(),
+          current_result_id=CASE WHEN #{jobStatus} IN ('PAUSED','CANCELLED','COMPLETED','PARTIAL_FAILED','FAILED')
+            THEN NULL ELSE current_result_id END
+        WHERE job_id=#{jobId}
+    </update>
+    <update id="updateJobPreparation">
+        UPDATE biz_practical_ai_job
+        SET preparation_status=#{preparationStatus}, comparison_pages_json=#{comparisonPagesJson,jdbcType=VARCHAR},
+            error_message=#{errorMessage,jdbcType=VARCHAR}, heartbeat_time=NOW()
+        WHERE job_id=#{jobId}
+    </update>
+    <update id="updateJobHeartbeat">
+        UPDATE biz_practical_ai_job SET heartbeat_time=NOW(), current_result_id=#{currentResultId,jdbcType=BIGINT}
+        WHERE job_id=#{jobId}
     </update>
     <update id="updateJobCounts">
         UPDATE biz_practical_ai_job job SET
@@ -85,8 +114,8 @@
 
     <insert id="insertResult" useGeneratedKeys="true" keyProperty="resultId">
         INSERT INTO biz_practical_ai_result
-          (job_id,answer_id,practical_version_id,rubric_snapshot_id,result_status,create_time)
-        VALUES (#{jobId},#{answerId},#{practicalVersionId},#{rubricSnapshotId},#{resultStatus},NOW())
+          (job_id,answer_id,practical_version_id,rubric_snapshot_id,result_status,processing_stage,create_time)
+        VALUES (#{jobId},#{answerId},#{practicalVersionId},#{rubricSnapshotId},#{resultStatus},'WAITING',NOW())
     </insert>
     <select id="selectResult" resultMap="AiResult">SELECT * FROM biz_practical_ai_result WHERE result_id=#{resultId}</select>
     <select id="selectResultsByJob" resultMap="AiResult">SELECT * FROM biz_practical_ai_result WHERE job_id=#{jobId} ORDER BY result_id</select>
@@ -94,18 +123,50 @@
         UPDATE biz_practical_ai_result SET result_status=#{resultStatus},suggested_score=#{suggestedScore},
           scoring_details_json=#{scoringDetailsJson,jdbcType=VARCHAR},evidence_json=#{evidenceJson,jdbcType=VARCHAR},
           confidence=#{confidence},provider_request_id=#{providerRequestId},prompt_tokens=#{promptTokens},
-          completion_tokens=#{completionTokens},error_message=#{errorMessage},finish_time=#{finishTime}
-        WHERE result_id=#{resultId} AND practical_version_id=#{practicalVersionId}
+          completion_tokens=#{completionTokens},error_message=#{errorMessage},finish_time=#{finishTime},
+          processing_stage=#{processingStage},stage_updated_time=NOW(),duration_ms=#{durationMs}
+        WHERE result_id=#{resultId} AND practical_version_id=#{practicalVersionId} AND result_status='PROCESSING'
+    </update>
+    <update id="markResultProcessing">
+        UPDATE biz_practical_ai_result
+        SET result_status='PROCESSING',processing_stage=#{processingStage},processing_started_time=NOW(),
+            stage_updated_time=NOW(),finish_time=NULL,error_message=NULL,attempt_count=attempt_count+1
+        WHERE result_id=#{resultId} AND result_status='PENDING'
+    </update>
+    <update id="updateResultStage">
+        UPDATE biz_practical_ai_result SET processing_stage=#{processingStage},stage_updated_time=NOW()
+        WHERE result_id=#{resultId} AND result_status='PROCESSING'
+    </update>
+    <update id="resetInterruptedResults">
+        UPDATE biz_practical_ai_result
+        SET result_status='PENDING',processing_stage='WAITING',processing_started_time=NULL,
+            stage_updated_time=NOW(),error_message=NULL,finish_time=NULL
+        WHERE job_id=#{jobId} AND result_status='PROCESSING'
     </update>
     <update id="resetFailedResults">
         UPDATE biz_practical_ai_result SET result_status='PENDING',suggested_score=NULL,scoring_details_json=NULL,
           evidence_json=NULL,confidence=NULL,provider_request_id=NULL,prompt_tokens=NULL,completion_tokens=NULL,
-          error_message=NULL,finish_time=NULL WHERE job_id=#{jobId} AND result_status='FAILED'
+          error_message=NULL,finish_time=NULL,processing_stage='WAITING',processing_started_time=NULL,
+          stage_updated_time=NOW(),duration_ms=NULL WHERE job_id=#{jobId} AND result_status='FAILED'
     </update>
     <update id="updatePendingResultsStatus">
-        UPDATE biz_practical_ai_result SET result_status=#{resultStatus},error_message=#{errorMessage},finish_time=#{finishTime}
-        WHERE job_id=#{jobId} AND result_status='PENDING'
+        UPDATE biz_practical_ai_result SET result_status=#{resultStatus},error_message=#{errorMessage},finish_time=#{finishTime},
+          processing_stage=CASE WHEN #{resultStatus}='CANCELLED' THEN 'CANCELLED' ELSE processing_stage END,
+          stage_updated_time=NOW(),duration_ms=CASE WHEN processing_started_time IS NULL THEN duration_ms
+            ELSE TIMESTAMPDIFF(MICROSECOND,processing_started_time,#{finishTime}) DIV 1000 END
+        WHERE job_id=#{jobId} AND result_status IN ('PENDING','PROCESSING')
     </update>
+    <insert id="insertEvent" useGeneratedKeys="true" keyProperty="eventId">
+        INSERT INTO biz_practical_ai_event(job_id,result_id,event_level,event_stage,event_message,create_time)
+        VALUES(#{jobId},#{resultId,jdbcType=BIGINT},#{eventLevel},#{eventStage},#{eventMessage},NOW())
+    </insert>
+    <select id="selectEvents" resultMap="AiEvent">
+        SELECT event_id,job_id,result_id,event_level,event_stage,event_message,create_time
+        FROM biz_practical_ai_event
+        WHERE job_id=#{jobId}
+        <if test="afterEventId != null and afterEventId > 0">AND event_id &gt; #{afterEventId}</if>
+        ORDER BY event_id DESC LIMIT #{limit}
+    </select>
     <update id="updateApplyStatus">
         UPDATE biz_practical_ai_result
         SET apply_status=#{applyStatus}, applied_by_user_id=#{appliedByUserId,jdbcType=BIGINT},

@@ -13,6 +13,9 @@ export function uploadAiReferenceAnswer(data) {
   return request({ url: `${base}/reference-answer`, method: 'post', data, headers: { 'Content-Type': 'multipart/form-data' } })
 }
 export function getAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}`, method: 'get' }) }
+export function getAiJobEvents(jobId, afterEventId = 0) {
+  return request({ url: `${base}/jobs/${jobId}/events`, method: 'get', params: { afterEventId } })
+}
 export function pauseAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}/pause`, method: 'post' }) }
 export function resumeAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}/resume`, method: 'post' }) }
 export function cancelAiJob(jobId) { return request({ url: `${base}/jobs/${jobId}/cancel`, method: 'post' }) }
