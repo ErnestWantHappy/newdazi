@@ -112,7 +112,7 @@
     </el-card>
 
     <!-- 主工作区 -->
-    <div class="grading-main" v-loading="loading">
+    <div ref="gradingMainRef" class="grading-main" v-loading="loading">
       <!-- 左侧：学生列表 -->
       <div class="student-list-panel">
          <div class="panel-title">
@@ -538,6 +538,7 @@ let scoringDetailsRequestId = 0;
 
 const isFullscreen = ref(false);
 const gradingPageRef = ref(null);
+const gradingMainRef = ref(null);
 const scoreInputRef = ref(null);
 
 // P6: 分项评分相关状态
@@ -811,6 +812,21 @@ function setItemInputRef(el, index) {
     }
 }
 
+// 自动聚焦只能选中评分框，不能把整个三栏工作区一起滚走。
+function focusScoreInput(input) {
+    if (!input) return;
+    try {
+        input.focus({ preventScroll: true });
+    } catch (e) {
+        input.focus();
+    }
+    input.select();
+    if (gradingMainRef.value) {
+        gradingMainRef.value.scrollTop = 0;
+        gradingMainRef.value.scrollLeft = 0;
+    }
+}
+
 // P6: 回车切换下一项或提交
 function onItemEnter(index) {
     if (submitting.value) return;
@@ -821,8 +837,7 @@ function onItemEnter(index) {
             if (nextInput && nextInput.$el) {
                 const input = nextInput.$el.querySelector('input');
                 if (input) {
-                    input.focus();
-                    input.select(); // 自动选中内容，方便直接输入
+                    focusScoreInput(input);
                 }
             }
         });
@@ -840,8 +855,7 @@ function focusFirstItem() {
             if (itemInputRefs.value.length > 0 && itemInputRefs.value[0]) {
                 const input = itemInputRefs.value[0].$el?.querySelector('input');
                 if (input) {
-                    input.focus();
-                    input.select(); // 自动选中内容
+                    focusScoreInput(input);
                 }
             }
         }, 50);
@@ -1300,9 +1314,8 @@ function selectStudent(student, index) {
                 focusFirstItem();
             } else if (scoreInputRef.value) {
                 // 直接打分模式：聚焦总分输入框
-                scoreInputRef.value.focus();
                 const input = scoreInputRef.value.$el?.querySelector('input');
-                if (input) input.select();
+                focusScoreInput(input);
             }
         }, 100); // 增加延时确保DOM更新完成
     });
@@ -1752,6 +1765,7 @@ function autoFocusItem() {
 
 .grading-main {
   flex: 1;
+  min-height: 0;
   display: flex;
   gap: 10px;
   overflow: hidden;
@@ -1759,6 +1773,7 @@ function autoFocusItem() {
 
 .student-list-panel {
   width: 250px;
+  min-height: 0;
   background: #fff;
   border-radius: 4px;
   display: flex;
@@ -1863,6 +1878,7 @@ function autoFocusItem() {
 
 .preview-panel {
   flex: 1;
+  min-height: 0;
   background: #fff;
   border-radius: 4px;
   display: flex;
@@ -1949,6 +1965,8 @@ function autoFocusItem() {
 
 .scoring-panel {
   width: 300px;
+  min-height: 0;
+  overflow-y: auto;
   background: #fff;
   border-radius: 4px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
