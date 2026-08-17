@@ -6,7 +6,7 @@ import org.apache.ibatis.annotations.Param;
 import com.ruoyi.business.domain.CollaborationRoom;
 import com.ruoyi.business.domain.CollaborationUploadTicket;
 
-/** 在线协作房间、文件版本和 WPS 保存票据持久化。 */
+/** 在线协作房间、文件版本和历史 WPS 票据持久化。 */
 public interface CollaborationMapper
 {
     CollaborationRoom selectRoomById(@Param("roomId") Long roomId);
@@ -89,4 +89,3 @@ public interface CollaborationMapper
                             @Param("errorMessage") String errorMessage,
                             @Param("createTime") Date createTime);
 }
-

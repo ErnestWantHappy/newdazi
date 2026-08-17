@@ -7,6 +7,7 @@ public class CollaborationRoom
 {
     private Long roomId;
     private String provider;
+    private String providerSessionKey;
     private String publicFileId;
     private Long lessonId;
     private Long questionId;
@@ -38,6 +39,8 @@ public class CollaborationRoom
     public void setRoomId(Long roomId) { this.roomId = roomId; }
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
+    public String getProviderSessionKey() { return providerSessionKey; }
+    public void setProviderSessionKey(String providerSessionKey) { this.providerSessionKey = providerSessionKey; }
     public String getPublicFileId() { return publicFileId; }
     public void setPublicFileId(String publicFileId) { this.publicFileId = publicFileId; }
     public Long getLessonId() { return lessonId; }
@@ -91,4 +94,3 @@ public class CollaborationRoom
     public Date getUpdateTime() { return updateTime; }
     public void setUpdateTime(Date updateTime) { this.updateTime = updateTime; }
 }
-

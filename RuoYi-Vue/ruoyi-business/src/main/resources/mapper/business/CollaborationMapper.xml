@@ -5,6 +5,7 @@
     <resultMap id="RoomResult" type="com.ruoyi.business.domain.CollaborationRoom">
         <id property="roomId" column="room_id"/>
         <result property="provider" column="provider"/>
+        <result property="providerSessionKey" column="provider_session_key"/>
         <result property="publicFileId" column="public_file_id"/>
         <result property="lessonId" column="lesson_id"/>
         <result property="questionId" column="question_id"/>
@@ -55,7 +56,7 @@
         <result property="updateTime" column="update_time"/>
     </resultMap>
 
-    <sql id="roomColumns">room_id, provider, public_file_id, lesson_id, question_id, source_material_id,
+    <sql id="roomColumns">room_id, provider, provider_session_key, public_file_id, lesson_id, question_id, source_material_id,
         dept_id, entry_year, class_code, room_title, status, current_version, current_file_name,
         current_file_path, current_file_extension, current_mime_type, current_file_size, current_sha256,
         creator_user_id, modifier_user_id, last_open_time, last_save_time, last_callback_type,
@@ -80,12 +81,12 @@
 
     <insert id="insertRoom" useGeneratedKeys="true" keyProperty="roomId">
         INSERT INTO biz_collab_room
-        (provider, public_file_id, lesson_id, question_id, source_material_id, dept_id, entry_year,
+        (provider, provider_session_key, public_file_id, lesson_id, question_id, source_material_id, dept_id, entry_year,
          class_code, room_title, status, current_version, current_file_name, current_file_path,
          current_file_extension, current_mime_type, current_file_size, current_sha256,
          creator_user_id, modifier_user_id, create_time, update_time)
         VALUES
-        (#{provider}, #{publicFileId}, #{lessonId}, #{questionId}, #{sourceMaterialId}, #{deptId},
+        (#{provider}, #{providerSessionKey}, #{publicFileId}, #{lessonId}, #{questionId}, #{sourceMaterialId}, #{deptId},
          #{entryYear}, #{classCode}, #{roomTitle}, #{status}, #{currentVersion}, #{currentFileName},
          #{currentFilePath}, #{currentFileExtension}, #{currentMimeType}, #{currentFileSize},
          #{currentSha256}, #{creatorUserId}, #{modifierUserId}, #{createTime}, #{updateTime})
@@ -154,4 +155,3 @@
                 #{userId}, #{remoteIp}, #{durationMs}, #{errorCode}, #{errorMessage}, #{createTime})
     </insert>
 </mapper>
-
