@@ -30,6 +30,10 @@ public interface CollaborationMapper
 
     int reopenRoom(@Param("roomId") Long roomId, @Param("status") String status);
 
+    int updateRoomProvider(@Param("roomId") Long roomId,
+                           @Param("provider") String provider,
+                           @Param("providerSessionKey") String providerSessionKey);
+
     int markRoomOpened(@Param("roomId") Long roomId, @Param("openTime") Date openTime);
 
     int updateRoomCallback(@Param("roomId") Long roomId,

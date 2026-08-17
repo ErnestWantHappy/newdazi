@@ -29,6 +29,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.config.WpsWebOfficeProperties;
+import com.ruoyi.business.provider.CryptPadAdapter;
+import com.ruoyi.business.provider.MockCollaborationProvider;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizStudent;
@@ -46,7 +48,7 @@ import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 
-/** 在线协作业务层：课程和班级归平台，WPS 只是编辑器。 */
+/** 在线协作业务层：课程和班级归平台，编辑器通过 Provider 接入。 */
 @Service
 public class CollaborationRoomService
 {
@@ -58,6 +60,9 @@ public class CollaborationRoomService
     @Value("${collaboration.enabled:false}")
     private boolean enabled;
 
+    @Value("${collaboration.provider:}")
+    private String provider;
+
     @Autowired private WpsWebOfficeProperties properties;
     @Autowired private CollaborationMapper collaborationMapper;
     @Autowired private BizLessonMapper lessonMapper;
@@ -66,9 +71,13 @@ public class CollaborationRoomService
     @Autowired private PracticalArtifactMapper artifactMapper;
     @Autowired private BizStudentMapper studentMapper;
     @Autowired private CollaborationTokenService tokenService;
+    @Autowired private CryptPadAdapter cryptPadAdapter;
+    @Autowired private MockCollaborationProvider mockCollaborationProvider;
+    @Autowired private CollaborationSecretService secretService;
 
     public Map<String, Object> health()
     {
+        if (isCryptPadProvider()) return cryptPadHealth();
         PublicAddressAssessment publicAddress = assessPublicAddress(properties.getPublicBaseUrl());
         boolean writable = storageWritable();
         Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -183,13 +192,20 @@ public class CollaborationRoomService
         requireReady();
         collaborationMapper.markRoomOpened(roomId, new Date());
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("appId", properties.getAppId());
-        result.put("fileId", room.getPublicFileId());
-        result.put("officeType", officeType(room.getCurrentFileExtension()));
-        result.put("token", tokenService.issue(userId, roomId, scope));
-        result.put("tokenTimeout", properties.getTokenMinutes() * 60_000L);
-        result.put("sdkUrl", properties.getSdkUrl());
-        result.put("endpoint", properties.getEndpoint());
+        if (isCryptPadProvider())
+        {
+            result.putAll(cryptPadAdapter.session(room, userId, scope));
+        }
+        else
+        {
+            result.put("appId", properties.getAppId());
+            result.put("fileId", room.getPublicFileId());
+            result.put("officeType", officeType(room.getCurrentFileExtension()));
+            result.put("token", tokenService.issue(userId, roomId, scope));
+            result.put("tokenTimeout", properties.getTokenMinutes() * 60_000L);
+            result.put("sdkUrl", properties.getSdkUrl());
+            result.put("endpoint", properties.getEndpoint());
+        }
         result.put("room", publicRoom(room, true));
         result.put("readOnly", "READ_ONLY".equals(room.getStatus()));
         return result;
@@ -207,6 +223,14 @@ public class CollaborationRoomService
         CollaborationRoom room = collaborationMapper.selectRoomByPublicFileId(fileId);
         if (room == null) throw new ServiceException("协作文档不存在");
         return room;
+    }
+
+    /** 文档下载和保存接口共用同一套平台房间权限校验。 */
+    public String assertRoomAccess(Long roomId)
+    {
+        CollaborationRoom room = requireRoom(roomId);
+        if ("CLOSED".equals(room.getStatus())) throw new ServiceException("该班级协作房间已关闭");
+        return requireRoomAccess(room, SecurityUtils.getUserId());
     }
 
     public Path resolveStoredFile(String relativePath)
@@ -234,6 +258,11 @@ public class CollaborationRoomService
         {
             if (!material.getMaterialId().equals(existing.getSourceMaterialId()))
                 throw new ServiceException("已有班级房间使用另一份起始文件，请新建操作题后再切换模板");
+            if (!providerName().equalsIgnoreCase(StringUtils.defaultString(existing.getProvider())))
+            {
+                String key = isCryptPadProvider() ? secretService.encrypt(secretService.generateKey()) : null;
+                collaborationMapper.updateRoomProvider(existing.getRoomId(), providerName(), key);
+            }
             collaborationMapper.reopenRoom(existing.getRoomId(), "OPEN");
             return;
         }
@@ -249,7 +278,8 @@ public class CollaborationRoomService
         String sha256 = digest(target, "SHA-256");
         Date now = new Date();
         CollaborationRoom room = new CollaborationRoom();
-        room.setProvider("WPS");
+        room.setProvider(providerName());
+        if (isCryptPadProvider()) room.setProviderSessionKey(secretService.encrypt(secretService.generateKey()));
         room.setPublicFileId(fileId);
         room.setLessonId(lesson.getLessonId());
         room.setQuestionId(material.getQuestionId());
@@ -324,7 +354,7 @@ public class CollaborationRoomService
                 item.put("fileExtension", extension);
                 item.put("fileSize", material.getFileSize());
                 item.put("withinTestLimit", material.getFileSize() == null
-                        || material.getFileSize() <= properties.getTestMaxFileBytes());
+                        || material.getFileSize() <= maxFileBytes());
                 result.add(item);
             }
         }
@@ -348,11 +378,11 @@ public class CollaborationRoomService
     private void validateMaterial(PracticalQuestionMaterial material) throws IOException
     {
         String extension = normalizeExtension(material.getFileExtension(), material.getOriginalFileName());
-        if (!EDITABLE_EXTENSIONS.contains(extension)) throw new ServiceException("WPS PoC 仅支持可编辑的 Word、Excel、PPT 文件");
+        if (!EDITABLE_EXTENSIONS.contains(extension)) throw new ServiceException("在线协作仅支持可编辑的 Word、Excel、PPT 文件");
         Path source = resolveMaterialPath(material.getResourcePath());
         if (!Files.isRegularFile(source)) throw new ServiceException("操作题起始文件在服务器上不存在");
-        if (Files.size(source) > properties.getTestMaxFileBytes())
-            throw new ServiceException("文件超过 WPS 免费测试版 5MB 限制，请换小文件验证");
+        if (Files.size(source) > maxFileBytes())
+            throw new ServiceException("文件超过在线协作单文件限制，请换用较小文件");
     }
 
     private Path resolveMaterialPath(String resourcePath)
@@ -372,9 +402,48 @@ public class CollaborationRoomService
 
     private void requireReady()
     {
+        if (isCryptPadProvider())
+        {
+            if (!cryptPadAdapter.ready()) throw new ServiceException("CryptPad 尚未就绪，请检查外置配置");
+            return;
+        }
         @SuppressWarnings("unchecked")
         List<String> problems = (List<String>) health().get("problems");
         if (!problems.isEmpty()) throw new ServiceException("WPS PoC 尚未就绪：" + String.join("；", problems));
+    }
+
+    private boolean isCryptPadProvider()
+    {
+        return "CRYPTPAD".equalsIgnoreCase(StringUtils.defaultString(provider));
+    }
+
+    private String providerName()
+    {
+        if (isCryptPadProvider()) return "CRYPTPAD";
+        if ("MOCK".equalsIgnoreCase(StringUtils.defaultString(provider))) return "MOCK";
+        return "WPS";
+    }
+
+    private long maxFileBytes()
+    {
+        return isCryptPadProvider() ? 50L * 1024L * 1024L : properties.getTestMaxFileBytes();
+    }
+
+    private Map<String, Object> cryptPadHealth()
+    {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("enabled", enabled);
+        result.put("provider", providerName());
+        result.put("storageWritable", storageWritable());
+        result.put("maxFileBytes", maxFileBytes());
+        result.putAll(cryptPadAdapter.health());
+        List<String> problems = new ArrayList<String>();
+        if (!enabled) problems.add("未设置 COLLABORATION_ENABLED=true");
+        if (!cryptPadAdapter.ready()) problems.add("CryptPad 地址、集成脚本或密钥外置配置不完整");
+        if (!storageWritable()) problems.add("协作文档存储目录不可写");
+        result.put("ready", problems.isEmpty());
+        result.put("problems", problems);
+        return result;
     }
 
     private boolean hasOpenRoom(List<CollaborationRoom> rooms)

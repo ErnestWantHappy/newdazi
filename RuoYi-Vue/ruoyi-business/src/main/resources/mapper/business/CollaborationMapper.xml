@@ -99,6 +99,10 @@
     <update id="reopenRoom">
         UPDATE biz_collab_room SET status = #{status}, update_time = NOW() WHERE room_id = #{roomId}
     </update>
+    <update id="updateRoomProvider">
+        UPDATE biz_collab_room SET provider = #{provider}, provider_session_key = #{providerSessionKey},
+            update_time = NOW() WHERE room_id = #{roomId}
+    </update>
     <update id="markRoomOpened">
         UPDATE biz_collab_room SET last_open_time = #{openTime}, update_time = #{openTime} WHERE room_id = #{roomId}
     </update>
