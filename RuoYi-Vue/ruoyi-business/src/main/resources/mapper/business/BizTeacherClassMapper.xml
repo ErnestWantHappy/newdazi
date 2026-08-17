@@ -37,7 +37,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <!-- 查询指定教师管理的班级列表（带学生人数和学校名称） -->
-    <!-- 修复：统计学生数时必须加 dept_id 条件，避免统计到其他学校同年级班级的学生 -->
+    <!-- 学生人数先按当前学校一次聚合，避免每个班级各扫描一遍学生表。 -->
     <select id="selectTeacherClassListWithCount" resultMap="BizTeacherClassResult">
         select 
             tc.id,
@@ -47,13 +47,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             tc.class_code,
             tc.create_time,
             d.dept_name,
-            (select count(*) from biz_student s 
-             inner join sys_user u on s.user_id = u.user_id
-             where s.entry_year = tc.entry_year 
-               and s.class_code = tc.class_code 
-               and u.dept_id = tc.dept_id) as student_count
+            IFNULL(student_stats.student_count, 0) as student_count
         from biz_teacher_class tc
         left join sys_dept d on tc.dept_id = d.dept_id
+        left join (
+            select u.dept_id, s.entry_year, s.class_code, count(*) as student_count
+            from sys_user u
+            inner join biz_student s on s.user_id = u.user_id
+            where u.dept_id = #{deptId}
+              and u.status = '0'
+              and u.del_flag = '0'
+            group by u.dept_id, s.entry_year, s.class_code
+        ) student_stats
+          on student_stats.dept_id = tc.dept_id
+         and student_stats.entry_year = tc.entry_year
+         and student_stats.class_code = tc.class_code
         where tc.user_id = #{userId} and tc.dept_id = #{deptId}
         order by tc.entry_year desc, tc.class_code asc
     </select>

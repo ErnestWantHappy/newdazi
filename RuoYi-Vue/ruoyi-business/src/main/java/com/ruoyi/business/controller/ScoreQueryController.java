@@ -30,6 +30,8 @@ import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
+import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import javax.servlet.http.HttpServletResponse;
@@ -1026,7 +1028,10 @@ public class ScoreQueryController extends BaseController {
         // 输出
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
-        response.setHeader("Content-Disposition", "attachment; filename=scores.xlsx");
+        String classScope = org.apache.commons.lang3.StringUtils.isBlank(classCode)
+                ? "全部班级" : classCode.trim() + "班";
+        FileUtils.setAttachmentResponseHeader(response, DownloadFileNameUtils.withTimestamp(
+                "成绩汇总_" + entryYear.trim() + "级_" + classScope + ".xlsx"));
         wb.write(response.getOutputStream());
         wb.close();
     }

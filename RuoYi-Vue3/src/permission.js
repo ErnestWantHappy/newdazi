@@ -38,7 +38,7 @@ router.beforeEach((to, from, next) => {
             const roles = userStore.roles;
 
             usePermissionStore()
-              .generateRoutes()
+              .generateRoutes(roles)
               .then((accessRoutes) => {
                 accessRoutes.forEach((route) => {
                   if (!isHttp(route.path)) {

@@ -432,6 +432,7 @@ import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, 
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
 import {
   exportGuideSheet,
   downloadGuideSheetUpload,
@@ -612,7 +613,8 @@ async function downloadUpload(row) {
     entryYear.value,
     classCode.value
   )
-  saveAs(response instanceof Blob ? response : new Blob([response]), row.fileName || '学生作品')
+  const blob = response instanceof Blob ? response : new Blob([response])
+  saveAs(blob, resolveBlobDownloadFilename(blob, `电子导学单_学生作品_${row.fileName || '附件'}`))
 }
 
 async function handleExport() {
@@ -622,7 +624,8 @@ async function handleExport() {
     classCode.value || undefined
   )
   const suffix = selectedClass.value ? `-${selectedClass.value.label}` : '-全部班级'
-  saveAs(new Blob([response]), `${sheetTitle.value || '导学单'}${suffix}-结果.xlsx`)
+  const blob = response instanceof Blob ? response : new Blob([response])
+  saveAs(blob, resolveBlobDownloadFilename(blob, `${sheetTitle.value || '导学单'}${suffix}_结果.xlsx`))
 }
 
 /** 获取学生自评数据 */

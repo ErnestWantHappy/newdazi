@@ -1,12 +1,126 @@
 # 信息科技学业测评平台 (Context)
 
-> **版本**：v2.71
-> **更新时间**：2026-08-09
+> **版本**：v2.99
+> **更新时间**：2026-08-16
 > **核心定位**：中小学信息科技 **教学 + 多维度测评**（选择/判断/操作/打字、批改、学情、导学单、区域抽测）。  
 > **文档用途**：多 AI / 人工接力的 **业务真相**；操作纪律见 `AGENTS.md`。  
 > **文档恢复**：2026-07-22 按方案 A，以热修/发布壳为底座，从 Git `main`（`a88cdcd` 重写前完整版，约 1113 行）回填业务语言、角色、流程、库表、规则与技术细节；机位锁等否决项仅作摘要，不恢复为待实现。
 
-> **当前焦点（2026-08-09：教师首页按课程开设年级分栏与首屏提速已发布 10.52.1.123，并通过郑东旭教师账号正式验收）**
+> **当前焦点（2026-08-16：角色菜单优先级与教师帮助中心 v5 署名已发布）**
+> 0. **角色菜单顺序**：教师顶级菜单固定为“教师首页 → 题库管理 → 成绩查询 → 学生管理 → 班级管理 → 教师工具 → 导学单管理 → 教研活动 → 学生个人成绩画像 → 免抽测申请 → 帮助中心”；教研员固定为“学校统计 → 课程与成绩监管 → 区域抽测 → 教研活动 → 免抽测申请审核 → 教师工具 → 导学单管理 → 学生管理 → 题库管理 → 系统管理 → 系统监控 → 帮助中心”。只调整前端顶级展示顺序，不改变权限或二级菜单；兼容若依把单菜单包装成根路径 `/` 的路由结构，帮助中心始终置底。
+> 1. **帮助中心 v5**：v4 的教师六步流程、多图长页、教程分支、角色边界和全部教程素材保持不变；顶部署名更新为“由象山县一线信息科技教师 **郑东旭主要开发，朱屹辅助支持** 设计并持续开发”。本轮仅修改这一处前端文案，不改变页面结构、路由、权限、后端或数据库。
+> 2. **学生导入防错**：学生管理界面班级选项限制 01～10；下载模板由前端直接生成并内置 01/2025/01 与 02/2025/02 两行示例，上传前解析 Excel，601、602 等带年级的三位班号会显示具体行号并停止上传。后端 `StudentImportRules`、示例模板和同规则校验也已在本机实现，专项测试 4/4 通过，但本次为避免把工作区其他未发布后端改动带入生产，正式环境只发布前端防错层，3009 未重启。
+> 3. **验证与发布**：菜单单测 4/4、学生导入后端专项测试 4/4 以及 v4 教师/教研员/390px 手机生产验收仍为既有功能基线；v5 使用同一隔离源，仅覆盖帮助中心署名后完成 Vue3 生产构建，产物中新署名精确匹配 1 次。正式 3010 release 为 `D:\program\3009dazipingtai\releases\20260816_181815_ab6d0d6_help_credit_v5`，发布 ZIP 6,702,908 bytes、SHA-256 `55AAD7A96C28B84FEEB0DF07028104C55ED6AD63C097CB2D3693D7B0D8306853`；Nginx 候选/正式检查与 reload 均为 0，活动配置 SHA-256 `527E608722098EACE6252D1D0C44BB2841B8A8D523DAA613CE4C24E0312FD082`。3010 首页、帮助路由、后端 API 与 3012 均为 HTTP 200；未登录浏览器访问帮助中心按预期跳转登录页，页面错误 0，本轮未擅自提交生产账号密码，因此未重复执行登录后全角色冒烟。回滚点为保留的 `20260816_162101_ab6d0d6_help_center_v4/frontend`，配置备份在 `D:\program\3009dazipingtai\backups\20260816_181815_help_credit_v5`；无 SQL、无数据库回滚，3009 未重启。
+
+> **上一焦点（2026-08-15：教师实用帮助中心 v3 与郑东旭个人主页 v6 已发布）**
+> 0. **帮助中心 v3 与角色边界**：根级“帮助中心”仍只允许 `admin / teacher / researcher` 加载，学生没有菜单。教师端通过现有学生、任教班级、题库、教师首页接口给出可容错的真实准备度提示。顶部不再用难以辨认的四宫格，而是用 1 张 1280×720 课程设计真实页面大图呈现“教学练评闭环”。教师看不到教研员/管理员治理内容；教研员/管理员不显示教师智能检查和教师六步流程。未新增后端、数据库、SQL 或权限模型。
+> 1. **署名与个人主页 v6**：登录页继续底部居中显示开发支持。所有登录后角色右下署名都可点击 `http://10.52.1.123:3012/`，链接无悬浮动画。个人主页源码仍独立位于 `D:\dmwprogram\zhengdongxu-portfolio`；首屏增加“00 后信息科技教师”，电话、微信二维码、深浅主题、GSAP/ScrollTrigger 与 Lenis 平滑滚动保留，小红书仍为 0。精选工具桌面固定画面与移动内嵌画面继续统一为 16:9、`object-fit: contain`；桌面固定画面改为在导航下方可用视口内垂直居中，1000px 高视口实测画面中心 489px、视口中心 500px，差 11px，短屏幕回退为顶部安全定位。
+> 2. **工具内容、真实入口与截图**：精选 6 项为 `AI信息科技学业测评系统`、`错题刷题系统 2.0`、`AI 学业评价系统`、`小型网络搭建仿真网页`、`AI 音乐学习工具 2.0`、`本地班主任工作台`，班级电子宠物不再重点展示；完整档案由 18 增至 19。入口拆为“打开工具 / 抖音展示 / 网盘获取”；信息科技测评指向 `http://xxkj.xsedu.net.cn/`，错题指向 `/aicuoti/`，AI 学业评价指向 `/aiquanxuekexiangshan/`，网络仿真指向 `:3020`。AI 音乐显示演示账号 `zdx` 和密码 `123456`，跨站需手动填写。v5 从真实站点重新采集全部 6 张 1600×900 截图：网络仿真图实际放置 8 类设备并生成真实连接，不再是空画布；AI 音乐改为“教师出乐谱 + 学校歌曲库”，不再使用空成绩页。采集报告 `D:\dmwprogram\zhengdongxu-portfolio\public\project-media\capture-report.json` 为 `passed=true`。
+> 3. **班主任工作台与服务器台账**：按用户确认的方案 1，把纯静态班主任工作台复制到个人主页 `public/tools/banzhuren/`，正式地址 `http://10.52.1.123:3012/tools/banzhuren/`，复用 3012 且不新增端口。服务器桌面已建立 `C:\Users\Administrator\Desktop\10.52.1.123-项目与端口台账.md`；仓库同步维护 `contexts/server-project-port-registry.md`，台账 SHA-256 `C345345C6004C4E56737AF9E015B3C95E74C011A0ECAC0F3FA313AA3E8078154`。
+> 4. **六步真实页面教程**：教师流程固定为“确认学生 → 认领班级 → 准备题目 → 新建课程 → 学生作答 → 批改学情”。每一步用一张对应的 1280×720 正式环境功能截图整行展示，并同时提供“打开对应功能”和“查看图文教程”两个入口；教程抽屉复用该步骤截图，显示 4～5 条具体操作，不再另设重复的小教程卡片。六张截图来源依次为学生管理、班级管理、题库、课程设计器、学生任务、操作题批改，采集报告 `output/playwright/help-step-screenshots/report.json` 为 `passed=true`。
+> 5. **隔离构建与正式发布**：3010 从 Git `ab6d0d6` 干净 worktree 仅叠加既有生产登录页、教师工具依赖、帮助中心、路由、署名与素材，2696 modules 构建成功；v3 ZIP 5,933,169 bytes，SHA-256 `83FCEC90083B56470C27EDE3A474C3035941EE31418017551D561E6E37F127E2`。3010 release 仍为 `D:\program\3009dazipingtai\releases\20260815_192819_ab6d0d6_help_center_v3`；3012 已切换到 `D:\program\zhengdongxu-portfolio\releases\20260815_204500_portfolio_v6`。个人主页 v6 ZIP 13,118,776 bytes，SHA-256 `3F9D2290D735D989A21D5601713E70311E5F029A631FAD10D40A9748CBA22973`。Nginx 候选检查、正式检查、reload 均为 0，活动配置 SHA-256 `15C90DEF4C859A44E15F3C10476252BD1B1A903DE310379611F5A591E9476757`；3010 首页/API、3012 首页、荣誉预览与班主任子路径均为 200，3009 未重启。
+> 6. **生产验收与回滚**：帮助中心 `output/playwright/help-center-v3-production-smoke.json` 与个人主页 `D:\dmwprogram\zhengdongxu-portfolio\output\smoke-v6\report.json` 均为 `passed=true`，页面错误和失败资源均为 0。个人主页 6 张精选荣誉和 22 张时间线预览均为 1440×960 WebP；分类结果严格为讲座 5、本人获奖 4、指导学生 8、论文 3、公开课 2。桌面/390px 手机展开、筛选、灯箱、关闭、Esc、无横向溢出均通过，网页 PDF 链接和 PDF 网络请求均为 0。切换前 Nginx 备份在 `D:\program\zhengdongxu-portfolio\backups\20260815_204500_portfolio_v6`，备份配置 SHA-256 `D3EA61723671DD191E16663E752B166BE48CDD9D1321DFF3AB9FD8A2FEF07914`；回滚只需把 3012 root 切回保留的 `20260815_195300_portfolio_v5/frontend`，执行 `nginx -t` 和 reload，无数据库回滚。帮助中心 v3 的 3010 回滚点仍为 `20260815_184609_ab6d0d6_help_center_v2/frontend`。
+> 7. **荣誉档案与隐私边界**：个人主页首页重点展示 6 项成果，“查看全部 22 项”在原页展开按日期倒序的单列时间线，支持全部/讲座培训/本人获奖/指导学生/论文成果/公开课筛选；每项可打开 WebP 证明材料灯箱。原始 PDF 只作为本地制作来源，正式 release 中 PDF 数量严格为 0。本人姓名、学校、奖项、日期、公章保留；学生姓名、验证/群二维码和联系电话等第三方敏感信息在预览层遮挡。含完整参训名单、身份证尾号和手机号的原始材料绝不上传；详细决策见 `contexts/developer-profile-help/ADR-003-public-honor-previews-without-raw-pdfs.md`。
+
+> **并行焦点（2026-08-14：全平台下载文件统一命名已完成本地实现，待发布）**
+> 0. **统一规则**：磁盘和数据库中的原存储路径保持不变，用户下载时由后端统一给出展示文件名；名称清除路径、控制字符及 Windows 非法字符，最长 120 字符。批量导出统一为“业务名称 + 范围（接口有明确范围时）+ `yyyyMMdd_HHmmss` + 扩展名”，上传附件保留原扩展名并增加“课堂题目素材、学生操作题作品、电子导学单学生作品、教研活动课程资源”等业务前缀；无法恢复原名的 UUID 文件显示为“附件_时间戳”，不再暴露 UUID 或泛化英文名。
+> 1. **覆盖范围**：公共附件下载/预览、若依全部 `ExcelUtil` 导出、成绩汇总、区域抽测成绩、课程监管 CSV、代码生成 ZIP、电子导学单作品与结果、教研活动资源、WPS 存储回调，以及学生课堂素材和操作题作品均接入统一响应头。Vue3 的通用下载、Axios Blob 下载和直接 `saveAs` 下载均优先采用后端文件名，并兼容 `download-filename` 与标准 `Content-Disposition`。
+> 2. **安全与兼容**：资源权限校验、文件内容、文件存储名和历史路径均未改变；通用资源下载新增可选 `downloadName`，后端仍会清洗该值且下载前继续执行原资源访问授权。无需 SQL、无需数据库写入、无需新增依赖。
+> 3. **验证证据**：后端命名与响应头专项测试 5/5，前端响应头解析与清洗测试 3/3；`mvn -pl ruoyi-admin -am -DskipTests package` 成功，8 个后端模块全部构建；Vue3 `npm run build:prod` 成功（2685 modules，仅既有 vform `eval` 与大 chunk 警告）。`git diff --check` 无空白错误。
+> 4. **发布要求与风险**：本轮尚未发布到 `10.52.1.123`；生效需要同时发布新 JAR 和 Vue3 `dist`，重启 3009 并切换/重载 3010。由于本轮未启动本地完整服务，尚未做浏览器真实下载冒烟；发布前应抽查“系统 Excel 导出、成绩导出、普通附件、学生题目素材”四类，确认中文名、时间戳和扩展名正确。
+
+> **并行发布事实（2026-08-14：登录页三图轮播 v2 已前端独立发布）**
+> 0. **页面实现**：Vue3 登录页保留“信息科技知识展墙”“真实信息科技课堂”两张背景；第三张改为用户提供的真实象山海湾夜景航拍图，经克制的 16:9 横向扩图和画质整理后输出 1672×941 WebP，不添加数字光线、文字、虚构学校或建筑。轮播改为每 5 秒自动切换，背景使用 1.8 秒交叉淡入和 5.4 秒轻微缩放；底部指示点由按钮改为不可点击的纯状态 `span`，页面非输入状态下可用键盘 `←` / `→` 双向切换，账号、密码、验证码输入框内的方向键仍保持文本光标语义。系统开启“减少动态效果”时继续尊重无动画偏好。
+> 1. **隔离构建**：为避免把当前工作区尚未发布的下载命名、教师工具等改动误带上线，继续使用正式同基线 Git `ab6d0d6` 的隔离工作树，只复制本轮 `login.vue`、知识展墙、课堂和象山三张 WebP 后执行 `npm run build:prod`；2681 modules 构建成功。v2 发布包 5,687,145 bytes，SHA-256 `B81DEF1FA092221280B708083B19AA843D0782D8E1955A19340BAB2C89282A29`；`index.html` SHA-256 `F26CE583D847D36F2658F480D85B341B64AD76122DADD77ED4941EB153AE6A34`。产物中象山图为 `login-xiangshan-coast-v2-BC02xoNd.webp`、156,446 bytes，旧宁波合成图数量为 0。
+> 2. **正式发布**：3010 Nginx 根已切换到 `D:\program\3009dazipingtai\releases\20260814_220728_ab6d0d6_login_carousel_v2\frontend`；候选配置和正式配置 `nginx -t` 均通过，reload 成功，活动配置 SHA-256 `0A95F1F3616CBCF39B80ABF39B7CCEA16BBB3CCFEC4CB0FE97CC67EC5516B787`。本轮仍只发布前端，3009 未重启且继续使用 `20260814_203252_ab6d0d6_wps_retired` 后端；无 SQL、无数据库写入，无需数据库备份或回滚 SQL。
+> 3. **正式验收**：浏览器在 `http://10.52.1.123:3010/` 实测 3 个背景层和 3 个不可点击 `span` 指示点，按钮数量为 0；鼠标点击后索引不变，`←` 从第 1 张切到第 3 张、`→` 切回第 1 张，输入框内 `→` 不触发轮播；等待 5,229 ms 后自动切到第 2 张。第三张 URL 已指向新象山 WebP，登录框中心 `640` 与视口中心 `640` 一致。3009、3010、80 域名 Host、教师工具 3005、SIoT 18080 和新象山图片均为 HTTP 200。
+> 4. **备份与回滚**：v2 切换前 Nginx 配置备份位于 `D:\program\3009dazipingtai\backups\20260814_220728_ab6d0d6_login_carousel_v2_before_login_carousel_v2\nginx.conf.before`，SHA-256 `521A8AD7F674CB094296B9AE8F7191EA20F67AA1613D617D2EE0FC70E94A2DC7`。回滚只需恢复该配置（或把 3010 root 改回 `20260814_212801_ab6d0d6_login_carousel/frontend`），执行 `nginx -t` 和 reload；v1、v2 及更早 release 均保留，不动 3009 和数据库。
+
+> **并行运维事实（2026-08-11/14：生产服务器磁盘在线扩容已完成）**
+> 0. **扩容结果**：VMware 磁盘 0 已将 C 盘从 79.40 GiB 在线扩展到 99.40 GiB，增加约 20 GiB；VMware 磁盘 1 已将 D 盘从 99.98 GiB 在线扩展到 599.98 GiB，增加约 500 GiB。两次均使用 Windows 原生 `Resize-Partition` 将右侧连续未分配空间并入原 NTFS 卷，没有格式化、移动、删除或改名现有内容，盘符和既有路径保持不变。
+> 1. **最终证据**：磁盘 0/1 均为 GPT、Online、Healthy、非只读，未分配空间均为 0；C 盘可用 58,527,305,728 bytes（约 54.5 GiB），D 盘可用 607,510,876,160 bytes（约 565.8 GiB）。3009、3010、80、3005、18080 均为 HTTP 200。
+> 2. **影响边界**：未修改业务代码、数据库、NSSM、Nginx 或端口配置，未重启服务器或业务服务；现有发布、备份和上传路径继续使用 D 盘。扩容无需应用级回滚，不建议为回到旧容量而收缩生产卷。
+
+> **上一焦点（2026-08-14：WPS 在线协作已停用并发布；免费自托管替代方案待用户二选一）**
+> 0. **产品决策**：用户明确放弃 WPS WebOffice，原因是正式容量收费且依赖 WPS 云端访问公网回调网关；不再要求信息中心为 WPS 开放公共 DNS/NAT。在线协作目标不变：多个学校、每班独立房间、全班共同编辑同一份 Word/Excel/PPT、总并发至少 200；个人作品、考试、批改和物联网继续与在线协作解耦。
+> 1. **停用范围**：Vue3 已移除教师课程设计器协作面板、学生操作题协作入口、教师/学生直达编辑路由，并物理删除 WPS 前端 API、面板和编辑承载页三个文件。后端保留房间/版本模型作为迁移与回滚底座，但 `COLLABORATION_ENABLED=false` 时学生房间列表为空、会话不可创建、WPS 回调在读取/保存前直接返回“在线协作服务已停用”。四张协作表、历史房间和文件未删除，无 SQL、无数据库写入。
+> 2. **构建与验收**：`mvn -pl ruoyi-admin -am clean package` 成功，业务测试 291/291、admin 3/3；Vue3 `npm run build:prod` 成功，模块由 2689 降为 2684。生产管理员登录和协作健康接口均为 200，`enabled=false`、`ready=false`、WPS AppID 未配置；旧回调地址只能得到停用结果。Playwright 教师课程设计器与旧直达路由冒烟通过，WPS/在线协作入口不可见，页面错误和 HTTP 5xx 均为 0；证据为 `output/playwright/wps-retirement-server-smoke.json` 及两张截图。
+> 3. **正式发布与回滚**：3009/3010 已切换到 `D:\program\3009dazipingtai\releases\20260814_203252_ab6d0d6_wps_retired`；JAR SHA-256 `57FD2041683D2C77049C027835AAFA98F9307BCA36713A245D4A2A2B3175D538`，前端 `index.html` SHA-256 `74E13DD44FC70C7D76D4D60F548738B4BC7E230F94A251974D9D4E4A5E84EF5B`。活动 NSSM 中 6 个 `WPS_WEBOFFICE_*` 变量已移除，3009/3010 均为 HTTP 200。备份位于 `D:\program\3009dazipingtai\backups\20260814_203252_ab6d0d6_wps_retired_before_wps_retirement`，包含 NSSM 注册表和两套 Nginx 配置；旧 release 均保留，可恢复备份后重启回滚。
+> 4. **Nginx 顺带修复**：正式 D 盘 Nginx 原配置有三处历史行粘连：WPS callback 注释与 `location`、WPS storage 注释与 `location`、xxkj 注释与 `server` 拼在同一行，旧主进程尚能服务但任何 reload 都会失败。本次在备份后拆行，`nginx -t` 已通过并成功 reload；`xxkj` 仍代理 3010，`aitool` 导航栏根未改变。
+> 5. **替代引擎调研**：旧 `LibreOffice/online` 是历史镜像，当前活跃路线是 Collabora Online；免费 CODE 官方明确只适合测试/个人/小团队，不建议生产，仍需平台实现 WOPI 且 200 人必须压测。免费 Umo Editor 只是 Vue3/Tiptap 类 Word 编辑器，官方多人协作和 Office 导入导出属于商业版 Next/Server；截图中的 “Umo Editor Engine” 无可核验官方仓库。Yjs 只是 CRDT 同步引擎。ONLYOFFICE CE 有 20 连接限制，Univer 实时协作/导入导出属于 Pro，SuperDoc 只覆盖 DOCX。
+> 6. **当前推荐与门禁**：首选验证 CryptPad Integration API：AGPL 自托管、Document/Spreadsheet/Presentation 使用浏览器端 OnlyOffice 代码但不使用 Document Server，无第三方公网回调，平台可通过 API 传文件/同班会话密钥并在 `onSave` 接回版本；仍须核对 AGPL、真实教学文件兼容和 200 人容量。备选为 Collabora CODE + WOPI。正式服务器现状为 Docker 未安装、Hyper-V/WSL/VirtualMachinePlatform 全部 Disabled，因此两种方案都应使用独立 Debian VM。详细对比和 P0～P3 验收见 `contexts/online-collaboration/provider-research-20260814.md`；用户确认 CryptPad 或 Collabora 前，不新增依赖、SQL 或替代引擎代码。
+
+> **上一焦点（2026-08-12：在线协作学生鉴权已修复并发布；WPS 真实联机被公网 DNS/NAT 阻塞）**
+> 0. **真实故障结论**：教师打开房间失败并非 AppID、签名或 WPS“可用范围”导致。WPS 调用日志明确为 `40007 ProviderError`，其云端 DNS 对 `xxkj.xsedu.net.cn` 返回 `no such host`；本机、服务器以及显式公共 DNS 查询均只得到私网地址 `10.52.1.123`。域名能够在教育内网打开，不等于 WPS 公有云能够解析和访问。学生“当前操作没有权限”是另一条独立故障：正式房间 1、课程 268、指派、学生楼尚岑的学校 169、届别 2025、班号 1 完全一致，但该班 46 名学生均未维护 `sys_user_role`，原控制器却先用 `student` 系统角色拦截。
+> 1. **代码修复与安全边界**：`CollaborationController` 的学生当前房间和房间会话接口不再依赖缺失的系统角色；匿名请求仍由 Spring Security 统一拒绝，业务层继续要求学生的学校、届别、班号和当前课程全部与房间一致，教师仍须本校且为课程创建人/管理员。`CollaborationRoomService` 健康检查改为真实解析公网基础地址，私网、回环、链路本地和 IPv6 唯一本地地址均判为不可公网回调；创建 WPS 会话前强制执行健康门禁，教师/学生现在会看到域名、解析地址和“配置公网 DNS + 反向代理/NAT”的中文原因，而不是 WPS 灰屏。
+> 2. **验证证据**：协作鉴权、跨班拒绝、权限先于网络诊断、私网回调识别、Token 与 WPS-2 签名专项测试 12/12；`mvn -pl ruoyi-admin -am clean package` 成功，业务测试 290/290、admin 3/3。生产教师登录成功，健康接口为 200、`ready=false`、解析地址仅 `10.52.1.123`；合法学生 `2025720104` 登录成功，`/business/collaboration/student/current` 从 403 修复为 200，并只返回房间 1；匿名请求仍为 401。教师和学生请求房间 1 均得到相同的可操作 DNS 诊断。浏览器复核中学生首页显示“本班共同编辑”，进入后显示该诊断，不再显示“当前操作没有权限”。
+> 3. **生产发布与回滚**：3009 已切换到 `D:\program\3009dazipingtai\releases\20260812_211200_ab6d0d6_wps_auth_dns_fix_r2`，JAR SHA-256 `EE1BF5E3D11C91D6F65FE1958BB6F9906D7F27B9368C062B1A8A7E429D161A73`；NSSM 为 Running，3009/3010/域名 80/教师工具 3005/SIoT 18080 均为 HTTP 200，WPS 与 AI 环境变量原样保留。本轮无 SQL、无数据库写入。切换前 NSSM 注册表备份在 `D:\program\3009dazipingtai\backups\20260812_211200_before_wps_auth_dns_fix_r2\NewDaziBackend3009.reg`；应用回滚可先切回保留的 `20260812_210300_ab6d0d6_wps_auth_dns_fix`，必要时再切回 `20260811_225246_ab6d0d6_wps_weboffice_configured` 后端路径并重启。
+> 4. **WPS 后台结论**：截图确认“在线预览编辑”能力已经开启；“权限管理 → 可用范围”为空不是本次 JSSDK 文件回调失败原因，当前请求在到达平台权限回调前已经死于 WPS 云端 DNS。回调网关仍应填写“网关前缀”而不是单个接口地址，并开启平台已实现的文件信息、下载地址、权限、批量用户、上传准备、上传地址、上传完成回调；但在公网 DNS/NAT 完成前，继续调整这些开关不能解决 `no such host`。
+> 5. **当前唯一放行门禁**：信息中心必须让 `xxkj.xsedu.net.cn` 在互联网 DNS 中解析到公网 IP，并由公网 80/443 反向代理或 NAT 原样转发到 `10.52.1.123:3010`；不能继续把公网 A 记录直接写成 `10.52.1.123`。若使用教育专网专线，则需信息中心与 WPS 确认 WPS Solution 回调出口 IP 的路由和白名单。完成后先复核 WPS 日志不再是 DNS 错误，再进行两名同班学生 + 一名异班学生的打开、共同编辑、保存版本递增闭环；此前不得宣称在线协作“真实可用”。
+
+> **上一焦点（2026-08-11：WPS WebOffice 测试应用已在生产启用，服务端协议验证通过，等待真实房间多人联机）**
+> 0. **产品边界**：在线协作与物联网继续是两个独立功能。本 PoC 不开发 Office 软件，不替代学生个人操作题作品或考试；教师从课程内操作题 `STARTER` 文件选择一份 Word/Excel/PPT，平台按课程当前指派的 `学校 + 届别 + 班号` 各创建一个房间，同班编辑同一 `fileId`，异班使用不同文件副本。教师可进入、查看版本和回调诊断，也可复制只允许本班已登录学生进入的链接。
+> 1. **平台实现**：新增独立 `biz_collab_room`、`biz_collab_revision`、`biz_collab_upload_ticket`、`biz_collab_callback_event` 四表及 `sql/wps_weboffice_collaboration_poc_v1.sql`；房间、权限、当前文件和不可变版本归平台持有，WPS 只作为编辑器提供方。题库起始文件仅复制，原文件不修改；关闭房间只改状态并保留历史。教师课程设计器新增 WPS PoC 设置和每班诊断表，学生操作题新增“进入在线协作空间”，Vue3 新增共用编辑器承载页。专题需求、设计、任务和决策见 `contexts/online-collaboration/`。
+> 2. **WPS 协议与安全**：已按官方协议实现文件信息、下载地址、文档权限、批量用户信息，以及当前推荐的三阶段保存 `prepare → address → 一次性 PUT → complete`；每次完成保存递增版本并保留旧文件。公网回调使用 `@Anonymous` 绕过平台 JWT，但强制校验 WPS-2 的 AppID、Date 时间窗、Body/URI MD5 和 SHA1 签名，同时校验平台 HMAC-SHA256 短期 Token；下载使用短期用途 Token，上传使用 15 分钟一次性票据。AppID、AppSecret、Token 密钥、公网基础地址、官方 JSSDK 地址全部为外置环境变量，仓库和上下文不含真实凭据。
+> 3. **数据库证据**：本机写库前完整备份为 `D:\dmwprogram\newdazipingtai\backups\20260811_201654_local_before_wps_weboffice_poc\xueyeceping_server_20260729.sql`，81,580,741 bytes，SHA-256 `AACB882CE08B920B05209A606EF559BCACF75664EBF7708706B7BD6C94729FCF`。正式库写入前完整备份为 `D:\program\3009dazipingtai\backups\20260811_203410_ab6d0d6_before_wps_weboffice_poc\ry-vue.sql`，76,987,373 bytes，SHA-256 `A133614E84B73319E1469854BC7C02447C10AEDE6784477787D3690EA3AF017A`。增量 SQL SHA-256 `FEDC209D24700264B84F371248332F4AE0E6D495367E9CE46AFE7DBA00E70C5A`；本机和正式库首次、重复执行均成功。激活验收产生 4 条唯一测试 fileId 回调事件，先把事件表备份为 `D:\program\3009dazipingtai\backups\20260811_225246_before_wps_activation\biz_collab_callback_event_before_probe_cleanup.sql`，3,772 bytes，SHA-256 `AAE98C355D9A416398DADB61ACC2409FC4F3F49CD9BFA4292D45C946143F3E59`，再执行 `sql/cleanup_wps_activation_probes_20260811.sql` 精确删除 4 条，探针残留为 0；没有修改真实房间、课程、题目、学生答案或成绩。
+> 4. **验证证据**：短期 Token 与 WPS-2 官方 GET/JSON 签名规则专项测试 6/6；`mvn -pl ruoyi-admin -am clean package -DskipTests` 成功；Vue3 生产构建 2689 modules 成功。生产已设置真实测试应用环境变量并启用 `COLLABORATION_ENABLED=true`，教师登录与 `/business/collaboration/health` 均为 200，`ready=true`、问题数 0，AppID、AppSecret、Token 密钥、公网地址、JSSDK、存储可写全部通过。官方稳定版 JSSDK v1.1.27 已同域发布，公网 200、27,612 bytes、SHA-256 `815A2C447C85EA672714E2B26183BD862C83B1DB88D33314E3B010C82BE88343`，与 WPS 官方下载文件一致。匿名无签名请求被拒绝为“AppID 不匹配”；使用生产环境变量构造的 WPS-2 + 平台 Token 签名请求已通过全部安全校验并进入业务层，因测试 fileId 不存在返回“协作文档不存在”，证明不是平台 401 或签名失败。当前尚未收到 WPS 官方集群对真实房间的回调。
+> 5. **正式发布与回滚**：3009 NSSM 与 3010 Nginx 根已切换到 `D:\program\3009dazipingtai\releases\20260811_225246_ab6d0d6_wps_weboffice_configured`；JAR 和原构建前端沿用上一 PoC release，只增加官方 JSSDK 静态文件和生产外置环境配置。既有 `PRACTICAL_AI_MASTER_KEY` 原样保留，WPS AppSecret 与随机 Token 密钥仅在 NSSM 私密环境中，不写入 Git 或本上下文；临时凭据文件已删除。切换前 NSSM 注册表与 Nginx 配置备份位于 `D:\program\3009dazipingtai\backups\20260811_225246_before_wps_activation\`。回滚可恢复该目录的注册表/Nginx 备份并切回 `20260811_203700_ab6d0d6_wps_weboffice_poc`；四张协作表继续向后兼容保留。
+> 6. **域名绑定事实**：按用户提供的现有域名复用 `xxkj.xsedu.net.cn`，不再申请 `weboffice-api` 子域名。服务器曾同时存在 D 盘 Nginx 1.29.4 与 `C:\OpenResty` 两套 80 监听配置，实际监听者会随启动顺序变化；现已在两套配置中都增加 `server_name xxkj.xsedu.net.cn` 并代理到 `127.0.0.1:3010`，而 `aitool.xsedu.net.cn` 继续匹配导航栏。当前 80 实际由 D 盘 Nginx 持有。原始 TCP 验证中 `xxkj` 标题为“信息科技学业测评平台”且与 3010 一致，`aitool` 标题仍为“象山教育 AI 应用工具平台”；`xxkj/weboffice/callback/**` 已到 WPS 控制器并返回 AppID 未配置。OpenResty 配置备份为 `D:\program\3009dazipingtai\backups\20260811_223101_before_xxkj_openresty_binding\openresty-nginx.conf`，D 盘 Nginx 配置备份为 `D:\program\3009dazipingtai\backups\20260811_223253_before_xxkj_host_binding\nginx.conf`。两条探针诊断事件已精确删除，事件表恢复为 0。
+> 7. **公网门禁与下一步**：WPS 控制台当前回调网关为 `http://xxkj.xsedu.net.cn/weboffice/callback`，平台公网基础地址为 `http://xxkj.xsedu.net.cn`，不需要第二个域名；HTTPS 仍是正式使用前的安全加固项。AppID/AppSecret、官方稳定 JSSDK、随机 Token 密钥和功能开关均已配置，服务器端启用门禁已解除。下一步由教师在一门带 Word/Excel/PPT 起始文件的课程中开启协作，确认 WPS 控制台所需回调接口开关均已打开，再用两名同班学生与一名异班学生验证“同班同文档、异班不同副本、保存后版本递增”。当前仍未真实打开 WPS 编辑器，也未声称 WPS 官方回调与多人保存闭环通过；免费测试版带水印、最多 5 个同时打开的不同文档、单文件 5 MB，不能证明全县 200+ 正式容量。
+> 8. **生产资源事故与恢复**：激活过程中发现 PID 14948 的历史 Codex 远程 PowerShell 脚本自 22:23 起异常占用约 12.6 GB 内存，导致整机仅余约 57 MB、3009 一度 Paused、MySQL 报内存不足、Java/LibreOffice 无法提交内存；该进程命令行明确指向旧 release 的 `codex-remote-*.ps1`，不是业务服务，已按精确 PID 终止。释放后空闲物理内存约 14.2 GB、虚拟内存约 27.4 GB；3009 再次重启后为 `Running + Automatic`，约第 4 次两秒探测恢复 HTTP 200，WPS 健康仍 `ready=true`，stderr 长度保持 556 bytes 未新增 OOM 警告，最终日志中 23:05 之后无新 ERROR/Deadlock/OOM。现有 stderr 的 556 bytes 和 stdout 的早期 OOM/LibreOffice 错误属于释放内存前历史证据，不得误报为当前持续故障。
+
+> **上一焦点（2026-08-11：QA 千并发报告真实缺陷已修复，生产 r4 在 200/1000 并发下均 0 失败）**
+> 0. **范围与角色结论**：按用户确认的方案 B，管理员账号已在本机和正式环境验证可登录；管理员部分功能不作为本轮放行条件。教研员已分别在本机和正式环境完成“新增教研员账号 → 新账号登录且角色为 researcher → 删除测试账号”，残留为 0。管理员凭据只保存在 gitignore 的 `contexts/secrets.local.md`，不写入报告、上下文、日志或提交。
+> 1. **报告缺陷修复**：`StudentHomeController` 增加学生角色守卫，教师访问学生首页接口由业务 500 改为 403；全局不支持 HTTP 方法由 500 改为 405；`sql/fix_teacher_lesson_list_menu.sql` 改为删除 teacher 对停用管理员课程菜单的残留关联，正式库执行前为 1、执行后为 0，实际权限边界仍为 403。历史 2087 条孤儿答卷无法从现有 17 份本机备份恢复题目定义，本轮没有猜测或清理历史成绩；新增删题保护，已有学生答卷的题目禁止硬删除，防止继续产生孤儿。
+> 2. **性能修复**：保留已部署的 7 组只读索引与 Druid `initialSize=20,minIdle=20,maxActive=120`；学生历史成绩收口为一次 CTE 聚合，错题/课程答案利用唯一约束取消全表“最新答案”物化，课程题目与评分项从 N+1 改为一次 JOIN，教师班级人数改为一次分组聚合。教研学校/教师/课程/时间线按完整筛选结果缓存 60 秒并做实例内防击穿，教师首页按用户+学校缓存 30 秒，教师工具目录缓存 5 分钟；正常高频日志降为 DEBUG，默认业务日志级别改为 INFO。缓存只影响短时间刷新速度，不改变权限、接口字段或统计口径。
+> 3. **编译、功能与清理**：`mvn -pl ruoyi-admin -am clean package` 成功，业务测试 278/278、admin 测试 3/3。QA 清理脚本已修复并执行，33 个 QA 账号、30 个学生、1 门课程、4 道题、100 条答卷及相关实操作品/附件均精确删除，所有 QA 标识残留为 0，证据为 `output/qa-tester/20260811-qa-1000-full/evidence/cleanup.json`。生产分页复核中 2025 学年课程共 223 条，第 1/2 页各 10 条且 ID 不重复；教师首页连续请求约 181/50/37 ms，缓存命中有效。
+> 4. **并发与死锁回归**：最终 r4 生产 120 并发 60 秒共 37,172 次请求，0 失败，P50 187 ms、P95 250 ms、P99 359 ms、603.8 RPS；200 并发 60 秒共 29,531 次请求，0 失败，P50 390 ms、P95 578 ms、P99 1.0 秒、465.63 RPS，修复前为 28.637% 失败、P50 19.187 秒、P95 30.234 秒、8.3 RPS。1000 并发覆盖教师/教研员/学生 22 类只读接口，共 31,576 次请求，0 失败，P50 1.703 秒、P95 3.531 秒、P99 11.204 秒、433.66 RPS；P95 比 r3 的 7.313 秒再降约 51.7%，但极少数 P99 请求仍偏慢，不能表述为“每个请求都秒开”。本机同一学生 50 并发重复交卷为 50/50 成功、答案行数 43 前后不变、MySQL deadlock 增量 0，测试数据已原样恢复。
+> 5. **备份、SQL 与发布**：本轮本机写库前备份为 `D:\dmwprogram\newdazipingtai\backups\20260811_191844_local_before_qa1000_fixes_ab6d0d6\xueyeceping_server_20260729.sql`，81,514,842 bytes，SHA-256 `5E4D2BD3AE3FAD1E4A8CC629F3F967AB2DEC309C5362899ECD2332D387775993`。正式库写入前备份为 `D:\program\3009dazipingtai\backups\20260811_193044_before_qa1000_perf_fix_ab6d0d6\ry-vue.sql`，76,962,235 bytes，SHA-256 `F98A99EA61BB28019F08DECAF4A8E1470757EC8DBBB00B4A5FD39E21FA47A0C1`。3009 当前 release 为 `D:\program\3009dazipingtai\releases\20260811_195500_ab6d0d6_qa1000_perf_fix_r4`，JAR SHA-256 `854DF893B5FB86D0B47DEE222087539CB35D2553D155933E90970A102DCB0FD8`；服务 Running，3009/3010 均 HTTP 200，压测后 stderr ERROR 与 stdout Deadlock/OOM 命中均为 0。
+> 6. **回滚与剩余风险**：应用回滚可把 NSSM 切回保留的 r3 `20260811_194850_ab6d0d6_qa1000_perf_fix_r3` 并重启；本轮只追加执行权限残留清理 SQL，回滚可按 `sql/fix_teacher_lesson_list_menu.sql` 注释恢复关系。历史 2087 条孤儿答卷仍需业务人工决定保留、映射或清理；1000 并发 P99 尾延迟以及教研活动主题、题库列表两个相对慢端点可继续专项优化。当前代码未 commit、未 push。
+
+> **上一焦点（2026-08-11：初中物联网县级 SIoT 2618 PoC 已部署，软件链路通过，等待 Mind+ + 掌控板实测）**
+> 0. **产品边界**：初中学生继续在 Mind+ 编写掌控板 Wi-Fi、MQTT 和传感器程序，平台不重新开发 Mind+；物联网以 2/4 人小组实验和全班共享为主，不做考试。物联网与在线协作是两个独立功能。小学省平台本轮不接入；初中专题见 `contexts/junior-iot-poc/`。
+> 1. **县级 PoC 部署**：服务器原有 2019 年 SIoT 1.2 占用 1883，由 NSSM `SIoT` 自动启动；检查时只有本机自连接，无外部学生设备。按用户明确要求，旧服务和 `D:\Tools\SIoT1.2` 已删除。删除前备份为 `D:\program\siot-poc\backups\20260811_161328_siot12_before_removal\SIoT1.2.zip`，9,863,288 bytes，SHA-256 `D23F042072D9EF4577A4D8B65737354BDAEF65DFF6EB4EB9D58BBC8D34CB0CD7`。
+> 2. **新版服务**：SIoT 2618 发布到 `D:\program\siot-poc\releases\20260811_161357_2618`，上传制品 SHA-256 `5D61FDCE64924456EBE746B155B27B78D7EF66375C04F42B7A66E793401754C8`；NSSM 服务 `CountySIoTPoc` 为 `Running + Auto`。MQTT 为 `1883`、Web 为 `18080`，另由 2618 自带监听 1888/8883；新增 1883/18080 入站规则，目标为 Domain/Private 下的 RFC1918 私网地址。日志在 `D:\program\siot-poc\logs`。失败部署产生的两个非活动 release 已删除，只保留当前活动 release。
+> 3. **链路与恢复证据**：开发机跨机器访问 1883/18080 成功，Web 为 HTTP 200；两个独立 MQTT 客户端完成认证、订阅、发布和同数据接收，错误凭据明确返回 CONNACK 5。模拟 `main.exe` 异常退出后，NSSM 约 1.115 秒恢复新进程及 1883/18080，恢复后 MQTT 再次收发成功。240 个模拟小组并发连接、每组 5 条消息，共 1200/1200 条全部收到，客户端错误 0，耗时约 0.274 秒；负载后进程工作集约 56 MB。QoS 0 测试消息未写入 SIoT 数据库，测试前后 `poc/%` 消息和 Topic 均为 0。浏览器使用 2618 当前凭据成功进入“数据管理”，标题为 `SIOT V2`、无 5xx 或白屏，截图为 `output/playwright/siot-poc-server-dashboard.png`；Playwright 自动填表会触发发行包登录页一次非阻断 `onValuesChange/trim` 页面异常，但仍能完成登录，真实手工登录需在 P1 一并观察。
+> 4. **隔离与现网复核**：本轮没有修改学业测评平台前后端、数据库、80/3005/3009/3010 配置；最终复核这些端口与 18080 均为 HTTP 200。SIoT 默认单账号仅用于 PoC，不等于正式多校权限隔离；正式平台必须由服务端生成学校/课程/实验/小组 Topic 与设备令牌，浏览器不得持有全县共享凭据。
+> 5. **下一门禁**：当前只证明“县服务器 Broker 与平台式订阅程序”软件链路和 240 组瞬时并发可行，尚未证明学校 Wi-Fi、教育网跨校路由和真实掌控板稳定。下一步严格按 `contexts/junior-iot-poc/physical-board-test.md` 用一块掌控板连续发送 10 分钟并做断网恢复；P1 通过后再开发平台最小接收器、课程/小组映射、实时展示和分层诊断。Mind+ 使用 SIoT 2618 官方默认凭据，不能继续用旧 SIoT 1.2 截图中的口令；凭据不写入核心上下文或聊天。
+
+> **上一焦点（2026-08-11：生产高并发只读超时已按方案 B 修复并发布，120/200 并发均 0 失败）**
+> 0. **根因核实**：QA 猜测的 `maxActive<=8` 不成立，旧正式 JAR 实际为 `initialSize=10,minIdle=20,maxActive=100,maxWait=30000`；MySQL `max_connections=151`，历史 `Max_used_connections=100`，说明应用连接池确实打满。Performance Schema 还确认 `/business/schoolScore/schools` 对应聚合平均约 6.67 秒、学生历史答题会物化约 17.37 万答案分组、教师班级人数按班重复扫描约 7906 名学生，慢查询与 N+1 才是主要放大器；缓冲池命中正常，本轮不改 MySQL 内存参数。
+> 1. **代码与配置修复**：Druid 调整为 `initialSize=20,minIdle=20,maxActive=120,maxWait=30000`，仍给 MySQL 保留 31 个以上非应用连接余量。学生历史成绩改为单次 CTE 聚合，学生课程答案/错题查询利用既有唯一约束取消全表“最新答案”物化；教师班级人数改为按学校一次聚合；教研监管学校汇总增加 15 秒参数级 Redis 缓存和实例内防击穿；教师工具目录增加 5 分钟 Redis 缓存并在增删改、上下架、恢复时失效。没有改接口字段、权限和业务口径。
+> 2. **索引、备份与回滚**：新增幂等 `sql/high_concurrency_read_performance_v1.sql`，只增加 7 组二级索引（20 个字段序号），不改表字段和业务数据。本机执行前整库备份为 `D:\dmwprogram\newdazipingtai\backups\20260811_100058_local_before_high_concurrency_read_ab6d0d6\xueyeceping_server_20260729.sql`，75,198,109 bytes，SHA-256 `8B16E0299FC9FB7C8B49A54424462D5FB3E5FD49E1A7B3454594750F865BBE00`。正式库执行前整库备份为 `D:\program\3009dazipingtai\backups\20260811_101847_ab6d0d6_before_high_concurrency_read\ry-vue.sql`，76,817,129 bytes，SHA-256 `1633B0A25BF24E1403AA009805FFB1B5A95BE1984F7D971ABAB5B57805B809CE`；正式执行 SQL SHA-256 `4A991CA9EFA1327E40B313B4B52237BA4F1BAF3A7ED8980348760241DD5C95EB`，首次与重复执行均成功，后检为 7 组/20 列、答案重复组 0。索引向后兼容，可随旧 JAR 保留；若必须撤销，应逐个 `DROP INDEX`，整库恢复会覆盖备份后的新业务数据，不能作为常规回滚。
+> 3. **本机验证与死锁回归**：业务模块全量 272/272、admin `clean package` 均通过，教师首页/班级、教研学校、教师工具、学生历史成绩/错题真实 API 均为 HTTP/业务码 200。50 并发课堂写回归为 2245/2245 成功、0 超时、0 网络错误，交卷 480/480 成功（P50 28.25 ms、P95 36.82 ms），运行日志死锁和连接池错误均为 0；测试数据已精确清理，库表计数恢复、残留/重复/孤儿均为 0。证据集中在 `output/qa-tester/high-concurrency-read-20260811/`。
+> 4. **正式发布与性能结果**：3009 后端已切换至 `D:\program\3009dazipingtai\releases\20260811_102008_ab6d0d6_high_concurrency_read`，JAR SHA-256 `EA5ABCAEC37261FAA45EC4058BC8A114B9B26D15713606C50FC1E95B97CE269E`；NSSM 为 `Running + Automatic`，3009 已重启，3010 前端未改。120 并发由修复前 450 请求、18.22% 失败、P50 13.156 秒、P95 45.406 秒、4.74 RPS，改善为 36,815 请求、0 失败、P50 63 ms、P95 781 ms、601.22 RPS；200 并发由 866 请求、28.637% 失败、P50 19.187 秒、P95 30.234 秒、8.3 RPS，改善为 52,518 请求、0 失败、P50 219 ms、P95 266 ms、847.28 RPS。两次均复用 QA 脚本并使用 60 秒只读施压。
+> 5. **发布后健康与剩余风险**：200 并发后 31.5 MB 应用日志中连接池超时、死锁、OOM、应用 ERROR、Druid 慢 SQL均为 0，stderr 为 0；服务工作集约 777.6 MB、177 线程，MySQL 连接已回落至 21、运行中 2，3009/3010/80/3005 均 HTTP 200。短缓存最多带来监管汇总 15 秒、教师工具目录 5 分钟陈旧窗口；新增二级索引有轻微写放大，但 50 并发交卷已验证无失败/死锁。应用回滚只需把 NSSM 切回 `20260810_114800_ab6d0d6_teacher_tools_r3` 并重启，旧 release 保留。当前代码未 commit、未 push。
+
+> **功能完成状态校正（2026-08-11，依据用户明确确认）**：课程与成绩监管、操作题限期批改、教师免抽测以及区域抽测核心闭环均已完成，不再列为“本机完成、正式服务器待发布”或“待开发”事项。区域抽测已经包含清单、状态机、参考班级/学生、作答限时、匿名评卷和成绩发布分析；操作题 AI 专题中“区域抽测暂不启用 AI”只表示 AI 辅助评卷尚未纳入该专题范围，**不代表区域抽测功能未完成**。本次只校正产品完成状态，没有重新核验或补写当时正式发布目录、数据库备份及 SQL 哈希，后续若需发布审计应以服务器留存记录为准，不得猜测。
+
+> **上一焦点（2026-08-10：教师工具 4 个失效入口已修复，3 个课堂工具已纳入 NSSM 自动启动）**
+> 0. **根因与端点结论**：打字平台旧主机 `10.52.1.92` 已离线，目录地址已按用户确认改为 `http://10.52.1.94/`。小型网络搭建原 3000 端口被 3011 信息科技基础检测后端占用，保留 3011 不动并把网络仿真改为 `http://10.52.1.123:3020/`。图像识别和小学实验项目文件完整但没有进程或自动启动，地址继续为 `http://10.52.1.123:3001/`、`http://10.52.1.123:3003/`。
+> 1. **服务与网络配置**：正式服务器新增 NSSM 服务 `TeacherToolNetwork3020`、`TeacherToolImage3001`、`TeacherToolPrimaryLab3003`，均为 `Running`、`Auto`；日志固定到 `D:\program\_startup_logs\teacher-tools\`。新增同名 3020/3001/3003 入站规则，仅允许 Domain 配置文件和 `LocalSubnet`。网络入口 `D:\program\3000xiaxingwangluodajian_7shang\backend-jieru1\index.js` 只把监听端口从 3000 改为 3020；3011、3009、3010、80、3005 均未改动。
+> 2. **代码与 SQL**：`sql/teacher_tools_v1.sql` 的新装种子已同步 `.94` 和 3020；新增幂等 `sql/teacher_tools_endpoint_repair_v1.sql`，按 `LOCAL_3005 + source_ref` 严格前检，只更新 `3005-typing` 与 `3005-network`，并核对小学实验、图像识别两个既有地址。专题运行决策见 `contexts/teacher-tools/ADR-002-independent-service-ports.md`。
+> 3. **备份与数据库证据**：服务修改前文件备份为 `D:\program\3009dazipingtai\backups\20260810_153005_ab6d0d6_before_teacher_tool_services`，原网络入口 SHA-256 `73A38C275D34C13116E9850D8A2AB10E7FF1911DF2CB2317036DE17B0E1D7864`，图像入口 `1D7EE0FDCE4C9AD59DC1F256F5C78F09DDF9C00715DBF40DE7512E2F52C230EF`，小学入口 `BF8DED88E77B709EC2F16507E00386E7462E5EAA4BEB3E09CA7638FD8A96A6D2`。本机库备份为 `D:\dmwprogram\newdazipingtai\backups\20260810_153738_local_before_teacher_tool_endpoints_ab6d0d6\xueyeceping_server_20260729.sql`，74,943,003 bytes，SHA-256 `5463E95693A7810F05A163F6D829D6D23D4AE32FF51DDDF6D0FF36625FC4F5BC`。正式库备份为 `D:\program\3009dazipingtai\backups\20260810_153942_ab6d0d6_before_teacher_tool_endpoints\ry-vue.sql`，76,530,967 bytes，SHA-256 `90B11576295CEB92CA4E03B9583427299D25352FF4D0ACAEB47C9C4A2A76E46C`；执行 SQL SHA-256 `CF3510E18D76E2B27D96154F6A2A91122A01A2E76678ED67991944A78CFB5530`。本机和正式库首次/重复执行均为 0，正式四条地址匹配且重复来源为 0；3009 无需重启。
+> 4. **正式验收**：新增三个服务首次启动及停启回归后均保持 `Running + Auto`，客户端访问 3001/3003/3020 均为 HTTP 200。浏览器确认小学平台显示三至六年级上下册 8 个入口，网络仿真显示光猫/路由器/交换机与终端设备画布，图像识别显示上传界面，`.94` 显示学生/教师登录；教师端仍为 81 个工具，打字卡片实际打开 `.94`。图像识别 `/recognize` 使用仓库 Logo 合成样本返回 `result_num=5`，页面错误日志为 0。报告为 `output/playwright/teacher-tools-endpoint-repair-server-smoke.json`。
+> 5. **回滚与风险**：服务回滚先停止并删除上述 3 个 NSSM 服务及 3 条 `TeacherTools-*` 防火墙规则，再从服务备份恢复网络 `index.js`；目录地址可依据正式备份中的 `teacher-tools-before.tsv` 精确恢复，不应直接全库覆盖。图像识别仍依赖外部识别接口，`.94` 旧测评站和所有外部工具的持续可用性不受本平台控制；目前未增加自动巡检。当前代码未 commit、未 push。
+
+> **上一焦点（2026-08-10：教师工具单页导航已发布 10.52.1.123，80/3005 旧站保持不变）**
+> 0. **产品与权限结论**：Vue3 教师端新增根级一级菜单“教师工具”，紧跟教师首页。教师、教研员、管理员可浏览；仅教研员、管理员可通过页内按钮进入隐藏管理页；学生无菜单且浏览/管理接口均返回业务码 403。专题需求、设计、任务、ADR 和清洗清单见 `contexts/teacher-tools/`。
+> 1. **页面能力**：浏览页采用现有平台侧栏 + 高密度单页导航，提供名称/说明/标签搜索和吸顶分类定位。小学、七年级、八年级、省学科平台为重点展开区；学生免登录、AI、编程、办公素材、教师网站、班主任、跨学科、校本区域为次要折叠区，默认预览 4 项并在本页展开。“常用推荐”由工具标记生成。工具卡片按名称、说明、标签和访问类型映射编程、网络、AI、图片、文档、PDF、表格、音乐、评价、班级等 18 类现有平台 SVG 图标及 6 组色彩；外部图片失败时也回退到对应语义图标。分类定位改为带图标的自动换行按钮组，重点/次要入口分层显示，不再产生横向滚动条。所有卡片通过 `_blank` + `noopener,noreferrer` 打开。
+> 2. **数据、接口与治理**：新增 `biz_teacher_tool_category`、`biz_teacher_tool`、`biz_teacher_tool_category_rel` 三表及 `/business/teacher-tools/catalog`、分类/工具管理接口。`sql/teacher_tools_v1.sql` 可重复执行，正式库现有 12 个分类、81 个有效工具、90 条关系；重复分类编码、重复来源、孤儿关系、学生权限、禁止协议、URL 凭据和明文密码均为 0。首批数据来自 3005、80 根站和省学科工具页，已剔除旧导航循环、私人协作房间、明文凭据、娱乐/翻墙和高风险下载项；之后只在本平台维护，不再同步旧站。
+> 3. **本机验收**：迁移前完整备份位于 `D:\dmwprogram\newdazipingtai\backups\20260810_111223_local_before_teacher_tools_ab6d0d6\xueyeceping_server_20260729.sql`，74,838,676 bytes，SHA-256 `D6ACF717C1AFCCD7CA3B317FEEBCDC9A6ECDAC0258185070848F13C773822855`。SQL 首次/重复执行一致；后端业务全量 270/270（本机 Surefire fork 拒绝访问后按既有口径 `forkCount=0` 通过）、admin clean package、前端纯函数 7/7、Vue3 生产构建 2684 modules 均通过。管理 CRUD、URL 拒绝、上下架、软删恢复、多个手工工具空来源标识和测试数据精确清理通过。视觉回归在 1536 和模拟 125% 的 1229 CSS 宽度下均无页面/导航横向溢出，首屏识别到 18 种语义图标，页面错误与 5xx 均为 0；截图为 `output/playwright/teacher-tools-icons-nav-desktop.png`、`teacher-tools-icons-nav-125.png`。
+> 4. **正式角色与浏览器证据**：正式 API 为教师目录 200/管理 403、教研员目录与管理 200、学生目录与管理 403。正式 3010 在 `1536×813`（常用 125% 缩放等效视口）下，推荐区保持四列、卡片宽 306.5px，页面与导航 `scrollWidth` 均等于可视宽度，18 种语义图标生效且无页面错误/5xx；截图为 `output/playwright/teacher-tools-server-visual-125.png`。原功能验收继续有效：教师页 12 分类、81 工具、次要分类 4 项预览/展开、Python 搜索和无结果状态均正确，教师管理入口为 0；教研员管理页和新增表单可见；学生菜单为 0。两个不填来源标识的手工工具均成功新增，随后已连同关系精确清理为 0。
+> 5. **正式备份与发布**：正式完整数据库备份仍为 `D:\program\3009dazipingtai\backups\20260810_112430_ab6d0d6_before_teacher_tools\ry-vue.sql`，76,433,395 bytes，SHA-256 `38B49FAE5A5B01C73971860265CFE635F2BEFD3D1992B5BF74904261EE109564`，清单 SHA-256 `55F31C7BA69328C1F3F6F38A861EE8E5CE982D99156A542BF3BCB244A43CFE0D`。3009 后端继续运行统一 release `20260810_114800_ab6d0d6_teacher_tools_r3`，JAR SHA-256 `DC5174D7D33AE12F91D98A70DD28CBF8626997ED80E099469649ABB0D5B2EB0F`，本轮未重启。3010 前端已切换到 `D:\program\3009dazipingtai\releases\20260810_122305_ab6d0d6_teacher_tools_visual`；压缩包 SHA-256 `1F9D516C214B74B0FD7A4564D950099908169A81F50B852B72F9699D706B5141`，index SHA-256 `3FADE5F355DEBF4E5792991646CE7836CDB98575BD93C74FB47BA50933A76AD0`，Nginx 配置备份为 `D:\program\3009dazipingtai\backups\20260810_122305_ab6d0d6_before_teacher_tools_visual\nginx.conf.before-visual-refresh`。Nginx `-t`/reload 均为 0，3010、API 代理、80、3005 均为 200。
+> 6. **回滚与剩余风险**：本轮视觉热更只需把 3010 Nginx root 切回 `20260810_114800_ab6d0d6_teacher_tools_r3/frontend` 并 reload；3009 与数据库无需处理。若需回到本功能发布前，则后端切回 `20260809_172512_b1801ac`、前端切回 `20260810_103724_ab6d0d6_preview_hotfix`。三张新表可保留；若必须数据库级回滚，使用上述正式备份，但会覆盖备份后的新维护数据。外部工具的登录、验证码、服务条款和持续可用性仍由外站负责；本轮按产品决定未增加自动巡检。当前代码未 commit、未 push。
+
+> **上一焦点（2026-08-10：操作题预览 401 与历史单图片兼容热修已发布 10.52.1.123，三个教师/教研员入口正式验收通过）**
+> 0. **根因与安全边界**：题库、普通课程设计器、区域抽测设计器仍把 `previewPath` 直接拼成 `/profile/**` 新窗口地址；浏览器新窗口无法附加 `Authorization` 请求头，而后端按既有安全策略拒绝直接访问该目录，所以返回业务码 401。修复统一改走 `/common/resource/view?resource=...`，继续由 Cookie 登录态和资源归属校验授权，不放宽 `/profile/**`。
+> 1. **前端修复**：`business/question/index.vue`、`business/lesson/designer.vue`、`business/countyExam/examDesigner.vue` 三个旧入口已统一使用受权资源接口。`student/index.vue` 同时兼容历史单图片作品：图片附件只要存在 `resourcePath` 即可直接预览；Office/PDF 仍要求规范化预览成功；多附件中的不可预览项会单独禁用，不再被题目级旧字段误判。
+> 2. **本机与正式验收证据**：资源权限相关 Java 专项 12/12、admin `clean package`、Vue3 生产构建（2678 modules）均通过。本机临时 PDF 精确回归确认直接 `/profile/**` 返回业务码 401，受权接口返回 HTTP 200 `application/pdf`，临时题目、评分项、材料和上传文件均已清理。正式环境题库题目 1247、普通课程设计器 237、区域抽测设计器 3 的浏览器/API 冒烟 12/12：三处地址均为 `/prod-api/common/resource/view`，目标 PDF 均为 200 `application/pdf` 且 `%PDF` 签名正确；页面异常和 5xx 均为 0。报告 `output/playwright/operation-preview-server-hotfix-smoke.json`，截图为 `operation-preview-server-question.png`、`operation-preview-server-lesson-designer.png`、`operation-preview-server-county-designer.png`。
+> 3. **历史数据与文件审计**：本机库共有操作题 104 道，旧预览状态为成功 71、失败 24、空 9；当前教师可见 37 道，其中 34 道有旧预览路径，但对应 34 个历史 PDF 在本机 `RuoYi-Vue/uploadPath` 均不存在。这是本机数据库克隆与历史上传目录未完整配对，不是路由代码问题。正式服务器已只读确认用户给出的示例 PDF 实体存在，大小 149,783 bytes；其正式预览已恢复。附件现状为旧预览失败 314、规范化状态失败 84，主要原因是历史 PDF 生成失败 207、历史类型不支持 107、源文件缺失 84；当前版本/附件关系检查未发现当前版本缺失、状态错配、孤儿答案版本或答案源路径错配。
+> 4. **正式发布、回滚与剩余项**：本轮没有 SQL、后端接口或配置变更，3009 未重启。前端 release `D:\program\3009dazipingtai\releases\20260810_103724_ab6d0d6_preview_hotfix` 已切换，压缩包 SHA-256 `7E9D46573E961B223C08CFFF200032611980023BB0FEBD48DFE2174225D89BB9`，index SHA-256 `47C0FF84E5CEE8DD6673F6AF1244676F70A790C233F1A2F2983E5EE8EBDC2065`；Nginx 配置检查、reload、3010 首页和 API 代理均为 0/200。发布前配置备份为 `D:\program\3009dazipingtai\backups\20260810_103724_ab6d0d6_before_preview_hotfix\nginx.conf`，SHA-256 `8385988C507525328A9771A827BF4E3ABD77415E12B98EF15E5DDD66DE3F5EE5`。回滚只需恢复该配置或把 3010 root 切回 `20260809_172512_b1801ac/frontend` 后 reload。当前未 commit、未 push；正式环境没有可用的文档内学生验收账号，历史单图片按钮兼容仍待获得有效学生样本后补做只读 UI 冒烟。
+
+> **上一焦点（2026-08-09：教师首页按课程开设年级分栏与首屏提速已发布 10.52.1.123，并通过郑东旭教师账号正式验收）**
 > 0. **产品结论**：教师首页第一层继续按稳定届别 `entry_year` 分组，第二层按课程开设年级 `grade` 分栏。当前年级栏始终存在并默认展开；历史年级栏默认折叠，展开后显示全部历史课，且允许通过带目标年级提示的入口新增历史课。术语、需求、设计、任务和决策见 `contexts/teacher-dashboard-grade-history/`。
 > 1. **课程不变性与课次**：`grade` 已明确为课程开设年级，课程创建后与 `entry_year` 一样不可在普通编辑中改变。新建课程的课次由服务端按“同学校 + 同教师 + 同届别 + 同课程开设年级”取最大值加一；前端只提供同口径建议。当前年级没有课程时从第 1 课开始，上下学期不重置。
 > 2. **推进边界**：自动推进和教师首页手动一键推进寻找下一课时均要求课程开设年级相同；课次重新从 1 开始后不会串入历史年级课程。历史课仍保留设计、指派、批改、成绩和显式新增能力。
@@ -15,7 +129,7 @@
 > 5. **验收证据**：后端专项 19/19、业务模块全量 265/265、admin clean package、Vue3 生产构建（2678 modules）均通过。本机教师 API/Playwright 冒烟 16/16。正式环境使用郑东旭教师账号密码并固定初中部 169 复验 16/16：核心课程接口约 106.2 ms，批改状态约 3551.8 ms 但不阻塞课程；2024 级当前九年级空栏新建为第 1 课、八年级 12 门历史课折叠/展开正确；2025 级七年级 1～4 与八年级第 1 课分栏正确；辅助状态失败时课程仍保留；首次核心请求 1 次、从设计器每次返回各刷新 1 次；无页面错误和 500。正式报告 `output/playwright/teacher-home-grade-history-server-b1801ac-smoke.json`，截图 `teacher-home-grade-history-server-b1801ac-01-collapsed.png`、`teacher-home-grade-history-server-b1801ac-02-expanded.png`。
 > 6. **正式发布、回滚与剩余风险**：功能提交 `b1801ac` 已创建但尚未 push。统一 release `D:\program\3009dazipingtai\releases\20260809_172512_b1801ac` 已切换；JAR SHA-256 `054469608B7B0219A4CBC0BAB8D7EA9949E7D2AD1F7831B4779A5D8BEE5A482E`，前端 index SHA-256 `996C658AC2DF1AD5083F6A8B78AA12B6F34E8ECF2085A175D119263C56F785F8`。3009/3010/API 代理均为 200，服务环境变量保持，启动 ERROR=0、stderr=0。应用回滚分别切回后端 `20260809_152820_0a6a6e4`、前端 `20260809_161949_5bcc985`；若需撤销课次修正，应依据正式备份中的 `target-lessons-before.tsv` 做精确恢复，不能直接全库覆盖发布后的新业务数据。批改状态接口正式实测仍约 3.55 秒，但已移出首屏阻塞链路，后续可另立批量聚合优化。
 
-> **上一焦点（2026-08-09：操作题 AI 批改 v4 与教师批改页顶部单卡片布局已发布 10.52.1.123；全班重新生成仍只产出建议，教师可在批量采用时选择“仅补未评分”或经二次确认“覆盖已有评分”，每份覆盖保留前后审计；真实学生准确率与隐私门禁仍未据此解除）**
+> **更早焦点（2026-08-09：操作题 AI 批改 v4 与教师批改页顶部单卡片布局已发布 10.52.1.123；全班重新生成仍只产出建议，教师可在批量采用时选择“仅补未评分”或经二次确认“覆盖已有评分”，每份覆盖保留前后审计；真实学生准确率与隐私门禁仍未据此解除）**
 > 0. **本轮产品结论**：已确认采用“逻辑作品 + 不可变提交版本 + 多附件 + 统一静态预览 + AI 草稿由教师确认”的路线。Office/PDF 主作品单文件，图片 1～10 张，单文件 50 MiB；压缩包只作教师资源；普通课程先接千问视觉模型，豆包做上线前盲测，区域抽测暂不启用 AI。专题文档见 `contexts/operation-artifact-ai-grading/`。
 > 1. **P1 已完成代码**：普通课程分项满分改由服务端最大余数法分配，分项上限总和严格等于题目满分；评分保存增加题目归属、总分、分项归属/完整性/重复/上限/合计校验，并锁定答案行，以提交时间和预期旧成绩拒绝陈旧请求。直接打分会清除旧分项明细。
 > 2. **P1 前端收口**：教师批改保存期间禁止换人、翻页和重复回车；评分项、评分明细异步请求增加序号与答卷归属检查，迟到响应不再覆盖当前学生；前端不再自行逐项四舍五入，直接使用服务端绝对上限。
@@ -45,7 +159,7 @@
 > 4. **本机菜单与 SQL**：已在本机库执行幂等 `sql/teaching_supervision_ui_refinement_v2.sql`。复核结果：`课程与成绩监管` 与 `免抽测申请审核` 均为根级 C 菜单，`免抽测课数标准` 为审核菜单子权限；教研员三项授权均为 1。原始 `teaching_exemption_v1.sql` 已同步新菜单结构。
 > 5. **验收证据**：后端业务全量 231/231、admin clean package 成功；Vue3 生产构建成功（2677 modules，仅既有 vform `eval` 与大 chunk 警告）。原课程监管/免抽测只读 Playwright/API 冒烟 10/10；教师首页跟进冒烟 6/6，确认 `lesson_id=237/227/201` 三张可见卡片均有红点、菜单图标为 `#icon-documentation`、批改与成绩弹窗均为 900px 双列布局且无 500/页面异常。跟进报告为 `output/playwright/teacher-home-red-dot-layout-smoke.json`，截图为 `teacher-home-refinement-01` 至 `03`。本机后端 8080、前端 80 已启动。
 > 6. **既有稳定性事实**：`AI_FIX_20260731_001` 的交卷短事务、死锁退避重试、删除防护和 50 VU 2,766/2,766 成功结论继续有效；在线孤儿答案已归档治理，旧库未改动。历史课程时间、课程归属和跨校指派冲突仍按原结论待治理。
-> 7. **发布边界**：本轮未 commit、未 push、未发布 `10.52.1.123`；正式服务器仍是 `1488206`，尚未获得本轮代码、菜单 SQL 和此前本机数据治理增量。正式发布须按 AGENTS 先只读核对与备份，再执行相关增量 SQL、发布新 jar/dist、探活并做多校教师与教研员菜单/时间视图回归；不得直接照搬本机行数。
+> 7. **状态校正**：本段原“未发布 `10.52.1.123`、正式服务器仍是 `1488206`”结论已经过时。依据用户 2026-08-11 明确确认，课程监管、操作题限期批改和教师免抽测均已完成；当时的具体发布目录、数据库备份及迁移哈希未在本次文档校正中重新核验，不能沿用旧行数或凭空补写。
 
 ---
 
@@ -61,7 +175,7 @@
 | MySQL | 用户 `root`；业务库 **`ry-vue`**（2026-07-22 只读核实）；密码见 secrets.local |
 | 本机开发库 | `xueyeceping_server_20260729` @ localhost（服务器克隆 + 监管增量；旧 `xueyeceping1` 保留） |
 | 私密凭据 | `contexts/secrets.local.md`（**禁止 git add / 禁止写入本文件密码**） |
-| 当前开发分支 | `codex/research-activity-v1`（教师首页功能提交 `b1801ac` 已创建但尚未 push；此前后端 `0a6a6e4`、前端 `5bcc985` 已 push，草稿 PR #3 已包含；用户要求不再新建分支） |
+| 当前开发分支 | `codex/research-activity-v1`，HEAD `ab6d0d6`；操作题预览热修、教师工具与 v2.74 上下文尚未 commit/push，用户要求不再新建分支 |
 
 ### 线上菜单差异快照（2026-07-22 只读 `ry-vue`）
 
@@ -70,7 +184,7 @@
 | 区域抽测菜单 | 存在 `menu_id=2047`，`component=business/countyExam/index`，教研员已授权 |
 | 系统诊断中心 25010 | **已补齐**（执行 `researcher_monitor_menu_fix.sql` 后 =1） |
 | 教研员监控子菜单 | **2 + 109 + 113 + 25010**；111/112/110/114 = 0 |
-| 前端 3010 | **当前统一 release** `20260809_172512_b1801ac`；上一后端 `20260809_152820_0a6a6e4`、上一前端 `20260809_161949_5bcc985` 均保留；80 端口站点未改动 |
+| 前端 3010 | 当前前端 release `20260810_122305_ab6d0d6_teacher_tools_visual`，后端仍为 `20260810_114800_ab6d0d6_teacher_tools_r3`；上一完整 release 与功能发布前版本均保留；80 与 3005 站点未改动 |
 
 修复脚本：`sql/researcher_monitor_menu_fix.sql`（幂等）；`sql/platform_overview_diagnosis_menu.sql` 第 6/7 节已同步口径。
 
@@ -159,6 +273,7 @@
 | 导学单 | `guideSheet/*` | guide-sheet API |
 | 区域抽测 | `countyExam/*` | CountyExam* |
 | 系统诊断中心 | `monitor/diagnosis/index.vue` | `SystemDiagnosisController` `/monitor/diagnosis` |
+| 教师工具 | `teacherTools/index.vue`、`manage.vue` | `TeacherToolController` `/business/teacher-tools/**` |
 | 原生服务监控 | `monitor/server/index.vue` | `ServerController` |
 | 数据监控 | `monitor/druid/index.vue` | Druid servlet（可关） |
 | 学生端 | `views/student/*` | `StudentHomeController` |
@@ -199,11 +314,11 @@
 - 性能：本机生成并清理 20,000 条代表资源；结构化筛选 P95 34.801 ms、关键词 P95 41.864 ms，精确课程标题排首位，清理余量 0；报告 `output/stress/research-activity-performance.json`。
 - **正式发布**：以已 push 的完整提交 `14882068287f349378b9ee52476bbe21c6c7e994` 构建并发布到 `20260728_151733_1488206`；数据库/配置备份、四个 SQL、Nginx 60m、NSSM/Nginx 切换、探活和服务器专项回归均完成，详见 §11.6。应用回滚切回上一 release，新表保留不 DROP；正文 URL SQL 为向前兼容修复，无需回滚。
 
-### 2.9 课程与成绩监管、操作题限期批改（2026-07-29 二次审查完成）
+### 2.9 课程与成绩监管、操作题限期批改（已完成；2026-08-11 状态校正）
 
 - **专题文档**：`contexts/teaching-supervision/requirements.md`、`design.md`、`tasks.md`、`adr/adr-001-course-class-fact-and-deadline-model.md`。
 - **数据模型**：`biz_lesson_class_scope` 固化课程班级事实；`biz_practical_grading_deadline` 固化首次触发和当前有效截止；`biz_practical_grading_deadline_audit` 保存延期/重新开放审计。动态参与和批改数量仍从现有学生、答案和表现表计算。
-- **迁移文件**：执行前 `sql/teaching_supervision_v1_preflight.sql`，执行 `sql/teaching_supervision_v1.sql`，执行后 `sql/teaching_supervision_v1_postcheck.sql`。目标环境必须重新备份和复核，不能因本机已执行而跳过。
+- **历史迁移文件**：执行前 `sql/teaching_supervision_v1_preflight.sql`，执行 `sql/teaching_supervision_v1.sql`，执行后 `sql/teaching_supervision_v1_postcheck.sql`。现有功能状态已校正为完成；未来迁移到新环境时仍须重新备份和复核，不能直接照搬历史行数。
 - **服务器复制源备份**：`D:\dmwprogram\newdazipingtai\backups\20260729_180020_server_before_local_clone_d827415\ry-vue_server_full.sql`，62,283,806 bytes，SHA-256 `350E73232CB17F0C4D8EC0B973EAE47837976B1752E70ABE8CE686ADA5236BED`。原本机库迁移前备份仍保留在 `20260728_174812` 目录。
 - **期限规则**：含操作题的课程班级在有效学生中已有答题记录人数首次达到 50% 时触发；分母 0 不触发。全局配置 `business.practicalGrading.deadlineDays=21` 只影响以后触发；`business.practicalGrading.goLiveTime` 固定历史初始化时间。实时提交使用事务提交后检查，Quartz `practicalGradingDeadlineTask.reconcileTriggers` 每 10 分钟补偿。
 - **状态与锁定**：状态为 `NO_PRACTICAL / NOT_TRIGGERED / GRADING / DUE_SOON / COMPLETED / OVERDUE / REOPENED`；即将到期为 72 小时。教师评分在原数据权限校验后、任何写入前检查期限；逾期只读。教研员/管理员调整必须填写原因，乐观更新期限并在同一事务写审计。
@@ -211,19 +326,19 @@
 - **事实生命周期**：课程改派先将同课程其他当前事实置为非当前，再删除旧指派并写入新事实；删除课程时在同一事务按审计→期限→事实→课程的依赖顺序清理，避免新增事实表产生孤儿记录。
 - **权限**：`business:teachingSupervision:view/export`、`business:practicalDeadline:config/adjust` 独立；控制器同时要求教研员/管理员角色和对应权限，方法级权限不能绕过角色边界。研究员本机已授权 4 项，教师和学生监管/配置 API 均实测 403。研究员读取学生操作题附件仍走资源归属校验。
 - **验收证据**：当前本机库为服务器克隆 `xueyeceping_server_20260729`，迁移后事实 873、当前事实 129、历史期限 473，重复组、零分母、无操作题期限和孤儿事实均为 0；后端 clean package 成功，业务 213/213、admin 3/3；Vue3 学年边界测试 3/3、生产构建成功。2025 学年 7 种状态课程接口均 200，耗时 0.754～2.408 秒；`NO_PRACTICAL=108`、`NOT_TRIGGERED=20`、`GRADING=66`、`COMPLETED=55`，其余当前为 0，四种有数据状态的抽样班级与课程筛选一致。学校汇总分页总数 19，三次耗时 3.991～4.387 秒；教师层 1.539 秒、课程层 0.827 秒。此前 Playwright/API 26/26 报告和截图仍在 `output/playwright/teaching-supervision-*`；本次只读复核未重跑会改期限的完整浏览器链。最终 fat jar 已在本机 8080 重启并探活。
-- **构建/重启要求**：后端改动涉及业务模块、Quartz 和 Mapper，发布必须重新打 fat jar 并重启；前端必须重新 `build:prod` 并切换 dist。只部署代码而未执行目标库迁移，功能不可用。
-- **部署与回滚**：本轮未 commit、未 push、未发布服务器。发布时必须在目标库重新备份后执行增量 SQL，再创建新 release。应用回滚切回上一 jar/dist，并先停用新增 Quartz 任务；数据库回滚优先恢复发布前备份，不直接 DROP 含审计的新表。
+- **历史构建/重启要求**：后端改动涉及业务模块、Quartz 和 Mapper，迁移到新环境时必须重新打 fat jar 并重启；前端必须重新 `build:prod` 并切换 dist。只部署代码而未执行目标库迁移，功能不可用。
+- **完成状态与审计边界**：依据用户 2026-08-11 明确确认，本功能已经完成，原“未发布服务器”结论作废。本次未重新核验当时的 release、正式库备份和 SQL 执行哈希；需要追溯部署或回滚时，应先读取服务器现存发布与备份记录，不得按本节历史本机证据推断。
 
-### 2.10 教师免抽测、真实使用日期与课程时间治理（v2.52，本机完成）
+### 2.10 教师免抽测、真实使用日期与课程时间治理（已完成；2026-08-11 状态校正）
 
 - **专题文档**：需求、设计、任务跟踪见 `contexts/teaching-supervision/requirements.md`、`design.md`、`tasks.md`；快照与真实活动决策见 `adr/adr-002-exemption-snapshot-and-real-activity.md`。
-- **迁移顺序**：目标库依次执行 `sql/teaching_exemption_v1_preflight.sql`、`sql/teaching_exemption_v1.sql`、`sql/teaching_exemption_v1_postcheck.sql`。迁移创建标准、申请、班级快照、课程快照、附件 5 表，补齐菜单与角色权限，并只修复未来课程时间默认值；历史空时间保持原样。
+- **历史迁移顺序**：目标库依次执行 `sql/teaching_exemption_v1_preflight.sql`、`sql/teaching_exemption_v1.sql`、`sql/teaching_exemption_v1_postcheck.sql`。迁移创建标准、申请、班级快照、课程快照、附件 5 表，补齐菜单与角色权限，并只修复未来课程时间默认值；历史空时间保持原样。现有功能状态已校正为完成，本顺序仅供新环境迁移或审计参考。
 - **本机备份与后检**：迁移前完整备份为 `D:\dmwprogram\newdazipingtai\backups\20260730_233001_local_before_teaching_exemption_d827415\xueyeceping_server_20260729_before_teaching_exemption.sql`，62,678,787 bytes，SHA-256 `8095118C6486663DF9EF98F3AF14A4E5C51565F4AF79E1A68F8F5071371D5354`。后检确认 5 表存在；重复标准/申请、非法状态、孤儿和快照汇总异常均为 0；课程总数 228，迁移前后仍有创建时间空 206、修改时间空 225、两者均空 206。
 - **统计与快照**：任教班级由当前管班、当前/历史指派和课程班级事实并集确定；参与只认答题、签到和课堂表现。教师预览 2025 学年第二学期六年级实测 9 班、76 课，操作题已批率 42.82%；12 并发提交仅 1 成功、11 被拒绝。申请经教研员审核和标准写入回读后，按测试备注和主键精确清理，申请及两级快照余量为 0。
 - **接口与权限**：教师和教研员关键接口均返回 200；监管使用日期查询返回 14 所学校。教师调用审核、学生调用审核或教师预览均为 403。教研员拥有 `business:exemption:review/standard`，教师拥有 `business:exemption:apply`，学生相关权限为 0。申请附件读取继续经过资源归属判断。
 - **性能与查询计划**：免抽测预览连续 25 次为 350～642 ms，P50 395 ms、P95 516 ms；监管学校查询连续 15 次为 1.123～1.276 s，P50 1.177 s、P95 1.276 s。统计 SQL 先按教师、学校、学年学期和班级范围收窄，再聚合三类活动；索引/执行路径审查未发现无界相关子查询。本轮修复了历史指派表与现表联合时的排序规则冲突。
 - **自动化与浏览器**：`mvn -pl ruoyi-business -am test -DforkCount=0` 为 226/226；`mvn -pl ruoyi-admin -am clean package -DskipTests` 成功。Vue3 学年/学期与题型测试 6/6，生产构建成功（2675 modules；仅既有 vform `eval` 和大 chunk 警告）。系统 Chrome 浏览器冒烟覆盖教师预览、教研员标准/审核入口和监管日期下钻，截图保存在 `output/playwright/`。
-- **重启、部署与回滚**：本机 fat jar 已重启并监听 8080，Vue3 dev 监听 80，两端 HTTP 200。正式发布必须重新构建 jar/dist、在服务器备份并执行两组监管/免抽测迁移后切换新 release。应用回滚切回旧 jar/dist；数据库若必须回滚，优先恢复发布前备份，不直接删除已有申请快照。本轮未 commit、未 push、未发布服务器。
+- **完成状态与审计边界**：依据用户 2026-08-11 明确确认，教师免抽测、真实使用日期与课程时间治理已经完成，原“正式发布待执行”结论作废。本次未重新核验当时的 release、正式库备份和迁移哈希；未来迁移或回滚仍须先读取目标服务器真实记录，数据库不得直接删除已有申请快照。
 
 
 ## 三、历史交付（仍有效，摘要）

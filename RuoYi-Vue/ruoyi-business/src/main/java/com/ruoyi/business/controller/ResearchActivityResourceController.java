@@ -1,8 +1,6 @@
 package com.ruoyi.business.controller;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +18,8 @@ import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
+import com.ruoyi.common.utils.file.FileUtils;
 
 /** 教研活动图片、私有课件下载和云盘访问接口。 */
 @RestController
@@ -46,10 +46,9 @@ public class ResearchActivityResourceController extends BaseController
     public void download(@PathVariable Long resourceId, HttpServletResponse response) throws IOException
     {
         DownloadResource download = service.prepareDownload(resourceId);
-        String fileName = download.getFileName() == null ? "research-resource" : download.getFileName();
-        String encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8.name()).replace("+", "%20");
+        String fileName = DownloadFileNameUtils.withBusinessPrefix("教研活动_课程资源", download.getFileName());
         response.setContentType("application/octet-stream");
-        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
+        FileUtils.setAttachmentResponseHeader(response, fileName);
         response.setHeader("X-Content-Type-Options", "nosniff");
         response.setHeader("Cache-Control", "private, no-store, max-age=0");
         Files.copy(download.getPath(), response.getOutputStream());

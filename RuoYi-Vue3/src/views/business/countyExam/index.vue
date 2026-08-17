@@ -435,6 +435,7 @@
 import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { saveAs } from 'file-saver'
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
@@ -1087,7 +1088,7 @@ function loadStudents() {
 async function handleExport() {
   if (!detailDrawer.exam) return
   const blob = await exportCountyExamStudents(detailDrawer.exam.examId)
-  saveAs(new Blob([blob]), `${detailDrawer.exam.examName || '区域抽测'}-成绩.xlsx`)
+  saveAs(blob, resolveBlobDownloadFilename(blob, `${detailDrawer.exam.examName || '区域抽测'}_成绩.xlsx`))
 }
 
 function schoolTypeText(value) {

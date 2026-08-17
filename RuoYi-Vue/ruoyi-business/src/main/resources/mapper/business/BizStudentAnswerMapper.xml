@@ -120,9 +120,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectByStudentAndLesson" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         WHERE a.student_id = #{studentId}
           AND a.lesson_id = #{lessonId}
         ORDER BY a.question_id ASC
@@ -153,6 +150,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE student_id IN
         <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
             #{studentId}
+        </foreach>
+    </select>
+
+    <select id="countByQuestionIds" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer
+        WHERE question_id IN
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
         </foreach>
     </select>
 
@@ -228,14 +234,63 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </delete>
 
-    <!-- 查询学生有答题记录的所有课程ID -->
-    <select id="selectDistinctLessonIdsByStudent" resultType="java.lang.Long">
-        SELECT a.lesson_id 
-        FROM biz_student_answer a
-        WHERE a.student_id = #{studentId}
-          AND YEAR(a.submit_time) = #{year}
-        GROUP BY a.lesson_id
-        ORDER BY MAX(a.submit_time) DESC
+    <!--
+        唯一索引保证每个学生/课程/题目只有一行，历史成绩无需再物化整张答案表取 MAX(answer_id)。
+        先选出本年度出现过提交的课程，再一次聚合课程总分、学生得分和题型得分。
+    -->
+    <select id="selectHistoryScores" resultType="java.util.LinkedHashMap">
+        WITH selected_lesson AS (
+            SELECT answer.lesson_id
+            FROM biz_student_answer answer
+            WHERE answer.student_id = #{studentId}
+              AND answer.submit_time &gt;= #{startTime}
+              AND answer.submit_time &lt; #{endTime}
+            GROUP BY answer.lesson_id
+        ),
+        answer_metric AS (
+            SELECT answer.lesson_id,
+                   SUM(IFNULL(answer.score, 0)) AS my_score,
+                   MAX(answer.submit_time) AS submit_time,
+                   SUM(CASE WHEN question.question_type = 'typing'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS typing_score,
+                   SUM(CASE WHEN question.question_type IN ('choice', 'judgment')
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS theory_score,
+                   SUM(CASE WHEN question.question_type = 'practical'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS practical_score,
+                   SUM(CASE WHEN question.question_type = 'typing'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS typing_total,
+                   SUM(CASE WHEN question.question_type IN ('choice', 'judgment')
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS theory_total,
+                   SUM(CASE WHEN question.question_type = 'practical'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS practical_total
+            FROM biz_student_answer answer
+            INNER JOIN selected_lesson selected ON selected.lesson_id = answer.lesson_id
+            LEFT JOIN biz_lesson_question lesson_question
+                   ON lesson_question.lesson_id = answer.lesson_id
+                  AND lesson_question.question_id = answer.question_id
+            LEFT JOIN biz_question question ON question.question_id = answer.question_id
+            WHERE answer.student_id = #{studentId}
+            GROUP BY answer.lesson_id
+        ),
+        lesson_total AS (
+            SELECT lesson_question.lesson_id,
+                   SUM(IFNULL(lesson_question.question_score, 0)) AS total_score
+            FROM biz_lesson_question lesson_question
+            INNER JOIN selected_lesson selected ON selected.lesson_id = lesson_question.lesson_id
+            GROUP BY lesson_question.lesson_id
+        )
+        SELECT lesson.lesson_id AS lessonId,
+               lesson.lesson_title AS lessonTitle,
+               IFNULL(lesson_total.total_score, 0) AS totalScore,
+               IFNULL(answer_metric.my_score, 0) AS myScore,
+               answer_metric.submit_time AS submitTime,
+               CONCAT(IFNULL(answer_metric.typing_score, 0), '/', IFNULL(answer_metric.typing_total, 0)) AS typingScore,
+               CONCAT(IFNULL(answer_metric.theory_score, 0), '/', IFNULL(answer_metric.theory_total, 0)) AS theoryScore,
+               CONCAT(IFNULL(answer_metric.practical_score, 0), '/', IFNULL(answer_metric.practical_total, 0)) AS practicalScore
+        FROM answer_metric
+        INNER JOIN biz_lesson lesson ON lesson.lesson_id = answer_metric.lesson_id
+        LEFT JOIN lesson_total ON lesson_total.lesson_id = answer_metric.lesson_id
+        ORDER BY answer_metric.submit_time DESC
     </select>
 
     <select id="selectWrongQuestions" resultType="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
@@ -258,9 +313,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.file_path AS filePath,
             a.student_answer AS studentAnswer
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
         WHERE a.student_id = #{studentId}

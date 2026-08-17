@@ -16,6 +16,7 @@ import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.service.IBizStudentService;
 import com.ruoyi.business.service.IBizTeacherClassService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
+import com.ruoyi.business.util.StudentImportRules;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -108,9 +109,10 @@ public class BizStudentServiceImpl implements IBizStudentService
         }
         String schoolCode = school.getSchoolCode();
 
-        // 核心编译错误修复：方法名 padl 应为 leftPad
+        bizStudent.setEntryYear(StudentImportRules.normalizeEntryYear(bizStudent.getEntryYear()));
+        bizStudent.setClassCode(StudentImportRules.normalizeClassCode(bizStudent.getClassCode()));
+        bizStudent.setStudentNo(StudentImportRules.normalizeStudentNo(bizStudent.getStudentNo()));
         String formattedClassCode = StringUtils.leftPad(bizStudent.getClassCode(), 2, '0');
-        // 核心编译错误修复：方法名 padl 应为 leftPad
         String formattedStudentNo = StringUtils.leftPad(bizStudent.getStudentNo(), 2, '0');
         String generatedUserName = bizStudent.getEntryYear() + schoolCode + formattedClassCode + formattedStudentNo;
 
@@ -288,6 +290,10 @@ public class BizStudentServiceImpl implements IBizStudentService
                     failureMsg.append("<br/>").append(failureNum).append("、学生 ").append(student.getStudentName()).append(" 导入失败：学号不能为空");
                     continue;
                 }
+
+                student.setEntryYear(StudentImportRules.normalizeEntryYear(student.getEntryYear()));
+                student.setClassCode(StudentImportRules.normalizeClassCode(student.getClassCode()));
+                student.setStudentNo(StudentImportRules.normalizeStudentNo(student.getStudentNo()));
 
                 // 2. 生成登录账号
                 String formattedClassCode = StringUtils.leftPad(student.getClassCode(), 2, '0');

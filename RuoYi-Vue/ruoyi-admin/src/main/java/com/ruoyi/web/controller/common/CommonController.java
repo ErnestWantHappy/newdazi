@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,6 +27,7 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.file.FileUploadUtils;
 import com.ruoyi.common.utils.file.FileUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
 import com.ruoyi.framework.config.ServerConfig;
 import com.ruoyi.business.service.ResourceAccessService;
 import com.ruoyi.common.exception.ServiceException;
@@ -64,7 +66,7 @@ public class CommonController
             {
                 throw new Exception(StringUtils.format("文件名称({})非法，不允许下载。 ", fileName));
             }
-            String realFileName = System.currentTimeMillis() + fileName.substring(fileName.indexOf("_") + 1);
+            String realFileName = DownloadFileNameUtils.fromStoredPath(fileName);
             String filePath = RuoYiConfig.getDownloadPath() + fileName;
 
             response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
@@ -150,7 +152,9 @@ public class CommonController
      * 本地资源通用下载
      */
     @GetMapping("/download/resource")
-    public void resourceDownload(String resource, HttpServletRequest request, HttpServletResponse response)
+    public void resourceDownload(String resource,
+                                 @RequestParam(required = false) String downloadName,
+                                 HttpServletRequest request, HttpServletResponse response)
             throws Exception
     {
         try
@@ -163,9 +167,11 @@ public class CommonController
             // 本地资源路径
             Path downloadPath = resolveProfileResource(authorizedResource);
             // 下载名称
-            String downloadName = downloadPath.getFileName().toString();
+            String resolvedDownloadName = StringUtils.isNotBlank(downloadName)
+                    ? DownloadFileNameUtils.sanitize(downloadName, "附件")
+                    : DownloadFileNameUtils.fromStoredPath(authorizedResource);
             response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-            FileUtils.setAttachmentResponseHeader(response, downloadName);
+            FileUtils.setAttachmentResponseHeader(response, resolvedDownloadName);
             FileUtils.writeBytes(downloadPath.toString(), response.getOutputStream());
         }
         catch (ServiceException e)
@@ -224,11 +230,8 @@ public class CommonController
             }
             
             response.setContentType(contentType);
-            // P6 Fix: 使用percentEncode编码文件名以支持中文
-            String fileName = FileUtils.getName(resource);
-            String encodedFileName = FileUtils.percentEncode(fileName);
-            // inline 表示在浏览器中打开，而不是下载
-            response.setHeader("Content-Disposition", "inline; filename=" + encodedFileName + "; filename*=utf-8''" + encodedFileName);
+            String fileName = DownloadFileNameUtils.fromStoredPath(authorizedResource);
+            FileUtils.setInlineResponseHeader(response, fileName);
             FileUtils.writeBytes(downloadPath.toString(), response.getOutputStream());
         }
         catch (ServiceException e)

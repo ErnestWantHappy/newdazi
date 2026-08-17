@@ -37,4 +37,12 @@ class AnswerDeletionGuardServiceTest
 
         assertDoesNotThrow(() -> service.assertStudentsDeletable(new Long[] { 30L }));
     }
+
+    @Test
+    void questionWithAnswersCannotBeHardDeleted()
+    {
+        when(studentAnswerMapper.countByQuestionIds(Arrays.asList(22L, 29L))).thenReturn(315);
+
+        assertThrows(ServiceException.class, () -> service.assertQuestionsDeletable(new Long[] { 22L, 29L }));
+    }
 }

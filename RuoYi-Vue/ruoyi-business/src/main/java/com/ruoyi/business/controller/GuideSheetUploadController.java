@@ -6,6 +6,7 @@ import javax.servlet.http.HttpServletResponse;
 import com.ruoyi.business.service.GuideSheetUploadService;
 import com.ruoyi.business.service.GuideSheetUploadService.DownloadResource;
 import com.ruoyi.common.utils.file.FileUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -51,14 +52,13 @@ public class GuideSheetUploadController
         {
             mimeType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
-        String fileName = FileUtils.percentEncode(resource.getFileName() == null
-                ? "file" : resource.getFileName());
+        String fileName = DownloadFileNameUtils.withBusinessPrefix(
+                "电子导学单_学生作品", resource.getFileName());
         response.setContentType(mimeType);
         response.setContentLengthLong(Files.size(resource.getPath()));
         response.setHeader("X-Content-Type-Options", "nosniff");
         response.setHeader("Cache-Control", "private, no-store");
-        response.setHeader("Content-Disposition",
-                "inline; filename=" + fileName + "; filename*=utf-8''" + fileName);
+        FileUtils.setInlineResponseHeader(response, fileName);
         Files.copy(resource.getPath(), response.getOutputStream());
     }
 }

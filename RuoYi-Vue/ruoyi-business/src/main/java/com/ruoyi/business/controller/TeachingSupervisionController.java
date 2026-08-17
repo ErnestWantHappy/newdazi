@@ -4,8 +4,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,8 +25,12 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.PageDomain;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.core.page.TableSupport;
+import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
+import com.ruoyi.common.utils.file.FileUtils;
+import com.ruoyi.common.utils.sign.Md5Utils;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.business.util.AcademicYearUtils;
@@ -39,16 +45,29 @@ import com.ruoyi.business.util.AcademicYearUtils;
 public class TeachingSupervisionController extends BaseController
 {
     private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final String SUMMARY_CACHE_PREFIX = "business:teaching-supervision:summary:v2:";
+    private static final int SUMMARY_CACHE_SECONDS = 60;
 
     @Autowired
     private TeachingSupervisionMapper supervisionMapper;
+
+    @Autowired
+    private RedisCache redisCache;
+
+    private final Map<String, Object> summaryCacheLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/schools")
     public TableDataInfo schools(TeachingSupervisionQuery query)
     {
         normalizePeriod(query);
-        long total = supervisionMapper.countSchoolSummaries(query);
         PageDomain pageDomain = TableSupport.buildPageRequest();
+        String cacheKey = buildSchoolCacheKey(query, pageDomain);
+        return loadCachedSummary(cacheKey, () -> loadSchoolSummaries(query, pageDomain));
+    }
+
+    private TableDataInfo loadSchoolSummaries(TeachingSupervisionQuery query, PageDomain pageDomain)
+    {
+        long total = supervisionMapper.countSchoolSummaries(query);
         // 学校汇总的自动 count 会重复执行全部成绩聚合，改用轻量计数避免同一请求计算两遍。
         PageHelper.startPage(pageDomain.getPageNum(), pageDomain.getPageSize(), false)
                 .setReasonable(pageDomain.getReasonable());
@@ -57,20 +76,48 @@ public class TeachingSupervisionController extends BaseController
         return result;
     }
 
+    String buildSchoolCacheKey(TeachingSupervisionQuery query, PageDomain pageDomain)
+    {
+        return buildSummaryCacheKey("schools", query, pageDomain);
+    }
+
+    String buildSummaryCacheKey(String scope, TeachingSupervisionQuery query, PageDomain pageDomain)
+    {
+        String canonical = String.join("\u001f",
+                value(query.getAcademicYear()), value(query.getSemester()),
+                value(query.getUsageStartDate()), value(query.getUsageEndDate()),
+                value(query.getUsageSort()), value(query.getDeptId()), value(query.getTeacherId()),
+                value(query.getLessonId()), value(query.getKeyword()), value(query.getLessonMode()),
+                value(query.getEntryYear()), value(query.getGrade()), value(query.getClassCode()),
+                value(query.getHasPractical()), value(query.getStatusCode()));
+        if (pageDomain != null)
+        {
+            canonical = String.join("\u001f", canonical,
+                    value(pageDomain.getPageNum()), value(pageDomain.getPageSize()),
+                    value(pageDomain.getOrderByColumn()), value(pageDomain.getIsAsc()));
+        }
+        return SUMMARY_CACHE_PREFIX + scope + ":" + Md5Utils.hash(canonical);
+    }
+
+    private String value(Object value)
+    {
+        return value == null ? "" : String.valueOf(value);
+    }
+
     @GetMapping("/teachers")
     public TableDataInfo teachers(TeachingSupervisionQuery query)
     {
         normalizePeriod(query);
-        startPage();
-        return getDataTable(supervisionMapper.selectTeacherSummaries(query));
+        return loadCachedPagedSummary("teachers", query,
+                () -> supervisionMapper.selectTeacherSummaries(query));
     }
 
     @GetMapping("/courses")
     public TableDataInfo courses(TeachingSupervisionQuery query)
     {
         normalizePeriod(query);
-        startPage();
-        return getDataTable(supervisionMapper.selectCourseSummaries(query));
+        return loadCachedPagedSummary("courses", query,
+                () -> supervisionMapper.selectCourseSummaries(query));
     }
 
     /**
@@ -80,8 +127,70 @@ public class TeachingSupervisionController extends BaseController
     public TableDataInfo timeline(TeachingSupervisionQuery query)
     {
         normalizePeriod(query);
-        startPage();
-        return getDataTable(supervisionMapper.selectTimelineSummaries(query));
+        return loadCachedPagedSummary("timeline", query,
+                () -> supervisionMapper.selectTimelineSummaries(query));
+    }
+
+    private TableDataInfo loadCachedPagedSummary(String scope, TeachingSupervisionQuery query,
+            Supplier<List<Map<String, Object>>> loader)
+    {
+        PageDomain pageDomain = TableSupport.buildPageRequest();
+        // 同一筛选条件的不同页共享一份聚合结果，避免每翻一页重算全部课堂事实。
+        String cacheKey = buildSummaryCacheKey(scope + ":all", query, null);
+        TableDataInfo fullResult = loadCachedSummary(cacheKey, () ->
+        {
+            return getDataTable(loader.get());
+        });
+        return paginate(fullResult, pageDomain);
+    }
+
+    private TableDataInfo paginate(TableDataInfo fullResult, PageDomain pageDomain)
+    {
+        List<?> rows = fullResult.getRows();
+        long total = rows == null ? 0L : rows.size();
+        int pageSize = Math.max(1, pageDomain.getPageSize());
+        int pageNum = Math.max(1, pageDomain.getPageNum());
+        int pages = total == 0 ? 1 : (int) ((total + pageSize - 1) / pageSize);
+        if (pageDomain.getReasonable() && pageNum > pages)
+        {
+            pageNum = pages;
+        }
+        int fromIndex = (int) Math.min(total, (long) (pageNum - 1) * pageSize);
+        int toIndex = (int) Math.min(total, (long) fromIndex + pageSize);
+        List<?> pageRows = rows == null ? java.util.Collections.emptyList() : rows.subList(fromIndex, toIndex);
+        TableDataInfo pageResult = new TableDataInfo(pageRows, total);
+        pageResult.setCode(fullResult.getCode());
+        pageResult.setMsg(fullResult.getMsg());
+        return pageResult;
+    }
+
+    private TableDataInfo loadCachedSummary(String cacheKey, Supplier<TableDataInfo> loader)
+    {
+        TableDataInfo cached = redisCache.getCacheObject(cacheKey);
+        if (cached != null)
+        {
+            return cached;
+        }
+        Object cacheLock = summaryCacheLocks.computeIfAbsent(cacheKey, key -> new Object());
+        try
+        {
+            // 同一统计参数只允许一个请求回源，避免聚合 SQL 在瞬时并发下击穿数据库。
+            synchronized (cacheLock)
+            {
+                cached = redisCache.getCacheObject(cacheKey);
+                if (cached != null)
+                {
+                    return cached;
+                }
+                TableDataInfo result = loader.get();
+                redisCache.setCacheObject(cacheKey, result, SUMMARY_CACHE_SECONDS, TimeUnit.SECONDS);
+                return result;
+            }
+        }
+        finally
+        {
+            summaryCacheLocks.remove(cacheKey, cacheLock);
+        }
     }
 
     @GetMapping("/classes")
@@ -329,8 +438,7 @@ public class TeachingSupervisionController extends BaseController
     {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("text/csv;charset=UTF-8");
-        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''"
-                + URLEncoder.encode(filename, StandardCharsets.UTF_8.name()).replace("+", "%20"));
+        FileUtils.setAttachmentResponseHeader(response, DownloadFileNameUtils.withTimestamp(filename));
         java.io.PrintWriter writer = response.getWriter();
         writer.write('\ufeff');
         writer.println(csvCell("统计时间") + "," + csvCell(java.time.ZonedDateTime.now(BEIJING_ZONE).toString()));

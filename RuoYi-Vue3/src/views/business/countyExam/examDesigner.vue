@@ -590,7 +590,8 @@ function handleRemoveQuestion(row) {
 function handlePreviewFile(row) {
   if (pdfPreviewRef.value && row.previewPath) {
     const baseUrl = import.meta.env.VITE_APP_BASE_API;
-    const fullPdfUrl = baseUrl + row.previewPath;
+    // 区域抽测题目也复用资源层鉴权，不能直接访问受保护的 /profile/**。
+    const fullPdfUrl = `${baseUrl}/common/resource/view?resource=${encodeURIComponent(row.previewPath)}`;
     pdfPreviewRef.value.open(fullPdfUrl);
   } else {
     proxy.$modal.msgError("没有可预览的PDF文件。");

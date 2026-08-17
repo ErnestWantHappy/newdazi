@@ -63,6 +63,7 @@ import org.slf4j.LoggerFactory;
  */
 @RestController
 @RequestMapping("/business/student-home")
+@PreAuthorize("@studentSs.isStudent()")
 public class StudentHomeController extends BaseController
 {
     private static final Logger log = LoggerFactory.getLogger(StudentHomeController.class);
@@ -123,7 +124,7 @@ public class StudentHomeController extends BaseController
 
         Long userId = loginUser.getUserId();
         Long deptId = loginUser.getDeptId();
-        log.info("【学生首页】用户ID: {} 请求当前课程", userId);
+        log.debug("【学生首页】用户ID: {} 请求当前课程", userId);
 
         // 1. 查询学生信息（入学年份、班级编号）
         BizStudent student = bizStudentMapper.selectBizStudentByUserId(userId);
@@ -140,7 +141,7 @@ public class StudentHomeController extends BaseController
 
         String entryYear = student.getEntryYear();
         String classCode = student.getClassCode();
-        log.info("【学生首页】学生入学年份: {}, 班级: {}", entryYear, classCode);
+        log.debug("【学生首页】学生入学年份: {}, 班级: {}", entryYear, classCode);
 
         // 获取学校信息
         SysDept dept = deptMapper.selectDeptById(deptId);
@@ -162,14 +163,14 @@ public class StudentHomeController extends BaseController
         // 2. 查询当前被指派的课程ID
         Long lessonId = lessonAssignmentMapper.selectCurrentLessonByClass(entryYear, classCode, deptId);
         if (lessonId == null) {
-            log.info("【学生首页】学生 {} 当前没有被指派课程", userId);
+            log.debug("【学生首页】学生 {} 当前没有被指派课程", userId);
             return AjaxResult.success()
                     .put("hasLesson", false)
                     .put("message", "暂无课程")
                     .put("studentInfo", studentInfo);
         }
 
-        log.info("【学生首页】当前课程ID: {}", lessonId);
+        log.debug("【学生首页】当前课程ID: {}", lessonId);
 
         // 3. 查询课程基本信息
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
@@ -187,7 +188,7 @@ public class StudentHomeController extends BaseController
             }
         }
 
-        log.info("【学生首页】课程 {} 包含 {} 道题目", lessonId, questions.size());
+        log.debug("【学生首页】课程 {} 包含 {} 道题目", lessonId, questions.size());
         
         // 5. 查询学生已提交的答题记录
         List<BizStudentAnswer> submittedAnswers = studentAnswerMapper.selectByStudentAndLesson(student.getStudentId(), lessonId);
@@ -866,80 +867,16 @@ public class StudentHomeController extends BaseController
             year = java.time.Year.now().getValue();
         }
 
-        log.info("【历史成绩】学生 {} 查询 {} 年成绩", student.getStudentId(), year);
+        log.debug("【历史成绩】学生 {} 查询 {} 年成绩", student.getStudentId(), year);
 
-        // 查询该学生所有已提交的课程成绩
-        List<Map<String, Object>> historyList = new java.util.ArrayList<>();
-        
-        // 查询学生有答题记录的所有课程ID
-        List<Long> lessonIds = studentAnswerMapper.selectDistinctLessonIdsByStudent(student.getStudentId(), year);
-        
-        for (Long lessonId : lessonIds) {
-            BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
-            if (lesson == null) continue;
-            
-            // 查询该课程的总分
-            List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
-            int totalScore = questions.stream().mapToInt(q -> q.getQuestionScore() != null ? q.getQuestionScore().intValue() : 0).sum();
-            
-            // 查询学生在该课程的得分
-            List<BizStudentAnswer> answers = studentAnswerMapper.selectByStudentAndLesson(student.getStudentId(), lessonId);
-            int myScore = answers.stream().mapToInt(a -> a.getScore() != null ? a.getScore() : 0).sum();
-            
-            // 获取最后提交时间
-            Date lastSubmitTime = answers.stream()
-                .map(BizStudentAnswer::getSubmitTime)
-                .filter(t -> t != null)
-                .max(Date::compareTo)
-                .orElse(null);
-            
-            // 统计各题型得分
-            int typingScore = 0, theoryScore = 0, practicalScore = 0;
-            int typingTotal = 0, theoryTotal = 0, practicalTotal = 0;
-            
-            Map<Long, BizLessonQuestionDetailVo> questionMap = questions.stream()
-                .collect(java.util.stream.Collectors.toMap(BizLessonQuestionDetailVo::getQuestionId, q -> q));
-            
-            for (BizStudentAnswer a : answers) {
-                BizLessonQuestionDetailVo q = questionMap.get(a.getQuestionId());
-                if (q == null) continue;
-                int score = a.getScore() != null ? a.getScore() : 0;
-                int qScore = q.getQuestionScore() != null ? q.getQuestionScore().intValue() : 0;
-                
-                if ("typing".equals(q.getQuestionType())) {
-                    typingScore += score;
-                    typingTotal += qScore;
-                } else if ("choice".equals(q.getQuestionType()) || "judgment".equals(q.getQuestionType())) {
-                    theoryScore += score;
-                    theoryTotal += qScore;
-                } else if ("practical".equals(q.getQuestionType())) {
-                    practicalScore += score;
-                    practicalTotal += qScore;
-                }
-            }
-            
-            Map<String, Object> record = new java.util.HashMap<>();
-            record.put("lessonId", lessonId);
-            record.put("lessonTitle", lesson.getLessonTitle());
-            record.put("totalScore", totalScore);
-            record.put("myScore", myScore);
-            record.put("submitTime", lastSubmitTime);
-            record.put("typingScore", typingScore + "/" + typingTotal);
-            record.put("theoryScore", theoryScore + "/" + theoryTotal);
-            record.put("practicalScore", practicalScore + "/" + practicalTotal);
-            
-            historyList.add(record);
-        }
-        
-        // 按提交时间倒序
-        historyList.sort((a, b) -> {
-            Date t1 = (Date) a.get("submitTime");
-            Date t2 = (Date) b.get("submitTime");
-            if (t1 == null && t2 == null) return 0;
-            if (t1 == null) return 1;
-            if (t2 == null) return -1;
-            return t2.compareTo(t1);
-        });
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        Date startTime = Date.from(java.time.LocalDate.of(year, 1, 1)
+                .atStartOfDay(zone).toInstant());
+        Date endTime = Date.from(java.time.LocalDate.of(year + 1, 1, 1)
+                .atStartOfDay(zone).toInstant());
+        // 唯一约束保证答案无需再全表取最新；一条 SQL 返回完整成绩单，避免课程和评分项 N+1。
+        List<Map<String, Object>> historyList = studentAnswerMapper.selectHistoryScores(
+                student.getStudentId(), startTime, endTime);
 
         return AjaxResult.success(historyList);
     }

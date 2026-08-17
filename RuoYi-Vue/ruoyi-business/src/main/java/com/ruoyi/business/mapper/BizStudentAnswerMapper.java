@@ -53,6 +53,9 @@ public interface BizStudentAnswerMapper
 
     /** 统计指定学生的答题记录，用于阻止产生无学生归属的孤儿答案。 */
     int countByStudentIds(@Param("studentIds") List<Long> studentIds);
+
+    /** 统计指定题目的答题记录，用于阻止删题破坏历史成绩。 */
+    int countByQuestionIds(@Param("questionIds") List<Long> questionIds);
     
     /**
      * 查询某课程的所有答题记录
@@ -85,9 +88,11 @@ public interface BizStudentAnswerMapper
                                           @Param("questionIds") List<Long> questionIds);
 
     /**
-     * 查询学生有答题记录的所有课程ID（按年份筛选）
+     * 一次聚合学生指定自然年的历史成绩，避免按课程循环查询和题目评分项 N+1。
      */
-    List<Long> selectDistinctLessonIdsByStudent(@Param("studentId") Long studentId, @Param("year") Integer year);
+    List<java.util.Map<String, Object>> selectHistoryScores(@Param("studentId") Long studentId,
+                                                            @Param("startTime") Date startTime,
+                                                            @Param("endTime") Date endTime);
 
     /**
      * 查询错题列表

@@ -7,6 +7,7 @@ import com.ruoyi.business.service.IBizLessonService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.redis.RedisCache;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,8 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.exception.ServiceException;
@@ -33,6 +36,9 @@ import com.ruoyi.common.exception.ServiceException;
 @PreAuthorize("@ss.hasRole('teacher') or @ss.hasRole('admin')")
 public class TeacherDashboardController extends BaseController
 {
+    private static final String DASHBOARD_CACHE_PREFIX = "business:teacher-dashboard:v1:";
+    private static final int DASHBOARD_CACHE_SECONDS = 30;
+
     @Autowired
     private IBizLessonService lessonService;
 
@@ -42,14 +48,44 @@ public class TeacherDashboardController extends BaseController
     @Autowired
     private BizStudentAnswerMapper studentAnswerMapper;
 
+    @Autowired
+    private RedisCache redisCache;
+
+    private final Map<String, Object> dashboardCacheLocks = new ConcurrentHashMap<>();
+
     /**
      * 获取教师首页的完整数据
      */
     @GetMapping("/dashboard-data")
     public AjaxResult getDashboardData()
     {
-        List<GradeGroupVo> dashboardData = lessonService.getTeacherDashboardData();
-        return AjaxResult.success(dashboardData);
+        String cacheKey = DASHBOARD_CACHE_PREFIX + SecurityUtils.getUserId() + ":" + SecurityUtils.getDeptId();
+        AjaxResult cached = redisCache.getCacheObject(cacheKey);
+        if (cached != null)
+        {
+            return cached;
+        }
+        Object cacheLock = dashboardCacheLocks.computeIfAbsent(cacheKey, key -> new Object());
+        try
+        {
+            // 教师首页包含多次班级、课程和指派聚合，同一教师瞬时并发只回源一次。
+            synchronized (cacheLock)
+            {
+                cached = redisCache.getCacheObject(cacheKey);
+                if (cached != null)
+                {
+                    return cached;
+                }
+                List<GradeGroupVo> dashboardData = lessonService.getTeacherDashboardData();
+                AjaxResult result = AjaxResult.success(dashboardData);
+                redisCache.setCacheObject(cacheKey, result, DASHBOARD_CACHE_SECONDS, TimeUnit.SECONDS);
+                return result;
+            }
+        }
+        finally
+        {
+            dashboardCacheLocks.remove(cacheKey, cacheLock);
+        }
     }
 
     /**

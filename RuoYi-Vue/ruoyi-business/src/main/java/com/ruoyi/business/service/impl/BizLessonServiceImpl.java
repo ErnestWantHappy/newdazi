@@ -207,7 +207,7 @@ public class BizLessonServiceImpl implements IBizLessonService
             return new ArrayList<>();
         }
         String username = loginUser != null ? loginUser.getUsername() : "unknown";
-        log.info("【教师首页数据】开始获取数据，教师: {}, 学校ID: {}", username, deptId);
+        log.debug("【教师首页数据】开始获取数据，教师: {}, 学校ID: {}", username, deptId);
 
         SysDept school = deptMapper.selectDeptById(deptId);
         if (school == null) {
@@ -215,14 +215,14 @@ public class BizLessonServiceImpl implements IBizLessonService
             return new ArrayList<>();
         }
         String schoolType = school.getSchoolType();
-        log.info("【教师首页数据】学校类型: {}", schoolType);
+        log.debug("【教师首页数据】学校类型: {}", schoolType);
 
         // 改为从教师管理的班级表（biz_teacher_class）获取年级分组，而不是全校学生
         BizTeacherClass tcQuery = new BizTeacherClass();
         tcQuery.setUserId(loginUser.getUserId());
         tcQuery.setDeptId(deptId);
         List<BizTeacherClass> managedClasses = teacherClassMapper.selectBizTeacherClassList(tcQuery);
-        log.info("【教师首页数据】步骤1: 从 biz_teacher_class 查询到 {} 条该教师管理的班级记录。", managedClasses.size());
+        log.debug("【教师首页数据】步骤1: 从 biz_teacher_class 查询到 {} 条该教师管理的班级记录。", managedClasses.size());
 
         Map<String, List<String>> yearClassMap = managedClasses.stream()
                 .filter(Objects::nonNull)
@@ -233,11 +233,11 @@ public class BizLessonServiceImpl implements IBizLessonService
                             Collectors.collectingAndThen(Collectors.toList(), 
                                 list -> list.stream().distinct().collect(Collectors.toList())))
                 ));
-        log.info("【教师首页数据】步骤2: 成功按入学年份分组，共 {} 个年份组。", yearClassMap.size());
+        log.debug("【教师首页数据】步骤2: 成功按入学年份分组，共 {} 个年份组。", yearClassMap.size());
 
         List<GradeGroupVo> result = new ArrayList<>();
         for (String entryYear : yearClassMap.keySet()) {
-            log.info("【教师首页数据】步骤3: 正在处理入学年份: {}", entryYear);
+            log.debug("【教师首页数据】步骤3: 正在处理入学年份: {}", entryYear);
             GradeGroupVo gradeGroup = new GradeGroupVo();
             gradeGroup.setEntryYear(entryYear);
 
@@ -245,19 +245,19 @@ public class BizLessonServiceImpl implements IBizLessonService
             gradeGroup.setGradeName(gradeInfo.keySet().iterator().next());
             Long currentGradeId = gradeInfo.values().iterator().next();
             gradeGroup.setGradeId(currentGradeId);
-            log.info("【教师首页数据】计算得出年级为: {}, 年级ID: {}", gradeGroup.getGradeName(), currentGradeId);
+            log.debug("【教师首页数据】计算得出年级为: {}, 年级ID: {}", gradeGroup.getGradeName(), currentGradeId);
 
             gradeGroup.setAllClassesInGrade(yearClassMap.get(entryYear));
 
             // 按稳定 entry_year 装课：已毕业(gradeId=-1)/新生(0) 也必须查课，
             // 禁止用「当前年级号 > 0」误杀历史届课程卡片。
             List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByEntryYearAndCreator(entryYear, username, deptId);
-            log.info("【教师首页数据】届别 {}（{}）自建课程 {} 门。", entryYear, gradeGroup.getGradeName(),
+            log.debug("【教师首页数据】届别 {}（{}）自建课程 {} 门。", entryYear, gradeGroup.getGradeName(),
                     selfLessons == null ? 0 : selfLessons.size());
 
             List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
                     entryYear, loginUser.getUserId(), deptId, username);
-            log.info("【教师首页数据】届别 {} 共享课程 {} 门。", entryYear,
+            log.debug("【教师首页数据】届别 {} 共享课程 {} 门。", entryYear,
                     sharedLessons == null ? 0 : sharedLessons.size());
 
             List<LessonInfoVo> allLessons = new ArrayList<>();
@@ -287,7 +287,7 @@ public class BizLessonServiceImpl implements IBizLessonService
 
         result.sort((a, b) -> b.getEntryYear().compareTo(a.getEntryYear()));
         fillDashboardAssignments(result, deptId);
-        log.info("【教师首页数据】数据组装完成，共返回 {} 个年级组的数据。", result.size());
+        log.debug("【教师首页数据】数据组装完成，共返回 {} 个年级组的数据。", result.size());
 
         return result;
     }

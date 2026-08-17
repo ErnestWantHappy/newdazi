@@ -22,19 +22,19 @@ public class BizStudent extends BaseEntity
     private Long userId;
 
     /** 学号 */
-    @Excel(name = "学号")
+    @Excel(name = "学号", width = 14, prompt = "填写本班序号，例如 01，范围 01～99")
     private String studentNo;
 
     /** 入学年份 */
-    @Excel(name = "入学年份")
+    @Excel(name = "入学年份", width = 16, prompt = "填写 4 位入学年份，例如 2025")
     private String entryYear;
 
     /** 班级编号 */
-    @Excel(name = "班级编号")
+    @Excel(name = "班级编号", width = 18, prompt = "只填 01～10，不要写 601、602 等带年级的三位数")
     private String classCode;
 
     /** 真实姓名 (用于导入和列表展示) */
-    @Excel(name = "真实姓名")
+    @Excel(name = "真实姓名", width = 18)
     private String studentName;
 
     /** 登录账号 (用于列表展示, 非数据库字段) */
@@ -47,7 +47,7 @@ public class BizStudent extends BaseEntity
     private Long teacherUserId;
 
     /** 教师备注 */
-    @Excel(name = "备注")
+    @Excel(name = "备注", width = 38, wrapText = true)
     private String remark;
 
 

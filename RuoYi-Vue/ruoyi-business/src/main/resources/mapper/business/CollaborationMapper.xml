@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.CollaborationMapper">
+
+    <resultMap id="RoomResult" type="com.ruoyi.business.domain.CollaborationRoom">
+        <id property="roomId" column="room_id"/>
+        <result property="provider" column="provider"/>
+        <result property="publicFileId" column="public_file_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="sourceMaterialId" column="source_material_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+        <result property="roomTitle" column="room_title"/>
+        <result property="status" column="status"/>
+        <result property="currentVersion" column="current_version"/>
+        <result property="currentFileName" column="current_file_name"/>
+        <result property="currentFilePath" column="current_file_path"/>
+        <result property="currentFileExtension" column="current_file_extension"/>
+        <result property="currentMimeType" column="current_mime_type"/>
+        <result property="currentFileSize" column="current_file_size"/>
+        <result property="currentSha256" column="current_sha256"/>
+        <result property="creatorUserId" column="creator_user_id"/>
+        <result property="modifierUserId" column="modifier_user_id"/>
+        <result property="lastOpenTime" column="last_open_time"/>
+        <result property="lastSaveTime" column="last_save_time"/>
+        <result property="lastCallbackType" column="last_callback_type"/>
+        <result property="lastCallbackStatus" column="last_callback_status"/>
+        <result property="lastWpsRequestId" column="last_wps_request_id"/>
+        <result property="lastErrorMessage" column="last_error_message"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="TicketResult" type="com.ruoyi.business.domain.CollaborationUploadTicket">
+        <id property="ticketId" column="ticket_id"/>
+        <result property="ticketToken" column="ticket_token"/>
+        <result property="roomId" column="room_id"/>
+        <result property="expectedVersion" column="expected_version"/>
+        <result property="expectedFileName" column="expected_file_name"/>
+        <result property="expectedFileSize" column="expected_file_size"/>
+        <result property="expectedDigestType" column="expected_digest_type"/>
+        <result property="expectedDigest" column="expected_digest"/>
+        <result property="manualSave" column="manual_save"/>
+        <result property="tempFilePath" column="temp_file_path"/>
+        <result property="status" column="status"/>
+        <result property="uploadedFileSize" column="uploaded_file_size"/>
+        <result property="uploadedSha256" column="uploaded_sha256"/>
+        <result property="requesterUserId" column="requester_user_id"/>
+        <result property="expiresTime" column="expires_time"/>
+        <result property="completedTime" column="completed_time"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="roomColumns">room_id, provider, public_file_id, lesson_id, question_id, source_material_id,
+        dept_id, entry_year, class_code, room_title, status, current_version, current_file_name,
+        current_file_path, current_file_extension, current_mime_type, current_file_size, current_sha256,
+        creator_user_id, modifier_user_id, last_open_time, last_save_time, last_callback_type,
+        last_callback_status, last_wps_request_id, last_error_message, create_time, update_time</sql>
+
+    <select id="selectRoomById" resultMap="RoomResult">
+        SELECT <include refid="roomColumns"/> FROM biz_collab_room WHERE room_id = #{roomId}
+    </select>
+    <select id="selectRoomByPublicFileId" resultMap="RoomResult">
+        SELECT <include refid="roomColumns"/> FROM biz_collab_room WHERE public_file_id = #{publicFileId}
+    </select>
+    <select id="selectRoomByClass" resultMap="RoomResult">
+        SELECT <include refid="roomColumns"/> FROM biz_collab_room
+        WHERE lesson_id = #{lessonId} AND question_id = #{questionId} AND dept_id = #{deptId}
+          AND entry_year = #{entryYear} AND class_code = #{classCode} LIMIT 1
+    </select>
+    <select id="selectRoomsByLesson" resultMap="RoomResult">
+        SELECT <include refid="roomColumns"/> FROM biz_collab_room
+        WHERE lesson_id = #{lessonId} AND dept_id = #{deptId}
+        ORDER BY CAST(class_code AS UNSIGNED), class_code, room_id
+    </select>
+
+    <insert id="insertRoom" useGeneratedKeys="true" keyProperty="roomId">
+        INSERT INTO biz_collab_room
+        (provider, public_file_id, lesson_id, question_id, source_material_id, dept_id, entry_year,
+         class_code, room_title, status, current_version, current_file_name, current_file_path,
+         current_file_extension, current_mime_type, current_file_size, current_sha256,
+         creator_user_id, modifier_user_id, create_time, update_time)
+        VALUES
+        (#{provider}, #{publicFileId}, #{lessonId}, #{questionId}, #{sourceMaterialId}, #{deptId},
+         #{entryYear}, #{classCode}, #{roomTitle}, #{status}, #{currentVersion}, #{currentFileName},
+         #{currentFilePath}, #{currentFileExtension}, #{currentMimeType}, #{currentFileSize},
+         #{currentSha256}, #{creatorUserId}, #{modifierUserId}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="updateRoomStatus">
+        UPDATE biz_collab_room SET status = #{status}, update_time = NOW()
+        WHERE lesson_id = #{lessonId} AND dept_id = #{deptId}
+    </update>
+    <update id="reopenRoom">
+        UPDATE biz_collab_room SET status = #{status}, update_time = NOW() WHERE room_id = #{roomId}
+    </update>
+    <update id="markRoomOpened">
+        UPDATE biz_collab_room SET last_open_time = #{openTime}, update_time = #{openTime} WHERE room_id = #{roomId}
+    </update>
+    <update id="updateRoomCallback">
+        UPDATE biz_collab_room SET last_callback_type = #{callbackType}, last_callback_status = #{callbackStatus},
+            last_wps_request_id = #{wpsRequestId}, last_error_message = #{errorMessage}, update_time = #{updateTime}
+        WHERE room_id = #{roomId}
+    </update>
+
+    <insert id="insertRevision">
+        INSERT INTO biz_collab_revision
+        (room_id, version_no, file_name, file_path, file_size, sha256, wps_digest_type, wps_digest,
+         manual_save, saved_by_user_id, create_time)
+        VALUES (#{roomId}, #{versionNo}, #{fileName}, #{filePath}, #{fileSize}, #{sha256},
+                #{digestType}, #{digest}, #{manualSave}, #{savedByUserId}, #{createTime})
+    </insert>
+
+    <insert id="insertUploadTicket" useGeneratedKeys="true" keyProperty="ticketId">
+        INSERT INTO biz_collab_upload_ticket
+        (ticket_token, room_id, expected_version, expected_file_name, expected_file_size,
+         expected_digest_type, expected_digest, manual_save, temp_file_path, status,
+         requester_user_id, expires_time, create_time, update_time)
+        VALUES (#{ticketToken}, #{roomId}, #{expectedVersion}, #{expectedFileName}, #{expectedFileSize},
+                #{expectedDigestType}, #{expectedDigest}, #{manualSave}, #{tempFilePath}, #{status},
+                #{requesterUserId}, #{expiresTime}, #{createTime}, #{updateTime})
+    </insert>
+    <select id="selectUploadTicket" resultMap="TicketResult">
+        SELECT * FROM biz_collab_upload_ticket WHERE ticket_token = #{ticketToken} LIMIT 1
+    </select>
+    <update id="markTicketUploaded">
+        UPDATE biz_collab_upload_ticket SET status = 'UPLOADED', uploaded_file_size = #{uploadedFileSize},
+            uploaded_sha256 = #{uploadedSha256}, update_time = #{updateTime}
+        WHERE ticket_token = #{ticketToken} AND status = 'PREPARED' AND expires_time &gt; #{updateTime}
+    </update>
+    <update id="markTicketCompleted">
+        UPDATE biz_collab_upload_ticket SET status = #{status}, completed_time = #{completedTime},
+            error_message = #{errorMessage}, update_time = #{completedTime}
+        WHERE ticket_id = #{ticketId} AND status IN ('PREPARED', 'UPLOADED')
+    </update>
+
+    <update id="commitRoomVersion">
+        UPDATE biz_collab_room SET current_version = #{nextVersion}, current_file_name = #{fileName},
+            current_file_path = #{filePath}, current_file_extension = #{fileExtension},
+            current_mime_type = #{mimeType}, current_file_size = #{fileSize}, current_sha256 = #{sha256},
+            modifier_user_id = #{modifierUserId}, last_save_time = #{saveTime}, update_time = #{saveTime}
+        WHERE room_id = #{roomId} AND current_version = #{expectedVersion}
+    </update>
+
+    <insert id="insertCallbackEvent">
+        INSERT INTO biz_collab_callback_event
+        (room_id, public_file_id, callback_type, callback_status, wps_request_id, user_id, remote_ip,
+         duration_ms, error_code, error_message, create_time)
+        VALUES (#{roomId}, #{publicFileId}, #{callbackType}, #{callbackStatus}, #{wpsRequestId},
+                #{userId}, #{remoteIp}, #{durationMs}, #{errorCode}, #{errorMessage}, #{createTime})
+    </insert>
+</mapper>
+

@@ -18,7 +18,7 @@
       </el-form-item>
       <el-form-item label="班级" prop="classCode">
          <el-select v-model="queryParams.classCode" placeholder="请选择班级" clearable style="width: 200px">
-           <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+           <el-option v-for="n in 10" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
          </el-select>
       </el-form-item>
       <el-form-item label="账号状态" prop="lockStatus">
@@ -146,11 +146,11 @@
         </el-form-item>
         <el-form-item label="班级编号" prop="classCode">
            <el-select v-model="form.classCode" placeholder="请选择班级编号" style="width:100%">
-             <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+             <el-option v-for="n in 10" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
            </el-select>
         </el-form-item>
         <el-form-item label="学号" prop="studentNo">
-          <el-input v-model="form.studentNo" placeholder="请输入学生在本班的学号(1-99)" />
+          <el-input v-model="form.studentNo" placeholder="请输入本班学号，例如 01" maxlength="2" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" placeholder="如：转班、转校、休学等" />
@@ -165,6 +165,16 @@
     </el-dialog>
 
     <el-dialog :title="upload.title" v-model="upload.open" width="400px" append-to-body>
+      <el-alert
+        class="student-import-alert"
+        style="margin-bottom: 16px"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <template #title><b>班级编号只填 01～10，不要填写年级号</b></template>
+        <div>正确：学号 01、入学年份 2025、班级编号 01；错误：班级编号 601、602。</div>
+      </el-alert>
       <el-upload
         ref="uploadRef"
         :limit="1"
@@ -175,6 +185,7 @@
         :on-progress="handleFileUploadProgress"
         :on-success="handleFileSuccess"
         :on-error="handleFileError"
+        :before-upload="validateStudentImportFile"
         :auto-upload="false"
         drag
       >
@@ -219,7 +230,7 @@
                 </el-form-item>
                 <el-form-item label="班级">
                   <el-select v-model="deleteDialog.classCode" placeholder="请选择班级" style="width: 200px">
-                    <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+                    <el-option v-for="n in 10" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
                   </el-select>
                 </el-form-item>
               </el-form>
@@ -245,6 +256,7 @@
 import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import useUserStore from "@/store/modules/user";
+import * as XLSX from "xlsx";
 import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus, delStudentByClass } from "@/api/business/student";
 import {
   handleSessionExpired,
@@ -298,7 +310,10 @@ const data = reactive({
     studentName: [ { required: true, message: "学生姓名不能为空", trigger: "blur" } ],
     entryYear: [ { required: true, message: "入学年份不能为空", trigger: "change" } ],
     classCode: [ { required: true, message: "班级编号不能为空", trigger: "change" } ],
-    studentNo: [ { required: true, message: "学号不能为空", trigger: "blur" } ],
+    studentNo: [
+      { required: true, message: "学号不能为空", trigger: "blur" },
+      { pattern: /^(0?[1-9]|[1-9]\\d)$/, message: "学号只能填写 01～99", trigger: "blur" }
+    ],
   }
 });
 
@@ -550,8 +565,47 @@ function handleImport() {
 
 /** 下载模板操作 */
 function importTemplate() {
-  proxy.download("business/student/importTemplate", { deptId: userStore.currentDeptId || null }, `student_template_${new Date().getTime()}.xlsx`);
+  const rows = [
+    ["学号", "入学年份", "班级编号", "真实姓名", "备注"],
+    ["01", "2025", "01", "示例学生一", "示例行，导入前请替换"],
+    ["02", "2025", "02", "示例学生二", "班号只填 01～10，不要写 601、602"]
+  ];
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet["!cols"] = [{ wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 38 }];
+  ["A2", "A3", "C2", "C3"].forEach(cell => {
+    if (worksheet[cell]) worksheet[cell].z = "@";
+  });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "学生导入数据");
+  XLSX.writeFile(workbook, `student_template_${new Date().getTime()}.xlsx`);
 };
+
+/**
+ * 上传前先在浏览器检查班号。这样教师能立即看到具体行号，避免把 601、602
+ * 这类“年级 + 班号”误写法提交到服务器后才发现整批失败。
+ */
+async function validateStudentImportFile(rawFile) {
+  try {
+    const workbook = XLSX.read(await rawFile.arrayBuffer(), { type: "array", raw: false });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+    const invalidRows = [];
+    rows.slice(1).forEach((row, index) => {
+      if (row.every(value => String(value).trim() === "")) return;
+      const classCode = String(row[2] ?? "").trim();
+      const classNumber = Number(classCode);
+      if (!/^\d{1,2}$/.test(classCode) || classNumber < 1 || classNumber > 10) invalidRows.push(index + 2);
+    });
+    if (invalidRows.length) {
+      proxy.$modal.msgError(`第 ${invalidRows.slice(0, 5).join("、")} 行班级编号无效：只填 01～10，不要写 601、602 等带年级的三位数。`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    proxy.$modal.msgError("无法读取 Excel，请重新下载平台模板后填写。");
+    return false;
+  }
+}
 
 import { ElLoading } from 'element-plus';
 

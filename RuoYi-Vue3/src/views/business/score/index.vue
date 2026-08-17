@@ -529,6 +529,7 @@
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename';
 import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore, getGuideSheetScoreContext } from '@/api/business/score';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@element-plus/icons-vue';
@@ -1170,10 +1171,10 @@ function handleExport(selectedColumns) {
     searchKeyword.value.trim() || null,
     selectedColumns
   ).then(res => {
-    const blob = new Blob([res]);
+    const blob = res instanceof Blob ? res : new Blob([res]);
     const link = document.createElement('a');
     link.href = window.URL.createObjectURL(blob);
-    link.download = `成绩汇总_${queryParams.value.entryYear}级.xlsx`;
+    link.download = resolveBlobDownloadFilename(blob, `成绩汇总_${queryParams.value.entryYear}级.xlsx`);
     link.click();
     window.URL.revokeObjectURL(link.href);
     ElMessage.success('导出成功');

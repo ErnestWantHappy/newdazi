@@ -1,19 +1,14 @@
--- 修复：教师角色虽已关联「课程管理」菜单，但菜单 status=1 导致 selectMenuPerms 过滤掉 business:lesson:list
--- 幂等：仅当 perms 与预期一致时启用；可重复执行
--- 回滚：UPDATE sys_menu SET status = '1' WHERE menu_id = 2006 AND perms = 'business:lesson:list';
+-- 修复：教师前端不展示管理员课程列表，但教师角色残留了已停用菜单的授权关系。
+-- 不启用该管理菜单，只删除 teacher 角色的无效关联，保持实际 403 权限边界不变。
+-- 幂等：可重复执行。
+-- 回滚：INSERT IGNORE INTO sys_role_menu(role_id, menu_id)
+--       SELECT r.role_id, m.menu_id FROM sys_role r JOIN sys_menu m ON m.perms='business:lesson:list'
+--       WHERE r.role_key='teacher' AND m.status='1';
 
-UPDATE sys_menu
-SET status = '0',
-    update_by = 'system',
-    update_time = NOW()
-WHERE menu_id = 2006
-  AND perms = 'business:lesson:list'
-  AND status <> '0';
-
--- 兜底：若环境 menu_id 不同，按 perms + 课程管理 名称启用
-UPDATE sys_menu
-SET status = '0',
-    update_by = 'system',
-    update_time = NOW()
-WHERE perms = 'business:lesson:list'
-  AND status <> '0';
+DELETE role_menu
+FROM sys_role_menu role_menu
+INNER JOIN sys_role role ON role.role_id = role_menu.role_id
+INNER JOIN sys_menu menu ON menu.menu_id = role_menu.menu_id
+WHERE role.role_key = 'teacher'
+  AND menu.perms = 'business:lesson:list'
+  AND menu.status = '1';

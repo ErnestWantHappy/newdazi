@@ -62,7 +62,8 @@ server:
 # 日志配置
 logging:
   level:
-    com.ruoyi: debug
+    # 生产高并发下 DEBUG 会放大日志 I/O，需要排障时再通过外置配置临时开启。
+    com.ruoyi: info
     # 导学单 JSON 含学生答卷和评分配置，禁止作为 MyBatis SQL 参数写入日志
     com.ruoyi.business.mapper.GuideSheetAnswerMapper: info
     com.ruoyi.business.mapper.GuideSheetBindingMapper: info
@@ -176,6 +177,21 @@ student:
 # Swagger 示例接口默认不注册，仅本机显式开启。
 demo:
   enabled: ${DEMO_ENABLED:false}
+
+# WPS WebOffice 在线协作 PoC。真实密钥与公网地址只能通过环境变量或外置 yml 注入。
+collaboration:
+  enabled: ${COLLABORATION_ENABLED:false}
+  wps:
+    app-id: ${WPS_WEBOFFICE_APP_ID:}
+    app-secret: ${WPS_WEBOFFICE_APP_SECRET:}
+    public-base-url: ${WPS_WEBOFFICE_PUBLIC_BASE_URL:}
+    # 使用 WPS 控制台下载并部署的官方 web-office-sdk-solution.umd.js 地址。
+    sdk-url: ${WPS_WEBOFFICE_SDK_URL:}
+    endpoint: ${WPS_WEBOFFICE_ENDPOINT:https://o.wpsgo.com}
+    token-secret: ${WPS_WEBOFFICE_TOKEN_SECRET:}
+    token-minutes: ${WPS_WEBOFFICE_TOKEN_MINUTES:120}
+    # 免费测试应用当前单文件限制为 5MB；正式授权后可通过外置配置调整。
+    test-max-file-bytes: ${WPS_WEBOFFICE_TEST_MAX_FILE_BYTES:5242880}
 
 # 电子导学单配置。密钥仅从部署环境注入，禁止写入表单数据。
 guide-sheet:

@@ -1127,7 +1127,8 @@ function submitFileForm() {
 function handlePreview(row) {
   if (row.previewPath) {
     const baseUrl = import.meta.env.VITE_APP_BASE_API;
-    const fullUrl = baseUrl + row.previewPath;
+    // /profile/** 已禁止静态直读，必须通过服务端做登录态和题目归属校验。
+    const fullUrl = `${baseUrl}/common/resource/view?resource=${encodeURIComponent(row.previewPath)}`;
     window.open(fullUrl, "_blank");
   } else {
     proxy.$modal.msgWarning("该题目没有可预览的附件");

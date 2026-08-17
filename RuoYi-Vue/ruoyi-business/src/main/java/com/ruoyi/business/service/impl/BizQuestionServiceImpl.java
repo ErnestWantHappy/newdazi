@@ -7,6 +7,7 @@ import com.ruoyi.business.mapper.BizScoringItemMapper; // P6 import
 import com.ruoyi.business.mapper.PracticalArtifactMapper;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
 import com.ruoyi.business.service.AsyncConversionService;
+import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.service.IBizQuestionService;
 import com.ruoyi.business.utils.FileConversionUtils;
 import com.ruoyi.common.config.RuoYiConfig;
@@ -43,6 +44,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
     @Autowired
     private PracticalArtifactMapper practicalArtifactMapper;
+
+    @Autowired
+    private AnswerDeletionGuardService answerDeletionGuardService;
 
     @Override
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
@@ -149,11 +153,13 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 }
             }
         }
+        answerDeletionGuardService.assertQuestionsDeletable(questionIds);
         return bizQuestionMapper.deleteBizQuestionByQuestionIds(questionIds);
     }
 
     @Override
     public int deleteBizQuestionByQuestionId(Long questionId) {
+        answerDeletionGuardService.assertQuestionsDeletable(new Long[] { questionId });
         return bizQuestionMapper.deleteBizQuestionByQuestionId(questionId);
     }
 

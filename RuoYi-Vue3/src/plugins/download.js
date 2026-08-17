@@ -3,6 +3,7 @@ import { ElLoading, ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
 import errorCode from '@/utils/errorCode'
 import { blobValidate } from '@/utils/ruoyi'
+import { filenameFromHeaders, sanitizeDownloadFilename } from '@/utils/downloadFilename'
 import {
   getAuthorizationHeader,
   handleSessionExpired,
@@ -20,7 +21,7 @@ async function parseBlobError(data) {
 
 async function handleBlobResponse(data, headers, defaultName) {
   if (blobValidate(data)) {
-    saveAs(data, decodeURIComponent(headers?.['download-filename'] || defaultName))
+    saveAs(data, filenameFromHeaders(headers) || sanitizeDownloadFilename(defaultName))
     return
   }
   const rspObj = await parseBlobError(data)
@@ -40,7 +41,7 @@ function getHeaders() {
 }
 
 async function requestDownload(config, options = {}) {
-  const { showLoading = false, filename = 'download' } = options
+  const { showLoading = false, filename = '下载文件' } = options
   if (showLoading) {
     downloadLoadingInstance = ElLoading.service({
       text: '正在下载数据，请稍候',
@@ -78,13 +79,14 @@ export default {
       filename: name
     })
   },
-  resource(resource) {
-    const url = `${baseURL}/common/download/resource?resource=${encodeURIComponent(resource)}`
+  resource(resource, name) {
+    const nameQuery = name ? `&downloadName=${encodeURIComponent(name)}` : ''
+    const url = `${baseURL}/common/download/resource?resource=${encodeURIComponent(resource)}${nameQuery}`
     return requestDownload({
       method: 'get',
       url
     }, {
-      filename: 'resource'
+      filename: name || '附件'
     })
   },
   zip(url, name) {

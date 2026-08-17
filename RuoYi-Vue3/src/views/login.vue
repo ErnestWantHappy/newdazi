@@ -1,5 +1,28 @@
 <template>
   <div class="login">
+    <div class="login-backgrounds" aria-hidden="true">
+      <div
+        v-for="(item, index) in loginBackgrounds"
+        :key="item.name"
+        class="login-background"
+        :class="{ 'is-active': activeBackgroundIndex === index }"
+        :style="{ backgroundImage: `url(${item.src})` }"
+      />
+    </div>
+
+    <div class="login-slide-content">
+      <transition name="slide-copy" mode="out-in">
+        <div :key="activeBackgroundIndex" class="login-slide-copy">
+          <div class="login-slide-eyebrow">{{ activeBackground.eyebrow }}</div>
+          <h2>{{ activeBackground.title }}</h2>
+          <p>{{ activeBackground.subtitle }}</p>
+          <div v-if="activeBackground.tags" class="login-slide-tags">
+            <span v-for="tag in activeBackground.tags" :key="tag">{{ tag }}</span>
+          </div>
+        </div>
+      </transition>
+    </div>
+
     <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">
       <h3 class="title">{{ title }}</h3>
       <el-form-item prop="username">
@@ -57,6 +80,14 @@
         </div>
       </el-form-item>
     </el-form>
+    <div class="login-carousel-dots" aria-hidden="true">
+      <span
+        v-for="(item, index) in loginBackgrounds"
+        :key="item.name"
+        class="login-carousel-dot"
+        :class="{ 'is-active': activeBackgroundIndex === index }"
+      />
+    </div>
     <!--  底部  -->
     <div class="el-login-footer">
       <span>开发支持：象山县-郑东旭</span>
@@ -92,12 +123,43 @@ import { getCodeImg } from "@/api/login"
 import Cookies from "js-cookie"
 import { encrypt, decrypt } from "@/utils/jsencrypt"
 import useUserStore from '@/store/modules/user'
+import knowledgeWallBackground from '@/assets/images/login-knowledge-wall-v1.webp'
+import classroomBackground from '@/assets/images/login-classroom-closeup-v1.webp'
+import xiangshanBackground from '@/assets/images/login-xiangshan-coast-v2.webp'
 
 const title = import.meta.env.VITE_APP_TITLE
 const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
 const { proxy } = getCurrentInstance()
+
+const loginBackgrounds = [
+  {
+    name: '信息科技知识展墙',
+    src: knowledgeWallBackground,
+    eyebrow: '贯通小学 · 初中 · 高中',
+    title: '从数字启蒙，到智能创造',
+    subtitle: '覆盖信息科技学习的核心主题与实践能力。',
+    tags: ['数字与编码', '算法与编程', '过程与控制', '网络与安全', '物联网', '人工智能']
+  },
+  {
+    name: '真实信息科技课堂',
+    src: classroomBackground,
+    eyebrow: '真实课堂',
+    title: '教、学、练、评，在课堂中发生',
+    subtitle: '选择、判断、操作与打字，让每一次学习过程都看得见。'
+  },
+  {
+    name: '象山山海与数字教育',
+    src: xiangshanBackground,
+    eyebrow: '山海象山',
+    title: '数字教育，连接每一间课堂',
+    subtitle: '让山海之间的学校共享资源、协同成长。'
+  }
+]
+const activeBackgroundIndex = ref(0)
+const activeBackground = computed(() => loginBackgrounds[activeBackgroundIndex.value])
+let backgroundTimer
 
 const loginForm = ref({
   username: "",
@@ -235,18 +297,172 @@ function getCookie() {
   }
 }
 
+function stopBackgroundRotation() {
+  if (backgroundTimer) {
+    window.clearInterval(backgroundTimer)
+    backgroundTimer = undefined
+  }
+}
+
+function startBackgroundRotation() {
+  stopBackgroundRotation()
+  backgroundTimer = window.setInterval(() => {
+    activeBackgroundIndex.value = (activeBackgroundIndex.value + 1) % loginBackgrounds.length
+  }, 5000)
+}
+
+function switchBackground(step) {
+  activeBackgroundIndex.value = (
+    activeBackgroundIndex.value + step + loginBackgrounds.length
+  ) % loginBackgrounds.length
+  startBackgroundRotation()
+}
+
+function handleBackgroundKeydown(event) {
+  const target = event.target
+  const isEditing = target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')
+  if (isEditing || !['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    return
+  }
+  event.preventDefault()
+  switchBackground(event.key === 'ArrowLeft' ? -1 : 1)
+}
+
+function setupBackgroundRotation() {
+  // 预加载全部背景，避免首次轮播时因网络请求造成闪白或突变。
+  loginBackgrounds.forEach(({ src }) => {
+    const image = new Image()
+    image.src = src
+  })
+  window.addEventListener('keydown', handleBackgroundKeydown)
+  startBackgroundRotation()
+}
+
+function teardownBackgroundRotation() {
+  window.removeEventListener('keydown', handleBackgroundKeydown)
+  stopBackgroundRotation()
+}
+
+onMounted(setupBackgroundRotation)
+onBeforeUnmount(teardownBackgroundRotation)
+
 getCode()
 getCookie()
 </script>
 
 <style lang='scss' scoped>
 .login {
+  position: relative;
+  isolation: isolate;
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100%;
-  background-image: url("../assets/images/login-background.jpg");
+  overflow: hidden;
+  background: #17344b;
+}
+.login-backgrounds {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.login-background {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-position: center;
   background-size: cover;
+  transform: scale(1.01);
+  will-change: opacity, transform;
+  transition:
+    opacity 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 5.4s ease-out;
+  &.is-active {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+}
+.login-slide-content {
+  position: absolute;
+  top: 48px;
+  left: 48px;
+  z-index: 1;
+  width: min(420px, calc(50vw - 250px));
+  pointer-events: none;
+}
+.login-slide-copy {
+  padding: 18px 20px;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 14px;
+  background: rgba(8, 35, 58, 0.66);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  .login-slide-eyebrow {
+    margin-bottom: 8px;
+    color: #aeefff;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+  }
+  h2 {
+    margin: 0 0 9px;
+    font-size: 25px;
+    line-height: 1.35;
+  }
+  p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+}
+.login-slide-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 13px;
+  span {
+    padding: 4px 9px;
+    color: #eafaff;
+    border: 1px solid rgba(174, 239, 255, 0.34);
+    border-radius: 999px;
+    background: rgba(22, 122, 160, 0.26);
+    font-size: 12px;
+  }
+}
+.login-carousel-dots {
+  position: absolute;
+  bottom: 54px;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  transform: translateX(-50%);
+  .login-carousel-dot {
+    display: block;
+    width: 9px;
+    height: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.28);
+    transition: width 0.25s ease, border-radius 0.25s ease, background 0.25s ease;
+    &.is-active {
+      width: 28px;
+      border-radius: 999px;
+      background: #ffffff;
+    }
+  }
+}
+.slide-copy-enter-active,
+.slide-copy-leave-active {
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.slide-copy-enter-from,
+.slide-copy-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 .title {
   margin: 0px auto 30px auto;
@@ -255,11 +471,13 @@ getCookie()
 }
 
 .login-form {
+  position: relative;
   border-radius: 6px;
   background: #ffffff;
   width: 400px;
   padding: 25px 25px 5px 25px;
-  z-index: 1;
+  z-index: 2;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.22);
   .el-input {
     height: 40px;
     input {
@@ -291,15 +509,48 @@ getCookie()
   line-height: 40px;
   position: fixed;
   bottom: 0;
+  z-index: 3;
   width: 100%;
   text-align: center;
   color: #fff;
   font-family: Arial;
   font-size: 12px;
   letter-spacing: 1px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 .login-code-img {
   height: 40px;
   padding-left: 12px;
+}
+
+@media (max-width: 1100px) {
+  .login-slide-content {
+    top: 24px;
+    left: 24px;
+    width: min(280px, calc(50vw - 230px));
+  }
+  .login-slide-copy {
+    padding: 14px 16px;
+    h2 {
+      font-size: 20px;
+    }
+  }
+  .login-slide-tags {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .login-slide-content {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-background,
+  .slide-copy-enter-active,
+  .slide-copy-leave-active {
+    transition: none;
+  }
 }
 </style>

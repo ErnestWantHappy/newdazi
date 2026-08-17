@@ -158,6 +158,19 @@ export const constantRoutes = [
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
   {
+    path: '/help-center',
+    component: Layout,
+    roles: ['admin', 'teacher', 'researcher'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/help/index'),
+        name: 'HelpCenter',
+        meta: { title: '帮助中心', icon: 'question', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/platform',
     component: Layout,
     redirect: '/platform/overview',
@@ -257,6 +270,20 @@ export const dynamicRoutes = [
       }
     ],
     redirect: '/teacher-dashboard/index'
+  },
+  {
+    path: '/business/teacher-tools/manage',
+    component: Layout,
+    permissions: ['business:teacherTool:manage'],
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/teacherTools/manage'),
+        name: 'TeacherToolsManage',
+        meta: { title: '教师工具管理', activeMenu: '/teacher-tools', noCache: true }
+      }
+    ]
   },
   {
     path: '/business/guide-sheet',

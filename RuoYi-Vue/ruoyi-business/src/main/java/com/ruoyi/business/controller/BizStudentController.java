@@ -1,5 +1,6 @@
 package com.ruoyi.business.controller;
 
+import java.util.Arrays;
 import java.util.List;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -136,7 +137,22 @@ public class BizStudentController extends BaseController
     public void importTemplate(HttpServletResponse response)
     {
         ExcelUtil<BizStudent> util = new ExcelUtil<BizStudent>(BizStudent.class);
-        util.importTemplateExcel(response, "学生数据");
+        BizStudent first = new BizStudent();
+        first.setStudentNo("01");
+        first.setEntryYear("2025");
+        first.setClassCode("01");
+        first.setStudentName("示例学生一");
+        first.setRemark("示例行，导入前请替换");
+
+        BizStudent second = new BizStudent();
+        second.setStudentNo("02");
+        second.setEntryYear("2025");
+        second.setClassCode("02");
+        second.setStudentName("示例学生二");
+        second.setRemark("班号只填 01～10，不要写 601、602");
+
+        // 模板带两行示例，避免教师把年级号误写进班级编号。
+        util.exportExcel(response, Arrays.asList(first, second), "学生导入模板");
     }
 
     /**

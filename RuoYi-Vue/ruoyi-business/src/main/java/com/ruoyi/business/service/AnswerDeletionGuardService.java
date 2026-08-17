@@ -35,6 +35,14 @@ public class AnswerDeletionGuardService
         }
     }
 
+    public void assertQuestionsDeletable(Long[] questionIds)
+    {
+        List<Long> ids = normalizedIds(questionIds);
+        if (!ids.isEmpty() && studentAnswerMapper.countByQuestionIds(ids) > 0) {
+            throw new ServiceException("题目已有学生答题记录，为保留成绩历史不可删除");
+        }
+    }
+
     private List<Long> normalizedIds(Long[] ids)
     {
         if (ids == null || ids.length == 0) {

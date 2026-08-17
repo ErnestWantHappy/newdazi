@@ -831,7 +831,8 @@ function handleRemoveQuestion(row) {
 function handlePreviewFile(row) {
   if (pdfPreviewRef.value && row.previewPath) {
     const baseUrl = import.meta.env.VITE_APP_BASE_API;
-    const fullPdfUrl = baseUrl + row.previewPath;
+    // iframe 无法附加 Authorization，统一由授权资源接口读取预览文件。
+    const fullPdfUrl = `${baseUrl}/common/resource/view?resource=${encodeURIComponent(row.previewPath)}`;
     pdfPreviewRef.value.open(fullPdfUrl);
   } else {
     proxy.$modal.msgError("没有可预览的PDF文件。");

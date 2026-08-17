@@ -35,11 +35,11 @@ import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
+import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -490,10 +490,10 @@ public class CountyExamServiceImpl implements ICountyExamService {
                 writeCell(row, 9, STUDENT_SUBMITTED.equals(String.valueOf(item.get("status"))) ? "已提交" : "未提交");
                 writeCell(row, 10, item.get("submitTime"));
             }
-            String fileName = URLEncoder.encode(exam.getExamName() + "-成绩.xlsx", StandardCharsets.UTF_8.name()).replaceAll("\\+", "%20");
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             response.setCharacterEncoding("utf-8");
-            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+            FileUtils.setAttachmentResponseHeader(response, DownloadFileNameUtils.withTimestamp(
+                    "区域抽测_" + exam.getExamName() + "_成绩.xlsx"));
             ServletOutputStream outputStream = response.getOutputStream();
             workbook.write(outputStream);
             outputStream.flush();

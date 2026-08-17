@@ -317,6 +317,7 @@ import { updateUserPwd } from '@/api/system/user'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import useUserStore from '@/store/modules/user'
 import { questionTypeLabel } from '@/utils/questionType'
+import Download from '@/plugins/download'
 
 const userStore = useUserStore()
 
@@ -892,13 +893,7 @@ function getFileName(filePath) {
 
 function downloadMaterial(filePath) {
   if (!filePath) return
-  const link = document.createElement('a')
-  link.href = import.meta.env.VITE_APP_BASE_API + '/common/download/resource?resource=' + encodeURIComponent(filePath)
-  link.download = getFileName(filePath)
-  link.target = '_blank'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  Download.resource(filePath, `区域抽测_题目素材_${getFileName(filePath)}`)
 }
 
 function formatTime(seconds) {

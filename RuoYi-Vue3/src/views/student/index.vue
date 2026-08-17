@@ -488,7 +488,7 @@
                 <div class="material-files">
                   <div v-for="(material, materialIndex) in getStudentMaterials(q)" :key="material.materialId || materialIndex" class="material-file-row">
                     <span class="material-name">{{ material.originalFileName || getFileName(material.resourcePath) }}</span>
-                    <el-button type="primary" size="small" icon="Download" @click="downloadMaterial(material.resourcePath)">下载</el-button>
+                    <el-button type="primary" size="small" icon="Download" @click="downloadMaterial(material.resourcePath, material.originalFileName)">下载</el-button>
                   </div>
                 </div>
               </div>
@@ -580,7 +580,12 @@
                 <div v-if="getPracticalAttachments(q.questionId).length > 1" class="practical-attachment-list">
                   <div v-for="(attachment, attachmentIndex) in getPracticalAttachments(q.questionId)" :key="attachment.attachmentId || attachmentIndex" class="attachment-row">
                     <span>{{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}</span>
-                    <el-button link type="primary" @click="previewWork(q.questionId, attachmentIndex)">预览</el-button>
+                    <el-button
+                      link
+                      type="primary"
+                      :disabled="!canPreviewPractical(q.questionId, attachmentIndex)"
+                      @click="previewWork(q.questionId, attachmentIndex)"
+                    >预览</el-button>
                     <el-button link type="info" @click="downloadSubmittedWork(q.questionId, attachmentIndex)">下载</el-button>
                   </div>
                 </div>
@@ -932,6 +937,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import PdfPreview from "@/components/PdfPreview/index.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
 import { questionTypeLabel } from "@/utils/questionType";
+import Download from "@/plugins/download";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -1903,18 +1909,9 @@ function getFileName(filePath) {
 }
 
 // 下载素材文件
-function downloadMaterial(filePath) {
+function downloadMaterial(filePath, originalFileName) {
   if (!filePath) return;
-  const baseUrl = import.meta.env.VITE_APP_BASE_API;
-  const fullUrl = `${baseUrl}/common/download/resource?resource=${encodeURIComponent(filePath)}`;
-  // 使用a标签下载
-  const link = document.createElement("a");
-  link.href = fullUrl;
-  link.download = getFileName(filePath);
-  link.target = "_blank";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  Download.resource(filePath, `课堂题目素材_${originalFileName || getFileName(filePath)}`);
 }
 
 function getPracticalAllowedExtensions(question) {
@@ -2036,7 +2033,7 @@ function getPracticalDisplayName(questionId) {
 function getPracticalPreviewLabel(questionId) {
   // C3：交卷成功与预览成功解耦的文案
   const status = practicalPreviewStatuses.value[questionId];
-  if (practicalPreviewPaths.value[questionId]) return "可预览";
+  if (getPracticalAttachments(questionId).some(isPracticalAttachmentPreviewable)) return "可预览";
   if (status === "success") return "可预览";
   if (status === "pending") return "已交卷·预览排队";
   if (status === "converting") return "已交卷·预览转换中";
@@ -2046,27 +2043,30 @@ function getPracticalPreviewLabel(questionId) {
 
 function getPracticalPreviewClass(questionId) {
   const status = practicalPreviewStatuses.value[questionId];
-  if (practicalPreviewPaths.value[questionId]) return "success";
+  if (getPracticalAttachments(questionId).some(isPracticalAttachmentPreviewable)) return "success";
   if (status === "success") return "success";
   if (status === "pending" || status === "converting") return "pending";
   if (status === "failed") return "failed";
   return "";
 }
 
-function canPreviewPractical(questionId) {
-  return !!practicalPreviewPaths.value[questionId];
+function isPracticalAttachmentPreviewable(attachment) {
+  if (!attachment) return false;
+  // 历史图片可能没有旧 previewPath，但图片源文件本身就是可预览资源。
+  if (attachment.fileKind === "IMAGE") return !!attachment.resourcePath;
+  return !!attachment.previewPath && attachment.previewStatus !== "failed";
+}
+
+function canPreviewPractical(questionId, attachmentIndex = 0) {
+  const attachment = getPracticalAttachments(questionId)[attachmentIndex];
+  return isPracticalAttachmentPreviewable(attachment);
 }
 
 function downloadSubmittedWork(questionId, attachmentIndex = 0) {
-  const filePath = getPracticalAttachments(questionId)[attachmentIndex]?.resourcePath;
+  const attachment = getPracticalAttachments(questionId)[attachmentIndex];
+  const filePath = attachment?.resourcePath;
   if (!filePath) return;
-  const link = document.createElement("a");
-  link.href = `${import.meta.env.VITE_APP_BASE_API}/common/download/resource?resource=${encodeURIComponent(filePath)}`;
-  link.download = getFileName(filePath);
-  link.target = "_blank";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  Download.resource(filePath, `学生操作题作品_${attachment?.originalFileName || getFileName(filePath)}`);
 }
 
 // 预览作品（使用PDF预览组件，借助后端LibreOffice转换）

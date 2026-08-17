@@ -48,6 +48,7 @@
 <script setup>
 import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
 import { accessResearchLink, downloadResearchResource } from '@/api/business/researchActivity.js'
 import { SCHOOL_TYPES, SEMESTERS, formatFileSize, gradeLabel, lessonLabel, linkStatus, optionLabel } from '../utils/researchActivityFormat.js'
 
@@ -60,7 +61,8 @@ async function download(resource) {
   busyId.value = resource.resourceId
   try {
     const blob = await downloadResearchResource(resource.resourceId)
-    saveAs(new Blob([blob]), resource.originalFileName || resource.resourceName || '课程资源')
+    saveAs(blob, resolveBlobDownloadFilename(blob,
+      `教研活动_课程资源_${resource.originalFileName || resource.resourceName || '附件'}`))
   } finally { busyId.value = null }
 }
 async function openLink(resource) {
