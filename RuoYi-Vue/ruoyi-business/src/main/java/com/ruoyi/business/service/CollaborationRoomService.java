@@ -133,6 +133,12 @@ public class CollaborationRoomService
         if (request == null || !Boolean.TRUE.equals(request.getEnabled()))
         {
             collaborationMapper.updateRoomStatus(lessonId, lesson.getDeptId(), "CLOSED");
+            if (isCryptPadProvider())
+            {
+                for (CollaborationRoom room : collaborationMapper.selectRoomsByLesson(lessonId, lesson.getDeptId()))
+                    collaborationMapper.updateRoomProvider(room.getRoomId(), "CRYPTPAD",
+                            secretService.encrypt(secretService.generateKey()));
+            }
             return teacherSettings(lessonId);
         }
         requireReady();

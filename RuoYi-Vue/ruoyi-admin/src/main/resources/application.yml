@@ -178,9 +178,17 @@ student:
 demo:
   enabled: ${DEMO_ENABLED:false}
 
-# WPS WebOffice 在线协作 PoC。真实密钥与公网地址只能通过环境变量或外置 yml 注入。
+# 在线协作 Provider。历史 WPS 配置保留用于回滚，当前默认使用 CryptPad。
 collaboration:
   enabled: ${COLLABORATION_ENABLED:false}
+  provider: ${COLLABORATION_PROVIDER:CRYPTPAD}
+  cryptpad:
+    base-url: ${CRYPTPAD_BASE_URL:}
+    api-url: ${CRYPTPAD_API_URL:}
+    key-secret: ${COLLABORATION_KEY_SECRET:}
+    autosave-seconds: ${CRYPTPAD_AUTOSAVE_SECONDS:15}
+    max-file-bytes: ${CRYPTPAD_MAX_FILE_BYTES:52428800}
+    remote-embedding: ${CRYPTPAD_REMOTE_EMBEDDING:true}
   wps:
     app-id: ${WPS_WEBOFFICE_APP_ID:}
     app-secret: ${WPS_WEBOFFICE_APP_SECRET:}
