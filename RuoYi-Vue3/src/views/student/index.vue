@@ -1,3 +1,4 @@
+
 <template>
   <div class="student-dashboard">
     <!-- 顶部导航栏 -->
@@ -23,6 +24,13 @@
         </div>
         <div class="header-right">
           <div class="header-actions">
+            <el-button
+              type="success"
+              link
+              icon="Cpu"
+              @click="$router.push('/student/iot')"
+              >物联实验</el-button
+            >
             <el-button
               type="primary"
               link
@@ -145,9 +153,16 @@
       </div>
 
       <div v-else class="task-container">
+        <el-card v-if="collaborationRooms.length" shadow="never" class="collaboration-card">
+          <template #header><div class="card-header"><span>班级在线协作</span><el-tag type="success">同班共享</el-tag></div></template>
+          <div v-for="room in collaborationRooms" :key="room.roomId" class="collaboration-room-row">
+            <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.fileName }} · 第 {{ room.version }} 版</span></div>
+            <el-button type="primary" @click="openCollaboration(room)">进入房间</el-button>
+          </div>
+        </el-card>
         <!-- 空状态提示 -->
         <el-empty 
-          v-if="typingQuestions.length === 0 && theoryQuestions.length === 0 && practicalQuestions.length === 0" 
+          v-if="typingQuestions.length === 0 && theoryQuestions.length === 0 && practicalQuestions.length === 0"
           description="本课程暂无练习题目" 
         />
         <!-- 1. 打字练习区域 -->
@@ -433,7 +448,7 @@
           </div>
           <div class="practical-list">
             <el-card
-              v-for="(q, index) in practicalQuestions"
+              v-for="(q, index) in filePracticalQuestions"
               :key="q.questionId"
               class="practical-card"
               shadow="hover"
@@ -470,7 +485,7 @@
 
               <!-- 题目描述 -->
               <div class="question-stem">
-                <span v-if="practicalQuestions.length > 1">{{ index + 1 }}. </span>
+                <span v-if="filePracticalQuestions.length > 1">{{ index + 1 }}. </span>
                 {{ q.questionContent }}
               </div>
 
@@ -592,6 +607,7 @@
               </div>
             </el-card>
           </div>
+          <student-programming-question v-for="q in pythonPracticalQuestions" :key="q.questionId" :lesson-id="lessonId" :question="q" @completed="fetchData" />
         </div>
       </div>
     </main>
@@ -694,12 +710,14 @@
           width="80"
           align="center"
         />
-        <el-table-column
-          prop="practicalScore"
-          label="操作"
-          width="80"
-          align="center"
-        />
+        <el-table-column label="操作" width="150" align="center">
+          <template #default="{ row }">
+            <span>{{ row.practicalScore }}</span>
+            <small v-if="row.filePracticalScore || row.pythonPracticalScore" class="practical-score-detail">
+              文件 {{ row.filePracticalScore || '0/0' }} · Python {{ row.pythonPracticalScore || '0/0' }}
+            </small>
+          </template>
+        </el-table-column>
         <el-table-column label="提交时间" width="160" align="center">
           <template #default="{ row }">
             {{ formatDateTime(row.submitTime) }}
@@ -936,8 +954,11 @@ import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import PdfPreview from "@/components/PdfPreview/index.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
+import StudentProgrammingQuestion from "@/components/StudentProgrammingQuestion/index.vue";
+import { getStudentProgramming } from "@/api/business/programming";
 import { questionTypeLabel } from "@/utils/questionType";
 import Download from "@/plugins/download";
+import { getCurrentCollaborationRooms } from "@/api/business/collaboration";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -966,6 +987,11 @@ const lessonConfig = ref({
   randomJudgmentCount: 0,
 });
 const studentInfo = ref({});
+const collaborationRooms = ref([]);
+
+function openCollaboration(room) {
+  router.push(`/student/collaboration/${room.roomId}`);
+}
 
 const checkinTimeText = computed(() => {
   if (!checkinTime.value) return "签到成功";
@@ -1309,6 +1335,35 @@ const theoryTotalScore = computed(() => {
 const practicalQuestions = computed(() =>
   allQuestions.value.filter((q) => q.questionType === "practical")
 );
+// 兼容历史接口的下划线字段和不同大小写，避免 Python 题误回退到文件上传。
+function isPythonPracticalQuestion(question) {
+  const mode = question?.practicalMode ?? question?.practical_mode;
+  return String(mode || "").trim().toUpperCase() === "PYTHON";
+}
+
+// 兼容历史 DTO 漏传 practicalMode 的情况：仅对作答方式为空的操作题回查平台后端。
+// 普通文件题的回查会被后端拒绝，仍按文件上传处理，不会误显示为编程题。
+async function resolveMissingPracticalModes(questions, currentLessonId) {
+  const pending = (questions || []).filter(
+    (question) => question?.questionType === "practical" && !String(question?.practicalMode ?? question?.practical_mode ?? "").trim()
+  );
+  await Promise.all(pending.map(async (question) => {
+    try {
+      const result = await getStudentProgramming(currentLessonId, question.questionId);
+      if (String(result?.data?.config?.languageCode || "").toLowerCase() === "python") {
+        question.practicalMode = "PYTHON";
+      }
+    } catch (error) {
+      // 无 Python 配置或没有权限时保留 FILE 回退，不影响普通操作题作答。
+    }
+  }));
+}
+const pythonPracticalQuestions = computed(() =>
+  practicalQuestions.value.filter(isPythonPracticalQuestion)
+);
+const filePracticalQuestions = computed(() =>
+  practicalQuestions.value.filter((q) => !isPythonPracticalQuestion(q))
+);
 const practicalUploads = ref({}); // { questionId: uploadedFilePath }
 const practicalScores = ref({}); // { questionId: score | null } - null表示未批阅
 const practicalPreviewStatuses = ref({}); // { questionId: previewStatus }
@@ -1363,7 +1418,9 @@ const courseMyScore = computed(() => {
 
   // 操作题得分（已批阅的）
   practicalQuestions.value.forEach((q) => {
-    const score = practicalScores.value[q.questionId];
+    const score = isPythonPracticalQuestion(q)
+      ? submittedAnswers.value[q.questionId]?.score
+      : practicalScores.value[q.questionId];
     if (score !== null && score !== undefined) {
       total += score;
       hasAnyScore = true;
@@ -1378,7 +1435,9 @@ const practicalMyScore = computed(() => {
   let total = 0;
   let hasAnyScore = false;
   practicalQuestions.value.forEach((q) => {
-    const score = practicalScores.value[q.questionId];
+    const score = isPythonPracticalQuestion(q)
+      ? submittedAnswers.value[q.questionId]?.score
+      : practicalScores.value[q.questionId];
     if (score !== null && score !== undefined) {
       total += score;
       hasAnyScore = true;
@@ -1419,6 +1478,12 @@ async function fetchData() {
       return;
     }
     const res = await getCurrentLesson();
+    try {
+      const collaborationRes = await getCurrentCollaborationRooms();
+      collaborationRooms.value = collaborationRes.data || collaborationRes || [];
+    } catch (collaborationError) {
+      collaborationRooms.value = [];
+    }
     if (res.blockedByCountyExam) {
       router.replace("/student/county-exam");
       return;
@@ -1449,6 +1514,7 @@ async function fetchData() {
       
       // 应用随机逻辑
       const rawQuestions = res.questions || [];
+      await resolveMissingPracticalModes(rawQuestions, res.lessonId);
       
       const studentId = res.studentInfo?.studentId || 0;
       allQuestions.value = applyRandomShuffle(
@@ -1498,7 +1564,7 @@ async function handleStudentCheckin() {
 
 // 初始化操作题状态（加载已提交的作品）
 function initPracticalStates() {
-  practicalQuestions.value.forEach((q) => {
+  filePracticalQuestions.value.forEach((q) => {
     syncPracticalSubmission(q.questionId, submittedAnswers.value[q.questionId]);
   });
 }
@@ -2383,6 +2449,27 @@ onUnmounted(() => {
 
 .section-block {
   margin-bottom: 40px;
+}
+
+.collaboration-card {
+  margin-bottom: 20px;
+}
+.collaboration-room-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+.collaboration-room-row:last-child {
+  border-bottom: 0;
+}
+.collaboration-meta {
+  display: block;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .section-title {

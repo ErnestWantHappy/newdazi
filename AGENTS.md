@@ -1,7 +1,7 @@
 # AGENTS.md — 信息科技学业测评平台
 
 > 给 **AI 代理 + 人工开发** 的操作手册：怎么启动、改哪里、怎么验收、什么不能碰。  
-> **业务真相与在研焦点以 `contexts/context.md` 为准**；本文件不重复百科，改业务结论时请同步更新 context。
+> **当前业务真相与在研焦点以 `contexts/PROJECT_CORE.md` 为准**；架构入口见 `docs/architecture/INDEX.md`。`contexts/context.md` 保留为历史事实索引，不是默认必读全文。
 
 ---
 
@@ -19,7 +19,10 @@
 | `RuoYi-Vue/` | **后端** monorepo（`ruoyi-admin` 启动模块，`ruoyi-business` 业务） |
 | `RuoYi-Vue3/` | **唯一前端**（Vue3 + Vite + Element Plus） |
 | `sql/` | 仓库级增量 SQL（优先看这里） |
-| `contexts/` | 多 AI 接力上下文；**先读 `context.md` 顶部「当前接力焦点」** |
+| `contexts/PROJECT_CORE.md` | 多 AI / 人工接力的短小当前事实；**任务开始必须先读** |
+| `contexts/context.md` | 历史发布、排障与证据索引；仅在需追溯冲突或旧决策时按关键词读取 |
+| `docs/architecture/` | 系统、数据边界、外部集成、部署与 ADR 的可读架构资料 |
+| `.agents/skills/project-context/` | 仓库级上下文接管与重大变更收口流程 |
 | `contexts/secrets.local.md` | **本机私密凭据**（密码/Token，**已 gitignore，禁止提交**） |
 | `output/playwright/` | 浏览器验收截图 / storage state 等产物 |
 | `output/stress/` | 本机并发/交卷压测脚本与报告 |
@@ -146,16 +149,17 @@ npm run dev
 
 ## 5. AI 改代码边界（严格）
 
-1. **先读** `contexts/context.md` 顶部版本、焦点与禁止事项。  
-2. **只改任务相关文件**；最小可用修改，不顺手重构。  
-3. 业务规则、表结构、接口语义变更 → **同步更新 `contexts/context.md`**（版本与日期）。  
-4. SQL 放 `sql/`，尽量幂等；说明是否需在目标库执行、是否要重启。  
-5. 注释用 **简体中文**，解释「为什么」，避免废话。  
-6. 方案级选择（换栈、大改库表、大范围重构）→ **先给 2～3 方案并等用户确认**，再动手。
-7. **每轮出现重大修改时，AI 必须在本轮结束前主动维护项目核心上下文。**重大修改包括：改变核心业务流程、接口或 DTO 语义、数据库表结构或迁移、权限边界、部署配置、跨模块行为，或一个完整功能/热修集中修改多个关键文件并需要系统回归。必须更新 `contexts/context.md` 的版本、日期、当前焦点、已完成事实、测试证据、SQL/配置/重启要求、剩余风险、部署状态与下一步。涉及专题需求、设计、任务或架构决策时，还必须同步对应 `requirements.md`、`design.md`、`tasks.md` 和 ADR。只写已经验证的事实；上下文未更新不得宣称任务完成。
-8. 小型文案或单点样式修改可不升级核心上下文，除非改变业务含义。
-9. 不得把密码、Token、Cookie 或私密路径内容写入上下文；私密凭据仍只保存在 `contexts/secrets.local.md`。
-10. 交接前必须确保新 AI 只读 `contexts/context.md` 顶部即可知道当前真实焦点、已验证状态和下一步。
+1. **先读** `contexts/PROJECT_CORE.md` 和 `docs/architecture/INDEX.md`；只有需要追溯旧决策、发布或排障证据时，才按关键词读取 `contexts/context.md`。
+2. **接管顺序固定为**：`AGENTS.md` → `contexts/PROJECT_CORE.md` → `docs/architecture/INDEX.md` → 任务相关专题；不要为明确的小改重复全仓扫描。
+3. **只改任务相关文件**；最小可用修改，不顺手重构。
+4. 业务规则、表结构、接口语义变更 → **同步更新 `contexts/PROJECT_CORE.md`**（版本与日期）；需要追溯证据时再追加或链接 `contexts/context.md`。
+5. SQL 放 `sql/`，尽量幂等；说明是否需在目标库执行、是否要重启。
+6. 注释用 **简体中文**，解释「为什么」，避免废话。
+7. 方案级选择（换栈、大改库表、大范围重构）→ **先给 2～3 方案并等用户确认**，再动手。
+8. **每轮出现重大修改时，AI 必须在本轮结束前主动维护项目核心上下文。**重大修改包括：改变核心业务流程、接口或 DTO 语义、数据库表结构或迁移、权限边界、部署配置、跨模块行为，或一个完整功能/热修集中修改多个关键文件并需要系统回归。必须更新 `contexts/PROJECT_CORE.md` 的当前状态、验证证据、SQL/配置/重启要求、剩余风险与下一步；同步 `docs/architecture/` 中受影响图或说明。涉及专题需求、设计、任务或架构决策时，还必须同步对应 `requirements.md`、`design.md`、`tasks.md` 和 ADR。只写已经验证的事实；上下文未更新不得宣称任务完成。
+9. 小型文案或单点样式修改可不升级核心上下文，除非改变业务含义。
+10. 不得把密码、Token、Cookie 或私密路径内容写入上下文；私密凭据仍只保存在 `contexts/secrets.local.md`。
+11. 交接前必须确保新 AI 只读 `contexts/PROJECT_CORE.md` 和 `docs/architecture/INDEX.md` 即可知道当前真实焦点、已验证状态和下一步。
 
 ---
 
@@ -247,15 +251,15 @@ npm run build:prod
 
 ## 10. 任务收尾检查清单
 
-- [ ] 改动范围与 `context.md` 焦点一致，无跨模块误伤  
+- [ ] 改动范围与 `PROJECT_CORE.md` 当前焦点一致，无跨模块误伤
 - [ ] 编译/相关单测通过（或说明无法跑的原因）  
 - [ ] 若动 UI/权限/登录：完成第 7.2 冒烟或说明跳过原因  
 - [ ] 需要的 SQL / 配置 / 重启步骤已写明  
-- [ ] 业务结论变更已写入 `contexts/context.md`  
-- [ ] 若属重大修改：已更新 `contexts/context.md` 的版本、日期、焦点、事实、证据、发布/回滚状态、风险与下一步
+- [ ] 业务结论变更已写入 `contexts/PROJECT_CORE.md`；需要保留审计证据时已链接或追加到 `contexts/context.md`
+- [ ] 若属重大修改：已更新 `contexts/PROJECT_CORE.md` 的版本、日期、焦点、事实、证据、发布/回滚状态、风险与下一步，并同步受影响的架构资料
 - [ ] 若影响专题需求/设计/任务/架构：已同步对应 `requirements.md`、`design.md`、`tasks.md` 和 ADR
 - [ ] 上下文只包含已验证事实，不含密码、Token、Cookie 或私密路径内容
-- [ ] 新 AI 只读 `contexts/context.md` 顶部即可知道当前真实焦点
+- [ ] 新 AI 只读 `contexts/PROJECT_CORE.md` 和 `docs/architecture/INDEX.md` 即可知道当前真实焦点
 - [ ] 向用户汇报：改了什么、怎么验、剩余风险、下一步  
 
 ---
@@ -265,7 +269,9 @@ npm run build:prod
 | 文件 | 职责 |
 | :--- | :--- |
 | **本文件 `AGENTS.md`** | 怎么干活：目录、启动、账号、验收、远程代操作、红线 |
-| **`contexts/context.md`** | 业务事实、版本焦点、已完成/禁止事项、非机密环境 |
+| **`contexts/PROJECT_CORE.md`** | 当前业务事实、焦点、已验证状态、风险与下一步 |
+| **`docs/architecture/`** | 当前系统、数据、集成、部署边界与 ADR 索引 |
+| **`contexts/context.md`** | 历史发布、排障、回滚与决策证据索引 |
 | **`contexts/secrets.local.md`** | 密码与 Token（gitignore，禁止提交） |
 | **`contexts/*.md` 其它** | 专题方案、部署、接力提示词 |
 

@@ -84,6 +84,9 @@ public class LessonInfoVo {
     /** 是否包含操作题 */
     private boolean hasPractical;
 
+    /** 是否存在已开启的班级在线协作房间，用于教师首页显示入口。 */
+    private boolean hasCollaboration;
+
     /** 课程用途：assessment 常规课 / attendance 课堂考勤 */
     private String lessonMode;
 
@@ -110,6 +113,14 @@ public class LessonInfoVo {
 
     public void setHasPractical(boolean hasPractical) {
         this.hasPractical = hasPractical;
+    }
+
+    public boolean isHasCollaboration() {
+        return hasCollaboration;
+    }
+
+    public void setHasCollaboration(boolean hasCollaboration) {
+        this.hasCollaboration = hasCollaboration;
     }
 
     public String getLessonMode() {

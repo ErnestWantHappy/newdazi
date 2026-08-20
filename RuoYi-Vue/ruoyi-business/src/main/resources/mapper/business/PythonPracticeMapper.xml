@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.PythonPracticeMapper">
+  <select id="selectPlans" resultType="map">
+    SELECT p.*, v.plan_version_id, v.version_no, v.status version_status
+    FROM biz_python_practice_plan p
+    LEFT JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.version_no=IF(p.current_version_no=0,(SELECT MAX(v2.version_no) FROM biz_python_practice_plan_version v2 WHERE v2.plan_id=p.plan_id),p.current_version_no)
+    WHERE p.dept_id=#{deptId} AND p.status='ACTIVE'
+    <if test="entryYear != null and entryYear != ''">AND p.entry_year=#{entryYear}</if>
+    ORDER BY p.grade, p.plan_id
+  </select>
+  <select id="selectPlan" resultType="map">SELECT p.*,v.plan_version_id,v.version_no,v.status version_status FROM biz_python_practice_plan p LEFT JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.version_no=IF(p.current_version_no=0,(SELECT MAX(v2.version_no) FROM biz_python_practice_plan_version v2 WHERE v2.plan_id=p.plan_id),p.current_version_no) WHERE p.plan_id=#{planId}</select>
+  <select id="selectPlanByScope" resultType="map">SELECT * FROM biz_python_practice_plan WHERE dept_id=#{deptId} AND grade=#{grade} AND semester=#{semester} AND entry_year=#{entryYear} AND status='ACTIVE' LIMIT 1</select>
+  <select id="selectPlanByVersion" resultType="map">SELECT p.*,v.plan_version_id,v.version_no,v.status version_status FROM biz_python_practice_plan p JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id WHERE v.plan_version_id=#{planVersionId}</select>
+  <select id="selectPlanQuestions" resultType="map">
+    SELECT q.plan_question_id,q.question_id,q.sort_no,q.stage,q.required_flag,s.snapshot_id,s.question_content,s.input_description,s.output_description,s.sample_explanation,s.constraints_text,s.notes_text,s.starter_code,s.language_code,s.time_limit_seconds,s.memory_limit_kb
+    FROM biz_python_practice_plan_question q JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
+    WHERE q.plan_version_id=#{planVersionId} ORDER BY q.sort_no
+  </select>
+  <select id="selectStudentQuestions" resultType="map">
+    SELECT 'BASE_VERSION' source_type,v.plan_version_id source_id,q.question_id,q.sort_no,q.stage,q.required_flag,s.snapshot_id,s.question_content,s.input_description,s.output_description,s.sample_explanation,s.constraints_text,s.notes_text,s.starter_code,s.language_code,s.time_limit_seconds,s.memory_limit_kb
+    FROM biz_python_practice_plan p JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.status='PUBLISHED' AND v.version_no=p.current_version_no JOIN biz_python_practice_plan_question q ON q.plan_version_id=v.plan_version_id JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
+    WHERE p.dept_id=#{deptId} AND p.entry_year=#{entryYear} AND p.status='ACTIVE'
+    UNION ALL
+    SELECT 'EXTENSION',e.extension_id,q.question_id,q.sort_no,'EXTENSION','1',s.snapshot_id,s.question_content,s.input_description,s.output_description,s.sample_explanation,s.constraints_text,s.notes_text,s.starter_code,s.language_code,s.time_limit_seconds,s.memory_limit_kb
+    FROM biz_python_practice_extension e JOIN biz_python_practice_extension_class ec ON ec.extension_id=e.extension_id AND ec.dept_id=#{deptId} AND ec.entry_year=#{entryYear} AND ec.class_code=#{classCode} JOIN biz_python_practice_extension_question q ON q.extension_id=e.extension_id JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
+    WHERE e.status='PUBLISHED' ORDER BY sort_no
+  </select>
+  <select id="selectQuestion" resultType="map">SELECT s.* FROM biz_python_practice_question_snapshot s WHERE s.source_type=#{sourceType} AND s.source_id=#{sourceId} AND s.question_id=#{questionId} LIMIT 1</select>
+  <select id="selectDraft" resultType="map">SELECT * FROM biz_python_practice_draft WHERE student_id=#{studentId} AND source_type=#{sourceType} AND source_id=#{sourceId} AND question_id=#{questionId}</select>
+  <insert id="upsertDraft">INSERT INTO biz_python_practice_draft(student_id,source_type,source_id,question_id,snapshot_id,source_code,update_time) VALUES(#{studentId},#{sourceType},#{sourceId},#{questionId},#{snapshotId},#{sourceCode},NOW()) ON DUPLICATE KEY UPDATE snapshot_id=VALUES(snapshot_id),source_code=VALUES(source_code),update_time=NOW()</insert>
+  <select id="selectSubmissions" resultType="map">SELECT submission_id,submission_key,source_type,source_id,question_id,submit_type,status_code,status_message,score,passed_case_count,total_case_count,judge_summary,submitted_at,judged_at FROM biz_python_practice_submission WHERE student_id=#{studentId} AND source_type=#{sourceType} AND source_id=#{sourceId} AND question_id=#{questionId} ORDER BY submission_id DESC LIMIT 20</select>
+  <select id="selectSubmission" resultType="map">SELECT * FROM biz_python_practice_submission WHERE submission_id=#{submissionId}</select>
+  <select id="selectSnapshotCases" resultType="map">SELECT * FROM biz_python_practice_snapshot_case WHERE snapshot_id=#{snapshotId}<if test="publicOnly"> AND is_public='1'</if> ORDER BY order_num</select>
+  <update id="markSubmissionJudging">UPDATE biz_python_practice_submission SET status_code='JUDGING',status_message='判题中' WHERE submission_id=#{submissionId} AND status_code='WAITING'</update>
+  <update id="updateSubmissionResult">UPDATE biz_python_practice_submission SET status_code=#{statusCode},status_message=#{statusMessage},score=#{score},passed_case_count=#{passedCaseCount},total_case_count=#{totalCaseCount},judge_summary=#{judgeSummary},judged_at=NOW() WHERE submission_id=#{submissionId} AND status_code IN ('WAITING','JUDGING')</update>
+  <insert id="insertSubmission" useGeneratedKeys="true" keyProperty="submissionId">INSERT INTO biz_python_practice_submission(submission_key,student_id,source_type,source_id,question_id,snapshot_id,source_code,submit_type,status_code,status_message,submitted_at) VALUES(#{submissionKey},#{studentId},#{sourceType},#{sourceId},#{questionId},#{snapshotId},#{sourceCode},#{submitType},'WAITING','等待判题',NOW())</insert>
+  <insert id="insertPlan" useGeneratedKeys="true" keyProperty="planId">INSERT INTO biz_python_practice_plan(dept_id,grade,semester,entry_year,plan_name,status,current_version_no,creator_id,create_by,create_time,update_by,update_time) VALUES(#{deptId},#{grade},#{semester},#{entryYear},#{planName},'ACTIVE',0,#{creatorId},#{createBy},NOW(),#{createBy},NOW())</insert>
+  <insert id="insertPlanVersion" useGeneratedKeys="true" keyProperty="planVersionId">INSERT INTO biz_python_practice_plan_version(plan_id,version_no,status,creator_id,create_by,create_time,update_by,update_time) VALUES(#{planId},#{versionNo},'DRAFT',#{creatorId},#{createBy},NOW(),#{createBy},NOW())</insert>
+  <insert id="insertSnapshot" useGeneratedKeys="true" keyProperty="snapshotId">INSERT INTO biz_python_practice_question_snapshot(source_type,source_id,question_id,snapshot_hash,question_content,input_description,output_description,sample_explanation,constraints_text,notes_text,starter_code,language_code,time_limit_seconds,memory_limit_kb,max_processes,max_file_size_kb,max_output_kb,create_by,create_time) VALUES(#{sourceType},#{sourceId},#{questionId},#{snapshotHash},#{questionContent},#{inputDescription},#{outputDescription},#{sampleExplanation},#{constraintsText},#{notesText},#{starterCode},'python',#{timeLimitSeconds},#{memoryLimitKb},#{maxProcesses},#{maxFileSizeKb},#{maxOutputKb},#{createBy},NOW())</insert>
+  <insert id="insertSnapshotCase">INSERT INTO biz_python_practice_snapshot_case(snapshot_id,case_name,input_text,expected_output,is_public,score_weight,order_num) VALUES(#{snapshotId},#{caseName},#{inputText},#{expectedOutput},#{isPublic},#{scoreWeight},#{orderNum})</insert>
+  <insert id="insertPlanQuestion">INSERT INTO biz_python_practice_plan_question(plan_version_id,question_id,snapshot_id,sort_no,stage,required_flag) VALUES(#{planVersionId},#{questionId},#{snapshotId},#{sortNo},#{stage},#{requiredFlag})</insert>
+  <select id="countPlanVersionQuestion" resultType="int">SELECT COUNT(*) FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId} AND question_id=#{questionId}</select>
+  <update id="updatePlanStatus">UPDATE biz_python_practice_plan SET status=#{status},update_time=NOW() WHERE plan_id=#{planId}</update>
+  <update id="retractPublishedVersions">UPDATE biz_python_practice_plan_version SET status='RETRACTED',update_time=NOW() WHERE plan_id=#{planId} AND status='PUBLISHED' AND (#{exceptVersionId} IS NULL OR plan_version_id &lt;&gt; #{exceptVersionId})</update>
+  <update id="publishVersion">UPDATE biz_python_practice_plan_version SET status='PUBLISHED',published_time=NOW(),update_time=NOW() WHERE plan_id=#{planId} AND plan_version_id=#{planVersionId} AND status='DRAFT'</update>
+  <select id="selectPlanQuestionCount" resultType="int">SELECT COUNT(*) FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId}</select>
+  <select id="selectSnapshotPublicCaseCount" resultType="int">SELECT COUNT(DISTINCT c.snapshot_id) FROM biz_python_practice_plan_question q JOIN biz_python_practice_snapshot_case c ON c.snapshot_id=q.snapshot_id WHERE q.plan_version_id=#{planVersionId} AND c.is_public=<choose><when test="publicOnly">'1'</when><otherwise>'0'</otherwise></choose></select>
+  <update id="updateCurrentVersion">UPDATE biz_python_practice_plan SET current_version_no=#{versionNo},update_time=NOW() WHERE plan_id=#{planId}</update>
+  <select id="selectVersionNo" resultType="int">SELECT version_no FROM biz_python_practice_plan_version WHERE plan_version_id=#{planVersionId}</select>
+  <select id="selectExtensions" resultType="map">SELECT e.*,COUNT(eq.extension_question_id) question_count FROM biz_python_practice_extension e LEFT JOIN biz_python_practice_extension_question eq ON eq.extension_id=e.extension_id WHERE e.plan_id=#{planId} GROUP BY e.extension_id ORDER BY e.extension_id DESC</select>
+  <select id="selectExtension" resultType="map">SELECT * FROM biz_python_practice_extension WHERE extension_id=#{extensionId}</select>
+  <insert id="insertExtension" useGeneratedKeys="true" keyProperty="extensionId">INSERT INTO biz_python_practice_extension(plan_id,extension_name,status,creator_id,create_by,create_time,update_by,update_time) VALUES(#{planId},#{extensionName},'DRAFT',#{creatorId},#{createBy},NOW(),#{createBy},NOW())</insert>
+  <insert id="insertExtensionClass">INSERT INTO biz_python_practice_extension_class(extension_id,dept_id,entry_year,class_code) VALUES(#{extensionId},#{deptId},#{entryYear},#{classCode}) ON DUPLICATE KEY UPDATE class_code=VALUES(class_code)</insert>
+  <insert id="insertExtensionQuestion">INSERT INTO biz_python_practice_extension_question(extension_id,question_id,snapshot_id,sort_no) VALUES(#{extensionId},#{questionId},#{snapshotId},#{sortNo})</insert>
+  <select id="countPublishedVersions" resultType="int">SELECT COUNT(*) FROM biz_python_practice_plan_version WHERE plan_id=#{planId} AND status='PUBLISHED'</select>
+  <delete id="deletePlanSnapshotCases">DELETE c FROM biz_python_practice_snapshot_case c JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=c.snapshot_id LEFT JOIN biz_python_practice_plan_version v ON s.source_type='BASE_VERSION' AND s.source_id=v.plan_version_id LEFT JOIN biz_python_practice_extension e ON s.source_type='EXTENSION' AND s.source_id=e.extension_id WHERE v.plan_id=#{planId} OR e.plan_id=#{planId}</delete>
+  <delete id="deletePlanSnapshots">DELETE s FROM biz_python_practice_question_snapshot s LEFT JOIN biz_python_practice_plan_version v ON s.source_type='BASE_VERSION' AND s.source_id=v.plan_version_id LEFT JOIN biz_python_practice_extension e ON s.source_type='EXTENSION' AND s.source_id=e.extension_id WHERE v.plan_id=#{planId} OR e.plan_id=#{planId}</delete>
+  <delete id="deletePlanQuestions">DELETE q FROM biz_python_practice_plan_question q JOIN biz_python_practice_plan_version v ON v.plan_version_id=q.plan_version_id WHERE v.plan_id=#{planId}</delete>
+  <delete id="deletePlanVersions">DELETE FROM biz_python_practice_plan_version WHERE plan_id=#{planId}</delete>
+  <delete id="deleteExtensionQuestions">DELETE q FROM biz_python_practice_extension_question q JOIN biz_python_practice_extension e ON e.extension_id=q.extension_id WHERE e.plan_id=#{planId}</delete>
+  <delete id="deleteExtensionClasses">DELETE c FROM biz_python_practice_extension_class c JOIN biz_python_practice_extension e ON e.extension_id=c.extension_id WHERE e.plan_id=#{planId}</delete>
+  <delete id="deleteExtensions">DELETE FROM biz_python_practice_extension WHERE plan_id=#{planId}</delete>
+  <delete id="deletePlan">DELETE FROM biz_python_practice_plan WHERE plan_id=#{planId}</delete>
+  <update id="publishExtension">UPDATE biz_python_practice_extension SET status='PUBLISHED',published_time=NOW(),update_time=NOW() WHERE extension_id=#{extensionId} AND status='DRAFT'</update>
+  <update id="retractExtension">UPDATE biz_python_practice_extension SET status='RETRACTED',update_time=NOW() WHERE extension_id=#{extensionId} AND status='PUBLISHED'</update>
+  <select id="selectExtensionQuestionCount" resultType="int">SELECT COUNT(*) FROM biz_python_practice_extension_question WHERE extension_id=#{extensionId}</select>
+  <select id="selectExtensionPublicCaseCount" resultType="int">SELECT COUNT(DISTINCT c.snapshot_id) FROM biz_python_practice_extension_question q JOIN biz_python_practice_snapshot_case c ON c.snapshot_id=q.snapshot_id WHERE q.extension_id=#{extensionId} AND c.is_public=<choose><when test="publicOnly">'1'</when><otherwise>'0'</otherwise></choose></select>
+  <select id="countExtensionQuestion" resultType="int">SELECT COUNT(*) FROM biz_python_practice_extension_question WHERE extension_id=#{extensionId} AND question_id=#{questionId}</select>
+  <select id="countBaseQuestion" resultType="int">
+    SELECT COUNT(*) FROM biz_python_practice_plan p
+    JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.status IN ('DRAFT','PUBLISHED')
+    JOIN biz_python_practice_plan_question q ON q.plan_version_id=v.plan_version_id AND q.question_id=#{questionId}
+    WHERE p.plan_id=#{planId}
+  </select>
+  <select id="countPublishedExtensionConflict" resultType="int">
+    SELECT COUNT(*) FROM biz_python_practice_extension target
+    JOIN biz_python_practice_extension_class target_class ON target_class.extension_id=target.extension_id
+    JOIN biz_python_practice_extension other ON other.plan_id=target.plan_id AND other.status='PUBLISHED' AND other.extension_id&lt;&gt;target.extension_id
+    JOIN biz_python_practice_extension_class other_class ON other_class.extension_id=other.extension_id
+      AND other_class.dept_id=target_class.dept_id AND other_class.entry_year=target_class.entry_year AND other_class.class_code=target_class.class_code
+    JOIN biz_python_practice_extension_question other_question ON other_question.extension_id=other.extension_id AND other_question.question_id=#{questionId}
+    WHERE target.extension_id=#{extensionId}
+  </select>
+  <select id="selectAnalytics" resultType="map">SELECT p.student_id,s.student_no,u.nick_name student_name,s.entry_year,s.class_code,p.question_id,p.best_score,p.passed_flag,p.submit_count,p.first_pass_time,p.last_practice_time FROM biz_python_practice_progress p JOIN biz_student s ON s.student_id=p.student_id JOIN sys_user u ON u.user_id=s.user_id WHERE p.source_type=#{sourceType} AND p.source_id=#{sourceId} AND u.dept_id=#{deptId}<if test="entryYear != null and entryYear != ''"> AND s.entry_year=#{entryYear}</if><if test="classCode != null and classCode != ''"> AND s.class_code=#{classCode}</if> ORDER BY s.class_code,s.student_no,p.last_practice_time DESC</select>
+  <select id="selectStudentProgress" resultType="map">SELECT source_type,source_id,question_id,best_score,passed_flag,submit_count,first_pass_time,last_practice_time FROM biz_python_practice_progress WHERE student_id=#{studentId}</select>
+  <insert id="upsertProgress">INSERT INTO biz_python_practice_progress(student_id,source_type,source_id,question_id,best_score,passed_flag,submit_count,first_pass_time,last_practice_time) VALUES(#{studentId},#{sourceType},#{sourceId},#{questionId},#{bestScore},#{passedFlag},1,#{firstPassTime},NOW()) ON DUPLICATE KEY UPDATE best_score=GREATEST(best_score,VALUES(best_score)),passed_flag=IF(VALUES(passed_flag)='1','1',passed_flag),submit_count=submit_count+1,first_pass_time=IF(first_pass_time IS NULL,VALUES(first_pass_time),first_pass_time),last_practice_time=NOW()</insert>
+</mapper>

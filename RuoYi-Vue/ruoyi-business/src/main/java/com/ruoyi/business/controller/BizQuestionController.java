@@ -92,7 +92,9 @@ public class BizQuestionController extends BaseController
     @PostMapping
     public AjaxResult add(@RequestBody BizQuestion bizQuestion)
     {
-        return toAjax(bizQuestionService.insertBizQuestion(bizQuestion));
+        int rows = bizQuestionService.insertBizQuestion(bizQuestion);
+        // 新增 Python 编程题后，前端必须立刻保存其测试点配置；保留原 code/msg 语义并附带主键。
+        return rows > 0 ? success().put("questionId", bizQuestion.getQuestionId()) : error();
     }
 
     /**

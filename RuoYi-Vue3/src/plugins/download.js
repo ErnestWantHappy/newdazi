@@ -16,7 +16,12 @@ let downloadLoadingInstance
 
 async function parseBlobError(data) {
   const resText = await data.text()
-  return JSON.parse(resText)
+  try {
+    return JSON.parse(resText)
+  } catch (_error) {
+    // 下载模块与通用请求保持一致：非 JSON 错误内容应提示，而不是抛出 JSON.parse 异常。
+    return { code: 500, msg: resText.trim().slice(0, 200) || errorCode.default }
+  }
 }
 
 async function handleBlobResponse(data, headers, defaultName) {

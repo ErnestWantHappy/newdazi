@@ -52,6 +52,6 @@ export default {
   /**
    * 底部版权文本内容
    */
-  footerContent: '开发支持：象山县-郑东旭'
+  footerContent: ''
 }
 

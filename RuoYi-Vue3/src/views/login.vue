@@ -88,9 +88,10 @@
         :class="{ 'is-active': activeBackgroundIndex === index }"
       />
     </div>
-    <!--  底部  -->
-    <div class="el-login-footer">
-      <span>开发支持：象山县-郑东旭</span>
+    <!-- 登录页保留必要的版权与备案信息，降低对登录操作的干扰。 -->
+    <div class="el-login-footer" aria-label="平台版权信息">
+      <div>版权所有：象山县教育局教科研中心</div>
+      <div>地址：浙江省象山县高教园区教科研中心&nbsp;&nbsp;邮编：315700&nbsp;&nbsp;备案号：浙ICP备05007927号</div>
     </div>
     <el-dialog
       v-model="schoolDialogVisible"
@@ -505,18 +506,19 @@ getCookie()
   }
 }
 .el-login-footer {
-  height: 40px;
-  line-height: 40px;
   position: fixed;
-  bottom: 0;
+  bottom: 18px;
   z-index: 3;
   width: 100%;
-  text-align: center;
-  color: #fff;
-  font-family: Arial;
+  padding: 0 20px;
+  color: rgba(255, 255, 255, 0.78);
+  font-family: Arial, "Microsoft YaHei", sans-serif;
   font-size: 12px;
-  letter-spacing: 1px;
+  line-height: 1.9;
+  text-align: center;
+  letter-spacing: 0.2px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
 .login-code-img {
   height: 40px;
@@ -543,6 +545,11 @@ getCookie()
 @media (max-width: 900px) {
   .login-slide-content {
     display: none;
+  }
+
+  .el-login-footer {
+    bottom: 10px;
+    font-size: 11px;
   }
 }
 

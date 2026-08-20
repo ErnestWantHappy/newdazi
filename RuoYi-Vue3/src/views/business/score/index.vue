@@ -331,6 +331,9 @@
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
                     <p><b>理论：</b><span class="score-num">{{ score.theoryScore }}</span> 分</p>
                     <p><b>操作：</b><span class="score-num">{{ score.practicalScore }}</span> 分</p>
+                    <p v-if="score.filePracticalScore !== undefined || score.pythonPracticalScore !== undefined" class="score-subdetail">
+                      <b>其中：</b>文件作品 <span class="score-num">{{ score.filePracticalScore || 0 }}</span> 分，Python 编程 <span class="score-num">{{ score.pythonPracticalScore || 0 }}</span> 分
+                    </p>
                     <p>
                       <b>作业分：</b><span class="score-num">{{ score.totalScore || 0 }}</span> 分
                       <el-tag v-if="score.manualAdjusted" size="small" type="danger" effect="plain" class="manual-score-mark">修</el-tag>

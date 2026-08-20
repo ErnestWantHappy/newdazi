@@ -205,13 +205,17 @@
                 </div>
                 <!-- 操作题显示评分标准 -->
                 <div v-else-if="scope.row.questionType === 'practical'" class="scoring-info">
-                  <div v-if="scope.row.scoringItems && scope.row.scoringItems.length > 0">
+                  <div v-if="scope.row.practicalMode === 'PYTHON'" class="no-scoring">操作题 · Python 在线编程（自动判题）</div>
+                  <div v-else-if="scope.row.scoringItems && scope.row.scoringItems.length > 0">
                     <span class="scoring-label">评分标准：</span>
                     <span v-for="(item, idx) in scope.row.scoringItems" :key="item?.itemId || idx" class="scoring-item">
                       <template v-if="item">{{ item.itemName }}({{ item.itemScore }}%){{ idx < scope.row.scoringItems.length - 1 ? ' / ' : '' }}</template>
                     </span>
                   </div>
                   <div v-else class="no-scoring">暂无评分标准</div>
+                </div>
+                <div v-else-if="scope.row.questionType === 'python'" class="scoring-info">
+                  <div class="no-scoring">操作题 · Python 在线编程（等待数据迁移）</div>
                 </div>
                 <!-- 异常处理：未知题型 -->
                 <div v-else class="unknown-type-error" style="color: #F56C6C; background: #fef0f0; padding: 5px; margin-top: 5px; border-radius: 4px;">
@@ -224,20 +228,34 @@
                   <dict-tag :options="biz_question_type" :value="scope.row.questionType"/>
                </template>
             </el-table-column>
+            <el-table-column label="作答方式" align="center" width="145">
+              <template #default="scope">
+                <span v-if="scope.row.questionType === 'practical'">{{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}</span>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
             <el-table-column label="分值" align="center" width="120">
               <template #default="scope">
                 <el-input-number v-model="scope.row.questionScore" :min="0" :max="100" size="small" />
               </template>
             </el-table-column>
-            <el-table-column label="操作" align="center" width="140">
+            <el-table-column label="操作" align="center" width="210">
               <template #default="scope">
                 <!-- 新增：操作题支持在已选列表中直接预览 -->
                 <el-button
-                  v-if="scope.row.questionType === 'practical' && scope.row.previewPath"
+                  v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON')"
                   link
                   type="success"
-                  @click="handlePreviewFile(scope.row)"
+                  @click="scope.row.practicalMode === 'PYTHON' ? openPythonPreview(scope.row) : handlePreviewFile(scope.row)"
                 >预览</el-button>
+                <el-tooltip content="开启后，当前课程已指派的每个班级各有一份共享文档；学生只能进入自己班级的房间" placement="top">
+                  <el-button
+                    v-if="isFilePractical(scope.row)"
+                    link
+                    :type="isCollaborationQuestion(scope.row) ? 'primary' : 'info'"
+                    @click="toggleCollaboration(scope.row)"
+                  >{{ isCollaborationQuestion(scope.row) ? '已开启协作' : '开启协作' }}</el-button>
+                </el-tooltip>
                 <el-button link type="danger" @click="handleRemoveQuestion(scope.row)">移除</el-button>
               </template>
             </el-table-column>
@@ -268,7 +286,7 @@
                 <el-option v-for="dict in biz_semester" :key="dict.value" :label="dict.label" :value="dict.value"/>
               </el-select>
             </el-form-item>
-            <el-form-item label="题型" prop="questionType">
+             <el-form-item label="题型" prop="questionType">
               <el-select v-model="queryParams.questionType" placeholder="题目类型" clearable style="width: 120px">
                 <el-option v-for="dict in biz_question_type" :key="dict.value" :label="dict.label" :value="dict.value"/>
               </el-select>
@@ -284,6 +302,12 @@
                  <el-option label="我的私有" value="N" />
                </el-select>
              </el-form-item>
+            <el-form-item label="操作方式" prop="practicalMode">
+              <el-select v-model="queryParams.practicalMode" placeholder="操作方式" clearable style="width: 140px">
+                <el-option label="Python 在线编程" value="PYTHON" />
+                <el-option label="文件作品" value="FILE" />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
               <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -325,13 +349,19 @@
                   <dict-tag :options="biz_question_type" :value="scope.row.questionType"/>
                </template>
              </el-table-column>
+             <el-table-column label="作答方式" align="center" width="145">
+               <template #default="scope">
+                 <span v-if="scope.row.questionType === 'practical'">{{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}</span>
+                 <span v-else>-</span>
+               </template>
+             </el-table-column>
              <el-table-column label="操作" align="center" width="100">
                <template #default="scope">
                  <el-button
-                   v-if="scope.row.questionType === 'practical' && scope.row.previewPath"
+                   v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON')"
                    link
                    type="success"
-                   @click="handlePreviewFile(scope.row)"
+                   @click="scope.row.practicalMode === 'PYTHON' ? openPythonPreview(scope.row) : handlePreviewFile(scope.row)"
                  >预览</el-button>
                  <el-button 
                    link 
@@ -360,6 +390,29 @@
     </div>
 
     <pdf-preview ref="pdfPreviewRef" />
+    <el-dialog v-model="pythonPreviewVisible" title="Python 题目预览" width="760px" append-to-body>
+      <template v-if="pythonPreviewQuestion">
+        <h3 class="python-preview-title">{{ pythonPreviewQuestion.questionContent }}</h3>
+        <div class="python-preview-meta">题目 ID：{{ pythonPreviewQuestion.questionId }}　年级：{{ pythonPreviewQuestion.grade }}</div>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="输入说明">{{ pythonPreviewConfig.inputDescription || '无' }}</el-descriptions-item>
+          <el-descriptions-item label="输出说明">{{ pythonPreviewConfig.outputDescription || '无' }}</el-descriptions-item>
+          <el-descriptions-item label="样例">{{ pythonPreviewCases.map(item => `输入：${item.inputText || '无'}；输出：${item.expectedOutput}`).join('；') || '暂无样例' }}</el-descriptions-item>
+          <el-descriptions-item label="限制条件">{{ pythonPreviewConfig.constraintsText || '无' }}</el-descriptions-item>
+          <el-descriptions-item label="起始代码"><pre class="python-preview-code">{{ pythonPreviewConfig.starterCode || '暂无' }}</pre></el-descriptions-item>
+        </el-descriptions>
+      </template>
+    </el-dialog>
+    <el-dialog v-model="collaborationMaterialVisible" title="选择在线协作文件" width="520px" append-to-body>
+      <p class="collaboration-material-tip">每个授课班会从此文件复制一份独立的共享文档。学生只能编辑自己班级的副本。</p>
+      <el-radio-group v-model="collaborationForm.materialId" class="collaboration-material-list">
+        <el-radio v-for="item in collaborationCandidates" :key="item.materialId" :value="item.materialId">{{ item.fileName }}</el-radio>
+      </el-radio-group>
+      <template #footer>
+        <el-button @click="collaborationMaterialVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmEnableCollaboration">确认开启</el-button>
+      </template>
+    </el-dialog>
 
   </div>
 </template>
@@ -368,7 +421,9 @@
 import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
+import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
 import { listQuestion } from "@/api/business/question";
+import { getProgrammingQuestion } from "@/api/business/programming";
 import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
@@ -385,6 +440,13 @@ const loading = ref(true);
 const total = ref(0);
 const pdfPreviewRef = ref(null);
 const isAddMode = ref(false);
+const pythonPreviewVisible = ref(false);
+const pythonPreviewQuestion = ref(null);
+const pythonPreviewConfig = ref({});
+const pythonPreviewCases = ref([]);
+const collaborationForm = ref({ enabled: false, questionId: null, materialId: null });
+const collaborationCandidates = ref([]);
+const collaborationMaterialVisible = ref(false);
 
 // 核心修复：将 assignedClassCodes 整合到 form 对象中
 const form = ref({
@@ -421,6 +483,7 @@ const queryParams = ref({
   semester: null,
   isPublic: null,
   questionType: null,
+  practicalMode: null,
   lessonNum: null,
   orderByColumn: 'createTime',  // 按创建时间排序
   isAsc: 'desc',                 // 降序，最新的在前
@@ -576,20 +639,25 @@ function submitForm() {
 
       if (form.value.lessonId) {
         // 修改模式使用 saveAll
-        saveAllLessonDetails(data).then(response => {
+        saveAllLessonDetails(data).then(async response => {
+          await synchronizeCollaboration(response.data?.lessonId || response.lessonId || form.value.lessonId);
           proxy.$modal.msgSuccess("修改成功");
           // 修改成功后跳转回来源页面（通常是教师首页或列表页）
           if (route.query.redirect) {
-             router.push(route.query.redirect);
+              router.push({
+                path: route.query.redirect,
+                query: { refresh: String(Date.now()) }
+              });
           } else {
-             router.push('/teacher-dashboard'); // 默认回教师首页
+              router.push({ path: '/teacher-dashboard/index', query: { refresh: String(Date.now()) } }); // 默认回教师首页
           }
         });
       } else {
         // 新增模式
-        saveAllLessonDetails(data).then(response => {
+        saveAllLessonDetails(data).then(async response => {
+          await synchronizeCollaboration(response.data?.lessonId || response.lessonId);
           proxy.$modal.msgSuccess("新增成功");
-          router.push('/teacher-dashboard');
+          router.push({ path: '/teacher-dashboard/index', query: { refresh: String(Date.now()) } });
         });
       }
     }
@@ -638,6 +706,9 @@ function initialize() {
         guideSheetReplaceRequested: false,
       };
       initialGuideSheetBinding.value = detail.currentGuideSheetBinding || null;
+      loadCollaborationSettings(detail.lessonId).catch(() => {
+        collaborationForm.value = { enabled: false, questionId: null, materialId: null };
+      });
       selectedQuestions.value = (detail.questions || []).map((item, index) => ({
         ...item,
         questionScore: item.questionScore != null ? item.questionScore : 0,
@@ -783,13 +854,6 @@ function isQuestionSelected(questionId) {
 }
 
 function handleAddQuestion(row) {
-    if (row.questionType === 'practical') {
-        const hasPractical = selectedQuestions.value.some(q => q.questionType === 'practical');
-        if (hasPractical) {
-            proxy.$modal.msgError('一门课程最多只能添加一道操作题。');
-            return;
-        }
-    }
     if (row.questionType === 'typing') {
         const hasTyping = selectedQuestions.value.some(q => q.questionType === 'typing');
         if (hasTyping) {
@@ -811,6 +875,7 @@ function handleAddQuestion(row) {
             optionD: row.optionD,
             answer: row.answer,
             previewPath: row.previewPath,
+            practicalMode: row.questionType === 'practical' ? (row.practicalMode || 'FILE') : null,
             typingDuration: row.typingDuration,
             wordCount: row.wordCount,
             scoringItems: row.scoringItems || [],
@@ -825,7 +890,87 @@ function handleRemoveQuestion(row) {
   const index = selectedQuestions.value.findIndex(q => q.questionId === row.questionId);
   if (index > -1) {
     selectedQuestions.value.splice(index, 1);
+    if (Number(collaborationForm.value.questionId) === Number(row.questionId)) {
+      collaborationForm.value = { enabled: false, questionId: null, materialId: null };
+    }
   }
+}
+
+function isFilePractical(row) {
+  return row.questionType === 'practical' && (row.practicalMode || 'FILE') === 'FILE';
+}
+
+function isCollaborationQuestion(row) {
+  return Boolean(collaborationForm.value.enabled)
+    && Number(collaborationForm.value.questionId) === Number(row.questionId);
+}
+
+async function loadCollaborationSettings(lessonId) {
+  if (!lessonId) return;
+  const response = await getCollaborationLesson(lessonId);
+  const payload = response.data || response;
+  collaborationCandidates.value = payload.candidates || [];
+  collaborationForm.value = {
+    enabled: Boolean(payload.enabled),
+    questionId: payload.questionId || null,
+    materialId: payload.materialId || null
+  };
+}
+
+async function toggleCollaboration(row) {
+  if (isCollaborationQuestion(row)) {
+    collaborationForm.value.enabled = false;
+    return;
+  }
+  collaborationForm.value = { enabled: true, questionId: row.questionId, materialId: null };
+  if (!form.value.lessonId) {
+    proxy.$modal.msgInfo('课程保存后将按已指派班级自动创建协作房间。');
+    return;
+  }
+  const desired = { ...collaborationForm.value };
+  await loadCollaborationSettings(form.value.lessonId);
+  collaborationForm.value = desired;
+  const candidates = collaborationCandidates.value.filter(item => Number(item.questionId) === Number(row.questionId));
+  if (!candidates.length) {
+    collaborationForm.value.enabled = false;
+    proxy.$modal.msgError('该文件作品没有可用于在线协作的 Word、Excel 或 PPT 起始文件。');
+    return;
+  }
+  if (candidates.length === 1) {
+    collaborationForm.value.materialId = candidates[0].materialId;
+    return;
+  }
+  collaborationMaterialVisible.value = true;
+}
+
+function confirmEnableCollaboration() {
+  if (!collaborationForm.value.materialId) {
+    proxy.$modal.msgWarning('请选择一份起始文件。');
+    return;
+  }
+  collaborationMaterialVisible.value = false;
+}
+
+async function synchronizeCollaboration(lessonId) {
+  if (!lessonId) return;
+  if (!collaborationForm.value.enabled) {
+    if (form.value.lessonId) await saveCollaborationLesson(lessonId, { enabled: false });
+    return;
+  }
+  const desired = { ...collaborationForm.value };
+  await loadCollaborationSettings(lessonId);
+  collaborationForm.value = desired;
+  const candidates = collaborationCandidates.value.filter(item => Number(item.questionId) === Number(collaborationForm.value.questionId));
+  if (!candidates.length) throw new Error('所选文件作品没有可用于在线协作的起始文件');
+  if (!collaborationForm.value.materialId) {
+    if (candidates.length > 1) throw new Error('该操作题有多份起始文件，请先选择用于在线协作的文件');
+    collaborationForm.value.materialId = candidates[0].materialId;
+  }
+  await saveCollaborationLesson(lessonId, {
+    enabled: true,
+    questionId: collaborationForm.value.questionId,
+    materialId: collaborationForm.value.materialId
+  });
 }
 
 function handlePreviewFile(row) {
@@ -837,6 +982,14 @@ function handlePreviewFile(row) {
   } else {
     proxy.$modal.msgError("没有可预览的PDF文件。");
   }
+}
+
+async function openPythonPreview(row) {
+  const response = await getProgrammingQuestion(Number(row.questionId));
+  pythonPreviewQuestion.value = row;
+  pythonPreviewConfig.value = response.data || {};
+  pythonPreviewCases.value = response.testCases || [];
+  pythonPreviewVisible.value = true;
 }
 
 
@@ -966,6 +1119,12 @@ onMounted(() => {
 .resource-tabs {
   padding-bottom: 24px;
 }
+
+.python-preview-title { margin: 0 0 8px; }
+.python-preview-meta { color: #909399; margin-bottom: 16px; }
+.python-preview-code { white-space: pre-wrap; background: #f6f8fa; padding: 10px; margin: 0; }
+.collaboration-material-tip { color: #606266; line-height: 1.6; }
+.collaboration-material-list { display: flex; flex-direction: column; gap: 12px; }
 
 @media (max-width: 768px) {
   .resource-tabs { overflow-x: auto; }

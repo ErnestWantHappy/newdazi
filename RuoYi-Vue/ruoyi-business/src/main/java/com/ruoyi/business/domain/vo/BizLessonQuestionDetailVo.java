@@ -31,6 +31,9 @@ public class BizLessonQuestionDetailVo extends BizLessonQuestion {
     /** 操作题允许提交的扩展名CSV */
     private String practicalAllowedExtensions;
 
+    /** 操作题作答方式：FILE 文件作品，PYTHON 在线 Python 编程 */
+    private String practicalMode;
+
     /** 图片作品最多张数 */
     private Integer practicalImageMaxCount;
 
@@ -128,6 +131,9 @@ public class BizLessonQuestionDetailVo extends BizLessonQuestion {
 
     public String getPracticalAllowedExtensions() { return practicalAllowedExtensions; }
     public void setPracticalAllowedExtensions(String practicalAllowedExtensions) { this.practicalAllowedExtensions = practicalAllowedExtensions; }
+
+    public String getPracticalMode() { return practicalMode; }
+    public void setPracticalMode(String practicalMode) { this.practicalMode = practicalMode; }
 
     public Integer getPracticalImageMaxCount() { return practicalImageMaxCount; }
     public void setPracticalImageMaxCount(Integer practicalImageMaxCount) { this.practicalImageMaxCount = practicalImageMaxCount; }

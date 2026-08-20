@@ -68,6 +68,12 @@
           />
         </el-select>
       </el-form-item>
+      <el-form-item label="操作方式" prop="practicalMode">
+        <el-select v-model="queryParams.practicalMode" placeholder="请选择操作方式" clearable style="width: 200px">
+          <el-option label="Python 在线编程" value="PYTHON" />
+          <el-option label="文件作品" value="FILE" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="是否公开" prop="isPublic">
         <el-select
           v-model="queryParams.isPublic"
@@ -193,6 +199,14 @@
             :options="biz_question_type"
             :value="scope.row.questionType"
         /></template>
+      </el-table-column>
+      <el-table-column label="操作方式" align="center" prop="practicalMode" width="140">
+        <template #default="scope">
+          <span v-if="scope.row.questionType === 'practical'">
+            {{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}
+          </span>
+          <span v-else>-</span>
+        </template>
       </el-table-column>
       <el-table-column
         label="题目内容"
@@ -479,8 +493,46 @@
           </el-form-item>
         </div>
 
+        <div v-if="form.questionType === 'practical' && form.practicalMode === 'PYTHON'">
+          <el-divider content-position="left">Python 判题配置</el-divider>
+          <el-row :gutter="12">
+            <el-col :span="8"><el-form-item label="时限（秒）"><el-input-number v-model="form.programming.timeLimitSeconds" :min="0.1" :max="10" :step="0.1" /></el-form-item></el-col>
+            <el-col :span="8"><el-form-item label="内存（KB）"><el-input-number v-model="form.programming.memoryLimitKb" :min="16384" :max="524288" :step="1024" /></el-form-item></el-col>
+            <el-col :span="8"><el-form-item label="输出（KB）"><el-input-number v-model="form.programming.maxOutputKb" :min="1" :max="1024" /></el-form-item></el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="12"><el-form-item label="输入说明"><el-input v-model="form.programming.inputDescription" type="textarea" :rows="3" placeholder="说明程序需要读取的数据及格式" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="输出说明"><el-input v-model="form.programming.outputDescription" type="textarea" :rows="3" placeholder="说明程序必须输出的内容及格式" /></el-form-item></el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="8"><el-form-item label="样例解释"><el-input v-model="form.programming.sampleExplanation" type="textarea" :rows="3" /></el-form-item></el-col>
+            <el-col :span="8"><el-form-item label="限制条件"><el-input v-model="form.programming.constraintsText" type="textarea" :rows="3" /></el-form-item></el-col>
+            <el-col :span="8"><el-form-item label="注意事项"><el-input v-model="form.programming.notesText" type="textarea" :rows="3" /></el-form-item></el-col>
+          </el-row>
+          <el-form-item label="起始代码"><el-input v-model="form.programming.starterCode" type="textarea" :rows="6" placeholder="例如：n = int(input())" /></el-form-item>
+          <el-form-item label-width="0">
+            <el-table :data="form.programming.testCases" border>
+              <el-table-column label="名称" min-width="110"><template #default="{ row }"><el-input v-model="row.caseName" /></template></el-table-column>
+              <el-table-column label="输入" min-width="140"><template #default="{ row }"><el-input v-model="row.inputText" type="textarea" :rows="2" /></template></el-table-column>
+              <el-table-column label="期望输出" min-width="140"><template #default="{ row }"><el-input v-model="row.expectedOutput" type="textarea" :rows="2" /></template></el-table-column>
+              <el-table-column label="公开" width="80"><template #default="{ row }"><el-switch v-model="row.isPublic" active-value="1" inactive-value="0" /></template></el-table-column>
+              <el-table-column label="权重" width="120"><template #default="{ row }"><el-input-number v-model="row.scoreWeight" :min="0.1" :step="0.5" /></template></el-table-column>
+              <el-table-column label="操作" width="70"><template #default="{ $index }"><el-button link type="danger" icon="Delete" @click="form.programming.testCases.splice($index, 1)" /></template></el-table-column>
+            </el-table>
+            <el-button style="margin-top:10px" type="primary" plain icon="Plus" size="small" @click="addProgrammingCase">添加测试点</el-button>
+            <span style="margin-left:10px;color:#909399;font-size:12px">至少保留一个隐藏测试点；隐藏测试输入和期望输出不会下发给学生。</span>
+          </el-form-item>
+        </div>
+
         <!-- 动态表单项: 操作题专属 -->
         <div v-if="form.questionType === 'practical'">
+          <el-form-item label="作答方式">
+            <el-radio-group v-model="form.practicalMode">
+              <el-radio value="FILE">文件作品</el-radio>
+              <el-radio value="PYTHON">Python 在线编程</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <template v-if="form.practicalMode !== 'PYTHON'">
           <el-form-item label="学生起始文件">
             <file-upload
               v-model="form.filePath"
@@ -595,6 +647,7 @@
               </div>
             </div>
           </el-form-item>
+          </template>
         </div>
       </el-form>
       <template #footer>
@@ -658,6 +711,7 @@ import {
   addQuestion,
   updateQuestion,
 } from "@/api/business/question";
+import { getProgrammingQuestion, saveProgrammingQuestion } from "@/api/business/programming";
 import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
 import {
@@ -687,6 +741,7 @@ const data = reactive({
     pageNum: 1,
     pageSize: 10,
     questionType: null,
+    practicalMode: null,
     questionContent: null,
     isPublic: null,
     grade: null,
@@ -812,11 +867,13 @@ function reset() {
     updateTime: null,
     scoringItems: [], // P6
     practicalAllowedExtensions: "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png",
+    practicalMode: "FILE",
     practicalAllowedExtensionList: ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"],
     practicalImageMaxCount: 10,
     practicalMaterials: [],
     practicalResourceFiles: "",
     practicalReferenceFiles: "",
+    programming: defaultProgrammingConfig(),
   };
   proxy.resetForm("questionRef");
 }
@@ -863,6 +920,55 @@ function splitMaterialPaths(value, materialType) {
 }
 
 const typingDurationCustomized = ref(false);
+
+function defaultProgrammingConfig() {
+  return {
+    languageCode: "python",
+    starterCode: "",
+    inputDescription: "",
+    outputDescription: "",
+    sampleExplanation: "",
+    constraintsText: "",
+    notesText: "",
+    timeLimitSeconds: 2,
+    memoryLimitKb: 131072,
+    maxProcesses: 8,
+    maxFileSizeKb: 1024,
+    maxOutputKb: 64,
+    enabled: "1",
+    testCases: [
+      {
+        caseName: "示例 1",
+        inputText: "",
+        expectedOutput: "",
+        isPublic: "1",
+        scoreWeight: 1,
+      },
+      {
+        caseName: "隐藏测试 1",
+        inputText: "",
+        expectedOutput: "",
+        isPublic: "0",
+        scoreWeight: 1,
+      },
+    ],
+  };
+}
+
+function isPythonPracticalQuestion(question) {
+  return question?.questionType === "practical" && question?.practicalMode === "PYTHON";
+}
+
+function addProgrammingCase() {
+  if (!form.value.programming) form.value.programming = defaultProgrammingConfig();
+  form.value.programming.testCases.push({
+    caseName: `测试点 ${form.value.programming.testCases.length + 1}`,
+    inputText: "",
+    expectedOutput: "",
+    isPublic: "0",
+    scoreWeight: 1,
+  });
+}
 
 function syncTypingWordStats(newContent) {
   const content = newContent || "";
@@ -950,14 +1056,32 @@ function handleUpdate(row) {
   const _questionId = row.questionId || ids.value[0];
   getQuestion(_questionId).then((response) => {
     form.value = response.data;
+    form.value.programming = defaultProgrammingConfig();
     form.value.practicalAllowedExtensionList = String(
       form.value.practicalAllowedExtensions || "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png"
     ).split(",").filter(Boolean);
     form.value.practicalResourceFiles = materialPaths(form.value.practicalMaterials, "RESOURCE");
     form.value.practicalReferenceFiles = materialPaths(form.value.practicalMaterials, "REFERENCE");
     typingDurationCustomized.value = form.value.questionType === "typing" && form.value.typingDuration != null;
-    open.value = true;
-    title.value = "修改题目";
+    const showEditor = () => {
+      open.value = true;
+      title.value = "修改题目";
+    };
+    if (isPythonPracticalQuestion(form.value)) {
+      getProgrammingQuestion(_questionId).then((programmingResponse) => {
+        const config = programmingResponse.data || {};
+        form.value.programming = {
+          ...defaultProgrammingConfig(),
+          ...config,
+          testCases: programmingResponse.testCases || [],
+        };
+        showEditor();
+      }).catch(() => {
+        showEditor();
+      });
+    } else {
+      showEditor();
+    }
   });
 }
 
@@ -966,7 +1090,7 @@ function submitForm() {
   proxy.$refs["questionRef"].validate((valid) => {
     if (valid) {
       // P6.1: 操作题必须配置评分项，且比例值合计必须为100
-      if (form.value.questionType === "practical") {
+      if (form.value.questionType === "practical" && !isPythonPracticalQuestion(form.value)) {
         if (!form.value.practicalAllowedExtensionList?.length) {
           ElMessage.warning("请至少选择一种学生提交格式");
           return;
@@ -988,6 +1112,22 @@ function submitForm() {
         ];
       }
 
+      if (isPythonPracticalQuestion(form.value)) {
+        const testCases = form.value.programming?.testCases || [];
+        if (!testCases.length) {
+          ElMessage.warning("Python 编程题至少需要一个测试点");
+          return;
+        }
+        if (!testCases.some((item) => item.isPublic !== "1")) {
+          ElMessage.warning("Python 编程题至少需要一个隐藏测试点");
+          return;
+        }
+        if (testCases.some((item) => item.expectedOutput == null || String(item.expectedOutput).trim() === "")) {
+          ElMessage.warning("每个测试点都必须填写期望输出");
+          return;
+        }
+      }
+
       // P6: 添加Loading效果
       const loadingInstance = ElLoading.service({
         lock: true,
@@ -997,7 +1137,12 @@ function submitForm() {
 
       if (form.value.questionId != null) {
         updateQuestion(form.value)
-          .then((response) => {
+          .then(() => {
+            if (isPythonPracticalQuestion(form.value)) {
+              return saveProgrammingQuestion(form.value.questionId, form.value.programming);
+            }
+          })
+          .then(() => {
             loadingInstance.close();
             proxy.$modal.msgSuccess("修改成功");
             open.value = false;
@@ -1009,6 +1154,12 @@ function submitForm() {
       } else {
         addQuestion(form.value)
           .then((response) => {
+            const questionId = response.questionId || response.data?.questionId;
+            if (isPythonPracticalQuestion(form.value) && questionId) {
+              return saveProgrammingQuestion(questionId, form.value.programming);
+            }
+          })
+          .then(() => {
             loadingInstance.close();
             proxy.$modal.msgSuccess("新增成功");
             open.value = false;

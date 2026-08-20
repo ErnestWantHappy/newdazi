@@ -3,6 +3,7 @@ package com.ruoyi.business.provider;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -38,6 +39,12 @@ public class CryptPadAdapter implements CollaborationProvider
     @Override
     public Map<String, Object> session(CollaborationRoom room, Long userId, String scope)
     {
+        return session(room, userId, scope, null);
+    }
+
+    @Override
+    public Map<String, Object> session(CollaborationRoom room, Long userId, String scope, String displayName)
+    {
         if (!ready()) throw new ServiceException("CryptPad 尚未配置完成");
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("provider", id());
@@ -49,7 +56,11 @@ public class CryptPadAdapter implements CollaborationProvider
         result.put("title", room.getCurrentFileName());
         result.put("autosave", properties.getAutosaveSeconds());
         result.put("mode", "READ_ONLY".equals(room.getStatus()) ? "view" : "edit");
-        result.put("user", userId == null ? "平台用户" : "用户" + userId);
+        result.put("user", StringUtils.defaultIfBlank(displayName,
+                userId == null ? "平台用户" : "协作用户"));
+        // CryptPad/OnlyOffice 用稳定参与者 ID 区分同时编辑者；只传姓名会被当作匿名会话复用。
+        result.put("participantId", "p-" + DigestUtils.sha256Hex(
+                String.valueOf(room.getRoomId()) + ":" + String.valueOf(userId) + ":" + properties.getKeySecret()).substring(0, 24));
         result.put("scope", scope);
         result.put("roomId", room.getRoomId());
         result.put("version", room.getCurrentVersion());

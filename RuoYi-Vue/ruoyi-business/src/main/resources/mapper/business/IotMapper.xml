@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.IotMapper">
+    <resultMap id="experimentResult" type="IotExperiment">
+        <id property="experimentId" column="experiment_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="activityCode" column="activity_code"/>
+        <result property="title" column="title"/>
+        <result property="description" column="description"/>
+        <result property="topicPrefix" column="topic_prefix"/>
+        <result property="status" column="status"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="classConfigResult" type="IotClassConfig">
+        <id property="configId" column="config_id"/>
+        <result property="experimentId" column="experiment_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+        <result property="groupSize" column="group_size"/>
+        <result property="mqttUsername" column="mqtt_username"/>
+        <result property="passcodeCiphertext" column="passcode_ciphertext"/>
+        <result property="passcodeHash" column="passcode_hash"/>
+        <result property="passcodeVersion" column="passcode_version"/>
+        <result property="groupVersion" column="group_version"/>
+        <result property="passcodeUpdatedAt" column="passcode_updated_at"/>
+        <result property="groupedAt" column="grouped_at"/>
+        <result property="status" column="status"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="studentCount" column="student_count"/>
+        <result property="groupCount" column="group_count"/>
+    </resultMap>
+
+    <resultMap id="groupResult" type="IotGroup">
+        <id property="groupId" column="group_id"/>
+        <result property="experimentId" column="experiment_id"/>
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+        <result property="groupCode" column="group_code"/>
+        <result property="groupNo" column="group_no"/>
+        <result property="groupName" column="group_name"/>
+        <result property="topic" column="topic"/>
+        <result property="status" column="status"/>
+        <result property="deviceCount" column="device_count"/>
+        <result property="studentCount" column="student_count"/>
+        <result property="lastSeenAt" column="last_seen_at"/>
+    </resultMap>
+
+    <resultMap id="groupStudentResult" type="IotGroupStudent">
+        <id property="groupStudentId" column="group_student_id"/>
+        <result property="groupId" column="group_id"/>
+        <result property="experimentId" column="experiment_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="studentName" column="student_name"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <resultMap id="deviceResult" type="IotDevice">
+        <id property="deviceId" column="device_id"/>
+        <result property="groupId" column="group_id"/>
+        <result property="experimentId" column="experiment_id"/>
+        <result property="deviceCode" column="device_code"/>
+        <result property="deviceName" column="device_name"/>
+        <result property="topic" column="topic"/>
+        <result property="brokerUsername" column="broker_username"/>
+        <result property="credentialHash" column="credential_hash"/>
+        <result property="credentialExpiresAt" column="credential_expires_at"/>
+        <result property="status" column="status"/>
+        <result property="lastSeenAt" column="last_seen_at"/>
+    </resultMap>
+
+    <resultMap id="messageResult" type="IotMessage">
+        <id property="messageId" column="message_id"/>
+        <result property="experimentId" column="experiment_id"/>
+        <result property="groupId" column="group_id"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="groupCode" column="group_code"/>
+        <result property="deviceCode" column="device_code"/>
+        <result property="topic" column="topic"/>
+        <result property="payloadType" column="payload_type"/>
+        <result property="payloadText" column="payload_text"/>
+        <result property="payloadNumber" column="payload_number"/>
+        <result property="sourceIp" column="source_ip"/>
+        <result property="qos" column="qos"/>
+        <result property="retained" column="retained"/>
+        <result property="receivedAt" column="received_at"/>
+    </resultMap>
+
+    <resultMap id="eventResult" type="IotEvent">
+        <id property="eventId" column="event_id"/>
+        <result property="experimentId" column="experiment_id"/>
+        <result property="groupId" column="group_id"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="eventType" column="event_type"/>
+        <result property="diagnosticStage" column="diagnostic_stage"/>
+        <result property="detail" column="detail"/>
+        <result property="payloadDigest" column="payload_digest"/>
+        <result property="occurredAt" column="occurred_at"/>
+    </resultMap>
+
+    <select id="selectExperimentById" resultMap="experimentResult">
+        select * from biz_iot_experiment where experiment_id = #{experimentId}
+    </select>
+
+    <select id="selectExperimentsByLesson" resultMap="experimentResult">
+        select * from biz_iot_experiment where lesson_id = #{lessonId} and dept_id = #{deptId} and status = '0'
+        order by experiment_id desc
+    </select>
+
+    <insert id="insertExperiment" parameterType="IotExperiment" useGeneratedKeys="true" keyProperty="experimentId">
+        insert into biz_iot_experiment (lesson_id, dept_id, activity_code, title, description, topic_prefix, status, create_by, create_time)
+        values (#{lessonId}, #{deptId}, #{activityCode}, #{title}, #{description}, #{topicPrefix}, '0', #{createBy}, now())
+    </insert>
+
+    <!-- 班级配置与口令快照 -->
+    <select id="selectClassConfig" resultMap="classConfigResult">
+        select c.*,
+               (select count(*) from biz_iot_group_student gs where gs.experiment_id = c.experiment_id and gs.group_id in (select g.group_id from biz_iot_group g where g.experiment_id = c.experiment_id and g.entry_year = c.entry_year and g.class_code = c.class_code)) as student_count,
+               (select count(*) from biz_iot_group g where g.experiment_id = c.experiment_id and g.entry_year = c.entry_year and g.class_code = c.class_code and g.status = '0') as group_count
+        from biz_iot_class_config c
+        where c.experiment_id = #{experimentId} and c.entry_year = #{entryYear} and c.class_code = #{classCode}
+    </select>
+
+    <insert id="insertClassConfig" parameterType="IotClassConfig" useGeneratedKeys="true" keyProperty="configId">
+        insert into biz_iot_class_config (experiment_id, dept_id, entry_year, class_code, group_size, mqtt_username, passcode_ciphertext, passcode_hash, passcode_version, group_version, passcode_updated_at, grouped_at, status, create_by, create_time)
+        values (#{experimentId}, #{deptId}, #{entryYear}, #{classCode}, #{groupSize}, #{mqttUsername}, #{passcodeCiphertext}, #{passcodeHash}, #{passcodeVersion}, #{groupVersion}, #{passcodeUpdatedAt}, #{groupedAt}, '0', #{createBy}, now())
+    </insert>
+
+    <update id="updateClassConfig" parameterType="IotClassConfig">
+        update biz_iot_class_config
+        set group_size = #{groupSize},
+            mqtt_username = #{mqttUsername},
+            passcode_ciphertext = #{passcodeCiphertext},
+            passcode_hash = #{passcodeHash},
+            passcode_version = #{passcodeVersion},
+            group_version = #{groupVersion},
+            passcode_updated_at = #{passcodeUpdatedAt},
+            grouped_at = #{groupedAt},
+            status = #{status},
+            update_time = now()
+        where config_id = #{configId}
+    </update>
+
+    <!-- 课程已指派班级查询 -->
+    <select id="selectAssignedClassesByLesson" resultType="map">
+        select distinct a.entry_year as entryYear, a.class_code as classCode, a.dept_id as deptId,
+               concat(a.entry_year, '级', a.class_code, '班') as className
+        from biz_lesson_assignment a
+        where a.lesson_id = #{lessonId} and a.dept_id = #{deptId}
+        order by a.entry_year desc, cast(a.class_code as unsigned) asc, a.class_code asc
+    </select>
+
+    <!-- 班级学生列表查询 -->
+    <select id="selectStudentsByClass" resultType="com.ruoyi.business.domain.BizStudent">
+        select s.student_id as studentId, s.user_id as userId, s.student_no as studentNo,
+               s.entry_year as entryYear, s.class_code as classCode, u.nick_name as studentName
+        from biz_student s
+        inner join sys_user u on u.user_id = s.user_id
+        where u.dept_id = #{deptId} and s.entry_year = #{entryYear} and s.class_code = #{classCode} and u.del_flag = '0'
+        order by cast(s.student_no as unsigned) asc, s.student_no asc
+    </select>
+
+    <!-- 小组查询与维护 -->
+    <select id="selectGroupById" resultMap="groupResult">
+        select g.*,
+               count(distinct d.device_id) as device_count,
+               count(distinct gs.group_student_id) as student_count,
+               max(case when g.last_seen_at is not null then g.last_seen_at else d.last_seen_at end) as last_seen_at
+        from biz_iot_group g
+        left join biz_iot_device d on d.group_id = g.group_id and d.status = '0'
+        left join biz_iot_group_student gs on gs.group_id = g.group_id
+        where g.group_id = #{groupId}
+        group by g.group_id
+    </select>
+
+    <select id="selectGroupsByExperiment" resultMap="groupResult">
+        select g.*,
+               count(distinct d.device_id) as device_count,
+               count(distinct gs.group_student_id) as student_count,
+               max(case when g.last_seen_at is not null then g.last_seen_at else d.last_seen_at end) as last_seen_at
+        from biz_iot_group g
+        left join biz_iot_device d on d.group_id = g.group_id and d.status = '0'
+        left join biz_iot_group_student gs on gs.group_id = g.group_id
+        where g.experiment_id = #{experimentId} and g.status = '0'
+        group by g.group_id
+        order by g.entry_year desc, cast(g.class_code as unsigned) asc, g.class_code asc, g.group_no asc, g.group_code asc
+    </select>
+
+    <select id="selectGroupsByExperimentAndClass" resultMap="groupResult">
+        select g.*,
+               count(distinct d.device_id) as device_count,
+               count(distinct gs.group_student_id) as student_count,
+               max(case when g.last_seen_at is not null then g.last_seen_at else d.last_seen_at end) as last_seen_at
+        from biz_iot_group g
+        left join biz_iot_device d on d.group_id = g.group_id and d.status = '0'
+        left join biz_iot_group_student gs on gs.group_id = g.group_id
+        where g.experiment_id = #{experimentId} and g.entry_year = #{entryYear} and g.class_code = #{classCode} and g.status = '0'
+        group by g.group_id
+        order by g.group_no asc, g.group_code asc
+    </select>
+
+    <select id="selectGroupsByExperimentForTeacher" resultMap="groupResult">
+        select g.*,
+               count(distinct d.device_id) as device_count,
+               count(distinct gs.group_student_id) as student_count,
+               max(case when g.last_seen_at is not null then g.last_seen_at else d.last_seen_at end) as last_seen_at
+        from biz_iot_group g
+        join biz_teacher_class tc on tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        left join biz_iot_device d on d.group_id = g.group_id and d.status = '0'
+        left join biz_iot_group_student gs on gs.group_id = g.group_id
+        where g.experiment_id = #{experimentId} and g.status = '0' and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        group by g.group_id
+        order by g.entry_year desc, cast(g.class_code as unsigned) asc, g.class_code asc, g.group_no asc, g.group_code asc
+    </select>
+
+    <select id="selectGroupByTopic" resultMap="groupResult">
+        select g.* from biz_iot_group g
+        where (g.topic = #{topic} or #{topic} like concat(g.topic, '/%'))
+          and g.status = '0'
+        limit 1
+    </select>
+
+    <insert id="insertGroup" parameterType="IotGroup" useGeneratedKeys="true" keyProperty="groupId">
+        insert into biz_iot_group (experiment_id, entry_year, class_code, group_code, group_no, group_name, topic, status, create_by, create_time)
+        values (#{experimentId}, #{entryYear}, #{classCode}, #{groupCode}, #{groupNo}, #{groupName}, #{topic}, '0', #{createBy}, now())
+    </insert>
+
+    <delete id="deleteGroupsByExperimentAndClass">
+        delete from biz_iot_group
+        where experiment_id = #{experimentId} and entry_year = #{entryYear} and class_code = #{classCode}
+    </delete>
+
+    <update id="touchGroup">
+        update biz_iot_group set last_seen_at = #{lastSeenAt}, update_time = now() where group_id = #{groupId}
+    </update>
+
+    <!-- 学生分组快照维护 -->
+    <select id="selectGroupStudentsByGroupId" resultMap="groupStudentResult">
+        select * from biz_iot_group_student
+        where group_id = #{groupId}
+        order by sort_order asc, group_student_id asc
+    </select>
+
+    <select id="selectGroupStudentsByExperimentAndClass" resultMap="groupStudentResult">
+        select gs.* from biz_iot_group_student gs
+        join biz_iot_group g on g.group_id = gs.group_id
+        where gs.experiment_id = #{experimentId} and g.entry_year = #{entryYear} and g.class_code = #{classCode}
+        order by g.group_no asc, gs.sort_order asc
+    </select>
+
+    <select id="selectGroupStudentByExpAndStudent" resultMap="groupStudentResult">
+        select * from biz_iot_group_student
+        where experiment_id = #{experimentId} and student_id = #{studentId}
+        limit 1
+    </select>
+
+    <insert id="insertGroupStudent" parameterType="IotGroupStudent" useGeneratedKeys="true" keyProperty="groupStudentId">
+        insert into biz_iot_group_student (group_id, experiment_id, student_id, student_no, student_name, sort_order, create_time)
+        values (#{groupId}, #{experimentId}, #{studentId}, #{studentNo}, #{studentName}, #{sortOrder}, now())
+    </insert>
+
+    <delete id="deleteGroupStudentsByExperimentAndClass">
+        delete from biz_iot_group_student
+        where experiment_id = #{experimentId} and group_id in (
+            select group_id from biz_iot_group where experiment_id = #{experimentId} and entry_year = #{entryYear} and class_code = #{classCode}
+        )
+    </delete>
+
+    <!-- 设备管理 -->
+    <select id="selectDeviceById" resultMap="deviceResult">
+        select d.*, g.experiment_id,
+          case when g.topic is not null then concat(g.topic, '/device', d.device_code, '/data')
+               else concat(e.topic_prefix, '/', g.entry_year, '_', g.class_code, '/', e.activity_code, '/', g.group_code, '/', d.device_code, '/data') end as topic
+        from biz_iot_device d join biz_iot_group g on g.group_id = d.group_id
+          join biz_iot_experiment e on e.experiment_id = g.experiment_id
+        where d.device_id = #{deviceId}
+    </select>
+
+    <select id="selectDeviceByTopic" resultMap="deviceResult">
+        select d.*, g.experiment_id from biz_iot_device d
+        join biz_iot_group g on g.group_id = d.group_id
+        join biz_iot_experiment e on e.experiment_id = g.experiment_id
+        where (
+            concat(e.topic_prefix, '/', g.entry_year, '_', g.class_code, '/', e.activity_code, '/', g.group_code, '/', d.device_code, '/data') = #{topic}
+            or concat(g.topic, '/device', d.device_code, '/data') = #{topic}
+            or g.topic = #{topic}
+        )
+          and e.status = '0' and g.status = '0' and d.status = '0'
+        limit 1
+    </select>
+
+    <select id="selectDevicesByGroup" resultMap="deviceResult">
+        select d.*, g.experiment_id,
+          case when g.topic is not null then concat(g.topic, '/device', d.device_code, '/data')
+               else concat(e.topic_prefix, '/', g.entry_year, '_', g.class_code, '/', e.activity_code, '/', g.group_code, '/', d.device_code, '/data') end as topic
+        from biz_iot_device d join biz_iot_group g on g.group_id = d.group_id
+          join biz_iot_experiment e on e.experiment_id = g.experiment_id
+        where d.group_id = #{groupId} and d.status = '0'
+        order by d.device_id
+    </select>
+
+    <insert id="insertDevice" parameterType="IotDevice" useGeneratedKeys="true" keyProperty="deviceId">
+        insert into biz_iot_device (group_id, device_code, device_name, status, create_by, create_time)
+        values (#{groupId}, #{deviceCode}, #{deviceName}, '0', #{createBy}, now())
+    </insert>
+
+    <update id="updateDeviceCredential" parameterType="IotDevice">
+        update biz_iot_device set broker_username = #{brokerUsername}, credential_hash = #{credentialHash},
+          credential_expires_at = #{credentialExpiresAt}, update_time = now() where device_id = #{deviceId}
+    </update>
+
+    <update id="updateDeviceStatus">
+        update biz_iot_device set status = #{status}, update_time = now() where device_id = #{deviceId}
+    </update>
+
+    <select id="selectExpiredDevices" resultMap="deviceResult">
+        select d.*, g.experiment_id,
+          case when g.topic is not null then g.topic
+               else concat(e.topic_prefix, '/', g.entry_year, '_', g.class_code, '/', e.activity_code, '/', g.group_code, '/', d.device_code, '/data') end as topic
+        from biz_iot_device d join biz_iot_group g on g.group_id = d.group_id
+          join biz_iot_experiment e on e.experiment_id = g.experiment_id
+        where d.status = '0' and d.credential_expires_at is not null and d.credential_expires_at &lt;= #{now}
+    </select>
+
+    <update id="touchDevice">
+        update biz_iot_device set last_seen_at = #{lastSeenAt}, update_time = now() where device_id = #{deviceId}
+    </update>
+
+    <!-- 教师数据范围校验 -->
+    <select id="countTeacherGroupScope" resultType="int">
+        select count(*) from biz_iot_group g
+        join biz_iot_experiment e on e.experiment_id = g.experiment_id
+        join biz_teacher_class tc on tc.dept_id = e.dept_id and tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        where g.experiment_id = #{experimentId} and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+    </select>
+
+    <select id="countTeacherLessonScope" resultType="int">
+        select count(*) from biz_lesson_assignment a
+        join biz_teacher_class tc on tc.dept_id = #{deptId} and tc.entry_year = a.entry_year and tc.class_code = a.class_code
+        where a.lesson_id = #{lessonId} and tc.user_id = #{userId}
+    </select>
+
+    <select id="countTeacherClassScope" resultType="int">
+        select count(*) from biz_teacher_class tc
+        where tc.user_id = #{userId} and tc.dept_id = #{deptId} and tc.entry_year = #{entryYear} and tc.class_code = #{classCode}
+    </select>
+
+    <!-- 消息管理 -->
+    <insert id="insertMessage" parameterType="IotMessage" useGeneratedKeys="true" keyProperty="messageId">
+        insert into biz_iot_message (experiment_id, group_id, device_id, topic, payload_type, payload_text,
+          payload_number, source_ip, qos, retained, received_at)
+        values (#{experimentId}, #{groupId}, #{deviceId}, #{topic}, #{payloadType}, #{payloadText},
+          #{payloadNumber}, #{sourceIp}, #{qos}, #{retained}, #{receivedAt})
+    </insert>
+
+    <select id="selectRecentMessages" resultMap="messageResult">
+        select m.*, g.group_code, coalesce(d.device_code, 'data') as device_code from biz_iot_message m
+        join biz_iot_group g on g.group_id = m.group_id
+        left join biz_iot_device d on d.device_id = m.device_id
+        where m.experiment_id = #{experimentId} order by m.received_at desc limit #{limit}
+    </select>
+
+    <select id="selectRecentMessagesByGroup" resultMap="messageResult">
+        select m.*, g.group_code, coalesce(d.device_code, 'data') as device_code from biz_iot_message m
+        join biz_iot_group g on g.group_id = m.group_id
+        left join biz_iot_device d on d.device_id = m.device_id
+        where m.group_id = #{groupId} order by m.received_at desc limit #{limit}
+    </select>
+
+    <select id="selectRecentMessagesForTeacher" resultMap="messageResult">
+        select m.*, g.group_code, coalesce(d.device_code, 'data') as device_code from biz_iot_message m
+        join biz_iot_group g on g.group_id = m.group_id
+        left join biz_iot_device d on d.device_id = m.device_id
+        join biz_teacher_class tc on tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        where m.experiment_id = #{experimentId} and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        order by m.received_at desc limit #{limit}
+    </select>
+
+    <!-- 事件管理 -->
+    <insert id="insertEvent" parameterType="IotEvent" useGeneratedKeys="true" keyProperty="eventId">
+        insert into biz_iot_event (experiment_id, group_id, device_id, event_type, diagnostic_stage, detail, payload_digest, occurred_at)
+        values (#{experimentId}, #{groupId}, #{deviceId}, #{eventType}, #{diagnosticStage}, #{detail}, #{payloadDigest}, #{occurredAt})
+    </insert>
+
+    <select id="selectRecentEvents" resultMap="eventResult">
+        select * from biz_iot_event where experiment_id = #{experimentId}
+        order by occurred_at desc limit #{limit}
+    </select>
+
+    <select id="selectRecentEventsForTeacher" resultMap="eventResult">
+        select e.* from biz_iot_event e join biz_iot_group g on g.group_id = e.group_id
+        join biz_teacher_class tc on tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        where e.experiment_id = #{experimentId} and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        order by e.occurred_at desc limit #{limit}
+    </select>
+</mapper>

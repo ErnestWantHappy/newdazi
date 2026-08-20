@@ -3,6 +3,7 @@ package com.ruoyi.business.service.impl;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import com.ruoyi.business.domain.vo.GradeGroupVo;
 import com.ruoyi.business.domain.vo.LessonDetailVo;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
+import com.ruoyi.business.mapper.CollaborationMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
@@ -91,6 +93,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private PracticalRubricSnapshotService practicalRubricSnapshotService;
+
+    @Autowired
+    private CollaborationMapper collaborationMapper;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -901,6 +906,15 @@ public class BizLessonServiceImpl implements IBizLessonService
                 .flatMap(group -> group.getLessons().stream())
                 .forEach(lesson -> lesson.setAssignedClasses(classesByLesson.getOrDefault(
                         lesson.getLessonId() + "#" + lesson.getEntryYear(), new ArrayList<>())));
+
+        List<Long> openCollaborationLessonIds = collaborationMapper.selectOpenLessonIdsByLessonIds(lessonIds, deptId);
+        if (openCollaborationLessonIds == null) openCollaborationLessonIds = new ArrayList<>();
+        HashSet<Long> openCollaborationSet = new HashSet<>(openCollaborationLessonIds);
+        groups.stream()
+                .filter(Objects::nonNull)
+                .filter(group -> group.getLessons() != null)
+                .flatMap(group -> group.getLessons().stream())
+                .forEach(lesson -> lesson.setHasCollaboration(openCollaborationSet.contains(lesson.getLessonId())));
     }
 
     private void validateEntryYear(String entryYear)

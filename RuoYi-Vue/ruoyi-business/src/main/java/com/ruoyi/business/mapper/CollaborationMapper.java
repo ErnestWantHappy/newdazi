@@ -9,6 +9,10 @@ import com.ruoyi.business.domain.CollaborationUploadTicket;
 /** 在线协作房间、文件版本和历史 WPS 票据持久化。 */
 public interface CollaborationMapper
 {
+    /** 教师首页批量标记存在开放协作房间的课程，避免逐课程查询。 */
+    List<Long> selectOpenLessonIdsByLessonIds(@Param("lessonIds") List<Long> lessonIds,
+                                              @Param("deptId") Long deptId);
+
     CollaborationRoom selectRoomById(@Param("roomId") Long roomId);
 
     CollaborationRoom selectRoomByPublicFileId(@Param("publicFileId") String publicFileId);

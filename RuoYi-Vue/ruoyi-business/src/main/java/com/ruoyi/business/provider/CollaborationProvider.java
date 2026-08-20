@@ -13,4 +13,12 @@ public interface CollaborationProvider
     Map<String, Object> health();
 
     Map<String, Object> session(CollaborationRoom room, Long userId, String scope);
+
+    /**
+     * 创建会话时允许业务层传入展示名；旧 Provider 不需要身份信息时继续走旧实现。
+     */
+    default Map<String, Object> session(CollaborationRoom room, Long userId, String scope, String displayName)
+    {
+        return session(room, userId, scope);
+    }
 }

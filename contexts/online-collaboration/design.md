@@ -1,6 +1,38 @@
-# 在线协作设计（WPS 实施记录已归档）
+# 在线协作设计（当前 CryptPad，WPS 实施记录已归档）
 
-> 2026-08-14：本设计对应的 WPS 提供方已停用，保留内容用于回滚和复用房间/版本模型。下一阶段优先评估 CryptPad Integration API，备选 Collabora CODE + WOPI；未获得用户路线确认前不改表结构，详见 `provider-research-20260814.md` 与 ADR-004。
+## 当前 CryptPad 架构（2026-08-17）
+
+```text
+教师课程设计器 -> 平台协作设置 API -> 每班房间 + 起始文件副本
+学生/教师 -> 平台登录和课程/学校/班级校验 -> CryptPad Integration API
+CryptPad 浏览器编辑器 -> onSave Blob -> 平台文件类型/大小/版本 CAS -> revision
+```
+
+- 业务房间仍使用 `biz_collab_room`，Provider 为 `CRYPTPAD`；WPS 历史记录保留。
+- `provider_session_key` 只保存 AES-GCM 密文，主密钥由 `COLLABORATION_KEY_SECRET` 外置注入。
+- CryptPad 服务固定为 `cryptpad/cryptpad:2026.5.1`，Compose 目录为服务器 `/srv/cryptpad`，容器端口只绑定 `127.0.0.1:3000` 和 `127.0.0.1:3003`。
+- Nginx 负责两个域名的 HTTP/WebSocket 转发；正式 HTTPS 由现有受信任网关提供，网关必须把两个 Host 转发到扩展服务器。
+- 平台接口包括健康检查、教师课程协作设置、学生当前班级房间、房间会话、文档下载、CAS 保存和教师密钥轮换。
+
+> 2026-08-19：按用户要求，当前部署临时改为 HTTP（80 端口）验证。HTTP 不提供传输加密，只允许内网测试；恢复 HTTPS 后才能进入正式使用门禁。
+> 2026-08-19：补充平台嵌入来源 `http://xxkj.xsedu.net.cn` 到 CryptPad Nginx 的 Content-Security-Policy `frame-ancestors`，否则平台 iframe 会显示“office.xsedu.net.cn 拒绝连接”。
+> 2026-08-19：CryptPad 默认 `enableEmbedding=false` 导致平台进入房间时提示“此 CryptPad 实例禁用嵌入”；已从干净 decree 备份恢复并追加合法 `ENABLE_EMBEDDING=true` 记录，重启后 `api/config` 返回 `true`，容器健康。该开关只解决实例嵌入门禁，仍需现场完成多人编辑和保存闭环验收。
+
+## 安全边界
+
+平台先做业务授权再生成会话；匿名、跨学校、跨班级、非当前课程和关闭房间均拒绝。CryptPad 不维护平台学生账号，也不作为平台权限来源。
+
+## 运维
+
+Compose、Nginx、systemd 自启动、日志轮转和每日备份均放在 `deploy/cryptpad/`；数据和备份分开保存。镜像构建或升级必须保留版本标签、镜像摘要、备份和上一版 release。
+
+### 2026-08-17 部署验收补充
+
+- 实际 Compose 根目录为 `/srv/cryptpad`，固定镜像摘要为 `sha256:689634b77d1ef739efcd79b02e136788cb1b03793a7b6b6a46b2debcce130feb`；OnlyOffice v9 与 x2t 固定组件挂载在 `/srv/cryptpad/data/onlyoffice`，避免启动时访问 GitHub。
+- 宿主机仅监听 Nginx 80；CryptPad 容器仅发布到回环 3000/3003。`cryptpad-compose.service` 和 `cryptpad-backup.timer` 已启用，备份落在 `/srv/cryptpad/backups` 并写 SHA-256。
+- 2026-08-19 按用户要求切换为 HTTP 后，服务器本机带正确 Host 的 `/`、`/checkup/` 和 `/cryptpad-api.js` 返回 200，容器为 healthy；两个域名已直接解析到 `10.52.1.129`，但当前验收电脑访问 80 端口超时，网络/防火墙路径仍未放行。
+
+> 2026-08-14：本设计对应的 WPS 提供方已停用，保留内容仅用于回滚和复用房间/版本模型；当前 CryptPad 路线已由 ADR-005 采纳。下方 WPS 架构、协议和配置段落均为历史归档，不代表当前实现。
 
 ## 1. 架构
 

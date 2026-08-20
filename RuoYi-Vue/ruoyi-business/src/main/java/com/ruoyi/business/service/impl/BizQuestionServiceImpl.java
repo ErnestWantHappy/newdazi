@@ -52,7 +52,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
         // P6: 查询评分项 (仅操作题)
-        if (question != null && "practical".equals(question.getQuestionType())) {
+        if (isFilePractical(question)) {
             question.setScoringItems(bizScoringItemMapper.selectItemsByQuestion(questionId));
             question.setPracticalMaterials(practicalArtifactMapper.selectMaterialsByQuestion(questionId));
         }
@@ -128,7 +128,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
      * P6: 自定义辅助方法：批量保存评分项
      */
     private void insertScoringItems(BizQuestion bizQuestion) {
-        if ("practical".equals(bizQuestion.getQuestionType()) && bizQuestion.getScoringItems() != null) {
+        if (isFilePractical(bizQuestion) && bizQuestion.getScoringItems() != null) {
             int order = 0;
             for (BizScoringItem item : bizQuestion.getScoringItems()) {
                 item.setQuestionId(bizQuestion.getQuestionId());
@@ -237,6 +237,21 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             bizQuestion.setFilePath(null);
             bizQuestion.setPreviewPath(null);
         } else if ("practical".equals(questionType)) {
+            if (isPythonPractical(bizQuestion)) {
+                // 在线编程由 Judge0 配置和测试点评分，不能混入文件作品和人工评分项。
+                bizQuestion.setPracticalMode("PYTHON");
+                bizQuestion.setFilePath(null);
+                bizQuestion.setPreviewPath(null);
+                bizQuestion.setPreviewStatus(null);
+                bizQuestion.setPracticalAllowedExtensions(null);
+                bizQuestion.setPracticalImageMaxCount(null);
+                bizQuestion.setPracticalMaterials(null);
+                bizQuestion.setScoringItems(null);
+                bizQuestion.setWordCount(null);
+                bizQuestion.setTypingDuration(null);
+                return;
+            }
+            bizQuestion.setPracticalMode("FILE");
             if (StringUtils.isEmpty(bizQuestion.getPracticalAllowedExtensions())) {
                 bizQuestion.setPracticalAllowedExtensions(
                         "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png");
@@ -297,7 +312,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
      * 触发操作题异步转换（如果需要）
      */
     private void triggerAsyncConversionIfNeeded(BizQuestion bizQuestion) {
-        if ("practical".equals(bizQuestion.getQuestionType()) 
+        if (isFilePractical(bizQuestion)
             && "pending".equals(bizQuestion.getPreviewStatus())
             && bizQuestion.getQuestionId() != null) {
             
@@ -323,7 +338,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     {
         if (question.getQuestionId() == null) return;
         practicalArtifactMapper.deleteMaterialsByQuestion(question.getQuestionId());
-        if (!"practical".equals(question.getQuestionType())) return;
+        if (!isFilePractical(question)) return;
 
         int order = 0;
         if (StringUtils.isNotEmpty(question.getFilePath()))
@@ -370,5 +385,17 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     {
         int dot = path == null ? -1 : path.lastIndexOf('.');
         return dot < 0 ? "" : path.substring(dot + 1).toLowerCase();
+    }
+
+    private boolean isPythonPractical(BizQuestion question)
+    {
+        return question != null && "practical".equals(question.getQuestionType())
+                && "PYTHON".equalsIgnoreCase(question.getPracticalMode());
+    }
+
+    private boolean isFilePractical(BizQuestion question)
+    {
+        return question != null && "practical".equals(question.getQuestionType())
+                && !"PYTHON".equalsIgnoreCase(question.getPracticalMode());
     }
 }

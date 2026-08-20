@@ -200,7 +200,8 @@ public class CollaborationRoomService
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         if (isCryptPadProvider())
         {
-            result.putAll(cryptPadAdapter.session(room, userId, scope));
+            result.putAll(cryptPadAdapter.session(room, userId, scope,
+                    sessionDisplayName(userId, scope)));
         }
         else
         {
@@ -215,6 +216,41 @@ public class CollaborationRoomService
         result.put("room", publicRoom(room, true));
         result.put("readOnly", "READ_ONLY".equals(room.getStatus()));
         return result;
+    }
+
+    /**
+     * 协作参与者需要看到可辨认的课堂身份，但不应把内部用户 ID 或登录账号暴露给编辑器。
+     */
+    private String sessionDisplayName(Long userId, String scope)
+    {
+        if ("STUDENT".equals(scope))
+        {
+            BizStudent student = studentMapper.selectBizStudentByUserId(userId);
+            if (student != null)
+            {
+                String studentNo = cleanDisplayPart(student.getStudentNo());
+                String studentName = cleanDisplayPart(student.getStudentName());
+                if (StringUtils.isNotBlank(studentNo) && StringUtils.isNotBlank(studentName))
+                    return studentNo + " " + studentName;
+                if (StringUtils.isNotBlank(studentName)) return studentName;
+                if (StringUtils.isNotBlank(studentNo)) return studentNo;
+            }
+        }
+        try
+        {
+            String nickName = cleanDisplayPart(SecurityUtils.getLoginUser().getUser().getNickName());
+            if (StringUtils.isNotBlank(nickName)) return nickName;
+        }
+        catch (Exception ignored)
+        {
+            // 会话已经通过权限校验，展示名读取失败时只回退到通用名称，不影响进入房间。
+        }
+        return "协作用户";
+    }
+
+    private String cleanDisplayPart(String value)
+    {
+        return StringUtils.defaultString(value).replaceAll("[\\r\\n\\t]", " ").trim();
     }
 
     public CollaborationRoom requireRoom(Long roomId)
@@ -410,6 +446,7 @@ public class CollaborationRoomService
     {
         if (isCryptPadProvider())
         {
+            if (!enabled) throw new ServiceException("在线协作功能当前未开启");
             if (!cryptPadAdapter.ready()) throw new ServiceException("CryptPad 尚未就绪，请检查外置配置");
             return;
         }

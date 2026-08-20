@@ -44,10 +44,6 @@ function addIframe() {
   overflow: hidden;
 }
 
-.app-main:has(.copyright) {
-  padding-bottom: 36px;
-}
-
 .fixed-header + .app-main {
   padding-top: 50px;
 }

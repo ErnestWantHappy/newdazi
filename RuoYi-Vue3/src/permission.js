@@ -20,6 +20,11 @@ const isWhiteList = (path) => {
 
 router.beforeEach((to, from, next) => {
   NProgress.start();
+  // 平台菜单实际路由为 /platform-update，兼容历史书签中的旧地址。
+  if (to.path === '/business/platform-update') {
+    next({ path: '/platform-update', replace: true });
+    return;
+  }
   if (getToken()) {
     to.meta.title && useSettingsStore().setTitle(to.meta.title);
     /* has token*/

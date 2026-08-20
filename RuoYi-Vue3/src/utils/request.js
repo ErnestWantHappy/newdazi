@@ -35,7 +35,12 @@ function parseResponseMessage(data, code) {
 
 async function parseBlobError(data) {
   const resText = await data.text()
-  return JSON.parse(resText)
+  try {
+    return JSON.parse(resText)
+  } catch (_error) {
+    // 网关故障页或代理返回的 HTML/CSS 不能再触发二次解析异常，避免覆盖原始下载失败原因。
+    return { code: 500, msg: resText.trim().slice(0, 200) || errorCode.default }
+  }
 }
 
 service.interceptors.request.use(config => {

@@ -25,6 +25,8 @@ public class StudentLessonQuestionVo
     private String previewPath;
     private String filePath;
     private String practicalAllowedExtensions;
+    /** 操作题作答方式：FILE 为文件作品，PYTHON 为在线编程。 */
+    private String practicalMode;
     private Integer practicalImageMaxCount;
     private List<PracticalQuestionMaterial> practicalMaterials = new ArrayList<PracticalQuestionMaterial>();
 
@@ -60,6 +62,8 @@ public class StudentLessonQuestionVo
     public void setFilePath(String filePath) { this.filePath = filePath; }
     public String getPracticalAllowedExtensions() { return practicalAllowedExtensions; }
     public void setPracticalAllowedExtensions(String practicalAllowedExtensions) { this.practicalAllowedExtensions = practicalAllowedExtensions; }
+    public String getPracticalMode() { return practicalMode; }
+    public void setPracticalMode(String practicalMode) { this.practicalMode = practicalMode; }
     public Integer getPracticalImageMaxCount() { return practicalImageMaxCount; }
     public void setPracticalImageMaxCount(Integer practicalImageMaxCount) { this.practicalImageMaxCount = practicalImageMaxCount; }
     public List<PracticalQuestionMaterial> getPracticalMaterials() { return practicalMaterials; }

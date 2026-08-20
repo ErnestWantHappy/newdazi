@@ -25,6 +25,12 @@ public class BizLessonCheckin extends BaseEntity
     private String studentNo;
     /** 展示用：班级 */
     private String classCode;
+    /** 展示用：学生备注 */
+    private String remark;
+    /** 展示用：班级学生总数 */
+    private Long totalCount;
+    /** 展示用：班级已签到人数 */
+    private Long checkedInCount;
 
     public Long getCheckinId() { return checkinId; }
     public void setCheckinId(Long checkinId) { this.checkinId = checkinId; }
@@ -42,4 +48,10 @@ public class BizLessonCheckin extends BaseEntity
     public void setStudentNo(String studentNo) { this.studentNo = studentNo; }
     public String getClassCode() { return classCode; }
     public void setClassCode(String classCode) { this.classCode = classCode; }
+    public String getRemark() { return remark; }
+    public void setRemark(String remark) { this.remark = remark; }
+    public Long getTotalCount() { return totalCount; }
+    public void setTotalCount(Long totalCount) { this.totalCount = totalCount; }
+    public Long getCheckedInCount() { return checkedInCount; }
+    public void setCheckedInCount(Long checkedInCount) { this.checkedInCount = checkedInCount; }
 }

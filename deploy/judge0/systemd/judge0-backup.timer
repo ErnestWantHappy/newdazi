@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily Judge0 CE backup
+
+[Timer]
+OnCalendar=*-*-* 02:35:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

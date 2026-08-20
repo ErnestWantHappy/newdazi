@@ -8,6 +8,7 @@ import com.ruoyi.business.domain.vo.GradeGroupVo;
 import com.ruoyi.business.domain.vo.LessonDetailVo;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
+import com.ruoyi.business.mapper.CollaborationMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
@@ -54,6 +55,8 @@ class BizLessonServiceImplTest
     private BizLessonMapper bizLessonMapper;
     @Mock
     private BizLessonAssignmentMapper lessonAssignmentMapper;
+    @Mock
+    private CollaborationMapper collaborationMapper;
     @Mock
     private BizTeacherClassMapper teacherClassMapper;
     @Mock
@@ -211,6 +214,9 @@ class BizLessonServiceImplTest
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(8L),
                 org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq("teacher")))
                 .thenReturn(Collections.emptyList());
+        when(collaborationMapper.selectOpenLessonIdsByLessonIds(
+                org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.eq(10L)))
+                .thenReturn(Collections.singletonList(24L));
         List<GradeGroupVo> groups = service.getTeacherDashboardData();
 
         GradeGroupVo ninthGradeGroup = groups.stream()
@@ -221,6 +227,8 @@ class BizLessonServiceImplTest
         assertNotNull(eighthGradeGroup);
         assertEquals(Collections.singletonList(ninthGradeLesson), ninthGradeGroup.getLessons());
         assertEquals(Collections.singletonList(eighthGradeLesson), eighthGradeGroup.getLessons());
+        assertTrue(ninthGradeLesson.isHasCollaboration());
+        assertFalse(eighthGradeLesson.isHasCollaboration());
         assertEquals("九年级", ninthGradeGroup.getGradeName());
         assertEquals("八年级", eighthGradeGroup.getGradeName());
         verify(lessonAssignmentMapper).selectAssignmentsByLessonIds(

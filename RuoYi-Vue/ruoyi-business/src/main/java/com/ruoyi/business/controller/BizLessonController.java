@@ -60,6 +60,40 @@ public class BizLessonController extends BaseController
     private BizTeacherClassMapper teacherClassMapper;
 
     /**
+     * 教师查看某考勤课的各班签到汇总。
+     * 创建教师和管理员可看本校该届全部班级，任课教师仅看自己管理的班级。
+     */
+    @PreAuthorize("@ss.hasPermi('business:lesson:query')")
+    @GetMapping("/checkin-summary")
+    public AjaxResult checkinSummary(@RequestParam Long lessonId, @RequestParam String entryYear)
+    {
+        if (lessonId == null || StringUtils.isBlank(entryYear))
+        {
+            return error("参数不完整");
+        }
+        BizLesson lesson = getAuthorizedCheckinLesson(lessonId);
+        if (lesson == null)
+        {
+            return error("课程不存在或无权查看签到");
+        }
+        Long deptId = SecurityUtils.getDeptId();
+        List<BizLessonCheckin> summary = lessonCheckinMapper.selectClassSummaryByLesson(
+                lessonId, entryYear.trim(), deptId);
+        if (!canViewAllCheckinClasses(lesson))
+        {
+            Long userId = SecurityUtils.getUserId();
+            summary.removeIf(row -> !canManageCheckinClass(userId, deptId, entryYear, row.getClassCode()));
+        }
+        long total = summary.stream().mapToLong(row -> row.getTotalCount() == null ? 0L : row.getTotalCount()).sum();
+        long checked = summary.stream().mapToLong(row -> row.getCheckedInCount() == null ? 0L : row.getCheckedInCount()).sum();
+        return success(summary)
+                .put("total", total)
+                .put("checkedInCount", checked)
+                .put("lessonMode", lesson.getLessonMode() == null ? "assessment" : lesson.getLessonMode())
+                .put("lessonTitle", lesson.getLessonTitle());
+    }
+
+    /**
      * 获取课程完整详情 (用于课程设计器 "修改" 模式)
      */
     @PreAuthorize("@ss.hasPermi('business:lesson:query')")
@@ -83,30 +117,18 @@ public class BizLessonController extends BaseController
         {
             return error("参数不完整");
         }
-        // 直接查 Mapper，避免 service 层 assertCanManageLesson 把任教教师挡在门外
-        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        BizLesson lesson = getAuthorizedCheckinLesson(lessonId);
         if (lesson == null)
         {
-            return error("课程不存在");
+            return error("课程不存在或无权查看签到");
         }
         Long deptId = SecurityUtils.getDeptId();
-        if (lesson.getDeptId() != null && !lesson.getDeptId().equals(deptId))
-        {
-            return error("无权查看该课程签到");
-        }
         String pureClass = classCode.replace("班", "").trim();
         // 签到名单：本校 +（创建人/管理员/任教该班）。考勤课未必有「当前指派」校验，故不强制 assignment。
         Long userId = SecurityUtils.getUserId();
-        boolean creator = userId.equals(lesson.getCreatorId())
-                || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
-        if (!SecurityUtils.isAdmin(userId) && !creator)
+        if (!canViewAllCheckinClasses(lesson))
         {
-            BizTeacherClass probe = new BizTeacherClass();
-            probe.setUserId(userId);
-            probe.setDeptId(deptId);
-            probe.setEntryYear(entryYear.trim());
-            probe.setClassCode(pureClass);
-            if (teacherClassMapper.checkTeacherClassExists(probe) <= 0)
+            if (!canManageCheckinClass(userId, deptId, entryYear, pureClass))
             {
                 return error("只能查看自己管理班级的签到");
             }
@@ -119,6 +141,36 @@ public class BizLessonController extends BaseController
                 .put("checkedInCount", checked)
                 .put("lessonMode", lesson.getLessonMode() == null ? "assessment" : lesson.getLessonMode())
                 .put("lessonTitle", lesson.getLessonTitle());
+    }
+
+    /** 直接查询课程，保留任课教师查看自己班级签到的既有权限边界。 */
+    private BizLesson getAuthorizedCheckinLesson(Long lessonId)
+    {
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        Long deptId = SecurityUtils.getDeptId();
+        if (lesson == null || (lesson.getDeptId() != null && !lesson.getDeptId().equals(deptId)))
+        {
+            return null;
+        }
+        return lesson;
+    }
+
+    private boolean canViewAllCheckinClasses(BizLesson lesson)
+    {
+        Long userId = SecurityUtils.getUserId();
+        return SecurityUtils.isAdmin(userId)
+                || userId.equals(lesson.getCreatorId())
+                || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
+    }
+
+    private boolean canManageCheckinClass(Long userId, Long deptId, String entryYear, String classCode)
+    {
+        BizTeacherClass probe = new BizTeacherClass();
+        probe.setUserId(userId);
+        probe.setDeptId(deptId);
+        probe.setEntryYear(entryYear.trim());
+        probe.setClassCode(classCode);
+        return teacherClassMapper.checkTeacherClassExists(probe) > 0;
     }
 
     /**

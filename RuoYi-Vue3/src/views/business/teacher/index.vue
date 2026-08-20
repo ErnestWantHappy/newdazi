@@ -63,54 +63,79 @@
                 <el-icon><Close /></el-icon>
               </div>
 
-              <div class="folder-content">
-                <div class="folder-title-vertical" :title="lesson.lessonTitle">
-                  {{ lesson.lessonTitle }}
+              <div class="lesson-main">
+                <div class="folder-content">
+                  <div class="folder-title-vertical" :title="lesson.lessonTitle">
+                    {{ lesson.lessonTitle }}
+                  </div>
+                  <div class="folder-info">
+                    <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
+                      <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
+                    </div>
+                    <div class="lesson-count-tag">
+                      第{{ lesson.lessonNum }}课
+                    </div>
+                    <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
+                  </div>
                 </div>
-                <div class="folder-info">
-                  <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
-                    <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
+
+                <div class="folder-actions">
+                  <div class="action-btn design" @click.stop="handleEditLesson(lesson, group)" title="设计课程">
+                    <el-icon><Edit /></el-icon>
+                    <span>设计</span>
                   </div>
-                  <div class="lesson-count-tag">
-                    第{{ lesson.lessonNum }}课
+                  <div
+                    v-if="lesson.lessonMode === 'attendance'"
+                    class="action-btn grade"
+                    @click.stop="openCheckinRoster(lesson, group)"
+                    title="签到名单"
+                  >
+                    <el-icon><Check /></el-icon>
+                    <span>签到</span>
                   </div>
-                  <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
+                  <div
+                    v-if="lesson.hasPractical"
+                    class="action-btn grade"
+                    @click.stop="goToGrading(lesson, group)"
+                    title="批改作业"
+                  >
+                    <el-icon><Check /></el-icon>
+                    <span>批改</span>
+                    <span v-if="hasUngradedPractical(lesson)" class="grading-red-dot" aria-label="存在未批操作题"></span>
+                  </div>
+                  <div
+                    v-if="lesson.lessonMode !== 'attendance'"
+                    class="action-btn score"
+                    @click.stop="goToScoreAnalysis(lesson, group)"
+                    title="查看成绩"
+                  >
+                    <el-icon><DataLine /></el-icon>
+                    <span>成绩</span>
+                  </div>
+                  <div
+                    v-if="lesson.lessonMode !== 'attendance'"
+                    class="action-btn iot"
+                    @click.stop="goToIotExperiment(lesson, group)"
+                    title="物联网实验"
+                  >
+                    <el-icon><Connection /></el-icon>
+                    <span>物联</span>
+                  </div>
                 </div>
               </div>
 
-              <div class="folder-actions">
-                <div class="action-btn design" @click.stop="handleEditLesson(lesson, group)" title="设计课程">
-                  <el-icon><Edit /></el-icon>
-                  <span>设计</span>
-                </div>
-                <div
-                  v-if="lesson.lessonMode === 'attendance'"
-                  class="action-btn grade"
-                  @click.stop="openCheckinRoster(lesson, group)"
-                  title="签到名单"
+              <div class="lesson-collaboration-footer">
+                <el-button
+                  v-if="lesson.hasCollaboration"
+                  class="lesson-collaboration-entry"
+                  size="small"
+                  type="primary"
+                  text
+                  @click.stop="openCollaborationRooms(lesson)"
                 >
-                  <el-icon><Check /></el-icon>
-                  <span>签到</span>
-                </div>
-                <div
-                  v-if="lesson.hasPractical"
-                  class="action-btn grade"
-                  @click.stop="goToGrading(lesson, group)"
-                  title="批改作业"
-                >
-                  <el-icon><Check /></el-icon>
-                  <span>批改</span>
-                  <span v-if="hasUngradedPractical(lesson)" class="grading-red-dot" aria-label="存在未批操作题"></span>
-                </div>
-                <div
-                  v-if="lesson.lessonMode !== 'attendance'"
-                  class="action-btn score"
-                  @click.stop="goToScoreAnalysis(lesson, group)"
-                  title="查看成绩"
-                >
-                  <el-icon><DataLine /></el-icon>
-                  <span>成绩</span>
-                </div>
+                  <el-icon><Connection /></el-icon>
+                  <span>在线协作</span>
+                </el-button>
               </div>
             </div>
 
@@ -141,6 +166,16 @@
 
     <!-- 班级选择弹窗 -->
     <ClassSelectionDialog ref="classDialogRef" />
+
+    <el-dialog v-model="collaborationDialogVisible" :title="`${collaborationLesson?.lessonTitle || '课程'} · 选择协作班级`" width="560px" destroy-on-close>
+      <el-alert type="info" :closable="false" show-icon title="每个班级使用独立共享文档，学生只能进入自己班级的房间。" />
+      <el-table v-loading="collaborationRoomsLoading" :data="collaborationRooms" class="collaboration-room-table" empty-text="当前课程没有开放的协作班级">
+        <el-table-column label="班级" width="120"><template #default="{ row }">{{ row.classCode }}班</template></el-table-column>
+        <el-table-column prop="fileName" label="协作文档" min-width="220" show-overflow-tooltip />
+        <el-table-column label="版本" width="80" align="center"><template #default="{ row }">v{{ row.version || 1 }}</template></el-table-column>
+        <el-table-column label="操作" width="100" align="right"><template #default="{ row }"><el-button link type="primary" @click="enterCollaborationRoom(row)">进入</el-button></template></el-table-column>
+      </el-table>
+    </el-dialog>
 
     <!-- 手动一键课堂推进：年级 + 多选班级（默认全选当前为常规课的班级） -->
     <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进" width="480px" destroy-on-close>
@@ -228,16 +263,42 @@
       </template>
     </el-dialog>
 
-    <!-- 考勤签到名单 -->
-    <el-dialog v-model="checkinDialogVisible" :title="checkinDialogTitle" width="640px" destroy-on-close>
+    <!-- 考勤签到情况：先按班级总览，再进入学生明细 -->
+    <el-dialog v-model="checkinDialogVisible" :title="checkinDialogTitle" width="720px" destroy-on-close @closed="resetCheckinDialog">
+      <template #header>
+        <div class="checkin-dialog-header">
+          <el-button v-if="checkinView === 'roster'" link type="primary" @click="showCheckinSummary">返回班级汇总</el-button>
+          <span>{{ checkinDialogTitle }}</span>
+        </div>
+      </template>
       <div v-if="checkinMeta.total != null" class="checkin-summary">
         已签到 {{ checkinMeta.checkedInCount || 0 }} / {{ checkinMeta.total || 0 }} 人
       </div>
-      <el-table v-loading="checkinLoading" :data="checkinRows" size="small" max-height="420">
+      <el-table v-if="checkinView === 'summary'" v-loading="checkinLoading" :data="checkinSummaryRows" size="small" max-height="420" :row-class-name="getCheckinSummaryRowClass" @row-click="openCheckinClassRoster">
+        <el-table-column label="班级" width="130">
+          <template #default="{ row }">{{ row.classCode }}班</template>
+        </el-table-column>
+        <el-table-column label="已签到" width="120" align="center">
+          <template #default="{ row }">{{ row.checkedInCount || 0 }} 人</template>
+        </el-table-column>
+        <el-table-column label="未签到" width="120" align="center">
+          <template #default="{ row }">{{ Math.max(0, Number(row.totalCount || 0) - Number(row.checkedInCount || 0)) }} 人</template>
+        </el-table-column>
+        <el-table-column label="班级总人数" width="130" align="center">
+          <template #default="{ row }">{{ row.totalCount || 0 }} 人</template>
+        </el-table-column>
+        <el-table-column label="查看名单" min-width="120" align="right">
+          <template #default="{ row }"><el-button link type="primary" @click.stop="openCheckinClassRoster(row)">查看</el-button></template>
+        </el-table-column>
+      </el-table>
+      <el-table v-else v-loading="checkinLoading" :data="checkinRows" size="small" max-height="420">
         <el-table-column label="学号" prop="studentNo" width="120" />
         <el-table-column label="姓名" prop="studentName" min-width="100" />
         <el-table-column label="班级" prop="classCode" width="80">
           <template #default="{ row }">{{ row.classCode }}班</template>
+        </el-table-column>
+        <el-table-column label="备注" prop="remark" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -258,22 +319,25 @@
 
 <script setup name="TeacherDashboard">
 import ResearchNotificationBar from '@/views/business/researchActivity/components/ResearchNotificationBar.vue'
-import { computed, ref, onMounted, onActivated } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref, onMounted, onActivated, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { getDashboardData, getDashboardPracticalStatus } from '@/api/business/teacher';
+import { getCollaborationLesson } from '@/api/business/collaboration';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
 import {
   delLesson,
   getLessonCheckinRoster,
+  getLessonCheckinSummary,
   getAdvancePolicy,
   updateAdvancePolicy,
   manualAdvanceLesson
 } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, Connection, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
+const route = useRoute();
 const loading = ref(true);
 const gradeGroups = ref([]);
 
@@ -293,7 +357,15 @@ const checkinDialogVisible = ref(false);
 const checkinDialogTitle = ref('签到名单');
 const checkinLoading = ref(false);
 const checkinRows = ref([]);
+const checkinSummaryRows = ref([]);
 const checkinMeta = ref({});
+const checkinView = ref('summary');
+const checkinLesson = ref(null);
+const checkinEntryYear = ref('');
+const collaborationDialogVisible = ref(false);
+const collaborationRoomsLoading = ref(false);
+const collaborationLesson = ref(null);
+const collaborationRooms = ref([]);
 
 // 统一推进设置
 const settingsVisible = ref(false);
@@ -644,6 +716,37 @@ function handleEditLesson(lesson, group) {
   });
 }
 
+/** 物联网实验始终从课程入口进入，避免教师手工填写课程 ID。 */
+function goToIotExperiment(lesson, group) {
+  router.push({
+    path: '/business/iot',
+    query: {
+      lessonId: lesson.lessonId,
+      lessonTitle: lesson.lessonTitle || '',
+      entryYear: lesson.entryYear || group.entryYear || ''
+    }
+  });
+}
+
+async function openCollaborationRooms(lesson) {
+  collaborationLesson.value = lesson;
+  collaborationRooms.value = [];
+  collaborationDialogVisible.value = true;
+  collaborationRoomsLoading.value = true;
+  try {
+    const response = await getCollaborationLesson(lesson.lessonId);
+    const payload = response.data || response;
+    collaborationRooms.value = (payload.rooms || []).filter(room => room.status === 'OPEN');
+  } finally {
+    collaborationRoomsLoading.value = false;
+  }
+}
+
+function enterCollaborationRoom(room) {
+  collaborationDialogVisible.value = false;
+  router.push(`/business/collaboration/editor/${room.roomId}`);
+}
+
 function formatCheckinTime(value) {
   try {
     return new Date(value).toLocaleString();
@@ -652,32 +755,70 @@ function formatCheckinTime(value) {
   }
 }
 
-/** 查看考勤课签到名单 */
+/** 打开考勤课各班签到情况。 */
 async function openCheckinRoster(lesson, group) {
-  const selectedClass = await classDialogRef.value.open(group.allClassesInGrade, lesson.lessonId, 'score');
-  if (!selectedClass) return;
-  const pureClass = String(selectedClass).replace('班', '').trim();
-  checkinDialogTitle.value = `${lesson.lessonTitle || '课程'} · ${pureClass}班签到`;
+  checkinLesson.value = lesson;
+  checkinEntryYear.value = group.entryYear;
+  checkinDialogTitle.value = `${lesson.lessonTitle || '课程'} · 签到情况`;
   checkinDialogVisible.value = true;
+  await showCheckinSummary();
+}
+
+/** 加载各班签到人数。 */
+async function showCheckinSummary() {
+  if (!checkinLesson.value || !checkinEntryYear.value) return;
+  checkinView.value = 'summary';
+  checkinLoading.value = true;
+  checkinRows.value = [];
+  checkinSummaryRows.value = [];
+  checkinMeta.value = {};
+  try {
+    const res = await getLessonCheckinSummary({
+      lessonId: checkinLesson.value.lessonId,
+      entryYear: checkinEntryYear.value
+    });
+    checkinSummaryRows.value = res.data || [];
+    checkinMeta.value = {
+      total: res.total,
+      checkedInCount: res.checkedInCount
+    };
+  } finally {
+    checkinLoading.value = false;
+  }
+}
+
+/** 从班级汇总进入该班学生的签到名单。 */
+async function openCheckinClassRoster(summary) {
+  if (!summary?.classCode || !checkinLesson.value) return;
+  checkinView.value = 'roster';
+  checkinDialogTitle.value = `${checkinLesson.value.lessonTitle || '课程'} · ${summary.classCode}班签到`;
   checkinLoading.value = true;
   checkinRows.value = [];
   checkinMeta.value = {};
   try {
     const res = await getLessonCheckinRoster({
-      lessonId: lesson.lessonId,
-      entryYear: group.entryYear,
-      classCode: pureClass
+      lessonId: checkinLesson.value.lessonId,
+      entryYear: checkinEntryYear.value,
+      classCode: summary.classCode
     });
     checkinRows.value = res.data || [];
-    checkinMeta.value = {
-      total: res.total,
-      checkedInCount: res.checkedInCount
-    };
-  } catch (e) {
-    checkinDialogVisible.value = false;
+    checkinMeta.value = { total: res.total, checkedInCount: res.checkedInCount };
   } finally {
     checkinLoading.value = false;
   }
+}
+
+function resetCheckinDialog() {
+  checkinView.value = 'summary';
+  checkinRows.value = [];
+  checkinSummaryRows.value = [];
+  checkinMeta.value = {};
+  checkinLesson.value = null;
+  checkinEntryYear.value = '';
+}
+
+function getCheckinSummaryRowClass() {
+  return 'checkin-summary-row';
 }
 
 /** 跳转批改 */
@@ -748,9 +889,20 @@ function refreshDashboard() {
 }
 
 let skipFirstActivatedRefresh = true;
+let lastDashboardRefreshToken = '';
 onMounted(() => {
   refreshDashboard();
 });
+
+// 保存空课程后可能复用首页组件，监听保存标记确保新课程立即出现。
+watch(
+  () => route.query.refresh,
+  refreshToken => {
+    if (!refreshToken || String(refreshToken) === lastDashboardRefreshToken) return;
+    lastDashboardRefreshToken = String(refreshToken);
+    refreshDashboard();
+  }
+);
 
 // 从其他页面返回时（如课程设计页），重新加载数据
 onActivated(() => {
@@ -880,7 +1032,13 @@ onActivated(() => {
   overflow: hidden;
   border: 1px solid #ebeef5;
   display: flex;
-  flex-direction: row; 
+  flex-direction: column;
+}
+
+.lesson-main {
+  min-height: 0;
+  flex: 1;
+  display: flex;
 }
 
 .lesson-folder:hover {
@@ -934,6 +1092,32 @@ onActivated(() => {
   overflow: hidden; /* 防止溢出 */
 }
 
+.lesson-collaboration-footer {
+  height: 32px;
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid #f0f2f5;
+  background: #fbfdff;
+}
+
+.lesson-collaboration-entry {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  font-size: 12px;
+
+  :deep(.el-icon) {
+    margin-right: 4px;
+  }
+}
+
+.collaboration-room-table {
+  margin-top: 16px;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -956,6 +1140,17 @@ onActivated(() => {
   margin-bottom: 10px;
   color: #606266;
   font-size: 13px;
+}
+.checkin-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.checkin-summary-row {
+  cursor: pointer;
 }
 .settings-intro {
   margin: 0 0 16px;
@@ -1059,6 +1254,7 @@ onActivated(() => {
   &.design:hover { color: #409EFF; background-color: #ecf5ff; }
   &.grade:hover { color: #67C23A; background-color: #f0f9eb; }
   &.score:hover { color: #E6A23C; background-color: #fdf6ec; }
+  &.iot:hover { color: #258b84; background-color: #ecf8f6; }
   
   &:not(:last-child) {
      border-bottom: 1px solid #f0f2f5;

@@ -1,0 +1,7 @@
+[Unit]
+Description=Judge0 CE PostgreSQL and configuration backup
+After=judge0-compose.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/judge0-python/backup/judge0-backup.sh

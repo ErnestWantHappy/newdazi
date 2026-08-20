@@ -15,6 +15,9 @@
         <result property="studentName" column="student_name"/>
         <result property="studentNo" column="student_no"/>
         <result property="classCode" column="class_code"/>
+        <result property="remark" column="remark"/>
+        <result property="totalCount" column="total_count"/>
+        <result property="checkedInCount" column="checked_in_count"/>
     </resultMap>
 
     <select id="selectByLessonAndStudent" resultMap="BizLessonCheckinResult">
@@ -39,6 +42,7 @@
             u.nick_name AS student_name,
             s.student_no,
             s.class_code,
+            s.remark,
             c.checkin_id,
             c.lesson_id,
             c.dept_id,
@@ -59,6 +63,24 @@
             CAST(s.student_no AS UNSIGNED) ASC,
             s.student_no ASC,
             s.student_id ASC
+    </select>
+
+    <!-- 统计口径与教师端签到名单保持一致，避免汇总人数和名单人数不同。 -->
+    <select id="selectClassSummaryByLesson" resultMap="BizLessonCheckinResult">
+        SELECT
+            s.class_code,
+            COUNT(*) AS total_count,
+            SUM(CASE WHEN c.checkin_id IS NULL THEN 0 ELSE 1 END) AS checked_in_count
+        FROM biz_student s
+        INNER JOIN sys_user u
+            ON u.user_id = s.user_id
+           AND u.dept_id = #{deptId}
+        LEFT JOIN biz_lesson_checkin c
+            ON c.student_id = s.student_id
+           AND c.lesson_id = #{lessonId}
+        WHERE s.entry_year = #{entryYear}
+        GROUP BY s.class_code
+        ORDER BY CAST(s.class_code AS UNSIGNED) ASC, s.class_code ASC
     </select>
 
     <select id="countByLesson" resultType="int">

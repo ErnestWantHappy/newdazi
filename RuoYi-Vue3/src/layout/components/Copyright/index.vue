@@ -1,34 +1,51 @@
 <template>
-  <footer class="copyright" aria-label="开发支持">
-    <a :href="developerSiteUrl" target="_blank" rel="noopener noreferrer">开发支持：象山县-郑东旭</a>
+  <footer v-if="showCopyright" class="copyright" aria-label="平台版权信息">
+    版权所有：象山县教育局教科研中心
+    <span class="copyright-separator">·</span>
+    地址：浙江省象山县高教园区教科研中心
+    <span class="copyright-separator">·</span>
+    浙ICP备05007927号
   </footer>
 </template>
 
 <script setup>
-const developerSiteUrl = import.meta.env.VITE_DEVELOPER_SITE_URL || 'http://10.52.1.123:3012/'
+import useUserStore from '@/store/modules/user'
+
+const userStore = useUserStore()
+const showCopyright = computed(() => {
+  const roles = userStore.roles || []
+  return roles.includes('teacher') || roles.includes('researcher')
+})
 </script>
 
 <style scoped>
 .copyright {
-  position: fixed;
-  right: 14px;
-  bottom: 10px;
-  padding: 5px 9px;
-  text-align: right;
-  color: var(--el-text-color-secondary);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
-  box-shadow: 0 6px 18px rgb(15 23 42 / 8%);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 20px 18px;
+  color: #9aa3ad;
+  border-top: 1px solid #eef1f4;
+  background: #fff;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
   font-size: 11px;
-  line-height: 1.2;
-  user-select: none;
-  backdrop-filter: blur(8px);
-  z-index: 999;
+  line-height: 1.8;
+  text-align: center;
+  letter-spacing: 0.1px;
 }
 
-.copyright a {
-  color: inherit;
-  text-decoration: none;
+.copyright-separator {
+  padding: 0 8px;
+  color: #c7cdd4;
+}
+
+@media (max-width: 900px) {
+  .copyright {
+    padding: 12px 16px 16px;
+    font-size: 10px;
+  }
+
+  .copyright-separator {
+    padding: 0 4px;
+  }
 }
 </style>

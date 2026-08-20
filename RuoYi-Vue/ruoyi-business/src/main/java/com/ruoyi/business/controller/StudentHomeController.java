@@ -50,6 +50,8 @@ import com.ruoyi.business.domain.dto.PracticalArtifactSubmitRequest;
 import com.ruoyi.business.domain.dto.PracticalArtifactDeleteRequest;
 import com.ruoyi.business.domain.dto.PracticalUploadTicket;
 import com.ruoyi.business.domain.vo.PracticalArtifactVo;
+import com.ruoyi.business.domain.ProgrammingQuestionConfig;
+import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import org.slf4j.Logger;
@@ -183,6 +185,15 @@ public class StudentHomeController extends BaseController
         {
             if ("practical".equalsIgnoreCase(question.getQuestionType()))
             {
+                // 旧数据或旧缓存可能没有返回作答方式；启用 Python 配置时必须明确告诉学生端使用编辑器。
+                if (question.getPracticalMode() == null || question.getPracticalMode().trim().isEmpty())
+                {
+                    ProgrammingQuestionConfig programmingConfig = programmingJudgeMapper.selectConfig(question.getQuestionId());
+                    if (programmingConfig != null && "1".equals(programmingConfig.getEnabled()))
+                    {
+                        question.setPracticalMode("PYTHON");
+                    }
+                }
                 question.setPracticalMaterials(
                         practicalArtifactService.getStudentMaterials(question.getQuestionId()));
             }
@@ -334,6 +345,9 @@ public class StudentHomeController extends BaseController
 
     @Autowired
     private BizQuestionMapper questionMapper;
+
+    @Autowired
+    private ProgrammingJudgeMapper programmingJudgeMapper;
 
     @Autowired
     private RedisCache redisCache;

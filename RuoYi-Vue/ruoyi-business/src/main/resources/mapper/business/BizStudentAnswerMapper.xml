@@ -257,12 +257,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS theory_score,
                    SUM(CASE WHEN question.question_type = 'practical'
                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS practical_score,
+                   SUM(CASE WHEN question.question_type = 'practical' AND IFNULL(question.practical_mode, 'FILE') = 'FILE'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS file_practical_score,
+                   SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'PYTHON'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS python_practical_score,
                    SUM(CASE WHEN question.question_type = 'typing'
                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS typing_total,
                    SUM(CASE WHEN question.question_type IN ('choice', 'judgment')
                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS theory_total,
                    SUM(CASE WHEN question.question_type = 'practical'
                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS practical_total
+                   ,SUM(CASE WHEN question.question_type = 'practical' AND IFNULL(question.practical_mode, 'FILE') = 'FILE'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS file_practical_total
+                   ,SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'PYTHON'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS python_practical_total
             FROM biz_student_answer answer
             INNER JOIN selected_lesson selected ON selected.lesson_id = answer.lesson_id
             LEFT JOIN biz_lesson_question lesson_question
@@ -287,6 +295,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                CONCAT(IFNULL(answer_metric.typing_score, 0), '/', IFNULL(answer_metric.typing_total, 0)) AS typingScore,
                CONCAT(IFNULL(answer_metric.theory_score, 0), '/', IFNULL(answer_metric.theory_total, 0)) AS theoryScore,
                CONCAT(IFNULL(answer_metric.practical_score, 0), '/', IFNULL(answer_metric.practical_total, 0)) AS practicalScore
+               ,CONCAT(IFNULL(answer_metric.file_practical_score, 0), '/', IFNULL(answer_metric.file_practical_total, 0)) AS filePracticalScore
+               ,CONCAT(IFNULL(answer_metric.python_practical_score, 0), '/', IFNULL(answer_metric.python_practical_total, 0)) AS pythonPracticalScore
         FROM answer_metric
         INNER JOIN biz_lesson lesson ON lesson.lesson_id = answer_metric.lesson_id
         LEFT JOIN lesson_total ON lesson_total.lesson_id = answer_metric.lesson_id
@@ -386,6 +396,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
             SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
             SUM(IFNULL(a.score, 0)) AS totalScore,
             -- 打字统计（只取打字题的平均值）
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
@@ -414,6 +426,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
             SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
             SUM(IFNULL(a.score, 0)) AS totalScore,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,

@@ -125,6 +125,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="previewPath" column="preview_path"/>
         <result property="filePath" column="file_path"/>
         <result property="practicalAllowedExtensions" column="practical_allowed_extensions"/>
+        <result property="practicalMode" column="practical_mode"/>
         <result property="practicalImageMaxCount" column="practical_image_max_count"/>
         <collection property="scoringItems" ofType="com.ruoyi.business.domain.BizScoringItem">
             <id property="itemId" column="scoring_item_id"/>
@@ -153,6 +154,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.preview_path,
             q.file_path,
             q.practical_allowed_extensions,
+            q.practical_mode,
             q.practical_image_max_count,
             si.item_id AS scoring_item_id,
             si.question_id AS scoring_question_id,

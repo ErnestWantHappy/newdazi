@@ -12,3 +12,5 @@
 **/secrets.local.md
 **/*.local.md
 contexts/secrets.local.md
+deploy/judge0/config/judge0.conf
+backups/

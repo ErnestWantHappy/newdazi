@@ -84,3 +84,12 @@ export function manualAdvanceLesson(data) {
     data
   })
 }
+
+/** 教师查看考勤课各班签到汇总 */
+export function getLessonCheckinSummary(params) {
+  return request({
+    url: '/business/lesson/checkin-summary',
+    method: 'get',
+    params
+  })
+}

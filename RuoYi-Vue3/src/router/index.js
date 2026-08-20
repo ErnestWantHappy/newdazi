@@ -152,11 +152,63 @@ export const constantRoutes = [
       }
     ]
   }
-  
+  ,{
+    path: '/business/collaboration',
+    component: Layout,
+    hidden: true,
+    roles: ['admin', 'teacher'],
+    children: [
+      {
+        path: 'lesson/:lessonId(\\d+)',
+        component: () => import('@/views/business/collaboration/index'),
+        name: 'CollaborationLesson',
+        meta: { title: '课程在线协作', activeMenu: '/business/lesson' }
+      },
+      {
+        path: 'editor/:roomId(\\d+)',
+        component: () => import('@/views/business/collaboration/editor'),
+        name: 'CollaborationTeacherEditor',
+        meta: { title: '班级协作编辑', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/student/collaboration',
+    component: () => import('@/layout/StudentLayout'),
+    hidden: true,
+    roles: ['student'],
+    children: [
+      {
+        path: ':roomId(\\d+)',
+        component: () => import('@/views/student/collaboration'),
+        name: 'StudentCollaboration',
+        meta: { title: '班级在线协作', noCache: true }
+      },
+      {
+        path: 'editor/:roomId(\\d+)',
+        component: () => import('@/views/business/collaboration/editor'),
+        name: 'StudentCollaborationEditor',
+        meta: { title: '班级协作编辑', noCache: true }
+      }
+    ]
+  },
 ]
 
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
+  {
+    path: '/business/iot',
+    component: Layout,
+    roles: ['admin', 'teacher', 'researcher'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/iot/index'),
+        name: 'IotExperimentDashboard',
+        meta: { title: '物联网实验', icon: 'monitor', noCache: true }
+      }
+    ]
+  },
   {
     path: '/help-center',
     component: Layout,
@@ -209,6 +261,18 @@ export const dynamicRoutes = [
         component: () => import('@/views/student/guideSheet/index'),
         name: 'StudentGuideSheet',
         meta: { title: '电子导学单', icon: 'guide-sheet' }
+      },
+      {
+        path: 'python-practice',
+        component: () => import('@/views/student/pythonPractice'),
+        name: 'StudentPythonPracticeInHome',
+        meta: { title: 'Python 练习', icon: 'code' }
+      },
+      {
+        path: 'iot',
+        component: () => import('@/views/student/iot'),
+        name: 'StudentIot',
+        meta: { title: '物联实验', icon: 'component' }
       }
     ]
   },

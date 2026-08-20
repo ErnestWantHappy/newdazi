@@ -62,6 +62,17 @@
         creator_user_id, modifier_user_id, last_open_time, last_save_time, last_callback_type,
         last_callback_status, last_wps_request_id, last_error_message, create_time, update_time</sql>
 
+    <select id="selectOpenLessonIdsByLessonIds" resultType="long">
+        SELECT DISTINCT lesson_id
+        FROM biz_collab_room
+        WHERE dept_id = #{deptId}
+          AND status = 'OPEN'
+          AND lesson_id IN
+        <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+            #{lessonId}
+        </foreach>
+    </select>
+
     <select id="selectRoomById" resultMap="RoomResult">
         SELECT <include refid="roomColumns"/> FROM biz_collab_room WHERE room_id = #{roomId}
     </select>

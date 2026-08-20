@@ -176,6 +176,7 @@ public class GuideSheetStudentViewService
             target.setPreviewPath(source.getPreviewPath());
             target.setFilePath(source.getFilePath());
             target.setPracticalAllowedExtensions(source.getPracticalAllowedExtensions());
+            target.setPracticalMode(source.getPracticalMode());
             target.setPracticalImageMaxCount(source.getPracticalImageMaxCount());
             result.add(target);
         }
