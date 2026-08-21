@@ -73,6 +73,12 @@ public class BizLesson extends BaseEntity
     /** 阈值首次达标时间（服务端写入，用于延迟判定） */
     private java.util.Date autoAdvanceReadyTime;
 
+    /**
+     * 课程级物联网实验开关：1=开启。
+     * 开启后教师首页课程卡片与学生首页才显示物联入口；实验与分组仍在物联页配置。
+     */
+    private Boolean iotEnabled;
+
     /** 课程包含的题目列表 (非数据库字段) */
     private List<BizLessonQuestion> questions;
 
@@ -212,6 +218,14 @@ public class BizLesson extends BaseEntity
 
     public void setAutoAdvanceReadyTime(java.util.Date autoAdvanceReadyTime) {
         this.autoAdvanceReadyTime = autoAdvanceReadyTime;
+    }
+
+    public Boolean getIotEnabled() {
+        return iotEnabled;
+    }
+
+    public void setIotEnabled(Boolean iotEnabled) {
+        this.iotEnabled = iotEnabled;
     }
 
     public List<BizLessonQuestion> getQuestions()

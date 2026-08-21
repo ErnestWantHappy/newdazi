@@ -59,6 +59,68 @@ public final class AcademicYearUtils
         return section.gradeOffset + gradeInSection;
     }
 
+    /** 历史届按学段最高年级展示，避免毕业生查询被当作参数错误。 */
+    public static int resolveDisplayGrade(int entryYear, String schoolType, LocalDate date)
+    {
+        requireDate(date);
+        SchoolSection section = requireSchoolSection(schoolType);
+        int gradeInSection = resolveAcademicStartYear(date) - entryYear + 1;
+        if (gradeInSection < 1)
+        {
+            throw new IllegalArgumentException("入学年份不能晚于当前学年");
+        }
+        return section.gradeOffset + Math.min(gradeInSection, section.durationYears);
+    }
+
+    /** 页面统一使用的年级名称；已经毕业的历史届显示“已毕业”。 */
+    public static String resolveGradeName(String entryYear, String schoolType, LocalDate date)
+    {
+        if (entryYear == null || entryYear.trim().isEmpty())
+        {
+            return "未知年级";
+        }
+        final int parsed;
+        try
+        {
+            parsed = Integer.parseInt(entryYear.trim());
+        }
+        catch (NumberFormatException ex)
+        {
+            return "未知年级";
+        }
+        SchoolSection section = requireSchoolSection(schoolType);
+        int gradeInSection = resolveAcademicStartYear(date) - parsed + 1;
+        if (gradeInSection < 1)
+        {
+            return "未知年级";
+        }
+        if (gradeInSection > section.durationYears)
+        {
+            return "已毕业";
+        }
+        return gradeName(section.gradeOffset + gradeInSection);
+    }
+
+    private static String gradeName(int absoluteGrade)
+    {
+        switch (absoluteGrade)
+        {
+            case 1: return "一年级";
+            case 2: return "二年级";
+            case 3: return "三年级";
+            case 4: return "四年级";
+            case 5: return "五年级";
+            case 6: return "六年级";
+            case 7: return "七年级";
+            case 8: return "八年级";
+            case 9: return "九年级";
+            case 10: return "高一";
+            case 11: return "高二";
+            case 12: return "高三";
+            default: return "未知年级";
+        }
+    }
+
     /**
      * 根据绝对年级和指定日期反推出入学年份。
      */

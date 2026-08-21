@@ -20,6 +20,10 @@ export function getCollaborationSession(roomId) {
   return request({ url: `/business/collaboration/room/${roomId}/session`, method: 'get' })
 }
 
+export function getCollaborationRevisions(roomId) {
+  return request({ url: `/business/collaboration/room/${roomId}/revisions`, method: 'get' })
+}
+
 export function getCollaborationDocument(roomId) {
   return request({
     url: `/business/collaboration/room/${roomId}/document`,

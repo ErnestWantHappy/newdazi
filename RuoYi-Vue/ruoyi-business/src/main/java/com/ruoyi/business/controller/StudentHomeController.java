@@ -230,6 +230,8 @@ public class StudentHomeController extends BaseController
                 .put("lessonId", lessonId)
                 .put("lessonTitle", lesson != null ? lesson.getLessonTitle() : "")
                 .put("lessonMode", lessonMode)
+                // 课程级物联网开关：学生首页据此决定是否显示「物联实验」入口。
+                .put("iotEnabled", lesson != null && Boolean.TRUE.equals(lesson.getIotEnabled()))
                 .put("teacherNote", lesson != null ? lesson.getTeacherNote() : null)
                 .put("checkedIn", checkedIn)
                 .put("checkinTime", checkin == null ? null : checkin.getCheckinTime())
@@ -312,32 +314,8 @@ public class StudentHomeController extends BaseController
      * 根据入学年份和学校类型计算年级名称
      */
     private String calculateGradeName(String entryYear, String schoolType) {
-        if (entryYear == null) return "未知年级";
-        
-        java.util.Calendar now = java.util.Calendar.getInstance();
-        int currentYear = now.get(java.util.Calendar.YEAR);
-        int currentMonth = now.get(java.util.Calendar.MONTH) + 1;
-        
-        int academicStartYear = currentYear;
-        if (currentMonth < 7) {
-            academicStartYear = currentYear - 1;
-        }
-        
-        int yearsInSchool = academicStartYear - Integer.parseInt(entryYear) + 1;
-        
-        String[] gradeNames;
-        if ("1".equals(schoolType)) { // 小学
-            gradeNames = new String[]{"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"};
-        } else if ("2".equals(schoolType)) { // 初中
-            gradeNames = new String[]{"七年级", "八年级", "九年级"};
-        } else { // 高中
-            gradeNames = new String[]{"高一", "高二", "高三"};
-        }
-        
-        if (yearsInSchool >= 1 && yearsInSchool <= gradeNames.length) {
-            return gradeNames[yearsInSchool - 1];
-        }
-        return "未知年级";
+        return com.ruoyi.business.util.AcademicYearUtils.resolveGradeName(
+                entryYear, schoolType, java.time.LocalDate.now());
     }
 
     @Autowired
@@ -622,6 +600,9 @@ public class StudentHomeController extends BaseController
                     isCorrect = question.getQuestionScore() != null 
                              && score >= question.getQuestionScore() * 0.6;
                     
+                    // 打字题重复提交（含弱网重发）保留历史最高分，防止慢的一次覆盖快的一次
+                    answer.setKeepBestScore(true);
+
                     // 存储前端传来的打字统计数据
                     if (request.getTypingStats() != null && request.getTypingStats().containsKey(questionId)) {
                         TypingStatItem stat = request.getTypingStats().get(questionId);

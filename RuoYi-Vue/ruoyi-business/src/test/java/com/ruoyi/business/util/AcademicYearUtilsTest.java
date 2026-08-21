@@ -93,4 +93,15 @@ class AcademicYearUtilsTest
         assertThrows(IllegalArgumentException.class,
                 () -> AcademicYearUtils.gradeInSection(13));
     }
+
+    @Test
+    void shouldKeepHistoricalGradeQueriesAvailable()
+    {
+        assertEquals(9, AcademicYearUtils.resolveDisplayGrade(
+                2020, AcademicYearUtils.JUNIOR_HIGH_SCHOOL, AFTER_CUTOFF));
+        assertEquals("已毕业", AcademicYearUtils.resolveGradeName(
+                "2020", AcademicYearUtils.JUNIOR_HIGH_SCHOOL, AFTER_CUTOFF));
+        assertEquals("九年级", AcademicYearUtils.resolveGradeName(
+                "2024", AcademicYearUtils.JUNIOR_HIGH_SCHOOL, AFTER_CUTOFF));
+    }
 }

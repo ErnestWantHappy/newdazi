@@ -26,6 +26,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="lessonId != null "> and lesson_id = #{lessonId}</if>
             <if test="entryYear != null  and entryYear != ''"> and entry_year = #{entryYear}</if>
             <if test="classCode != null  and classCode != ''"> and class_code = #{classCode}</if>
+            <if test="deptId != null"> and dept_id = #{deptId}</if>
             <if test="assignTime != null "> and assign_time = #{assignTime}</if>
         </where>
     </select>

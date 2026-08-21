@@ -200,6 +200,8 @@ export const dynamicRoutes = [
     path: '/business/iot',
     component: Layout,
     roles: ['admin', 'teacher', 'researcher'],
+    // 数据库菜单已提供正式侧边栏入口，保留静态路由只用于兼容旧书签。
+    hidden: true,
     children: [
       {
         path: '',

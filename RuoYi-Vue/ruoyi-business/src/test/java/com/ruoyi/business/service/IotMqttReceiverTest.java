@@ -13,6 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -94,6 +96,37 @@ class IotMqttReceiverTest
 
         verify(mapper).insertMessage(any());
         verify(mapper, org.mockito.Mockito.times(2)).insertEvent(any());
+    }
+
+    @Test
+    void shouldApplyGlobalRateLimitAcrossDifferentTopics()
+    {
+        IotMapper mapper = mock(IotMapper.class);
+        IotMqttReceiver receiver = receiver(mapper, mock(IotWebSocketHandler.class), 100);
+        IotMqttProperties properties = (IotMqttProperties) ReflectionTestUtils.getField(receiver, "properties");
+        properties.setMaxMessagesPerMinuteGlobal(1);
+        String first = "county/10/20/2024-01/light/group01/data";
+        String second = "county/10/20/2024-01/light/group02/data";
+        when(mapper.selectDeviceByTopic(first)).thenReturn(device());
+        when(mapper.selectDeviceByTopic(second)).thenReturn(device());
+
+        receiver.receive(first, new MqttMessage("7".getBytes(StandardCharsets.UTF_8)));
+        receiver.receive(second, new MqttMessage("8".getBytes(StandardCharsets.UTF_8)));
+
+        verify(mapper).insertMessage(any());
+        verify(mapper, org.mockito.Mockito.times(2)).insertEvent(any());
+    }
+
+    @Test
+    void shouldRejectUnsafeTopicsBeforeMapping()
+    {
+        assertTrue(IotMqttReceiver.isValidTopic("county/10/20/group01/data", 256));
+        assertFalse(IotMqttReceiver.isValidTopic("county/10/20/#", 256));
+        assertFalse(IotMqttReceiver.isValidTopic("county/10/20/+/data", 256));
+        assertFalse(IotMqttReceiver.isValidTopic("county/10/20/\u0000/data", 256));
+        StringBuilder longTopic = new StringBuilder("county/");
+        for (int i = 0; i < 257; i++) longTopic.append('x');
+        assertFalse(IotMqttReceiver.isValidTopic(longTopic.toString(), 256));
     }
 
     private IotMqttReceiver receiver(IotMapper mapper, IotWebSocketHandler socket, int rate)

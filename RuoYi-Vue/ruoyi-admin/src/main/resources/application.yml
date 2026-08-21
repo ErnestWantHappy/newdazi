@@ -207,6 +207,7 @@ collaboration:
     max-file-bytes: ${CRYPTPAD_MAX_FILE_BYTES:52428800}
     remote-embedding: ${CRYPTPAD_REMOTE_EMBEDDING:true}
   wps:
+    enabled: ${WPS_WEBOFFICE_ENABLED:false}
     app-id: ${WPS_WEBOFFICE_APP_ID:}
     app-secret: ${WPS_WEBOFFICE_APP_SECRET:}
     public-base-url: ${WPS_WEBOFFICE_PUBLIC_BASE_URL:}
@@ -243,6 +244,10 @@ iot:
     client-id: ${IOT_MQTT_CLIENT_ID:dazi-platform-iot}
     max-payload-bytes: ${IOT_MQTT_MAX_PAYLOAD_BYTES:16000}
     max-messages-per-minute: ${IOT_MQTT_MAX_MESSAGES_PER_MINUTE:120}
+    max-messages-per-minute-global: ${IOT_MQTT_MAX_MESSAGES_PER_MINUTE_GLOBAL:5000}
+    max-topic-length: ${IOT_MQTT_MAX_TOPIC_LENGTH:256}
+    # 课堂口令密钥必须由部署环境注入，禁止在配置文件或源码中设置默认值。
+    passcode-secret: ${IOT_PASSCODE_SECRET:}
     siot-credential-sync-enabled: ${IOT_SIOT_CREDENTIAL_SYNC_ENABLED:false}
     siot-db-path: ${IOT_SIOT_DB_PATH:}
     credential-ttl-minutes: ${IOT_CREDENTIAL_TTL_MINUTES:120}

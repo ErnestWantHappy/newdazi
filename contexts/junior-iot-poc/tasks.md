@@ -47,3 +47,11 @@
 - [x] 生产环境真实教师/学生账号端到端业务链路验证（分组、配置卡、口令轮换、学生专属看板）全部通过。
 - [ ] 开展真实机房多班级、多小组并发物联教学实验。
 
+
+## P4：课程级物联开关与教师数据收集（2026-08-21 已发布，release `20260821_iot_course_switch_v1`）
+
+- [x] 物联入口改为课程级开关：`sql/iot_course_switch_v1.sql` 给 `biz_lesson` 加 `iot_enabled` 并按已有实验回填（生产后检 3 门课开启、一致性 0）；教师课程设计器新增「开启物联网」开关（考勤课强制关闭）；教师首页课程卡片底部入口条与学生首页按钮均按开关显示，学生页带 `lessonId` 进入。
+- [x] 教师物联页新增「学生数据收集」卡：小组统计表（消息数/最近上报）、消息分页列表（时间/小组/设备/类型/载荷/主题）、payloadType 与关键词过滤；接口 `GET /business/iot/experiments/{experimentId}/messages`（教师按负责班级范围、管理员/教研员全量）。
+- [x] 生产启用数据链路：EMQX 5.8.8 管理 API 18083 由仅本机改为开放给内网（容器同镜像同挂载重建，旧容器 `school-emqx-poc-bak-20260821` 留作回滚）；ACL 替换为订阅账号只读订阅 county/# + `class_*` 设备收发 + deny all（备份 `acl.conf.bak-20260821`）；新建 `platform_iot_subscriber` 订阅账号与 `dazi-backend` API 密钥（凭据见 secrets.local.md）；后端 NSSM 环境变量注入 `IOT_MQTT_ENABLED=true`、订阅账号密码、`IOT_PASSCODE_SECRET`（与历史默认值一致以兼容存量密文）与 EMQX API 密钥，重启后日志确认「物联网 MQTT 接收器已连接 broker=tcp://10.52.1.129:1883 subscription=county/#」。
+- [x] 生产 API 验证：学生 current-lesson `iotEnabled=true`；教师课程详情 252 `iotEnabled=True`；实验 1 消息接口 200（共 0 条）。
+- [ ] 待真实机房设备经 Mind+ 上报后验证：小组统计、消息分页、实时消息流与教师收集页数据联动。

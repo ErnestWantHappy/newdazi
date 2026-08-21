@@ -386,6 +386,80 @@
         order by m.received_at desc limit #{limit}
     </select>
 
+    <!-- 教师数据收集：课程管理者分页查询（含班级/小组/格式筛选） -->
+    <sql id="messagePageWhere">
+        where m.experiment_id = #{experimentId}
+        <if test="entryYear != null and entryYear != ''">and g.entry_year = #{entryYear}</if>
+        <if test="classCode != null and classCode != ''">and g.class_code = #{classCode}</if>
+        <if test="groupId != null">and m.group_id = #{groupId}</if>
+        <if test="payloadType != null and payloadType != ''">and m.payload_type = #{payloadType}</if>
+        <if test="keyword != null and keyword != ''">
+            and (m.payload_text like concat('%', #{keyword}, '%')
+                 or coalesce(d.device_code, '') like concat('%', #{keyword}, '%')
+                 or m.topic like concat('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <sql id="messagePageJoin">
+        join biz_iot_group g on g.group_id = m.group_id
+        left join biz_iot_device d on d.device_id = m.device_id
+    </sql>
+
+    <select id="selectMessagePage" resultMap="messageResult">
+        select m.*, g.group_code, coalesce(d.device_code, 'data') as device_code from biz_iot_message m
+        <include refid="messagePageJoin"/>
+        <include refid="messagePageWhere"/>
+        order by m.received_at desc limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countMessagePage" resultType="int">
+        select count(*) from biz_iot_message m
+        <include refid="messagePageJoin"/>
+        <include refid="messagePageWhere"/>
+    </select>
+
+    <select id="selectMessagePageForTeacher" resultMap="messageResult">
+        select m.*, g.group_code, coalesce(d.device_code, 'data') as device_code from biz_iot_message m
+        <include refid="messagePageJoin"/>
+        join biz_teacher_class tc on tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        <include refid="messagePageWhere"/>
+        and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        order by m.received_at desc limit #{offset}, #{pageSize}
+    </select>
+
+    <select id="countMessagePageForTeacher" resultType="int">
+        select count(*) from biz_iot_message m
+        <include refid="messagePageJoin"/>
+        join biz_teacher_class tc on tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        <include refid="messagePageWhere"/>
+        and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+    </select>
+
+    <!-- 教师数据收集：指定班级内各小组消息汇总 -->
+    <select id="selectMessageGroupStats" resultType="map">
+        select g.group_id as groupId, g.group_code as groupCode, g.group_name as groupName,
+               count(m.message_id) as messageCount, max(m.received_at) as lastReceivedAt
+        from biz_iot_group g
+        left join biz_iot_message m on m.group_id = g.group_id
+        where g.experiment_id = #{experimentId}
+          and g.entry_year = #{entryYear} and g.class_code = #{classCode} and g.status = '0'
+        group by g.group_id, g.group_code, g.group_name
+        order by g.group_no asc, g.group_code asc
+    </select>
+
+    <select id="selectMessageGroupStatsForTeacher" resultType="map">
+        select g.group_id as groupId, g.group_code as groupCode, g.group_name as groupName,
+               count(m.message_id) as messageCount, max(m.received_at) as lastReceivedAt
+        from biz_iot_group g
+        join biz_teacher_class tc on tc.entry_year = g.entry_year and tc.class_code = g.class_code
+        left join biz_iot_message m on m.group_id = g.group_id
+        where g.experiment_id = #{experimentId}
+          and g.entry_year = #{entryYear} and g.class_code = #{classCode} and g.status = '0'
+          and tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        group by g.group_id, g.group_code, g.group_name
+        order by g.group_no asc, g.group_code asc
+    </select>
+
     <!-- 事件管理 -->
     <insert id="insertEvent" parameterType="IotEvent" useGeneratedKeys="true" keyProperty="eventId">
         insert into biz_iot_event (experiment_id, group_id, device_id, event_type, diagnostic_stage, detail, payload_digest, occurred_at)

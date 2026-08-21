@@ -223,6 +223,80 @@
         </el-col>
       </el-row>
 
+      <!-- 学生数据收集：分页查看设备上报数据与各小组汇总 -->
+      <el-card v-if="experimentId" shadow="never" class="section-card collect-card mb-3">
+        <template #header>
+          <div class="card-header">
+            <span>学生数据收集</span>
+            <span class="muted small">学生/设备经 MQTT 上报的数据按时间入库，可在此按班级、小组与格式汇总查看。</span>
+          </div>
+        </template>
+        <div class="collect-toolbar">
+          <el-select v-model="collectForm.groupId" clearable placeholder="全部小组" style="width: 150px" @change="loadMessagePage(1)">
+            <el-option v-for="g in currentGroups" :key="g.groupId" :label="`${g.groupName}（${g.groupCode}）`" :value="g.groupId" />
+          </el-select>
+          <el-select v-model="collectForm.payloadType" clearable placeholder="全部格式" style="width: 130px" @change="loadMessagePage(1)">
+            <el-option label="TEXT" value="TEXT" />
+            <el-option label="JSON" value="JSON" />
+            <el-option label="NUMBER" value="NUMBER" />
+          </el-select>
+          <el-input
+            v-model="collectForm.keyword"
+            placeholder="搜索数据内容 / 设备 / Topic"
+            clearable
+            style="width: 220px"
+            @keyup.enter="loadMessagePage(1)"
+            @clear="loadMessagePage(1)"
+          />
+          <el-button type="primary" plain icon="Search" @click="loadMessagePage(1)">查询</el-button>
+          <el-button icon="Refresh" @click="loadMessagePage()">刷新</el-button>
+          <span class="collect-total">共 {{ collectTotal }} 条</span>
+        </div>
+        <el-table
+          v-if="collectStats.length"
+          :data="collectStats"
+          size="small"
+          border
+          class="collect-stats-table"
+        >
+          <el-table-column prop="groupName" label="小组" min-width="130" />
+          <el-table-column prop="groupCode" label="组编号" width="110" />
+          <el-table-column prop="messageCount" label="已接收数据(条)" width="130" align="center">
+            <template #default="{ row }"><el-tag size="small" type="success">{{ row.messageCount || 0 }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="最近接收时间" min-width="170">
+            <template #default="{ row }">{{ formatTime(row.lastReceivedAt) || '尚未收到数据' }}</template>
+          </el-table-column>
+        </el-table>
+        <el-table
+          v-loading="collectLoading"
+          :data="collectRows"
+          size="small"
+          class="collect-table"
+          empty-text="暂无收集数据。学生设备经 MQTT 上报后，这里才会出现记录。"
+        >
+          <el-table-column label="接收时间" width="165">
+            <template #default="{ row }">{{ formatTime(row.receivedAt) }}</template>
+          </el-table-column>
+          <el-table-column prop="groupCode" label="小组" width="90" />
+          <el-table-column prop="deviceCode" label="设备" width="100" show-overflow-tooltip />
+          <el-table-column prop="payloadType" label="格式" width="85" />
+          <el-table-column label="数据内容" min-width="200" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.payloadText ?? row.payloadNumber ?? '' }}</template>
+          </el-table-column>
+          <el-table-column prop="topic" label="Topic" min-width="200" show-overflow-tooltip />
+        </el-table>
+        <el-pagination
+          v-if="collectTotal > 0"
+          class="collect-pagination"
+          layout="total, prev, pager, next"
+          :total="collectTotal"
+          :page-size="collectPageSize"
+          :current-page="collectPage"
+          @current-change="loadMessagePage"
+        />
+      </el-card>
+
       <!-- 诊断事件时间轴 -->
       <el-card v-if="dashboard" shadow="never" class="section-card event-card mb-3">
         <template #header>
@@ -343,6 +417,7 @@ import {
   listIotExperiments,
   listIotGroups,
   listIotLessonClasses,
+  listIotMessages,
   rotateIotClassPasscode
 } from '@/api/business/iot'
 
@@ -371,6 +446,13 @@ const classCardDialog = ref(false)
 const classCard = ref(null)
 
 const experimentForm = reactive({ activityCode: '', title: '', description: '' })
+const collectForm = reactive({ groupId: null, payloadType: '', keyword: '' })
+const collectRows = ref([])
+const collectStats = ref([])
+const collectTotal = ref(0)
+const collectPage = ref(1)
+const collectPageSize = ref(20)
+const collectLoading = ref(false)
 let socket = null
 
 const currentClass = computed(() => {
@@ -450,6 +532,38 @@ async function loadClassDataAndDashboard() {
   } catch (error) {
     errorMessage.value = error?.message || '物联数据加载失败'
   }
+  // 学生数据收集列表随主数据一并刷新
+  loadMessagePage()
+}
+
+/** 分页加载学生数据收集列表与小组汇总。 */
+async function loadMessagePage(page) {
+  if (!experimentId.value) return
+  if (typeof page === 'number') collectPage.value = page
+  collectLoading.value = true
+  try {
+    const cls = currentClass.value
+    const params = {
+      pageNum: collectPage.value,
+      pageSize: collectPageSize.value,
+      groupId: collectForm.groupId || undefined,
+      payloadType: collectForm.payloadType || undefined,
+      keyword: collectForm.keyword || undefined
+    }
+    if (cls) {
+      params.entryYear = cls.entryYear
+      params.classCode = cls.classCode
+    }
+    const res = await listIotMessages(experimentId.value, params)
+    const payload = res?.data || {}
+    collectRows.value = payload.rows || []
+    collectTotal.value = Number(payload.total || 0)
+    collectStats.value = payload.stats || []
+  } catch (error) {
+    ElMessage.error(error?.message || '数据收集加载失败')
+  } finally {
+    collectLoading.value = false
+  }
 }
 
 async function refreshData() {
@@ -463,10 +577,14 @@ async function refreshData() {
 }
 
 function onExperimentChange() {
+  collectForm.groupId = null
+  collectPage.value = 1
   loadClassDataAndDashboard()
 }
 
 function onClassChange() {
+  collectForm.groupId = null
+  collectPage.value = 1
   loadClassDataAndDashboard()
 }
 
@@ -798,6 +916,29 @@ function isOnline(row) {
 
 .section-card {
   border: 1px solid #e4e7ed;
+}
+
+.collect-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.collect-total {
+  font-size: 12px;
+  color: #909399;
+  margin-left: auto;
+}
+
+.collect-stats-table {
+  margin-bottom: 12px;
+}
+
+.collect-pagination {
+  margin-top: 12px;
+  justify-content: flex-end;
 }
 
 .members-tag-list {

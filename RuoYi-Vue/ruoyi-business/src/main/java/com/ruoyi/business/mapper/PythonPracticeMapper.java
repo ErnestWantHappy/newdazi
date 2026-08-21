@@ -31,6 +31,7 @@ public interface PythonPracticeMapper {
     int insertSnapshot(Map<String, Object> params);
     int insertSnapshotCase(Map<String, Object> params);
     int insertPlanQuestion(Map<String, Object> params);
+    int deletePlanQuestion(@Param("planVersionId") Long planVersionId, @Param("questionId") Long questionId);
     int countPlanVersionQuestion(@Param("planVersionId") Long planVersionId, @Param("questionId") Long questionId);
     int updatePlanStatus(@Param("planId") Long planId, @Param("status") String status);
     int publishVersion(@Param("planId") Long planId, @Param("planVersionId") Long planVersionId);

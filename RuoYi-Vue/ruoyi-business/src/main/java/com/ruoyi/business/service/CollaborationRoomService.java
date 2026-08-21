@@ -117,6 +117,26 @@ public class CollaborationRoomService
         List<CollaborationRoom> rooms = collaborationMapper.selectRoomsByLesson(lessonId, lesson.getDeptId());
         result.put("enabled", hasOpenRoom(rooms));
         result.put("rooms", publicRooms(rooms, true));
+        List<Map<String, Object>> members = new ArrayList<Map<String, Object>>();
+        for (CollaborationRoom room : rooms)
+        {
+            BizStudent query = new BizStudent();
+            query.setDeptId(lesson.getDeptId());
+            query.setEntryYear(room.getEntryYear());
+            query.setClassCode(room.getClassCode());
+            for (BizStudent student : studentMapper.selectBizStudentList(query))
+            {
+                Map<String, Object> member = new LinkedHashMap<String, Object>();
+                member.put("studentId", student.getStudentId());
+                member.put("studentNo", student.getStudentNo());
+                member.put("studentName", student.getStudentName());
+                member.put("entryYear", student.getEntryYear());
+                member.put("classCode", student.getClassCode());
+                member.put("loginBound", student.getUserId() != null);
+                members.add(member);
+            }
+        }
+        result.put("members", members);
         if (!rooms.isEmpty())
         {
             result.put("questionId", rooms.get(0).getQuestionId());
@@ -258,6 +278,15 @@ public class CollaborationRoomService
         CollaborationRoom room = collaborationMapper.selectRoomById(roomId);
         if (room == null) throw new ServiceException("协作房间不存在");
         return room;
+    }
+
+    /** 教师监管：读取房间不可变版本历史（管理员或课程创建者，且课程属于本校）。 */
+    public List<Map<String, Object>> listRevisions(Long roomId)
+    {
+        CollaborationRoom room = requireRoom(roomId);
+        requireTeacherLesson(room.getLessonId());
+        List<Map<String, Object>> revisions = collaborationMapper.selectRevisionsByRoomId(roomId);
+        return revisions == null ? new ArrayList<Map<String, Object>>() : revisions;
     }
 
     public CollaborationRoom requireRoomByFileId(String fileId)

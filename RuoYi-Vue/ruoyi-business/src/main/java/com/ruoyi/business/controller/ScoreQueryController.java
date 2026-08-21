@@ -237,9 +237,13 @@ public class ScoreQueryController extends BaseController {
      * 初中: 入学对应7年级，到9年级
      * 高中: 入学对应10年级，到12年级
      */
-    private int calculateGrade(int entryYear, String schoolType) {
+    private int calculateGrade(String entryYear, String schoolType) {
         try {
-            return AcademicYearUtils.resolveAbsoluteGrade(entryYear, schoolType, java.time.LocalDate.now());
+            return AcademicYearUtils.resolveDisplayGrade(
+                    Integer.parseInt(entryYear == null ? "" : entryYear.trim()),
+                    schoolType, java.time.LocalDate.now());
+        } catch (NumberFormatException e) {
+            throw new ServiceException("入学年份必须是四位数字");
         } catch (IllegalArgumentException e) {
             throw new ServiceException(e.getMessage());
         }
@@ -264,7 +268,7 @@ public class ScoreQueryController extends BaseController {
         // 获取学校类型并计算年级
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        int gradeNum = calculateGrade(entryYear, schoolType);
         
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, lessonId);
         selectedLessonIds = validateSelectedLessonIds(entryYear, selectedLessonIds);
@@ -790,7 +794,7 @@ public class ScoreQueryController extends BaseController {
         Long userId = SecurityUtils.getUserId();
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        int gradeNum = calculateGrade(entryYear, schoolType);
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, null);
         selectedLessonIds = validateSelectedLessonIds(entryYear, selectedLessonIds);
         List<String> selectedColumns = parseExportColumns(columns);
@@ -1140,7 +1144,7 @@ public class ScoreQueryController extends BaseController {
         Long deptId = SecurityUtils.getDeptId();
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        int gradeNum = calculateGrade(entryYear, schoolType);
         
         List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(
                 lessonId, classCode.trim(), entryYear.trim(), deptId);

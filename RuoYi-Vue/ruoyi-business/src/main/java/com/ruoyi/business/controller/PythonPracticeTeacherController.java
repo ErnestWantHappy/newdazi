@@ -41,6 +41,10 @@ public class PythonPracticeTeacherController extends BaseController {
     @PostMapping("/versions/{planVersionId}/questions")
     public AjaxResult addQuestion(@PathVariable Long planVersionId, @RequestBody Map<String, Object> request) { Object id = request.get("questionId"); return success(service.addQuestion(planVersionId, Long.valueOf(String.valueOf(id)), request.get("sortNo") == null ? null : Integer.valueOf(String.valueOf(request.get("sortNo"))), (String) request.get("stage"), SecurityUtils.getUsername(), SecurityUtils.getDeptId())); }
 
+    @PreAuthorize("@ss.hasPermi('business:pythonPractice:edit')")
+    @DeleteMapping("/versions/{planVersionId}/questions/{questionId}")
+    public AjaxResult removeQuestion(@PathVariable Long planVersionId, @PathVariable Long questionId) { service.removeQuestion(planVersionId, questionId, SecurityUtils.getDeptId()); return success(); }
+
     @PreAuthorize("@ss.hasPermi('business:pythonPractice:publish')")
     @PostMapping("/plans/{planId}/versions/{planVersionId}/publish")
     public AjaxResult publish(@PathVariable Long planId, @PathVariable Long planVersionId) { return success(service.publish(planId, planVersionId, SecurityUtils.getDeptId())); }

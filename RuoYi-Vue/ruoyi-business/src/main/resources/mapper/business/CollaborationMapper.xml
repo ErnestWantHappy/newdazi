@@ -131,6 +131,17 @@
                 #{digestType}, #{digest}, #{manualSave}, #{savedByUserId}, #{createTime})
     </insert>
 
+    <select id="selectRevisionsByRoomId" resultType="map">
+        select r.revision_id as revisionId, r.room_id as roomId, r.version_no as versionNo,
+               r.file_name as fileName, r.file_size as fileSize, r.sha256 as sha256,
+               r.manual_save as manualSave, r.saved_by_user_id as savedByUserId,
+               r.create_time as createTime, u.nick_name as savedByName
+        from biz_collab_revision r
+        left join sys_user u on u.user_id = r.saved_by_user_id
+        where r.room_id = #{roomId}
+        order by r.version_no desc
+    </select>
+
     <insert id="insertUploadTicket" useGeneratedKeys="true" keyProperty="ticketId">
         INSERT INTO biz_collab_upload_ticket
         (ticket_token, room_id, expected_version, expected_file_name, expected_file_size,

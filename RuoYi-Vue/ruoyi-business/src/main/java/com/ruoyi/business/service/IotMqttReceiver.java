@@ -27,6 +27,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -44,6 +45,10 @@ public class IotMqttReceiver
     @Autowired private IotMapper mapper;
     @Autowired private IotWebSocketHandler websocketHandler;
 
+    /**
+     * Broker 不可达时不能阻塞 Spring 主线程；连接失败仍由接收器记录诊断事件。
+     */
+    @Async("threadPoolTaskExecutor")
     public void startIfEnabled()
     {
         if (!properties.isEnabled())
@@ -114,6 +119,11 @@ public class IotMqttReceiver
         if (topic == null || mqttMessage == null)
         {
             record(null, null, null, "INVALID_MESSAGE", "消息格式", "消息为空");
+            return;
+        }
+        if (!isValidTopic(topic, properties.getMaxTopicLength()))
+        {
+            record(null, null, null, "INVALID_TOPIC", "Topic", "Topic 格式不符合平台约束");
             return;
         }
         byte[] bytes = mqttMessage.getPayload();
@@ -200,10 +210,25 @@ public class IotMqttReceiver
     private boolean allowRate(String topic)
     {
         long bucket = System.currentTimeMillis() / 60000L;
+        String globalKey = bucket + ":__global__";
+        AtomicInteger globalCount = rate.computeIfAbsent(globalKey, ignored -> new AtomicInteger());
+        if (globalCount.incrementAndGet() > Math.max(1, properties.getMaxMessagesPerMinuteGlobal())) return false;
         String key = bucket + ":" + topic;
         AtomicInteger count = rate.computeIfAbsent(key, ignored -> new AtomicInteger());
-        if (count.incrementAndGet() > properties.getMaxMessagesPerMinute()) return false;
+        if (count.incrementAndGet() > Math.max(1, properties.getMaxMessagesPerMinute())) return false;
         if (rate.size() > 2048) rate.entrySet().removeIf(entry -> !entry.getKey().startsWith(bucket + ":"));
+        return true;
+    }
+
+    /** MQTT Broker 不会把通配符作为真实发布 Topic 传给订阅者，平台也拒绝控制字符和过长 Topic。 */
+    static boolean isValidTopic(String topic, int maxLength)
+    {
+        if (topic == null || topic.isEmpty() || topic.length() > Math.max(1, maxLength)) return false;
+        if (topic.indexOf('#') >= 0 || topic.indexOf('+') >= 0) return false;
+        for (int i = 0; i < topic.length(); i++)
+        {
+            if (Character.isISOControl(topic.charAt(i))) return false;
+        }
         return true;
     }
 

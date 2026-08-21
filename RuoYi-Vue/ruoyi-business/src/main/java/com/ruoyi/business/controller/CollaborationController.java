@@ -54,4 +54,14 @@ public class CollaborationController
         // 教师与学生身份都由房间业务事实判断，避免合法学生因缺少系统角色被提前拒绝。
         return AjaxResult.success(service.createSession(roomId));
     }
+
+    /**
+     * 教师监管：查看房间不可变版本历史（谁在何时保存了哪个版本）。
+     */
+    @GetMapping("/room/{roomId}/revisions")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
+    public AjaxResult revisions(@PathVariable Long roomId)
+    {
+        return AjaxResult.success(service.listRevisions(roomId));
+    }
 }

@@ -220,8 +220,9 @@ function handleLogin() {
           return
         }
         continueAfterLogin()
-      }).catch(() => {
+      }).catch((error) => {
         loading.value = false
+        proxy.$modal.msgError(error?.message || "登录失败，请检查账号、密码和验证码")
         // 重新获取验证码
         if (captchaEnabled.value) {
           getCode()

@@ -60,6 +60,30 @@ public interface IotMapper
     List<IotMessage> selectRecentMessagesByGroup(@Param("groupId") Long groupId, @Param("limit") int limit);
     List<IotMessage> selectRecentMessagesForTeacher(@Param("experimentId") Long experimentId, @Param("userId") Long userId, @Param("deptId") Long deptId, @Param("limit") int limit);
 
+    /** 教师数据收集：按实验/班级/小组/格式分页查询消息（课程管理者，不限班级范围）。 */
+    List<IotMessage> selectMessagePage(@Param("experimentId") Long experimentId, @Param("entryYear") String entryYear,
+            @Param("classCode") String classCode, @Param("groupId") Long groupId, @Param("payloadType") String payloadType,
+            @Param("keyword") String keyword, @Param("offset") int offset, @Param("pageSize") int pageSize);
+    int countMessagePage(@Param("experimentId") Long experimentId, @Param("entryYear") String entryYear,
+            @Param("classCode") String classCode, @Param("groupId") Long groupId, @Param("payloadType") String payloadType,
+            @Param("keyword") String keyword);
+
+    /** 教师数据收集：非课程管理者的任课教师按 biz_teacher_class 班级范围分页查询。 */
+    List<IotMessage> selectMessagePageForTeacher(@Param("experimentId") Long experimentId, @Param("entryYear") String entryYear,
+            @Param("classCode") String classCode, @Param("groupId") Long groupId, @Param("payloadType") String payloadType,
+            @Param("keyword") String keyword, @Param("userId") Long userId, @Param("deptId") Long deptId,
+            @Param("offset") int offset, @Param("pageSize") int pageSize);
+    int countMessagePageForTeacher(@Param("experimentId") Long experimentId, @Param("entryYear") String entryYear,
+            @Param("classCode") String classCode, @Param("groupId") Long groupId, @Param("payloadType") String payloadType,
+            @Param("keyword") String keyword, @Param("userId") Long userId, @Param("deptId") Long deptId);
+
+    /** 教师数据收集：指定班级内各小组消息数与最近接收时间汇总。 */
+    List<Map<String, Object>> selectMessageGroupStats(@Param("experimentId") Long experimentId,
+            @Param("entryYear") String entryYear, @Param("classCode") String classCode);
+    List<Map<String, Object>> selectMessageGroupStatsForTeacher(@Param("experimentId") Long experimentId,
+            @Param("entryYear") String entryYear, @Param("classCode") String classCode,
+            @Param("userId") Long userId, @Param("deptId") Long deptId);
+
     int insertEvent(IotEvent event);
     List<IotEvent> selectRecentEvents(@Param("experimentId") Long experimentId, @Param("limit") int limit);
     List<IotEvent> selectRecentEventsForTeacher(@Param("experimentId") Long experimentId, @Param("userId") Long userId, @Param("deptId") Long deptId, @Param("limit") int limit);

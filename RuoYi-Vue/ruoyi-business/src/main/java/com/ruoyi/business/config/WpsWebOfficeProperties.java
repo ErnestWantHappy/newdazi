@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "collaboration.wps")
 public class WpsWebOfficeProperties
 {
+    /** WPS 路线已退役，必须显式开启才允许回调进入业务层。 */
+    private boolean enabled;
     private String appId;
     private String appSecret;
     private String publicBaseUrl;
@@ -16,6 +18,9 @@ public class WpsWebOfficeProperties
     private String tokenSecret;
     private long tokenMinutes = 120L;
     private long testMaxFileBytes = 5L * 1024L * 1024L;
+
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     public String getAppId() { return appId; }
     public void setAppId(String appId) { this.appId = appId; }
@@ -34,4 +39,3 @@ public class WpsWebOfficeProperties
     public long getTestMaxFileBytes() { return testMaxFileBytes; }
     public void setTestMaxFileBytes(long testMaxFileBytes) { this.testMaxFileBytes = testMaxFileBytes; }
 }
-

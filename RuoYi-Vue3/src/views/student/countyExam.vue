@@ -991,8 +991,20 @@ function handleCommand(command) {
   }
 }
 
-onMounted(fetchData)
+// 防误关：考试进行中刷新/关闭页面前浏览器强制二次确认，防止机房学生误触丢答案
+const beforeUnloadHandler = (e) => {
+  if (examId.value && !isReadOnly.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnloadHandler)
+  fetchData()
+})
 onUnmounted(() => {
+  window.removeEventListener('beforeunload', beforeUnloadHandler)
   clearExamTimer()
   clearTypingIntervals()
   clearTypingDraftTimers()

@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class IotPasscodeUtilTest
 {
@@ -41,6 +42,13 @@ class IotPasscodeUtilTest
 
         String decrypted = IotPasscodeUtil.decrypt(ciphertext, secret);
         assertEquals(passcode, decrypted, "解密后必须还原为原始 6 位口令");
+    }
+
+    @Test
+    void shouldRejectMissingEncryptionSecret()
+    {
+        assertThrows(IllegalStateException.class, () -> IotPasscodeUtil.encrypt("K7P3M8", ""));
+        assertEquals(null, IotPasscodeUtil.decrypt("not-a-ciphertext", ""));
     }
 
     @Test

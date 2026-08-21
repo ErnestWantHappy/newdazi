@@ -16,6 +16,9 @@ public class IotMqttProperties
     private String clientId = "dazi-platform-iot";
     private int maxPayloadBytes = 16000;
     private int maxMessagesPerMinute = 120;
+    /** 全局上限必须低于数据库和 WebSocket 能承受的峰值，防止多 Topic 叠加绕过单 Topic 限流。 */
+    private int maxMessagesPerMinuteGlobal = 5000;
+    private int maxTopicLength = 256;
 
     // EMQX v5 管理 API 配置
     private String emqxApiUrl = "http://127.0.0.1:18083/api/v5";
@@ -23,8 +26,8 @@ public class IotMqttProperties
     private String emqxApiKey;
     private String emqxApiSecret;
 
-    // AES-256-GCM 口令加密密钥
-    private String passcodeSecret = "DaziIotPasscodeGcmSecret2026";
+    // AES-256-GCM 口令加密密钥必须由部署环境注入，禁止使用源码默认密钥。
+    private String passcodeSecret;
 
     // 历史 SIoT 回退配置
     private boolean siotCredentialSyncEnabled;
@@ -56,6 +59,12 @@ public class IotMqttProperties
 
     public int getMaxMessagesPerMinute() { return maxMessagesPerMinute; }
     public void setMaxMessagesPerMinute(int maxMessagesPerMinute) { this.maxMessagesPerMinute = maxMessagesPerMinute; }
+
+    public int getMaxMessagesPerMinuteGlobal() { return maxMessagesPerMinuteGlobal; }
+    public void setMaxMessagesPerMinuteGlobal(int value) { maxMessagesPerMinuteGlobal = value; }
+
+    public int getMaxTopicLength() { return maxTopicLength; }
+    public void setMaxTopicLength(int value) { maxTopicLength = value; }
 
     public String getEmqxApiUrl() { return emqxApiUrl; }
     public void setEmqxApiUrl(String emqxApiUrl) { this.emqxApiUrl = emqxApiUrl; }

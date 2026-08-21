@@ -25,11 +25,19 @@
         <div class="header-right">
           <div class="header-actions">
             <el-button
+              v-if="iotEnabled"
               type="success"
               link
               icon="Cpu"
-              @click="$router.push('/student/iot')"
+              @click="$router.push({ path: '/student/iot', query: { lessonId } })"
               >物联实验</el-button
+            >
+            <el-button
+              type="warning"
+              link
+              icon="Cpu"
+              @click="$router.push('/student/python-practice')"
+              >Python 练习</el-button
             >
             <el-button
               type="primary"
@@ -98,8 +106,7 @@
                 studentInfo.deptName
               }}</el-tag>
               <el-tag type="success" effect="dark"
-                >{{ studentInfo.gradeName
-                }}{{ studentInfo.classCode }}班</el-tag
+                >{{ studentClassLabel }}</el-tag
               >
               <el-tag type="warning" effect="dark">{{
                 studentInfo.studentName || "同学"
@@ -975,6 +982,7 @@ const teacherNote = ref("");
 const checkedIn = ref(false);
 const checkinTime = ref(null);
 const checkinLoading = ref(false);
+const iotEnabled = ref(false);
 const hasGuideSheet = ref(false);
 const guideSheetBindingId = ref(null);
 const activeLearningMode = ref("daily");
@@ -987,6 +995,14 @@ const lessonConfig = ref({
   randomJudgmentCount: 0,
 });
 const studentInfo = ref({});
+const studentClassLabel = computed(() => {
+  const gradeName = studentInfo.value.gradeName || '未知年级'
+  const classCode = studentInfo.value.classCode || ''
+  const gradeLabel = gradeName === '已毕业' && studentInfo.value.entryYear
+    ? `${studentInfo.value.entryYear}级（已毕业）`
+    : gradeName
+  return `${gradeLabel}${classCode}班`
+})
 const collaborationRooms = ref([]);
 
 function openCollaboration(room) {
@@ -1495,6 +1511,7 @@ async function fetchData() {
     teacherNote.value = "";
     checkedIn.value = false;
     checkinTime.value = null;
+    iotEnabled.value = false;
     if (res.hasLesson) {
       lessonId.value = res.lessonId;
       lessonTitle.value = res.lessonTitle;
@@ -1502,6 +1519,8 @@ async function fetchData() {
       teacherNote.value = res.teacherNote || "";
       checkedIn.value = Boolean(res.checkedIn);
       checkinTime.value = res.checkinTime || null;
+      // 课程级物联网开关：只有教师开启后才显示「物联实验」入口。
+      iotEnabled.value = Boolean(res.iotEnabled);
       guideSheetBindingId.value = res.guideSheetBindingId || res.guideSheetBinding?.bindingId || null;
       hasGuideSheet.value = Boolean(res.guideSheetEnabled && guideSheetBindingId.value);
       
@@ -1540,6 +1559,7 @@ async function fetchData() {
     teacherNote.value = "";
     checkedIn.value = false;
     checkinTime.value = null;
+    iotEnabled.value = false;
     allQuestions.value = [];
     activeLearningMode.value = 'daily';
   } finally {
@@ -2254,11 +2274,27 @@ async function switchToDailyCourse() {
   if (canLeave !== false) activeLearningMode.value = 'daily'
 }
 
+// 防误关：还有没交的作答或正在进行的打字题时，刷新/关闭页面前浏览器强制二次确认
+const beforeUnloadHandler = (e) => {
+  const hasPendingAnswer = Object.values(answers.value || {}).some(
+    (v) => v !== null && v !== undefined && v !== ""
+  );
+  const hasRunningTyping = Object.values(typingStates.value || {}).some(
+    (s) => s && s.started && !s.submitted
+  );
+  if (hasPendingAnswer || hasRunningTyping) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+};
+
 onMounted(() => {
+  window.addEventListener("beforeunload", beforeUnloadHandler);
   fetchData();
 });
 
 onUnmounted(() => {
+  window.removeEventListener("beforeunload", beforeUnloadHandler);
   Object.values(timerIntervals).forEach((i) => clearInterval(i));
   Object.values(practicalPollingTimers).forEach((i) => clearTimeout(i));
 });

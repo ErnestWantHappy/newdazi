@@ -23,6 +23,7 @@ class WpsCallbackSecurityServiceTest
     void setUp()
     {
         properties = new WpsWebOfficeProperties();
+        properties.setEnabled(true);
         properties.setAppId("test-app-id");
         properties.setAppSecret("test-app-secret");
         properties.setTokenSecret("test-token-secret-at-least-32-characters");
@@ -67,6 +68,17 @@ class WpsCallbackSecurityServiceTest
     void rejectsCallbacksWhenProviderIsDisabled()
     {
         ReflectionTestUtils.setField(securityService, "enabled", false);
+        MockHttpServletRequest request = signedRequest("GET",
+                "/weboffice/callback/v3/3rd/files/c123", null, "");
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> securityService.verify(request, new byte[0]));
+        assertEquals("在线协作服务已停用", error.getMessage());
+    }
+
+    @Test
+    void rejectsCallbacksUnlessWpsIsExplicitlyEnabled()
+    {
+        properties.setEnabled(false);
         MockHttpServletRequest request = signedRequest("GET",
                 "/weboffice/callback/v3/3rd/files/c123", null, "");
         ServiceException error = assertThrows(ServiceException.class,

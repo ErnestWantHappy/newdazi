@@ -18,7 +18,9 @@ public class IotWebSocketHandler extends TextWebSocketHandler
     @Override
     public void afterConnectionEstablished(WebSocketSession session)
     {
+        if (session == null || session.getAttributes() == null) return;
         Long experimentId = (Long) session.getAttributes().get("experimentId");
+        if (experimentId == null || session.getId() == null) return;
         sessions.computeIfAbsent(experimentId, key -> new ConcurrentHashMap<>()).put(session.getId(), session);
     }
 
@@ -36,6 +38,7 @@ public class IotWebSocketHandler extends TextWebSocketHandler
 
     public void publishRefresh(Long experimentId)
     {
+        if (experimentId == null) return;
         Map<String, WebSocketSession> targets = sessions.get(experimentId);
         if (targets == null) return;
         String payload = JSON.toJSONString(java.util.Collections.singletonMap("type", "iot_refresh"));
@@ -52,7 +55,9 @@ public class IotWebSocketHandler extends TextWebSocketHandler
 
     private void remove(WebSocketSession session)
     {
+        if (session == null || session.getAttributes() == null || session.getId() == null) return;
         Long experimentId = (Long) session.getAttributes().get("experimentId");
+        if (experimentId == null) return;
         Map<String, WebSocketSession> targets = sessions.get(experimentId);
         if (targets == null) return;
         targets.remove(session.getId());

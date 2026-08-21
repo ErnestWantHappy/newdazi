@@ -78,6 +78,9 @@ public class BizStudentAnswer extends BaseEntity
     private String studentNo;
     private String classCode;
 
+    /** 打字题重交保留历史最高分标记；非数据库字段，仅打字题提交时置 true */
+    private Boolean keepBestScore;
+
     // Getters and Setters
     public Long getAnswerId() { return answerId; }
     public void setAnswerId(Long answerId) { this.answerId = answerId; }
@@ -142,6 +145,9 @@ public class BizStudentAnswer extends BaseEntity
     public Long getPracticalArtifactId() { return practicalArtifactId; }
     public void setPracticalArtifactId(Long practicalArtifactId) { this.practicalArtifactId = practicalArtifactId; }
 
+
+    public Boolean getKeepBestScore() { return keepBestScore; }
+    public void setKeepBestScore(Boolean keepBestScore) { this.keepBestScore = keepBestScore; }
     public Long getPracticalVersionId() { return practicalVersionId; }
     public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
 }

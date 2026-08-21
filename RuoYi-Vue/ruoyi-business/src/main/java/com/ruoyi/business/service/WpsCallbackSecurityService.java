@@ -33,7 +33,7 @@ public class WpsCallbackSecurityService
     public CollaborationTokenService.Claims verify(HttpServletRequest request, byte[] body)
     {
         // 供应商停用后即使旧地址仍被访问，也不再进入文件读取或保存流程。
-        if (!enabled)
+        if (!enabled || !properties.isEnabled())
         {
             throw new ServiceException("在线协作服务已停用");
         }

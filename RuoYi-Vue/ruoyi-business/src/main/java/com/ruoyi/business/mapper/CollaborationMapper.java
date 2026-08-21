@@ -2,6 +2,7 @@ package com.ruoyi.business.mapper;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.business.domain.CollaborationRoom;
 import com.ruoyi.business.domain.CollaborationUploadTicket;
@@ -58,6 +59,9 @@ public interface CollaborationMapper
                        @Param("manualSave") Boolean manualSave,
                        @Param("savedByUserId") Long savedByUserId,
                        @Param("createTime") Date createTime);
+
+    /** 教师监管：按时间倒序读取房间全部不可变版本（含保存人昵称）。 */
+    List<Map<String, Object>> selectRevisionsByRoomId(@Param("roomId") Long roomId);
 
     int insertUploadTicket(CollaborationUploadTicket ticket);
 

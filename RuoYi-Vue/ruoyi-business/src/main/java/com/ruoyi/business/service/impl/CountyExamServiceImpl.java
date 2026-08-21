@@ -2019,28 +2019,8 @@ public class CountyExamServiceImpl implements ICountyExamService {
     }
 
     private String calculateGradeName(String entryYear, String schoolType) {
-        if (entryYear == null) {
-            return "未知年级";
-        }
-        Calendar now = Calendar.getInstance();
-        int yearsInSchool;
-        try {
-            yearsInSchool = resolveAcademicStartYear(now) - Integer.parseInt(entryYear) + 1;
-        } catch (NumberFormatException e) {
-            return "未知年级";
-        }
-        String[] gradeNames;
-        if ("1".equals(schoolType)) {
-            gradeNames = new String[]{"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"};
-        } else if ("2".equals(schoolType)) {
-            gradeNames = new String[]{"七年级", "八年级", "九年级"};
-        } else {
-            gradeNames = new String[]{"高一", "高二", "高三"};
-        }
-        if (yearsInSchool >= 1 && yearsInSchool <= gradeNames.length) {
-            return gradeNames[yearsInSchool - 1];
-        }
-        return "未知年级";
+        return com.ruoyi.business.util.AcademicYearUtils.resolveGradeName(
+                entryYear, schoolType, java.time.LocalDate.now());
     }
 
     static Map<String, Object> buildAnalysisOverview(List<CountyExamStudent> participants,

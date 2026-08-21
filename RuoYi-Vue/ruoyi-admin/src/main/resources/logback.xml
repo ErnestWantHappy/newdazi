@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- 日志存放路径 -->
-	<property name="log.path" value="/home/ruoyi/logs" />
+    <!-- 日志存放路径。默认使用应用目录下的 logs，正式环境可通过 LOG_PATH 覆盖。 -->
+	<property name="log.path" value="${LOG_PATH:-./logs}" />
     <!-- 日志输出格式 -->
-	<property name="log.pattern" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />
+	<property name="log.pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - [trace:%X{traceId}] u=%X{userId} dept=%X{deptId} - %msg%n" />
 
 	<!-- 控制台输出 -->
 	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
@@ -80,12 +80,9 @@
 	<!-- Spring日志级别控制  -->
 	<logger name="org.springframework" level="warn" />
 
-	<root level="info">
-		<appender-ref ref="console" />
-	</root>
-	
-	<!--系统操作日志-->
+    <!-- 系统日志统一挂载到单一根节点，避免重复 root 导致前一个节点被覆盖。 -->
     <root level="info">
+        <appender-ref ref="console" />
         <appender-ref ref="file_info" />
         <appender-ref ref="file_error" />
     </root>

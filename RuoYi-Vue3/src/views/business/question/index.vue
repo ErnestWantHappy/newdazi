@@ -74,6 +74,13 @@
           <el-option label="文件作品" value="FILE" />
         </el-select>
       </el-form-item>
+      <el-form-item label="难度" prop="difficulty">
+        <el-select v-model="queryParams.difficulty" placeholder="请选择难度" clearable style="width: 160px">
+          <el-option label="简单" value="SIMPLE" />
+          <el-option label="中等" value="MEDIUM" />
+          <el-option label="困难" value="HARD" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="是否公开" prop="isPublic">
         <el-select
           v-model="queryParams.isPublic"
@@ -231,6 +238,12 @@
           ><dict-tag :options="biz_grade" :value="String(scope.row.grade)"
         /></template>
       </el-table-column>
+      <el-table-column label="难度" align="center" prop="difficulty" width="90">
+        <template #default="scope">
+          <span v-if="scope.row.practicalMode === 'PYTHON'">{{ difficultyLabel(scope.row.difficulty) }}</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="学期" align="center" prop="semester" width="100">
         <template #default="scope"
           ><dict-tag
@@ -371,6 +384,15 @@
                   :label="dict.label"
                   :value="dict.value"
                 ></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.questionType === 'practical' && form.practicalMode === 'PYTHON'" :span="12">
+            <el-form-item label="难度" prop="difficulty">
+              <el-select v-model="form.difficulty" placeholder="请选择难度">
+                <el-option label="简单" value="SIMPLE" />
+                <el-option label="中等" value="MEDIUM" />
+                <el-option label="困难" value="HARD" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -742,6 +764,7 @@ const data = reactive({
     pageSize: 10,
     questionType: null,
     practicalMode: null,
+    difficulty: null,
     questionContent: null,
     isPublic: null,
     grade: null,
@@ -829,6 +852,10 @@ function getList() {
   });
 }
 
+function difficultyLabel(value) {
+  return value === "SIMPLE" ? "简单" : value === "HARD" ? "困难" : "中等";
+}
+
 // 取消按钮
 function cancel() {
   open.value = false;
@@ -849,6 +876,7 @@ function reset() {
     questionContent: null,
     grade: null,
     semester: null,
+    difficulty: null,
     optionA: null,
     optionB: null,
     optionC: null,

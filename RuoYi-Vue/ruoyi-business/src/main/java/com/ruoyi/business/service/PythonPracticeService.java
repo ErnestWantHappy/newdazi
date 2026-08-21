@@ -23,6 +23,7 @@ import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
 import com.ruoyi.business.mapper.PythonPracticeMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.domain.BizTeacherClass;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.business.judge.Judge0Client;
@@ -84,13 +85,14 @@ public class PythonPracticeService {
         return result;
     }
 
-    /** 仅允许删除从未发布的题单，避免破坏学生已经产生的刷题历史。 */
+    /** 已发布题单执行归档，历史提交仍可审计；草稿则彻底删除。 */
     @Transactional(rollbackFor = Exception.class)
     public void deletePlan(Long planId, Long deptId) {
         Map<String, Object> plan = mapper.selectPlan(planId);
         requirePlanDept(plan, deptId);
         if (mapper.countPublishedVersions(planId) > 0) {
-            throw new ServiceException("已发布题单不能删除；请使用撤回或复制新版本。");
+            mapper.updatePlanStatus(planId, "INACTIVE");
+            return;
         }
         mapper.deletePlanQuestions(planId);
         mapper.deleteExtensionQuestions(planId);
@@ -119,8 +121,8 @@ public class PythonPracticeService {
     public Map<String, Object> addQuestion(Long planVersionId, Long questionId, Integer sortNo, String stage, String username, Long deptId) {
         Map<String, Object> version = mapper.selectPlanByVersion(planVersionId);
         requirePlanDept(version, deptId);
-        if (version == null || !"DRAFT".equals(String.valueOf(version.get("version_status")))) {
-            throw new ServiceException("已发布或已撤回的题单版本不能修改");
+        if (version == null || "RETRACTED".equals(String.valueOf(version.get("version_status")))) {
+            throw new ServiceException("已撤回的题单不能修改");
         }
         if (mapper.countPlanVersionQuestion(planVersionId, questionId) > 0) {
             throw new ServiceException("该题已在当前基础题单中");
@@ -146,6 +148,21 @@ public class PythonPracticeService {
         }
         Map<String, Object> link = new HashMap<String, Object>(); link.put("planVersionId", planVersionId); link.put("questionId", questionId); link.put("snapshotId", snapshot.get("snapshotId")); link.put("sortNo", sortNo == null ? 1 : sortNo); link.put("stage", stage == null ? "BEGINNER" : stage); link.put("requiredFlag", "1"); mapper.insertPlanQuestion(link);
         return snapshot;
+    }
+
+    /**
+     * 已发布题单允许直接撤下题目，但不删除快照和学生提交，保证历史练习可追溯。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void removeQuestion(Long planVersionId, Long questionId, Long deptId) {
+        Map<String, Object> version = mapper.selectPlanByVersion(planVersionId);
+        requirePlanDept(version, deptId);
+        if (version == null || "RETRACTED".equals(String.valueOf(version.get("version_status")))) {
+            throw new ServiceException("已撤回的题单不能修改");
+        }
+        if (mapper.deletePlanQuestion(planVersionId, questionId) != 1) {
+            throw new ServiceException("题目不存在或已被移除");
+        }
     }
 
     public List<Map<String, Object>> extensions(Long planId, Long deptId) { requirePlanDept(mapper.selectPlan(planId), deptId); return mapper.selectExtensions(planId); }
@@ -322,14 +339,14 @@ public class PythonPracticeService {
     private static double decimal(Object value, double fallback) { return value == null ? fallback : Double.valueOf(String.valueOf(value)); }
     private String statusMessage(String status) { if ("ACCEPTED".equals(status)) return "通过"; if ("PARTIAL".equals(status)) return "部分通过"; if ("WRONG_ANSWER".equals(status)) return "答案错误"; if ("SYNTAX_ERROR".equals(status)) return "语法错误"; if ("TIME_LIMIT".equals(status)) return "运行超时"; if ("MEMORY_LIMIT".equals(status)) return "内存超限"; return "判题服务异常，代码和提交已保留"; }
 
-    private BizStudent requireStudent(Long userId) { BizStudent student = studentMapper.selectBizStudentByUserId(userId); if (student == null) throw new ServiceException("当前账号不是学生"); return student; }
+    private BizStudent requireStudent(Long userId) { BizStudent student = studentMapper.selectBizStudentByUserId(userId); if (student == null) throw forbidden("当前账号不是学生"); return student; }
     private void assertStudentScope(BizStudent student, Long deptId, String sourceType, Long sourceId, Long questionId) {
         Long actualDept = deptId == null ? student.getDeptId() : deptId;
         boolean allowed = false;
         for (Map<String, Object> item : mapper.selectStudentQuestions(actualDept, student.getEntryYear(), student.getClassCode())) {
             if (sourceType.equals(item.get("source_type")) && sourceId != null && sourceId.equals(number(item.get("source_id"))) && questionId != null && questionId.equals(number(item.get("question_id")))) { allowed = true; break; }
         }
-        if (!allowed) throw new ServiceException("题目不属于当前学生可练习范围");
+        if (!allowed) throw forbidden("题目不属于当前学生可练习范围");
     }
     private static void require(Map<String, Object> request, String... keys) { for (String key : keys) if (request.get(key) == null || String.valueOf(request.get(key)).trim().isEmpty()) throw new ServiceException("缺少参数：" + key); }
     private static Long number(Object value) { return value == null ? null : Long.valueOf(String.valueOf(value)); }
@@ -341,7 +358,8 @@ public class PythonPracticeService {
     }
     private static String progressKey(Map<String, Object> item) { return String.valueOf(item.get("source_type")) + ":" + item.get("source_id") + ":" + item.get("question_id"); }
     private static void requirePlanDept(Map<String, Object> plan, Long deptId) {
-        if (plan == null || (deptId != null && !deptId.equals(number(plan.get("dept_id"))))) throw new ServiceException("题单不存在或无权访问");
+        if (plan == null) throw new ServiceException("题单不存在");
+        if (deptId != null && !deptId.equals(number(plan.get("dept_id")))) throw forbidden("无权访问该题单");
     }
     private void requireAnalyticsSource(String sourceType, Long sourceId, Long deptId) {
         if (sourceId == null) throw new ServiceException("学习情况来源不能为空");
@@ -359,6 +377,10 @@ public class PythonPracticeService {
     private void ensureManagedClass(Long userId, Long deptId, String entryYear, String classCode) {
         if (SecurityUtils.isAdmin(userId) || SecurityUtils.hasRole("researcher")) return;
         BizTeacherClass query = new BizTeacherClass(); query.setUserId(userId); query.setDeptId(deptId); query.setEntryYear(entryYear); query.setClassCode(classCode);
-        if (teacherClassMapper.checkTeacherClassExists(query) <= 0) throw new ServiceException("当前教师无权管理该班级");
+        if (teacherClassMapper.checkTeacherClassExists(query) <= 0) throw forbidden("当前教师无权管理该班级");
+    }
+
+    private static ServiceException forbidden(String message) {
+        return new ServiceException(message, HttpStatus.FORBIDDEN);
     }
 }

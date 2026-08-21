@@ -1,6 +1,31 @@
 <template>
   <div class="cryptpad-editor-page">
-    <div class="editor-toolbar"><span>{{ session.title || '在线协作文档' }}</span><el-tag :type="saved ? 'success' : 'warning'">{{ saved ? '已保存' : '编辑中' }}</el-tag><el-button size="small" @click="reload">重新加载</el-button></div>
+    <div class="editor-toolbar">
+      <span>{{ session.title || '在线协作文档' }}</span>
+      <el-tag size="small" type="info">v{{ session.version || 1 }}</el-tag>
+      <el-tag :type="saved ? 'success' : 'warning'">{{ saved ? '已保存' : '编辑中' }}</el-tag>
+      <el-popover placement="bottom-end" :width="260" trigger="click" popper-class="member-popover">
+        <template #reference>
+          <el-button size="small" :disabled="error">
+            <el-icon><User /></el-icon>
+            <span class="member-count">在线成员 {{ members.length }}</span>
+          </el-button>
+        </template>
+        <div class="member-panel">
+          <div class="member-panel-title">当前房间在线成员</div>
+          <div v-if="members.length" class="member-list">
+            <div v-for="member in members" :key="member.key" class="member-item">
+              <span class="member-dot" :class="{ online: !member.readOnly }"></span>
+              <span class="member-name">{{ member.name || '协作用户' }}</span>
+              <el-tag v-if="member.isSelf" size="small" type="success" effect="dark">我</el-tag>
+              <el-tag v-if="member.readOnly" size="small" type="info">只读</el-tag>
+            </div>
+          </div>
+          <div v-else class="member-empty">暂无其他成员，等待同学或老师进入…</div>
+        </div>
+      </el-popover>
+      <el-button size="small" @click="reload">重新加载</el-button>
+    </div>
     <div v-if="error" class="editor-error"><el-result icon="warning" title="协作暂时不可用" :sub-title="error"><template #extra><el-button type="primary" @click="reload">重新加载</el-button><el-button @click="copyDiagnostics">复制诊断信息</el-button></template></el-result></div>
     <div v-else ref="container" id="cryptpad-editor" class="editor-container"><el-skeleton v-if="loading" :rows="8" animated /></div>
   </div>
@@ -10,6 +35,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { User } from '@element-plus/icons-vue'
 import { getCollaborationDocument, getCollaborationSession, saveCollaborationDocument } from '@/api/business/collaboration'
 
 const route = useRoute()
@@ -18,14 +44,35 @@ const loading = ref(true)
 const saved = ref(true)
 const error = ref('')
 const session = reactive({})
+const members = ref([])
 let objectUrl = null
 let apiScript = null
 let initTimer = null
 let initObserver = null
 let initStartedAt = 0
 let windowErrorHandler = null
+let saveChain = Promise.resolve()
 
 const EDITOR_INIT_TIMEOUT = 20000
+
+/** CryptPad USERLIST_CHANGE 返回 {netfluxId: {id,name,readOnly}}；转成稳定数组并按自己置顶。 */
+function applyUserlist(list) {
+  const rows = []
+  if (list && typeof list === 'object') {
+    for (const key of Object.keys(list)) {
+      const user = list[key] || {}
+      rows.push({
+        key,
+        id: user.id,
+        name: String(user.name || '').trim() || '协作用户',
+        readOnly: Boolean(user.readOnly),
+        isSelf: Boolean(user.id && user.id === session.participantId)
+      })
+    }
+  }
+  rows.sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || a.name.localeCompare(b.name, 'zh-CN'))
+  members.value = rows
+}
 
 function browserDiagnostics() {
   return {
@@ -138,19 +185,33 @@ async function open() {
         user: { id: session.participantId, name: session.user }
       },
       events: {
-        onSave: async (file, callback) => {
+        onSave: (file, callback) => {
           saved.value = false
-          try {
-            const result = await saveCollaborationDocument(route.params.roomId, file, session.version, saveFileName(file))
-            session.version = result?.data?.version ?? result?.version ?? session.version + 1
-            saved.value = true
-            callback()
-          } catch (e) {
-            ElMessage.error(e?.message || '协作文档保存失败')
-            callback()
-          }
+          // CryptPad 可能在短时间内连续触发 onSave；串行提交避免后一个保存携带旧版本号。
+          saveChain = saveChain.then(async () => {
+            try {
+              let result
+              try {
+                result = await saveCollaborationDocument(route.params.roomId, file, session.version, saveFileName(file))
+              } catch (e) {
+                const message = String(e?.response?.data?.msg || e?.message || '')
+                if (!message.includes('版本已变化')) throw e
+                const latest = await getCollaborationSession(route.params.roomId)
+                session.version = latest?.data?.version ?? latest?.version ?? session.version
+                result = await saveCollaborationDocument(route.params.roomId, file, session.version, saveFileName(file))
+              }
+              session.version = result?.data?.version ?? result?.version ?? session.version + 1
+              saved.value = true
+              callback()
+            } catch (e) {
+              ElMessage.error(e?.message || '协作文档保存失败')
+              callback(e instanceof Error ? e : new Error('协作文档保存失败'))
+            }
+          })
         },
-        onHasUnsavedChanges: value => { saved.value = !value }
+        onHasUnsavedChanges: value => { saved.value = !value },
+        // CryptPad 集成 API 的实时用户列表：进入/离开都会推送最新成员集合。
+        onUserlistChange: applyUserlist
       }
     })
     await waitForEditorFrame()
@@ -162,7 +223,12 @@ async function open() {
     windowErrorHandler = null
   }
 }
-function reload() { if (objectUrl) URL.revokeObjectURL(objectUrl); container.value && (container.value.innerHTML = ''); open() }
+function reload() {
+  if (objectUrl) URL.revokeObjectURL(objectUrl)
+  container.value && (container.value.innerHTML = '')
+  members.value = []
+  open()
+}
 onMounted(open)
 onBeforeUnmount(() => {
   if (objectUrl) URL.revokeObjectURL(objectUrl)
@@ -177,6 +243,17 @@ onBeforeUnmount(() => {
 .cryptpad-editor-page { height: calc(100vh - 84px); display: flex; flex-direction: column; background: #f5f7fa; }
 .editor-toolbar { min-height: 48px; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: #fff; border-bottom: 1px solid #ebeef5; }
 .editor-toolbar span { flex: 1; font-weight: 600; }
+.editor-toolbar .member-count { margin-left: 4px; }
 .editor-container { flex: 1; min-height: 0; background: #fff; }
 .editor-error { flex: 1; display: flex; align-items: center; justify-content: center; }
+</style>
+
+<style>
+.member-popover .member-panel-title { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+.member-popover .member-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+.member-popover .member-item { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; background: #f7f9fb; }
+.member-popover .member-dot { width: 8px; height: 8px; border-radius: 50%; background: #c0c4cc; flex: 0 0 auto; }
+.member-popover .member-dot.online { background: #67c23a; }
+.member-popover .member-name { flex: 1; font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-popover .member-empty { font-size: 12px; color: #909399; padding: 8px 0; }
 </style>

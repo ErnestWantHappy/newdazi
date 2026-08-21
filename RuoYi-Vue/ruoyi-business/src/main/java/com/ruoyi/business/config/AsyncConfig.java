@@ -104,12 +104,17 @@ public class AsyncConfig {
     }
 
     /** 判题网络轮询独立隔离，Judge0 停顿时不挤占文件转换或外部 AI 线程。 */
+    @Value("${ruoyi.judge.queue-capacity:500}")
+    private int judgeQueueCapacity;
+
     @Bean("judge0Executor")
     public ThreadPoolTaskExecutor judge0Executor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(120);
+        // 队列默认 500：整班集中交编程题时先排队而非直接拒绝（拒绝会被学生端看到“判题服务异常”），
+        // 容量可通过环境变量 ruoyi.judge.queue-capacity 按机器调整。
+        executor.setQueueCapacity(judgeQueueCapacity);
         executor.setThreadNamePrefix("judge0-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);

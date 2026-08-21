@@ -132,4 +132,19 @@ class ProgrammingSubmissionServiceTest {
         verify(programmingMapper).selectPublicTestCases(1755L);
         verify(programmingMapper, never()).selectTestCases(1755L);
     }
+
+    @Test
+    void privateQuestionAccessReturnsForbiddenBusinessCode() {
+        BizQuestion question = new BizQuestion();
+        question.setQuestionType("practical");
+        question.setPracticalMode("PYTHON");
+        question.setCreatorId(99L);
+        when(questionMapper.selectBizQuestionByQuestionId(1756L)).thenReturn(question);
+
+        com.ruoyi.common.exception.ServiceException error = assertThrows(
+                com.ruoyi.common.exception.ServiceException.class,
+                () -> service.getTeacherPreviewCases(1756L, 2L, false));
+
+        assertEquals(403, error.getCode());
+    }
 }

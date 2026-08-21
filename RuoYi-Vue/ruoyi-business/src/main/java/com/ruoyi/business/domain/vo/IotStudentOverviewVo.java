@@ -10,6 +10,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 public class IotStudentOverviewVo
 {
     private Boolean hasExperiment = false;
+    /** 当前课程是否已开启物联网（课程设计器开关）；未开启时即使存在历史实验也不展示。 */
+    private Boolean iotEnabled = false;
     private Long experimentId;
     private String experimentTitle;
     private String activityCode;
@@ -69,6 +71,9 @@ public class IotStudentOverviewVo
 
     public Boolean getHasExperiment() { return hasExperiment; }
     public void setHasExperiment(Boolean hasExperiment) { this.hasExperiment = hasExperiment; }
+
+    public Boolean getIotEnabled() { return iotEnabled; }
+    public void setIotEnabled(Boolean iotEnabled) { this.iotEnabled = iotEnabled; }
 
     public Long getExperimentId() { return experimentId; }
     public void setExperimentId(Long experimentId) { this.experimentId = experimentId; }

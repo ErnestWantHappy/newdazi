@@ -65,6 +65,13 @@
               />
             </el-form-item>
 
+            <el-form-item v-if="form.lessonMode !== 'attendance'" label="开启物联网">
+              <el-switch v-model="form.iotEnabled" active-text="开启" inactive-text="关闭" />
+              <div style="color: #909399; font-size: 12px; margin-top: 4px; line-height: 1.5;">
+                开启后，教师首页该课程卡片与学生首页将显示「物联」入口；实验项目和班级分组在物联页配置。
+              </div>
+            </el-form-item>
+
             <el-form-item label="指派班级" prop="assignedClasses">
               <el-checkbox-group v-model="form.assignedClasses">
                 <el-checkbox 
@@ -461,6 +468,8 @@ const form = ref({
   randomChoiceCount: 0,   // 随机抽取选择题数
   randomJudgmentCount: 0, // 随机抽取判断题数
   lessonMode: 'assessment', // assessment 常规课 / attendance 课堂考勤
+  // 课程级物联网实验开关：开启后教师/学生首页才显示物联入口（考勤课强制关闭）
+  iotEnabled: false,
   // 自动推进在教师首页设置，设计器仅保留字段以便保存时透传已有配置
   autoAdvanceEnabled: false,
   autoAdvanceThresholdPct: 50,
@@ -632,6 +641,8 @@ function submitForm() {
         autoAdvanceEnabled: isAttendanceSubmit ? false : Boolean(form.value.autoAdvanceEnabled),
         autoAdvanceThresholdPct: Number(form.value.autoAdvanceThresholdPct) || 50,
         autoAdvanceDelayHours: Number(form.value.autoAdvanceDelayHours) || 2,
+        // 物联网开关：考勤课强制关闭
+        iotEnabled: isAttendanceSubmit ? false : Boolean(form.value.iotEnabled),
         questions: selectedQuestions.value,
         // 入学年份随表单显式提交，避免跨学年时再由年级反推错届。
         assignedClassCodes: form.value.assignedClasses 
@@ -696,6 +707,8 @@ function initialize() {
         randomJudgmentCount: detail.randomJudgmentCount ?? 0,
         lessonMode: detail.lessonMode === 'attendance' ? 'attendance' : 'assessment',
         teacherNote: detail.teacherNote || '',
+        iotEnabled: detail.lessonMode !== 'attendance'
+          && (detail.iotEnabled === true || detail.iotEnabled === 1 || detail.iotEnabled === '1'),
         autoAdvanceEnabled: detail.lessonMode === 'attendance'
           ? false
           : (detail.autoAdvanceEnabled === true || detail.autoAdvanceEnabled === 1 || detail.autoAdvanceEnabled === '1'),
@@ -737,6 +750,7 @@ function initialize() {
       randomJudgmentCount: 0,
       lessonMode: initMode,
       teacherNote: '',
+      iotEnabled: false,
       autoAdvanceEnabled: false,
       autoAdvanceThresholdPct: 50,
       autoAdvanceDelayHours: 2,

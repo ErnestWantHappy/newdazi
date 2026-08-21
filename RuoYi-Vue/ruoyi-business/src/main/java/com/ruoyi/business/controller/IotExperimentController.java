@@ -135,6 +135,24 @@ public class IotExperimentController extends BaseController
     }
 
     /**
+     * 教师数据收集：分页查询实验收到的上报消息（设备经 MQTT 上报入库），并返回当前班级小组消息汇总。
+     */
+    @GetMapping("/experiments/{experimentId}/messages")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher,researcher')")
+    public AjaxResult messages(@PathVariable Long experimentId,
+                               @RequestParam(required = false) String entryYear,
+                               @RequestParam(required = false) String classCode,
+                               @RequestParam(required = false) Long groupId,
+                               @RequestParam(required = false) String payloadType,
+                               @RequestParam(required = false) String keyword,
+                               @RequestParam(defaultValue = "1") Integer pageNum,
+                               @RequestParam(defaultValue = "20") Integer pageSize)
+    {
+        return success(service.listMessages(experimentId, entryYear, classCode, groupId,
+                payloadType, keyword, pageNum, pageSize));
+    }
+
+    /**
      * 学生端物联实验概览（仅返回当前学生所在班级与小组信息）
      */
     @GetMapping("/student/overview")

@@ -20,7 +20,6 @@ public final class IotPasscodeUtil
     private static final char[] PASSCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
-    private static final String DEFAULT_SECRET = "DaziIotPasscodeGcmSecret2026";
     private static final Pattern DIGIT_PATTERN = Pattern.compile("\\d+");
 
     private IotPasscodeUtil() { }
@@ -55,7 +54,7 @@ public final class IotPasscodeUtil
         if (plaintext == null || plaintext.trim().isEmpty()) return null;
         try
         {
-            byte[] keyBytes = deriveKey(customSecret != null ? customSecret : DEFAULT_SECRET);
+            byte[] keyBytes = deriveKey(customSecret);
             byte[] iv = new byte[12];
             RANDOM.nextBytes(iv);
 
@@ -88,7 +87,7 @@ public final class IotPasscodeUtil
             byte[] combined = Base64.getDecoder().decode(ciphertext.trim());
             if (combined.length < 16) return null;
 
-            byte[] keyBytes = deriveKey(customSecret != null ? customSecret : DEFAULT_SECRET);
+            byte[] keyBytes = deriveKey(customSecret);
             byte[] iv = new byte[12];
             System.arraycopy(combined, 0, iv, 0, 12);
 
@@ -150,7 +149,9 @@ public final class IotPasscodeUtil
 
     private static byte[] deriveKey(String secret) throws Exception
     {
+        if (secret == null || secret.trim().isEmpty())
+            throw new IllegalArgumentException("IoT 口令加密密钥未配置");
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        return digest.digest(secret.getBytes(StandardCharsets.UTF_8));
+        return digest.digest(secret.trim().getBytes(StandardCharsets.UTF_8));
     }
 }

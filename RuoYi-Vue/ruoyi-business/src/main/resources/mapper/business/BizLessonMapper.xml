@@ -20,6 +20,7 @@
         <result property="autoAdvanceThresholdPct"    column="auto_advance_threshold_pct"    />
         <result property="autoAdvanceDelayHours"    column="auto_advance_delay_hours"    />
         <result property="autoAdvanceReadyTime"    column="auto_advance_ready_time"    />
+        <result property="iotEnabled"    column="iot_enabled"    />
         <result property="creatorId"    column="creator_id"    />
         <result property="deptId"    column="dept_id"    />
         <result property="createBy"    column="create_by"    />
@@ -31,7 +32,7 @@
     <sql id="selectBizLessonVo">
         select lesson_id, lesson_title, grade, entry_year, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count,
                lesson_mode, teacher_note, auto_advance_enabled, auto_advance_threshold_pct, auto_advance_delay_hours, auto_advance_ready_time,
-               creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
+               iot_enabled, creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
 
     <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
@@ -68,6 +69,7 @@
             <if test="autoAdvanceThresholdPct != null">auto_advance_threshold_pct,</if>
             <if test="autoAdvanceDelayHours != null">auto_advance_delay_hours,</if>
             <if test="autoAdvanceReadyTime != null">auto_advance_ready_time,</if>
+            <if test="iotEnabled != null">iot_enabled,</if>
             <if test="creatorId != null">creator_id,</if>
             <if test="deptId != null">dept_id,</if>
             <if test="createBy != null and createBy != ''">create_by,</if>
@@ -116,6 +118,7 @@
             <if test="autoAdvanceThresholdPct != null">auto_advance_threshold_pct = #{autoAdvanceThresholdPct},</if>
             <if test="autoAdvanceDelayHours != null">auto_advance_delay_hours = #{autoAdvanceDelayHours},</if>
             <if test="autoAdvanceReadyTime != null">auto_advance_ready_time = #{autoAdvanceReadyTime},</if>
+            <if test="iotEnabled != null">iot_enabled = #{iotEnabled},</if>
             <if test="creatorId != null">creator_id = #{creatorId},</if>
             <if test="deptId != null">dept_id = #{deptId},</if>
             <if test="createBy != null and createBy != ''">create_by = #{createBy},</if>
@@ -221,6 +224,7 @@
         <result property="autoAdvanceEnabled"    column="auto_advance_enabled"    />
         <result property="autoAdvanceThresholdPct"    column="auto_advance_threshold_pct"    />
         <result property="autoAdvanceDelayHours"    column="auto_advance_delay_hours"    />
+        <result property="iotEnabled"    column="iot_enabled"    />
     </resultMap>
 
     <!-- 课程归届以持久化 entry_year 为准，grade 只是创建时的课程内容年级快照。 -->
@@ -239,7 +243,8 @@
             IFNULL(lesson_mode, 'assessment') as lesson_mode,
             IFNULL(auto_advance_enabled, 0) as auto_advance_enabled,
             IFNULL(auto_advance_threshold_pct, 50) as auto_advance_threshold_pct,
-            IFNULL(auto_advance_delay_hours, 2.0) as auto_advance_delay_hours
+            IFNULL(auto_advance_delay_hours, 2.0) as auto_advance_delay_hours,
+            IFNULL(iot_enabled, 0) as iot_enabled
         FROM
             biz_lesson
         WHERE
@@ -269,7 +274,8 @@
                 WHERE lq.lesson_id = l.lesson_id
                   AND q.question_type = 'practical'
             ) AS has_practical,
-            IFNULL(l.lesson_mode, 'assessment') as lesson_mode
+            IFNULL(l.lesson_mode, 'assessment') as lesson_mode,
+            IFNULL(l.iot_enabled, 0) as iot_enabled
         FROM biz_lesson l
         WHERE l.dept_id = #{deptId}
           AND IFNULL(l.lesson_mode, 'assessment') &lt;&gt; 'attendance'
@@ -360,7 +366,8 @@
             IFNULL(l.lesson_mode, 'assessment') as lesson_mode,
             IFNULL(l.auto_advance_enabled, 0) as auto_advance_enabled,
             IFNULL(l.auto_advance_threshold_pct, 50) as auto_advance_threshold_pct,
-            IFNULL(l.auto_advance_delay_hours, 2.0) as auto_advance_delay_hours
+            IFNULL(l.auto_advance_delay_hours, 2.0) as auto_advance_delay_hours,
+            IFNULL(l.iot_enabled, 0) as iot_enabled
         FROM biz_lesson l
         INNER JOIN biz_lesson_assignment la ON l.lesson_id = la.lesson_id
         INNER JOIN biz_teacher_class tc 

@@ -112,22 +112,13 @@
                     <el-icon><DataLine /></el-icon>
                     <span>成绩</span>
                   </div>
-                  <div
-                    v-if="lesson.lessonMode !== 'attendance'"
-                    class="action-btn iot"
-                    @click.stop="goToIotExperiment(lesson, group)"
-                    title="物联网实验"
-                  >
-                    <el-icon><Connection /></el-icon>
-                    <span>物联</span>
-                  </div>
                 </div>
               </div>
 
-              <div class="lesson-collaboration-footer">
+              <div class="lesson-entry-footer">
                 <el-button
                   v-if="lesson.hasCollaboration"
-                  class="lesson-collaboration-entry"
+                  class="lesson-entry-btn"
                   size="small"
                   type="primary"
                   text
@@ -135,6 +126,18 @@
                 >
                   <el-icon><Connection /></el-icon>
                   <span>在线协作</span>
+                </el-button>
+                <span v-if="lesson.hasCollaboration && lesson.iotEnabled" class="entry-divider" />
+                <el-button
+                  v-if="lesson.iotEnabled"
+                  class="lesson-entry-btn"
+                  size="small"
+                  type="primary"
+                  text
+                  @click.stop="goToIotExperiment(lesson, group)"
+                >
+                  <el-icon><Cpu /></el-icon>
+                  <span>物联</span>
                 </el-button>
               </div>
             </div>
@@ -333,7 +336,7 @@ import {
   manualAdvanceLesson
 } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, Connection, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
@@ -1092,7 +1095,7 @@ onActivated(() => {
   overflow: hidden; /* 防止溢出 */
 }
 
-.lesson-collaboration-footer {
+.lesson-entry-footer {
   height: 32px;
   flex: 0 0 32px;
   display: flex;
@@ -1102,8 +1105,8 @@ onActivated(() => {
   background: #fbfdff;
 }
 
-.lesson-collaboration-entry {
-  width: 100%;
+.lesson-entry-btn {
+  flex: 1;
   height: 100%;
   margin: 0;
   border-radius: 0;
@@ -1112,6 +1115,13 @@ onActivated(() => {
   :deep(.el-icon) {
     margin-right: 4px;
   }
+}
+
+.entry-divider {
+  width: 1px;
+  height: 16px;
+  background: #e4e7ed;
+  flex: 0 0 auto;
 }
 
 .collaboration-room-table {

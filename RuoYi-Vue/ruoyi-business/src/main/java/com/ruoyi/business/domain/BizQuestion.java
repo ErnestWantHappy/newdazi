@@ -23,6 +23,9 @@ public class BizQuestion extends BaseEntity
     @Excel(name = "年级", readConverterExp = "1=一年级,2=二年级,3=三年级,4=四年级,5=五年级,6=六年级,7=七年级,8=八年级,9=九年级,一年级=1,二年级=2,三年级=3,四年级=4,五年级=5,六年级=6,七年级=7,八年级=8,九年级=9", combo = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "七年级", "八年级", "九年级"})
     private Long grade;
 
+    /** Python 题目难度：SIMPLE/MEDIUM/HARD；仅 Python 题使用。 */
+    private String difficulty;
+
     @Excel(name = "学期", readConverterExp = "0=上册,1=下册,上册=0,下册=1", combo = {"上册", "下册"})
     private String semester;
 
@@ -125,6 +128,9 @@ public class BizQuestion extends BaseEntity
     public void setGrade(Long grade) {
         this.grade = grade;
     }
+
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
 
     public String getSemester() {
         return semester;
@@ -273,6 +279,7 @@ public class BizQuestion extends BaseEntity
                 .append("questionType", getQuestionType())
                 .append("questionContent", getQuestionContent())
                 .append("grade", getGrade())
+                .append("difficulty", getDifficulty())
                 .append("semester", getSemester())
                 .append("lessonNum", getLessonNum())
                 .append("optionA", getOptionA())

@@ -39,6 +39,7 @@ import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
 import com.ruoyi.common.core.redis.RedisCache;
+import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import org.springframework.data.redis.core.ValueOperations;
@@ -285,8 +286,10 @@ public class ProgrammingSubmissionService {
     private void assertStudentQuestionAccess(BizStudent student, Long deptId, Long lessonId, Long questionId) {
         if (student == null || lessonId == null || questionId == null) throw new ServiceException("课程或题目参数不完整");
         Long current = lessonAssignmentMapper.selectCurrentLessonByClass(student.getEntryYear(), student.getClassCode(), deptId);
-        if (!lessonId.equals(current)) throw new ServiceException("只能操作当前指派课程的编程题");
-        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId); if (lesson == null || lesson.getDeptId() == null || !deptId.equals(lesson.getDeptId())) throw new ServiceException("课程不存在或无权访问");
+        if (!lessonId.equals(current)) throw forbidden("只能操作当前指派课程的编程题");
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null) throw new ServiceException("课程不存在");
+        if (lesson.getDeptId() == null || !deptId.equals(lesson.getDeptId())) throw forbidden("无权访问该课程");
         for (BizLessonQuestionDetailVo q : lessonQuestionMapper.selectDetailsByLessonId(lessonId)) if (questionId.equals(q.getQuestionId()) && isPythonPractical(q)) return;
         throw new ServiceException("题目不存在或不是 Python 编程题");
     }
@@ -294,11 +297,12 @@ public class ProgrammingSubmissionService {
     private BizQuestion requirePythonQuestion(Long questionId) { BizQuestion question = questionMapper.selectBizQuestionByQuestionId(questionId); if (!isPythonPractical(question)) throw new ServiceException("题目不存在或不是 Python 在线编程操作题"); return question; }
     private boolean isPythonPractical(BizQuestion question) { return question != null && "practical".equalsIgnoreCase(question.getQuestionType()) && "PYTHON".equalsIgnoreCase(question.getPracticalMode()); }
     private boolean isPythonPractical(BizLessonQuestionDetailVo question) { return question != null && "practical".equalsIgnoreCase(question.getQuestionType()) && "PYTHON".equalsIgnoreCase(question.getPracticalMode()); }
-    private void assertQuestionOwner(BizQuestion question, Long currentUserId, boolean admin) { if (!admin && (currentUserId == null || !currentUserId.equals(question.getCreatorId()))) throw new ServiceException("无权访问他人创建的 Python 题配置"); }
+    private void assertQuestionOwner(BizQuestion question, Long currentUserId, boolean admin) { if (!admin && (currentUserId == null || !currentUserId.equals(question.getCreatorId()))) throw forbidden("无权访问他人创建的 Python 题配置"); }
     private void assertQuestionPreviewAccess(BizQuestion question, Long currentUserId, boolean admin) {
         if (admin || (currentUserId != null && currentUserId.equals(question.getCreatorId())) || "Y".equalsIgnoreCase(question.getIsPublic()) || "1".equals(question.getIsPublic())) return;
-        throw new ServiceException("无权预览他人创建的私有 Python 题");
+        throw forbidden("无权预览他人创建的私有 Python 题");
     }
+    private static ServiceException forbidden(String message) { return new ServiceException(message, HttpStatus.FORBIDDEN); }
     private void validateSource(String sourceCode) { if (sourceCode == null || sourceCode.trim().isEmpty()) throw new ServiceException("代码不能为空"); if (sourceCode.getBytes(StandardCharsets.UTF_8).length > Math.max(1024, properties.getMaxSourceBytes())) throw new ServiceException("代码超过允许大小"); }
     private void normalizeConfig(ProgrammingQuestionConfig c) { if (c.getTimeLimitSeconds() == null || c.getTimeLimitSeconds() < 0.1D || c.getTimeLimitSeconds() > 10D) throw new ServiceException("时限应在 0.1 至 10 秒之间"); if (c.getMemoryLimitKb() == null || c.getMemoryLimitKb() < 16384 || c.getMemoryLimitKb() > 524288) throw new ServiceException("内存应在 16MB 至 512MB 之间"); if (c.getMaxProcesses() == null || c.getMaxProcesses() < 1 || c.getMaxProcesses() > 8) throw new ServiceException("进程数应在 1 至 8 之间"); if (c.getMaxFileSizeKb() == null || c.getMaxFileSizeKb() < 1 || c.getMaxFileSizeKb() > 4096) throw new ServiceException("文件限制应在 1KB 至 4MB 之间"); if (c.getMaxOutputKb() == null || c.getMaxOutputKb() < 1 || c.getMaxOutputKb() > 1024) throw new ServiceException("输出限制应在 1KB 至 1MB 之间"); validateTextLength("输入说明", c.getInputDescription(), 20000); validateTextLength("输出说明", c.getOutputDescription(), 20000); validateTextLength("样例解释", c.getSampleExplanation(), 20000); validateTextLength("限制条件", c.getConstraintsText(), 20000); validateTextLength("注意事项", c.getNotesText(), 20000); validateTextLength("初始代码", c.getStarterCode(), Math.max(1024, properties.getMaxSourceBytes())); }
     private void validateTestCases(List<ProgrammingTestCase> cases) { if (cases == null || cases.isEmpty()) throw new ServiceException("至少配置一个测试点"); if (cases.size() > 50) throw new ServiceException("测试点数量不能超过 50 个"); boolean hidden = false; double totalWeight = 0D; for (ProgrammingTestCase c : cases) { validateTextLength("测试点名称", c.getCaseName(), 128); validateTextLength("测试点输入", c.getInputText(), 65536); validateTextLength("测试点期望输出", c.getExpectedOutput(), 65536); if (c.getExpectedOutput() == null || c.getExpectedOutput().trim().isEmpty()) throw new ServiceException("测试点期望输出不能为空"); if (!"1".equals(c.getIsPublic())) { c.setIsPublic("0"); hidden = true; } if (c.getScoreWeight() == null || c.getScoreWeight() <= 0D) throw new ServiceException("测试点权重必须大于零"); totalWeight += c.getScoreWeight(); } if (!hidden) throw new ServiceException("至少需要一个隐藏测试点"); if (totalWeight > 100000D) throw new ServiceException("测试点权重总和过大"); }

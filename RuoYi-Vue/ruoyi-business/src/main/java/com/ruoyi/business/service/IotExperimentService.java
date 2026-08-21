@@ -1,5 +1,7 @@
 package com.ruoyi.business.service;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,6 +33,7 @@ import com.ruoyi.business.domain.vo.IotClassCardVo;
 import com.ruoyi.business.domain.vo.IotCredentialVo;
 import com.ruoyi.business.domain.vo.IotStudentOverviewVo;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.IotMapper;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -49,6 +52,7 @@ public class IotExperimentService
 
     @Autowired private IotMapper mapper;
     @Autowired private BizLessonMapper lessonMapper;
+    @Autowired private BizLessonAssignmentMapper assignmentMapper;
     @Autowired private BizStudentMapper studentMapper;
     @Autowired private IotEmqxAdapter emqxAdapter;
     @Autowired private IotSiotCredentialAdapter siotCredentialAdapter;
@@ -125,6 +129,7 @@ public class IotExperimentService
     public Map<String, Object> generateClassGrouping(IotClassGroupingRequest request)
     {
         if (request == null || request.getExperimentId() == null) throw new ServiceException("实验不能为空");
+        requirePasscodeSecret();
         IotExperiment experiment = requireExperiment(request.getExperimentId());
         if (!canManageExperiment(experiment)) throw new ServiceException("无权管理该实验分组");
 
@@ -274,6 +279,7 @@ public class IotExperimentService
     public IotClassConfig rotateClassPasscode(IotRotatePasscodeRequest request)
     {
         if (request == null || request.getExperimentId() == null) throw new ServiceException("实验不能为空");
+        requirePasscodeSecret();
         IotExperiment experiment = requireExperiment(request.getExperimentId());
         if (!canManageExperiment(experiment)) throw new ServiceException("无权轮换该班级口令");
 
@@ -308,6 +314,7 @@ public class IotExperimentService
      */
     public IotClassCardVo getClassCard(Long experimentId, String entryYear, String classCode)
     {
+        requirePasscodeSecret();
         IotExperiment experiment = requireExperiment(experimentId);
         if (!canViewExperiment(experiment)) throw new ServiceException("无权查看该班级配置卡");
 
@@ -366,6 +373,9 @@ public class IotExperimentService
         if (loginUser == null) throw new ServiceException("请先登录");
         BizStudent student = studentMapper.selectBizStudentByUserId(loginUser.getUserId());
         if (student == null) throw new ServiceException("未找到学生档案信息");
+        Long currentDeptId = SecurityUtils.getDeptId();
+        if (student.getDeptId() == null || !student.getDeptId().equals(currentDeptId))
+            throw new ServiceException("学生档案学校与当前登录学校不一致");
 
         IotStudentOverviewVo vo = new IotStudentOverviewVo();
         vo.setEntryYear(student.getEntryYear());
@@ -380,7 +390,23 @@ public class IotExperimentService
             return vo;
         }
 
-        List<IotExperiment> experiments = mapper.selectExperimentsByLesson(lessonId, student.getDeptId());
+        // 学生只能查看本班当前指派课程，不能靠猜测 lessonId 读取同校其他课程的实验元数据。
+        Long currentLessonId = assignmentMapper.selectCurrentLessonByClass(
+                student.getEntryYear(), normalizeClass(student.getClassCode()), currentDeptId);
+        if (currentLessonId == null || !lessonId.equals(currentLessonId))
+            throw new ServiceException("只能查看当前课程的物联网实验");
+
+        // 课程级物联网开关：教师在课程设计中未开启时，即使历史存在实验也不展示。
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        boolean lessonIotEnabled = lesson != null && Boolean.TRUE.equals(lesson.getIotEnabled());
+        vo.setIotEnabled(lessonIotEnabled);
+        if (!lessonIotEnabled)
+        {
+            vo.setHasExperiment(false);
+            return vo;
+        }
+
+        List<IotExperiment> experiments = mapper.selectExperimentsByLesson(lessonId, currentDeptId);
         if (experiments == null || experiments.isEmpty())
         {
             vo.setHasExperiment(false);
@@ -565,6 +591,56 @@ public class IotExperimentService
         return result;
     }
 
+    /**
+     * 教师数据收集：分页查询实验收到的学生/设备上报消息，并返回班级内小组消息汇总。
+     * 数据来自设备经 MQTT 上报后入库（IOT_MQTT_ENABLED 开启时才有真实数据）。
+     */
+    public Map<String, Object> listMessages(Long experimentId, String entryYear, String classCode,
+                                            Long groupId, String payloadType, String keyword,
+                                            Integer pageNum, Integer pageSize)
+    {
+        IotExperiment experiment = requireExperiment(experimentId);
+        if (!canViewExperiment(experiment)) throw new ServiceException("无权查看该实验数据");
+        boolean manager = canManageExperiment(experiment);
+        String ey = StringUtils.trimToNull(entryYear);
+        String cc = classCode == null ? null : classCode.replace("班", "").trim();
+        if (StringUtils.isEmpty(cc)) cc = null;
+        String type = StringUtils.trimToNull(payloadType);
+        String word = StringUtils.trimToNull(keyword);
+
+        int page = pageNum == null || pageNum < 1 ? 1 : pageNum;
+        int size = pageSize == null || pageSize < 1 ? 20 : Math.min(pageSize, 100);
+        int offset = (page - 1) * size;
+
+        List<IotMessage> rows;
+        int total;
+        if (manager)
+        {
+            rows = mapper.selectMessagePage(experimentId, ey, cc, groupId, type, word, offset, size);
+            total = mapper.countMessagePage(experimentId, ey, cc, groupId, type, word);
+        }
+        else
+        {
+            rows = mapper.selectMessagePageForTeacher(experimentId, ey, cc, groupId, type, word,
+                    SecurityUtils.getUserId(), SecurityUtils.getDeptId(), offset, size);
+            total = mapper.countMessagePageForTeacher(experimentId, ey, cc, groupId, type, word,
+                    SecurityUtils.getUserId(), SecurityUtils.getDeptId());
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows == null ? Collections.emptyList() : rows);
+        result.put("total", total);
+        if (ey != null && cc != null)
+        {
+            List<Map<String, Object>> stats = manager
+                    ? mapper.selectMessageGroupStats(experimentId, ey, cc)
+                    : mapper.selectMessageGroupStatsForTeacher(experimentId, ey, cc,
+                            SecurityUtils.getUserId(), SecurityUtils.getDeptId());
+            result.put("stats", stats == null ? Collections.emptyList() : stats);
+        }
+        return result;
+    }
+
     private Map<String, Object> rotateCredential(IotDevice device, IotExperiment experiment)
     {
         boolean sharedCredential = mqttProperties.useSharedDeviceCredential();
@@ -635,6 +711,12 @@ public class IotExperimentService
                 || SecurityUtils.getUserId().equals(lesson.getCreatorId());
     }
 
+    private void requirePasscodeSecret()
+    {
+        if (org.apache.commons.lang3.StringUtils.isBlank(mqttProperties.getPasscodeSecret()))
+            throw new ServiceException("物联网口令加密密钥未配置，请先设置 IOT_PASSCODE_SECRET");
+    }
+
     private boolean canViewLesson(BizLesson lesson)
     {
         return canManageLesson(lesson) || mapper.countTeacherLessonScope(lesson.getLessonId(), SecurityUtils.getUserId(), SecurityUtils.getDeptId()) > 0;
@@ -662,21 +744,59 @@ public class IotExperimentService
 
     private String safe(Object value) { return String.valueOf(value).replaceAll("[^A-Za-z0-9_-]", "_"); }
 
+    private String normalizeClass(String value)
+    {
+        return value == null ? "" : value.replace("班", "").trim();
+    }
+
     private String parseBrokerHost(String brokerUrl)
     {
-        if (brokerUrl == null) return "10.52.1.129";
-        String s = brokerUrl.replace("tcp://", "").replace("mqtt://", "").replace("ssl://", "");
-        int colon = s.indexOf(':');
-        return colon > 0 ? s.substring(0, colon) : s;
+        if (brokerUrl == null || brokerUrl.trim().isEmpty()) return "10.52.1.129";
+        String value = brokerUrl.trim();
+        try
+        {
+            URI uri = new URI(value.contains("://") ? value : "tcp://" + value);
+            String host = uri.getHost();
+            if (host != null && !host.trim().isEmpty())
+            {
+                return host.startsWith("[") && host.endsWith("]")
+                        ? host.substring(1, host.length() - 1) : host;
+            }
+        }
+        catch (URISyntaxException ignored)
+        {
+            // 兼容旧配置中的非标准地址，下面只保留主机部分，避免坏配置阻断页面加载。
+        }
+        String host = value.replaceFirst("^[A-Za-z][A-Za-z0-9+.-]*://", "");
+        int slash = host.indexOf('/');
+        if (slash >= 0) host = host.substring(0, slash);
+        if (host.startsWith("["))
+        {
+            int closing = host.indexOf(']');
+            if (closing > 0) return host.substring(1, closing);
+        }
+        int colon = host.indexOf(':');
+        return colon > 0 ? host.substring(0, colon) : host;
     }
 
     private int parseBrokerPort(String brokerUrl)
     {
-        if (brokerUrl == null) return 1883;
-        int separator = brokerUrl.lastIndexOf(':');
-        if (separator >= 0)
+        if (brokerUrl == null || brokerUrl.trim().isEmpty()) return 1883;
+        String value = brokerUrl.trim();
+        try
         {
-            try { return Integer.parseInt(brokerUrl.substring(separator + 1)); }
+            URI uri = new URI(value.contains("://") ? value : "tcp://" + value);
+            if (uri.getPort() > 0 && uri.getPort() <= 65535) return uri.getPort();
+        }
+        catch (URISyntaxException ignored) { }
+        int separator = value.lastIndexOf(':');
+        if (separator >= 0 && separator < value.length() - 1)
+        {
+            try
+            {
+                int port = Integer.parseInt(value.substring(separator + 1));
+                if (port > 0 && port <= 65535) return port;
+            }
             catch (NumberFormatException ignored) { }
         }
         return 1883;

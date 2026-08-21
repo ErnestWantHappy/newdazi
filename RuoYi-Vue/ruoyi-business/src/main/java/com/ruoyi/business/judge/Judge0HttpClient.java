@@ -27,7 +27,22 @@ public class Judge0HttpClient implements Judge0Client {
         return toResult(response);
     }
     @Override public Judge0Result poll(String token) { return toResult(restTemplate().exchange(url("/submissions/" + token + "?base64_encoded=false"), HttpMethod.GET, new HttpEntity<Void>(headers()), Map.class).getBody()); }
-    private RestTemplate restTemplate() { SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory(); f.setConnectTimeout(properties.getConnectTimeoutMs()); f.setReadTimeout(properties.getReadTimeoutMs()); return new RestTemplate(f); }
+    // RestTemplate 线程安全；复用单例避免每次判题都重建连接（整班集中交编程题时显著减少握手开销）。
+    private volatile RestTemplate cachedRestTemplate;
+
+    private RestTemplate restTemplate() {
+        if (cachedRestTemplate == null) {
+            synchronized (this) {
+                if (cachedRestTemplate == null) {
+                    SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+                    f.setConnectTimeout(properties.getConnectTimeoutMs());
+                    f.setReadTimeout(properties.getReadTimeoutMs());
+                    cachedRestTemplate = new RestTemplate(f);
+                }
+            }
+        }
+        return cachedRestTemplate;
+    }
     private HttpHeaders headers() { HttpHeaders h = new HttpHeaders(); h.setContentType(MediaType.APPLICATION_JSON); h.set(properties.getAuthHeader(), properties.getAuthToken()); return h; }
     private String url(String path) { return properties.getBaseUrl().replaceAll("/+$", "") + path; }
     private Judge0Result toResult(Map value) {

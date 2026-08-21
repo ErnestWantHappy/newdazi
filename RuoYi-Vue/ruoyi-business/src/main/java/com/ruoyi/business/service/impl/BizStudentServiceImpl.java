@@ -83,12 +83,8 @@ public class BizStudentServiceImpl implements IBizStudentService
             bizStudent.setDeptId(currentDeptId);
             bizStudent.setTeacherUserId(currentUserId);
         }
-        else if (bizStudent.getDeptId() == null && currentDeptId != null)
-        {
-            // 管理员未指定校区时默认沿用当前选中的校区
-            bizStudent.setDeptId(currentDeptId);
-            bizStudent.setTeacherUserId(currentUserId);
-        }
+        // 管理员未指定校区时保留空条件，展示其权限范围内的全部学生；
+        // 传入 deptId 时仍按页面明确选择的校区过滤，避免默认部门造成空列表。
         return bizStudentMapper.selectBizStudentList(bizStudent);
     }
 

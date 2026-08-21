@@ -87,6 +87,9 @@ public class LessonInfoVo {
     /** 是否存在已开启的班级在线协作房间，用于教师首页显示入口。 */
     private boolean hasCollaboration;
 
+    /** 课程级物联网开关，用于教师首页课程卡片显示物联入口。 */
+    private boolean iotEnabled;
+
     /** 课程用途：assessment 常规课 / attendance 课堂考勤 */
     private String lessonMode;
 
@@ -121,6 +124,14 @@ public class LessonInfoVo {
 
     public void setHasCollaboration(boolean hasCollaboration) {
         this.hasCollaboration = hasCollaboration;
+    }
+
+    public boolean isIotEnabled() {
+        return iotEnabled;
+    }
+
+    public void setIotEnabled(boolean iotEnabled) {
+        this.iotEnabled = iotEnabled;
     }
 
     public String getLessonMode() {

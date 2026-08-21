@@ -360,6 +360,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         detailVo.setAutoAdvanceThresholdPct(lesson.getAutoAdvanceThresholdPct() != null ? lesson.getAutoAdvanceThresholdPct() : 50);
         detailVo.setAutoAdvanceDelayHours(lesson.getAutoAdvanceDelayHours() != null
                 ? lesson.getAutoAdvanceDelayHours() : new java.math.BigDecimal("2.0"));
+        // 物联网开关：考勤课一律按关闭返回，前端仅对常规课显示入口。
+        detailVo.setIotEnabled(!attendanceDetail && Boolean.TRUE.equals(lesson.getIotEnabled()));
         detailVo.setQuestions(questions);
         detailVo.setAssignedClassCodes(assignedClassCodes);
         detailVo.setAllClassesInGrade(allClassesInGrade);
@@ -427,6 +429,9 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonToSave.setTeacherNote(lessonDetailVo.getTeacherNote() == null ? "" : lessonDetailVo.getTeacherNote().trim());
         // 推进策略：考勤强制关；常规课一律采用教师统一策略（不在设计器逐课配置）
         applyTeacherAdvancePolicyToLesson(lessonToSave, userId, deptId, normalizedMode);
+        // 物联网开关：考勤课强制关闭；常规课按设计器选择保存。
+        lessonToSave.setIotEnabled("attendance".equals(normalizedMode)
+                ? Boolean.FALSE : Boolean.TRUE.equals(lessonDetailVo.getIotEnabled()));
 
         if (lessonToSave.getLessonId() == null) {
             lessonToSave.setCreatorId(userId);

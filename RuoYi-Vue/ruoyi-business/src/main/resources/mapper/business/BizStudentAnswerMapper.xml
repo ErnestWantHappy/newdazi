@@ -74,12 +74,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             preview_last_retry_time = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_last_retry_time, VALUES(preview_last_retry_time)),
             preview_error_message = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_error_message, VALUES(preview_error_message)),
             is_correct = VALUES(is_correct),
-            score = VALUES(score),
+            <!-- 打字题(keepBestScore=true)重复提交/弱网重发时保留历史最好成绩，避免慢的一次覆盖快的一次；其余题型仍按最新提交覆盖。 -->
+            score = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(score, 0), COALESCE(VALUES(score), 0)), VALUES(score)),
             answer_time = VALUES(answer_time),
             submit_time = VALUES(submit_time),
-            typing_speed = VALUES(typing_speed),
-            accuracy_rate = VALUES(accuracy_rate),
-            completion_rate = VALUES(completion_rate),
+            typing_speed = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(typing_speed, 0), COALESCE(VALUES(typing_speed), 0)), VALUES(typing_speed)),
+            accuracy_rate = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(accuracy_rate, 0), COALESCE(VALUES(accuracy_rate), 0)), VALUES(accuracy_rate)),
+            completion_rate = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(completion_rate, 0), COALESCE(VALUES(completion_rate), 0)), VALUES(completion_rate)),
             practical_artifact_id = COALESCE(VALUES(practical_artifact_id), practical_artifact_id),
             practical_version_id = COALESCE(VALUES(practical_version_id), practical_version_id),
             student_answer = VALUES(student_answer)

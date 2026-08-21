@@ -42,6 +42,9 @@ public class LessonDetailVo extends BaseEntity {
     /** 达标后延迟小时数 */
     private java.math.BigDecimal autoAdvanceDelayHours;
 
+    /** 课程级物联网实验开关（考勤课强制关闭） */
+    private Boolean iotEnabled;
+
     /** 关闭时保留当前绑定和历史答卷，仅停止学生访问。 */
     private Boolean guideSheetEnabled;
 
@@ -176,6 +179,14 @@ public class LessonDetailVo extends BaseEntity {
 
     public void setAutoAdvanceDelayHours(java.math.BigDecimal autoAdvanceDelayHours) {
         this.autoAdvanceDelayHours = autoAdvanceDelayHours;
+    }
+
+    public Boolean getIotEnabled() {
+        return iotEnabled;
+    }
+
+    public void setIotEnabled(Boolean iotEnabled) {
+        this.iotEnabled = iotEnabled;
     }
 
     public Boolean getGuideSheetEnabled() {

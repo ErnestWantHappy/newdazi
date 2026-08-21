@@ -4,9 +4,10 @@
       <div>
         <p class="eyebrow">IOT CLASSROOM</p>
         <h2>物联网实验工作台</h2>
-        <p class="muted">在 Mind+ 中使用掌控板与 SIoT 模块进行编程，通过本页面获取专属 Topic 与课堂参数。</p>
+        <p class="muted">在 Mind+ 的 SIoT 模块中连接 EMQX MQTT 服务，使用掌控板完成编程；本页面提供本组 Topic 与课堂连接参数。</p>
       </div>
       <div class="heading-actions">
+        <el-button text type="primary" @click="goHome">返回学生首页</el-button>
         <el-button icon="Refresh" :loading="loading" @click="loadOverview">刷新状态</el-button>
       </div>
     </div>
@@ -33,7 +34,9 @@
 
     <el-empty
       v-else-if="!overview?.hasExperiment"
-      description="当前课程暂未配置物联网实验，或教师尚未开启物联活动。"
+      :description="overview?.iotEnabled === false
+        ? '当前课程尚未开启物联网实验，请联系老师先在课程设计中开启物联。'
+        : '当前课程暂未配置物联网实验，或教师尚未开启物联活动。'"
       class="empty-card"
     />
 
@@ -78,7 +81,7 @@
 
             <div class="copy-all-bar mt-3">
               <el-button type="primary" size="large" icon="DocumentCopy" class="full-btn" @click="copyMindPlusConfig">
-                一键复制 Mind+ (SIoT) 配置参数
+                一键复制 Mind+ SIoT / EMQX 配置参数
               </el-button>
             </div>
           </el-card>
@@ -143,11 +146,12 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getIotStudentOverview } from '@/api/business/iot'
 
 const route = useRoute()
+const router = useRouter()
 const lessonId = ref(Number(route.query.lessonId) || undefined)
 const overview = ref(null)
 const loading = ref(false)
@@ -166,6 +170,10 @@ async function loadOverview() {
   } finally {
     loading.value = false
   }
+}
+
+function goHome() {
+  router.push('/student')
 }
 
 async function copyText(text, label = '内容') {

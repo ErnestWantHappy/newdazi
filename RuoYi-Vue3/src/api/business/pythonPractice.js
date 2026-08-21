@@ -5,6 +5,7 @@ export function getTeacherPlan(planId) { return request({ url: `/business/python
 export function createTeacherPlan(data) { return request({ url: '/business/python-practice/teacher/plans', method: 'post', data }) }
 export function deleteTeacherPlan(planId) { return request({ url: `/business/python-practice/teacher/plans/${planId}`, method: 'delete' }) }
 export function addTeacherQuestion(planVersionId, data) { return request({ url: `/business/python-practice/teacher/versions/${planVersionId}/questions`, method: 'post', data }) }
+export function removeTeacherQuestion(planVersionId, questionId) { return request({ url: `/business/python-practice/teacher/versions/${planVersionId}/questions/${questionId}`, method: 'delete' }) }
 export function publishTeacherPlan(planId, planVersionId) { return request({ url: `/business/python-practice/teacher/plans/${planId}/versions/${planVersionId}/publish`, method: 'post' }) }
 export function getTeacherExtensions(planId) { return request({ url: `/business/python-practice/teacher/plans/${planId}/extensions`, method: 'get' }) }
 export function createTeacherExtension(planId, data) { return request({ url: `/business/python-practice/teacher/plans/${planId}/extensions`, method: 'post', data }) }

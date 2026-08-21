@@ -33,16 +33,20 @@
                u.nick_name as student_name, u.user_name, u.dept_id
         from biz_student s
         left join sys_user u on s.user_id = u.user_id
-        <!-- 关联教师班级表，只显示教师管理的班级中的学生 -->
-        <!-- 修复：必须同时匹配 dept_id + entry_year + class_code，避免跨学校数据混合 -->
-        inner join biz_teacher_class tc 
-            on s.entry_year = tc.entry_year 
-            and s.class_code = tc.class_code
-            and u.dept_id = tc.dept_id
+        <!-- 教师按管理班级过滤；管理员按学校直接查询，避免没有教师班级记录时空列表。 -->
+        <if test="teacherUserId != null">
+            inner join biz_teacher_class tc
+                on s.entry_year = tc.entry_year
+                and s.class_code = tc.class_code
+                and u.dept_id = tc.dept_id
+        </if>
         <where>
             <!-- 必须是当前教师管理的班级 -->
             <if test="teacherUserId != null"> and tc.user_id = #{teacherUserId}</if>
-            <if test="deptId != null and deptId != 0"> and tc.dept_id = #{deptId}</if>
+            <choose>
+                <when test="teacherUserId != null and deptId != null and deptId != 0"> and tc.dept_id = #{deptId}</when>
+                <when test="teacherUserId == null and deptId != null and deptId != 0"> and u.dept_id = #{deptId}</when>
+            </choose>
             <!-- 搜索条件 -->
             <if test="studentName != null  and studentName != ''"> and u.nick_name like concat('%', #{studentName}, '%')</if>
             <if test="entryYear != null and entryYear != ''"> and s.entry_year = #{entryYear}</if>

@@ -49,6 +49,10 @@ export function getIotDashboard(experimentId, params = {}) {
   return request({ url: `/business/iot/experiments/${experimentId}/dashboard`, method: 'get', params: query })
 }
 
+export function listIotMessages(experimentId, params = {}) {
+  return request({ url: `/business/iot/experiments/${experimentId}/messages`, method: 'get', params })
+}
+
 export function getIotStudentOverview(lessonId) {
   return request({ url: '/business/iot/student/overview', method: 'get', params: { lessonId } })
 }

@@ -9,6 +9,7 @@
         <result property="questionType"    column="question_type"    />
         <result property="questionContent"    column="question_content"    />
         <result property="grade"    column="grade"    />
+        <result property="difficulty" column="difficulty" />
         <result property="semester"    column="semester"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="optionA"    column="option_a"    />
@@ -35,7 +36,7 @@
     </resultMap>
 
     <sql id="selectBizQuestionVo">
-        select q.question_id, q.question_type, q.question_content, q.grade, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name
+        select q.question_id, q.question_type, q.question_content, q.grade, q.difficulty, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name
         from biz_question q
         left join sys_user u on q.creator_id = u.user_id
     </sql>
@@ -45,6 +46,7 @@
         <where>
             <if test="questionType != null  and questionType != ''"> and q.question_type = #{questionType}</if>
             <if test="practicalMode != null and practicalMode != ''"> and q.practical_mode = #{practicalMode}</if>
+            <if test="difficulty != null and difficulty != ''"> and q.difficulty = #{difficulty}</if>
             <if test="questionContent != null  and questionContent != ''"> and q.question_content like concat('%', #{questionContent}, '%')</if>
             <if test="isPublic != null  and isPublic != ''"> and q.is_public = #{isPublic}</if>
             <if test="grade != null "> and q.grade = #{grade}</if>
@@ -73,6 +75,7 @@
             <if test="questionType != null and questionType != ''">question_type,</if>
             <if test="questionContent != null and questionContent != ''">question_content,</if>
             <if test="grade != null">grade,</if>
+            <if test="difficulty != null and difficulty != ''">difficulty,</if>
             <if test="semester != null and semester != ''">semester,</if>
             <if test="lessonNum != null">lesson_num,</if>
             <if test="optionA != null">option_a,</if>
@@ -100,6 +103,7 @@
             <if test="questionType != null and questionType != ''">#{questionType},</if>
             <if test="questionContent != null and questionContent != ''">#{questionContent},</if>
             <if test="grade != null">#{grade},</if>
+            <if test="difficulty != null and difficulty != ''">#{difficulty},</if>
             <if test="semester != null and semester != ''">#{semester},</if>
             <if test="lessonNum != null">#{lessonNum},</if>
             <if test="optionA != null">#{optionA},</if>
@@ -131,6 +135,7 @@
             <if test="questionType != null and questionType != ''">question_type = #{questionType},</if>
             <if test="questionContent != null and questionContent != ''">question_content = #{questionContent},</if>
             <if test="grade != null">grade = #{grade},</if>
+            <if test="difficulty != null and difficulty != ''">difficulty = #{difficulty},</if>
             <if test="semester != null and semester != ''">semester = #{semester},</if>
             <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
             <if test="optionA != null">option_a = #{optionA},</if>
