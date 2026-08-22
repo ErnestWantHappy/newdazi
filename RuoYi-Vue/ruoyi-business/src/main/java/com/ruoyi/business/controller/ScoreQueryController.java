@@ -82,9 +82,18 @@ public class ScoreQueryController extends BaseController {
      */
     @PutMapping("/absent")
     public AjaxResult setAbsent(@RequestBody Map<String, Object> params) {
-        Long lessonId = ((Number) params.get("lessonId")).longValue();
-        Long studentId = ((Number) params.get("studentId")).longValue();
-        Boolean isAbsent = (Boolean) params.get("isAbsent");
+        // 前端可能传字符串或缺失字段，直接强转 Number 会 NPE/500，这里统一做类型校验
+        Object lessonIdValue = params == null ? null : params.get("lessonId");
+        Object studentIdValue = params == null ? null : params.get("studentId");
+        if (!(lessonIdValue instanceof Number) || !(studentIdValue instanceof Number)) {
+            return AjaxResult.error("参数不完整：lessonId 与 studentId 必须为数字");
+        }
+        Long lessonId = ((Number) lessonIdValue).longValue();
+        Long studentId = ((Number) studentIdValue).longValue();
+        Boolean isAbsent = params.get("isAbsent") instanceof Boolean ? (Boolean) params.get("isAbsent") : null;
+        if (isAbsent == null) {
+            return AjaxResult.error("参数不完整：isAbsent 必须为布尔值");
+        }
 
         Long deptId = SecurityUtils.getDeptId();
         Long teacherId = SecurityUtils.getUserId();
@@ -94,24 +103,16 @@ public class ScoreQueryController extends BaseController {
             return AjaxResult.error(scopeError);
         }
 
-        com.ruoyi.business.domain.BizClassroomPerformance performance = performanceMapper.selectByStudentAndLesson(studentId, lessonId);
-        if (performance == null) {
-            performance = new com.ruoyi.business.domain.BizClassroomPerformance();
-            performance.setStudentId(studentId);
-            performance.setLessonId(lessonId);
-            performance.setTeacherId(teacherId);
-            performance.setDeptId(deptId);
-            performance.setScore(0);
-            performance.setReason("请假/缺考");
-            performance.setIsAbsent(isAbsent ? 1 : 0);
-            performanceMapper.insert(performance);
-        } else {
-            performance.setIsAbsent(isAbsent ? 1 : 0);
-            if (isAbsent) {
-                performance.setScore(0); // 清空表现分
-            }
-            performanceMapper.update(performance);
-        }
+        // 原子 upsert：依赖 uk_student_lesson 唯一键，并发双击不再双插/500；
+        // 标记缺考时清零表现分，取消缺考保留原表现分
+        com.ruoyi.business.domain.BizClassroomPerformance performance =
+                new com.ruoyi.business.domain.BizClassroomPerformance();
+        performance.setStudentId(studentId);
+        performance.setLessonId(lessonId);
+        performance.setTeacherId(teacherId);
+        performance.setDeptId(deptId);
+        performance.setIsAbsent(isAbsent ? 1 : 0);
+        performanceMapper.upsertAbsent(performance);
         return AjaxResult.success();
     }
 
@@ -134,6 +135,13 @@ public class ScoreQueryController extends BaseController {
                 performanceMapper.selectByStudentAndLesson(request.getStudentId(), request.getLessonId());
         if (performance != null && performance.getIsAbsent() != null && performance.getIsAbsent() == 1) {
             return AjaxResult.error("该学生本节课已标记请假，请先取消请假后再改分");
+        }
+
+        // 幂等保护：同一 (student, lesson) 只允许一条生效的 ADJUST，重复提交/并发双击直接拒绝
+        BizScoreAdjustment latestAdjustment = scoreAdjustmentMapper.selectLatestByStudentAndLesson(
+                request.getStudentId(), request.getLessonId(), SecurityUtils.getDeptId());
+        if (isActiveHomeworkAdjustment(latestAdjustment)) {
+            return AjaxResult.error("该学生本节课已存在生效的人工修正，请先取消后再改分");
         }
 
         int originalScore = selectRawHomeworkScore(request.getStudentId(), request.getLessonId());

@@ -6,6 +6,7 @@ import com.ruoyi.business.domain.ProgrammingTestCase;
 import com.ruoyi.business.domain.BizQuestion;
 import com.ruoyi.business.domain.ProgrammingQuestionConfig;
 import com.ruoyi.business.judge.Judge0Result;
+import com.ruoyi.business.judge.Judge0Properties;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
@@ -31,6 +32,7 @@ class ProgrammingSubmissionServiceTest {
     @Mock private ProgrammingJudgeMapper programmingMapper;
     @Mock private BizStudentAnswerMapper studentAnswerMapper;
     @Mock private BizQuestionMapper questionMapper;
+    @Mock private Judge0Properties properties;
     private ProgrammingSubmissionService service;
 
     @BeforeEach
@@ -39,6 +41,7 @@ class ProgrammingSubmissionServiceTest {
         ReflectionTestUtils.setField(service, "programmingMapper", programmingMapper);
         ReflectionTestUtils.setField(service, "studentAnswerMapper", studentAnswerMapper);
         ReflectionTestUtils.setField(service, "questionMapper", questionMapper);
+        ReflectionTestUtils.setField(service, "properties", properties);
     }
 
     @Test
@@ -134,6 +137,46 @@ class ProgrammingSubmissionServiceTest {
     }
 
     @Test
+    void questionOwnerEditReturnsPublicAndHiddenCases() {
+        BizQuestion question = new BizQuestion();
+        question.setQuestionType("practical");
+        question.setPracticalMode("PYTHON");
+        question.setCreatorId(2L);
+        when(questionMapper.selectBizQuestionByQuestionId(1757L)).thenReturn(question);
+        ProgrammingTestCase publicCase = new ProgrammingTestCase();
+        publicCase.setIsPublic("1");
+        ProgrammingTestCase hiddenCase = new ProgrammingTestCase();
+        hiddenCase.setIsPublic("0");
+        when(programmingMapper.selectTestCases(1757L)).thenReturn(
+                java.util.Arrays.asList(publicCase, hiddenCase));
+
+        assertEquals(2, service.getTeacherTestCases(1757L, 2L, false).size());
+        verify(programmingMapper).selectTestCases(1757L);
+        verify(programmingMapper, never()).selectPublicTestCases(1757L);
+    }
+
+    @Test
+    void programmingConfigurationRequiresWeightTotalOfOneHundred() {
+        ProgrammingTestCase publicCase = new ProgrammingTestCase();
+        publicCase.setCaseName("公开样例");
+        publicCase.setExpectedOutput("ok");
+        publicCase.setIsPublic("1");
+        publicCase.setScoreWeight(10D);
+        ProgrammingTestCase hiddenCase = new ProgrammingTestCase();
+        hiddenCase.setCaseName("隐藏测试点");
+        hiddenCase.setExpectedOutput("ok");
+        hiddenCase.setIsPublic("0");
+        hiddenCase.setScoreWeight(10D);
+
+        com.ruoyi.common.exception.ServiceException error = assertThrows(
+                com.ruoyi.common.exception.ServiceException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "validateTestCases",
+                        java.util.Arrays.asList(publicCase, hiddenCase)));
+
+        assertEquals("测试点权重合计必须为 100，当前为 20", error.getMessage());
+    }
+
+    @Test
     void privateQuestionAccessReturnsForbiddenBusinessCode() {
         BizQuestion question = new BizQuestion();
         question.setQuestionType("practical");
@@ -146,5 +189,43 @@ class ProgrammingSubmissionServiceTest {
                 () -> service.getTeacherPreviewCases(1756L, 2L, false));
 
         assertEquals(403, error.getCode());
+    }
+
+    @Test
+    void teacherSaveCannotClaimOrClearSystemExternalId() {
+        BizQuestion question = new BizQuestion();
+        question.setQuestionType("practical");
+        question.setPracticalMode("PYTHON");
+        when(questionMapper.selectBizQuestionByQuestionId(42L)).thenReturn(question);
+        ProgrammingQuestionConfig stored = new ProgrammingQuestionConfig();
+        stored.setExternalId("PYV2-042");
+        when(programmingMapper.selectConfig(42L)).thenReturn(stored);
+        when(properties.getMaxSourceBytes()).thenReturn(65536);
+
+        ProgrammingQuestionConfig request = new ProgrammingQuestionConfig();
+        request.setExternalId("PYV2-999");
+        request.setTitle("教师修改后的标题");
+        request.setTimeLimitSeconds(2D);
+        request.setMemoryLimitKb(131072);
+        request.setMaxProcesses(8);
+        request.setMaxFileSizeKb(1024);
+        request.setMaxOutputKb(64);
+        ProgrammingTestCase publicCase = new ProgrammingTestCase();
+        publicCase.setCaseName("公开样例");
+        publicCase.setExpectedOutput("ok");
+        publicCase.setIsPublic("1");
+        publicCase.setScoreWeight(20D);
+        ProgrammingTestCase hidden = new ProgrammingTestCase();
+        hidden.setCaseName("隐藏测试点");
+        hidden.setExpectedOutput("ok");
+        hidden.setIsPublic("0");
+        hidden.setScoreWeight(80D);
+        request.setTestCases(java.util.Arrays.asList(publicCase, hidden));
+
+        service.saveTeacherConfig(42L, request, 1L, true, "admin");
+
+        ArgumentCaptor<ProgrammingQuestionConfig> captor = ArgumentCaptor.forClass(ProgrammingQuestionConfig.class);
+        verify(programmingMapper).upsertConfig(captor.capture());
+        assertEquals("PYV2-042", captor.getValue().getExternalId());
     }
 }

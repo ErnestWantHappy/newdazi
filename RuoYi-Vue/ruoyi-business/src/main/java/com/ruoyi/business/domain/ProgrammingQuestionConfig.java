@@ -7,6 +7,14 @@ import java.util.List;
 public class ProgrammingQuestionConfig {
     private Long questionId;
     private String languageCode = "python";
+    private String externalId;
+    private String title;
+    private String knowledgePoints;
+    private String noInput = "0";
+    private String validationStatus = "DRAFT";
+    private Date validatedAt;
+    private String validatedBy;
+    private Integer contentVersion = 1;
     private String starterCode;
     private String inputDescription;
     private String outputDescription;
@@ -26,6 +34,14 @@ public class ProgrammingQuestionConfig {
     private List<ProgrammingTestCase> testCases;
     public Long getQuestionId() { return questionId; } public void setQuestionId(Long v) { questionId = v; }
     public String getLanguageCode() { return languageCode; } public void setLanguageCode(String v) { languageCode = v; }
+    public String getExternalId() { return externalId; } public void setExternalId(String v) { externalId = v; }
+    public String getTitle() { return title; } public void setTitle(String v) { title = v; }
+    public String getKnowledgePoints() { return knowledgePoints; } public void setKnowledgePoints(String v) { knowledgePoints = v; }
+    public String getNoInput() { return noInput; } public void setNoInput(String v) { noInput = v; }
+    public String getValidationStatus() { return validationStatus; } public void setValidationStatus(String v) { validationStatus = v; }
+    public Date getValidatedAt() { return validatedAt; } public void setValidatedAt(Date v) { validatedAt = v; }
+    public String getValidatedBy() { return validatedBy; } public void setValidatedBy(String v) { validatedBy = v; }
+    public Integer getContentVersion() { return contentVersion; } public void setContentVersion(Integer v) { contentVersion = v; }
     public String getStarterCode() { return starterCode; } public void setStarterCode(String v) { starterCode = v; }
     public String getInputDescription() { return inputDescription; } public void setInputDescription(String v) { inputDescription = v; }
     public String getOutputDescription() { return outputDescription; } public void setOutputDescription(String v) { outputDescription = v; }

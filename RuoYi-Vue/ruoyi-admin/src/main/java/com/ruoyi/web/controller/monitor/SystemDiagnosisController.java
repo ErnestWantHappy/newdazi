@@ -56,19 +56,79 @@ public class SystemDiagnosisController
     @Autowired
     private ISysPerfEventService perfEventService;
 
+    /**
+     * 单个探针超时预算：collectServer 内含固定 1 秒 OSHI tick 差分采样，
+     * 预算必须明显大于采样窗口，否则冷启动/慢查询时会频繁降级为空数据假象。
+     */
+    private static final int PROBE_TIMEOUT_SECONDS = 4;
+
+    /**
+     * 日志表行数超过该阈值时，topInterfaces 聚合改走轻量 sys_perf_event，避免大表全窗口 Group By。
+     */
+    private static final long OPER_LOG_FALLBACK_ROWS = 1_000_000L;
+
+    /** 探针专用守护线程池：与业务线程池隔离，池内任务彼此独立、互不阻塞。 */
+    private static final java.util.concurrent.ExecutorService PROBE_POOL =
+            java.util.concurrent.Executors.newFixedThreadPool(8, r -> {
+                Thread t = new Thread(r, "diagnosis-probe");
+                t.setDaemon(true);
+                return t;
+            });
+
     @PreAuthorize("@ss.hasAnyRoles('admin,researcher')")
     @GetMapping("/summary")
     public AjaxResult summary(@RequestParam(value = "hours", defaultValue = "24") int hours)
     {
         int diagnosisHours = normalizeHours(hours);
         Map<String, Object> data = new LinkedHashMap<>();
-        Server server = collectServer();
-        Map<String, Object> cache = collectCache();
-        List<Map<String, Object>> slowSql = collectSlowSql();
-        List<Map<String, Object>> errors = queryRecentErrors(diagnosisHours);
-        List<Map<String, Object>> slowOperations = querySlowOperations(diagnosisHours);
-        List<Map<String, Object>> jobs = collectJobs();
-        Map<String, Object> conversion = collectConversion();
+
+        // 所有探针并行发射，主线程按各自 2 秒预算收割，任一慢任务只影响自己那一块数据。
+        java.util.concurrent.Future<Server> serverF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectServer, PROBE_POOL);
+        java.util.concurrent.Future<Map<String, Object>> cacheF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectCache, PROBE_POOL);
+        java.util.concurrent.Future<List<Map<String, Object>>> slowSqlF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectSlowSql, PROBE_POOL);
+        java.util.concurrent.Future<List<Map<String, Object>>> errorsF =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> queryRecentErrors(diagnosisHours), PROBE_POOL);
+        java.util.concurrent.Future<List<Map<String, Object>>> slowOperationsF =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> querySlowOperations(diagnosisHours), PROBE_POOL);
+        java.util.concurrent.Future<List<Map<String, Object>>> topInterfacesF =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> queryTopInterfaces(diagnosisHours), PROBE_POOL);
+        java.util.concurrent.Future<List<Map<String, Object>>> jobsF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectJobs, PROBE_POOL);
+        java.util.concurrent.Future<Map<String, Object>> conversionF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectConversion, PROBE_POOL);
+        java.util.concurrent.Future<Map<String, Object>> threadPoolF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectThreadPool, PROBE_POOL);
+        java.util.concurrent.Future<Long> onlineCountF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::countOnlineUsers, PROBE_POOL);
+        java.util.concurrent.Future<List<Map<String, Object>>> dataSourcesF =
+                java.util.concurrent.CompletableFuture.supplyAsync(this::collectDataSources, PROBE_POOL);
+        java.util.concurrent.Future<List<SysPerfEvent>> perfEventsF =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> perfEventService.selectRecentEvents(diagnosisHours, null), PROBE_POOL);
+
+        // 记录主机探针是否降级：降级时前端必须显示“采集超时”而不是把全零当真实空闲
+        boolean serverDegraded = false;
+        Server server;
+        try
+        {
+            server = serverF.get(PROBE_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+            // 空对象特征：cpuNum 从未赋值为正数，说明 collectServer 内部异常返回了默认实例
+            serverDegraded = server.getCpu() == null || server.getCpu().getCpuNum() <= 0;
+        }
+        catch (Exception e)
+        {
+            server = new Server();
+            serverDegraded = true;
+        }
+        Map<String, Object> cache = await(cacheF, degradedCache());
+        List<Map<String, Object>> slowSql = await(slowSqlF, new ArrayList<>());
+        List<Map<String, Object>> errors = await(errorsF, new ArrayList<>());
+        List<Map<String, Object>> slowOperations = await(slowOperationsF, new ArrayList<>());
+        List<Map<String, Object>> jobs = await(jobsF, new ArrayList<>());
+        Map<String, Object> conversion = await(conversionF, new LinkedHashMap<>());
+        List<SysPerfEvent> perfEvents = await(perfEventsF, new ArrayList<>());
 
         enrichErrors(errors);
         enrichSlowOperations(slowOperations);
@@ -83,20 +143,134 @@ public class SystemDiagnosisController
 
         data.put("diagnosisHours", diagnosisHours);
         data.put("server", server);
+        data.put("serverDegraded", serverDegraded);
+        data.put("nodeVersion", resolveNodeVersion());
         data.put("cache", cache);
-        data.put("threadPool", collectThreadPool());
+        data.put("threadPool", await(threadPoolF, singleEntryMap("available", false)));
         data.put("conversion", conversion);
-        data.put("onlineCount", countOnlineUsers());
-        data.put("dataSources", collectDataSources());
+        data.put("onlineCount", await(onlineCountF, 0L));
+        data.put("dataSources", await(dataSourcesF, new ArrayList<>()));
         data.put("slowSql", slowSql);
         data.put("recentErrors", errors);
         data.put("slowOperations", slowOperations);
-        data.put("topInterfaces", queryTopInterfaces(diagnosisHours));
+        data.put("topInterfaces", await(topInterfacesF, new ArrayList<>()));
         data.put("jobs", jobs);
         data.put("adviceSummary", adviceSummary);
         data.put("health", buildHealth(server, cache, slowSql, errors, slowOperations, conversion, diagnosisHours));
-        data.put("report", buildReport(data, adviceSummary, perfEventService.selectRecentEvents(diagnosisHours, null)));
+        data.put("report", buildReport(data, adviceSummary, perfEvents));
+        // 双保险：递归替换 NaN/Infinity，保证任何探针的异常数值都不会炸掉 JSON 序列化
+        sanitizeNonFiniteNumbers(data);
         return AjaxResult.success(data);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void sanitizeNonFiniteNumbers(Object node)
+    {
+        if (node instanceof Map)
+        {
+            ((Map) node).forEach((k, v) -> {
+                if (v instanceof Double && (((Double) v).isNaN() || ((Double) v).isInfinite()))
+                {
+                    ((Map) node).put(k, 0D);
+                }
+                else if (v instanceof Float && (((Float) v).isNaN() || ((Float) v).isInfinite()))
+                {
+                    ((Map) node).put(k, 0F);
+                }
+                else
+                {
+                    sanitizeNonFiniteNumbers(v);
+                }
+            });
+        }
+        else if (node instanceof List)
+        {
+            for (Object item : (List) node)
+            {
+                sanitizeNonFiniteNumbers(item);
+            }
+        }
+    }
+
+    /** Node.js 版本缓存：仅首次调用探测一次，失败/缺失返回 null，不影响接口。 */
+    private static volatile String NODE_VERSION_CACHE;
+
+    /**
+     * 探测本机 Node.js 版本（硬件信息面板展示用）。
+     * 只执行一次 `node -v`，任何异常都静默降级为 null，绝不拖慢诊断接口。
+     */
+    private static String resolveNodeVersion()
+    {
+        if (NODE_VERSION_CACHE != null)
+        {
+            return NODE_VERSION_CACHE.isEmpty() ? null : NODE_VERSION_CACHE;
+        }
+        synchronized (SystemDiagnosisController.class)
+        {
+            if (NODE_VERSION_CACHE != null)
+            {
+                return NODE_VERSION_CACHE.isEmpty() ? null : NODE_VERSION_CACHE;
+            }
+            try
+            {
+                Process p = new ProcessBuilder("node", "-v").redirectErrorStream(true).start();
+                byte[] out = readStreamWithLimit(p.getInputStream(), 64);
+                boolean finished = p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+                if (!finished)
+                {
+                    p.destroyForcibly();
+                }
+                String v = finished ? new String(out, java.nio.charset.StandardCharsets.UTF_8).trim() : "";
+                NODE_VERSION_CACHE = v.matches("^v[0-9.]+.*") ? v : "";
+            }
+            catch (Exception e)
+            {
+                NODE_VERSION_CACHE = "";
+            }
+            return NODE_VERSION_CACHE.isEmpty() ? null : NODE_VERSION_CACHE;
+        }
+    }
+
+    /** 读取进程输出，最多 limit 字节，防止异常输出灌爆内存。 */
+    private static byte[] readStreamWithLimit(java.io.InputStream in, int limit) throws java.io.IOException
+    {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        byte[] chunk = new byte[256];
+        int n;
+        while ((n = in.read(chunk)) != -1 && buf.size() < limit)
+        {
+            buf.write(chunk, 0, n);
+        }
+        in.close();
+        return buf.toByteArray();
+    }
+
+    private <T> T await(java.util.concurrent.Future<T> future, T fallback)
+    {
+        try
+        {
+            return future.get(PROBE_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        catch (Exception e)
+        {
+            return fallback;
+        }
+    }
+
+    private Map<String, Object> degradedCache()
+    {
+        Map<String, Object> cache = new LinkedHashMap<>();
+        cache.put("available", false);
+        cache.put("error", "缓存探针超时或异常");
+        cache.put("dbSize", 0);
+        return cache;
+    }
+
+    private Map<String, Object> singleEntryMap(String key, Object value)
+    {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put(key, value);
+        return map;
     }
 
     @PreAuthorize("@ss.hasAnyRoles('admin,researcher')")
@@ -125,26 +299,57 @@ public class SystemDiagnosisController
 
     private List<Map<String, Object>> queryRecentErrors(int hours)
     {
+        // oper_time 已建索引：范围扫描天然按时间序输出，无全表 Filesort
         return queryList(
                 "select oper_id, title, oper_name, dept_name, oper_url, request_method, oper_time, cost_time, error_msg "
                         + "from sys_oper_log where status = 1 and oper_time >= date_sub(now(), interval "
-                        + hours + " hour) order by oper_time desc limit 10");
+                        + hours + " hour) order by oper_id desc limit 10");
     }
 
     private List<Map<String, Object>> querySlowOperations(int hours)
     {
+        // 主键倒查限窗：内层走 oper_time 索引范围 + oper_id 排序（无 Filesort），最多扫 2000 行；
+        // 外层只对这 2000 行按耗时排序，代价可控。
         return queryList(
                 "select oper_id, title, oper_name, dept_name, oper_url, request_method, oper_time, cost_time, status, error_msg "
-                        + "from sys_oper_log where cost_time >= 1000 and oper_time >= date_sub(now(), interval "
-                        + hours + " hour) order by cost_time desc, oper_time desc limit 10");
+                        + "from (select oper_id, title, oper_name, dept_name, oper_url, request_method, oper_time, cost_time, status, error_msg "
+                        + "from sys_oper_log where cost_time >= 1000 and oper_time >= date_sub(now(), interval " + hours
+                        + " hour) order by oper_id desc limit 2000) recent "
+                        + "order by cost_time desc, oper_time desc limit 10");
     }
 
     private List<Map<String, Object>> queryTopInterfaces(int hours)
     {
+        // 日志表过大时直接从轻量 sys_perf_event 聚合，避免大表全窗口 Group By
+        if (operLogRows() > OPER_LOG_FALLBACK_ROWS)
+        {
+            return queryList(
+                    "select source_url as oper_url, '' as title, count(1) as request_count, round(avg(duration_ms), 0) as avg_cost, max(duration_ms) as max_cost "
+                            + "from sys_perf_event where occur_time >= date_sub(now(), interval " + hours
+                            + " hour) group by source_url order by request_count desc limit 10");
+        }
+        // 常规路径：主键倒查最近 10000 条为聚合上限，杜绝全表扫描
         return queryList(
                 "select oper_url, title, count(1) as request_count, round(avg(cost_time), 0) as avg_cost, max(cost_time) as max_cost "
-                        + "from sys_oper_log where oper_time >= date_sub(now(), interval "
-                        + hours + " hour) group by oper_url, title order by request_count desc, max_cost desc limit 10");
+                        + "from (select oper_url, title, cost_time from sys_oper_log where oper_time >= date_sub(now(), interval "
+                        + hours + " hour) order by oper_id desc limit 10000) recent "
+                        + "group by oper_url, title order by request_count desc, max_cost desc limit 10");
+    }
+
+    /** information_schema 行数估算，毫秒级返回；仅用于是否切换 perf_event 聚合的阈值判断。 */
+    private long operLogRows()
+    {
+        try
+        {
+            Long rows = jdbcTemplate.queryForObject(
+                    "select table_rows from information_schema.tables where table_schema = database() and table_name = 'sys_oper_log'",
+                    Long.class);
+            return rows == null ? 0L : rows;
+        }
+        catch (Exception e)
+        {
+            return 0L;
+        }
     }
 
     private List<Map<String, Object>> collectJobs()

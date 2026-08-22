@@ -2,11 +2,13 @@
 
 > **历史事实索引（2026-08-20 起不再作为默认入口）**：新接手 AI 必须先读 `contexts/PROJECT_CORE.md` 和 `docs/architecture/INDEX.md`。本文件保留原始发布、排障和回滚证据；其中出现的旧“当前接力焦点”均为当时快照，不能覆盖最新核心事实。遇到冲突时，以当前代码、可复核部署/数据库证据和有日期的最新记录为准。
 
-> **版本**：v3.29
-> **更新时间**：2026-08-21
+> **版本**：v3.30
+> **更新时间**：2026-08-22
 > **核心定位**：中小学信息科技 **教学 + 多维度测评**（选择/判断/操作/打字、批改、学情、导学单、区域抽测）。  
 > **文档用途**：多 AI / 人工接力的 **业务真相**；操作纪律见 `AGENTS.md`。  
 > **文档恢复**：2026-07-22 按方案 A，以热修/发布壳为底座，从 Git `main`（`a88cdcd` 重写前完整版，约 1113 行）回填业务语言、角色、流程、库表、规则与技术细节；机位锁等否决项仅作摘要，不恢复为待实现。
+
+> **Python OJ 统一题库与练习题单发布（2026-08-22，已上线）**：已取消“年级基础题单 + 班级加练包”双模型，统一为可关联一个或多个负责班级的“练习题单”；同班允许多个题单，已发布修改复制新草稿，无作答记录可硬删除、有记录则归档并可恢复。教师端已上线三步出题、双 Sheet 导入、参考代码全测试点验证、课程设计器式选题、活动/已删除题单和统一学情；学生端已上线可拖动三窗格 OJ、自定义输入、样例运行、正式提交、测试点矩阵和提交记录。120 道 `PYV2-001`～`PYV2-120` 系统题已导入正式库，共 720 个测试点（公开 240、隐藏 480），生产 Judge0 全量 720/720 通过；题库 SQL 重复执行数量不变。发布前整库备份为 `D:\program\3009dazipingtai\backups\20260822_161015_before_python_oj_unified_v2\ry-vue_full.sql`，81,624,952 bytes，SHA-256 `85D2BBBCCDB4FEAF1E2BC7DBEA3FAAD3F2223EAA9F5009B4E9AEE983D9BC57B1`。活动后端为 `releases\20260822_164900_python_oj_unified_v2_r5\backend`，活动前端为 `releases\20260822_164500_python_oj_unified_v2_r3\frontend`；3009/3010 HTTP 200，教师建题单/选题/发布/删除和学生可见性 API 冒烟通过。旧 V1 80 题因课程 276 仍使用其中 10 题而保留，推荐只选择 V2；待课程切换后再精确清理。回滚应用可切回保留的 `20260821_resilience_v1`，新增表字段可兼容留存。
 
 > **课程级物联开关与协作体验修复发布（2026-08-21，已上线）**：正式 release `D:\program\3009dazipingtai\releases\20260821_iot_course_switch_v1`（backend/config/frontend）。物联入口由全局显示改为课程级开关：`sql/iot_course_switch_v1.sql` 给 `biz_lesson` 增加 `iot_enabled`（幂等，按已有 `biz_iot_experiment` 回填；后检 3 门课开启、实验课未开启为 0），教师课程设计器新增「开启物联网」开关（考勤课强制关闭），教师首页课程卡片底部入口条与学生首页按钮按开关显示，学生页带 `lessonId` 进入；教师物联页新增「学生数据收集」卡（小组统计 + 消息分页 + 类型/关键词过滤，接口 `GET /business/iot/experiments/{id}/messages`）。协作侧修复「协作文档版本已变化」频繁提示（保存链串行化 + 版本 CAS 失败时重拉会话重试一次，此前 3010 线上为无重试旧构建，15 秒自动保存必带旧版本号）与 OnlyOffice 参与人身份显示（学生 a 编辑却显示学生 b、教师只看到自己），并新增在线成员列表与版本历史接口 `GET /business/collaboration/room/{roomId}/revisions`。
 > 写库前整库备份 `D:\program\3009dazipingtai\backups\20260821_185607_before_iot_course_switch_9f29fff\ry-vue_full.sql`（140,735,436 bytes，SHA-256 `88F1BA8F24CC9ED3FB9A5C7FF2F4C8B05E229286365021691A51323D12B44664`）。新 release JAR SHA-256 `BC48A6F484CE7813AB7D196D99E49AA27DDF19EA456514F31654AF70ECD55F57`，application.yml `09C7574BBAC83192D5C5350F91D8347AEE14E3F8FD2CD19C07EBD8A21EA2067A`，前端 616 文件与本地一致。NSSM `NewDaziBackend3009` 已指向新 release 并重启，环境变量新增 `IOT_MQTT_ENABLED=true`、`IOT_MQTT_USERNAME/PASSWORD`（platform_iot_subscriber，凭据见 secrets.local.md）、`IOT_PASSCODE_SECRET`（与历史默认值一致以兼容存量密文）、`IOT_EMQX_API_KEY/SECRET`；外置 application.yml `iot.mqtt.enabled=true`、broker `tcp://10.52.1.129:1883`。3009 HTTP 200，日志确认「物联网 MQTT 接收器已连接 broker=tcp://10.52.1.129:1883 subscription=county/#」；3010 Nginx 已切新前端并 reload（线上 index.html SHA-256 与新版一致）；生产 API 验证：学生 2020710101 current-lesson `iotEnabled=true`、教师课程详情 252 `iotEnabled=True`、实验 1 消息接口 200（共 0 条，待设备上报）。

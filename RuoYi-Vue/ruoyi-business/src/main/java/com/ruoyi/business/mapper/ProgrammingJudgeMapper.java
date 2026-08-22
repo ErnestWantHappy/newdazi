@@ -14,7 +14,12 @@ public interface ProgrammingJudgeMapper {
     List<ProgrammingTestCase> selectTestCases(@Param("questionId") Long questionId);
     List<ProgrammingTestCase> selectPublicTestCases(@Param("questionId") Long questionId);
     int upsertConfig(ProgrammingQuestionConfig config);
+    int updateValidationStatus(@Param("questionId") Long questionId, @Param("status") String status,
+                               @Param("username") String username);
+    int countConfigByTitle(@Param("title") String title);
+    int countQuestionDependencies(@Param("questionId") Long questionId);
     int deleteTestCases(@Param("questionId") Long questionId);
+    int deleteConfig(@Param("questionId") Long questionId);
     int insertTestCase(ProgrammingTestCase testCase);
     ProgrammingDraft selectDraft(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId, @Param("questionId") Long questionId);
     int upsertDraft(ProgrammingDraft draft);

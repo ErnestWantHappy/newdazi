@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS biz_python_practice_question_snapshot (
     source_id BIGINT NOT NULL,
     question_id BIGINT NOT NULL,
     snapshot_hash VARCHAR(64) NOT NULL DEFAULT '',
+    question_title VARCHAR(255) NULL,
+    difficulty VARCHAR(32) NULL,
+    knowledge_points VARCHAR(500) NULL,
+    no_input CHAR(1) NOT NULL DEFAULT '0',
     question_content MEDIUMTEXT NOT NULL,
     input_description MEDIUMTEXT NULL,
     output_description MEDIUMTEXT NULL,
@@ -152,7 +156,8 @@ CREATE TABLE IF NOT EXISTS biz_python_practice_submission (
     question_id BIGINT NOT NULL,
     snapshot_id BIGINT NOT NULL,
     source_code MEDIUMTEXT NOT NULL,
-    submit_type VARCHAR(16) NOT NULL COMMENT 'RUN或SUBMIT',
+    custom_input MEDIUMTEXT NULL COMMENT 'CUSTOM_RUN 的学生自定义输入',
+    submit_type VARCHAR(16) NOT NULL COMMENT 'RUN、SUBMIT或CUSTOM_RUN',
     status_code VARCHAR(32) NOT NULL DEFAULT 'WAITING',
     status_message VARCHAR(255) NOT NULL DEFAULT '',
     score INT NULL,
@@ -168,6 +173,24 @@ CREATE TABLE IF NOT EXISTS biz_python_practice_submission (
     KEY idx_python_practice_submission_scope (source_type, source_id, question_id, status_code),
     KEY idx_python_practice_submission_recovery (status_code, submitted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Python刷题提交历史';
+
+CREATE TABLE IF NOT EXISTS biz_python_practice_submission_case (
+    submission_case_id BIGINT NOT NULL AUTO_INCREMENT,
+    submission_id BIGINT NOT NULL,
+    snapshot_case_id BIGINT NULL,
+    case_name VARCHAR(128) NOT NULL DEFAULT '',
+    is_public CHAR(1) NOT NULL DEFAULT '0',
+    status_code VARCHAR(32) NOT NULL,
+    judge0_status_id INT NULL,
+    time_seconds DECIMAL(10,3) NULL,
+    memory_kb INT NULL,
+    output_text MEDIUMTEXT NULL,
+    error_summary VARCHAR(1000) NULL,
+    order_num INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (submission_case_id),
+    UNIQUE KEY uk_python_practice_submission_case_order (submission_id, order_num),
+    KEY idx_python_practice_submission_case_submission (submission_id, is_public, order_num)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Python刷题逐测试点判题结果';
 
 CREATE TABLE IF NOT EXISTS biz_python_practice_progress (
     progress_id BIGINT NOT NULL AUTO_INCREMENT,

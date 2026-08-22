@@ -430,7 +430,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
 import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
 import { listQuestion } from "@/api/business/question";
-import { getProgrammingQuestion } from "@/api/business/programming";
+import { previewProgrammingQuestion } from "@/api/business/programming";
 import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
@@ -999,7 +999,7 @@ function handlePreviewFile(row) {
 }
 
 async function openPythonPreview(row) {
-  const response = await getProgrammingQuestion(Number(row.questionId));
+  const response = await previewProgrammingQuestion(Number(row.questionId));
   pythonPreviewQuestion.value = row;
   pythonPreviewConfig.value = response.data || {};
   pythonPreviewCases.value = response.testCases || [];

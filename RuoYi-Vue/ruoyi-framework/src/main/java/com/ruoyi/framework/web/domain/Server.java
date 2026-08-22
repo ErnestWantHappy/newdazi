@@ -140,6 +140,7 @@ public class Server
         long idle = ticks[TickType.IDLE.getIndex()] - prevTicks[TickType.IDLE.getIndex()];
         long totalCpu = user + nice + cSys + idle + iowait + irq + softirq + steal;
         cpu.setCpuNum(processor.getLogicalProcessorCount());
+        cpu.setModel(processor.getProcessorIdentifier().getName());
         cpu.setTotal(totalCpu);
         cpu.setSys(cSys);
         cpu.setUsed(user);

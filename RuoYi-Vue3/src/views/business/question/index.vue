@@ -1,5 +1,10 @@
 <template>
   <div class="app-container">
+    <el-radio-group v-model="bankView" class="bank-view-tabs" @change="changeBankView">
+      <el-radio-button label="ALL">全部题目</el-radio-button>
+      <el-radio-button label="COMMON">常规题库</el-radio-button>
+      <el-radio-button label="PYTHON">Python 编程题库</el-radio-button>
+    </el-radio-group>
     <!-- 搜索区域 -->
     <el-form
       :model="queryParams"
@@ -8,7 +13,7 @@
       v-show="showSearch"
       label-width="68px"
     >
-      <el-form-item label="年级" prop="grade">
+      <el-form-item v-if="bankView !== 'PYTHON'" label="年级" prop="grade">
         <el-select
           v-model="queryParams.grade"
           placeholder="请选择年级"
@@ -23,7 +28,7 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="学期" prop="semester">
+      <el-form-item v-if="bankView !== 'PYTHON'" label="学期" prop="semester">
         <el-select
           v-model="queryParams.semester"
           placeholder="请选择学期"
@@ -38,7 +43,7 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="第几课" prop="lessonNum">
+      <el-form-item v-if="bankView !== 'PYTHON'" label="第几课" prop="lessonNum">
         <el-select
           v-model="queryParams.lessonNum"
           placeholder="请选择"
@@ -53,7 +58,7 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="题目类型" prop="questionType">
+      <el-form-item v-if="bankView !== 'PYTHON'" label="题目类型" prop="questionType">
         <el-select
           v-model="queryParams.questionType"
           placeholder="请选择类型"
@@ -68,7 +73,7 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="操作方式" prop="practicalMode">
+      <el-form-item v-if="bankView !== 'PYTHON'" label="操作方式" prop="practicalMode">
         <el-select v-model="queryParams.practicalMode" placeholder="请选择操作方式" clearable style="width: 200px">
           <el-option label="Python 在线编程" value="PYTHON" />
           <el-option label="文件作品" value="FILE" />
@@ -136,6 +141,7 @@
       </el-col>
       <el-col :span="1.5">
         <el-button
+          v-if="bankView !== 'PYTHON'"
           type="info"
           plain
           icon="Upload"
@@ -143,6 +149,9 @@
           v-hasPermi="['business:question:import']"
           >批量导入</el-button
         >
+      </el-col>
+      <el-col v-if="bankView === 'PYTHON'" :span="1.5">
+        <el-button type="info" plain icon="Upload" @click="openPythonImport" v-hasPermi="['business:question:import']">Python 双 Sheet 导入</el-button>
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -196,6 +205,7 @@
         width="80"
       />
       <el-table-column
+        v-if="bankView !== 'PYTHON'"
         label="题目类型"
         align="center"
         prop="questionType"
@@ -207,7 +217,7 @@
             :value="scope.row.questionType"
         /></template>
       </el-table-column>
-      <el-table-column label="操作方式" align="center" prop="practicalMode" width="140">
+      <el-table-column v-if="bankView !== 'PYTHON'" label="操作方式" align="center" prop="practicalMode" width="140">
         <template #default="scope">
           <span v-if="scope.row.questionType === 'practical'">
             {{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}
@@ -215,28 +225,27 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
+      <el-table-column v-if="bankView === 'PYTHON'" label="题目标题" align="left" prop="programmingTitle" min-width="180" show-overflow-tooltip />
       <el-table-column
-        label="题目内容"
+        :label="bankView === 'PYTHON' ? '题目描述' : '题目内容'"
         align="left"
         prop="questionContent"
         :show-overflow-tooltip="true"
       />
-      <el-table-column
+      <el-table-column v-if="bankView !== 'PYTHON'"
         label="总字数"
         align="center"
         prop="wordCount"
         width="100"
       />
-      <el-table-column
+      <el-table-column v-if="bankView !== 'PYTHON'"
         label="打字时长(分)"
         align="center"
         prop="typingDuration"
         width="120"
       />
-      <el-table-column label="年级" align="center" prop="grade" width="100">
-        <template #default="scope"
-          ><dict-tag :options="biz_grade" :value="String(scope.row.grade)"
-        /></template>
+      <el-table-column v-if="bankView !== 'PYTHON'" label="年级" align="center" prop="grade" width="100">
+        <template #default="scope"><span v-if="scope.row.practicalMode === 'PYTHON'">-</span><dict-tag v-else :options="biz_grade" :value="String(scope.row.grade)" /></template>
       </el-table-column>
       <el-table-column label="难度" align="center" prop="difficulty" width="90">
         <template #default="scope">
@@ -244,14 +253,10 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="学期" align="center" prop="semester" width="100">
-        <template #default="scope"
-          ><dict-tag
-            :options="biz_semester"
-            :value="String(scope.row.semester)"
-        /></template>
+      <el-table-column v-if="bankView !== 'PYTHON'" label="学期" align="center" prop="semester" width="100">
+        <template #default="scope"><span v-if="scope.row.practicalMode === 'PYTHON'">-</span><dict-tag v-else :options="biz_semester" :value="String(scope.row.semester)" /></template>
       </el-table-column>
-      <el-table-column
+      <el-table-column v-if="bankView !== 'PYTHON'"
         label="第几课"
         align="center"
         prop="lessonNum"
@@ -261,6 +266,11 @@
           <span v-if="scope.row.lessonNum">第{{ scope.row.lessonNum }}课</span>
           <span v-else>-</span>
         </template>
+      </el-table-column>
+      <el-table-column v-if="bankView === 'PYTHON'" label="知识点" align="left" prop="knowledgePoints" min-width="150" show-overflow-tooltip />
+      <el-table-column v-if="bankView === 'PYTHON'" label="测试点" align="center" prop="testCaseCount" width="80" />
+      <el-table-column v-if="bankView === 'PYTHON'" label="验证状态" align="center" prop="validationStatus" width="110">
+        <template #default="scope"><el-tag :type="validationTagType(scope.row.validationStatus)">{{ validationLabel(scope.row.validationStatus) }}</el-tag></template>
       </el-table-column>
       <el-table-column
         label="是否公开"
@@ -325,7 +335,7 @@
     />
 
     <!-- 添加或修改对话框 -->
-    <el-dialog :title="title" v-model="open" width="800px" append-to-body>
+    <el-dialog :title="title" v-model="open" width="980px" append-to-body>
       <el-form
         ref="questionRef"
         :model="form"
@@ -333,7 +343,7 @@
         label-width="120px"
       >
         <!-- 通用表单项 -->
-        <el-row>
+        <el-row v-if="!isPythonPracticalQuestion(form)">
           <el-col :span="12">
             <el-form-item label="题目类型" prop="questionType">
               <el-select
@@ -362,7 +372,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row>
+        <el-row v-if="!isPythonPracticalQuestion(form)">
           <el-col :span="12">
             <el-form-item label="年级" prop="grade">
               <el-select v-model="form.grade" placeholder="请选择年级">
@@ -387,17 +397,8 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="form.questionType === 'practical' && form.practicalMode === 'PYTHON'" :span="12">
-            <el-form-item label="难度" prop="difficulty">
-              <el-select v-model="form.difficulty" placeholder="请选择难度">
-                <el-option label="简单" value="SIMPLE" />
-                <el-option label="中等" value="MEDIUM" />
-                <el-option label="困难" value="HARD" />
-              </el-select>
-            </el-form-item>
-          </el-col>
         </el-row>
-        <el-row>
+        <el-row v-if="!isPythonPracticalQuestion(form)">
           <el-col :span="12">
             <el-form-item label="第几课" prop="lessonNum">
               <el-select
@@ -415,7 +416,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item :label="questionContentLabel" prop="questionContent">
+        <el-form-item v-if="!isPythonPracticalQuestion(form)" :label="questionContentLabel" prop="questionContent">
           <el-input
             v-model="form.questionContent"
             :rows="questionContentRows"
@@ -515,35 +516,66 @@
           </el-form-item>
         </div>
 
-        <div v-if="form.questionType === 'practical' && form.practicalMode === 'PYTHON'">
-          <el-divider content-position="left">Python 判题配置</el-divider>
-          <el-row :gutter="12">
-            <el-col :span="8"><el-form-item label="时限（秒）"><el-input-number v-model="form.programming.timeLimitSeconds" :min="0.1" :max="10" :step="0.1" /></el-form-item></el-col>
-            <el-col :span="8"><el-form-item label="内存（KB）"><el-input-number v-model="form.programming.memoryLimitKb" :min="16384" :max="524288" :step="1024" /></el-form-item></el-col>
-            <el-col :span="8"><el-form-item label="输出（KB）"><el-input-number v-model="form.programming.maxOutputKb" :min="1" :max="1024" /></el-form-item></el-col>
-          </el-row>
-          <el-row :gutter="12">
-            <el-col :span="12"><el-form-item label="输入说明"><el-input v-model="form.programming.inputDescription" type="textarea" :rows="3" placeholder="说明程序需要读取的数据及格式" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="输出说明"><el-input v-model="form.programming.outputDescription" type="textarea" :rows="3" placeholder="说明程序必须输出的内容及格式" /></el-form-item></el-col>
-          </el-row>
-          <el-row :gutter="12">
-            <el-col :span="8"><el-form-item label="样例解释"><el-input v-model="form.programming.sampleExplanation" type="textarea" :rows="3" /></el-form-item></el-col>
-            <el-col :span="8"><el-form-item label="限制条件"><el-input v-model="form.programming.constraintsText" type="textarea" :rows="3" /></el-form-item></el-col>
-            <el-col :span="8"><el-form-item label="注意事项"><el-input v-model="form.programming.notesText" type="textarea" :rows="3" /></el-form-item></el-col>
-          </el-row>
-          <el-form-item label="起始代码"><el-input v-model="form.programming.starterCode" type="textarea" :rows="6" placeholder="例如：n = int(input())" /></el-form-item>
-          <el-form-item label-width="0">
-            <el-table :data="form.programming.testCases" border>
-              <el-table-column label="名称" min-width="110"><template #default="{ row }"><el-input v-model="row.caseName" /></template></el-table-column>
-              <el-table-column label="输入" min-width="140"><template #default="{ row }"><el-input v-model="row.inputText" type="textarea" :rows="2" /></template></el-table-column>
-              <el-table-column label="期望输出" min-width="140"><template #default="{ row }"><el-input v-model="row.expectedOutput" type="textarea" :rows="2" /></template></el-table-column>
-              <el-table-column label="公开" width="80"><template #default="{ row }"><el-switch v-model="row.isPublic" active-value="1" inactive-value="0" /></template></el-table-column>
-              <el-table-column label="权重" width="120"><template #default="{ row }"><el-input-number v-model="row.scoreWeight" :min="0.1" :step="0.5" /></template></el-table-column>
+        <div v-if="isPythonPracticalQuestion(form)" class="python-wizard">
+          <el-steps :active="pythonStep" align-center finish-status="success" class="python-steps">
+            <el-step title="题面与格式" description="把任务说清楚" />
+            <el-step title="测试点" description="公开样例与隐藏数据" />
+            <el-step title="代码与验证" description="参考代码一键验题" />
+          </el-steps>
+
+          <div v-show="pythonStep === 0" class="python-step-panel">
+            <el-row :gutter="14">
+              <el-col :span="12"><el-form-item label="题目标题" required><el-input v-model="form.programming.title" maxlength="255" placeholder="例如：计算长方形的面积" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item label="难度" prop="difficulty"><el-select v-model="form.difficulty" style="width:100%"><el-option label="简单" value="SIMPLE" /><el-option label="中等" value="MEDIUM" /><el-option label="困难" value="HARD" /></el-select></el-form-item></el-col>
+              <el-col :span="6"><el-form-item label="无输入题"><el-switch v-model="form.programming.noInput" active-value="1" inactive-value="0" /></el-form-item></el-col>
+            </el-row>
+            <el-form-item label="知识点"><el-input v-model="form.programming.knowledgePoints" placeholder="多个知识点用逗号分隔，例如：输入输出,整数运算" /></el-form-item>
+            <el-form-item label="题目描述" prop="questionContent"><el-input v-model="form.questionContent" type="textarea" :rows="5" placeholder="说明已知条件、要完成的任务，不要只写“按题面输入输出”" /></el-form-item>
+            <el-row :gutter="14">
+              <el-col :span="12"><el-form-item label="输入格式"><el-input v-model="form.programming.inputDescription" type="textarea" :rows="3" :disabled="form.programming.noInput === '1'" placeholder="逐行说明类型、数量、分隔方式" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="输出格式"><el-input v-model="form.programming.outputDescription" type="textarea" :rows="3" placeholder="说明输出内容和精度、空格、换行要求" /></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="14">
+              <el-col :span="8"><el-form-item label="数据范围"><el-input v-model="form.programming.constraintsText" type="textarea" :rows="3" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="样例解释"><el-input v-model="form.programming.sampleExplanation" type="textarea" :rows="3" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="提示"><el-input v-model="form.programming.notesText" type="textarea" :rows="3" /></el-form-item></el-col>
+            </el-row>
+          </div>
+
+          <div v-show="pythonStep === 1" class="python-step-panel">
+            <el-alert title="公开测试点会作为样例展示；隐藏测试点只用于正式判题。每行输入输出会原样传给程序。" type="info" :closable="false" />
+            <div class="case-summary">
+              <div>
+                <el-tag type="success">公开样例 {{ programmingPublicCaseCount }} 个</el-tag>
+                <el-tag type="warning">隐藏测试点 {{ programmingHiddenCaseCount }} 个</el-tag>
+                <el-tag :type="programmingWeightTotal === 100 ? 'success' : 'danger'">总权重 {{ programmingWeightTotal }} / 100</el-tag>
+              </div>
+              <el-button link type="primary" @click="distributeProgrammingWeights">平均分配到 100</el-button>
+            </div>
+            <el-alert v-if="programmingWeightTotal !== 100" :title="programmingWeightErrorText" type="error" :closable="false" show-icon />
+            <el-table :data="form.programming.testCases" border class="case-table">
+              <el-table-column label="名称" min-width="120"><template #default="{ row }"><el-input v-model="row.caseName" /></template></el-table-column>
+              <el-table-column label="输入" min-width="180"><template #default="{ row }"><el-input v-model="row.inputText" type="textarea" :rows="3" :disabled="form.programming.noInput === '1'" /></template></el-table-column>
+              <el-table-column label="期望输出" min-width="180"><template #default="{ row }"><el-input v-model="row.expectedOutput" type="textarea" :rows="3" /></template></el-table-column>
+              <el-table-column label="类型" width="130"><template #default="{ row }"><el-select v-model="row.isPublic"><el-option label="公开样例" value="1" /><el-option label="隐藏测试" value="0" /></el-select></template></el-table-column>
+              <el-table-column label="权重" width="120"><template #default="{ row }"><el-input-number v-model="row.scoreWeight" :min="0.1" :step="0.5" controls-position="right" /></template></el-table-column>
               <el-table-column label="操作" width="70"><template #default="{ $index }"><el-button link type="danger" icon="Delete" @click="form.programming.testCases.splice($index, 1)" /></template></el-table-column>
             </el-table>
-            <el-button style="margin-top:10px" type="primary" plain icon="Plus" size="small" @click="addProgrammingCase">添加测试点</el-button>
-            <span style="margin-left:10px;color:#909399;font-size:12px">至少保留一个隐藏测试点；隐藏测试输入和期望输出不会下发给学生。</span>
-          </el-form-item>
+            <div class="case-actions"><el-button type="primary" plain icon="Plus" @click="addProgrammingCase">添加测试点</el-button><span>至少 1 个公开样例和 1 个隐藏测试点；系统题建议 2 个公开、4 个隐藏。</span></div>
+          </div>
+
+          <div v-show="pythonStep === 2" class="python-step-panel">
+            <el-alert :type="validationAlertType" :title="validationStatusText" :closable="false" class="validation-alert" />
+            <el-form-item label="起始代码"><el-input v-model="form.programming.starterCode" type="textarea" :rows="5" placeholder="可留空；如填写，只给出必要结构，不泄露解法" /></el-form-item>
+            <el-form-item label="参考代码" prop="answer" required><el-input v-model="form.answer" type="textarea" :rows="10" placeholder="仅教师可见。保存后系统会用这份代码跑完全部测试点。" /></el-form-item>
+            <el-collapse>
+              <el-collapse-item title="高级资源限制（通常无需修改）" name="limits">
+                <el-row :gutter="12"><el-col :span="8"><el-form-item label="时限（秒）"><el-input-number v-model="form.programming.timeLimitSeconds" :min="0.1" :max="10" :step="0.1" /></el-form-item></el-col><el-col :span="8"><el-form-item label="内存（KB）"><el-input-number v-model="form.programming.memoryLimitKb" :min="16384" :max="524288" :step="1024" /></el-form-item></el-col><el-col :span="8"><el-form-item label="输出（KB）"><el-input-number v-model="form.programming.maxOutputKb" :min="1" :max="1024" /></el-form-item></el-col></el-row>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+
+          <div class="wizard-actions"><el-button v-if="pythonStep > 0" @click="pythonStep--">上一步</el-button><el-button v-if="pythonStep < 2" type="primary" @click="nextPythonStep">下一步</el-button></div>
         </div>
 
         <!-- 动态表单项: 操作题专属 -->
@@ -674,10 +706,31 @@
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button type="primary" @click="submitForm">确 定</el-button>
+          <el-button v-if="!isPythonPracticalQuestion(form)" type="primary" @click="submitForm(false)">确 定</el-button>
+          <template v-else>
+            <el-button @click="submitForm(false)">保存草稿</el-button>
+            <el-button type="primary" :loading="validating" @click="submitForm(true)">保存并验证全部测试点</el-button>
+          </template>
           <el-button @click="cancel">取 消</el-button>
         </div>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="pythonImportOpen" title="导入 Python OJ 题目" width="760px" append-to-body>
+      <el-alert title="Excel 必须包含“题目”和“测试点”两个 Sheet。上传只做预检，不会立即写入题库。" type="info" :closable="false" />
+      <div class="python-import-actions">
+        <el-upload :auto-upload="false" accept=".xlsx,.xls" :show-file-list="false" :on-change="handlePythonWorkbook">
+          <el-button type="primary" :loading="pythonImportLoading">选择 Excel 并预检</el-button>
+        </el-upload>
+        <el-button link type="primary" @click="downloadPythonTemplate">下载双 Sheet 模板</el-button>
+      </div>
+      <div v-if="pythonImportReport" class="import-report">
+        <el-descriptions :column="3" border><el-descriptions-item label="题目数">{{ pythonImportReport.questionCount }}</el-descriptions-item><el-descriptions-item label="测试点数">{{ pythonImportReport.testCaseCount }}</el-descriptions-item><el-descriptions-item label="预检结果"><el-tag :type="pythonImportReport.ready ? 'success' : 'danger'">{{ pythonImportReport.ready ? '全部通过' : '需要修正' }}</el-tag></el-descriptions-item></el-descriptions>
+        <el-alert v-if="pythonImportReport.ready" :title="`参考代码已通过全部测试点；确认令牌 ${pythonImportReport.expiresInMinutes} 分钟内有效。`" type="success" :closable="false" class="import-alert" />
+        <div v-else class="import-errors"><h4>错误清单</h4><ol><li v-for="(error, index) in pythonImportReport.errors" :key="index">{{ error }}</li></ol></div>
+        <el-table v-if="pythonImportReport.validation?.length" :data="pythonImportReport.validation" size="small" max-height="240"><el-table-column prop="externalId" label="外部题号" width="110" /><el-table-column prop="title" label="标题" /><el-table-column prop="passedCount" label="通过" width="70" /><el-table-column prop="totalCount" label="总点数" width="80" /></el-table>
+      </div>
+      <template #footer><el-button @click="pythonImportOpen = false">取消</el-button><el-button type="primary" :disabled="!pythonImportReport?.ready" :loading="pythonImportConfirming" @click="confirmPythonWorkbook">确认事务导入</el-button></template>
     </el-dialog>
 
     <!-- 题目导入对话框 -->
@@ -733,9 +786,10 @@ import {
   addQuestion,
   updateQuestion,
 } from "@/api/business/question";
-import { getProgrammingQuestion, saveProgrammingQuestion } from "@/api/business/programming";
+import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQuestion, previewProgrammingImport, confirmProgrammingImport } from "@/api/business/programming";
 import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
+import * as XLSX from "xlsx";
 import {
   handleSessionExpired,
   isSessionExpiredCode,
@@ -756,6 +810,13 @@ const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
 const title = ref("");
+const bankView = ref("ALL");
+const pythonStep = ref(0);
+const validating = ref(false);
+const pythonImportOpen = ref(false);
+const pythonImportLoading = ref(false);
+const pythonImportConfirming = ref(false);
+const pythonImportReport = ref(null);
 
 const data = reactive({
   form: {},
@@ -770,6 +831,7 @@ const data = reactive({
     grade: null,
     semester: null,
     lessonNum: null,
+    bankView: "ALL",
     createBy: null,
   },
 });
@@ -778,12 +840,15 @@ const { queryParams, form } = toRefs(data);
 
 // --- 动态校验规则 ---
 const rules = computed(() => {
+  const pythonQuestion = isPythonPracticalQuestion(form.value);
   const baseRules = {
     questionType: [{ required: true, message: "题目类型不能为空" }],
     questionContent: [{ required: true, message: "题目内容不能为空" }],
     isPublic: [{ required: true, message: "是否公开不能为空" }],
-    grade: [{ required: true, message: "年级不能为空" }],
-    semester: [{ required: true, message: "学期不能为空" }],
+    ...(pythonQuestion ? {} : {
+      grade: [{ required: true, message: "年级不能为空" }],
+      semester: [{ required: true, message: "学期不能为空" }],
+    }),
   };
 
   if (form.value.questionType === "choice") {
@@ -803,6 +868,10 @@ const rules = computed(() => {
   } else if (form.value.questionType === "practical") {
     return {
       ...baseRules,
+      ...(pythonQuestion ? {
+        difficulty: [{ required: true, message: "难度不能为空" }],
+        answer: [{ required: true, message: "参考代码不能为空" }],
+      } : {}),
     };
   } else if (form.value.questionType === "typing") {
     return {
@@ -856,6 +925,88 @@ function difficultyLabel(value) {
   return value === "SIMPLE" ? "简单" : value === "HARD" ? "困难" : "中等";
 }
 
+function validationLabel(value) {
+  return ({ VALID: "已验证", INVALID: "验证失败", VALIDATING: "验证中", DRAFT: "待验证" })[value] || "待验证";
+}
+
+function validationTagType(value) {
+  return value === "VALID" ? "success" : value === "INVALID" ? "danger" : value === "VALIDATING" ? "warning" : "info";
+}
+
+function changeBankView(value) {
+  queryParams.value.bankView = value;
+  queryParams.value.pageNum = 1;
+  if (value === "PYTHON") {
+    Object.assign(queryParams.value, { questionType: null, practicalMode: null, grade: null, semester: null, lessonNum: null });
+  }
+  getList();
+}
+
+function openPythonImport() {
+  pythonImportReport.value = null;
+  pythonImportOpen.value = true;
+}
+
+function cell(row, ...names) {
+  for (const name of names) if (row[name] !== undefined && row[name] !== null) return row[name];
+  return "";
+}
+
+function parseNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function handlePythonWorkbook(file) {
+  if (!file?.raw) return;
+  pythonImportLoading.value = true;
+  pythonImportReport.value = null;
+  try {
+    const workbook = XLSX.read(await file.raw.arrayBuffer(), { type: "array" });
+    const questionSheet = workbook.Sheets["题目"];
+    const caseSheet = workbook.Sheets["测试点"];
+    if (!questionSheet || !caseSheet) throw new Error("Excel 必须同时包含“题目”和“测试点”两个 Sheet");
+    const questionRows = XLSX.utils.sheet_to_json(questionSheet, { defval: "", raw: false });
+    const caseRows = XLSX.utils.sheet_to_json(caseSheet, { defval: "", raw: false });
+    const payload = {
+      questions: questionRows.map(row => ({
+        externalId: String(cell(row, "外部题号", "externalId")), title: String(cell(row, "标题", "title")), difficulty: String(cell(row, "难度", "difficulty")), knowledgePoints: String(cell(row, "知识点", "knowledgePoints")),
+        description: String(cell(row, "题目描述", "description")), inputDescription: String(cell(row, "输入格式", "inputDescription")), outputDescription: String(cell(row, "输出格式", "outputDescription")), constraintsText: String(cell(row, "数据范围", "constraintsText")), sampleExplanation: String(cell(row, "样例解释", "sampleExplanation")), notesText: String(cell(row, "提示", "notesText")),
+        starterCode: String(cell(row, "起始代码", "starterCode")), referenceCode: String(cell(row, "参考代码", "referenceCode")), noInput: String(cell(row, "无输入题", "noInput")), isPublic: String(cell(row, "是否公开", "isPublic")),
+        timeLimitSeconds: parseNumber(cell(row, "时间限制(秒)", "时间限制", "timeLimitSeconds"), 2), memoryLimitKb: parseNumber(cell(row, "内存限制(KB)", "内存限制", "memoryLimitKb"), 131072),
+      })),
+      testCases: caseRows.map((row, index) => ({
+        externalId: String(cell(row, "外部题号", "externalId")), caseName: String(cell(row, "用例名称", "caseName")), inputText: String(cell(row, "输入", "inputText")), expectedOutput: String(cell(row, "期望输出", "expectedOutput")), isPublic: String(cell(row, "是否公开", "isPublic")), scoreWeight: parseNumber(cell(row, "权重", "scoreWeight"), 1), orderNum: parseNumber(cell(row, "顺序", "orderNum"), index + 1),
+      })),
+    };
+    pythonImportReport.value = (await previewProgrammingImport(payload)).data || {};
+    if (pythonImportReport.value.ready) ElMessage.success("预检通过，可以确认导入"); else ElMessage.warning(`预检发现 ${pythonImportReport.value.errors?.length || 0} 个问题`);
+  } catch (error) {
+    ElMessage.error(error?.message || "Excel 解析或预检失败");
+  } finally {
+    pythonImportLoading.value = false;
+  }
+}
+
+function downloadPythonTemplate() {
+  const questions = [{ "外部题号": "PY001", "标题": "两个整数的和", "难度": "简单", "知识点": "输入输出,整数运算", "题目描述": "读入两个整数，输出它们的和。", "输入格式": "一行两个整数 a 和 b，用一个空格分隔。", "输出格式": "输出一个整数，表示 a+b。", "数据范围": "-10000 ≤ a,b ≤ 10000", "样例解释": "3+5=8。", "提示": "", "起始代码": "a, b = map(int, input().split())\n", "参考代码": "a, b = map(int, input().split())\nprint(a + b)\n", "无输入题": "否", "是否公开": "是", "时间限制(秒)": 2, "内存限制(KB)": 131072 }];
+  const cases = [{ "外部题号": "PY001", "用例名称": "样例1", "输入": "3 5\n", "期望输出": "8\n", "是否公开": "是", "权重": 1, "顺序": 1 }, { "外部题号": "PY001", "用例名称": "负数边界", "输入": "-10 4\n", "期望输出": "-6\n", "是否公开": "否", "权重": 1, "顺序": 2 }];
+  const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(questions), "题目"); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(cases), "测试点"); XLSX.writeFile(workbook, "Python_OJ题目双Sheet导入模板.xlsx");
+}
+
+async function confirmPythonWorkbook() {
+  const token = pythonImportReport.value?.confirmToken;
+  if (!token) return;
+  pythonImportConfirming.value = true;
+  try {
+    const result = (await confirmProgrammingImport(token)).data || {};
+    ElMessage.success(`已成功导入 ${result.importedCount || 0} 道已验证 Python 题`);
+    pythonImportOpen.value = false; pythonImportReport.value = null; getList();
+  } finally {
+    pythonImportConfirming.value = false;
+  }
+}
+
 // 取消按钮
 function cancel() {
   open.value = false;
@@ -870,6 +1021,7 @@ function cancelUpload() {
 
 // 表单重置
 function reset() {
+  pythonStep.value = 0;
   form.value = {
     questionId: null,
     questionType: null,
@@ -952,6 +1104,11 @@ const typingDurationCustomized = ref(false);
 function defaultProgrammingConfig() {
   return {
     languageCode: "python",
+    title: "",
+    knowledgePoints: "",
+    noInput: "0",
+    validationStatus: "DRAFT",
+    contentVersion: 1,
     starterCode: "",
     inputDescription: "",
     outputDescription: "",
@@ -970,14 +1127,14 @@ function defaultProgrammingConfig() {
         inputText: "",
         expectedOutput: "",
         isPublic: "1",
-        scoreWeight: 1,
+        scoreWeight: 50,
       },
       {
         caseName: "隐藏测试 1",
         inputText: "",
         expectedOutput: "",
         isPublic: "0",
-        scoreWeight: 1,
+        scoreWeight: 50,
       },
     ],
   };
@@ -996,6 +1153,63 @@ function addProgrammingCase() {
     isPublic: "0",
     scoreWeight: 1,
   });
+}
+
+const programmingPublicCaseCount = computed(() => (form.value.programming?.testCases || []).filter((item) => item.isPublic === "1").length);
+const programmingHiddenCaseCount = computed(() => (form.value.programming?.testCases || []).filter((item) => item.isPublic !== "1").length);
+const programmingWeightTotal = computed(() => Math.round((form.value.programming?.testCases || []).reduce((sum, item) => sum + (Number(item.scoreWeight) || 0), 0) * 100) / 100);
+const programmingWeightErrorText = computed(() => {
+  const difference = Math.round((100 - programmingWeightTotal.value) * 100) / 100;
+  return difference > 0
+    ? `测试点权重还差 ${difference}，必须合计为 100 才能保存。`
+    : `测试点权重超出 ${Math.abs(difference)}，必须合计为 100 才能保存。`;
+});
+
+function distributeProgrammingWeights() {
+  const cases = form.value.programming?.testCases || [];
+  if (!cases.length) return ElMessage.warning("请先添加测试点");
+  const base = Math.floor((100 / cases.length) * 100) / 100;
+  let assigned = 0;
+  cases.forEach((item, index) => {
+    const weight = index === cases.length - 1 ? Math.round((100 - assigned) * 100) / 100 : base;
+    item.scoreWeight = weight;
+    assigned += weight;
+  });
+  ElMessage.success("测试点权重已平均分配为 100");
+}
+
+const validationAlertType = computed(() => form.value.programming?.validationStatus === "VALID" ? "success" : form.value.programming?.validationStatus === "INVALID" ? "error" : "warning");
+const validationStatusText = computed(() => {
+  const status = form.value.programming?.validationStatus;
+  if (status === "VALID") return "验证通过：参考代码已通过全部测试点，可以加入课程或刷题题单。";
+  if (status === "INVALID") return "验证未通过：请检查参考代码或测试点后重新保存并验证。";
+  if (status === "VALIDATING") return "正在验证全部测试点。";
+  return "尚未验证：题面、测试点或代码修改后都需要重新验证。";
+});
+
+function validatePythonBasics() {
+  const programming = form.value.programming || {};
+  if (!String(programming.title || "").trim()) return "请填写题目标题";
+  if (!String(form.value.questionContent || "").trim()) return "请填写题目描述";
+  if (programming.noInput !== "1" && !String(programming.inputDescription || "").trim()) return "请写清楚输入格式";
+  if (!String(programming.outputDescription || "").trim()) return "请写清楚输出格式";
+  return "";
+}
+
+function validatePythonCases() {
+  const testCases = form.value.programming?.testCases || [];
+  if (!testCases.some((item) => item.isPublic === "1")) return "至少需要一个公开样例";
+  if (!testCases.some((item) => item.isPublic !== "1")) return "至少需要一个隐藏测试点";
+  if (testCases.some((item) => item.expectedOutput == null || String(item.expectedOutput).trim() === "")) return "每个测试点都必须填写期望输出";
+  if (testCases.some((item) => !Number.isFinite(Number(item.scoreWeight)) || Number(item.scoreWeight) <= 0)) return "每个测试点权重都必须大于 0";
+  if (Math.abs(programmingWeightTotal.value - 100) > 0.000001) return `测试点权重合计必须为 100，当前为 ${programmingWeightTotal.value}`;
+  return "";
+}
+
+function nextPythonStep() {
+  const message = pythonStep.value === 0 ? validatePythonBasics() : validatePythonCases();
+  if (message) return ElMessage.warning(message);
+  pythonStep.value += 1;
 }
 
 function syncTypingWordStats(newContent) {
@@ -1113,9 +1327,9 @@ function handleUpdate(row) {
   });
 }
 
-/** 提交按钮 */
-function submitForm() {
-  proxy.$refs["questionRef"].validate((valid) => {
+/** 保存普通题，或保存 Python 题后用参考代码验证全部测试点。 */
+function submitForm(validateAfterSave = false) {
+  proxy.$refs["questionRef"].validate(async (valid) => {
     if (valid) {
       // P6.1: 操作题必须配置评分项，且比例值合计必须为100
       if (form.value.questionType === "practical" && !isPythonPracticalQuestion(form.value)) {
@@ -1141,18 +1355,14 @@ function submitForm() {
       }
 
       if (isPythonPracticalQuestion(form.value)) {
-        const testCases = form.value.programming?.testCases || [];
-        if (!testCases.length) {
-          ElMessage.warning("Python 编程题至少需要一个测试点");
-          return;
-        }
-        if (!testCases.some((item) => item.isPublic !== "1")) {
-          ElMessage.warning("Python 编程题至少需要一个隐藏测试点");
-          return;
-        }
-        if (testCases.some((item) => item.expectedOutput == null || String(item.expectedOutput).trim() === "")) {
-          ElMessage.warning("每个测试点都必须填写期望输出");
-          return;
+        const basicMessage = validatePythonBasics();
+        const caseMessage = validatePythonCases();
+        if (basicMessage || caseMessage) { ElMessage.warning(basicMessage || caseMessage); return; }
+        // Python 题是通用技能题，年级、学期和课次只在课程或题单关联层表达。
+        form.value.grade = null; form.value.semester = null; form.value.lessonNum = null; form.value.isPublic = "Y";
+        if (form.value.programming.noInput === "1") {
+          form.value.programming.inputDescription = "本题没有输入。";
+          form.value.programming.testCases.forEach((item) => { item.inputText = ""; });
         }
       }
 
@@ -1163,39 +1373,43 @@ function submitForm() {
         background: "rgba(0, 0, 0, 0.7)",
       });
 
-      if (form.value.questionId != null) {
-        updateQuestion(form.value)
-          .then(() => {
-            if (isPythonPracticalQuestion(form.value)) {
-              return saveProgrammingQuestion(form.value.questionId, form.value.programming);
+      validating.value = validateAfterSave;
+      try {
+        let questionId = form.value.questionId;
+        if (questionId != null) {
+          await updateQuestion(form.value);
+        } else {
+          const response = await addQuestion(form.value);
+          questionId = response.questionId || response.data?.questionId;
+          form.value.questionId = questionId;
+        }
+        if (isPythonPracticalQuestion(form.value)) {
+          if (!questionId) throw new Error("保存题目后未返回题目 ID");
+          await saveProgrammingQuestion(questionId, form.value.programming);
+          if (validateAfterSave) {
+            const validation = await validateProgrammingQuestion(questionId);
+            form.value.programming.validationStatus = validation.data?.validationStatus || "INVALID";
+            const passed = validation.data?.passedCount || 0;
+            const totalCases = validation.data?.totalCount || 0;
+            if (!validation.data?.valid) {
+              pythonStep.value = 2;
+              ElMessage.error(`验证未通过：${passed}/${totalCases} 个测试点通过`);
+              return;
             }
-          })
-          .then(() => {
-            loadingInstance.close();
-            proxy.$modal.msgSuccess("修改成功");
-            open.value = false;
-            getList();
-          })
-          .catch(() => {
-            loadingInstance.close();
-          });
-      } else {
-        addQuestion(form.value)
-          .then((response) => {
-            const questionId = response.questionId || response.data?.questionId;
-            if (isPythonPracticalQuestion(form.value) && questionId) {
-              return saveProgrammingQuestion(questionId, form.value.programming);
-            }
-          })
-          .then(() => {
-            loadingInstance.close();
-            proxy.$modal.msgSuccess("新增成功");
-            open.value = false;
-            getList();
-          })
-          .catch(() => {
-            loadingInstance.close();
-          });
+            proxy.$modal.msgSuccess(`验证通过：${passed}/${totalCases} 个测试点全部通过`);
+          } else {
+            proxy.$modal.msgSuccess("Python 题已保存，验证状态已重置为待验证");
+          }
+        } else {
+          proxy.$modal.msgSuccess(questionId === form.value.questionId ? "保存成功" : "新增成功");
+        }
+        open.value = false;
+        getList();
+      } catch (error) {
+        if (validateAfterSave) pythonStep.value = 2;
+      } finally {
+        validating.value = false;
+        loadingInstance.close();
       }
     }
   });
@@ -1316,3 +1530,7 @@ function handlePreview(row) {
 
 getList();
 </script>
+
+<style scoped>
+.bank-view-tabs{margin-bottom:16px}.python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
+</style>

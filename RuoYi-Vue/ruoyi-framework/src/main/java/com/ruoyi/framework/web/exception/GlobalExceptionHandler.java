@@ -11,6 +11,7 @@ import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.dao.DataAccessException;
 import com.ruoyi.common.constant.HttpStatus;
@@ -105,6 +106,17 @@ public class GlobalExceptionHandler
     }
 
     /**
+     * 请求体 JSON 反序列化失败（类型错误、非法日期等）属于客户端输入错误，
+     * 归一化为 400 语义，避免落入“系统繁忙”500 分支污染错误日志。
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public AjaxResult handleHttpMessageNotReadableException(HttpMessageNotReadableException e, HttpServletRequest request)
+    {
+        log.warn("请求地址'{}',请求体反序列化失败:'{}'", request.getRequestURI(), e.getMessage());
+        return AjaxResult.error(HttpStatus.BAD_REQUEST, "请求参数格式错误");
+    }
+
+    /**
      * 拦截未知的运行时异常
      */
     @ExceptionHandler(RuntimeException.class)
@@ -154,7 +166,11 @@ public class GlobalExceptionHandler
     public Object handleMethodArgumentNotValidException(MethodArgumentNotValidException e)
     {
         log.error(e.getMessage(), e);
-        String message = e.getBindingResult().getFieldError().getDefaultMessage();
+        org.springframework.validation.FieldError fieldError = e.getBindingResult().getFieldError();
+        // 对象级/全局级校验失败时 fieldError 为 null，取第一个全局错误兜底，避免异常处理器自身 NPE
+        String message = fieldError != null
+                ? fieldError.getDefaultMessage()
+                : e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
         return AjaxResult.error(message);
     }
 

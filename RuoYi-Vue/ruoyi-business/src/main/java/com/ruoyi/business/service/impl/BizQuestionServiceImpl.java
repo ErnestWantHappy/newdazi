@@ -5,6 +5,7 @@ import com.ruoyi.business.domain.BizScoringItem; // P6 import
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizScoringItemMapper; // P6 import
 import com.ruoyi.business.mapper.PracticalArtifactMapper;
+import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
 import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
@@ -38,6 +39,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
     @Autowired
     private BizScoringItemMapper bizScoringItemMapper; // P6 mapper
+
+    @Autowired
+    private ProgrammingJudgeMapper programmingJudgeMapper;
 
     @Autowired
     private AsyncConversionService asyncConversionService;
@@ -139,6 +143,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int deleteBizQuestionByQuestionIds(Long[] questionIds) {
         // 权限校验：非管理员只能删除自己创建的题目
         Long currentUserId = SecurityUtils.getUserId();
@@ -154,13 +159,43 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             }
         }
         answerDeletionGuardService.assertQuestionsDeletable(questionIds);
+        for (Long questionId : questionIds) {
+            BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+            if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
+                assertPythonQuestionDeletable(questionId);
+            }
+        }
+        for (Long questionId : questionIds) {
+            BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+            if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
+                deletePythonQuestionChildren(questionId);
+            }
+        }
         return bizQuestionMapper.deleteBizQuestionByQuestionIds(questionIds);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int deleteBizQuestionByQuestionId(Long questionId) {
         answerDeletionGuardService.assertQuestionsDeletable(new Long[] { questionId });
+        BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+        if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
+            assertPythonQuestionDeletable(questionId);
+            deletePythonQuestionChildren(questionId);
+        }
         return bizQuestionMapper.deleteBizQuestionByQuestionId(questionId);
+    }
+
+    /** Python 题被课程、题单或历史记录使用时只能走专门迁移，普通删除不能制造业务孤儿。 */
+    private void assertPythonQuestionDeletable(Long questionId) {
+        if (programmingJudgeMapper.countQuestionDependencies(questionId) > 0) {
+            throw new ServiceException("Python 题已被课程、题单、快照或提交记录使用，不能直接删除");
+        }
+    }
+
+    private void deletePythonQuestionChildren(Long questionId) {
+        programmingJudgeMapper.deleteTestCases(questionId);
+        programmingJudgeMapper.deleteConfig(questionId);
     }
 
     @Override

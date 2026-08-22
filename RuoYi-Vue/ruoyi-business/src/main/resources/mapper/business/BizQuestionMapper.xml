@@ -10,6 +10,10 @@
         <result property="questionContent"    column="question_content"    />
         <result property="grade"    column="grade"    />
         <result property="difficulty" column="difficulty" />
+        <result property="programmingTitle" column="programming_title" />
+        <result property="knowledgePoints" column="knowledge_points" />
+        <result property="validationStatus" column="validation_status" />
+        <result property="testCaseCount" column="test_case_count" />
         <result property="semester"    column="semester"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="optionA"    column="option_a"    />
@@ -36,9 +40,12 @@
     </resultMap>
 
     <sql id="selectBizQuestionVo">
-        select q.question_id, q.question_type, q.question_content, q.grade, q.difficulty, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name
+        select q.question_id, q.question_type, q.question_content, q.grade, q.difficulty, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name,
+               pc.title programming_title, pc.knowledge_points, pc.validation_status, COALESCE(tc.test_case_count,0) test_case_count
         from biz_question q
         left join sys_user u on q.creator_id = u.user_id
+        left join biz_programming_question_config pc on pc.question_id=q.question_id
+        left join (select question_id,count(*) test_case_count from biz_programming_test_case group by question_id) tc on tc.question_id=q.question_id
     </sql>
 
     <select id="selectBizQuestionList" parameterType="BizQuestion" resultMap="BizQuestionResult">
@@ -47,7 +54,9 @@
             <if test="questionType != null  and questionType != ''"> and q.question_type = #{questionType}</if>
             <if test="practicalMode != null and practicalMode != ''"> and q.practical_mode = #{practicalMode}</if>
             <if test="difficulty != null and difficulty != ''"> and q.difficulty = #{difficulty}</if>
-            <if test="questionContent != null  and questionContent != ''"> and q.question_content like concat('%', #{questionContent}, '%')</if>
+            <if test="bankView != null and bankView == 'PYTHON'"> and q.question_type='practical' and q.practical_mode='PYTHON'</if>
+            <if test="bankView != null and bankView == 'COMMON'"> and not (q.question_type='practical' and q.practical_mode='PYTHON')</if>
+            <if test="questionContent != null  and questionContent != ''"> and (q.question_content like concat('%', #{questionContent}, '%') or pc.title like concat('%', #{questionContent}, '%'))</if>
             <if test="isPublic != null  and isPublic != ''"> and q.is_public = #{isPublic}</if>
             <if test="grade != null "> and q.grade = #{grade}</if>
             <if test="semester != null  and semester != ''"> and q.semester = #{semester}</if>
@@ -134,10 +143,19 @@
         <trim prefix="SET" suffixOverrides=",">
             <if test="questionType != null and questionType != ''">question_type = #{questionType},</if>
             <if test="questionContent != null and questionContent != ''">question_content = #{questionContent},</if>
-            <if test="grade != null">grade = #{grade},</if>
+            <choose>
+                <when test="questionType == 'practical' and practicalMode == 'PYTHON'">
+                    grade = NULL,
+                    semester = NULL,
+                    lesson_num = NULL,
+                </when>
+                <otherwise>
+                    <if test="grade != null">grade = #{grade},</if>
+                    <if test="semester != null and semester != ''">semester = #{semester},</if>
+                    <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
+                </otherwise>
+            </choose>
             <if test="difficulty != null and difficulty != ''">difficulty = #{difficulty},</if>
-            <if test="semester != null and semester != ''">semester = #{semester},</if>
-            <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
             <if test="optionA != null">option_a = #{optionA},</if>
             <if test="optionB != null">option_b = #{optionB},</if>
             <if test="optionC != null">option_c = #{optionC},</if>

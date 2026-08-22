@@ -32,9 +32,52 @@ public class PythonPracticeStudentController extends BaseController {
 
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/draft")
-    public AjaxResult draft(@RequestBody Map<String, Object> request) { return success(service.saveDraft(SecurityUtils.getUserId(), (String) request.get("sourceType"), Long.valueOf(String.valueOf(request.get("sourceId"))), Long.valueOf(String.valueOf(request.get("questionId"))), (String) request.get("sourceCode"))); }
+    public AjaxResult draft(@RequestBody Map<String, Object> request) {
+        Long sourceId = requiredLong(request, "sourceId");
+        Long questionId = requiredLong(request, "questionId");
+        String sourceType = strOrNull(request.get("sourceType"));
+        if (sourceId == null || questionId == null || sourceType == null) {
+            return error("参数不完整：sourceType/sourceId/questionId 必须为有效值");
+        }
+        return success(service.saveDraft(SecurityUtils.getUserId(), sourceType, sourceId, questionId, strOrNull(request.get("sourceCode"))));
+    }
 
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/submit")
-    public AjaxResult submit(@RequestBody Map<String, Object> request) { return success(service.submit(SecurityUtils.getUserId(), (String) request.get("sourceType"), Long.valueOf(String.valueOf(request.get("sourceId"))), Long.valueOf(String.valueOf(request.get("questionId"))), (String) request.get("sourceCode"), (String) request.get("submitType"), submissionWorker)); }
+    public AjaxResult submit(@RequestBody Map<String, Object> request) {
+        Long sourceId = requiredLong(request, "sourceId");
+        Long questionId = requiredLong(request, "questionId");
+        String sourceType = strOrNull(request.get("sourceType"));
+        if (sourceId == null || questionId == null || sourceType == null) {
+            return error("参数不完整：sourceType/sourceId/questionId 必须为有效值");
+        }
+        return success(service.submit(SecurityUtils.getUserId(), sourceType, sourceId, questionId,
+            strOrNull(request.get("sourceCode")), strOrNull(request.get("submitType")),
+            strOrNull(request.get("customInput")), submissionWorker));
+    }
+
+    /** 缺失或非法数字统一返回 null 并由入口报参数错误，避免 Long.valueOf("null") 直接 500 */
+    private Long requiredLong(Map<String, Object> request, String key) {
+        Object value = request == null ? null : request.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        String text = value == null ? null : String.valueOf(value).trim();
+        if (text == null || text.isEmpty() || "null".equals(text)) {
+            return null;
+        }
+        try {
+            return Long.valueOf(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String strOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value);
+        return "null".equals(text) ? null : text;
+    }
 }

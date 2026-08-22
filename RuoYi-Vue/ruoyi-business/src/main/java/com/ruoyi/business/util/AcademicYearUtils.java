@@ -101,6 +101,25 @@ public final class AcademicYearUtils
         return gradeName(section.gradeOffset + gradeInSection);
     }
 
+    /**
+     * 生成当前教学班简称，例如初中 2024 级 1 班在 2026 学年显示为“901班”。
+     * 班号统一补足两位，避免“9年级1班”和“901班”两套口径并存。
+     */
+    public static String resolveClassLabel(String entryYear, String classCode, String schoolType, LocalDate date)
+    {
+        int absoluteGrade = resolveAbsoluteGrade(entryYear, schoolType, date);
+        if (classCode == null || !classCode.trim().matches("\\d+"))
+        {
+            throw new IllegalArgumentException("班级编号必须是数字");
+        }
+        int parsedClassCode = Integer.parseInt(classCode.trim());
+        if (parsedClassCode < 1 || parsedClassCode > 99)
+        {
+            throw new IllegalArgumentException("班级编号必须在 1-99 之间");
+        }
+        return String.format("%d%02d班", absoluteGrade, parsedClassCode);
+    }
+
     private static String gradeName(int absoluteGrade)
     {
         switch (absoluteGrade)

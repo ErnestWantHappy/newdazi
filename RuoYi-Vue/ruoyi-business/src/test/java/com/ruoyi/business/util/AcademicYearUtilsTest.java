@@ -47,6 +47,19 @@ class AcademicYearUtilsTest
     }
 
     @Test
+    void shouldResolveCurrentClassLabelForEverySchoolSection()
+    {
+        assertEquals("901班", AcademicYearUtils.resolveClassLabel(
+                "2024", "1", AcademicYearUtils.JUNIOR_HIGH_SCHOOL, AFTER_CUTOFF));
+        assertEquals("803班", AcademicYearUtils.resolveClassLabel(
+                "2025", "3", AcademicYearUtils.JUNIOR_HIGH_SCHOOL, AFTER_CUTOFF));
+        assertEquals("301班", AcademicYearUtils.resolveClassLabel(
+                "2024", "1", AcademicYearUtils.PRIMARY_SCHOOL, AFTER_CUTOFF));
+        assertEquals("1201班", AcademicYearUtils.resolveClassLabel(
+                "2024", "1", AcademicYearUtils.SENIOR_HIGH_SCHOOL, AFTER_CUTOFF));
+    }
+
+    @Test
     void shouldResolveGradePositionInsideSchoolSection()
     {
         assertEquals(1, AcademicYearUtils.gradeInSection(1));
@@ -92,6 +105,8 @@ class AcademicYearUtilsTest
                 () -> AcademicYearUtils.gradeInSection(0));
         assertThrows(IllegalArgumentException.class,
                 () -> AcademicYearUtils.gradeInSection(13));
+        assertThrows(IllegalArgumentException.class,
+                () -> AcademicYearUtils.resolveClassLabel("2024", "A", AcademicYearUtils.JUNIOR_HIGH_SCHOOL, AFTER_CUTOFF));
     }
 
     @Test

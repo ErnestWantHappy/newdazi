@@ -73,17 +73,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             preview_retry_count = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_retry_count, VALUES(preview_retry_count)),
             preview_last_retry_time = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_last_retry_time, VALUES(preview_last_retry_time)),
             preview_error_message = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_error_message, VALUES(preview_error_message)),
-            is_correct = VALUES(is_correct),
-            <!-- 打字题(keepBestScore=true)重复提交/弱网重发时保留历史最好成绩，避免慢的一次覆盖快的一次；其余题型仍按最新提交覆盖。 -->
-            score = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(score, 0), COALESCE(VALUES(score), 0)), VALUES(score)),
-            answer_time = VALUES(answer_time),
-            submit_time = VALUES(submit_time),
-            typing_speed = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(typing_speed, 0), COALESCE(VALUES(typing_speed), 0)), VALUES(typing_speed)),
-            accuracy_rate = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(accuracy_rate, 0), COALESCE(VALUES(accuracy_rate), 0)), VALUES(accuracy_rate)),
-            completion_rate = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(completion_rate, 0), COALESCE(VALUES(completion_rate), 0)), VALUES(completion_rate)),
+            <!-- 打字题(keepBestScore=true)整体择优：仅当新提交得分更高时，答案文本与成绩统计才整体采用新值；
+                 否则整体保留旧值，杜绝“文本是新的一次、分数是旧的一次”的错位。其余题型仍按最新提交覆盖。
+                 注意 score 必须放在本组最后赋值：MySQL 对 ON DUPLICATE KEY UPDATE 按顺序求值，
+                 后面的赋值会看到前面已更新的列，score 最后赋值可保证前面的比较读到的都是旧分。 -->
+            is_correct = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(is_correct), is_correct), VALUES(is_correct)),
+            answer_time = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(answer_time), answer_time), VALUES(answer_time)),
+            submit_time = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(submit_time), submit_time), VALUES(submit_time)),
+            typing_speed = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(typing_speed), typing_speed), VALUES(typing_speed)),
+            accuracy_rate = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(accuracy_rate), accuracy_rate), VALUES(accuracy_rate)),
+            completion_rate = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(completion_rate), completion_rate), VALUES(completion_rate)),
             practical_artifact_id = COALESCE(VALUES(practical_artifact_id), practical_artifact_id),
             practical_version_id = COALESCE(VALUES(practical_version_id), practical_version_id),
-            student_answer = VALUES(student_answer)
+            student_answer = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(student_answer), student_answer), VALUES(student_answer)),
+            score = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(score, 0), COALESCE(VALUES(score), 0)), VALUES(score))
     </insert>
 
     <!-- 批量插入答题记录 -->

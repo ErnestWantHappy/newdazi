@@ -1,5 +1,8 @@
 {
   "java.compile.nullAnalysis.mode": "automatic",
   "pendant.autoGenerateSessionNames": true,
-  "pendant.showThinking": true
+  "pendant.showThinking": true,
+  "pendant.thinkingDisplayMode": "collapseWhenDone",
+  "pendant.thinkingLevel": "high",
+  "pendant.notifications.agentFinished": true
 }

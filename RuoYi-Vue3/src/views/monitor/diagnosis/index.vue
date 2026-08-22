@@ -83,6 +83,73 @@
     </el-row>
 
     <el-row :gutter="16" class="diagnosis-grid">
+      <el-col :xs="24" :lg="10">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>主机硬件信息</h2>
+            <span>服务器与物理资源属性</span>
+          </div>
+          <el-alert
+            v-if="data.serverDegraded"
+            title="主机采集超时，以下数值可能为降级占位，不代表真实空闲"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 8px"
+          />
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="CPU 型号">{{ hardware.cpu?.model || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="核心数">{{ hardware.cpu?.cpuNum || '—' }} 核</el-descriptions-item>
+            <el-descriptions-item label="总内存">{{ fmtGb(hardware.mem?.total) }}</el-descriptions-item>
+            <el-descriptions-item label="服务器名称">{{ hardware.sys?.computerName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="服务器 IP">{{ hardware.sys?.computerIp || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="操作系统">{{ hardware.sys?.osName || '—' }}（{{ hardware.sys?.osArch || '—' }}）</el-descriptions-item>
+            <el-descriptions-item label="Node.js">{{ data.nodeVersion || '未检测到' }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </el-col>
+      <el-col :xs="24" :lg="14">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>磁盘状态</h2>
+            <span>各分区容量与使用率</span>
+          </div>
+          <el-table :data="hardware.sysFiles || []" size="small" border>
+            <el-table-column prop="dirName" label="盘符路径" min-width="90" />
+            <el-table-column prop="sysTypeName" label="文件系统" min-width="70" />
+            <el-table-column prop="total" label="总大小" min-width="80" />
+            <el-table-column prop="free" label="可用大小" min-width="80" />
+            <el-table-column prop="used" label="已用大小" min-width="80" />
+            <el-table-column label="已用百分比" min-width="140">
+              <template #default="{ row }">
+                <el-progress :percentage="Number(row.usage || 0)" :stroke-width="12" />
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" class="diagnosis-grid">
+      <el-col :span="24">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Java 虚拟机信息</h2>
+            <span>{{ hardware.jvm?.name || '—' }}</span>
+          </div>
+          <el-descriptions :column="3" border size="small">
+            <el-descriptions-item label="Java 版本">{{ hardware.jvm?.version || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="启动时间">{{ hardware.jvm?.startTime || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="运行时长">{{ hardware.jvm?.runTime || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="安装路径" :span="2">{{ hardware.jvm?.home || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="项目路径">{{ hardware.sys?.userDir || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="运行参数" :span="3">{{ hardware.jvm?.inputArgs || '—' }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" class="diagnosis-grid">
       <el-col :span="24">
         <section class="panel conversion-panel">
           <div class="panel-head">
@@ -302,6 +369,7 @@ const resourceChartRef = ref(null)
 const cleanupLoading = ref(false)
 let resourceChart = null
 
+const hardware = computed(() => data.value.server || {})
 const riskList = computed(() => data.value.health?.risks || [])
 const adviceSummary = computed(() => data.value.adviceSummary || [])
 const scopeLabel = computed(() => data.value.health?.scopeLabel || (diagnosisHours.value >= 168 ? '近 7 天' : `近 ${diagnosisHours.value} 小时`))
@@ -321,10 +389,19 @@ const conversionBacklog = computed(() => ({
   failed: Number(conversionInfo.value.dailyFailedCount || 0) + Number(conversionInfo.value.countyFailedCount || 0)
 }))
 
+function fmtGb(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return `${Number(value).toFixed(2)} GB`
+}
+
+
 function loadData() {
+  // 容错：后端已做并行+超时降级，此处再兜底网络异常，保留上次数据避免页面瘫痪
   getDiagnosisSummary({ hours: diagnosisHours.value }).then(res => {
     data.value = res.data || {}
     nextTick(renderResourceChart)
+  }).catch(() => {
+    proxy.$modal.msgError('诊断数据获取失败，已保留上次结果，请稍后重试')
   })
   loadEvents()
 }

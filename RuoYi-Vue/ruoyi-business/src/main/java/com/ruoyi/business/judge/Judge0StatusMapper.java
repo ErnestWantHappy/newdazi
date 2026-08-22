@@ -22,4 +22,19 @@ public final class Judge0StatusMapper {
             default: return "SERVICE_ERROR";
         }
     }
+
+    /** Python 由解释器执行，部分 Judge0 会把语法错误归入 Runtime Error，需要结合错误文本纠正。 */
+    public static String toPlatformStatus(Judge0Result result) {
+        String status = toPlatformStatus(result == null ? null : result.getStatusId());
+        if (!"RUNTIME_ERROR".equals(status) || result == null) return status;
+        String details = safe(result.getCompileOutput()) + "\n" + safe(result.getStderr()) + "\n" + safe(result.getMessage());
+        if (details.contains("SyntaxError") || details.contains("IndentationError") || details.contains("TabError")) {
+            return "SYNTAX_ERROR";
+        }
+        return status;
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value;
+    }
 }

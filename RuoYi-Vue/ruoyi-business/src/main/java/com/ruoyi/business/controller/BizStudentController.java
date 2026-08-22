@@ -181,8 +181,12 @@ public class BizStudentController extends BaseController
         if (userIds == null || userIds.length == 0) {
             return AjaxResult.error("参数不能为空！");
         }
-        bizStudentService.resetStudentPwd(userIds);
-        return AjaxResult.success();
+        int successCount = bizStudentService.resetStudentPwd(userIds);
+        int skipped = userIds.length - successCount;
+        // 明细话术：让教师知道哪些目标被跳过（不存在/跨校/非学生），不再伪装成全部成功
+        return skipped > 0
+                ? AjaxResult.success(String.format("成功重置 %d 个账号，跳过 %d 个（不存在、跨校或非学生账号）", successCount, skipped))
+                : AjaxResult.success(String.format("成功重置 %d 个账号", successCount));
     }
 
     /**

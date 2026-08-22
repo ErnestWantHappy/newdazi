@@ -31,6 +31,7 @@ import com.ruoyi.business.judge.Judge0Properties;
 import com.ruoyi.business.judge.Judge0Request;
 import com.ruoyi.business.judge.Judge0Result;
 import com.ruoyi.business.judge.Judge0StatusMapper;
+import com.ruoyi.business.judge.OutputComparator;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
@@ -91,11 +92,86 @@ public class ProgrammingSubmissionService {
         BizQuestion question = requirePythonQuestion(questionId);
         assertQuestionOwner(question, currentUserId, admin);
         if (config == null) throw new ServiceException("编程题配置不能为空");
+        ProgrammingQuestionConfig stored = programmingMapper.selectConfig(questionId);
+        // 稳定外部题号只允许受控系统题导入写入，教师请求既不能抢占也不能清空已有编号。
+        config.setExternalId(stored == null ? null : stored.getExternalId());
         config.setQuestionId(questionId); normalizeConfig(config); validateTestCases(config.getTestCases());
+        // 题面、用例或资源限制一旦保存，旧验证结论立即失效，不能由客户端伪造 VALID。
+        config.setValidationStatus("DRAFT"); config.setValidatedAt(null); config.setValidatedBy(null);
         config.setCreateBy(username); config.setUpdateBy(username); programmingMapper.upsertConfig(config);
         programmingMapper.deleteTestCases(questionId);
         int order = 1;
         for (ProgrammingTestCase testCase : config.getTestCases()) { testCase.setQuestionId(questionId); testCase.setOrderNum(order++); testCase.setCreateBy(username); testCase.setUpdateBy(username); programmingMapper.insertTestCase(testCase); }
+    }
+
+    /** 教师参考代码必须在真实判题链路通过全部测试点，验证状态才可变为 VALID。 */
+    public Map<String, Object> validateTeacherQuestion(Long questionId, Long currentUserId, boolean admin, String username) {
+        BizQuestion question = requirePythonQuestion(questionId);
+        assertQuestionOwner(question, currentUserId, admin);
+        ProgrammingQuestionConfig config = programmingMapper.selectConfig(questionId);
+        List<ProgrammingTestCase> cases = programmingMapper.selectTestCases(questionId);
+        if (config == null) throw new ServiceException("请先保存 Python 判题配置");
+        validateSource(question.getAnswer());
+        validateTestCases(cases);
+        programmingMapper.updateValidationStatus(questionId, "VALIDATING", username);
+        List<Map<String, Object>> details = new ArrayList<Map<String, Object>>();
+        boolean valid = true;
+        try {
+            for (ProgrammingTestCase testCase : cases) {
+                Judge0Result judgeResult = execute(question.getAnswer(), testCase, config);
+                String status = mapStatus(judgeResult, testCase.getExpectedOutput());
+                Map<String, Object> detail = new HashMap<String, Object>();
+                detail.put("caseName", testCase.getCaseName()); detail.put("isPublic", testCase.getIsPublic()); detail.put("statusCode", status);
+                detail.put("timeSeconds", judgeResult == null ? null : judgeResult.getTimeSeconds()); detail.put("memoryKb", judgeResult == null ? null : judgeResult.getMemoryKb());
+                details.add(detail);
+                if (!"ACCEPTED".equals(status)) valid = false;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            programmingMapper.updateValidationStatus(questionId, "INVALID", username);
+            throw new ServiceException("题目验证被中断，请稍后重试");
+        } catch (RuntimeException ex) {
+            programmingMapper.updateValidationStatus(questionId, "INVALID", username);
+            throw ex;
+        }
+        programmingMapper.updateValidationStatus(questionId, valid ? "VALID" : "INVALID", username);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("valid", valid); result.put("validationStatus", valid ? "VALID" : "INVALID"); result.put("passedCount", countAccepted(details)); result.put("totalCount", details.size()); result.put("cases", details);
+        return result;
+    }
+
+    private static int countAccepted(List<Map<String, Object>> details) {
+        int count = 0;
+        for (Map<String, Object> detail : details) if ("ACCEPTED".equals(detail.get("statusCode"))) count++;
+        return count;
+    }
+
+    /** Excel 预检复用正式 Judge0 链路，但不写题库和验证状态。 */
+    public Map<String, Object> validateImportCandidate(String referenceCode, ProgrammingQuestionConfig config,
+                                                        List<ProgrammingTestCase> cases) {
+        validateSource(referenceCode); normalizeConfig(config); validateTestCases(cases);
+        List<Map<String, Object>> details = new ArrayList<Map<String, Object>>();
+        boolean valid = true;
+        try {
+            for (ProgrammingTestCase testCase : cases) {
+                Judge0Result judgeResult = execute(referenceCode, testCase, config);
+                String status = mapStatus(judgeResult, testCase.getExpectedOutput());
+                Map<String, Object> detail = new HashMap<String, Object>(); detail.put("caseName", testCase.getCaseName()); detail.put("statusCode", status);
+                if (!"ACCEPTED".equals(status)) {
+                    // 导入预检属于教师自己的题目数据，失败时返回对比信息，便于定位编码或样例错误。
+                    detail.put("judge0StatusId", judgeResult == null ? null : judgeResult.getStatusId());
+                    detail.put("expectedOutput", testCase.getExpectedOutput());
+                    detail.put("actualOutput", judgeResult == null ? null : judgeResult.getStdout());
+                    detail.put("errorSummary", judgeResult == null ? null : firstNonEmpty(judgeResult.getCompileOutput(), judgeResult.getStderr(), judgeResult.getMessage()));
+                }
+                details.add(detail);
+                if (!"ACCEPTED".equals(status)) valid = false;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("导入预检被中断，请稍后重试");
+        }
+        Map<String, Object> result = new HashMap<String, Object>(); result.put("valid", valid); result.put("passedCount", countAccepted(details)); result.put("totalCount", details.size()); result.put("cases", details); return result;
     }
 
     public ProgrammingDraft getDraft(BizStudent student, Long deptId, Long lessonId, Long questionId) {
@@ -108,7 +184,7 @@ public class ProgrammingSubmissionService {
         assertStudentQuestionAccess(student, deptId, lessonId, questionId);
         ProgrammingQuestionConfig stored = programmingMapper.selectConfig(questionId);
         if (stored == null || !"1".equals(stored.getEnabled())) throw new ServiceException("该编程题暂未开放");
-        ProgrammingQuestionConfig safe = new ProgrammingQuestionConfig(); safe.setQuestionId(stored.getQuestionId()); safe.setLanguageCode("python"); safe.setStarterCode(stored.getStarterCode()); safe.setInputDescription(stored.getInputDescription()); safe.setOutputDescription(stored.getOutputDescription()); safe.setSampleExplanation(stored.getSampleExplanation()); safe.setConstraintsText(stored.getConstraintsText()); safe.setNotesText(stored.getNotesText()); safe.setTimeLimitSeconds(stored.getTimeLimitSeconds()); safe.setMemoryLimitKb(stored.getMemoryLimitKb()); safe.setMaxOutputKb(stored.getMaxOutputKb());
+        ProgrammingQuestionConfig safe = new ProgrammingQuestionConfig(); safe.setQuestionId(stored.getQuestionId()); safe.setLanguageCode("python"); safe.setTitle(stored.getTitle()); safe.setKnowledgePoints(stored.getKnowledgePoints()); safe.setNoInput(stored.getNoInput()); safe.setStarterCode(stored.getStarterCode()); safe.setInputDescription(stored.getInputDescription()); safe.setOutputDescription(stored.getOutputDescription()); safe.setSampleExplanation(stored.getSampleExplanation()); safe.setConstraintsText(stored.getConstraintsText()); safe.setNotesText(stored.getNotesText()); safe.setTimeLimitSeconds(stored.getTimeLimitSeconds()); safe.setMemoryLimitKb(stored.getMemoryLimitKb()); safe.setMaxOutputKb(stored.getMaxOutputKb());
         return safe;
     }
 
@@ -235,7 +311,7 @@ public class ProgrammingSubmissionService {
     }
 
     private ProgrammingSubmissionCase toCaseResult(Long submissionId, ProgrammingTestCase testCase, Judge0Result result) {
-        ProgrammingSubmissionCase row = new ProgrammingSubmissionCase(); row.setSubmissionId(submissionId); row.setTestCaseId(testCase.getTestCaseId()); row.setIsPublic(testCase.getIsPublic()); row.setJudge0StatusId(result == null ? null : result.getStatusId()); row.setStatusCode(mapStatus(result));
+        ProgrammingSubmissionCase row = new ProgrammingSubmissionCase(); row.setSubmissionId(submissionId); row.setTestCaseId(testCase.getTestCaseId()); row.setIsPublic(testCase.getIsPublic()); row.setJudge0StatusId(result == null ? null : result.getStatusId()); row.setStatusCode(mapStatus(result, testCase.getExpectedOutput()));
         if (result != null) {
             row.setTimeSeconds(result.getTimeSeconds());
             row.setMemoryKb(result.getMemoryKb());
@@ -304,10 +380,42 @@ public class ProgrammingSubmissionService {
     }
     private static ServiceException forbidden(String message) { return new ServiceException(message, HttpStatus.FORBIDDEN); }
     private void validateSource(String sourceCode) { if (sourceCode == null || sourceCode.trim().isEmpty()) throw new ServiceException("代码不能为空"); if (sourceCode.getBytes(StandardCharsets.UTF_8).length > Math.max(1024, properties.getMaxSourceBytes())) throw new ServiceException("代码超过允许大小"); }
-    private void normalizeConfig(ProgrammingQuestionConfig c) { if (c.getTimeLimitSeconds() == null || c.getTimeLimitSeconds() < 0.1D || c.getTimeLimitSeconds() > 10D) throw new ServiceException("时限应在 0.1 至 10 秒之间"); if (c.getMemoryLimitKb() == null || c.getMemoryLimitKb() < 16384 || c.getMemoryLimitKb() > 524288) throw new ServiceException("内存应在 16MB 至 512MB 之间"); if (c.getMaxProcesses() == null || c.getMaxProcesses() < 1 || c.getMaxProcesses() > 8) throw new ServiceException("进程数应在 1 至 8 之间"); if (c.getMaxFileSizeKb() == null || c.getMaxFileSizeKb() < 1 || c.getMaxFileSizeKb() > 4096) throw new ServiceException("文件限制应在 1KB 至 4MB 之间"); if (c.getMaxOutputKb() == null || c.getMaxOutputKb() < 1 || c.getMaxOutputKb() > 1024) throw new ServiceException("输出限制应在 1KB 至 1MB 之间"); validateTextLength("输入说明", c.getInputDescription(), 20000); validateTextLength("输出说明", c.getOutputDescription(), 20000); validateTextLength("样例解释", c.getSampleExplanation(), 20000); validateTextLength("限制条件", c.getConstraintsText(), 20000); validateTextLength("注意事项", c.getNotesText(), 20000); validateTextLength("初始代码", c.getStarterCode(), Math.max(1024, properties.getMaxSourceBytes())); }
-    private void validateTestCases(List<ProgrammingTestCase> cases) { if (cases == null || cases.isEmpty()) throw new ServiceException("至少配置一个测试点"); if (cases.size() > 50) throw new ServiceException("测试点数量不能超过 50 个"); boolean hidden = false; double totalWeight = 0D; for (ProgrammingTestCase c : cases) { validateTextLength("测试点名称", c.getCaseName(), 128); validateTextLength("测试点输入", c.getInputText(), 65536); validateTextLength("测试点期望输出", c.getExpectedOutput(), 65536); if (c.getExpectedOutput() == null || c.getExpectedOutput().trim().isEmpty()) throw new ServiceException("测试点期望输出不能为空"); if (!"1".equals(c.getIsPublic())) { c.setIsPublic("0"); hidden = true; } if (c.getScoreWeight() == null || c.getScoreWeight() <= 0D) throw new ServiceException("测试点权重必须大于零"); totalWeight += c.getScoreWeight(); } if (!hidden) throw new ServiceException("至少需要一个隐藏测试点"); if (totalWeight > 100000D) throw new ServiceException("测试点权重总和过大"); }
+    private void normalizeConfig(ProgrammingQuestionConfig c) { if (c.getTitle() == null || c.getTitle().trim().isEmpty()) throw new ServiceException("题目标题不能为空"); validateTextLength("题目标题", c.getTitle(), 255); validateTextLength("知识点", c.getKnowledgePoints(), 500); c.setNoInput("1".equals(c.getNoInput()) ? "1" : "0"); if (c.getContentVersion() == null || c.getContentVersion() < 1) c.setContentVersion(1); if (c.getTimeLimitSeconds() == null || c.getTimeLimitSeconds() < 0.1D || c.getTimeLimitSeconds() > 10D) throw new ServiceException("时限应在 0.1 至 10 秒之间"); if (c.getMemoryLimitKb() == null || c.getMemoryLimitKb() < 16384 || c.getMemoryLimitKb() > 524288) throw new ServiceException("内存应在 16MB 至 512MB 之间"); if (c.getMaxProcesses() == null || c.getMaxProcesses() < 1 || c.getMaxProcesses() > 8) throw new ServiceException("进程数应在 1 至 8 之间"); if (c.getMaxFileSizeKb() == null || c.getMaxFileSizeKb() < 1 || c.getMaxFileSizeKb() > 4096) throw new ServiceException("文件限制应在 1KB 至 4MB 之间"); if (c.getMaxOutputKb() == null || c.getMaxOutputKb() < 1 || c.getMaxOutputKb() > 1024) throw new ServiceException("输出限制应在 1KB 至 1MB 之间"); validateTextLength("输入说明", c.getInputDescription(), 20000); validateTextLength("输出说明", c.getOutputDescription(), 20000); validateTextLength("样例解释", c.getSampleExplanation(), 20000); validateTextLength("限制条件", c.getConstraintsText(), 20000); validateTextLength("注意事项", c.getNotesText(), 20000); validateTextLength("初始代码", c.getStarterCode(), Math.max(1024, properties.getMaxSourceBytes())); }
+    private void validateTestCases(List<ProgrammingTestCase> cases) {
+        if (cases == null || cases.isEmpty()) throw new ServiceException("至少配置一个测试点");
+        if (cases.size() > 50) throw new ServiceException("测试点数量不能超过 50 个");
+        boolean publicCase = false;
+        boolean hiddenCase = false;
+        double totalWeight = 0D;
+        for (ProgrammingTestCase c : cases) {
+            validateTextLength("测试点名称", c.getCaseName(), 128);
+            validateTextLength("测试点输入", c.getInputText(), 65536);
+            validateTextLength("测试点期望输出", c.getExpectedOutput(), 65536);
+            if (c.getExpectedOutput() == null || c.getExpectedOutput().trim().isEmpty()) throw new ServiceException("测试点期望输出不能为空");
+            if ("1".equals(c.getIsPublic())) publicCase = true;
+            else { c.setIsPublic("0"); hiddenCase = true; }
+            if (c.getScoreWeight() == null || c.getScoreWeight() <= 0D) throw new ServiceException("测试点权重必须大于零");
+            totalWeight += c.getScoreWeight();
+        }
+        if (!publicCase) throw new ServiceException("至少需要一个公开样例");
+        if (!hiddenCase) throw new ServiceException("至少需要一个隐藏测试点");
+        if (Math.abs(totalWeight - 100D) > 0.000001D) {
+            throw new ServiceException("测试点权重合计必须为 100，当前为 " + formatWeight(totalWeight));
+        }
+    }
+
+    private String formatWeight(double value) {
+        if (Math.abs(value - Math.rint(value)) < 0.000001D) return String.valueOf((long) Math.rint(value));
+        return String.valueOf(Math.round(value * 100D) / 100D);
+    }
     private void validateTextLength(String label, String value, int maxBytes) { if (value != null && value.getBytes(StandardCharsets.UTF_8).length > maxBytes) throw new ServiceException(label + "超过允许大小"); }
-    private String mapStatus(Judge0Result r) { return Judge0StatusMapper.toPlatformStatus(r == null ? null : r.getStatusId()); }
+    private String mapStatus(Judge0Result result, String expectedOutput) {
+        String status = Judge0StatusMapper.toPlatformStatus(result);
+        if (("ACCEPTED".equals(status) || "WRONG_ANSWER".equals(status)) && result != null) {
+            return OutputComparator.matches(expectedOutput, result.getStdout()) ? "ACCEPTED" : "WRONG_ANSWER";
+        }
+        return status;
+    }
     private String summarize(List<ProgrammingSubmissionCase> rows, int passed) { if (passed == rows.size()) return "ACCEPTED"; if (passed > 0) return "PARTIAL"; for (ProgrammingSubmissionCase row : rows) if (!"WRONG_ANSWER".equals(row.getStatusCode())) return row.getStatusCode(); return "WRONG_ANSWER"; }
     private String statusMessage(String status) { if ("ACCEPTED".equals(status)) return "通过"; if ("PARTIAL".equals(status)) return "部分通过"; if ("WRONG_ANSWER".equals(status)) return "答案错误"; if ("SYNTAX_ERROR".equals(status)) return "语法错误"; if ("RUNTIME_ERROR".equals(status)) return "运行错误"; if ("TIME_LIMIT".equals(status)) return "运行超时"; if ("MEMORY_LIMIT".equals(status)) return "内存超限"; return "判题服务异常，代码和提交已保留"; }
     private int lessonQuestionScore(Long lessonId, Long questionId) { for (BizLessonQuestionDetailVo q : lessonQuestionMapper.selectDetailsByLessonId(lessonId)) if (questionId.equals(q.getQuestionId())) return q.getQuestionScore() == null ? 0 : q.getQuestionScore().intValue(); return 0; }

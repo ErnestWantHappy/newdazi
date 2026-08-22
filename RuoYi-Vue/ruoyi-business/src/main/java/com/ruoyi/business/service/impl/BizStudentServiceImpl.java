@@ -361,19 +361,35 @@ public class BizStudentServiceImpl implements IBizStudentService
     public int resetStudentPwd(Long[] userIds) {
         int successCount = 0;
         String password = SecurityUtils.encryptPassword("123456");
+        LoginUser caller = SecurityUtils.getLoginUser();
+        // 越权防护基准：非管理员只能重置本校学生；学生身份以 biz_student 学籍事实为准——
+        // 平台从未批量维护学生的 sys_user_role（全库 role_id=101 记录为 0），不能依赖角色判断。
+        boolean callerIsAdmin = caller != null && caller.getUser() != null && caller.getUser().isAdmin();
+        Long callerDeptId = caller != null && caller.getUser() != null ? caller.getUser().getDeptId() : null;
         for(Long userId : userIds) {
             // 查询用户信息获取用户名
             SysUser existingUser = userMapper.selectUserById(userId);
             if (existingUser == null) {
                 continue;
             }
-            
+
+            if (!callerIsAdmin && (callerDeptId == null || !callerDeptId.equals(existingUser.getDeptId()))) {
+                log.warn("拒绝跨校重置密码: 操作人dept={}, 目标userId={}, 目标dept={}",
+                        callerDeptId, userId, existingUser.getDeptId());
+                continue;
+            }
+            BizStudent studentRecord = bizStudentMapper.selectBizStudentByUserId(userId);
+            if (studentRecord == null) {
+                log.warn("拒绝重置非学生账号密码: userId={}", userId);
+                continue;
+            }
+
             // 重置密码
             SysUser user = new SysUser();
             user.setUserId(userId);
             user.setPassword(password);
             successCount += userService.resetPwd(user);
-            
+
             // 清除登录失败次数缓存（解锁账号）
             String cacheKey = CacheConstants.PWD_ERR_CNT_KEY + existingUser.getUserName();
             if (redisCache.hasKey(cacheKey)) {

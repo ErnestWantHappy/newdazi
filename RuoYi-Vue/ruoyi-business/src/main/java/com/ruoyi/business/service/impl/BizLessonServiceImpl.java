@@ -26,6 +26,8 @@ import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
+import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
+import com.ruoyi.business.domain.ProgrammingQuestionConfig;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.service.PracticalRubricSnapshotService;
@@ -93,6 +95,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private PracticalRubricSnapshotService practicalRubricSnapshotService;
+
+    @Autowired
+    private ProgrammingJudgeMapper programmingJudgeMapper;
 
     @Autowired
     private CollaborationMapper collaborationMapper;
@@ -452,6 +457,14 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonQuestionMapper.deleteByLessonId(lessonId);
         List<BizLessonQuestionDetailVo> questions = lessonDetailVo.getQuestions();
         if (!CollectionUtils.isEmpty(questions)) {
+            for (BizLessonQuestionDetailVo question : questions) {
+                if ("practical".equalsIgnoreCase(question.getQuestionType()) && "PYTHON".equalsIgnoreCase(question.getPracticalMode())) {
+                    ProgrammingQuestionConfig config = programmingJudgeMapper.selectConfig(question.getQuestionId());
+                    if (config == null || !"1".equals(config.getEnabled()) || !"VALID".equals(config.getValidationStatus())) {
+                        throw new ServiceException("Python 题“" + question.getQuestionContent() + "”尚未通过参考代码验证，不能加入课程");
+                    }
+                }
+            }
             List<BizLessonQuestion> questionToInsert = questions.stream().map(q -> {
                 BizLessonQuestion item = new BizLessonQuestion();
                 item.setLessonId(lessonId);

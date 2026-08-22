@@ -100,7 +100,12 @@ public class BizLessonController extends BaseController
     @GetMapping(value = "/details/{lessonId}")
     public AjaxResult getLessonDetails(@PathVariable("lessonId") Long lessonId)
     {
-        return success(bizLessonService.selectLessonDetailsByLessonId(lessonId));
+        Object details = bizLessonService.selectLessonDetailsByLessonId(lessonId);
+        if (details == null)
+        {
+            return error("课程不存在");
+        }
+        return success(details);
     }
 
     /**

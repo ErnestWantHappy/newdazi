@@ -26,6 +26,15 @@ public class BizQuestion extends BaseEntity
     /** Python 题目难度：SIMPLE/MEDIUM/HARD；仅 Python 题使用。 */
     private String difficulty;
 
+    /** 题库管理视图过滤：ALL/COMMON/PYTHON，不持久化。 */
+    private String bankView;
+
+    /** 以下字段来自 Python 配置联表，只用于题库列表展示。 */
+    private String programmingTitle;
+    private String knowledgePoints;
+    private String validationStatus;
+    private Integer testCaseCount;
+
     @Excel(name = "学期", readConverterExp = "0=上册,1=下册,上册=0,下册=1", combo = {"上册", "下册"})
     private String semester;
 
@@ -131,6 +140,16 @@ public class BizQuestion extends BaseEntity
 
     public String getDifficulty() { return difficulty; }
     public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+    public String getBankView() { return bankView; }
+    public void setBankView(String bankView) { this.bankView = bankView; }
+    public String getProgrammingTitle() { return programmingTitle; }
+    public void setProgrammingTitle(String programmingTitle) { this.programmingTitle = programmingTitle; }
+    public String getKnowledgePoints() { return knowledgePoints; }
+    public void setKnowledgePoints(String knowledgePoints) { this.knowledgePoints = knowledgePoints; }
+    public String getValidationStatus() { return validationStatus; }
+    public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
+    public Integer getTestCaseCount() { return testCaseCount; }
+    public void setTestCaseCount(Integer testCaseCount) { this.testCaseCount = testCaseCount; }
 
     public String getSemester() {
         return semester;

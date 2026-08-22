@@ -4,6 +4,14 @@
 CREATE TABLE IF NOT EXISTS biz_programming_question_config (
     question_id BIGINT NOT NULL COMMENT 'biz_question.question_id，v2 起题型为 practical 且 practical_mode=PYTHON',
     language_code VARCHAR(32) NOT NULL DEFAULT 'python' COMMENT '第一阶段固定 python',
+    external_id VARCHAR(32) NULL COMMENT '系统题稳定外部题号，教师自建题为空',
+    title VARCHAR(255) NULL COMMENT 'Python OJ 列表标题',
+    knowledge_points VARCHAR(500) NULL COMMENT '逗号分隔的知识点标签',
+    no_input CHAR(1) NOT NULL DEFAULT '0' COMMENT '1为无标准输入题',
+    validation_status VARCHAR(16) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT/VALIDATING/VALID/INVALID',
+    validated_at DATETIME NULL,
+    validated_by VARCHAR(64) NULL,
+    content_version INT NOT NULL DEFAULT 1,
     starter_code MEDIUMTEXT NULL COMMENT '学生初始代码',
     time_limit_seconds DECIMAL(5,2) NOT NULL DEFAULT 2.00 COMMENT '单测试点 CPU 时限',
     memory_limit_kb INT NOT NULL DEFAULT 131072 COMMENT '单测试点内存上限',
@@ -15,7 +23,8 @@ CREATE TABLE IF NOT EXISTS biz_programming_question_config (
     create_time DATETIME NULL,
     update_by VARCHAR(64) NOT NULL DEFAULT '',
     update_time DATETIME NULL,
-    PRIMARY KEY (question_id)
+    PRIMARY KEY (question_id),
+    UNIQUE KEY uk_programming_config_external_id (external_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Python 编程题资源与判题限制配置';
 
 -- 已存在的第一版表可能仍是默认 10；只修正默认值，不改动已有题目配置。
