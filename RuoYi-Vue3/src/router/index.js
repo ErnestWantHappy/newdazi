@@ -352,6 +352,20 @@ export const dynamicRoutes = [
     ]
   },
   {
+    path: '/student-tool/manage',
+    component: Layout,
+    permissions: ['business:studentTool:manage'],
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/studentTool/manage'),
+        name: 'StudentToolManage',
+        meta: { title: '学生实验工具管理', activeMenu: '/student-tool', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/business/guide-sheet',
     component: Layout,
     hidden: true,

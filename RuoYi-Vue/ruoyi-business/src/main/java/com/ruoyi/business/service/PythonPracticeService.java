@@ -53,7 +53,7 @@ public class PythonPracticeService {
 
     public List<Map<String, Object>> teacherPlans(Long deptId, String entryYear) {
         List<Map<String, Object>> plans = mapper.selectPlans(deptId, entryYear);
-        String schoolType = requireSchoolType(deptId);
+        String schoolType = resolveSchoolType(deptId);
         for (Map<String, Object> plan : plans) {
             Long versionId = number(plan.get("plan_version_id"));
             List<Map<String, Object>> classes = versionId == null
@@ -67,7 +67,7 @@ public class PythonPracticeService {
     public List<Map<String, Object>> managedClasses(Long userId, Long deptId) {
         List<Map<String, Object>> classes = mapper.selectManagedClasses(userId, deptId,
             SecurityUtils.isAdmin(userId) || SecurityUtils.hasRole("researcher"));
-        return decorateCurrentClasses(classes, requireSchoolType(deptId));
+        return decorateCurrentClasses(classes, resolveSchoolType(deptId));
     }
 
     public Map<String, Object> planDetail(Long planId, Long deptId) {
@@ -75,7 +75,7 @@ public class PythonPracticeService {
         requirePlanDept(plan, deptId);
         Long versionId = number(plan.get("plan_version_id"));
         plan.put("questions", versionId == null ? Collections.emptyList() : mapper.selectPlanQuestions(versionId));
-        String schoolType = requireSchoolType(deptId);
+        String schoolType = resolveSchoolType(deptId);
         plan.put("classes", versionId == null ? Collections.emptyList()
             : decorateCurrentClasses(mapper.selectPlanClasses(versionId), schoolType));
         Long publishedVersionId = number(plan.get("published_version_id"));
@@ -345,7 +345,7 @@ public class PythonPracticeService {
             throw new ServiceException("该班级不属于当前题单");
         }
         List<Map<String, Object>> students = mapper.selectPlanAnalyticsStudents(planVersionId, deptId, entryYear.trim(), classCode.trim());
-        decorateCurrentClasses(students, requireSchoolType(deptId));
+        decorateCurrentClasses(students, resolveSchoolType(deptId));
         List<Map<String, Object>> questions = mapper.selectPlanAnalyticsQuestions(planVersionId, deptId, entryYear.trim(), classCode.trim());
         int started = 0, completed = 0, submissions = 0;
         for (Map<String, Object> row : students) {
@@ -598,6 +598,20 @@ public class PythonPracticeService {
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         LocalDate today = LocalDate.now();
         if (source == null) return result;
+        if (schoolType == null) {
+            for (Map<String, Object> row : source) {
+                String entryYear = stringOrNull(row.get("entry_year"));
+                String classCode = stringOrNull(row.get("class_code"));
+                if (entryYear == null || classCode == null) continue;
+                // 县级机构没有学段，无法换算自然年级；保留原始入学年份，避免整个页面因展示字段而不可用。
+                row.put("class_label", entryYear + "级" + classCode + "班");
+                result.add(row);
+            }
+            result.sort(Comparator
+                .comparingInt((Map<String, Object> row) -> intValue(row.get("entry_year"), Integer.MIN_VALUE)).reversed()
+                .thenComparingInt(row -> intValue(row.get("class_code"), Integer.MAX_VALUE)));
+            return result;
+        }
         for (Map<String, Object> row : source) {
             String entryYear = stringOrNull(row.get("entry_year"));
             String classCode = stringOrNull(row.get("class_code"));
@@ -617,10 +631,10 @@ public class PythonPracticeService {
         return result;
     }
 
-    private String requireSchoolType(Long deptId) {
+    private String resolveSchoolType(Long deptId) {
         SysDept dept = deptMapper.selectDeptById(deptId);
         if (dept == null || dept.getSchoolType() == null || dept.getSchoolType().trim().isEmpty()) {
-            throw new ServiceException("当前学校未配置小学、初中或高中学段，暂时无法换算教学班名称");
+            return null;
         }
         return dept.getSchoolType().trim();
     }

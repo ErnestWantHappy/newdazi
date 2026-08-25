@@ -46,6 +46,8 @@ import com.ruoyi.business.service.GuideSheetStudentViewService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
 import com.ruoyi.business.service.StudentAnswerSubmissionService;
 import com.ruoyi.business.service.PracticalArtifactService;
+import com.ruoyi.business.service.StudentToolService;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.dto.PracticalArtifactSubmitRequest;
 import com.ruoyi.business.domain.dto.PracticalArtifactDeleteRequest;
 import com.ruoyi.business.domain.dto.PracticalUploadTicket;
@@ -108,6 +110,9 @@ public class StudentHomeController extends BaseController
 
     @Autowired
     private BizLessonCheckinMapper lessonCheckinMapper;
+
+    @Autowired
+    private StudentToolService studentToolService;
 
     @Value("${student.submission-grace-minutes:15}")
     private long submissionGraceMinutes;
@@ -225,6 +230,35 @@ public class StudentHomeController extends BaseController
         BizLessonCheckin checkin = lessonCheckinMapper.selectByLessonAndStudent(lessonId, student.getStudentId());
         boolean checkedIn = checkin != null;
 
+        // 学生实验工具：本节课工具 + 按 学校+年级+班级 匹配的常驻工具
+        java.util.Map<String, Object> studentTools = studentToolService.getToolsForStudent(
+                deptId, entryYear, classCode, lessonId);
+
+        // 题目开放开关：当前指派行的 班级 x 课程 双开关；推进课程会自动复位
+        BizLessonAssignment assignmentQuery = new BizLessonAssignment();
+        assignmentQuery.setEntryYear(student.getEntryYear());
+        assignmentQuery.setClassCode(student.getClassCode());
+        assignmentQuery.setDeptId(deptId);
+        java.util.List<BizLessonAssignment> assignmentRows = lessonAssignmentMapper.selectBizLessonAssignmentList(assignmentQuery);
+        BizLessonAssignment currentAssignment = assignmentRows == null || assignmentRows.isEmpty() ? null : assignmentRows.get(0);
+        boolean theoryOpen = currentAssignment != null && Integer.valueOf(1).equals(currentAssignment.getTheoryOpen());
+        boolean practicalOpen = currentAssignment != null && Integer.valueOf(1).equals(currentAssignment.getPracticalOpen());
+
+        // 该课程是否含对应题型（未开放时前端给提示，而不是把区域藏到找不到）
+        boolean hasTheory = false;
+        boolean hasPractical = false;
+        for (StudentLessonQuestionVo q : questions)
+        {
+            if ("choice".equalsIgnoreCase(q.getQuestionType()) || "judgment".equalsIgnoreCase(q.getQuestionType()))
+            {
+                hasTheory = true;
+            }
+            else if ("practical".equalsIgnoreCase(q.getQuestionType()))
+            {
+                hasPractical = true;
+            }
+        }
+
         return AjaxResult.success()
                 .put("hasLesson", true)
                 .put("lessonId", lessonId)
@@ -245,7 +279,13 @@ public class StudentHomeController extends BaseController
                 .put("guideSheetTitle", guideSheetBinding == null ? null : guideSheetBinding.getSnapshotTitle())
                 .put("questions", questions)
                 .put("submittedAnswers", answersMap)  // 新增：学生已提交的答案
-                .put("studentInfo", studentInfo);
+                .put("studentInfo", studentInfo)
+                .put("studentTools", studentTools)
+                .put("theoryOpen", theoryOpen)
+                .put("practicalOpen", practicalOpen)
+                .put("hasTheory", hasTheory)
+                .put("hasPractical", hasPractical);
+
     }
 
     /**

@@ -56,21 +56,30 @@
     </el-row>
 
 
+    <el-alert v-if="!hostHw.available" type="warning" show-icon :closable="false" class="hw-missing"
+      title="129 硬件信息暂缺"
+      :description="hostHw.error || 'SSH 凭据未恢复或探针不可达；恢复凭据并配置 MONITOR_HOST129_SSH_COMMAND 后自动出数据。其余服务探针不受影响。'"
+      style="margin-bottom: 16px" />
+
     <el-row :gutter="16" class="host-dash" v-if="hostHw.available">
       <el-col :sm="24" :lg="14">
         <el-card shadow="hover">
-          <template #header><span class="card-title">129 硬件信息（SSH 探针 · {{ hostHw.os }}）</span></template>
+          <template #header><span class="card-title">129 硬件信息（SSH 探针 · {{ hostHw.os || '—' }}）</span></template>
           <el-row :gutter="12">
             <el-col :span="12">
               <div class="res-block">
-                <div class="res-label">CPU 型号 / 核心</div>
+                <div class="res-label">CPU 型号 / 核数</div>
                 <div class="res-value"><el-tag type="info">{{ hostHw.cpu?.model || '—' }}</el-tag></div>
-                <div class="res-sub">{{ hostHw.cpu?.cores }} 线程（{{ hostHw.cpu?.sockets }} 路）· 主机名 {{ hostHw.hostname }} · IP {{ hostHw.ip }}</div>
+                <div class="res-sub">{{ hostHw.cpu?.cores ?? '—' }} 核 · 主机名 {{ hostHw.hostname || '—' }} · IP {{ hostHw.ip || '—' }}</div>
+              </div>
+              <div class="res-block" style="margin-top:8px">
+                <div class="res-label">操作系统 / 内核</div>
+                <div class="res-sub">{{ hostHw.os || '—' }}{{ hostHw.kernel ? ' · ' + hostHw.kernel : '' }}</div>
               </div>
               <div class="res-block" style="margin-top:8px">
                 <div class="res-label">运行环境版本</div>
                 <div class="res-sub">CryptPad Node：{{ hostHw.cryptpadNodeVersion || '—' }}</div>
-                <div class="res-sub">Judge0 Java：{{ hostHw.javaVersion || '—' }} · 宿主 Node：{{ hostHw.nodeVersion || '无' }}</div>
+                <div class="res-sub">宿主 Node：{{ hostHw.nodeVersion || '无' }} · Judge0 Java：{{ hostHw.javaVersion || '—' }}</div>
               </div>
             </el-col>
             <el-col :span="12">
@@ -79,6 +88,16 @@
                 <el-progress :percentage="hwMemPercent == null ? 0 : hwMemPercent"
                              :status="hwMemPercent != null && hwMemPercent >= 85 ? 'exception' : 'success'" />
                 <div class="res-sub">{{ fmtGb(hostHw.memory?.totalBytes) }} 总量 · 可用 {{ fmtGb(hostHw.memory?.availableBytes) }}</div>
+              </div>
+              <div class="res-block" style="margin-top:8px" v-if="hostHw.java">
+                <div class="res-label">Java 虚拟机（JVM）</div>
+                <div class="res-sub">版本：{{ hostHw.java.version || '—' }} · 启动时长：{{ hostHw.java.startTime || '—' }}</div>
+                <div class="res-sub" style="word-break: break-all">路径：{{ hostHw.java.home || '—' }}</div>
+                <div class="res-sub" style="word-break: break-all">运行参数：{{ hostHw.java.arguments || '—' }}</div>
+              </div>
+              <div class="res-block" style="margin-top:8px" v-else>
+                <div class="res-label">Java 虚拟机（JVM）</div>
+                <div class="res-sub">129 无 Java 服务进程或未采集</div>
               </div>
             </el-col>
           </el-row>
@@ -257,7 +276,7 @@ const compareRows = computed(() => [
   { item: 'JVM 使用率', host123: pct(host123.value.server?.jvm?.usage), host129: '独立服务机' },
   // 量纲说明：123 是 CPU 使用率百分比，129 的 load5 是运行队列负载均值（非百分比），不可直接比较
   { item: 'CPU 使用率% / 负载数值(5min)', host123: host123.value.server?.cpu?.used == null ? '—' : pct(host123.value.server.cpu.used), host129: sysInfo.value.cpu?.load5 != null ? fmtNum(sysInfo.value.cpu.load5) + '（负载）' : '不可用' },
-  { item: '判题排队', host123: String(sysInfo.value.judgePipeline?.queueSize ?? '—'), host129: 'Judge0 workers' }
+  { item: '判题排队', host123: String(sysInfo.value.judgePipeline?.queueSize ?? '—'), host129: '由 Judge0 管理' }
 ])
 function fmtNum(v) {
   const n = Number(v)

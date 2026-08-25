@@ -229,7 +229,22 @@ public class GuideSheetAccessService
     public BizLessonGuideSheetBinding requireLessonClassBindingContext(Long lessonId, String entryYear,
                                                                         String classCode)
     {
-        assertCanViewLessonClass(lessonId, entryYear, classCode);
+        // 成绩页对历史课程也要能打开（历史班级查看历史成绩）：这里只校验课程属于本校且届别一致，
+        // 不再要求“当前指派”。无当前指派时 return null 由调用方按“无导学单上下文”静默处理，
+        // 避免历史课查询被“该课程未指派给当前班级”拦截。
+        if (lessonId == null || StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+        {
+            throw new ServiceException("课程、入学年份和班级编号必须同时提供");
+        }
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        Long currentDeptId = SecurityUtils.getDeptId();
+        if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(currentDeptId))
+        {
+            throw new ServiceException("课程不存在或不属于当前学校");
+        }
+        assertLessonEntryYear(lesson, entryYear);
+        // 仅校验教师班级范围（历史课也受管理班级约束）；指派与否不再作为读开关/上下文的硬门槛。
+        assertTeacherClassScope(lesson, currentDeptId, entryYear, normalizeClassCode(classCode));
         return bindingMapper.selectCurrentByLessonId(lessonId);
     }
 

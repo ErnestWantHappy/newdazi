@@ -1,8 +1,8 @@
 <template>
   <div class="app-container">
-    <el-row :gutter="20">
+    <el-row :gutter="20" class="designer-grid">
       <!-- 左侧：课程内容区 -->
-      <el-col :span="10" :xs="24">
+      <el-col :span="24" :xl="11">
         <el-card class="box-card">
           <template #header>
             <div class="card-header">
@@ -42,7 +42,9 @@
             </el-row>
             <el-form-item label="第几课" prop="lessonNum">
               <el-input-number v-model="form.lessonNum" placeholder="课程序号" :min="1" :max="30" disabled />
-              <span style="margin-left: 8px; color: #909399; font-size: 12px;">系统根据已创建课程自动计算</span>
+              <el-tooltip content="系统根据已创建课程自动计算" placement="top">
+                <span class="form-help-dot">?</span>
+              </el-tooltip>
             </el-form-item>
 
             <el-form-item label="课程用途">
@@ -50,9 +52,9 @@
                 <el-radio value="assessment">常规课</el-radio>
                 <el-radio value="attendance">课堂考勤</el-radio>
               </el-radio-group>
-              <div style="color: #909399; font-size: 12px; margin-top: 4px; line-height: 1.5;">
-                常规课可出题、绑导学单；课堂考勤可不选题，学生仅签到，不计入作业均分。
-              </div>
+              <el-tooltip content="常规课可出题、绑导学单；课堂考勤可不选题，学生仅签到且不计入作业均分。" placement="top">
+                <span class="form-help-dot">?</span>
+              </el-tooltip>
             </el-form-item>
             <el-form-item v-if="form.lessonMode === 'attendance'" label="教师说明">
               <el-input
@@ -65,10 +67,49 @@
               />
             </el-form-item>
 
-            <el-form-item v-if="form.lessonMode !== 'attendance'" label="开启物联网">
-              <el-switch v-model="form.iotEnabled" active-text="开启" inactive-text="关闭" />
-              <div style="color: #909399; font-size: 12px; margin-top: 4px; line-height: 1.5;">
-                开启后，教师首页该课程卡片与学生首页将显示「物联」入口；实验项目和班级分组在物联页配置。
+            <el-form-item v-if="form.lessonMode !== 'attendance'" label="扩展功能">
+              <div class="feature-settings">
+                <div class="feature-row">
+                  <div class="feature-label">
+                    <b>物联网实验</b>
+                    <el-tooltip content="开启后，教师和学生首页显示物联入口；实验项目和班级分组在物联页配置。" placement="top">
+                      <span class="form-help-dot">?</span>
+                    </el-tooltip>
+                  </div>
+                  <el-switch v-model="form.iotEnabled" inline-prompt active-text="开" inactive-text="关" />
+                </div>
+                <div class="feature-row">
+                  <div class="feature-label">
+                    <b>在线协作</b>
+                    <span class="feature-status">{{ collaborationStatusText }}</span>
+                    <el-tooltip content="必须先选择带 Word、Excel 或 PPT 起始文件的“文件作品”操作题；Python 编程题不能作为协作文档。" placement="top">
+                      <span class="form-help-dot">?</span>
+                    </el-tooltip>
+                  </div>
+                  <el-switch :model-value="collaborationForm.enabled" inline-prompt active-text="开" inactive-text="关" @change="handleCollaborationToggle" />
+                </div>
+              </div>
+            </el-form-item>
+
+            <el-form-item v-if="form.lessonMode !== 'attendance'" label="本课工具">
+              <div style="width: 100%">
+                <div class="compact-setting-heading">
+                  <span>{{ form.lessonTools.length ? `已配置 ${form.lessonTools.length} 个工具` : '未配置' }}</span>
+                  <div>
+                    <el-tooltip content="学生可从首页的“学生实验工具”面板打开本课网址。" placement="top">
+                      <span class="form-help-dot">?</span>
+                    </el-tooltip>
+                    <el-button link type="primary" @click="lessonToolsExpanded = !lessonToolsExpanded">{{ lessonToolsExpanded ? '收起' : '配置' }}</el-button>
+                  </div>
+                </div>
+                <div v-show="lessonToolsExpanded">
+                  <div v-for="(t, ti) in form.lessonTools" :key="ti" class="lesson-tool-row">
+                  <el-input v-model="t.toolName" placeholder="工具名称，如：实验一" size="small" style="width: 150px" />
+                  <el-input v-model="t.toolUrl" placeholder="http:// 或 https:// 网址" size="small" style="flex: 1" />
+                  <el-button type="danger" link icon="Delete" @click="removeLessonTool(ti)" />
+                  </div>
+                  <el-button size="small" type="primary" plain icon="Plus" @click="addLessonTool">添加工具</el-button>
+                </div>
               </div>
             </el-form-item>
 
@@ -91,6 +132,32 @@
               </div>
               <div v-else-if="!form.grade" style="color: #909399; font-size: 12px;">
                 请先选择年级
+              </div>
+            </el-form-item>
+
+            <el-form-item
+              v-if="form.lessonMode !== 'attendance' && (hasTheorySelected || hasPracticalSelected)"
+              label="学生开放"
+            >
+              <div class="initial-gate-panel">
+                <div v-if="hasTheorySelected" class="initial-gate-row">
+                  <div class="feature-label">
+                    <b>理论测试题</b>
+                    <el-tooltip content="仅初始化新指派班级；已有班级状态不覆盖，课中可在成绩查询开启。" placement="top">
+                      <span class="form-help-dot">?</span>
+                    </el-tooltip>
+                  </div>
+                  <el-switch v-model="form.initialTheoryOpen" inline-prompt active-text="开" inactive-text="关" />
+                </div>
+                <div v-if="hasPracticalSelected" class="initial-gate-row">
+                  <div class="feature-label">
+                    <b>操作题（含 Python）</b>
+                    <el-tooltip content="仅初始化新指派班级；已有班级状态不覆盖，课中可在成绩查询开启。" placement="top">
+                      <span class="form-help-dot">?</span>
+                    </el-tooltip>
+                  </div>
+                  <el-switch v-model="form.initialPracticalOpen" inline-prompt active-text="开" inactive-text="关" />
+                </div>
               </div>
             </el-form-item>
 
@@ -165,24 +232,21 @@
             ⚠️ 注意：检测到同类题目分值不一致。随机抽题模式下，建议保持同题型分值相同，否则学生试卷总分可能浮动。当前预览总分仅供参考。
           </div>
           
-          <!-- 批量改分工具栏 -->
-          <div class="batch-toolbar" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 4px;">
-            <span style="font-size: 14px; font-weight: bold; color: #606266;">批量设置分数：</span>
-            <el-select v-model="batchScoreType" placeholder="选择题型" style="width: 140px" size="small">
-              <el-option :label="`选择题 (${choiceCount}题)`" value="choice" />
-              <el-option :label="`判断题 (${judgmentCount}题)`" value="judgment" />
-            </el-select>
-            <el-input-number v-model="batchScoreValue" :min="0" :max="100" size="small" controls-position="right" style="width: 100px" />
-            <span style="font-size: 14px; color: #606266;">分</span>
-            <el-button type="primary" size="small" @click="applyBatchScore">应 用</el-button>
+          <div v-if="choiceCount || judgmentCount" class="selected-question-tools">
+            <el-popover placement="bottom-start" :width="390" trigger="click">
+              <template #reference><el-button size="small" plain>批量改分</el-button></template>
+              <div class="batch-popover">
+                <el-select v-model="batchScoreType" placeholder="选择题型" style="width: 150px" size="small">
+                  <el-option :label="`选择题 (${choiceCount}题)`" value="choice" />
+                  <el-option :label="`判断题 (${judgmentCount}题)`" value="judgment" />
+                </el-select>
+                <el-input-number v-model="batchScoreValue" :min="0" :max="100" size="small" controls-position="right" style="width: 100px" />
+                <span>分</span>
+                <el-button type="primary" size="small" @click="applyBatchScore">应用</el-button>
+              </div>
+            </el-popover>
           </div>
           <el-table :data="selectedQuestions" row-key="questionId" style="width: 100%">
-            <!-- Debug: 显示实际题目数量 -->
-            <template #header v-if="selectedQuestions.length === 0 || selectedQuestions.length > 1">
-              <div style="padding: 5px; background: #e6f7ff; color: #0050b3; font-size: 12px;">
-                当前已选 {{ selectedQuestions.length }} 道题目
-              </div>
-            </template>
             <el-table-column label="题干" prop="questionContent" :show-overflow-tooltip="true">
               <template #default="scope">
                 <div class="question-content-text">{{ stripHtml(scope.row.questionContent) }}</div>
@@ -230,23 +294,18 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="题型" align="center" width="100">
+            <el-table-column label="题型 / 方式" align="center" width="150">
                <template #default="scope">
                   <dict-tag :options="biz_question_type" :value="scope.row.questionType"/>
-               </template>
-            </el-table-column>
-            <el-table-column label="作答方式" align="center" width="145">
-              <template #default="scope">
-                <span v-if="scope.row.questionType === 'practical'">{{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}</span>
-                <span v-else>-</span>
+                  <div v-if="scope.row.questionType === 'practical'" class="answer-mode-text">{{ scope.row.practicalMode === 'PYTHON' ? 'Python 编程' : '文件作品' }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="分值" align="center" width="120">
+            <el-table-column label="分值" align="center" width="105">
               <template #default="scope">
                 <el-input-number v-model="scope.row.questionScore" :min="0" :max="100" size="small" />
               </template>
             </el-table-column>
-            <el-table-column label="操作" align="center" width="210">
+            <el-table-column label="操作" align="center" width="120" fixed="right">
               <template #default="scope">
                 <!-- 新增：操作题支持在已选列表中直接预览 -->
                 <el-button
@@ -255,14 +314,6 @@
                   type="success"
                   @click="scope.row.practicalMode === 'PYTHON' ? openPythonPreview(scope.row) : handlePreviewFile(scope.row)"
                 >预览</el-button>
-                <el-tooltip content="开启后，当前课程已指派的每个班级各有一份共享文档；学生只能进入自己班级的房间" placement="top">
-                  <el-button
-                    v-if="isFilePractical(scope.row)"
-                    link
-                    :type="isCollaborationQuestion(scope.row) ? 'primary' : 'info'"
-                    @click="toggleCollaboration(scope.row)"
-                  >{{ isCollaborationQuestion(scope.row) ? '已开启协作' : '开启协作' }}</el-button>
-                </el-tooltip>
                 <el-button link type="danger" @click="handleRemoveQuestion(scope.row)">移除</el-button>
               </template>
             </el-table-column>
@@ -271,7 +322,7 @@
       </el-col>
 
       <!-- 右侧：题库选题区 -->
-      <el-col :span="14" :xs="24">
+      <el-col :span="24" :xl="13">
         <el-card>
            <template #header>
              <div class="card-header">
@@ -411,12 +462,14 @@
       </template>
     </el-dialog>
     <el-dialog v-model="collaborationMaterialVisible" title="选择在线协作文件" width="520px" append-to-body>
-      <p class="collaboration-material-tip">每个授课班会从此文件复制一份独立的共享文档。学生只能编辑自己班级的副本。</p>
+      <p class="collaboration-material-tip">请选择用于协作的文件作品及起始文件。每个授课班会获得一份独立副本。</p>
       <el-radio-group v-model="collaborationForm.materialId" class="collaboration-material-list">
-        <el-radio v-for="item in collaborationCandidates" :key="item.materialId" :value="item.materialId">{{ item.fileName }}</el-radio>
+        <el-radio v-for="item in collaborationCandidates" :key="item.materialId" :value="item.materialId">
+          {{ item.questionTitle ? `${item.questionTitle} · ` : '' }}{{ item.fileName }}
+        </el-radio>
       </el-radio-group>
       <template #footer>
-        <el-button @click="collaborationMaterialVisible = false">取消</el-button>
+        <el-button @click="cancelCollaborationMaterial">取消</el-button>
         <el-button type="primary" @click="confirmEnableCollaboration">确认开启</el-button>
       </template>
     </el-dialog>
@@ -429,7 +482,7 @@ import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
 import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
-import { listQuestion } from "@/api/business/question";
+import { getQuestion, listQuestion } from "@/api/business/question";
 import { previewProgrammingQuestion } from "@/api/business/programming";
 import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
@@ -454,6 +507,7 @@ const pythonPreviewCases = ref([]);
 const collaborationForm = ref({ enabled: false, questionId: null, materialId: null });
 const collaborationCandidates = ref([]);
 const collaborationMaterialVisible = ref(false);
+const lessonToolsExpanded = ref(false);
 
 // 核心修复：将 assignedClassCodes 整合到 form 对象中
 const form = ref({
@@ -464,6 +518,8 @@ const form = ref({
   semester: null,
   lessonNum: 1,
   assignedClasses: [], // 改为存储 "entryYear-classCode" 格式
+  initialTheoryOpen: false,
+  initialPracticalOpen: false,
   shuffleMode: 0,      // 出题模式: 0=固定, 1=随机排序, 2=随机抽取
   randomChoiceCount: 0,   // 随机抽取选择题数
   randomJudgmentCount: 0, // 随机抽取判断题数
@@ -475,6 +531,7 @@ const form = ref({
   autoAdvanceThresholdPct: 50,
   autoAdvanceDelayHours: 2,
   teacherNote: '',
+  lessonTools: [], // 本节课工具（学生端实验工具面板先显示，随课程保存）
   guideSheetEnabled: false,
   guideSheetSourceSheetId: null,
   guideSheetReplaceRequested: false,
@@ -482,6 +539,12 @@ const form = ref({
 const selectedQuestions = ref([]);
 const myManagedClasses = ref([]); // 教师管理的班级列表
 const initialGuideSheetBinding = ref(null);
+
+const filePracticalQuestions = computed(() => selectedQuestions.value.filter(isFilePractical));
+const collaborationStatusText = computed(() => {
+  if (collaborationForm.value.enabled) return '已开启';
+  return filePracticalQuestions.value.length ? '未开启' : '需先添加文件作品题';
+});
 
 const questionBankList = ref([]);
 const queryParams = ref({
@@ -643,6 +706,8 @@ function submitForm() {
         autoAdvanceDelayHours: Number(form.value.autoAdvanceDelayHours) || 2,
         // 物联网开关：考勤课强制关闭
         iotEnabled: isAttendanceSubmit ? false : Boolean(form.value.iotEnabled),
+        // 本节课工具：随课程保存，学生端面板先展示
+        lessonTools: (form.value.lessonTools || []).filter(t => t && t.toolName && t.toolUrl),
         questions: selectedQuestions.value,
         // 入学年份随表单显式提交，避免跨学年时再由年级反推错届。
         assignedClassCodes: form.value.assignedClasses 
@@ -702,11 +767,15 @@ function initialize() {
         semester: detail.semester ?? getDefaultSemester(),
         lessonNum: detail.lessonNum,
         assignedClasses: assignedClasses,
+        // 该设置只应用于本次新增加的班级，已有班级状态由后端保留。
+        initialTheoryOpen: false,
+        initialPracticalOpen: false,
         shuffleMode: detail.shuffleMode ?? 0,
         randomChoiceCount: detail.randomChoiceCount ?? 0,
         randomJudgmentCount: detail.randomJudgmentCount ?? 0,
         lessonMode: detail.lessonMode === 'attendance' ? 'attendance' : 'assessment',
         teacherNote: detail.teacherNote || '',
+        lessonTools: (detail.lessonTools || []).map(t => ({ toolName: t.toolName, toolUrl: t.toolUrl })),
         iotEnabled: detail.lessonMode !== 'attendance'
           && (detail.iotEnabled === true || detail.iotEnabled === 1 || detail.iotEnabled === '1'),
         autoAdvanceEnabled: detail.lessonMode === 'attendance'
@@ -745,11 +814,14 @@ function initialize() {
       semester: semester !== undefined ? String(semester) : getDefaultSemester(),
       lessonNum: route.query.nextNum ? parseInt(route.query.nextNum, 10) : 1,
       assignedClasses: [],
+      initialTheoryOpen: false,
+      initialPracticalOpen: false,
       shuffleMode: 0,
       randomChoiceCount: 0,
       randomJudgmentCount: 0,
       lessonMode: initMode,
       teacherNote: '',
+      lessonTools: [],
       iotEnabled: false,
       autoAdvanceEnabled: false,
       autoAdvanceThresholdPct: 50,
@@ -906,6 +978,7 @@ function handleRemoveQuestion(row) {
     selectedQuestions.value.splice(index, 1);
     if (Number(collaborationForm.value.questionId) === Number(row.questionId)) {
       collaborationForm.value = { enabled: false, questionId: null, materialId: null };
+      proxy.$modal.msgWarning('协作所用文件作品题已移除，在线协作已关闭。');
     }
   }
 }
@@ -917,6 +990,16 @@ function isFilePractical(row) {
 function isCollaborationQuestion(row) {
   return Boolean(collaborationForm.value.enabled)
     && Number(collaborationForm.value.questionId) === Number(row.questionId);
+}
+
+// 本节课工具：添加 / 删除行
+function addLessonTool() {
+  form.value.lessonTools = form.value.lessonTools || [];
+  form.value.lessonTools.push({ toolName: '', toolUrl: '' });
+  lessonToolsExpanded.value = true;
+}
+function removeLessonTool(index) {
+  form.value.lessonTools.splice(index, 1);
 }
 
 async function loadCollaborationSettings(lessonId) {
@@ -931,6 +1014,40 @@ async function loadCollaborationSettings(lessonId) {
   };
 }
 
+async function handleCollaborationToggle(enabled) {
+  if (!enabled) {
+    collaborationForm.value = { enabled: false, questionId: null, materialId: null };
+    collaborationCandidates.value = [];
+    return;
+  }
+  if (!filePracticalQuestions.value.length) {
+    proxy.$modal.msgWarning('请先添加一道“文件作品”操作题，再开启在线协作。');
+    return;
+  }
+
+  const candidates = [];
+  for (const row of filePracticalQuestions.value) {
+    candidates.push(...await loadQuestionCollaborationCandidates(row, false));
+  }
+  collaborationCandidates.value = candidates;
+  if (!candidates.length) {
+    proxy.$modal.msgError('已选文件作品题没有可用于在线协作的 Word、Excel 或 PPT 起始文件。');
+    return;
+  }
+  if (candidates.length === 1) {
+    collaborationForm.value = {
+      enabled: true,
+      questionId: candidates[0].questionId,
+      materialId: candidates[0].materialId
+    };
+    proxy.$modal.msgInfo('在线协作已加入本次保存，保存课程后即可使用。');
+    return;
+  }
+
+  collaborationForm.value = { enabled: true, questionId: null, materialId: null };
+  collaborationMaterialVisible.value = true;
+}
+
 async function toggleCollaboration(row) {
   if (isCollaborationQuestion(row)) {
     collaborationForm.value.enabled = false;
@@ -938,7 +1055,18 @@ async function toggleCollaboration(row) {
   }
   collaborationForm.value = { enabled: true, questionId: row.questionId, materialId: null };
   if (!form.value.lessonId) {
-    proxy.$modal.msgInfo('课程保存后将按已指派班级自动创建协作房间。');
+    const candidates = await loadQuestionCollaborationCandidates(row);
+    if (!candidates.length) {
+      collaborationForm.value.enabled = false;
+      proxy.$modal.msgError('该文件作品没有可用于在线协作的 Word、Excel 或 PPT 起始文件。');
+      return;
+    }
+    if (candidates.length === 1) {
+      collaborationForm.value.materialId = candidates[0].materialId;
+      proxy.$modal.msgInfo('保存课程后将按已指派班级自动创建协作房间。');
+      return;
+    }
+    collaborationMaterialVisible.value = true;
     return;
   }
   const desired = { ...collaborationForm.value };
@@ -954,7 +1082,33 @@ async function toggleCollaboration(row) {
     collaborationForm.value.materialId = candidates[0].materialId;
     return;
   }
+  collaborationCandidates.value = candidates;
   collaborationMaterialVisible.value = true;
+}
+
+async function loadQuestionCollaborationCandidates(row, updateStore = true) {
+  try {
+    const response = await getQuestion(row.questionId);
+    const detail = response.data || {};
+    const editableExtensions = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']);
+    const candidates = (detail.practicalMaterials || [])
+      .filter(item => String(item.materialType || '').toUpperCase() === 'STARTER')
+      .filter(item => {
+        const name = item.originalFileName || item.resourcePath || '';
+        return editableExtensions.has(name.split('.').pop()?.toLowerCase());
+      })
+      .map(item => ({
+        questionId: Number(row.questionId),
+        materialId: item.materialId,
+        fileName: item.originalFileName || String(item.resourcePath || '').split('/').pop(),
+        questionTitle: stripHtml(row.questionContent).trim().slice(0, 36) || `题目 ${row.questionId}`
+      }));
+    if (updateStore) collaborationCandidates.value = candidates;
+    return candidates;
+  } catch (error) {
+    if (updateStore) collaborationCandidates.value = [];
+    return [];
+  }
 }
 
 function confirmEnableCollaboration() {
@@ -962,7 +1116,22 @@ function confirmEnableCollaboration() {
     proxy.$modal.msgWarning('请选择一份起始文件。');
     return;
   }
+  const selected = collaborationCandidates.value.find(item => Number(item.materialId) === Number(collaborationForm.value.materialId));
+  if (!selected) {
+    proxy.$modal.msgWarning('所选起始文件已不可用，请重新选择。');
+    return;
+  }
+  collaborationForm.value = {
+    enabled: true,
+    questionId: selected.questionId,
+    materialId: selected.materialId
+  };
   collaborationMaterialVisible.value = false;
+}
+
+function cancelCollaborationMaterial() {
+  collaborationMaterialVisible.value = false;
+  collaborationForm.value = { enabled: false, questionId: null, materialId: null };
 }
 
 async function synchronizeCollaboration(lessonId) {
@@ -1014,6 +1183,8 @@ const batchScoreValue = ref(5);
 
 const choiceCount = computed(() => selectedQuestions.value.filter(q => q.questionType === 'choice').length);
 const judgmentCount = computed(() => selectedQuestions.value.filter(q => q.questionType === 'judgment').length);
+const hasTheorySelected = computed(() => choiceCount.value > 0 || judgmentCount.value > 0);
+const hasPracticalSelected = computed(() => selectedQuestions.value.some(q => q.questionType === 'practical'));
 
 function applyBatchScore() {
   if (!batchScoreType.value) {
@@ -1139,12 +1310,61 @@ onMounted(() => {
 .python-preview-code { white-space: pre-wrap; background: #f6f8fa; padding: 10px; margin: 0; }
 .collaboration-material-tip { color: #606266; line-height: 1.6; }
 .collaboration-material-list { display: flex; flex-direction: column; gap: 12px; }
+.designer-grid > :deep(.el-col) { margin-bottom: 20px; }
+.form-help-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 7px;
+  border: 1px solid #a8b3bd;
+  border-radius: 50%;
+  color: #7b8792;
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+}
+.feature-settings,
+.initial-gate-panel {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fff;
+}
+.feature-row,
+.initial-gate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 7px 12px;
+}
+.feature-row + .feature-row,
+.initial-gate-row + .initial-gate-row { border-top: 1px solid #ebeef5; }
+.feature-label { display: flex; align-items: center; min-width: 0; gap: 4px; }
+.feature-status { margin-left: 8px; color: #909399; font-size: 12px; font-weight: 400; }
+.compact-setting-heading { display: flex; align-items: center; justify-content: space-between; min-height: 32px; color: #606266; }
+.compact-setting-heading > div { display: flex; align-items: center; gap: 4px; }
+.selected-question-tools { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+.batch-popover { display: flex; align-items: center; gap: 8px; }
+.answer-mode-text { margin-top: 4px; color: #909399; font-size: 12px; }
 
 @media (max-width: 768px) {
   .resource-tabs { overflow-x: auto; }
 }
 
+.lesson-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 
+@media (max-width: 1199px) {
+  .designer-grid > :deep(.el-col) { margin-bottom: 16px; }
+}
 </style>
 
 

@@ -40,6 +40,13 @@
               >Python 练习</el-button
             >
             <el-button
+              type="info"
+              link
+              icon="Link"
+              @click="studentToolVisible = true"
+              >学生实验工具</el-button
+            >
+            <el-button
               type="primary"
               link
               icon="Timer"
@@ -75,6 +82,46 @@
         </div>
       </div>
     </header>
+
+    <!-- 学生实验工具面板：先本节课，后常驻；点击新标签页打开 -->
+    <el-dialog
+      v-model="studentToolVisible"
+      title="学生实验工具"
+      width="560px"
+      append-to-body
+      destroy-on-close
+      class="student-tool-dialog"
+    >
+      <div v-if="!hasToolList" class="student-tool-empty">
+        <el-empty description="当前没有可用的实验工具" :image-size="80" />
+      </div>
+      <template v-else>
+        <div v-if="lessonTools.length" class="tool-group">
+          <div class="tool-group-title">
+            <el-icon><Collection /></el-icon> 本节课工具
+          </div>
+          <div class="tool-grid">
+            <div v-for="tool in lessonTools" :key="'l' + tool.toolId" class="tool-item">
+              <el-link type="primary" :href="tool.toolUrl" target="_blank" rel="noopener noreferrer">
+                <el-icon><Link /></el-icon>{{ tool.toolName }}
+              </el-link>
+            </div>
+          </div>
+        </div>
+        <div v-if="residentTools.length" class="tool-group">
+          <div class="tool-group-title">
+            <el-icon><Star /></el-icon> 常驻工具
+          </div>
+          <div class="tool-grid">
+            <div v-for="tool in residentTools" :key="'r' + tool.toolId" class="tool-item">
+              <el-link type="primary" :href="tool.toolUrl" target="_blank" rel="noopener noreferrer">
+                <el-icon><Link /></el-icon>{{ tool.toolName }}
+              </el-link>
+            </div>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- 加载中 -->
     <div v-if="loading && activeLearningMode === 'daily'" class="loading-container">
@@ -160,6 +207,13 @@
       </div>
 
       <div v-else class="task-container">
+        <!-- 题目未开放提示：课程有题但老师未在课堂开启 -->
+        <el-alert v-if="!theoryOpen && hasTheory && !practicalOpen && hasPractical" type="info" :closable="false" show-icon class="gate-tip"
+          title="本课理论测试题与操作题暂未开放，请等老师在课堂开启后作答" />
+        <el-alert v-else-if="!theoryOpen && hasTheory" type="info" :closable="false" show-icon class="gate-tip"
+          title="本课理论测试题暂未开放，请等老师在课堂开启后作答" />
+        <el-alert v-else-if="!practicalOpen && hasPractical" type="info" :closable="false" show-icon class="gate-tip"
+          title="本课操作题暂未开放，请等老师在课堂开启后作答" />
         <el-card v-if="collaborationRooms.length" shadow="never" class="collaboration-card">
           <template #header><div class="card-header"><span>班级在线协作</span><el-tag type="success">同班共享</el-tag></div></template>
           <div v-for="room in collaborationRooms" :key="room.roomId" class="collaboration-room-row">
@@ -976,6 +1030,15 @@ const userStore = useUserStore();
 const loading = ref(true);
 const hasLesson = ref(false);
 const lessonId = ref(null);
+// 学生实验工具 + 题目开放开关状态
+const studentToolVisible = ref(false);
+const lessonTools = ref([]);
+const residentTools = ref([]);
+const hasToolList = computed(() => lessonTools.value.length > 0 || residentTools.value.length > 0);
+const theoryOpen = ref(false);
+const practicalOpen = ref(false);
+const hasTheory = ref(false);
+const hasPractical = ref(false);
 const lessonTitle = ref("");
 const lessonMode = ref("assessment");
 const teacherNote = ref("");
@@ -1333,10 +1396,13 @@ const theorySubmitted = ref(false);
 const typingQuestions = computed(() =>
   allQuestions.value.filter((q) => q.questionType === "typing")
 );
+// 理论题：老师课堂上开启后才显示（老师未开启时不渲染作答区）
 const theoryQuestions = computed(() =>
-  allQuestions.value.filter((q) =>
-    ["choice", "judgment"].includes(q.questionType)
-  )
+  theoryOpen.value
+    ? allQuestions.value.filter((q) =>
+        ["choice", "judgment"].includes(q.questionType)
+      )
+    : []
 );
 
 // 理论测试总分
@@ -1347,9 +1413,11 @@ const theoryTotalScore = computed(() => {
   );
 });
 
-// 操作题
+// 操作题：老师课堂上开启后才显示（老师未开启时不渲染作答区）
 const practicalQuestions = computed(() =>
-  allQuestions.value.filter((q) => q.questionType === "practical")
+  practicalOpen.value
+    ? allQuestions.value.filter((q) => q.questionType === "practical")
+    : []
 );
 // 兼容历史接口的下划线字段和不同大小写，避免 Python 题误回退到文件上传。
 function isPythonPracticalQuestion(question) {
@@ -1482,9 +1550,12 @@ const uploadHeaders = computed(() => ({
   Authorization: "Bearer " + userStore.token,
 }));
 
-// 加载数据
-async function fetchData() {
-  loading.value = true;
+// 加载数据（silent=静默轮询：不触发整屏 loading，失败时保留现有页面状态）
+async function fetchData(opts = {}) {
+  const silent = opts && opts.silent === true;
+  if (!silent) {
+    loading.value = true;
+  }
   accessCheckFailed.value = false;
   try {
     // 区域抽测检查失败时停止加载日常课程，避免网络异常导致优先级失效。
@@ -1545,11 +1616,22 @@ async function fetchData() {
       
       studentInfo.value = res.studentInfo || {};
       submittedAnswers.value = res.submittedAnswers || {};
+      // 学生实验工具与题目开放开关（班级x当前课程，推进自动复位）
+      lessonTools.value = res.studentTools?.lessonTools || [];
+      residentTools.value = res.studentTools?.residentTools || [];
+      theoryOpen.value = Boolean(res.theoryOpen);
+      practicalOpen.value = Boolean(res.practicalOpen);
+      hasTheory.value = Boolean(res.hasTheory);
+      hasPractical.value = Boolean(res.hasPractical);
       initTypingStates();
       initPracticalStates(); // 初始化操作题状态
       initTheoryState(); // 初始化理论测试状态（检查是否已提交）
     }
   } catch (err) {
+    // 静默轮询失败不清空现有状态，下个周期再试；避免一次网络抖动抹掉整页课程
+    if (silent) {
+      return;
+    }
     // 抽测状态无法确认时保持关闭，禁止回落到日常课程。
     accessCheckFailed.value = true;
     hasLesson.value = false;
@@ -1561,6 +1643,12 @@ async function fetchData() {
     checkinTime.value = null;
     iotEnabled.value = false;
     allQuestions.value = [];
+    lessonTools.value = [];
+    residentTools.value = [];
+    theoryOpen.value = false;
+    practicalOpen.value = false;
+    hasTheory.value = false;
+    hasPractical.value = false;
     activeLearningMode.value = 'daily';
   } finally {
     loading.value = false;
@@ -2288,13 +2376,37 @@ const beforeUnloadHandler = (e) => {
   }
 };
 
+// 老师开启题目后学生端自动出现：页面可见时每 60 秒静默重拉一次课程数据
+let gatePollTimer = null;
+// 是否有进行中的打字作答（已开始未提交）；此时刷新会重置计时与进度，必须跳过
+function hasActiveTypingSession() {
+  return Object.values(typingStates.value).some(
+    (s) => s && s.started && !s.submitted
+  );
+}
+function scheduleGatePoll() {
+  if (gatePollTimer) clearTimeout(gatePollTimer);
+  gatePollTimer = setTimeout(async () => {
+    if (document.visibilityState === "visible" && !hasActiveTypingSession()) {
+      try {
+        await fetchData({ silent: true });
+      } catch (e) {
+        // 静默失败，下个周期再试
+      }
+    }
+    scheduleGatePoll();
+  }, 60000);
+}
+
 onMounted(() => {
   window.addEventListener("beforeunload", beforeUnloadHandler);
   fetchData();
+  scheduleGatePoll();
 });
 
 onUnmounted(() => {
   window.removeEventListener("beforeunload", beforeUnloadHandler);
+  if (gatePollTimer) clearTimeout(gatePollTimer);
   Object.values(timerIntervals).forEach((i) => clearInterval(i));
   Object.values(practicalPollingTimers).forEach((i) => clearTimeout(i));
 });
@@ -3016,6 +3128,52 @@ onUnmounted(() => {
   height: 20px;
 }
 </style>
+/* 学生实验工具面板（对话框挂 body，需全局样式） */
+.gate-tip {
+  margin-bottom: 14px;
+}
+.student-tool-dialog .tool-group {
+  margin-bottom: 16px;
+}
+.student-tool-dialog .tool-group:last-child {
+  margin-bottom: 0;
+}
+.student-tool-dialog .tool-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 8px;
+}
+.student-tool-dialog .tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+}
+.student-tool-dialog .tool-item {
+  padding: 6px 10px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.student-tool-dialog .tool-item .el-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.student-tool-dialog .student-tool-empty {
+  padding: 10px 0;
+}
+@media (max-width: 600px) {
+  .student-tool-dialog .tool-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 <style lang="scss" scoped>
 /* 错题本相关 */

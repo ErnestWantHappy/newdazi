@@ -18,6 +18,22 @@
       </div>
     </section>
 
+    <!-- 平台推荐环境：浏览器 / Mind+ / 掌控板（对所有角色可见） -->
+    <section id="recommended-env" class="help-section env-section">
+      <header class="section-head">
+        <div><p>RECOMMENDED ENVIRONMENT</p><h2>平台推荐环境</h2><span>建议使用以下配置访问平台与开展课堂实验，Windows / macOS 均为通用版本。</span></div>
+      </header>
+      <div class="env-grid">
+        <article v-for="item in recommendedEnv" :key="item.name" class="env-card">
+          <div class="env-icon"><el-icon><component :is="envIcon(item.name)" /></el-icon></div>
+          <h3>{{ item.name }}</h3>
+          <el-tag type="primary" effect="plain" class="env-version">{{ item.version }}</el-tag>
+          <p>{{ item.purpose }}</p>
+          <div class="env-meta"><span>{{ item.metaLabel || '适用系统' }}：{{ item.metaValue || item.os }}</span></div>
+          <el-button v-if="item.url" type="primary" plain size="small" @click="openExternal(item.url)">前往下载<el-icon><TopRight /></el-icon></el-button>
+        </article>
+      </div>
+    </section>
     <template v-if="isTeacher">
       <section id="smart-check" class="help-section smart-section">
         <header class="section-head">
@@ -65,8 +81,6 @@
         <div class="manager-grid"><article v-for="item in managementGuides" :key="item.title"><span>{{ item.role }}</span><h3>{{ item.title }}</h3><ol><li v-for="step in item.steps" :key="step">{{ step }}</li></ol></article></div>
       </section>
     </template>
-
-    <section class="developer-callout"><div><p>需要人工支持？</p><h2>把课堂问题直接交给开发者</h2><span>访问郑东旭个人主页，查看联系方式、教育工具、讲座与开发实践。</span></div><el-button type="primary" size="large" @click="contactDeveloper">联系开发者<el-icon><TopRight /></el-icon></el-button></section>
 
     <el-dialog v-model="tutorialVisible" fullscreen destroy-on-close class="tutorial-dialog" :show-close="false">
       <template #header>
@@ -127,6 +141,7 @@ import { listStudent } from '@/api/business/student'
 import { listQuestion } from '@/api/business/question'
 import stepCourseDesignerImage from '@/assets/help/step-04-course-designer.png'
 import { teacherFlow, teacherTutorials } from './tutorials'
+import { recommendedEnv } from './recommendedEnv'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -186,6 +201,13 @@ async function loadReadiness() {
 
 function scrollTo(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 function goTo(path) { tutorialVisible.value = false; router.push(path) }
+// 推荐环境卡片图标映射（按名称关键词）
+function envIcon(name) {
+  if (name.includes('Chrome')) return 'Monitor'
+  if (name.includes('Mind+')) return 'Cpu'
+  return 'Cpu'
+}
+
 function contactDeveloper() { openExternal(developerSiteUrl) }
 function openExternal(url) { window.open(url, '_blank', 'noopener,noreferrer') }
 function openTutorial(step) { activeTutorial.value = teacherTutorials[step.id]; tutorialVisible.value = true }
@@ -206,5 +228,5 @@ onMounted(loadReadiness)
 .developer-callout{display:flex;align-items:center;justify-content:space-between;gap:28px;margin:20px 0 34px;padding:36px 42px;border-radius:22px;color:#fff;background:linear-gradient(120deg,#163967,#273b7d 58%,#145573)}.developer-callout p{margin:0 0 6px;color:#75e8ff;font-size:11px;letter-spacing:1.5px}.developer-callout h2{margin:0 0 7px}.developer-callout span{color:rgb(255 255 255/66%)}
 :global(.tutorial-dialog){margin:0!important;background:var(--el-bg-color-page)}:global(.tutorial-dialog .el-dialog__header){position:sticky;z-index:20;top:0;margin:0;padding:0;border-bottom:1px solid var(--el-border-color-lighter);background:rgb(255 255 255/92%);backdrop-filter:blur(18px)}:global(html.dark .tutorial-dialog .el-dialog__header){background:rgb(16 21 30/92%)}:global(.tutorial-dialog .el-dialog__body){padding:0}.tutorial-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:28px;max-width:1500px;margin:auto;padding:18px 34px}.tutorial-dialog-head>div:first-child{min-width:0}.tutorial-dialog-head span{color:var(--blue);font:700 10px monospace;letter-spacing:1.5px}.tutorial-dialog-head h2{margin:4px 0;font-size:24px}.tutorial-dialog-head p{overflow:hidden;margin:0;color:var(--el-text-color-secondary);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.tutorial-head-actions{display:flex;flex:0 0 auto;gap:10px}.tutorial-shell{max-width:1500px;margin:auto;padding:28px 34px 80px}.branch-board{position:relative;padding:30px;border-radius:24px;color:#fff;background:radial-gradient(circle at 80% 10%,rgb(55 214 239/20%),transparent 28%),linear-gradient(125deg,#0a2245,#153c6d)}.branch-root{display:flex;align-items:center;flex-direction:column;gap:5px;width:240px;margin:auto;padding:14px;border:1px solid rgb(116 232 255/22%);border-radius:14px;background:rgb(9 45 83/72%)}.branch-root span{color:#7de9ff;font-size:10px;letter-spacing:1px}.branch-lines{width:55%;height:34px;margin:auto;border-right:1px solid rgb(116 232 255/45%);border-bottom:1px solid rgb(116 232 255/45%);border-left:1px solid rgb(116 232 255/45%)}.branch-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.branch-list article{padding:18px;border:1px solid rgb(116 232 255/16%);border-radius:14px;background:rgb(5 29 59/64%)}.branch-list article>span{color:#7de9ff;font-size:10px}.branch-list h3{margin:5px 0 12px}.branch-children{display:flex;flex-wrap:wrap;gap:7px}.branch-children b{padding:6px 9px;border-radius:8px;color:#d8f7ff;background:rgb(74 190 230/13%);font-size:11px}.branch-list p{margin:12px 0 0;color:#ffcb66;font-size:11px}.tutorial-index{position:sticky;z-index:10;top:93px;display:flex;gap:8px;overflow-x:auto;margin:22px 0;padding:10px;border:1px solid var(--el-border-color-lighter);border-radius:15px;background:rgb(255 255 255/88%);box-shadow:0 10px 26px rgb(24 57 112/8%);backdrop-filter:blur(16px)}:global(html.dark) .tutorial-index{background:rgb(16 21 30/88%)}.tutorial-index button{display:flex;align-items:center;gap:8px;min-width:max-content;padding:8px 11px;border:0;border-radius:10px;color:var(--el-text-color-regular);background:transparent;cursor:pointer}.tutorial-index button:hover{color:var(--blue);background:var(--el-color-primary-light-9)}.tutorial-index b{color:var(--blue);font:700 10px monospace}.tutorial-index span{font-size:11px}.tutorial-sections{display:grid;gap:28px}.tutorial-section{scroll-margin-top:162px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:32px;align-items:center;padding:24px;border:1px solid var(--el-border-color-lighter);border-radius:22px;background:var(--el-bg-color);box-shadow:0 14px 42px rgb(24 57 112/6%)}.tutorial-section:nth-child(even) .tutorial-media{order:2}.tutorial-media{overflow:hidden;border:1px solid #263b59;border-radius:16px;background:#0a1930}.media-bar{padding-inline:12px}.tutorial-media img{display:block;width:100%;max-height:650px;object-fit:contain;background:#f4f6fa}.tutorial-copy{padding:12px}.tutorial-copy>span{color:var(--blue);font:700 10px monospace;letter-spacing:1.3px}.tutorial-copy h2{margin:9px 0 12px;font-size:28px}.tutorial-copy>p{margin:0;color:var(--el-text-color-secondary);line-height:1.9}.tutorial-copy ul{display:grid;gap:9px;margin:18px 0;padding-left:20px;color:var(--el-text-color-regular);font-size:13px;line-height:1.7}.smart-tip,.danger-tip{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:start;margin-top:14px;padding:14px;border-radius:12px;font-size:12px;line-height:1.7}.smart-tip{color:#145b79;background:#e7f9ff}.danger-tip{grid-template-columns:auto 1fr;color:#a83a30;background:#fff1ef}.section-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 @media(max-width:1200px){.platform-hero{grid-template-columns:1fr;padding:48px}.hero-showcase{width:min(100%,760px);margin:auto}.tutorial-section{grid-template-columns:1fr}.tutorial-section:nth-child(even) .tutorial-media{order:initial}}
-@media(max-width:780px){.help-page{padding:10px}.platform-hero{padding:34px 22px;border-radius:22px}.hero-showcase{margin-top:18px}.showcase-window{transform:none}.showcase-caption{margin:-10px 8px 0;padding:14px}.hero-actions{align-items:stretch;flex-direction:column}.smart-grid,.manager-grid{grid-template-columns:1fr}.smart-card{grid-template-columns:48px 1fr}.smart-card>.el-button{grid-column:1/3}.flow-section{margin-inline:-10px;padding-inline:20px}.developer-callout{align-items:flex-start;flex-direction:column;padding:28px 24px}.section-head{align-items:flex-start;flex-direction:column}.section-head h2{font-size:28px}.tutorial-dialog-head{padding:14px 16px}.tutorial-dialog-head p{display:none}.tutorial-head-actions>.el-button:first-child{display:none}.tutorial-shell{padding:16px 12px 60px}.branch-board{padding:20px 14px}.branch-root{width:auto}.branch-lines{width:70%}.tutorial-index{top:72px;margin-block:14px}.tutorial-section{gap:16px;padding:12px;border-radius:16px}.tutorial-copy{padding:8px}.tutorial-copy h2{font-size:22px}.tutorial-media img{max-height:none}.smart-tip{grid-template-columns:auto 1fr}.smart-tip span{grid-column:1/3}.section-links{align-items:stretch;flex-direction:column}.section-links .el-button{margin-left:0}}
+.env-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.env-card{display:flex;align-items:stretch;flex-direction:column;gap:8px;padding:24px;border:1px solid var(--el-border-color-lighter);border-radius:18px;background:var(--el-bg-color);box-shadow:0 10px 26px rgb(24 57 112/6%)}.env-icon{display:grid;place-items:center;width:46px;height:46px;margin-bottom:4px;border-radius:14px;color:var(--blue);background:var(--el-color-primary-light-9);font-size:22px}.env-card h3{margin:0;font-size:17px}.env-card p{margin:0;color:var(--el-text-color-secondary);font-size:12px;line-height:1.7;flex:1}.env-meta span{color:var(--el-text-color-placeholder);font-size:11px}.env-version{align-self:flex-start}@media(max-width:900px){.env-grid{grid-template-columns:1fr}}@media(max-width:780px){.help-page{padding:10px}.platform-hero{padding:34px 22px;border-radius:22px}.hero-showcase{margin-top:18px}.showcase-window{transform:none}.showcase-caption{margin:-10px 8px 0;padding:14px}.hero-actions{align-items:stretch;flex-direction:column}.smart-grid,.manager-grid{grid-template-columns:1fr}.smart-card{grid-template-columns:48px 1fr}.smart-card>.el-button{grid-column:1/3}.flow-section{margin-inline:-10px;padding-inline:20px}.developer-callout{align-items:flex-start;flex-direction:column;padding:28px 24px}.section-head{align-items:flex-start;flex-direction:column}.section-head h2{font-size:28px}.tutorial-dialog-head{padding:14px 16px}.tutorial-dialog-head p{display:none}.tutorial-head-actions>.el-button:first-child{display:none}.tutorial-shell{padding:16px 12px 60px}.branch-board{padding:20px 14px}.branch-root{width:auto}.branch-lines{width:70%}.tutorial-index{top:72px;margin-block:14px}.tutorial-section{gap:16px;padding:12px;border-radius:16px}.tutorial-copy{padding:8px}.tutorial-copy h2{font-size:22px}.tutorial-media img{max-height:none}.smart-tip{grid-template-columns:auto 1fr}.smart-tip span{grid-column:1/3}.section-links{align-items:stretch;flex-direction:column}.section-links .el-button{margin-left:0}}
 </style>

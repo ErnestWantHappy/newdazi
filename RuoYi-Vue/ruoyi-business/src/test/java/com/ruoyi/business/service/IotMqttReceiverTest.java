@@ -118,6 +118,23 @@ class IotMqttReceiverTest
     }
 
     @Test
+    void shouldIsolateProcessingFailureInsteadOfKillingConnection()
+    {
+        // 生产事故回归：外键错误曾使每条消息在回调中抛异常，paho 视为致命错误断连重连。
+        // 修复后单条消息处理失败必须就地隔离，绝不向回调线程传播。
+        IotMapper mapper = mock(IotMapper.class);
+        when(mapper.selectDeviceByTopic("county/10/20/group01/data")).thenThrow(new RuntimeException("fk constraint fails"));
+        IotMqttReceiver receiver = receiver(mapper, mock(IotWebSocketHandler.class), 10);
+
+        receiver.receive("county/10/20/group01/data", new MqttMessage("9".getBytes(StandardCharsets.UTF_8)));
+
+        verify(mapper, never()).insertMessage(any());
+        ArgumentCaptor<com.ruoyi.business.domain.IotEvent> eventCaptor = ArgumentCaptor.forClass(com.ruoyi.business.domain.IotEvent.class);
+        verify(mapper).insertEvent(eventCaptor.capture());
+        assertEquals("MESSAGE_PROCESS_FAILED", eventCaptor.getValue().getEventType());
+    }
+
+    @Test
     void shouldRejectUnsafeTopicsBeforeMapping()
     {
         assertTrue(IotMqttReceiver.isValidTopic("county/10/20/group01/data", 256));

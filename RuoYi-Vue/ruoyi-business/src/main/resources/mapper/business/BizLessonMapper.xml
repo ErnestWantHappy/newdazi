@@ -92,6 +92,7 @@
             <if test="autoAdvanceThresholdPct != null">#{autoAdvanceThresholdPct},</if>
             <if test="autoAdvanceDelayHours != null">#{autoAdvanceDelayHours},</if>
             <if test="autoAdvanceReadyTime != null">#{autoAdvanceReadyTime},</if>
+            <if test="iotEnabled != null">#{iotEnabled},</if>
             <if test="creatorId != null">#{creatorId},</if>
             <if test="deptId != null">#{deptId},</if>
             <if test="createBy != null and createBy != ''">#{createBy},</if>

@@ -29,6 +29,7 @@ import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
 import com.ruoyi.business.domain.ProgrammingQuestionConfig;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
+import com.ruoyi.business.service.StudentToolService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.service.PracticalRubricSnapshotService;
 import com.ruoyi.business.util.AcademicYearUtils;
@@ -101,6 +102,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private CollaborationMapper collaborationMapper;
+
+    @Autowired
+    private StudentToolService studentToolService;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -370,6 +374,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         detailVo.setQuestions(questions);
         detailVo.setAssignedClassCodes(assignedClassCodes);
         detailVo.setAllClassesInGrade(allClassesInGrade);
+        // 本节课工具：课程设计器回填，学生端面板先展示
+        detailVo.setLessonTools(studentToolService.getLessonTools(lessonId));
         BizLessonGuideSheetBinding binding = guideSheetBindingMapper.selectCurrentByLessonId(lessonId);
         detailVo.setGuideSheetBinding(binding);
         detailVo.setGuideSheetEnabled(binding != null && "Y".equals(binding.getEnabled()));
@@ -487,6 +493,21 @@ public class BizLessonServiceImpl implements IBizLessonService
         }
         practicalRubricSnapshotService.snapshotLesson(lessonId, questions, userId);
 
+        // 本节课工具：随课程保存，全量替换
+        studentToolService.replaceLessonTools(lessonId, lessonDetailVo.getLessonTools());
+
+        // 保存课程会重建指派行；先保留原班级的课堂开放状态，避免普通编辑把已上课班级重新关掉。
+        final String assignmentEntryYear = entryYear;
+        List<BizLessonAssignment> previousAssignments = lessonAssignmentMapper.selectAssignmentsByLessonId(lessonId);
+        Map<String, BizLessonAssignment> previousByClass = previousAssignments == null
+                ? new HashMap<>()
+                : previousAssignments.stream()
+                    .filter(Objects::nonNull)
+                    .filter(item -> Objects.equals(deptId, item.getDeptId()))
+                    .filter(item -> Objects.equals(assignmentEntryYear, item.getEntryYear()))
+                    .filter(item -> StringUtils.isNotBlank(item.getClassCode()))
+                    .collect(Collectors.toMap(BizLessonAssignment::getClassCode, item -> item, (left, right) -> left));
+
         lessonClassScopeMapper.markLessonAssignmentsInactive(lessonId);
         lessonAssignmentMapper.deleteByLessonId(lessonId);
         List<String> classCodes = lessonDetailVo.getAssignedClassCodes();
@@ -509,6 +530,8 @@ public class BizLessonServiceImpl implements IBizLessonService
                 assignment.setEntryYear(entryYear);
                 assignment.setAssignerId(userId);
                 assignment.setAssignTime(new Date());
+                BizLessonAssignment previous = previousByClass.get(pureClassCode);
+                applyInitialGatePolicy(assignment, previous, lessonDetailVo);
                 assignments.add(assignment);
             }
             if (!assignments.isEmpty()) {
@@ -524,6 +547,21 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonDetailVo.setSourceSheetId(binding == null ? null : binding.getSourceSheetId());
         lessonDetailVo.setGuideSheetEnabled(binding != null && "Y".equals(binding.getEnabled()));
         return lessonDetailVo;
+    }
+
+    /** 只有新班级采用设计器初始策略；已有班级必须保留课堂中的真实开关状态。 */
+    private void applyInitialGatePolicy(BizLessonAssignment assignment,
+                                        BizLessonAssignment previous,
+                                        LessonDetailVo detailVo)
+    {
+        if (previous != null)
+        {
+            assignment.setTheoryOpen(previous.getTheoryOpen() == null ? 0 : previous.getTheoryOpen());
+            assignment.setPracticalOpen(previous.getPracticalOpen() == null ? 0 : previous.getPracticalOpen());
+            return;
+        }
+        assignment.setTheoryOpen(Boolean.TRUE.equals(detailVo.getInitialTheoryOpen()) ? 1 : 0);
+        assignment.setPracticalOpen(Boolean.TRUE.equals(detailVo.getInitialPracticalOpen()) ? 1 : 0);
     }
 
     /**

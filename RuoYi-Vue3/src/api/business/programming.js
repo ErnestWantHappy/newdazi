@@ -9,5 +9,6 @@ export function confirmProgrammingImport(confirmToken) { return request({ url: '
 export function getStudentProgramming(lessonId, questionId) { return request({ url: `/business/student-home/programming/${lessonId}/${questionId}`, method: 'get' }) }
 export function saveProgrammingDraft(data) { return request({ url: '/business/student-home/programming/draft', method: 'put', data }) }
 export function runProgramming(data) { return request({ url: '/business/student-home/programming/run', method: 'post', data }) }
+export function customRunProgramming(data) { return request({ url: '/business/student-home/programming/custom-run', method: 'post', data }) }
 export function submitProgramming(data) { return request({ url: '/business/student-home/programming/submit', method: 'post', data }) }
 export function cancelProgramming(lessonId, questionId, submissionId) { return request({ url: `/business/student-home/programming/${lessonId}/${questionId}/submissions/${submissionId}/cancel`, method: 'post' }) }

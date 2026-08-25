@@ -48,6 +48,12 @@ public class BizLessonAssignment extends BaseEntity
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date autoAdvanceReadyTime;
 
+    /** 理论测试题开放开关 1=开放（推进课程自动复位） */
+    private Integer theoryOpen;
+
+    /** 操作题开放开关 1=开放（推进课程自动复位） */
+    private Integer practicalOpen;
+
     public void setAssignmentId(Long assignmentId) 
     {
         this.assignmentId = assignmentId;
@@ -126,6 +132,26 @@ public class BizLessonAssignment extends BaseEntity
     public void setAutoAdvanceReadyTime(Date autoAdvanceReadyTime)
     {
         this.autoAdvanceReadyTime = autoAdvanceReadyTime;
+    }
+
+    public Integer getTheoryOpen()
+    {
+        return theoryOpen;
+    }
+
+    public void setTheoryOpen(Integer theoryOpen)
+    {
+        this.theoryOpen = theoryOpen;
+    }
+
+    public Integer getPracticalOpen()
+    {
+        return practicalOpen;
+    }
+
+    public void setPracticalOpen(Integer practicalOpen)
+    {
+        this.practicalOpen = practicalOpen;
     }
 
     @Override

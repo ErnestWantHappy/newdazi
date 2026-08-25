@@ -54,6 +54,8 @@ public class StudentProgrammingController extends BaseController {
 
     @PostMapping("/run")
     public AjaxResult run(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "RUN", httpRequest); }
+    @PostMapping("/custom-run")
+    public AjaxResult customRun(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "CUSTOM_RUN", httpRequest); }
     @PostMapping("/submit")
     public AjaxResult submit(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "SUBMIT", httpRequest); }
 
@@ -64,10 +66,11 @@ public class StudentProgrammingController extends BaseController {
 
     private AjaxResult submit(StudentProgrammingRequest request, String kind, HttpServletRequest httpRequest) {
         BizStudent student = currentStudent(); guideSheetAccessService.assertNoPendingCountyExam();
-        ProgrammingSubmission submission = programmingSubmissionService.submit(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode, request.submissionKey, kind, httpRequest.getRemoteAddr(), programmingSubmissionWorker);
+        ProgrammingSubmission submission = programmingSubmissionService.submit(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode, request.customInput, request.submissionKey, kind, httpRequest.getRemoteAddr(), programmingSubmissionWorker);
         List<StudentProgrammingSubmissionVo> history = programmingSubmissionService.getStudentHistory(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId);
         StudentProgrammingSubmissionVo safe = history.stream().filter(item -> submission.getSubmissionId().equals(item.getSubmissionId())).findFirst().orElse(null);
-        return success("RUN".equals(kind) ? "示例运行已进入队列" : "正式提交已进入队列").put("submission", safe);
+        String message = "RUN".equals(kind) ? "示例运行已进入队列" : ("CUSTOM_RUN".equals(kind) ? "自定义运行已进入队列" : "正式提交已进入队列");
+        return success(message).put("submission", safe);
     }
 
     private BizStudent currentStudent() {
@@ -76,10 +79,11 @@ public class StudentProgrammingController extends BaseController {
     }
 
     public static class StudentProgrammingRequest {
-        private Long lessonId; private Long questionId; private String sourceCode; private String submissionKey;
+        private Long lessonId; private Long questionId; private String sourceCode; private String customInput; private String submissionKey;
         public Long getLessonId() { return lessonId; } public void setLessonId(Long v) { lessonId = v; }
         public Long getQuestionId() { return questionId; } public void setQuestionId(Long v) { questionId = v; }
         public String getSourceCode() { return sourceCode; } public void setSourceCode(String v) { sourceCode = v; }
+        public String getCustomInput() { return customInput; } public void setCustomInput(String v) { customInput = v; }
         public String getSubmissionKey() { return submissionKey; } public void setSubmissionKey(String v) { submissionKey = v; }
     }
 }

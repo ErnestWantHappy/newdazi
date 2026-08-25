@@ -8,6 +8,8 @@
 
 学生编程详情使用公开测试点 DTO，仅返回测试点名称、输入和期望输出；学生历史提交使用脱敏 DTO，不返回 Judge0 token、请求 IP、平台内部异常摘要或隐藏测试点数据。教师配置可选保存 `input_description`、`output_description`、`sample_explanation`、`constraints_text`、`notes_text` 五个说明字段，均不改变题型、成绩或权限模型。
 
+教师配置读取与只读预览必须分离：`GET /business/programming/question/{id}` 要求 `business:question:edit`，并在题目所有者/管理员校验后返回全部测试点；`GET /business/programming/question/{id}/preview` 要求查询权限，只返回公开样例。题库、题单和课程设计器只能使用预览接口，不能因复用编辑 DTO 泄露隐藏数据。题目保存和导入统一校验公开点、隐藏点、非空期望输出、正权重及总权重 100。
+
 为兼容历史 DTO 或缓存漏传作答方式，学生页仅对 `practicalMode` 为空的操作题调用既有平台接口 `GET /business/student-home/programming/{lessonId}/{questionId}`。该接口仍执行学生、当前课程、学校和题目作答方式校验，只有返回已启用 Python 配置时才在页面内补为 `PYTHON`；普通文件题的请求失败被视为 `FILE`。这是一层显示兼容，不增加 Judge0 浏览器入口，也不改变题目或成绩数据。
 
 ## 判题流程
@@ -23,6 +25,14 @@
 Judge0 使用独立 Compose 项目、独立 PostgreSQL/Redis 数据卷和独立 Docker 网络。API 发布在扩展服务器 `2358`，平台 Java 后端通过外置 `JUDGE0_BASE_URL`、`JUDGE0_AUTH_TOKEN` 调用，UFW 与 Judge0 IP 白名单仅允许 `10.52.1.123`；学生浏览器没有 Judge0 地址。Judge0 配置禁用代码网络、附加文件、命令行和编译参数，并在服务、容器和单提交三级限制 CPU、内存、进程、文件和输出。
 
 部署模板固定 `judge0/judge0:1.13.1`、`postgres:16.2`、`redis:7.2.4`，服务日志使用 `json-file` 轮转，systemd 管理自启动，备份脚本同时保存 PostgreSQL dump、Compose 配置并计算 SHA-256。Judge0 1.13.1 的 isolate 依赖 cgroup v1；扩展服务器已通过 `systemd.unified_cgroup_hierarchy=0` 切换并重启，`/sys/fs/cgroup/memory` 已验证为 cgroup v1，真实 Python 执行已返回 Accepted。回滚通过恢复上一镜像 digest 或将平台 `JUDGE0_MODE=disabled`，不删除 CryptPad 资源。
+
+### 400 份提交的排队容量（2026-08-23 已上线）
+
+容量分三层：平台先把每份提交写为 `WAITING`，再投递到 123 进程内 `judge0Executor`；执行线程把真实用例提交到 129 Judge0 的 Redis/Resque 队列；129 worker 受控地并行运行沙箱。生产参数为 Java 核心/最大线程 `10/10`、执行器队列 `1000`、课程班级并发门限 `60`，Judge0 `COUNT=10`、`MAX_QUEUE_SIZE=512`。这种设计让 400 份突发请求快速完成落库和排队，同时把 CPU 密集沙箱稳定限制在 10 路。
+
+Java `ThreadPoolExecutor` 的行为是先用核心线程、再入队、队列满后才扩到最大线程，因此核心线程必须与 Judge0 worker 数对齐；只调大 `maxPoolSize` 无法解决“长期只有 2 路真实判题”。执行器队列本身不持久化，提交记录虽已落库，但独立刷题当前没有覆盖后端在排空过程中重启的专项恢复验收；发布与运维应避免在途排空时重启，并把该能力作为后续韧性增强项。
+
+129 是 Judge0、CryptPad、EMQX 共用的 16 线程/31GiB 主机。Judge0 server 限额 2 CPU / 2GiB，worker 限额 10 CPU / 16GiB，保留宿主机和其他服务余量；继续增大 worker 必须重新做阶梯压测，不能直接把 `COUNT` 提到 400。决策见 `adr/ADR-011-queued-400-submissions-on-shared-host.md`。
 
 ## Python 刷题架构（已上线）
 
@@ -67,7 +77,7 @@ Judge0 使用独立 Compose 项目、独立 PostgreSQL/Redis 数据卷和独立 
 
 当前实现已在 V1 独立刷题表基础上执行 `sql/python_oj_modernization_v1.sql` 与 `sql/python_practice_unified_plan_v2.sql`。统一题单查询只经过题单、发布版本、版本班级和题目快照；发布前要求每题至少有公开和隐藏测试点。学生请求按本人学校、届别和班级重新核验。
 
-判题线程有最大轮询次数；达到上限或 Judge0 异常时提交标记为 `SERVICE_ERROR`，保留代码和提交历史，不写课程答案或零分。开发库和正式库均已完成备份与迁移。正式系统题 V2 为 120 题/720 点，生产 Judge0 全量 720/720 通过；教师建题单、选 V2 题、发布、学生可见及硬删除清理的正式 API 冒烟通过，`biz_student_answer` 未新增。回滚保留旧 release、Nginx/NSSM 配置和整库备份；尚未做真实整班同时提交压测。
+判题线程有最大轮询次数；达到上限或 Judge0 异常时提交标记为 `SERVICE_ERROR`，保留代码和提交历史，不写课程答案或零分。开发库和正式库均已完成备份与迁移。正式系统题 V2 为 120 题/720 点，生产 Judge0 全量 720/720 通过；教师建题单、选 V2 题、发布、学生可见及硬删除清理的正式 API 冒烟通过，`biz_student_answer` 未新增。回滚保留旧 release、Nginx/NSSM 配置和整库备份。2026-08-23 已完成 50/100/200/400 份同时提交的单用例 `CUSTOM_RUN` 阶梯压测，全部接收并 Accepted；400 个不同真实账号、每题多测试点的课堂演练仍是更高一级验收，不混同于本次容量基线。
 
 ## 2026-08-22 已确认：OJ 化目标设计
 
@@ -85,3 +95,18 @@ Judge0 使用独立 Compose 项目、独立 PostgreSQL/Redis 数据卷和独立 
 - Python 题的 `grade`、`semester`、`lesson_num` 保存为空；统一题库的 Python 视图和编辑表单不展示这些课程属性。旧 V1 80 题及依赖已由 `sql/python_practice_polish_v3.sql` 在整库备份后物理清理，V2 题保持 120 题/720 点。
 - 系统题 JSON 入库前使用 `tools/python_oj_validate.py` 做字段、乱码、重复、危险代码和本机 Python 全用例校验；`tools/python_oj_build_import_sql.py` 生成按稳定题号幂等、文本十六进制、事务回滚和后检齐全的 SQL。正式导入前已通过生产 Judge0 120 题/720 点全量验证，导入脚本多次复跑仍保持 120 个唯一题号和 720 个测试点。
 - Judge0 HTTP 客户端对代码、输入、期望输出以及响应文本统一使用 UTF-8 Base64；解码采用 MIME Base64 以容忍 Judge0 在编码文本末尾追加的换行，避免中文输出被拒绝或误判。
+
+## 2026-08-24 交互与降级设计
+
+- `PythonPracticeService.resolveSchoolType()` 返回可空学段；为空时跳过自然年级换算，按 `entryYear级classCode班` 生成班级标签，不能把组织数据不完整变成四个接口同时失败。
+- 学生刷题页把运行/提交入队响应统一归一化到页面使用的字段，轮询期间维持单一 pending 状态；终态后再开放按钮，避免重复提交和“结果为空”的假象。
+- 上一题/下一题沿当前题单顺序导航；若编辑器内容较已存草稿发生变化，先等待保存完成再切题。
+- 课程题目关联保持一对多，不新增 Python 数量字段或唯一约束；课程成绩仍走既有操作题聚合。
+
+## 2026-08-24 课程自定义运行设计
+
+- 学生课程端新增 `POST /business/student-home/programming/custom-run`，请求包含课程、题目、代码和 `customInput`；沿用学生身份、当前课程、班级和 Python 配置校验。
+- `ProgrammingSubmission` 增加可空 `custom_input`，`CUSTOM_RUN` 提交使用保留测试点 ID `0`。服务端只调用一次 Judge0，并把终态记为 `COMPLETED`；不读取期望输出、不计算分数、不写课程答案。
+- 自定义输入在服务端限制为 64 KiB。历史接口继续返回实际输出与错误信息，但不会伪造“通过/失败”的标准答案比较结果。
+- 前端仅在 `noInput=false` 时展示标准输入面板；运行期间与样例/提交共用互斥忙碌态，完成后明确显示“自定义运行不比较标准答案”。
+- 该不计分边界由 `adr/ADR-012-course-custom-run-non-scoring.md` 固化。

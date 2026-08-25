@@ -2,8 +2,6 @@
   <footer v-if="showCopyright" class="copyright" aria-label="平台版权信息">
     版权所有：象山县教育局教科研中心
     <span class="copyright-separator">·</span>
-    地址：浙江省象山县高教园区教科研中心
-    <span class="copyright-separator">·</span>
     浙ICP备05007927号
   </footer>
 </template>

@@ -1,48 +1,30 @@
 <template>
   <section class="lesson-guide-panel" aria-labelledby="lesson-guide-title">
-    <div class="panel-heading">
-      <div>
+    <div class="compact-guide-row" :class="{ disabled: selectedTemplate && !enabled }">
+      <div class="guide-heading">
         <h3 id="lesson-guide-title">电子导学单</h3>
-        <p>学生范围与本课程班级保持一致，成绩单独统计。</p>
+        <el-tooltip content="学生范围与课程班级一致，成绩单独统计；关闭后已有填写进度仍会保留。" placement="top">
+          <span class="guide-help-dot">?</span>
+        </el-tooltip>
       </div>
-      <el-switch
-        :model-value="enabled"
-        inline-prompt
-        active-text="启用"
-        inactive-text="关闭"
-        @change="handleEnabledChange"
-      />
-    </div>
-
-    <div v-if="selectedTemplate" class="template-summary" :class="{ disabled: !enabled }">
-      <div class="template-mark">导</div>
-      <div class="template-copy">
-        <div class="template-title-row">
+      <div class="guide-current">
+        <template v-if="selectedTemplate">
           <strong>{{ selectedTemplate.sheetTitle }}</strong>
-          <el-tag :type="enabled ? 'success' : 'info'" effect="plain" size="small">
-            {{ enabled ? '本课程已启用' : '已关闭，进度保留' }}
-          </el-tag>
-        </div>
-        <p>{{ templateMeta(selectedTemplate) }}</p>
-        <small v-if="selectedTemplate.fromBinding">课程中的内容不受原模板后续修改影响</small>
+          <span>{{ templateMeta(selectedTemplate) }}</span>
+        </template>
+        <span v-else class="guide-empty">未选择模板</span>
       </div>
-      <div class="template-actions">
-        <el-button icon="View" @click="openPreview">预览本课程内容</el-button>
-        <el-button type="primary" plain icon="Refresh" @click="openSelector">更换模板</el-button>
-        <el-button v-if="enabled" type="warning" plain icon="CircleClose" @click="disableAndKeep">
-          关闭但保留进度
-        </el-button>
+      <div class="guide-actions">
+        <el-button v-if="selectedTemplate" link type="primary" @click="openPreview">预览</el-button>
+        <el-button link type="primary" @click="openSelector">{{ selectedTemplate ? '更换' : '选择模板' }}</el-button>
+        <el-switch
+          :model-value="enabled"
+          inline-prompt
+          active-text="开"
+          inactive-text="关"
+          @change="handleEnabledChange"
+        />
       </div>
-    </div>
-
-    <div v-else class="empty-selection">
-      <div>
-        <strong>{{ enabled ? '请选择一份导学单模板' : '需要时可为本课程启用电子导学单' }}</strong>
-        <p>模板只决定学习内容，不会改变课程班级。</p>
-      </div>
-      <el-button type="primary" icon="Collection" @click="openSelector">
-        {{ enabled ? '选择模板' : '启用并选择模板' }}
-      </el-button>
     </div>
 
     <el-dialog v-model="selectorVisible" title="选择导学单模板" width="min(960px, 96vw)" append-to-body destroy-on-close>
@@ -281,6 +263,10 @@ function handleEnabledChange(value) {
     openSelector()
     return
   }
+  if (!value && props.enabled && selectedTemplate.value) {
+    disableAndKeep()
+    return
+  }
   emit('update:enabled', Boolean(value))
 }
 
@@ -415,80 +401,43 @@ async function previewTemplate(template) {
 <style scoped>
 .lesson-guide-panel {
   margin: 8px 0 22px;
-  padding: 18px;
+  padding: 0;
   border: 1px solid #d9e3e5;
-  border-left: 4px solid #197b72;
+  border-left: 3px solid #197b72;
+  border-radius: 6px;
   background: #fbfdfd;
 }
 
-.panel-heading,
-.template-summary,
-.empty-selection,
-.template-title-row,
-.template-actions {
+.compact-guide-row,
+.guide-heading,
+.guide-actions {
   display: flex;
   align-items: center;
 }
 
-.panel-heading {
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 14px;
-}
-
-.panel-heading h3,
-.panel-heading p,
-.empty-selection p,
-.template-copy p {
-  margin: 0;
-}
-
-.panel-heading h3 { color: #183f47; font-size: 16px; }
-.panel-heading p,
-.empty-selection p { margin-top: 4px; color: #6e7f85; font-size: 12px; }
-
-.template-summary,
-.empty-selection {
-  gap: 14px;
-  min-height: 76px;
-  padding: 14px;
-  border-top: 1px solid #e2eaeb;
-}
-
-.template-summary {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: start;
-}
-
-.template-summary.disabled { opacity: 0.78; }
-.empty-selection { justify-content: space-between; }
-
-.template-mark {
-  display: grid;
+.compact-guide-row { gap: 14px; min-height: 50px; padding: 7px 12px; }
+.compact-guide-row.disabled { opacity: 0.78; }
+.guide-heading { flex: 0 0 auto; gap: 6px; }
+.guide-heading h3 { margin: 0; color: #183f47; font-size: 15px; }
+.guide-help-dot {
+  display: inline-grid;
   place-items: center;
-  flex: 0 0 42px;
-  height: 42px;
-  color: #fff;
-  border-radius: 6px 2px 6px 2px;
-  background: #197b72;
-  font-family: STKaiti, KaiTi, serif;
-  font-size: 20px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #a8b3bd;
+  border-radius: 50%;
+  color: #7b8792;
+  font-size: 12px;
+  cursor: help;
 }
-
-.template-copy { min-width: 0; flex: 1; }
-.template-title-row { gap: 10px; flex-wrap: wrap; }
-.template-title-row strong { min-width: 0; color: #213f49; overflow-wrap: anywhere; }
-.template-copy p { margin-top: 5px; color: #597078; font-size: 12px; }
-.template-copy small { color: #8a989d; }
-.template-actions {
-  grid-column: 2;
-  justify-content: flex-start;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-.template-actions :deep(.el-button) { margin-left: 0; }
+.guide-current { min-width: 0; flex: 1; }
+.guide-current strong,
+.guide-current span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-current strong { color: #213f49; font-size: 13px; }
+.guide-current span { margin-top: 2px; color: #7b898e; font-size: 12px; }
+.guide-current .guide-empty { margin: 0; color: #909399; }
+.guide-actions { flex: 0 0 auto; gap: 2px; }
+.guide-actions :deep(.el-button) { margin-left: 0; }
 
 .selector-filter :deep(.el-form-item) { margin-right: 12px; margin-bottom: 12px; }
 .list-template-title strong,
@@ -512,11 +461,7 @@ async function previewTemplate(template) {
 }
 
 @media (max-width: 760px) {
-  .panel-heading,
-  .template-summary,
-  .empty-selection { align-items: stretch; flex-direction: column; }
-  .template-actions { justify-content: flex-start; }
-  .template-actions :deep(.el-button) { margin-left: 0; }
-  .template-mark { display: none; }
+  .compact-guide-row { align-items: flex-start; flex-wrap: wrap; }
+  .guide-current { flex-basis: 100%; order: 3; }
 }
 </style>

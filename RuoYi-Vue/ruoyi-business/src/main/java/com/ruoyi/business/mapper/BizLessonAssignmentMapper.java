@@ -139,6 +139,11 @@ public interface BizLessonAssignmentMapper
                              @Param("advanceSource") String advanceSource,
                              @Param("advancedTime") java.util.Date advancedTime);
 
+    /** 更新班级x当前课程的题目开放开关（theory/practical），供成绩页开关位使用 */
+    int updateLessonGate(@Param("assignmentId") Long assignmentId,
+                         @Param("kind") String kind,
+                         @Param("open") Boolean open);
+
     /** 判断学生所在班级是否在指定时间后从该课程推进离开 */
     int countRecentAdvanceHistory(@Param("lessonId") Long lessonId,
                                   @Param("entryYear") String entryYear,

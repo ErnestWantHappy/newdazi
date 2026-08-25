@@ -55,3 +55,18 @@
 - [x] 生产启用数据链路：EMQX 5.8.8 管理 API 18083 由仅本机改为开放给内网（容器同镜像同挂载重建，旧容器 `school-emqx-poc-bak-20260821` 留作回滚）；ACL 替换为订阅账号只读订阅 county/# + `class_*` 设备收发 + deny all（备份 `acl.conf.bak-20260821`）；新建 `platform_iot_subscriber` 订阅账号与 `dazi-backend` API 密钥（凭据见 secrets.local.md）；后端 NSSM 环境变量注入 `IOT_MQTT_ENABLED=true`、订阅账号密码、`IOT_PASSCODE_SECRET`（与历史默认值一致以兼容存量密文）与 EMQX API 密钥，重启后日志确认「物联网 MQTT 接收器已连接 broker=tcp://10.52.1.129:1883 subscription=county/#」。
 - [x] 生产 API 验证：学生 current-lesson `iotEnabled=true`；教师课程详情 252 `iotEnabled=True`；实验 1 消息接口 200（共 0 条）。
 - [ ] 待真实机房设备经 Mind+ 上报后验证：小组统计、消息分页、实时消息流与教师收集页数据联动。
+
+## P5：数据链路修复与教师/学生端页面重构（2026-08-23 已发布，release `20260823_iot_frontend_v1`，v1.25.2）
+
+- [x] 「教师端收不到数据」根因修复：`biz_iot_message.device_id` 外键+哨兵值 0+空设备表致每条消息外键冲突，paho 回调异常引发断连重连死循环。删外键（本机+正式库）+ `IotMqttReceiver` 异常隔离与断线自动重连重订阅（`MESSAGE_PROCESS_FAILED`/`BROKER_RECONNECTED` 事件）。
+- [x] 教师端物联页重构：合并冗余区块为「小组数据总览」大表格（每组持续显示最新数据/条数/最近接收时间），小组详情含全量历史明细与格式/关键词筛选；诊断事件区块页面移除、后台保留。
+- [x] 学生端物联页：新增「本组历史数据」分页列表（新接口 `GET /business/iot/student/messages`，20 秒静默轮询）；最新数据样式美化；复制按钮改用 `utils/clipboard.js` 兜底方案，修复内网 HTTP 环境「无法复制」。
+- [x] 生产冒烟：实验 4 班级账号发布 TEXT/NUMBER/JSON 三条测试消息全部正确落库后清理归位（基线 110 条）；平台订阅客户端在线、真实课堂设备已接入；3010 新前端关键 chunk 可访问。
+- [x] 遗留处置：2026-08-21 之前创建的三个班级配置（实验 1/2/3）曾未同步进 EMQX 认证库（设备连接被拒 rc=5），已经管理 API 补注册完成并复测连接成功；新页面布局仍建议真实教师/学生账号复测。
+
+## P6：教师端入口与详情体验（2026-08-24 已发布，release `20260824_python_iot_ux_v1`）
+
+- [x] 首页点击物联先选择班级，并将届别/班号带入工作台。
+- [x] 总览增加只看有数据、接收数量排序、两分钟实时状态和离线文案。
+- [x] 小组明细改弹窗，统一 TEXT/NUMBER/JSON 展示，移除恒值来源列。
+- [x] Vue3 生产构建、正式教师 IoT 班级/实验接口和 3010 新静态资源均验收通过；真实有消息班级的弹窗视觉效果留待课堂抽查。

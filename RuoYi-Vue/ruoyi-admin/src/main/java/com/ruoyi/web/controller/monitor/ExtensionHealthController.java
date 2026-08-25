@@ -74,9 +74,11 @@ public class ExtensionHealthController
 
     /** 硬件信息变化缓慢，缓存 60 秒，避免每次看板刷新都打一次 SSH。 */
     private static final long HOST129_CACHE_MS = 60_000L;
-    private static final long HOST129_PROBE_TIMEOUT_MS = 6000L;
+    private static final long HOST129_PROBE_TIMEOUT_MS = 12000L;
     private volatile long host129CacheAt;
     private volatile Map<String, Object> host129Cache;
+    private static final long HOST129_FAIL_CACHE_MS = 15_000L;
+    private volatile Map<String, Object> host129FailCache;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
 
@@ -108,7 +110,18 @@ public class ExtensionHealthController
         mqtt.put("subscription", iotMqttProperties.getSubscription());
         data.put("mqttReceiver", mqtt);
 
-        Map<String, Object> hostHardware = joinQuietly(hostHw);
+        // SSH 探针冷启动需 2~6 秒，不能用 3 秒的 joinQuietly 预算，否则必然被提前放弃
+        Map<String, Object> hostHardware;
+        try
+        {
+            hostHardware = hostHw.get(8, TimeUnit.SECONDS);
+        }
+        catch (Exception e)
+        {
+            hostHardware = new LinkedHashMap<>();
+            hostHardware.put("available", false);
+            hostHardware.put("error", "硬件探针未在 8 秒内返回");
+        }
         data.put("hostHardware", hostHardware);
         data.put("systemInfo", buildSystemInfo((Map<String, Object>) data.get("emqx"), hostHardware));
         data.put("latencyMs", System.currentTimeMillis() - start);
@@ -145,6 +158,9 @@ public class ExtensionHealthController
             info.put("nodeVersion", hw.get("nodeVersion"));
             info.put("cryptpadNodeVersion", hw.get("cryptpadNodeVersion"));
             info.put("javaVersion", hw.get("javaVersion"));
+            // JVM 详情（版本/启动时长/安装路径/运行参数），由 hwprobe.sh 采集；无 Java 服务进程时 java=null
+            info.put("java", hw.get("java"));
+            info.put("totalMemoryBytes", subMap(hw, "memory").get("totalBytes"));
         }
 
         Number memoryUsed = emqxUp ? asNumber(emqx.get("memoryUsed"))
@@ -220,6 +236,12 @@ public class ExtensionHealthController
             result.put("error", "未配置 monitor.host129.ssh-command");
             return result;
         }
+        // 失败结果也缓存 15 秒：探针故障时避免每次看板刷新都重打一次 SSH
+        Map<String, Object> cachedFail = host129FailCache;
+        if (cachedFail != null && System.currentTimeMillis() - host129CacheAt < HOST129_FAIL_CACHE_MS)
+        {
+            return cachedFail;
+        }
         Map<String, Object> cached = host129Cache;
         if (cached != null && System.currentTimeMillis() - host129CacheAt < HOST129_CACHE_MS)
         {
@@ -229,18 +251,26 @@ public class ExtensionHealthController
         {
             ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", host129SshCommand.trim());
             pb.redirectErrorStream(false);
-            Process p = pb.start();
-            boolean done = p.waitFor(HOST129_PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            if (!done)
-            {
-                p.destroyForcibly();
-                return unavailableHost("探针超时");
-            }
+            final Process p = pb.start();
+            // 看门狗：超时强杀进程，保证下方 readAll 能拿到 EOF 而不是永久阻塞
+            Thread watchdog = new Thread(() -> {
+                try
+                {
+                    Thread.sleep(HOST129_PROBE_TIMEOUT_MS + 500L);
+                    p.destroyForcibly();
+                }
+                catch (InterruptedException ignored) { }
+            });
+            watchdog.setDaemon(true);
+            watchdog.start();
+            // 先读完管道再等退出，避免“子进程写满管道缓冲”与“父进程等退出”互相死锁
             String out = readAll(p.getInputStream());
-            int rc = p.exitValue();
-            if (rc != 0 || out.trim().isEmpty() || !out.trim().startsWith("{"))
+            p.waitFor(3, TimeUnit.SECONDS);
+            int rc;
+            try { rc = p.exitValue(); } catch (IllegalThreadStateException e) { rc = -1; }
+            if (out.trim().isEmpty() || !out.trim().startsWith("{"))
             {
-                return unavailableHost("探针退出码 " + rc);
+                return unavailableHostCached("探针无有效输出（rc=" + rc + "）");
             }
             JsonNode node = objectMapper.readTree(out.trim());
             Map<String, Object> parsed = objectMapper.convertValue(node, Map.class);
@@ -248,6 +278,7 @@ public class ExtensionHealthController
             parsed.put("fetchedAt", new java.util.Date());
             host129Cache = parsed;
             host129CacheAt = System.currentTimeMillis();
+            watchdog.interrupt();
             return parsed;
         }
         catch (Exception e)
@@ -261,6 +292,14 @@ public class ExtensionHealthController
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("available", false);
         result.put("error", reason);
+        return result;
+    }
+
+    private Map<String, Object> unavailableHostCached(String reason)
+    {
+        Map<String, Object> result = unavailableHost(reason);
+        host129FailCache = result;
+        host129CacheAt = System.currentTimeMillis();
         return result;
     }
 

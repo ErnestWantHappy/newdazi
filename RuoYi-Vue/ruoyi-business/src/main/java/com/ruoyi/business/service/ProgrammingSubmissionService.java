@@ -51,6 +51,8 @@ public class ProgrammingSubmissionService {
     private static final String STATUS_JUDGING = "JUDGING";
     private static final String STATUS_SERVICE_ERROR = "SERVICE_ERROR";
     private static final String STATUS_CANCELLED = "CANCELLED";
+    private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final Long CUSTOM_CASE_ID = 0L;
     @Autowired private ProgrammingJudgeMapper programmingMapper;
     @Autowired private BizQuestionMapper questionMapper;
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
@@ -203,9 +205,10 @@ public class ProgrammingSubmissionService {
         ProgrammingDraft draft = new ProgrammingDraft(); draft.setStudentId(student.getStudentId()); draft.setLessonId(lessonId); draft.setQuestionId(questionId); draft.setSourceCode(sourceCode); programmingMapper.upsertDraft(draft);
     }
 
-    public ProgrammingSubmission submit(BizStudent student, Long deptId, Long lessonId, Long questionId, String sourceCode, String submissionKey, String kind, String requestIp, ProgrammingSubmissionWorker worker) {
+    public ProgrammingSubmission submit(BizStudent student, Long deptId, Long lessonId, Long questionId, String sourceCode, String customInput, String submissionKey, String kind, String requestIp, ProgrammingSubmissionWorker worker) {
         assertStudentQuestionAccess(student, deptId, lessonId, questionId); validateSource(sourceCode);
-        if (!"RUN".equals(kind) && !"SUBMIT".equals(kind)) throw new ServiceException("不支持的编程操作");
+        if (!"RUN".equals(kind) && !"CUSTOM_RUN".equals(kind) && !"SUBMIT".equals(kind)) throw new ServiceException("不支持的编程操作");
+        if ("CUSTOM_RUN".equals(kind)) validateCustomInput(customInput);
         if (submissionKey == null || !submissionKey.matches("[A-Za-z0-9_-]{8,64}")) throw new ServiceException("提交幂等键格式错误");
         ProgrammingSubmission existing = programmingMapper.selectSubmissionByKey(student.getStudentId(), lessonId, questionId, submissionKey);
         if (existing != null) return existing;
@@ -220,7 +223,7 @@ public class ProgrammingSubmissionService {
         try {
             existing = programmingMapper.selectSubmissionByKey(student.getStudentId(), lessonId, questionId, submissionKey);
             if (existing != null) { releaseReservation(student, lessonId, questionId); return existing; }
-            ProgrammingSubmission submission = new ProgrammingSubmission(); submission.setSubmissionKey(submissionKey); submission.setStudentId(student.getStudentId()); submission.setLessonId(lessonId); submission.setQuestionId(questionId); submission.setSourceCode(sourceCode); submission.setSubmissionKind(kind); submission.setStatusCode(STATUS_WAITING); submission.setStatusMessage("等待判题"); submission.setRequestIp(requestIp); submission.setSubmittedAt(new Date());
+            ProgrammingSubmission submission = new ProgrammingSubmission(); submission.setSubmissionKey(submissionKey); submission.setStudentId(student.getStudentId()); submission.setLessonId(lessonId); submission.setQuestionId(questionId); submission.setSourceCode(sourceCode); submission.setCustomInput("CUSTOM_RUN".equals(kind) ? (customInput == null ? "" : customInput) : null); submission.setSubmissionKind(kind); submission.setStatusCode(STATUS_WAITING); submission.setStatusMessage("等待判题"); submission.setRequestIp(requestIp); submission.setSubmittedAt(new Date());
             programmingMapper.insertSubmission(submission);
             redisCache.setCacheObject(slotKey(submission.getSubmissionId()), classSlotKey(student, lessonId, questionId), 180, TimeUnit.SECONDS);
             try {
@@ -251,7 +254,8 @@ public class ProgrammingSubmissionService {
             List<StudentProgrammingSubmissionCaseVo> safeCases = new ArrayList<StudentProgrammingSubmissionCaseVo>();
             for (ProgrammingSubmissionCase row : programmingMapper.selectSubmissionCases(item.getSubmissionId(), true)) {
                 ProgrammingTestCase testCase = casesById.get(row.getTestCaseId());
-                StudentProgrammingSubmissionCaseVo safeCase = new StudentProgrammingSubmissionCaseVo(); safeCase.setTestCaseId(row.getTestCaseId()); safeCase.setCaseName(testCase == null ? null : testCase.getCaseName()); safeCase.setInputText(testCase == null ? null : testCase.getInputText()); safeCase.setExpectedOutput(testCase == null ? null : testCase.getExpectedOutput()); safeCase.setActualOutput(row.getOutputText()); safeCase.setStatusCode(row.getStatusCode()); safeCase.setTimeSeconds(row.getTimeSeconds()); safeCase.setMemoryKb(row.getMemoryKb()); safeCase.setErrorMessage(row.getErrorSummary()); safeCases.add(safeCase);
+                boolean customCase = "CUSTOM_RUN".equals(item.getSubmissionKind()) && CUSTOM_CASE_ID.equals(row.getTestCaseId());
+                StudentProgrammingSubmissionCaseVo safeCase = new StudentProgrammingSubmissionCaseVo(); safeCase.setTestCaseId(row.getTestCaseId()); safeCase.setCaseName(customCase ? "自定义输入" : (testCase == null ? null : testCase.getCaseName())); safeCase.setInputText(customCase ? item.getCustomInput() : (testCase == null ? null : testCase.getInputText())); safeCase.setExpectedOutput(customCase ? null : (testCase == null ? null : testCase.getExpectedOutput())); safeCase.setActualOutput(row.getOutputText()); safeCase.setStatusCode(row.getStatusCode()); safeCase.setTimeSeconds(row.getTimeSeconds()); safeCase.setMemoryKb(row.getMemoryKb()); safeCase.setErrorMessage(row.getErrorSummary()); safeCases.add(safeCase);
             }
             safe.setCases(safeCases); result.add(safe);
         }
@@ -280,6 +284,14 @@ public class ProgrammingSubmissionService {
         try {
             ProgrammingQuestionConfig config = programmingMapper.selectConfig(submission.getQuestionId());
             if (config == null || !"1".equals(config.getEnabled())) throw new ServiceException("该编程题暂未开放判题");
+            if ("CUSTOM_RUN".equals(submission.getSubmissionKind())) {
+                ProgrammingTestCase customCase = new ProgrammingTestCase(); customCase.setTestCaseId(CUSTOM_CASE_ID); customCase.setCaseName("自定义输入"); customCase.setInputText(submission.getCustomInput()); customCase.setIsPublic("1"); customCase.setScoreWeight(0D); customCase.setOrderNum(1);
+                Judge0Result customResult = execute(submission.getSourceCode(), customCase, config);
+                ProgrammingSubmissionCase caseResult = toCustomCaseResult(submission.getSubmissionId(), customCase, customResult);
+                programmingMapper.insertSubmissionCase(caseResult);
+                complete(submission, config, java.util.Collections.singletonList(customCase), java.util.Collections.singletonList(caseResult), caseResult.getStatusCode());
+                return;
+            }
             List<ProgrammingTestCase> cases = "RUN".equals(submission.getSubmissionKind()) ? programmingMapper.selectPublicTestCases(submission.getQuestionId()) : programmingMapper.selectTestCases(submission.getQuestionId());
             if (cases == null || cases.isEmpty()) throw new ServiceException("题目尚未配置可执行测试点");
             List<ProgrammingSubmissionCase> results = new ArrayList<ProgrammingSubmissionCase>();
@@ -320,6 +332,14 @@ public class ProgrammingSubmissionService {
                 row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
             }
         }
+        return row;
+    }
+
+    /** 自定义运行没有期望输出：执行成功即为“运行完成”，绝不参与答案比较或课程计分。 */
+    private ProgrammingSubmissionCase toCustomCaseResult(Long submissionId, ProgrammingTestCase testCase, Judge0Result result) {
+        ProgrammingSubmissionCase row = new ProgrammingSubmissionCase(); row.setSubmissionId(submissionId); row.setTestCaseId(CUSTOM_CASE_ID); row.setIsPublic("1"); row.setJudge0StatusId(result == null ? null : result.getStatusId());
+        String status = Judge0StatusMapper.toPlatformStatus(result); row.setStatusCode("ACCEPTED".equals(status) ? STATUS_COMPLETED : status);
+        if (result != null) { row.setTimeSeconds(result.getTimeSeconds()); row.setMemoryKb(result.getMemoryKb()); row.setOutputText(trim(result.getStdout(), 65536)); row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000)); }
         return row;
     }
 
@@ -380,6 +400,7 @@ public class ProgrammingSubmissionService {
     }
     private static ServiceException forbidden(String message) { return new ServiceException(message, HttpStatus.FORBIDDEN); }
     private void validateSource(String sourceCode) { if (sourceCode == null || sourceCode.trim().isEmpty()) throw new ServiceException("代码不能为空"); if (sourceCode.getBytes(StandardCharsets.UTF_8).length > Math.max(1024, properties.getMaxSourceBytes())) throw new ServiceException("代码超过允许大小"); }
+    private void validateCustomInput(String customInput) { if (customInput != null && customInput.getBytes(StandardCharsets.UTF_8).length > 65536) throw new ServiceException("自定义输入不能超过 64KB"); }
     private void normalizeConfig(ProgrammingQuestionConfig c) { if (c.getTitle() == null || c.getTitle().trim().isEmpty()) throw new ServiceException("题目标题不能为空"); validateTextLength("题目标题", c.getTitle(), 255); validateTextLength("知识点", c.getKnowledgePoints(), 500); c.setNoInput("1".equals(c.getNoInput()) ? "1" : "0"); if (c.getContentVersion() == null || c.getContentVersion() < 1) c.setContentVersion(1); if (c.getTimeLimitSeconds() == null || c.getTimeLimitSeconds() < 0.1D || c.getTimeLimitSeconds() > 10D) throw new ServiceException("时限应在 0.1 至 10 秒之间"); if (c.getMemoryLimitKb() == null || c.getMemoryLimitKb() < 16384 || c.getMemoryLimitKb() > 524288) throw new ServiceException("内存应在 16MB 至 512MB 之间"); if (c.getMaxProcesses() == null || c.getMaxProcesses() < 1 || c.getMaxProcesses() > 8) throw new ServiceException("进程数应在 1 至 8 之间"); if (c.getMaxFileSizeKb() == null || c.getMaxFileSizeKb() < 1 || c.getMaxFileSizeKb() > 4096) throw new ServiceException("文件限制应在 1KB 至 4MB 之间"); if (c.getMaxOutputKb() == null || c.getMaxOutputKb() < 1 || c.getMaxOutputKb() > 1024) throw new ServiceException("输出限制应在 1KB 至 1MB 之间"); validateTextLength("输入说明", c.getInputDescription(), 20000); validateTextLength("输出说明", c.getOutputDescription(), 20000); validateTextLength("样例解释", c.getSampleExplanation(), 20000); validateTextLength("限制条件", c.getConstraintsText(), 20000); validateTextLength("注意事项", c.getNotesText(), 20000); validateTextLength("初始代码", c.getStarterCode(), Math.max(1024, properties.getMaxSourceBytes())); }
     private void validateTestCases(List<ProgrammingTestCase> cases) {
         if (cases == null || cases.isEmpty()) throw new ServiceException("至少配置一个测试点");
@@ -417,7 +438,7 @@ public class ProgrammingSubmissionService {
         return status;
     }
     private String summarize(List<ProgrammingSubmissionCase> rows, int passed) { if (passed == rows.size()) return "ACCEPTED"; if (passed > 0) return "PARTIAL"; for (ProgrammingSubmissionCase row : rows) if (!"WRONG_ANSWER".equals(row.getStatusCode())) return row.getStatusCode(); return "WRONG_ANSWER"; }
-    private String statusMessage(String status) { if ("ACCEPTED".equals(status)) return "通过"; if ("PARTIAL".equals(status)) return "部分通过"; if ("WRONG_ANSWER".equals(status)) return "答案错误"; if ("SYNTAX_ERROR".equals(status)) return "语法错误"; if ("RUNTIME_ERROR".equals(status)) return "运行错误"; if ("TIME_LIMIT".equals(status)) return "运行超时"; if ("MEMORY_LIMIT".equals(status)) return "内存超限"; return "判题服务异常，代码和提交已保留"; }
+    private String statusMessage(String status) { if (STATUS_COMPLETED.equals(status)) return "运行完成"; if ("ACCEPTED".equals(status)) return "通过"; if ("PARTIAL".equals(status)) return "部分通过"; if ("WRONG_ANSWER".equals(status)) return "答案错误"; if ("SYNTAX_ERROR".equals(status)) return "语法错误"; if ("RUNTIME_ERROR".equals(status)) return "运行错误"; if ("TIME_LIMIT".equals(status)) return "运行超时"; if ("MEMORY_LIMIT".equals(status)) return "内存超限"; return "判题服务异常，代码和提交已保留"; }
     private int lessonQuestionScore(Long lessonId, Long questionId) { for (BizLessonQuestionDetailVo q : lessonQuestionMapper.selectDetailsByLessonId(lessonId)) if (questionId.equals(q.getQuestionId())) return q.getQuestionScore() == null ? 0 : q.getQuestionScore().intValue(); return 0; }
     @SuppressWarnings({ "unchecked", "rawtypes" })
     private void reserveRateAndSlot(BizStudent student, Long deptId, Long lessonId, Long questionId) {

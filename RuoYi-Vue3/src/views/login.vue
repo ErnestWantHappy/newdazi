@@ -90,8 +90,7 @@
     </div>
     <!-- 登录页保留必要的版权与备案信息，降低对登录操作的干扰。 -->
     <div class="el-login-footer" aria-label="平台版权信息">
-      <div>版权所有：象山县教育局教科研中心</div>
-      <div>地址：浙江省象山县高教园区教科研中心&nbsp;&nbsp;邮编：315700&nbsp;&nbsp;备案号：浙ICP备05007927号</div>
+      <div>版权所有：象山县教育局教科研中心&nbsp;&nbsp;备案号：浙ICP备05007927号</div>
     </div>
     <el-dialog
       v-model="schoolDialogVisible"

@@ -6,7 +6,7 @@
     </div>
 
     <el-card shadow="never" class="list-card">
-      <el-table v-loading="loading" :data="plans" row-key="plan_id">
+      <el-table v-loading="loading" :data="plans" row-key="plan_id" empty-text="暂无练习题单">
         <el-table-column prop="plan_name" label="题单名称" min-width="190" />
         <el-table-column label="目标班级" min-width="240" show-overflow-tooltip>
           <template #default="{ row }">{{ row.class_names || '尚未选择班级' }}</template>
@@ -27,7 +27,6 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && !plans.length" description="暂无练习题单" />
     </el-card>
 
     <el-dialog v-model="createVisible" title="新建练习题单" width="620px">
@@ -151,7 +150,17 @@ async function publish(){if(!selectedQuestions.value.length||!editForm.classKeys
 async function previewQuestion(row){const res=await previewProgrammingQuestion(Number(row.questionId));previewQuestionData.value=row;previewConfig.value=res.data||{};previewCases.value=res.testCases||[];previewVisible.value=true}
 async function openAnalytics(row){const detail=(await getTeacherPlan(row.plan_id)).data||{};analyticsPlan.value={...row,...detail};analyticsClasses.value=detail.publishedClasses||[];analyticsClassKey.value='';classPickerVisible.value=true}
 async function loadAnalytics(){const cls=classObject(analyticsClassKey.value);classPickerVisible.value=false;analyticsData.value=(await getTeacherAnalytics({planVersionId:analyticsPlan.value.published_version_id,entryYear:cls.entryYear,classCode:cls.classCode})).data||{};analyticsVisible.value=true}
-onMounted(async()=>{await Promise.all([loadPlans(),getTeacherManagedClasses().then(r=>{managedClasses.value=r.data||[]})])})
+onMounted(async()=>{
+  await Promise.all([
+    loadPlans(),
+    getTeacherManagedClasses()
+      .then(r=>{managedClasses.value=r.data||[]})
+      .catch(()=>{
+        managedClasses.value=[]
+        ElMessage.warning('班级列表暂时无法加载，题单和学情仍可继续查看')
+      })
+  ])
+})
 </script>
 
 <style scoped>

@@ -19,7 +19,7 @@ import com.ruoyi.business.domain.IotMessage;
 import com.ruoyi.business.mapper.IotMapper;
 import com.ruoyi.business.config.IotWebSocketHandler;
 import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -94,12 +94,34 @@ public class IotMqttReceiver
         return mqtt != null && mqtt.isConnected();
     }
 
-    private final class Callback implements MqttCallback
+    private final class Callback implements MqttCallbackExtended
     {
+        @Override public void connectComplete(boolean reconnect, String serverURI)
+        {
+            if (!reconnect) return;
+            // paho 自动重连不会恢复订阅；会话未过期时重复订阅是幂等的，
+            // 会话过期（broker 侧 expiry_interval 2 小时）后不重订阅将静默收不到任何数据。
+            try
+            {
+                MqttClient mqtt = client.get();
+                if (mqtt != null && mqtt.isConnected())
+                {
+                    mqtt.subscribe(properties.getSubscription(), new Listener());
+                    record(null, null, null, "BROKER_RECONNECTED", "MQTT认证", "重连成功，已恢复订阅 " + properties.getSubscription());
+                    log.info("物联网 MQTT 重连成功并恢复订阅 broker={} subscription={}", serverURI, properties.getSubscription());
+                }
+            }
+            catch (Exception e)
+            {
+                record(null, null, null, "RESUBSCRIBE_FAILED", "MQTT认证", "重连后恢复订阅失败: " + abbreviate(String.valueOf(e), 200));
+                log.error("物联网 MQTT 重连后恢复订阅失败", e);
+            }
+        }
         @Override public void connectionLost(Throwable cause)
         {
-            record(null, null, null, "BROKER_CONNECTION_LOST", "网络未到达", "平台与 Broker 连接中断");
-            log.warn("物联网 MQTT 连接中断，将由客户端自动重连");
+            String reason = cause == null ? "未知原因" : String.valueOf(cause);
+            record(null, null, null, "BROKER_CONNECTION_LOST", "网络未到达", "平台与 Broker 连接中断: " + abbreviate(reason, 200));
+            log.warn("物联网 MQTT 连接中断，将由客户端自动重连 cause={}", reason);
         }
         @Override public void messageArrived(String topic, MqttMessage message) { }
         @Override public void deliveryComplete(org.eclipse.paho.client.mqttv3.IMqttDeliveryToken token) { }
@@ -121,6 +143,26 @@ public class IotMqttReceiver
             record(null, null, null, "INVALID_MESSAGE", "消息格式", "消息为空");
             return;
         }
+        try
+        {
+            receiveInternal(topic, mqttMessage);
+        }
+        catch (Exception e)
+        {
+            // paho 回调线程中抛出任何异常都会导致客户端断连并重连，
+            // 单条消息的处理失败必须就地隔离，只记诊断事件，绝不向上传播。
+            log.error("物联网消息处理失败 topic={}", topic, e);
+            try
+            {
+                record(null, null, null, "MESSAGE_PROCESS_FAILED", "平台接收",
+                        "消息处理失败: " + e.getClass().getSimpleName() + " " + abbreviate(String.valueOf(e.getMessage()), 200));
+            }
+            catch (Exception ignored) { }
+        }
+    }
+
+    private void receiveInternal(String topic, MqttMessage mqttMessage)
+    {
         if (!isValidTopic(topic, properties.getMaxTopicLength()))
         {
             record(null, null, null, "INVALID_TOPIC", "Topic", "Topic 格式不符合平台约束");
@@ -243,6 +285,13 @@ public class IotMqttReceiver
         event.setDetail(detail);
         event.setOccurredAt(new Date());
         mapper.insertEvent(event);
+    }
+
+    /** 截断诊断文本，防止超长异常信息撑破事件明细列。 */
+    private static String abbreviate(String value, int max)
+    {
+        if (value == null) return "";
+        return value.length() <= max ? value : value.substring(0, max) + "...";
     }
 
     public String digest(String value)

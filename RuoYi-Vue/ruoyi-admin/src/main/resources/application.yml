@@ -40,6 +40,11 @@ ruoyi:
     dispatch-core-size: 10
     dispatch-max-size: 20
     dispatch-queue-capacity: 2000
+  # Python 判题线程只负责向 Judge0 提交和轮询；生产值应与 129 的 worker 数量配套调整。
+  judge:
+    core-pool-size: ${JUDGE0_EXECUTOR_CORE_POOL_SIZE:2}
+    max-pool-size: ${JUDGE0_EXECUTOR_MAX_POOL_SIZE:4}
+    queue-capacity: ${JUDGE0_EXECUTOR_QUEUE_CAPACITY:500}
 
 # 开发环境配置
 server:

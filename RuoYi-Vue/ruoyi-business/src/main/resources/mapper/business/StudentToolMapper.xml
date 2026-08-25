@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.StudentToolMapper">
+
+    <resultMap type="BizStudentTool" id="StudentToolResult">
+        <id property="toolId" column="tool_id" />
+        <result property="toolName" column="tool_name" />
+        <result property="toolUrl" column="tool_url" />
+        <result property="toolDesc" column="tool_desc" />
+        <result property="sortOrder" column="sort_order" />
+        <result property="enabled" column="enabled" />
+        <result property="deptId" column="dept_id" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="remark" column="remark" />
+    </resultMap>
+
+    <sql id="selectStudentToolVo">
+        select tool_id, tool_name, tool_url, tool_desc, sort_order, enabled, dept_id,
+               create_by, create_time, update_by, update_time, remark
+        from biz_student_tool
+    </sql>
+
+    <select id="selectStudentToolList" parameterType="BizStudentTool" resultMap="StudentToolResult">
+        <include refid="selectStudentToolVo"/>
+        <where>
+            <if test="toolName != null and toolName != ''">and tool_name like concat('%', #{toolName}, '%')</if>
+            <if test="enabled != null">and enabled = #{enabled}</if>
+            <if test="deptId != null">and dept_id = #{deptId}</if>
+        </where>
+        order by sort_order asc, tool_id asc
+    </select>
+
+    <select id="selectStudentToolByToolId" parameterType="Long" resultMap="StudentToolResult">
+        <include refid="selectStudentToolVo"/>
+        where tool_id = #{toolId}
+    </select>
+
+    <insert id="insertStudentTool" parameterType="BizStudentTool" useGeneratedKeys="true" keyProperty="toolId">
+        insert into biz_student_tool
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="toolName != null">tool_name,</if>
+            <if test="toolUrl != null">tool_url,</if>
+            <if test="toolDesc != null">tool_desc,</if>
+            <if test="sortOrder != null">sort_order,</if>
+            <if test="enabled != null">enabled,</if>
+            <if test="deptId != null">dept_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="toolName != null">#{toolName},</if>
+            <if test="toolUrl != null">#{toolUrl},</if>
+            <if test="toolDesc != null">#{toolDesc},</if>
+            <if test="sortOrder != null">#{sortOrder},</if>
+            <if test="enabled != null">#{enabled},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <update id="updateStudentTool" parameterType="BizStudentTool">
+        update biz_student_tool
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="toolName != null">tool_name = #{toolName},</if>
+            <if test="toolUrl != null">tool_url = #{toolUrl},</if>
+            <if test="toolDesc != null">tool_desc = #{toolDesc},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            <if test="enabled != null">enabled = #{enabled},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where tool_id = #{toolId}
+    </update>
+
+    <delete id="deleteStudentToolByToolId" parameterType="Long">
+        delete from biz_student_tool where tool_id = #{toolId}
+    </delete>
+
+    <delete id="deleteStudentToolsByToolIds" parameterType="Long">
+        delete from biz_student_tool where tool_id in
+        <foreach collection="array" item="toolId" open="(" separator="," close=")">#{toolId}</foreach>
+    </delete>
+
+    <select id="selectResidentToolsForStudent" resultMap="StudentToolResult">
+        select distinct t.tool_id, t.tool_name, t.tool_url, t.tool_desc, t.sort_order,
+                        t.enabled, t.dept_id
+        from biz_student_tool t
+        join biz_student_tool_scope s on s.tool_id = t.tool_id
+        where t.enabled = 1
+          and (t.dept_id = #{deptId} or t.dept_id is null)
+          and s.entry_year = #{entryYear}
+          and (s.class_code = #{classCode} or s.class_code is null or s.class_code = '')
+        order by t.sort_order asc, t.tool_id asc
+    </select>
+
+    <resultMap id="StudentToolScopeResult" type="BizStudentToolScope">
+        <id property="scopeId" column="scope_id" />
+        <result property="toolId" column="tool_id" />
+        <result property="entryYear" column="entry_year" />
+        <result property="classCode" column="class_code" />
+    </resultMap>
+
+    <select id="selectScopesByToolId" parameterType="Long" resultMap="StudentToolScopeResult">
+        select scope_id, tool_id, entry_year, class_code from biz_student_tool_scope
+        where tool_id = #{toolId}
+        order by entry_year, class_code
+    </select>
+
+    <insert id="insertScope" parameterType="BizStudentToolScope">
+        insert into biz_student_tool_scope (tool_id, entry_year, class_code)
+        values (#{toolId}, #{entryYear}, #{classCode})
+    </insert>
+
+    <delete id="deleteScopesByToolId" parameterType="Long">
+        delete from biz_student_tool_scope where tool_id = #{toolId}
+    </delete>
+
+    <resultMap id="LessonToolResult" type="BizLessonTool">
+        <id property="toolId" column="tool_id" />
+        <result property="lessonId" column="lesson_id" />
+        <result property="toolName" column="tool_name" />
+        <result property="toolUrl" column="tool_url" />
+        <result property="sortOrder" column="sort_order" />
+    </resultMap>
+
+    <select id="selectLessonToolsByLessonId" parameterType="Long" resultMap="LessonToolResult">
+        select tool_id, lesson_id, tool_name, tool_url, sort_order
+        from biz_lesson_tool
+        where lesson_id = #{lessonId}
+        order by sort_order asc, tool_id asc
+    </select>
+
+    <insert id="insertLessonTool" parameterType="BizLessonTool" useGeneratedKeys="true" keyProperty="toolId">
+        insert into biz_lesson_tool (lesson_id, tool_name, tool_url, sort_order, create_by, create_time)
+        values (#{lessonId}, #{toolName}, #{toolUrl}, #{sortOrder}, #{createBy}, sysdate())
+    </insert>
+
+    <update id="updateLessonTool" parameterType="BizLessonTool">
+        update biz_lesson_tool
+        set tool_name = #{toolName}, tool_url = #{toolUrl}, sort_order = #{sortOrder},
+            update_by = #{updateBy}, update_time = sysdate()
+        where tool_id = #{toolId}
+    </update>
+
+    <delete id="deleteLessonToolsByLessonId" parameterType="Long">
+        delete from biz_lesson_tool where lesson_id = #{lessonId}
+    </delete>
+
+    <!-- selectColumns 等公共片段（XML 内引用的补充片段，供分页 VO 使用时复用） -->
+    <sql id="selectLessonToolVo">
+        select tool_id, lesson_id, tool_name, tool_url, sort_order from biz_lesson_tool
+    </sql>
+</mapper>

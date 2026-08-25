@@ -458,11 +458,64 @@ public class IotExperimentService
                 {
                     vo.setLatestPayloadText(recent.get(0).getPayloadText());
                     vo.setLatestPayloadType(recent.get(0).getPayloadType());
+                    vo.setLatestReceivedAt(recent.get(0).getReceivedAt());
                 }
             }
         }
 
         return vo;
+    }
+
+    /**
+     * 学生端历史数据：分页查询本人所在小组收到的上报消息（按接收时间倒序）。
+     * 校验链与学生概览一致：仅当前指派课程、物联已开启、且只能看自己小组的数据。
+     */
+    public Map<String, Object> listStudentMessages(Long lessonId, Integer pageNum, Integer pageSize)
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (loginUser == null) throw new ServiceException("请先登录");
+        BizStudent student = studentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null) throw new ServiceException("未找到学生档案信息");
+        Long currentDeptId = SecurityUtils.getDeptId();
+        if (student.getDeptId() == null || !student.getDeptId().equals(currentDeptId))
+            throw new ServiceException("学生档案学校与当前登录学校不一致");
+        if (lessonId == null) throw new ServiceException("课程不能为空");
+
+        // 学生只能查询本班当前指派课程，不能靠猜测 lessonId 读取其他课程数据
+        Long currentLessonId = assignmentMapper.selectCurrentLessonByClass(
+                student.getEntryYear(), normalizeClass(student.getClassCode()), currentDeptId);
+        if (currentLessonId == null || !lessonId.equals(currentLessonId))
+            throw new ServiceException("只能查看当前课程的物联网实验");
+
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null || !Boolean.TRUE.equals(lesson.getIotEnabled()))
+            throw new ServiceException("当前课程尚未开启物联网实验");
+
+        List<IotExperiment> experiments = mapper.selectExperimentsByLesson(lessonId, currentDeptId);
+        if (experiments == null || experiments.isEmpty())
+            throw new ServiceException("当前课程暂未配置物联网实验");
+        IotExperiment experiment = experiments.get(0);
+
+        IotGroupStudent gs = mapper.selectGroupStudentByExpAndStudent(experiment.getExperimentId(), student.getStudentId());
+        if (gs == null) throw new ServiceException("你尚未被分配到物联网小组，请联系老师生成分组");
+        IotGroup group = mapper.selectGroupById(gs.getGroupId());
+        if (group == null) throw new ServiceException("小组信息不存在，请联系老师重新生成分组");
+
+        int page = pageNum == null || pageNum < 1 ? 1 : pageNum;
+        int size = pageSize == null || pageSize < 1 ? 20 : Math.min(pageSize, 100);
+        int offset = (page - 1) * size;
+
+        List<IotMessage> rows = mapper.selectMessagePage(experiment.getExperimentId(), null, null,
+                group.getGroupId(), null, null, offset, size);
+        int total = mapper.countMessagePage(experiment.getExperimentId(), null, null,
+                group.getGroupId(), null, null);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("groupId", group.getGroupId());
+        result.put("groupName", group.getGroupName());
+        result.put("rows", rows == null ? Collections.emptyList() : rows);
+        result.put("total", total);
+        return result;
     }
 
     public List<IotGroup> listGroups(Long experimentId)

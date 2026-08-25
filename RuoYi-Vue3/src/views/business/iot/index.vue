@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">CLASSROOM MQTT</p>
         <h2>课程物联网实验</h2>
-        <p class="muted">学生继续使用 Mind+ 和掌控板；平台统一管理班级分组、6 位课堂口令、消息接收与诊断。</p>
+        <p class="muted">学生继续使用 Mind+ 和掌控板；平台统一管理班级分组、6 位课堂口令与上报数据接收。</p>
       </div>
       <div class="heading-actions">
         <el-button icon="Refresh" :loading="loading" @click="refreshData">刷新数据</el-button>
@@ -146,177 +146,196 @@
         </div>
       </el-card>
 
-      <!-- 诊断阶段条 -->
-      <div v-if="dashboard" class="diagnosis-strip mb-3">
-        <span class="diagnosis-title">分层诊断</span>
-        <el-tag v-for="stage in dashboard.diagnosticStages" :key="stage" :type="stageType(stage)">{{ stage }}</el-tag>
-        <span class="diagnosis-hint">Broker 限制班级 Topic 前缀；同班小组依靠 Topic 业务映射隔离。</span>
-      </div>
-
-      <!-- 小组与实时数据区域 -->
-      <el-row v-if="dashboard" :gutter="16">
-        <!-- 左侧：实验小组列表 -->
-        <el-col :xs="24" :lg="13">
-          <el-card shadow="never" class="section-card mb-3">
-            <template #header>
-              <div class="card-header">
-                <span>班级小组列表 ({{ currentGroups.length }})</span>
-                <span class="muted small" v-if="currentGroups.length">共 {{ totalGroupStudents }} 名学生</span>
-              </div>
-            </template>
-            <el-table :data="currentGroups" size="small" empty-text="当前班级暂无分组，请点击上方“自动生成分组”" stripe>
-              <el-table-column prop="groupName" label="组名" width="90">
-                <template #default="{ row }">
-                  <strong>{{ row.groupName }}</strong>
-                </template>
-              </el-table-column>
-              <el-table-column label="组员" min-width="170">
-                <template #default="{ row }">
-                  <div class="members-tag-list">
-                    <el-tag
-                      v-for="s in row.studentList"
-                      :key="s.studentId"
-                      size="small"
-                      effect="plain"
-                      class="member-tag"
-                    >
-                      {{ s.studentNo }} {{ s.studentName }}
-                    </el-tag>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="Topic" min-width="190" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <span class="topic-text">{{ row.topic }}</span>
-                  <el-button link type="primary" icon="CopyDocument" @click="copyText(row.topic, 'Topic')" />
-                </template>
-              </el-table-column>
-              <el-table-column label="在线" width="75">
-                <template #default="{ row }">
-                  <el-tag :type="isOnline(row) ? 'success' : 'info'" size="small">
-                    {{ isOnline(row) ? '在线' : '未收到' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-card>
-        </el-col>
-
-        <!-- 右侧：实时消息流 -->
-        <el-col :xs="24" :lg="11">
-          <el-card shadow="never" class="section-card mb-3">
-            <template #header>
-              <div class="card-header">
-                <span>最近消息流</span>
-                <el-tag size="small" type="success">实时接收中</el-tag>
-              </div>
-            </template>
-            <el-table :data="dashboard.messages" size="small" empty-text="暂无接收消息" max-height="360">
-              <el-table-column prop="groupCode" label="小组" width="80" />
-              <el-table-column prop="payloadType" label="格式" width="75" />
-              <el-table-column prop="payloadText" label="数据" min-width="140" show-overflow-tooltip />
-              <el-table-column label="时间" width="145">
-                <template #default="{ row }">{{ formatTime(row.receivedAt) }}</template>
-              </el-table-column>
-            </el-table>
-          </el-card>
-        </el-col>
-      </el-row>
-
-      <!-- 学生数据收集：分页查看设备上报数据与各小组汇总 -->
-      <el-card v-if="experimentId" shadow="never" class="section-card collect-card mb-3">
+      <!-- 小组数据总览：合并了原小组列表、最近消息流与数据收集汇总，一组一行 -->
+      <el-card v-if="currentClass" shadow="never" class="section-card overview-card mb-3">
         <template #header>
           <div class="card-header">
-            <span>学生数据收集</span>
-            <span class="muted small">学生/设备经 MQTT 上报的数据按时间入库，可在此按班级、小组与格式汇总查看。</span>
+            <div class="header-title">
+              <span class="class-title">小组数据总览</span>
+              <el-tag size="small" type="info">{{ currentGroups.length }} 组 / {{ totalGroupStudents }} 人</el-tag>
+              <el-tag size="small" type="success">共接收 {{ classTotalMessages }} 条数据</el-tag>
+              <el-switch v-model="onlyWithData" size="small" active-text="只看有数据" />
+            </div>
+            <el-tag v-if="hasRecentActivity" size="small" type="success" effect="plain">实时接收中</el-tag>
+            <el-tag v-else size="small" type="info" effect="plain">
+              {{ lastClassReceivedAt ? `最近接收 ${formatClock(lastClassReceivedAt)}` : '尚未接收数据' }}
+            </el-tag>
           </div>
         </template>
+        <el-table
+          :data="filteredGroups"
+          size="small"
+          empty-text="当前班级暂无分组，请点击上方“自动生成分组”"
+          stripe
+        >
+          <el-table-column label="小组" width="110">
+            <template #default="{ row }">
+              <div class="group-cell">
+                <strong>{{ row.groupName }}</strong>
+                <span class="group-code">{{ row.groupCode }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="组员" min-width="160">
+            <template #default="{ row }">
+              <div class="members-tag-list">
+                <el-tag
+                  v-for="s in row.studentList"
+                  :key="s.studentId"
+                  size="small"
+                  effect="plain"
+                  class="member-tag"
+                >
+                  {{ s.studentNo }} {{ s.studentName }}
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="Topic" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="topic-text">{{ row.topic }}</span>
+              <el-button link type="primary" icon="CopyDocument" @click="copyText(row.topic, 'Topic')" />
+            </template>
+          </el-table-column>
+          <el-table-column label="在线" width="75">
+            <template #default="{ row }">
+              <el-tag :type="isOnline(row) ? 'success' : 'info'" size="small">
+                {{ isOnline(row) ? '在线' : '离线' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="收到数据" width="105" align="center" sortable :sort-method="sortByMessageCount">
+            <template #default="{ row }">
+              <el-tag :type="(statsOf(row)?.messageCount || 0) > 0 ? 'success' : 'info'" size="small">
+                {{ statsOf(row)?.messageCount || 0 }} 条
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="最新数据" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="statsOf(row)?.lastPayload != null" class="latest-payload">{{ formatPayload(statsOf(row).lastPayload, statsOf(row).lastPayloadType) }}</span>
+              <span v-else class="muted">尚未收到数据</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="最近接收时间" width="160">
+            <template #default="{ row }">
+              <span v-if="statsOf(row)?.lastReceivedAt">{{ formatTime(statsOf(row).lastReceivedAt) }}</span>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" icon="DataAnalysis" @click="openGroupDetail(row)">
+                查看数据
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <!-- 小组详情使用卡片弹窗，教师关闭后仍停留在当前班级总览。 -->
+      <el-dialog
+        v-model="detailMode"
+        :title="detailGroup ? `${detailGroup.groupName} · 全部数据` : '小组数据'"
+        width="min(1000px, 92vw)"
+        top="5vh"
+        destroy-on-close
+        append-to-body
+        @closed="backToOverview"
+      >
+        <template #header>
+          <div class="card-header">
+            <div class="header-title">
+              <span class="class-title">{{ detailGroup?.groupName || '小组' }} 全部数据</span>
+              <el-tag v-if="detailGroup" size="small" type="info">{{ detailGroup.groupCode }}</el-tag>
+              <el-tag v-if="detailGroup" size="small" :type="isOnline(detailGroup) ? 'success' : 'info'">
+                {{ isOnline(detailGroup) ? '在线' : '离线' }}
+              </el-tag>
+            </div>
+            <span class="muted small">共 {{ detailTotal }} 条</span>
+          </div>
+        </template>
+
+        <div v-if="detailGroup" class="detail-dialog-body">
+        <div class="detail-meta mb-3">
+          <span class="muted small">组员：</span>
+          <el-tag
+            v-for="s in detailGroup.studentList"
+            :key="s.studentId"
+            size="small"
+            effect="plain"
+            class="member-tag"
+          >
+            {{ s.studentNo }} {{ s.studentName }}
+          </el-tag>
+          <span class="topic-wrap">
+            <span class="muted small">Topic：</span>
+            <span class="topic-text">{{ detailGroup.topic }}</span>
+            <el-button link type="primary" icon="CopyDocument" @click="copyText(detailGroup.topic, 'Topic')" />
+          </span>
+        </div>
+
+        <!-- 最新数据横幅：不受下方筛选影响，始终展示该小组最新一条上报 -->
+        <div class="latest-banner mb-3">
+          <span class="latest-label">最新数据：</span>
+          <template v-if="detailLatest">
+            <code class="latest-value">{{ formatPayload(detailLatest.lastPayload, detailLatest.lastPayloadType) }}</code>
+            <el-tag size="small" type="primary" effect="plain">{{ detailLatest.lastPayloadType || 'TEXT' }}</el-tag>
+            <span class="muted small">{{ formatTime(detailLatest.lastReceivedAt) }}</span>
+          </template>
+          <span v-else class="muted">尚未收到该小组数据</span>
+        </div>
+
         <div class="collect-toolbar">
-          <el-select v-model="collectForm.groupId" clearable placeholder="全部小组" style="width: 150px" @change="loadMessagePage(1)">
-            <el-option v-for="g in currentGroups" :key="g.groupId" :label="`${g.groupName}（${g.groupCode}）`" :value="g.groupId" />
-          </el-select>
-          <el-select v-model="collectForm.payloadType" clearable placeholder="全部格式" style="width: 130px" @change="loadMessagePage(1)">
+          <el-select v-model="detailFilter.payloadType" clearable placeholder="全部格式" style="width: 130px" @change="loadDetailPage(1)">
             <el-option label="TEXT" value="TEXT" />
             <el-option label="JSON" value="JSON" />
             <el-option label="NUMBER" value="NUMBER" />
           </el-select>
           <el-input
-            v-model="collectForm.keyword"
-            placeholder="搜索数据内容 / 设备 / Topic"
+            v-model="detailFilter.keyword"
+            placeholder="搜索数据内容 / 设备"
             clearable
             style="width: 220px"
-            @keyup.enter="loadMessagePage(1)"
-            @clear="loadMessagePage(1)"
+            @keyup.enter="loadDetailPage(1)"
+            @clear="loadDetailPage(1)"
           />
-          <el-button type="primary" plain icon="Search" @click="loadMessagePage(1)">查询</el-button>
-          <el-button icon="Refresh" @click="loadMessagePage()">刷新</el-button>
-          <span class="collect-total">共 {{ collectTotal }} 条</span>
+          <el-button type="primary" plain icon="Search" @click="loadDetailPage(1)">查询</el-button>
+          <el-button icon="Refresh" @click="loadDetailPage()">刷新</el-button>
         </div>
+
         <el-table
-          v-if="collectStats.length"
-          :data="collectStats"
+          v-loading="detailLoading"
+          :data="detailRows"
           size="small"
-          border
-          class="collect-stats-table"
+          class="detail-table"
+          empty-text="暂无数据。学生设备经 MQTT 上报后，这里才会出现记录。"
+          max-height="480"
         >
-          <el-table-column prop="groupName" label="小组" min-width="130" />
-          <el-table-column prop="groupCode" label="组编号" width="110" />
-          <el-table-column prop="messageCount" label="已接收数据(条)" width="130" align="center">
-            <template #default="{ row }"><el-tag size="small" type="success">{{ row.messageCount || 0 }}</el-tag></template>
-          </el-table-column>
-          <el-table-column label="最近接收时间" min-width="170">
-            <template #default="{ row }">{{ formatTime(row.lastReceivedAt) || '尚未收到数据' }}</template>
-          </el-table-column>
-        </el-table>
-        <el-table
-          v-loading="collectLoading"
-          :data="collectRows"
-          size="small"
-          class="collect-table"
-          empty-text="暂无收集数据。学生设备经 MQTT 上报后，这里才会出现记录。"
-        >
-          <el-table-column label="接收时间" width="165">
+          <el-table-column label="接收时间" width="170">
             <template #default="{ row }">{{ formatTime(row.receivedAt) }}</template>
           </el-table-column>
-          <el-table-column prop="groupCode" label="小组" width="90" />
-          <el-table-column prop="deviceCode" label="设备" width="100" show-overflow-tooltip />
-          <el-table-column prop="payloadType" label="格式" width="85" />
-          <el-table-column label="数据内容" min-width="200" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.payloadText ?? row.payloadNumber ?? '' }}</template>
+          <el-table-column label="格式" width="145">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ row.payloadType || 'TEXT' }}</el-tag>
+              <span v-if="row.deviceCode && row.deviceCode !== 'data'" class="device-name">{{ row.deviceCode }}</span>
+            </template>
           </el-table-column>
-          <el-table-column prop="topic" label="Topic" min-width="200" show-overflow-tooltip />
+          <el-table-column label="数据内容" min-width="240" show-overflow-tooltip>
+            <template #default="{ row }"><pre class="payload-display">{{ formatPayload(payloadOf(row), row.payloadType) }}</pre></template>
+          </el-table-column>
         </el-table>
         <el-pagination
-          v-if="collectTotal > 0"
+          v-if="detailTotal > 0"
           class="collect-pagination"
           layout="total, prev, pager, next"
-          :total="collectTotal"
-          :page-size="collectPageSize"
-          :current-page="collectPage"
-          @current-change="loadMessagePage"
+          :total="detailTotal"
+          :page-size="detailPageSize"
+          :current-page="detailPage"
+          @current-change="loadDetailPage"
         />
-      </el-card>
-
-      <!-- 诊断事件时间轴 -->
-      <el-card v-if="dashboard" shadow="never" class="section-card event-card mb-3">
-        <template #header>
-          <div class="card-header">
-            <span>诊断与连接事件</span>
-            <span class="muted small">网络未到达 → MQTT认证 → Topic → 消息格式 → 平台接收</span>
-          </div>
-        </template>
-        <el-timeline v-if="dashboard.events && dashboard.events.length">
-          <el-timeline-item
-            v-for="event in dashboard.events"
-            :key="event.eventId"
-            :timestamp="formatTime(event.occurredAt)"
-            :type="event.eventType === 'MESSAGE_RECEIVED' ? 'success' : 'warning'"
-          >
-            <b>{{ event.diagnosticStage }}</b>：{{ event.detail }}
-          </el-timeline-item>
-        </el-timeline>
-        <el-empty v-else description="暂无诊断事件" :image-size="60" />
-      </el-card>
+        </div>
+      </el-dialog>
     </template>
 
     <!-- 新建实验对话框 -->
@@ -420,10 +439,13 @@ import {
   listIotMessages,
   rotateIotClassPasscode
 } from '@/api/business/iot'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const query = new URLSearchParams(window.location.search)
 const lessonId = ref(Number(query.get('lessonId')) || undefined)
 const lessonTitle = ref(query.get('lessonTitle') || '')
+const initialEntryYear = query.get('entryYear') || ''
+const initialClassCode = query.get('classCode') || ''
 
 const experiments = ref([])
 const experimentId = ref()
@@ -446,14 +468,24 @@ const classCardDialog = ref(false)
 const classCard = ref(null)
 
 const experimentForm = reactive({ activityCode: '', title: '', description: '' })
-const collectForm = reactive({ groupId: null, payloadType: '', keyword: '' })
-const collectRows = ref([])
-const collectStats = ref([])
-const collectTotal = ref(0)
-const collectPage = ref(1)
-const collectPageSize = ref(20)
-const collectLoading = ref(false)
+
+// 小组汇总统计（每组接收条数、最近接收时间、最新数据），随实时推送自动刷新
+const groupStats = ref([])
+
+// 小组详情视图（点进具体小组查看其全部上报数据）
+const detailMode = ref(false)
+const detailGroup = ref(null)
+const detailRows = ref([])
+const detailTotal = ref(0)
+const detailPage = ref(1)
+const detailPageSize = ref(20)
+const detailLoading = ref(false)
+const detailFilter = reactive({ payloadType: '', keyword: '' })
+const onlyWithData = ref(false)
+const clockNow = ref(Date.now())
+
 let socket = null
+let clockTimer = null
 
 const currentClass = computed(() => {
   if (!selectedClassKey.value) return null
@@ -465,13 +497,52 @@ const totalGroupStudents = computed(() => {
   return currentGroups.value.reduce((sum, g) => sum + (g.studentList?.length || 0), 0)
 })
 
+const classTotalMessages = computed(() => {
+  return groupStats.value.reduce((sum, s) => sum + Number(s.messageCount || 0), 0)
+})
+
+const filteredGroups = computed(() => {
+  if (!onlyWithData.value) return currentGroups.value
+  return currentGroups.value.filter(group => Number(statsOf(group)?.messageCount || 0) > 0)
+})
+
+const lastClassReceivedAt = computed(() => {
+  return groupStats.value
+    .map(item => item.lastReceivedAt)
+    .filter(Boolean)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || ''
+})
+
+const hasRecentActivity = computed(() => {
+  if (!lastClassReceivedAt.value) return false
+  return clockNow.value - new Date(lastClassReceivedAt.value).getTime() < 120000
+})
+
+const statsMap = computed(() => {
+  const map = {}
+  for (const s of groupStats.value) map[s.groupId] = s
+  return map
+})
+
+const detailLatest = computed(() => {
+  if (!detailGroup.value) return null
+  const stats = statsMap.value[detailGroup.value.groupId]
+  return stats && stats.lastPayload != null ? stats : null
+})
+
 onMounted(async () => {
+  clockTimer = window.setInterval(() => { clockNow.value = Date.now() }, 30000)
   await loadExperimentsAndClasses()
 })
 
 onBeforeUnmount(() => {
   if (socket) socket.close()
+  if (clockTimer) window.clearInterval(clockTimer)
 })
+
+function statsOf(group) {
+  return statsMap.value[group.groupId] || null
+}
 
 async function loadExperimentsAndClasses() {
   if (!lessonId.value) return
@@ -489,10 +560,15 @@ async function loadExperimentsAndClasses() {
     }
 
     if (!selectedClassKey.value && assignedClasses.value.length) {
-      selectedClassKey.value = `${assignedClasses.value[0].entryYear}_${assignedClasses.value[0].classCode}`
+      const initialClass = assignedClasses.value.find(item =>
+        String(item.entryYear) === String(initialEntryYear)
+        && String(item.classCode) === String(initialClassCode)
+      )
+      const target = initialClass || assignedClasses.value[0]
+      selectedClassKey.value = `${target.entryYear}_${target.classCode}`
     }
 
-    await loadClassDataAndDashboard()
+    await loadClassData()
   } catch (error) {
     errorMessage.value = error?.message || '实验或班级列表加载失败'
   } finally {
@@ -500,11 +576,12 @@ async function loadExperimentsAndClasses() {
   }
 }
 
-async function loadClassDataAndDashboard() {
+async function loadClassData() {
   if (!experimentId.value) {
     dashboard.value = null
     classConfig.value = null
     currentGroups.value = []
+    groupStats.value = []
     return
   }
 
@@ -514,7 +591,7 @@ async function loadClassDataAndDashboard() {
       const [cfgRes, grpRes, dashRes] = await Promise.all([
         getIotClassConfig(experimentId.value, cls.entryYear, cls.classCode),
         listIotGroups(experimentId.value, cls.entryYear, cls.classCode),
-        getIotDashboard(experimentId.value, { entryYear: cls.entryYear, classCode: cls.classCode, limit: 50 })
+        getIotDashboard(experimentId.value, { entryYear: cls.entryYear, classCode: cls.classCode, limit: 1 })
       ])
       classConfig.value = cfgRes?.data || null
       if (classConfig.value?.groupSize) {
@@ -522,33 +599,73 @@ async function loadClassDataAndDashboard() {
       }
       currentGroups.value = grpRes?.data || []
       dashboard.value = dashRes?.data || null
+      await loadGroupStats()
     } else {
-      const dashRes = await getIotDashboard(experimentId.value, { limit: 50 })
+      const dashRes = await getIotDashboard(experimentId.value, { limit: 1 })
       dashboard.value = dashRes?.data || null
       currentGroups.value = dashboard.value?.groups || []
+      groupStats.value = []
     }
     connectRealtime()
     errorMessage.value = ''
   } catch (error) {
     errorMessage.value = error?.message || '物联数据加载失败'
   }
-  // 学生数据收集列表随主数据一并刷新
-  loadMessagePage()
+  // 若当前停留在小组详情页，主数据刷新时同步刷新明细
+  if (detailMode.value && detailGroup.value) {
+    loadDetailPage()
+  }
 }
 
-/** 分页加载学生数据收集列表与小组汇总。 */
-async function loadMessagePage(page) {
-  if (!experimentId.value) return
-  if (typeof page === 'number') collectPage.value = page
-  collectLoading.value = true
+/** 加载当前班级各小组汇总统计（含每组最新数据），pageSize=1 只为取 stats。 */
+async function loadGroupStats() {
+  const cls = currentClass.value
+  if (!experimentId.value || !cls) {
+    groupStats.value = []
+    return
+  }
   try {
-    const cls = currentClass.value
+    const res = await listIotMessages(experimentId.value, {
+      entryYear: cls.entryYear,
+      classCode: cls.classCode,
+      pageNum: 1,
+      pageSize: 1
+    })
+    groupStats.value = res?.data?.stats || []
+  } catch (error) {
+    groupStats.value = []
+  }
+}
+
+/** 打开小组详情：查看该小组全部上报数据。 */
+function openGroupDetail(group) {
+  detailGroup.value = group
+  detailMode.value = true
+  detailFilter.payloadType = ''
+  detailFilter.keyword = ''
+  loadDetailPage(1)
+}
+
+function backToOverview() {
+  detailMode.value = false
+  detailGroup.value = null
+  detailRows.value = []
+  detailTotal.value = 0
+}
+
+/** 分页加载小组明细（按接收时间倒序）。 */
+async function loadDetailPage(page) {
+  if (!experimentId.value || !detailGroup.value) return
+  if (typeof page === 'number') detailPage.value = page
+  const cls = currentClass.value
+  detailLoading.value = true
+  try {
     const params = {
-      pageNum: collectPage.value,
-      pageSize: collectPageSize.value,
-      groupId: collectForm.groupId || undefined,
-      payloadType: collectForm.payloadType || undefined,
-      keyword: collectForm.keyword || undefined
+      pageNum: detailPage.value,
+      pageSize: detailPageSize.value,
+      groupId: detailGroup.value.groupId,
+      payloadType: detailFilter.payloadType || undefined,
+      keyword: detailFilter.keyword || undefined
     }
     if (cls) {
       params.entryYear = cls.entryYear
@@ -556,20 +673,21 @@ async function loadMessagePage(page) {
     }
     const res = await listIotMessages(experimentId.value, params)
     const payload = res?.data || {}
-    collectRows.value = payload.rows || []
-    collectTotal.value = Number(payload.total || 0)
-    collectStats.value = payload.stats || []
+    detailRows.value = payload.rows || []
+    detailTotal.value = Number(payload.total || 0)
+    // stats 顺带返回，就地更新汇总，保证最新数据横幅常驻刷新
+    if (payload.stats) groupStats.value = payload.stats
   } catch (error) {
-    ElMessage.error(error?.message || '数据收集加载失败')
+    ElMessage.error(error?.message || '小组数据加载失败')
   } finally {
-    collectLoading.value = false
+    detailLoading.value = false
   }
 }
 
 async function refreshData() {
   loading.value = true
   try {
-    await loadClassDataAndDashboard()
+    await loadClassData()
     ElMessage.success('数据已更新')
   } finally {
     loading.value = false
@@ -577,15 +695,15 @@ async function refreshData() {
 }
 
 function onExperimentChange() {
-  collectForm.groupId = null
-  collectPage.value = 1
-  loadClassDataAndDashboard()
+  backToOverview()
+  detailPage.value = 1
+  loadClassData()
 }
 
 function onClassChange() {
-  collectForm.groupId = null
-  collectPage.value = 1
-  loadClassDataAndDashboard()
+  backToOverview()
+  detailPage.value = 1
+  loadClassData()
 }
 
 async function submitExperiment() {
@@ -639,7 +757,8 @@ async function executeGrouping(force) {
       force
     })
     ElMessage.success(`分组成功！共生成 ${res?.data?.totalGroups || 0} 个小组`)
-    await loadClassDataAndDashboard()
+    backToOverview()
+    await loadClassData()
   } catch (error) {
     ElMessage.error(error?.message || '生成分组失败')
   } finally {
@@ -689,10 +808,10 @@ async function openClassCard() {
 
 async function copyText(text, label = '内容') {
   if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
+  const ok = await copyToClipboard(text)
+  if (ok) {
     ElMessage.success(`${label}已复制到剪贴板`)
-  } catch (_e) {
+  } else {
     ElMessage.warning(`无法自动复制，请手动选中复制：${text}`)
   }
 }
@@ -724,18 +843,41 @@ function connectRealtime() {
   socket.onmessage = event => {
     try {
       if (JSON.parse(event.data).type === 'iot_refresh') {
-        loadClassDataAndDashboard()
+        loadClassData()
       }
     } catch (_error) { }
   }
 }
 
-function stageType(stage) {
-  return stage === '平台接收' ? 'success' : stage === '消息格式' ? 'warning' : 'info'
+function sortByMessageCount(left, right) {
+  return Number(statsOf(left)?.messageCount || 0) - Number(statsOf(right)?.messageCount || 0)
+}
+
+function payloadOf(row) {
+  return row?.payloadText ?? row?.payloadNumber ?? ''
+}
+
+function formatPayload(value, type) {
+  const normalizedType = String(type || 'TEXT').toUpperCase()
+  if (normalizedType === 'NUMBER') return `数值 ${value ?? ''}`
+  if (normalizedType === 'JSON') {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value
+      return JSON.stringify(parsed, null, 2)
+    } catch (_error) {
+      return String(value ?? '')
+    }
+  }
+  const text = String(value ?? '')
+  return text.length > 120 ? `${text.slice(0, 120)}…` : text
 }
 
 function formatTime(value) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''
+}
+
+function formatClock(value) {
+  return value ? new Date(value).toLocaleTimeString('zh-CN', { hour12: false }) : ''
 }
 
 function isOnline(row) {
@@ -892,30 +1034,90 @@ function isOnline(row) {
   color: #909399;
 }
 
-.diagnosis-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #ffffff;
-  padding: 10px 16px;
-  border-radius: 6px;
+.section-card {
   border: 1px solid #e4e7ed;
 }
 
-.diagnosis-title {
+.group-cell {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.4;
+}
+
+.group-code {
+  font-size: 11px;
+  color: #909399;
+}
+
+.latest-payload {
+  font-family: Consolas, monospace;
+  font-weight: 700;
+  color: #409eff;
+}
+
+.device-name {
+  display: block;
+  margin-top: 4px;
+  color: #606266;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payload-display {
+  margin: 0;
+  color: #303133;
+  font: 12px/1.5 Consolas, "Courier New", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-dialog-body {
+  min-height: 280px;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.topic-wrap {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+}
+
+.latest-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0f9eb;
+  border: 1px solid #e1f3d8;
+  border-radius: 6px;
+  padding: 10px 16px;
+}
+
+.latest-label {
   font-size: 13px;
   font-weight: 600;
   color: #303133;
 }
 
-.diagnosis-hint {
-  font-size: 12px;
-  color: #909399;
-  margin-left: auto;
-}
-
-.section-card {
-  border: 1px solid #e4e7ed;
+.latest-value {
+  font-family: Consolas, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: #67c23a;
+  background: #ffffff;
+  padding: 2px 10px;
+  border-radius: 4px;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collect-toolbar {
@@ -923,16 +1125,6 @@ function isOnline(row) {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
-}
-
-.collect-total {
-  font-size: 12px;
-  color: #909399;
-  margin-left: auto;
-}
-
-.collect-stats-table {
   margin-bottom: 12px;
 }
 

@@ -39,6 +39,9 @@ public class IotStudentOverviewVo
     private String latestPayloadType;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date latestReceivedAt;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date lastSeenAt;
 
     private Boolean isOnline = false;
@@ -134,6 +137,9 @@ public class IotStudentOverviewVo
 
     public String getLatestPayloadType() { return latestPayloadType; }
     public void setLatestPayloadType(String latestPayloadType) { this.latestPayloadType = latestPayloadType; }
+
+    public Date getLatestReceivedAt() { return latestReceivedAt; }
+    public void setLatestReceivedAt(Date latestReceivedAt) { this.latestReceivedAt = latestReceivedAt; }
 
     public Date getLastSeenAt() { return lastSeenAt; }
     public void setLastSeenAt(Date lastSeenAt) { this.lastSeenAt = lastSeenAt; }

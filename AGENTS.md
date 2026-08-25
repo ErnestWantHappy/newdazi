@@ -261,6 +261,7 @@ npm run build:prod
 - [ ] 上下文只包含已验证事实，不含密码、Token、Cookie 或私密路径内容
 - [ ] 新 AI 只读 `contexts/PROJECT_CORE.md` 和 `docs/architecture/INDEX.md` 即可知道当前真实焦点
 - [ ] 向用户汇报：改了什么、怎么验、剩余风险、下一步  
+- [ ] **发布登记（Agent 词典，仅部署到 10.52.1.123 的轮次必填）**：已在 `contexts/RELEASE_LOG.md` 登记日期/版本号/改动摘要；且本次更新已写入平台更新记录 `biz_platform_update`（草稿或已发布）。
 
 ---
 

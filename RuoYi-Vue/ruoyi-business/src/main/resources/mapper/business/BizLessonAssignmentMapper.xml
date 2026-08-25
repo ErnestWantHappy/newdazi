@@ -13,11 +13,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="deptId"    column="dept_id"    />
         <result property="assignTime"    column="assign_time"    />
         <result property="autoAdvanceReadyTime" column="auto_advance_ready_time" />
+        <result property="theoryOpen"    column="theory_open"    />
+        <result property="practicalOpen" column="practical_open" />
     </resultMap>
 
     <sql id="selectBizLessonAssignmentVo">
         select assignment_id, lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time,
-               auto_advance_ready_time from biz_lesson_assignment
+               auto_advance_ready_time, theory_open, practical_open from biz_lesson_assignment
     </sql>
 
     <select id="selectBizLessonAssignmentList" parameterType="BizLessonAssignment" resultMap="BizLessonAssignmentResult">
@@ -106,9 +108,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 新增：批量新增课程指派记录 -->
     <insert id="batchInsert" parameterType="java.util.List">
-        INSERT INTO biz_lesson_assignment (lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time) VALUES
+        INSERT INTO biz_lesson_assignment
+            (lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time, theory_open, practical_open)
+        VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.deptId}, #{item.assignTime})
+            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.deptId}, #{item.assignTime},
+             #{item.theoryOpen}, #{item.practicalOpen})
         </foreach>
     </insert>
 
@@ -147,12 +152,23 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         for update
     </select>
 
+    <update id="updateLessonGate">
+        update biz_lesson_assignment
+        <choose>
+            <when test="kind == 'theory'">set theory_open = #{open}</when>
+            <otherwise>set practical_open = #{open}</otherwise>
+        </choose>
+        where assignment_id = #{assignmentId}
+    </update>
+
     <update id="advanceCurrentAssignment">
         update biz_lesson_assignment
         set lesson_id = #{nextLessonId},
             assigner_id = #{assignerId},
             assign_time = #{assignTime},
-            auto_advance_ready_time = null
+            auto_advance_ready_time = null,
+            theory_open = 0,
+            practical_open = 0
         where assignment_id = #{assignmentId}
           and lesson_id = #{currentLessonId}
     </update>

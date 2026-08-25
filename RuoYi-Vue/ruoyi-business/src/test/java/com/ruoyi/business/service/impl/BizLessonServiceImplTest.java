@@ -2,6 +2,7 @@ package com.ruoyi.business.service.impl;
 
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.GradeGroupVo;
@@ -123,6 +124,37 @@ class BizLessonServiceImplTest
         detail.setQuestions(Collections.singletonList(question(100)));
 
         assertDoesNotThrow(() -> validate(detail));
+    }
+
+    @Test
+    void courseAllowsMultiplePythonQuestionsWhenTotalScoreIsOneHundred()
+    {
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setGuideSheetEnabled(false);
+        detail.setQuestions(Arrays.asList(pythonQuestion(31L, 40), pythonQuestion(32L, 60)));
+
+        assertDoesNotThrow(() -> validate(detail));
+    }
+
+    @Test
+    void gatePolicyPreservesExistingClassAndInitializesNewClass()
+    {
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setInitialTheoryOpen(Boolean.TRUE);
+        detail.setInitialPracticalOpen(Boolean.FALSE);
+
+        BizLessonAssignment existing = new BizLessonAssignment();
+        existing.setTheoryOpen(0);
+        existing.setPracticalOpen(1);
+        BizLessonAssignment rebuilt = new BizLessonAssignment();
+        ReflectionTestUtils.invokeMethod(service, "applyInitialGatePolicy", rebuilt, existing, detail);
+        assertEquals(Integer.valueOf(0), rebuilt.getTheoryOpen());
+        assertEquals(Integer.valueOf(1), rebuilt.getPracticalOpen());
+
+        BizLessonAssignment added = new BizLessonAssignment();
+        ReflectionTestUtils.invokeMethod(service, "applyInitialGatePolicy", added, null, detail);
+        assertEquals(Integer.valueOf(1), added.getTheoryOpen());
+        assertEquals(Integer.valueOf(0), added.getPracticalOpen());
     }
 
     @Test
@@ -357,6 +389,15 @@ class BizLessonServiceImplTest
         BizLessonQuestionDetailVo question = new BizLessonQuestionDetailVo();
         question.setQuestionId(9L);
         question.setQuestionScore(score);
+        return question;
+    }
+
+    private BizLessonQuestionDetailVo pythonQuestion(Long questionId, long score)
+    {
+        BizLessonQuestionDetailVo question = question(score);
+        question.setQuestionId(questionId);
+        question.setQuestionType("practical");
+        question.setPracticalMode("PYTHON");
         return question;
     }
 

@@ -49,6 +49,49 @@
       </div>
     </el-card>
 
+    <!-- 当前班级当前课程的学生可见性总开关紧跟筛选区，避免老师找不到。 -->
+    <el-card
+      v-if="!isGradeMode && selectedLessonIds.length === 1 && gateContext && gateContext.isCurrent"
+      class="gate-card"
+      style="margin-bottom: 15px;"
+    >
+      <template #header>
+        <div class="card-header">
+          <span>🧭 题目开放</span>
+          <el-tooltip
+            content="课程“推进”到下一课后开关自动复位为关闭；也可在此手动开启/关闭。"
+            placement="bottom"
+          >
+            <el-icon class="gate-hint"><InfoFilled /></el-icon>
+          </el-tooltip>
+        </div>
+      </template>
+      <div class="gate-row">
+        <div v-if="gateContext.hasTheory" class="gate-item">
+          <div class="gate-copy">
+            <b>理论测试题</b>
+            <span>老师开启后，学生端才显示本课理论题；一班开二班关互不影响。</span>
+          </div>
+          <el-switch
+            :model-value="gateContext.theoryOpen"
+            :loading="gateSaving === 'theory'"
+            @change="(v) => toggleGate('theory', v)"
+          />
+        </div>
+        <div v-if="gateContext.hasPractical" class="gate-item">
+          <div class="gate-copy">
+            <b>操作题（含 Python 编程）</b>
+            <span>老师开启后，学生端才显示本课操作题；推进课程自动复位。</span>
+          </div>
+          <el-switch
+            :model-value="gateContext.practicalOpen"
+            :loading="gateSaving === 'practical'"
+            @change="(v) => toggleGate('practical', v)"
+          />
+        </div>
+      </div>
+    </el-card>
+
     <!-- 图表区域 -->
     <div v-if="tableData.length > 0">
       <!-- 1. 年级概览模式 (全选班级) -->
@@ -533,7 +576,7 @@
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { resolveBlobDownloadFilename } from '@/utils/downloadFilename';
-import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore, getGuideSheetScoreContext } from '@/api/business/score';
+import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore, getGuideSheetScoreContext, getLessonGate, setLessonGate } from '@/api/business/score';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
@@ -759,6 +802,51 @@ const queryParams = ref({
   classCode: null
 });
 
+// 题目开放开关状态（成绩页，班级x当前课程）
+const gateContext = ref(null);
+const gateSaving = ref('');
+
+async function loadGateContext() {
+  gateContext.value = null;
+  if (isGradeMode.value || selectedLessonIds.value.length !== 1) return;
+  const lessonId = selectedLessonIds.value[0];
+  const entryYear = queryParams.value.entryYear;
+  const classCode = queryParams.value.classCode;
+  if (!lessonId || !entryYear || !classCode) return;
+  try {
+    const res = await getLessonGate(lessonId, entryYear, classCode);
+    // 后端 AjaxResult.put 为平铺结构（theoryOpen/isCurrent 在顶层），res.data 兜底两种形态
+    gateContext.value = res?.data || res || null;
+  } catch (e) {
+    // 失败静默，卡片不显示
+    gateContext.value = null;
+  }
+}
+
+async function toggleGate(kind, open) {
+  const lessonId = selectedLessonIds.value[0];
+  const entryYear = queryParams.value.entryYear;
+  const classCode = queryParams.value.classCode;
+  if (!lessonId || !entryYear || !classCode) return;
+  gateSaving.value = kind;
+  try {
+    const res = await setLessonGate(lessonId, entryYear, classCode, kind, open);
+    // PUT 只返回两个开关值（无 isCurrent/hasTheory），只能合并不能整体替换，否则卡片会消失
+    const d = res?.data || res || {};
+    gateContext.value = {
+      ...gateContext.value,
+      theoryOpen: Boolean(d.theoryOpen),
+      practicalOpen: Boolean(d.practicalOpen)
+    };
+    const label = kind === 'theory' ? '理论测试题' : '操作题';
+    proxy.$modal.msgSuccess(open ? ('已对当前班级开启' + label) : ('已关闭' + label + '（学生端不可见）'));
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    gateSaving.value = '';
+  }
+}
+
 // 计算属性：是否为年级概览模式（未选择特定班级）
 const isGradeMode = computed(() => !queryParams.value.classCode);
 
@@ -887,6 +975,7 @@ function onYearChange(val) {
 
 function onClassChange() {
   guideSheetContext.value = null;
+  gateContext.value = null;
   tableData.value = [];
   rawData.value = [];
 }
@@ -979,6 +1068,8 @@ function handleQuery() {
     })
     .finally(() => {
       loading.value = false;
+      // 题目开放开关随查询刷新（单选班级+单选课程时有效）
+      loadGateContext();
     });
 }
 
@@ -1634,6 +1725,37 @@ async function handleExportWithColumns(selectedColumns) {
 </script>
 
 <style lang="scss" scoped>
+.gate-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gate-hint {
+  color: #909399;
+}
+.gate-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.gate-item {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+}
+.gate-copy b {
+  display: block;
+  font-size: 14px;
+}
+.gate-copy span {
+  color: #909399;
+  font-size: 12px;
+}
 .filter-card {
   margin-bottom: 15px;
   

@@ -56,3 +56,7 @@ export function listIotMessages(experimentId, params = {}) {
 export function getIotStudentOverview(lessonId) {
   return request({ url: '/business/iot/student/overview', method: 'get', params: { lessonId } })
 }
+
+export function listIotStudentMessages(params) {
+  return request({ url: '/business/iot/student/messages', method: 'get', params })
+}

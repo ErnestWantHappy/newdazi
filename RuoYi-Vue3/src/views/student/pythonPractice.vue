@@ -6,6 +6,11 @@
         <span class="header-divider">/</span>
         <strong>{{ questionTitle }}</strong>
       </div>
+      <div v-if="currentPlanQuestions.length" class="question-navigation">
+        <el-button size="small" :disabled="currentPlanIndex <= 0 || questionLoading" @click="goRelative(-1)">上一题</el-button>
+        <span>第 {{ currentPlanIndex + 1 }} / {{ currentPlanQuestions.length }} 题</span>
+        <el-button size="small" :disabled="currentPlanIndex < 0 || currentPlanIndex >= currentPlanQuestions.length - 1 || questionLoading" @click="goRelative(1)">下一题</el-button>
+      </div>
       <div class="header-actions">
         <el-tag type="success" effect="plain">已通过 {{ passedCount }}/{{ questions.length }}</el-tag>
         <el-button text @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '全屏' }}</el-button>
@@ -62,11 +67,14 @@
                   <div class="toolbar-actions">
                     <el-button text @click="darkTheme = !darkTheme">{{ darkTheme ? '浅色' : '深色' }}</el-button>
                     <el-select model-value="Python 3" size="small" class="language-select" disabled><el-option label="Python 3" value="Python 3" /></el-select>
-                    <el-button :loading="running" @click="runSamples">运行样例</el-button>
-                    <el-button type="primary" :loading="submitting" @click="submit">提交</el-button>
+                    <el-button :loading="running" :disabled="isJudging" @click="runSamples">运行样例</el-button>
+                    <el-button type="primary" :loading="submitting" :disabled="isJudging" @click="submit">提交</el-button>
                   </div>
                 </div>
-                <div ref="editorElement" class="code-editor" />
+                <div v-if="isJudging" class="judge-status-bar">
+                  <span class="judge-pulse" />{{ pendingLabel }}，请稍候，不需要重复点击
+                </div>
+                <div ref="editorElement" class="code-editor" :class="{ 'with-judge-status': isJudging }" />
               </section>
             </pane>
             <pane :size="38" :min-size="24">
@@ -76,14 +84,14 @@
                     <div class="custom-console">
                       <div class="console-column">
                         <div class="console-label">输入</div>
-                        <el-input v-model="customInput" type="textarea" resize="none" :rows="7" placeholder="按题目输入格式填写；无输入题可留空" />
+                        <el-input v-model="customInput" type="textarea" resize="none" :rows="7" placeholder="按题目输入格式填写；无输入题可留空" :disabled="isJudging" />
                       </div>
                       <div class="console-column output-column">
                         <div class="console-label">输出</div>
                         <pre class="console-output">{{ customOutput }}</pre>
                       </div>
                     </div>
-                    <div class="console-actions"><el-button type="primary" :loading="customRunning" @click="runCustom">▶ 运行</el-button></div>
+                    <div class="console-actions"><el-button type="primary" :loading="customRunning" :disabled="isJudging" @click="runCustom">▶ 运行</el-button></div>
                   </el-tab-pane>
                   <el-tab-pane label="样例结果" name="samples">
                     <case-results :result="latestRun" empty-text="运行样例后，在这里查看期望输出与实际输出。" />
@@ -177,6 +185,19 @@ const latestRun = computed(() => selectedHistory.value?.submit_type === 'RUN' ? 
 const latestSubmit = computed(() => selectedHistory.value?.submit_type === 'SUBMIT' ? selectedHistory.value : history.value.find(item => item.submit_type === 'SUBMIT'))
 const latestCustom = computed(() => history.value.find(item => item.submit_type === 'CUSTOM_RUN'))
 const customOutput = computed(() => latestCustom.value?.caseResults?.[0]?.output_text || latestCustom.value?.caseResults?.[0]?.error_summary || (customRunning.value ? '正在运行…' : '运行结果将在这里显示'))
+const currentPlanQuestions = computed(() => {
+  if (!current.value) return []
+  return questions.value.filter(item => String(item.source_type) === String(current.value.source_type) && String(item.source_id) === String(current.value.source_id))
+})
+const currentPlanIndex = computed(() => currentPlanQuestions.value.findIndex(item => keyOf(item) === activeKey.value))
+const pendingSubmission = computed(() => {
+  const newest = selectedHistory.value?.submission_id === history.value[0]?.submission_id
+    ? selectedHistory.value
+    : history.value[0] || selectedHistory.value
+  return newest && (newest.status_code === 'WAITING' || newest.status_code === 'JUDGING') ? newest : null
+})
+const isJudging = computed(() => Boolean(pendingSubmission.value))
+const pendingLabel = computed(() => pendingSubmission.value?.status_code === 'JUDGING' ? '正在判题' : '正在排队')
 
 function keyOf(item) { return `${item.source_type}-${item.source_id}-${item.question_id}` }
 function titleOf(item) { return item.question_title || String(item.question_content || '').split(/\r?\n/)[0].replace(/^#+\s*/, '') || `Python 题目 ${item.question_id}` }
@@ -189,6 +210,30 @@ function submitTypeLabel(type) { return ({ RUN: '运行样例', SUBMIT: '正式�
 function difficultyLabel(value) { return ({ easy: '简单', medium: '中等', hard: '困难', EASY: '简单', MEDIUM: '中等', HARD: '困难' })[value] || value }
 function difficultyType(value) { const text = String(value).toLowerCase(); return text === 'hard' ? 'danger' : text === 'medium' ? 'warning' : 'success' }
 function formatMemory(kb) { return `${Math.round((Number(kb) || 131072) / 1024)}MB` }
+function normalizeSubmission(row) {
+  if (!row) return null
+  return {
+    ...row,
+    submission_id: row.submission_id ?? row.submissionId,
+    submit_type: row.submit_type ?? row.submitType,
+    status_code: row.status_code ?? row.statusCode,
+    status_message: row.status_message ?? row.statusMessage,
+    passed_case_count: row.passed_case_count ?? row.passedCaseCount,
+    total_case_count: row.total_case_count ?? row.totalCaseCount,
+    submitted_at: row.submitted_at ?? row.submittedAt,
+    caseResults: (row.caseResults || []).map(item => ({
+      ...item,
+      status_code: item.status_code ?? item.statusCode,
+      case_name: item.case_name ?? item.caseName,
+      time_seconds: item.time_seconds ?? item.timeSeconds,
+      memory_kb: item.memory_kb ?? item.memoryKb,
+      is_public: item.is_public ?? item.isPublic,
+      expected_output: item.expected_output ?? item.expectedOutput,
+      output_text: item.output_text ?? item.outputText,
+      error_summary: item.error_summary ?? item.errorSummary
+    }))
+  }
+}
 
 function mountEditor() {
   if (editorView || !editorElement.value) return
@@ -199,11 +244,27 @@ function refreshEditor() { requestAnimationFrame(() => editorView?.requestMeasur
 watch(darkTheme, value => editorView?.dispatch({ effects: themeCompartment.reconfigure(value ? oneDark : []) }))
 
 async function loadOverview() { if (overviewLoading.value) return; overviewLoading.value = true; pageError.value = ''; try { const res = await getStudentPracticeOverview(); questions.value = res.data?.questions || []; if (questions.value.length) await selectQuestion(questions.value[0]) } catch (error) { pageError.value = '题单加载失败，请检查网络后重试'; ElMessage.error(pageError.value) } finally { overviewLoading.value = false } }
-async function selectQuestion(item) { if (!item) return; clearTimeout(pollTimer); pollAttempts = 0; activeKey.value = keyOf(item); questionError.value = ''; questionLoading.value = true; selectedHistory.value = null; try { const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id }); current.value = res.data || {}; await nextTick(mountEditor); setCode(current.value.draft?.source_code || current.value.starter_code || ''); draftState.value = current.value.draft ? '草稿已保存' : '草稿未保存'; history.value = current.value.history || []; if (history.value[0]?.status_code === 'WAITING' || history.value[0]?.status_code === 'JUDGING') poll() } catch (error) { questionError.value = '题目加载失败，请重试'; ElMessage.error(questionError.value) } finally { questionLoading.value = false } }
+async function selectQuestion(item) {
+  if (!item || questionLoading.value || keyOf(item) === activeKey.value) return
+  if (current.value && draftState.value === '草稿待保存') {
+    try { await saveDraft() } catch (error) { return }
+  }
+  clearTimeout(pollTimer); pollAttempts = 0; activeKey.value = keyOf(item); questionError.value = ''; questionLoading.value = true; selectedHistory.value = null
+  try {
+    const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
+    current.value = res.data || {}
+    await nextTick(mountEditor)
+    setCode(current.value.draft?.source_code || current.value.starter_code || '')
+    draftState.value = current.value.draft ? '草稿已保存' : '草稿未保存'
+    history.value = (current.value.history || []).map(normalizeSubmission)
+    if (history.value[0]?.status_code === 'WAITING' || history.value[0]?.status_code === 'JUDGING') { selectedHistory.value = history.value[0]; poll() }
+  } catch (error) { questionError.value = '题目加载失败，请重试'; ElMessage.error(questionError.value) } finally { questionLoading.value = false }
+}
 async function saveDraft() { if (!current.value || saving.value) return; saving.value = true; try { await saveStudentPracticeDraft({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value }); draftState.value = '草稿已保存' } catch (error) { ElMessage.error('草稿保存失败，请稍后重试'); throw error } finally { saving.value = false } }
-async function enqueue(type) { if (!current.value || !sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码'); if (type === 'RUN') running.value = true; else if (type === 'CUSTOM_RUN') customRunning.value = true; else submitting.value = true; try { await saveDraft(); const res = await submitStudentPractice({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value, submitType: type, customInput: type === 'CUSTOM_RUN' ? customInput.value : undefined }); selectedHistory.value = res.data || {}; consoleTab.value = type === 'SUBMIT' ? 'judge' : type === 'RUN' ? 'samples' : 'custom'; pollAttempts = 0; poll() } catch (error) { ElMessage.error('提交失败，请检查网络后重试') } finally { running.value = false; customRunning.value = false; submitting.value = false } }
+async function enqueue(type) { if (!current.value || !sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码'); if (isJudging.value) return ElMessage.info('当前代码仍在排队或判题，请稍候'); if (type === 'RUN') running.value = true; else if (type === 'CUSTOM_RUN') customRunning.value = true; else submitting.value = true; try { await saveDraft(); const res = await submitStudentPractice({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value, submitType: type, customInput: type === 'CUSTOM_RUN' ? customInput.value : undefined }); selectedHistory.value = normalizeSubmission(res.data || {}); history.value = [selectedHistory.value, ...history.value.filter(item => item.submission_id !== selectedHistory.value.submission_id)]; consoleTab.value = type === 'SUBMIT' ? 'judge' : type === 'RUN' ? 'samples' : 'custom'; pollAttempts = 0; poll() } catch (error) { ElMessage.error('提交失败，请检查网络后重试') } finally { running.value = false; customRunning.value = false; submitting.value = false } }
 function runSamples() { return enqueue('RUN') } function runCustom() { return enqueue('CUSTOM_RUN') } function submit() { return enqueue('SUBMIT') }
-async function poll() { clearTimeout(pollTimer); if (pollAttempts >= 30) { ElMessage.warning('判题等待较久，可稍后在提交记录中查看'); return } pollAttempts += 1; pollTimer = setTimeout(async () => { if (!current.value) return; try { const res = await getStudentPracticeQuestion({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id }); history.value = res.data?.history || []; selectedHistory.value = history.value[0] || selectedHistory.value; if (selectedHistory.value?.status_code === 'WAITING' || selectedHistory.value?.status_code === 'JUDGING') poll(); else { const overview = await getStudentPracticeOverview(); questions.value = overview.data?.questions || questions.value } } catch (error) { ElMessage.error('判题结果查询失败，可稍后在提交记录中查看') } }, 700) }
+async function poll() { clearTimeout(pollTimer); if (pollAttempts >= 180) { ElMessage.warning('判题等待较久，后台仍会继续处理，可稍后重新打开本题查看'); return } pollAttempts += 1; pollTimer = setTimeout(async () => { if (!current.value) return; try { const res = await getStudentPracticeQuestion({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id }); history.value = (res.data?.history || []).map(normalizeSubmission); selectedHistory.value = history.value[0] || selectedHistory.value; if (selectedHistory.value?.status_code === 'WAITING' || selectedHistory.value?.status_code === 'JUDGING') poll(); else { const overview = await getStudentPracticeOverview(); questions.value = overview.data?.questions || questions.value } } catch (error) { ElMessage.error('判题结果查询失败，可稍后在提交记录中查看') } }, 1000) }
+async function goRelative(offset) { const item = currentPlanQuestions.value[currentPlanIndex.value + offset]; if (item) await selectQuestion(item) }
 function showHistoryResult(row) { selectedHistory.value = row; consoleTab.value = row.submit_type === 'SUBMIT' ? 'judge' : row.submit_type === 'RUN' ? 'samples' : 'custom' }
 async function toggleFullscreen() { if (!document.fullscreenElement) await workspace.value?.requestFullscreen(); else await document.exitFullscreen() }
 function onFullscreenChange() { fullscreen.value = !!document.fullscreenElement; refreshEditor() }
@@ -212,5 +273,5 @@ onUnmounted(() => { document.removeEventListener('fullscreenchange', onFullscree
 </script>
 
 <style scoped>
-.oj-page{height:calc(100vh - 84px);min-height:640px;background:#fff;color:#252b33;overflow:hidden}.oj-page:fullscreen{height:100vh}.oj-header{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #e7e9ed;background:#fff}.header-left,.header-actions,.toolbar-actions,.problem-meta{display:flex;align-items:center;gap:12px}.header-left{min-width:0}.header-left strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.header-divider{color:#c0c4cc}.list-button{font-size:15px}.page-alert{position:absolute;z-index:5;top:58px;left:12px;right:12px}.oj-workspace{height:calc(100% - 56px)}.main-split,.right-split{height:100%}.statement-pane,.code-pane,.console-pane{height:100%;background:#fff;overflow:hidden}.statement-scroll{height:100%;overflow:auto;padding:26px 28px 60px}.problem-heading h1{margin:0 0 10px;font-size:25px}.problem-meta{flex-wrap:wrap;color:#7b818a;font-size:13px}.statement-section{margin-top:26px}.statement-section h2{margin:0 0 12px;font-size:18px}.statement-text{white-space:pre-wrap;word-break:break-word;line-height:1.85;color:#3a4048}.sample-card{margin:12px 0;border:1px solid #e5e7eb;border-radius:7px;overflow:hidden}.sample-title{padding:8px 12px;background:#f7f8fa;font-weight:600}.sample-grid{display:grid;grid-template-columns:1fr 1fr}.sample-grid>div+div{border-left:1px solid #e5e7eb}.sample-label{padding:7px 12px;color:#737983;font-size:13px;border-bottom:1px solid #eceef1}.sample-grid pre,.case-compare pre{min-height:44px;margin:0;padding:11px 12px;overflow:auto;background:#fff;font:13px/1.55 Consolas,"Courier New",monospace;white-space:pre-wrap}.pane-toolbar{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid #e6e8eb;background:#fafbfc}.pane-title{font-weight:600}.draft-state{margin-left:12px;color:#909399;font-size:12px}.language-select{width:112px}.code-editor{height:calc(100% - 49px)}.code-editor :deep(.cm-focused){outline:none}.console-tabs{height:100%}.console-tabs :deep(.el-tabs__header){height:42px;margin:0;padding:0 14px}.console-tabs :deep(.el-tabs__content){height:calc(100% - 42px);overflow:auto}.console-tabs :deep(.el-tab-pane){height:100%}.custom-console{display:grid;grid-template-columns:1fr 1fr;height:calc(100% - 48px)}.console-column{padding:10px 12px}.console-column+.console-column{border-left:1px solid #e7e9ed}.console-label{margin-bottom:7px;color:#646b75;font-size:13px}.custom-console :deep(.el-textarea),.custom-console :deep(.el-textarea__inner){height:calc(100% - 24px)}.console-output{height:calc(100% - 24px);margin:0;overflow:auto;white-space:pre-wrap;font:13px/1.55 Consolas,"Courier New",monospace}.console-actions{position:absolute;right:14px;bottom:8px}.result-panel{padding:10px 14px 18px}.result-summary{padding:8px 10px;margin-bottom:10px;border-radius:5px;background:#f5f7fa;font-weight:600}.result-summary.accepted{color:#16803b;background:#eef9f1}.result-summary.wrong-answer,.result-summary.syntax-error,.result-summary.runtime-error,.result-summary.service-error{color:#c13a32;background:#fff1f0}.case-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}.case-card{padding:10px;border:1px solid #e4e7ed;border-left:4px solid #909399;border-radius:6px}.case-card.accepted{border-left-color:#20a45a}.case-card.wrong-answer,.case-card.syntax-error,.case-card.runtime-error,.case-card.time-limit,.case-card.memory-limit{border-left-color:#e24b43}.case-head{display:flex;justify-content:space-between;gap:8px}.case-metrics{margin-top:5px;color:#909399;font-size:12px}.case-compare{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.case-compare label{font-size:12px;color:#777}.case-compare pre{margin-top:3px;padding:6px;background:#f7f8fa;border-radius:4px}.case-error{white-space:pre-wrap;color:#c13a32;font-size:12px}.result-empty{display:flex;align-items:center;justify-content:center;height:150px;color:#909399}.empty-state{height:calc(100% - 56px)}.filter-row{margin-bottom:16px}.question-section{margin-bottom:18px}.section-label{padding:8px 10px;background:#f5f7fa;color:#606266;font-weight:600}.question-item{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%;padding:11px 10px;border:0;border-bottom:1px solid #ebeef5;background:#fff;text-align:left;cursor:pointer;color:#303133}.question-item:hover,.question-item.active{background:#ecf5ff;color:#337ecc}.question-item small{flex:none;color:#909399}.question-item small.accepted{color:#16803b}.question-item small.failed{color:#d98215}.oj-page :deep(.splitpanes__splitter){position:relative;background:#e8eaed}.oj-page :deep(.splitpanes--vertical>.splitpanes__splitter){width:7px}.oj-page :deep(.splitpanes--horizontal>.splitpanes__splitter){height:7px}.oj-page :deep(.splitpanes__splitter:hover){background:#409eff}@media(max-width:900px){.oj-page{height:auto;min-height:calc(100vh - 84px);overflow:auto}.oj-workspace{height:auto}.main-split{display:block}.main-split>.splitpanes__pane{width:100%!important;height:auto}.statement-pane{height:60vh}.right-split{height:800px}.sample-grid,.custom-console{grid-template-columns:1fr}.sample-grid>div+div,.console-column+.console-column{border-left:0;border-top:1px solid #e5e7eb}.header-actions .el-tag{display:none}}
+.oj-page{height:calc(100vh - 84px);min-height:640px;background:#fff;color:#252b33;overflow:hidden}.oj-page:fullscreen{height:100vh}.oj-header{height:56px;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #e7e9ed;background:#fff}.header-left,.header-actions,.toolbar-actions,.problem-meta,.question-navigation{display:flex;align-items:center;gap:12px}.header-left{min-width:0}.header-left strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.header-actions{justify-content:flex-end}.question-navigation{color:#606266;font-size:13px}.header-divider{color:#c0c4cc}.list-button{font-size:15px}.page-alert{position:absolute;z-index:5;top:58px;left:12px;right:12px}.oj-workspace{height:calc(100% - 56px)}.main-split,.right-split{height:100%}.statement-pane,.code-pane,.console-pane{height:100%;background:#fff;overflow:hidden}.statement-scroll{height:100%;overflow:auto;padding:26px 28px 60px}.problem-heading h1{margin:0 0 10px;font-size:25px}.problem-meta{flex-wrap:wrap;color:#7b818a;font-size:13px}.statement-section{margin-top:26px}.statement-section h2{margin:0 0 12px;font-size:18px}.statement-text{white-space:pre-wrap;word-break:break-word;line-height:1.85;color:#3a4048}.sample-card{margin:12px 0;border:1px solid #e5e7eb;border-radius:7px;overflow:hidden}.sample-title{padding:8px 12px;background:#f7f8fa;font-weight:600}.sample-grid{display:grid;grid-template-columns:1fr 1fr}.sample-grid>div+div{border-left:1px solid #e5e7eb}.sample-label{padding:7px 12px;color:#737983;font-size:13px;border-bottom:1px solid #eceef1}.sample-grid pre,.case-compare pre{min-height:44px;margin:0;padding:11px 12px;overflow:auto;background:#fff;font:13px/1.55 Consolas,"Courier New",monospace;white-space:pre-wrap}.pane-toolbar{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid #e6e8eb;background:#fafbfc}.pane-title{font-weight:600}.draft-state{margin-left:12px;color:#909399;font-size:12px}.language-select{width:112px}.judge-status-bar{height:36px;display:flex;align-items:center;justify-content:center;gap:9px;color:#8a5a00;background:#fff7e6;border-bottom:1px solid #ffe0a3;font-size:13px}.judge-pulse{width:8px;height:8px;border-radius:50%;background:#e6a23c;box-shadow:0 0 0 0 rgba(230,162,60,.55);animation:judge-pulse 1.4s infinite}.code-editor{height:calc(100% - 49px)}.code-editor.with-judge-status{height:calc(100% - 85px)}.code-editor :deep(.cm-focused){outline:none}.console-tabs{height:100%}.console-tabs :deep(.el-tabs__header){height:42px;margin:0;padding:0 14px}.console-tabs :deep(.el-tabs__content){height:calc(100% - 42px);overflow:auto}.console-tabs :deep(.el-tab-pane){height:100%}.custom-console{display:grid;grid-template-columns:1fr 1fr;height:calc(100% - 48px)}.console-column{padding:10px 12px}.console-column+.console-column{border-left:1px solid #e7e9ed}.console-label{margin-bottom:7px;color:#646b75;font-size:13px}.custom-console :deep(.el-textarea),.custom-console :deep(.el-textarea__inner){height:calc(100% - 24px)}.console-output{height:calc(100% - 24px);margin:0;overflow:auto;white-space:pre-wrap;font:13px/1.55 Consolas,"Courier New",monospace}.console-actions{position:absolute;right:14px;bottom:8px}.result-panel{padding:10px 14px 18px}.result-summary{padding:8px 10px;margin-bottom:10px;border-radius:5px;background:#f5f7fa;font-weight:600}.result-summary.accepted{color:#16803b;background:#eef9f1}.result-summary.waiting,.result-summary.judging{color:#8a5a00;background:#fff7e6}.result-summary.wrong-answer,.result-summary.syntax-error,.result-summary.runtime-error,.result-summary.service-error{color:#c13a32;background:#fff1f0}.case-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}.case-card{padding:10px;border:1px solid #e4e7ed;border-left:4px solid #909399;border-radius:6px}.case-card.accepted{border-left-color:#20a45a}.case-card.wrong-answer,.case-card.syntax-error,.case-card.runtime-error,.case-card.time-limit,.case-card.memory-limit{border-left-color:#e24b43}.case-head{display:flex;justify-content:space-between;gap:8px}.case-metrics{margin-top:5px;color:#909399;font-size:12px}.case-compare{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.case-compare label{font-size:12px;color:#777}.case-compare pre{margin-top:3px;padding:6px;background:#f7f8fa;border-radius:4px}.case-error{white-space:pre-wrap;color:#c13a32;font-size:12px}.result-empty{display:flex;align-items:center;justify-content:center;height:150px;color:#909399}.empty-state{height:calc(100% - 56px)}.filter-row{margin-bottom:16px}.question-section{margin-bottom:18px}.section-label{padding:8px 10px;background:#f5f7fa;color:#606266;font-weight:600}.question-item{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%;padding:11px 10px;border:0;border-bottom:1px solid #ebeef5;background:#fff;text-align:left;cursor:pointer;color:#303133}.question-item:hover,.question-item.active{background:#ecf5ff;color:#337ecc}.question-item small{flex:none;color:#909399}.question-item small.accepted{color:#16803b}.question-item small.failed{color:#d98215}.oj-page :deep(.splitpanes__splitter){position:relative;background:#e8eaed}.oj-page :deep(.splitpanes--vertical>.splitpanes__splitter){width:7px}.oj-page :deep(.splitpanes--horizontal>.splitpanes__splitter){height:7px}.oj-page :deep(.splitpanes__splitter:hover){background:#409eff}@keyframes judge-pulse{70%{box-shadow:0 0 0 8px rgba(230,162,60,0)}100%{box-shadow:0 0 0 0 rgba(230,162,60,0)}}@media(max-width:900px){.oj-page{height:auto;min-height:calc(100vh - 84px);overflow:auto}.oj-workspace{height:auto}.main-split{display:block}.main-split>.splitpanes__pane{width:100%!important;height:auto}.statement-pane{height:60vh}.right-split{height:800px}.sample-grid,.custom-console{grid-template-columns:1fr}.sample-grid>div+div,.console-column+.console-column{border-left:0;border-top:1px solid #e5e7eb}.header-actions .el-tag{display:none}.oj-header{grid-template-columns:minmax(0,1fr) auto}.question-navigation{grid-row:2;grid-column:1/-1;justify-content:center}.oj-header{height:auto;min-height:56px;padding-top:8px;padding-bottom:8px}.oj-workspace{height:auto}}
 </style>

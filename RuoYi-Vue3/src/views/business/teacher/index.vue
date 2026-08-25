@@ -180,6 +180,19 @@
       </el-table>
     </el-dialog>
 
+    <el-dialog v-model="iotClassDialogVisible" :title="`${iotEntry.lesson?.lessonTitle || '课程'} · 选择物联班级`" width="460px" destroy-on-close>
+      <p class="iot-class-tip">请选择本次要查看和配置的授课班级。进入后仍可在页面顶部切换班级。</p>
+      <el-radio-group v-model="iotEntry.classCode" class="iot-class-options">
+        <el-radio-button v-for="cls in iotEntry.classes" :key="cls" :value="normalizeClassCode(cls)">
+          {{ formatClassLabel(cls) }}
+        </el-radio-button>
+      </el-radio-group>
+      <template #footer>
+        <el-button @click="iotClassDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!iotEntry.classCode" @click="enterIotExperiment">进入物联实验</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 手动一键课堂推进：年级 + 多选班级（默认全选当前为常规课的班级） -->
     <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进" width="480px" destroy-on-close>
       <p class="settings-intro">
@@ -369,6 +382,8 @@ const collaborationDialogVisible = ref(false);
 const collaborationRoomsLoading = ref(false);
 const collaborationLesson = ref(null);
 const collaborationRooms = ref([]);
+const iotClassDialogVisible = ref(false);
+const iotEntry = ref({ lesson: null, entryYear: '', classes: [], classCode: '' });
 
 // 统一推进设置
 const settingsVisible = ref(false);
@@ -721,12 +736,31 @@ function handleEditLesson(lesson, group) {
 
 /** 物联网实验始终从课程入口进入，避免教师手工填写课程 ID。 */
 function goToIotExperiment(lesson, group) {
+  const classes = [...new Set((lesson.assignedClasses || []).map(normalizeClassCode).filter(Boolean))];
+  if (!classes.length) {
+    ElMessage.warning('该课程尚未指派班级，请先进入课程设计器设置授课班级');
+    return;
+  }
+  iotEntry.value = {
+    lesson,
+    entryYear: String(lesson.entryYear || group.entryYear || ''),
+    classes,
+    classCode: ''
+  };
+  iotClassDialogVisible.value = true;
+}
+
+function enterIotExperiment() {
+  const { lesson, entryYear, classCode } = iotEntry.value;
+  if (!lesson || !classCode) return;
+  iotClassDialogVisible.value = false;
   router.push({
     path: '/business/iot',
     query: {
       lessonId: lesson.lessonId,
       lessonTitle: lesson.lessonTitle || '',
-      entryYear: lesson.entryYear || group.entryYear || ''
+      entryYear,
+      classCode
     }
   });
 }
@@ -1363,5 +1397,20 @@ onActivated(() => {
 .add-icon {
     font-size: 28px; /* 加大图标 */
     margin-bottom: 8px;
+}
+.iot-class-tip {
+  margin: 0 0 16px;
+  color: #606266;
+  line-height: 1.6;
+}
+.iot-class-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.iot-class-options :deep(.el-radio-button__inner) {
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  box-shadow: none;
 }
 </style>

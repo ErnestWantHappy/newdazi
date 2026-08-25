@@ -55,10 +55,29 @@
         <div class="editor-head"><span>main.py</span><span>{{ draftState }}</span></div>
         <div ref="editorElement" class="code-editor"></div>
       </div>
+      <div v-if="needsInput" class="custom-input-panel">
+        <div class="custom-input-heading">
+          <label :for="inputId">程序输入（stdin）</label>
+          <el-tooltip content="这里用于自己调试。运行示例使用题目给出的固定样例，提交判题使用系统测试数据。" placement="top">
+            <span class="help-dot">?</span>
+          </el-tooltip>
+        </div>
+        <el-input
+          :id="inputId"
+          v-model="customInput"
+          type="textarea"
+          :rows="5"
+          resize="vertical"
+          maxlength="65536"
+          placeholder="按题目的输入格式填写，例如：3 5"
+          :disabled="isPending"
+        />
+      </div>
       <div class="programming-actions">
-        <el-button :loading="saving" @click="saveDraft">保存草稿</el-button>
-        <el-button :loading="running" @click="run">运行示例</el-button>
-        <el-button type="primary" :loading="submitting" @click="submit">提交判题</el-button>
+        <el-button :loading="saving" :disabled="isPending" @click="saveDraft">保存草稿</el-button>
+        <el-button :loading="running" :disabled="isPending" @click="run">运行示例</el-button>
+        <el-button v-if="needsInput" type="success" plain :loading="customRunning" :disabled="isPending" @click="runCustom">自定义运行</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="isPending" @click="submit">提交判题</el-button>
       </div>
     </section>
 
@@ -74,7 +93,10 @@
           </div>
           <div class="io-grid">
             <div><label>输入</label><pre>{{ row.inputText || '（无输入）' }}</pre></div>
-            <div><label>期望输出</label><pre>{{ row.expectedOutput || '（无输出）' }}</pre></div>
+            <div>
+              <label>{{ Number(row.testCaseId) === 0 ? '输出校验' : '期望输出' }}</label>
+              <pre>{{ Number(row.testCaseId) === 0 ? '自定义运行不比较标准答案' : (row.expectedOutput || '（无输出）') }}</pre>
+            </div>
             <div><label>实际输出</label><pre>{{ row.actualOutput || '（无输出）' }}</pre></div>
             <div v-if="row.errorMessage"><label>错误信息</label><pre class="error-output">{{ row.errorMessage }}</pre></div>
           </div>
@@ -88,7 +110,7 @@
       <div class="section-heading"><span>历史提交</span><span class="section-hint">仅显示本人本题记录</span></div>
       <el-table :data="historyList" size="small" class="history-table">
         <el-table-column label="时间" width="165"><template #default="{ row }">{{ formatTime(row.submittedAt) }}</template></el-table-column>
-        <el-table-column label="类型" width="90"><template #default="{ row }">{{ row.submissionKind === 'RUN' ? '示例运行' : '正式提交' }}</template></el-table-column>
+        <el-table-column label="类型" width="100"><template #default="{ row }">{{ submissionKindLabel(row.submissionKind) }}</template></el-table-column>
         <el-table-column label="结果"><template #default="{ row }"><el-tag :type="tagType(row.statusCode)">{{ statusLabel(row.statusCode) }}</el-tag></template></el-table-column>
         <el-table-column label="通过" width="100"><template #default="{ row }">{{ row.passedCaseCount || 0 }}/{{ row.totalCaseCount || 0 }}</template></el-table-column>
         <el-table-column label="得分" width="80"><template #default="{ row }">{{ row.score == null ? '-' : row.score }}</template></el-table-column>
@@ -109,7 +131,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } f
 import { oneDark } from '@codemirror/theme-one-dark'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { cancelProgramming, getStudentProgramming, runProgramming, saveProgrammingDraft, submitProgramming } from '@/api/business/programming'
+import { cancelProgramming, customRunProgramming, getStudentProgramming, runProgramming, saveProgrammingDraft, submitProgramming } from '@/api/business/programming'
 
 const props = defineProps({ lessonId: { type: Number, required: true }, question: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
@@ -120,7 +142,9 @@ const historyList = ref([])
 const current = ref(null)
 const saving = ref(false)
 const running = ref(false)
+const customRunning = ref(false)
 const submitting = ref(false)
+const customInput = ref('')
 const draftState = ref('草稿未保存')
 const pollTimedOut = ref(false)
 const darkTheme = ref(false)
@@ -137,6 +161,9 @@ let lastSavedSource = null
 const themeCompartment = new Compartment()
 const statusText = computed(() => current.value ? `${statusLabel(current.value.statusCode)}${current.value.statusMessage ? `：${current.value.statusMessage}` : ''}` : '可先查看公开样例，运行示例不会使用隐藏测试点。')
 const statusType = computed(() => !current.value ? 'info' : (tagType(current.value.statusCode) === 'danger' ? 'error' : tagType(current.value.statusCode)))
+const needsInput = computed(() => String(config.value.noInput ?? '0') !== '1')
+const isPending = computed(() => ['WAITING', 'JUDGING'].includes(current.value?.statusCode))
+const inputId = computed(() => `course-python-stdin-${props.question.questionId}`)
 
 const completionWords = ['print', 'input', 'len', 'range', 'str', 'int', 'float', 'list', 'dict', 'set', 'tuple', 'sum', 'min', 'max', 'sorted', 'enumerate', 'True', 'False', 'None', 'if', 'elif', 'else', 'for', 'while', 'def', 'return', 'import', 'from', 'in', 'and', 'or', 'not']
 const completionSource = completeFromList(completionWords.map(label => ({ label, type: 'keyword' })))
@@ -173,8 +200,9 @@ function applyTheme() { if (editorView) editorView.dispatch({ effects: themeComp
 function toggleTheme() { darkTheme.value = !darkTheme.value; applyTheme() }
 function toggleFullscreen() { fullscreen.value = !fullscreen.value; nextTick(() => editorView?.requestMeasure()) }
 function resetStarter() { setEditorValue(config.value.starterCode || ''); scheduleDraft() }
-function statusLabel(code) { return ({ WAITING: '等待判题', JUDGING: '判题中', ACCEPTED: '通过', PARTIAL: '部分通过', WRONG_ANSWER: '答案错误', SYNTAX_ERROR: '语法错误', RUNTIME_ERROR: '运行错误', TIME_LIMIT: '超时', MEMORY_LIMIT: '内存超限', SERVICE_ERROR: '服务异常', CANCELLED: '已取消' })[code] || '等待判题' }
-function tagType(code) { if (code === 'ACCEPTED') return 'success'; if (code === 'PARTIAL' || code === 'WAITING' || code === 'JUDGING') return 'warning'; if (code === 'SERVICE_ERROR') return 'info'; return 'danger' }
+function statusLabel(code) { return ({ WAITING: '等待判题', JUDGING: '判题中', COMPLETED: '运行完成', ACCEPTED: '通过', PARTIAL: '部分通过', WRONG_ANSWER: '答案错误', SYNTAX_ERROR: '语法错误', RUNTIME_ERROR: '运行错误', TIME_LIMIT: '超时', MEMORY_LIMIT: '内存超限', SERVICE_ERROR: '服务异常', CANCELLED: '已取消' })[code] || '等待判题' }
+function tagType(code) { if (code === 'ACCEPTED' || code === 'COMPLETED') return 'success'; if (code === 'PARTIAL' || code === 'WAITING' || code === 'JUDGING') return 'warning'; if (code === 'SERVICE_ERROR') return 'info'; return 'danger' }
+function submissionKindLabel(kind) { return ({ RUN: '示例运行', CUSTOM_RUN: '自定义运行', SUBMIT: '正式提交' })[kind] || kind }
 function formatTime(value) { return value ? String(value).replace('T', ' ').slice(0, 16) : '-' }
 function makeKey() { return `${Date.now()}${Math.random().toString(36).slice(2, 10)}` }
 
@@ -222,20 +250,24 @@ async function saveDraft() {
   }
 }
 async function run() { await enqueue('RUN') }
+async function runCustom() { await enqueue('CUSTOM_RUN') }
 async function submit() { await enqueue('SUBMIT') }
 async function enqueue(kind) {
   if (!sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码')
+  if (isPending.value) return ElMessage.info('当前代码仍在排队或判题，请稍候')
   if (pendingDraft.value) await saveDraft()
-  kind === 'RUN' ? running.value = true : submitting.value = true
+  if (kind === 'RUN') running.value = true
+  else if (kind === 'CUSTOM_RUN') customRunning.value = true
+  else submitting.value = true
   pollTimedOut.value = false
   try {
-    const api = kind === 'RUN' ? runProgramming : submitProgramming
-    const res = await api({ lessonId: props.lessonId, questionId: props.question.questionId, sourceCode: sourceCode.value, submissionKey: makeKey() })
+    const api = kind === 'RUN' ? runProgramming : (kind === 'CUSTOM_RUN' ? customRunProgramming : submitProgramming)
+    const res = await api({ lessonId: props.lessonId, questionId: props.question.questionId, sourceCode: sourceCode.value, customInput: kind === 'CUSTOM_RUN' ? customInput.value : undefined, submissionKey: makeKey() })
     current.value = res.submission || res.data?.submission
     if (current.value) historyList.value = [current.value, ...historyList.value.filter(item => item.submissionId !== current.value.submissionId)]
     pollCount = 0
     schedulePoll()
-  } finally { running.value = false; submitting.value = false }
+  } finally { running.value = false; customRunning.value = false; submitting.value = false }
 }
 async function cancel(row) { await cancelProgramming(props.lessonId, props.question.questionId, row.submissionId); await load() }
 async function refreshResult() { pollTimedOut.value = false; pollCount = 0; await load(); if (current.value?.statusCode === 'WAITING' || current.value?.statusCode === 'JUDGING') schedulePoll() }
@@ -296,6 +328,9 @@ pre { min-height:38px; max-height:180px; margin:0; padding:9px 10px; overflow:au
 .is-dark { background:#282c34; border-color:#434a56; }
 .is-dark .editor-head { background:#21252b; color:#abb2bf; }
 .programming-actions { justify-content:flex-start; margin-top:12px; }
+.custom-input-panel { margin-top:12px; padding:12px; border:1px solid #dfe7ee; border-radius:6px; background:#f8fafc; }
+.custom-input-heading { display:flex; align-items:center; gap:7px; margin-bottom:8px; color:#303133; font-weight:600; }
+.help-dot { display:inline-grid; place-items:center; width:18px; height:18px; border:1px solid #a8b3bd; border-radius:50%; color:#7b8792; font-size:12px; cursor:help; }
 .case-results { display:grid; gap:12px; }
 .case-result-header { margin-bottom:10px; }
 .case-metrics { margin-top:8px; color:#909399; font-size:12px; }

@@ -25,7 +25,9 @@ import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
+import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.common.exception.ServiceException;
@@ -76,6 +78,12 @@ public class ScoreQueryController extends BaseController {
 
     @Autowired
     private BizTeacherClassMapper teacherClassMapper;
+
+    @Autowired
+    private BizLessonAssignmentMapper lessonAssignmentMapper;
+
+    @Autowired
+    private com.ruoyi.business.mapper.StudentToolMapper studentToolMapper;
 
     /**
      * 设置/取消某节课缺考请假
@@ -190,6 +198,145 @@ public class ScoreQueryController extends BaseController {
         );
         scoreAdjustmentMapper.insert(adjustment);
         return AjaxResult.success("已取消人工修正");
+    }
+
+    /**
+     * 读取某课程在某班级的题目开放开关状态。
+     * 粒度= 班级 x 当前课程（biz_lesson_assignment）；教师从成绩页按 年级+班级+课程 触发。
+     */
+    @GetMapping("/lesson-gate")
+    public AjaxResult getLessonGate(@RequestParam Long lessonId,
+                                    @RequestParam String entryYear,
+                                    @RequestParam String classCode)
+    {
+        Long deptId = SecurityUtils.getDeptId();
+        // 课程必须属于本校，否则拒绝访问。
+        com.ruoyi.business.domain.BizLesson lesson =
+                lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(deptId))
+        {
+            return AjaxResult.error("课程不存在或不属于当前学校");
+        }
+        // 历史课程也可查看开关状态：取该班与该课程最后一次指派的开关（无指派记录则视为默认关闭）。
+        // 仅列出 history 语义：若该班当前课程就是本课，normalized true；否则为历史课查看。
+        BizLessonAssignment assignment = findAssignmentByLesson(deptId, entryYear, classCode, lessonId);
+        boolean isCurrent = false;
+        BizLessonAssignment current = findAssignment(deptId, entryYear, classCode);
+        if (current != null && Long.valueOf(lessonId).equals(current.getLessonId())) {
+            isCurrent = true;
+        }
+        boolean theoryOpen = false;
+        boolean practicalOpen = false;
+        if (assignment != null) {
+            theoryOpen = Integer.valueOf(1).equals(assignment.getTheoryOpen());
+            practicalOpen = Integer.valueOf(1).equals(assignment.getPracticalOpen());
+        }
+        boolean hasTheory = false;
+        boolean hasPractical = false;
+        List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> lessonQuestions =
+                lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+        for (com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo q : lessonQuestions)
+        {
+            if ("choice".equalsIgnoreCase(q.getQuestionType()) || "judgment".equalsIgnoreCase(q.getQuestionType()))
+            {
+                hasTheory = true;
+            }
+            else if ("practical".equalsIgnoreCase(q.getQuestionType()))
+            {
+                hasPractical = true;
+            }
+        }
+        return AjaxResult.success()
+                .put("theoryOpen", theoryOpen)
+                .put("practicalOpen", practicalOpen)
+                .put("hasTheory", hasTheory)
+                .put("hasPractical", hasPractical)
+                .put("lessonId", lessonId)
+                .put("isCurrent", isCurrent);
+    }
+
+    /**
+     * 设置某课程在某班级的题目开放开关（理论题 / 操作题）。
+     * 校验：班级当前课程必须等于所传课程，防止跨班/跨课误操作；推进课程时自动复位由推进 SQL 负责。
+     */
+    @PutMapping("/lesson-gate")
+    public AjaxResult setLessonGate(@RequestBody Map<String, Object> params)
+    {
+        Long lessonId = asLong(params.get("lessonId"));
+        String entryYear = params.get("entryYear") == null ? null : String.valueOf(params.get("entryYear"));
+        String classCode = params.get("classCode") == null ? null : String.valueOf(params.get("classCode"));
+        String kind = params.get("kind") == null ? null : String.valueOf(params.get("kind"));
+        Boolean open = params.get("open") instanceof Boolean ? (Boolean) params.get("open") : null;
+        if (lessonId == null || entryYear == null || classCode == null || kind == null || open == null)
+        {
+            return AjaxResult.error("参数不完整");
+        }
+        if (!"theory".equals(kind) && !"practical".equals(kind))
+        {
+            return AjaxResult.error("kind 只支持 theory / practical");
+        }
+        Long deptId = SecurityUtils.getDeptId();
+        BizLessonAssignment assignment = findAssignment(deptId, entryYear.trim(), classCode.trim());
+        if (assignment == null)
+        {
+            return AjaxResult.error("该班级当前没有指派课程");
+        }
+        if (!Long.valueOf(lessonId).equals(assignment.getLessonId()))
+        {
+            return AjaxResult.error("只能对当前课程开启/关闭题目，历史课程请回到当时的课堂上开启");
+        }
+        int updated = lessonAssignmentMapper.updateLessonGate(
+                assignment.getAssignmentId(), "theory".equals(kind) ? "theory" : "practical", open);
+        if (updated == 0)
+        {
+            return AjaxResult.error("更新失败，请重试");
+        }
+        BizLessonAssignment latest = lessonAssignmentMapper.selectBizLessonAssignmentByAssignmentId(assignment.getAssignmentId());
+        return AjaxResult.success()
+                .put("theoryOpen", latest == null ? null : Integer.valueOf(1).equals(latest.getTheoryOpen()))
+                .put("practicalOpen", latest == null ? null : Integer.valueOf(1).equals(latest.getPracticalOpen()));
+    }
+
+    /** 按 学校+年份+班级 取当前指派行 */
+    private BizLessonAssignment findAssignment(Long deptId, String entryYear, String classCode)
+    {
+        BizLessonAssignment query = new BizLessonAssignment();
+        query.setDeptId(deptId);
+        query.setEntryYear(entryYear);
+        query.setClassCode(classCode);
+        List<BizLessonAssignment> rows = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
+        return rows == null || rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** 查该班与该课程的最后一次指派行（用于历史课查看开关；无则返回 null） */
+    private BizLessonAssignment findAssignmentByLesson(Long deptId, String entryYear, String classCode, Long lessonId)
+    {
+        List<BizLessonAssignment> rows = lessonAssignmentMapper.selectAssignmentsByLessonId(lessonId);
+        if (rows == null) { return null; }
+        BizLessonAssignment matched = null;
+        for (BizLessonAssignment row : rows)
+        {
+            if (row.getDeptId() != null && row.getDeptId().equals(deptId)
+                    && entryYear.equals(row.getEntryYear())
+                    && classCode.equals(row.getClassCode()))
+            {
+                // 同班同课可能有多条历史指派，取最新一条
+                if (matched == null || (row.getAssignTime() != null
+                        && (matched.getAssignTime() == null
+                            || row.getAssignTime().after(matched.getAssignTime()))))
+                {
+                    matched = row;
+                }
+            }
+        }
+        return matched;
+    }
+
+    private Long asLong(Object v)
+    {
+        if (v instanceof Number) { return ((Number) v).longValue(); }
+        if (v != null) { try { return Long.valueOf(String.valueOf(v)); } catch (NumberFormatException ignored) { return null; } }
+        return null;
     }
 
     /**

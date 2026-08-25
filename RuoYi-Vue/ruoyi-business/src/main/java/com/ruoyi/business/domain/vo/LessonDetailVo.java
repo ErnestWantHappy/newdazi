@@ -2,6 +2,7 @@ package com.ruoyi.business.domain.vo;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
+import com.ruoyi.business.domain.BizLessonTool;
 import com.ruoyi.common.core.domain.BaseEntity;
 import java.util.List;
 
@@ -63,6 +64,15 @@ public class LessonDetailVo extends BaseEntity {
 
     /** 课程指派的班级编号列表 */
     private List<String> assignedClassCodes;
+
+    /** 新指派班级的理论题初始开放状态；已有班级状态不因编辑课程被覆盖。 */
+    private Boolean initialTheoryOpen;
+
+    /** 新指派班级的操作题初始开放状态；已有班级状态不因编辑课程被覆盖。 */
+    private Boolean initialPracticalOpen;
+
+    /** 本节课工具（学生端实验工具面板，随课程保存） */
+    private List<BizLessonTool> lessonTools;
 
     /** 当前年级下所有可选的班级列表 */
     private List<String> allClassesInGrade;
@@ -255,6 +265,30 @@ public class LessonDetailVo extends BaseEntity {
 
     public void setAssignedClassCodes(List<String> assignedClassCodes) {
         this.assignedClassCodes = assignedClassCodes;
+    }
+
+    public Boolean getInitialTheoryOpen() {
+        return initialTheoryOpen;
+    }
+
+    public void setInitialTheoryOpen(Boolean initialTheoryOpen) {
+        this.initialTheoryOpen = initialTheoryOpen;
+    }
+
+    public Boolean getInitialPracticalOpen() {
+        return initialPracticalOpen;
+    }
+
+    public void setInitialPracticalOpen(Boolean initialPracticalOpen) {
+        this.initialPracticalOpen = initialPracticalOpen;
+    }
+
+    public List<BizLessonTool> getLessonTools() {
+        return lessonTools;
+    }
+
+    public void setLessonTools(List<BizLessonTool> lessonTools) {
+        this.lessonTools = lessonTools;
     }
 
     public List<String> getAllClassesInGrade() {

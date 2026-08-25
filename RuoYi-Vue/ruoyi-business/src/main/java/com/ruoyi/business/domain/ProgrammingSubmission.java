@@ -5,7 +5,7 @@ import java.util.List;
 
 public class ProgrammingSubmission {
     private Long submissionId; private String submissionKey; private Long studentId; private Long lessonId; private Long questionId;
-    private String sourceCode; private String submissionKind; private String statusCode; private String statusMessage; private Integer score;
+    private String sourceCode; private String customInput; private String submissionKind; private String statusCode; private String statusMessage; private Integer score;
     private Integer passedCaseCount; private Integer totalCaseCount; private String judge0Token; private Integer judge0StatusId;
     private Double timeSeconds; private Integer memoryKb; private String errorSummary; private String requestIp;
     private Date submittedAt; private Date judgedAt; private Date cancelledAt; private List<ProgrammingSubmissionCase> cases;
@@ -15,6 +15,7 @@ public class ProgrammingSubmission {
     public Long getLessonId() { return lessonId; } public void setLessonId(Long v) { lessonId = v; }
     public Long getQuestionId() { return questionId; } public void setQuestionId(Long v) { questionId = v; }
     public String getSourceCode() { return sourceCode; } public void setSourceCode(String v) { sourceCode = v; }
+    public String getCustomInput() { return customInput; } public void setCustomInput(String v) { customInput = v; }
     public String getSubmissionKind() { return submissionKind; } public void setSubmissionKind(String v) { submissionKind = v; }
     public String getStatusCode() { return statusCode; } public void setStatusCode(String v) { statusCode = v; }
     public String getStatusMessage() { return statusMessage; } public void setStatusMessage(String v) { statusMessage = v; }

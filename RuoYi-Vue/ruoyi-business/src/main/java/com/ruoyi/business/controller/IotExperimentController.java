@@ -161,4 +161,16 @@ public class IotExperimentController extends BaseController
     {
         return success(service.getStudentOverview(lessonId));
     }
+
+    /**
+     * 学生端历史数据：分页查询本人所在小组收到的上报消息（倒序），仅学生角色可访问。
+     */
+    @GetMapping("/student/messages")
+    @PreAuthorize("@studentSs.isStudent()")
+    public AjaxResult studentMessages(@RequestParam Long lessonId,
+                                      @RequestParam(defaultValue = "1") Integer pageNum,
+                                      @RequestParam(defaultValue = "20") Integer pageSize)
+    {
+        return success(service.listStudentMessages(lessonId, pageNum, pageSize));
+    }
 }

@@ -104,16 +104,25 @@ public class AsyncConfig {
     }
 
     /** 判题网络轮询独立隔离，Judge0 停顿时不挤占文件转换或外部 AI 线程。 */
+    @Value("${ruoyi.judge.core-pool-size:2}")
+    private int judgeCorePoolSize;
+
+    @Value("${ruoyi.judge.max-pool-size:4}")
+    private int judgeMaxPoolSize;
+
     @Value("${ruoyi.judge.queue-capacity:500}")
     private int judgeQueueCapacity;
 
     @Bean("judge0Executor")
     public ThreadPoolTaskExecutor judge0Executor() {
+        if (judgeCorePoolSize <= 0 || judgeMaxPoolSize < judgeCorePoolSize || judgeQueueCapacity <= 0) {
+            throw new IllegalStateException("判题线程池配置无效：核心线程、最大线程和队列容量必须为正数，且最大线程不能小于核心线程");
+        }
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        // 队列默认 500：整班集中交编程题时先排队而非直接拒绝（拒绝会被学生端看到“判题服务异常”），
-        // 容量可通过环境变量 ruoyi.judge.queue-capacity 按机器调整。
+        executor.setCorePoolSize(judgeCorePoolSize);
+        executor.setMaxPoolSize(judgeMaxPoolSize);
+        // ThreadPoolExecutor 会先使用核心线程，再进入队列；生产环境把核心线程与 Judge0 worker 数对齐，
+        // 才能避免“队列已有数百任务但仍只有两个线程判题”的假扩容。
         executor.setQueueCapacity(judgeQueueCapacity);
         executor.setThreadNamePrefix("judge0-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());

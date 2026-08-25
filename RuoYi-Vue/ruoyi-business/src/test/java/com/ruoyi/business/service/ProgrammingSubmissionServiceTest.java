@@ -62,6 +62,32 @@ class ProgrammingSubmissionServiceTest {
     }
 
     @Test
+    void customRunCompletesWithoutExpectedOutputComparison() {
+        ProgrammingTestCase customCase = new ProgrammingTestCase();
+        customCase.setTestCaseId(0L);
+        customCase.setInputText("3 5");
+        customCase.setIsPublic("1");
+        Judge0Result judgeResult = new Judge0Result();
+        judgeResult.setStatusId(3);
+        judgeResult.setStdout("8\n");
+
+        ProgrammingSubmissionCase row = ReflectionTestUtils.invokeMethod(
+                service, "toCustomCaseResult", 9L, customCase, judgeResult);
+
+        assertEquals("COMPLETED", row.getStatusCode());
+        assertEquals("8", row.getOutputText());
+        verify(studentAnswerMapper, never()).upsertAnswer(any());
+    }
+
+    @Test
+    void customRunRejectsInputLargerThanSixtyFourKb() {
+        String input = String.join("", java.util.Collections.nCopies(65537, "a"));
+
+        assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "validateCustomInput", input));
+    }
+
+    @Test
     void serviceFailureDoesNotWriteExistingStudentAnswer() {
         ProgrammingSubmission existing = new ProgrammingSubmission();
         existing.setSubmissionId(3L);
