@@ -10,6 +10,8 @@ erDiagram
     LESSON }o--o{ CLASS : 指派
     LESSON ||--o{ QUESTION : 包含
     STUDENT ||--o{ STUDENT_ANSWER : 课程作答
+    STUDENT_ANSWER ||--o| ORPHAN_ANSWER_ARCHIVE : 删题前审计归档
+    AI_MODEL_PRICE ||--o{ AI_GRADING_JOB : 创建时冻结单价
     PYTHON_PLAN ||--o{ PYTHON_PLAN_VERSION : 版本
     PYTHON_PLAN_VERSION ||--o{ PYTHON_PLAN_CLASS : 投放班级
     PYTHON_PLAN_VERSION ||--o{ PYTHON_PLAN_QUESTION : 题目快照
@@ -39,5 +41,7 @@ erDiagram
 - IoT 以 `biz_iot_*` 保存实验、小组、设备、消息与诊断，Broker 管理凭据不入业务表。
 - 协作保留既有房间/版本资料，CryptPad 迁移只扩展 Provider 能力，不删除历史 WPS 回滚材料。
 - 学生实验工具两类：`biz_lesson_tool`（本节课工具，随 lesson 去留）与 `biz_student_tool`+`biz_student_tool_scope`（常驻工具，scope 按 入学年份+班级，class_code 空=整个年级生效，dept_id 隔离学校）。学生端匹配：lessonTools 取当前课程 + residentTools 按 学校+年级+班级 匹配启用项。
-- 题目开放开关：`biz_lesson_assignment.theory_open/practical_open`（班级x当前课程）。`advanceCurrentAssignment` 推进下一课时自动复位为 0；成绩页 `/business/score/lesson-gate` 读写。课程保存采用“先读旧指派→重建→回填”策略：已有班级保留旧值，仅新指派班级使用课程设计器提交的 `initialTheoryOpen/initialPracticalOpen`，避免重存课程覆盖课堂状态。
+- 题目开放开关：`biz_lesson_assignment.theory_open/practical_open`（班级x当前课程）。`advanceCurrentAssignment` 推进下一课时自动复位为 0；成绩页 `/business/score/lesson-gate` 读写。课程设计器的 `initialTheoryOpen/initialPracticalOpen` 默认均为开启；课程保存采用“先读旧指派→重建→回填”策略，已有班级保留旧值，仅新指派班级使用设计器提交值，避免重存课程覆盖课堂状态。
 - 课程与 Python 题仍通过 `biz_lesson_question` 多行关联，不增加“一课一道 Python 题”唯一约束；合法性由全课程题目分值合计 100、题目启用和 `VALID` 状态共同约束。
+- `biz_student_answer` 只有同时匹配当前 `biz_lesson_question(lesson_id, question_id)` 的记录才能进入批改、成绩、学情、截止进度和预览恢复等在线统计。课程保存移除题目时，必须在同一事务内把在线答案显式列复制到 `biz_student_answer_orphan_archive`，写 `biz_student_answer_orphan_archive_meta` 批次元数据并核对数量后，才能删除在线行和题目关联；归档失败必须回滚课程保存。
+- `biz_ai_model_price` 保存模型输入/输出单价（元/千 token）、状态和说明；`biz_practical_ai_job` 保存新任务创建时的价格快照。任务理论费用只汇总 `biz_practical_ai_result` 已持久化的 token，用 `输入 token × 输入单价/1000 + 输出 token × 输出单价/1000` 计算，不等同于供应商账单。旧任务无快照时可引用当前价格，但必须在接口和页面标明口径。

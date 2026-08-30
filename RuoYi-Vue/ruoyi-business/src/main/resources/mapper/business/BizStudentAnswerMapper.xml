@@ -181,6 +181,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
         JOIN biz_student s ON a.student_id = s.student_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
@@ -214,6 +217,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
         LEFT JOIN biz_student s ON a.student_id = s.student_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
@@ -277,10 +283,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS python_practical_total
             FROM biz_student_answer answer
             INNER JOIN selected_lesson selected ON selected.lesson_id = answer.lesson_id
-            LEFT JOIN biz_lesson_question lesson_question
+            INNER JOIN biz_lesson_question lesson_question
                    ON lesson_question.lesson_id = answer.lesson_id
                   AND lesson_question.question_id = answer.question_id
-            LEFT JOIN biz_question question ON question.question_id = answer.question_id
+            INNER JOIN biz_question question ON question.question_id = answer.question_id
             WHERE answer.student_id = #{studentId}
             GROUP BY answer.lesson_id
         ),
@@ -327,8 +333,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.file_path AS filePath,
             a.student_answer AS studentAnswer
         FROM biz_student_answer a
-        LEFT JOIN biz_question q ON a.question_id = q.question_id
-        LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
+        INNER JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
+        INNER JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id = #{studentId}
           AND a.is_correct = 0
           AND q.question_type IN ('choice', 'judgment')
@@ -375,8 +381,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
            <if test="questionId != null">
                AND a.question_id = #{questionId}
            </if>
-        LEFT JOIN biz_question q ON q.question_id = #{questionId}
-        LEFT JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
+        INNER JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
+        INNER JOIN biz_question q ON q.question_id = lq.question_id
         WHERE s.class_code = #{classCode}
           AND s.entry_year = #{entryYear}
           AND u.dept_id = #{deptId}
@@ -412,7 +418,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
-        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        INNER JOIN biz_lesson_question lq
+            ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+        INNER JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id = #{studentId}
         <if test="lessonId != null">
             AND a.lesson_id = #{lessonId}
@@ -441,7 +449,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
-        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        INNER JOIN biz_lesson_question lq
+            ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+        INNER JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id IN
         <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
             #{studentId}
@@ -564,6 +574,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN (
                 <include refid="latestAnswerIdSubquery"/>
             ) latest ON latest.answer_id = a1.answer_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a1.lesson_id
+               AND current_lq.question_id = a1.question_id
         ) a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
         LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND lq.lesson_id = #{lessonId}
         LEFT JOIN biz_question q ON a.question_id = q.question_id
@@ -586,6 +599,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
         JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN biz_lesson_question lq
+            ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
         JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.lesson_id = #{lessonId}
         GROUP BY s.class_code, s.entry_year
@@ -634,6 +649,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 WHERE lesson_id = #{lessonId}
                 GROUP BY student_id, lesson_id, question_id
             ) latest ON latest.answer_id = a.answer_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a.lesson_id
+               AND current_lq.question_id = a.question_id
             INNER JOIN biz_student s ON a.student_id = s.student_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             INNER JOIN biz_teacher_class tc
@@ -665,6 +683,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 WHERE lesson_id = #{lessonId}
                 GROUP BY student_id, lesson_id, question_id
             ) latest ON latest.answer_id = a1.answer_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a1.lesson_id
+               AND current_lq.question_id = a1.question_id
             WHERE a1.lesson_id = #{lessonId}
         ) ans ON ans.student_id = s.student_id
         LEFT JOIN biz_question q ON ans.question_id = q.question_id
@@ -688,6 +709,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN (
                 <include refid="latestAnswerIdSubquery"/>
             ) latest ON latest.answer_id = a.answer_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a.lesson_id
+               AND current_lq.question_id = a.question_id
             WHERE a.lesson_id = #{lessonId}
         ) ans ON ans.student_id = s.student_id
         LEFT JOIN biz_classroom_performance p
@@ -704,6 +728,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT EXISTS(
             SELECT 1
             FROM biz_student_answer a
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a.lesson_id
+               AND current_lq.question_id = a.question_id
             INNER JOIN biz_student s ON s.student_id = a.student_id
             INNER JOIN sys_user u ON u.user_id = s.user_id
             WHERE a.lesson_id = #{lessonId}
@@ -720,6 +747,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
         INNER JOIN biz_question q ON q.question_id = a.question_id
         WHERE q.question_type = 'practical'
           AND a.student_answer IS NOT NULL
@@ -743,6 +773,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
         INNER JOIN biz_question q ON q.question_id = a.question_id
         INNER JOIN biz_student s ON s.student_id = a.student_id
         INNER JOIN sys_user u ON u.user_id = s.user_id

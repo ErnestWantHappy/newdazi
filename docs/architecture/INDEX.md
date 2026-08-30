@@ -8,13 +8,15 @@
 | SQL / MyBatis / 数据规则 | `DATA_MODEL.md` | 根目录 `sql/`、相关 Mapper XML |
 | CryptPad、Judge0、EMQX/MQTT、实时推送 | `INTEGRATIONS.md` | `contexts/online-collaboration/`、`contexts/python-judge0/`、`contexts/junior-iot-poc/` |
 | Python OJ、统一题库、练习题单、课程自定义运行、班级范围与判题容量 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md`、`INTEGRATIONS.md` | `contexts/python-judge0/requirements.md`、`design.md`、`adr/ADR-008-unified-python-question-bank.md`、`adr/ADR-009-unified-practice-plan-class-version.md`、`adr/ADR-010-hard-delete-and-natural-class-label.md`、`adr/ADR-011-queued-400-submissions-on-shared-host.md`、`adr/ADR-012-course-custom-run-non-scoring.md` |
+| 操作题作品、批改统计、删题归档、AI 建议与费用估算 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/operation-artifact-ai-grading/requirements.md`、`design.md`、`tasks.md`、`ADR-006-current-question-answers-and-ai-cost-estimation.md` |
+| 教师首页共享课程、课程管理能力、学生端顶部导航 | `BUSINESS_BOUNDARIES.md` | `contexts/teacher-course-sharing/requirements.md`、`design.md`、`tasks.md`、`ADR-001-server-authoritative-course-capabilities.md` |
 | 内网发布、服务排障 | `DEPLOYMENT_RUNBOOK.md` | `AGENTS.md`、当前外置配置和服务器实际探查 |
 
 | 架构级取舍 | `ADR/README.md` | 相关专题 ADR 和历史证据 |
 | 学生实验工具、题目开放开关 | `DATA_MODEL.md` | `contexts/student-experiment-tools/requirements.md`、`design.md`、`tasks.md` |
 | 站点运维与信息展示（129 监控、平台更新、Agent 词典、帮助中心配置、版权） | `INTEGRATIONS.md`、`DEPLOYMENT_RUNBOOK.md` | `contexts/site-ops-and-info/requirements.md`、`design.md`、`tasks.md`、`contexts/RELEASE_LOG.md` |
 
-> 2026-08-23 新增专题：学生实验工具与题目开放开关（见 `contexts/student-experiment-tools/`）；站点运维与信息展示（见 `contexts/site-ops-and-info/`）。2026-08-24 已补充课程多 Python 题、开放状态保存、协作首次保存、课程自定义运行和物联详情弹窗的当前边界。
+> 2026-08-23 新增专题：学生实验工具与题目开放开关（见 `contexts/student-experiment-tools/`）；站点运维与信息展示（见 `contexts/site-ops-and-info/`）。2026-08-24 已补充课程多 Python 题、开放状态保存、协作首次保存、课程自定义运行和物联详情弹窗的当前边界。2026-08-25 已补充操作题当前题目统计、删题前答案归档和 AI 理论费用估算边界。2026-08-27 已补充共享课程服务端能力投影、删除校验顺序和学生端导航布局边界。
 
 ## 文档维护规则
 

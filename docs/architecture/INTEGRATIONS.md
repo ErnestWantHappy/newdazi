@@ -36,8 +36,10 @@ flowchart LR
 - 账号策略：同班共享班级账号和易读课堂口令；Broker ACL 限制班级前缀，班内再按业务 Topic 隔离。
 - 课程级开关：物联入口按 `biz_lesson.iot_enabled` 控制（教师设计器开启、考勤课强制关闭），教师/学生首页与接口均按此过滤；学生概览与教师收集接口还要校验课程已开启。
 - 生产现状（2026-08-21）：EMQX 5.8.8 @ 10.52.1.129；1883 设备接入；管理 API 18083 已开放给内网（原仅 127.0.0.1），平台后端经 `dazi-backend` API 密钥同步班级账号；平台接收器 `IOT_MQTT_ENABLED=true`，以 `platform_iot_subscriber` 订阅 `county/#`；ACL 文件规则：订阅账号只读订阅 county/#、`class_*` 设备收发、device01 测试、deny all。
+- 小学实验板兼容验证（2026-08-30）：真实板已在教师机临时 Broker 上证明固件可直接导入 `umqtt.simple.MQTTClient`，并显式设置 ClientID、用户名、密码、完整 `county/.../data` Topic，省平台 `userId/projectId` 封装不是技术依赖。正式 EMQX 已新增临时账号 `primary_board_probe`，文件 ACL 仅允许发布 `county/139/252/2020-07/iot_demo_exp/group01/data`；账号认证连接返回 CONNACK 0，原规则与平台订阅客户端均保持正常。真板直连 129、消息落库及教师页面显示仍是未完成门禁。
 - 开关：平台接收器由 `IOT_MQTT_ENABLED` 外置开启，默认关闭；启用前必须验证 SQL、Broker API、订阅账号、ACL 和真实硬件链路。
 - 禁区：学生浏览器不持有 Broker 管理凭据，不能把旧 SIoT 共享弱账号作为多校正式方案。
+- 运维路径：129 的 SSH 只经 123 跳板访问；小学实验板临时 ACL 修改前备份为 `/srv/emqx-school-poc/backups/20260830_050321_before_primary_board_probe/acl.conf`（SHA-256 `6e7df6236dcb759e08831542b40f6124eb3ccb7207bea0644293944454ab37f3`）。回滚时删除临时认证账号、移除对应单 Topic 文件规则；不重启 Judge0、CryptPad 或平台服务。
 - 接收器保护：默认关闭；启用后同时受全局每分钟消息上限（默认 5000）、单 Topic 每分钟上限、Topic 长度上限（默认 256）及通配符/控制字符校验约束。上线前仍须结合 Broker ACL 和真实硬件链路复核容量。
 - 启动行为：接收器在开关开启时通过 `threadPoolTaskExecutor` 异步连接 Broker，避免不可达 Broker 阻塞 Spring 主线程；连接失败写入诊断事件，默认关闭时不建立连接。
 - 课堂口令密钥：`IOT_PASSCODE_SECRET` 只允许由部署环境注入，源码和配置文件不提供默认值；缺少密钥时不允许生成/轮换口令或导出课堂配置卡。生产已注入的密钥与历史默认值一致，保证既有密文可解；更换密钥必须先把存量密文全部重加密。学生概览接口还必须校验 `lessonId` 是本人班级当前指派课程。

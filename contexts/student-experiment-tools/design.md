@@ -147,7 +147,9 @@ AjaxResult 追加：
 
 - `LessonDetailVo` 增加 `initialTheoryOpen/initialPracticalOpen`，仅表达设计器对新指派班级的初始值，不是课程全局状态。
 - `saveAll` 在删除并重建指派前读取旧指派，以学校+入学年份+班号为键保留既有开关；新键才采用 DTO 初始值。批量插入显式写入两列。
-- 前端设计器在“指派班级”后展示学生开放说明和双开关；成绩页开放卡片紧跟筛选卡，继续通过 `/business/score/lesson-gate` 即时保存当前班级状态。
+- 前端设计器在“指派班级”后展示“学生开放”双开关；存在对应题型时开关默认开启，已有班级状态仍由后端保留。
+- 成绩页开放卡片紧跟筛选卡，继续通过 `/business/score/lesson-gate` 即时保存当前班级状态。
+- 发布不执行存量 `biz_lesson_assignment` 开关回填 SQL；现有行保持原值。
 
 ## 8. 2026-08-24 课程设计器密度收口
 

@@ -81,6 +81,18 @@ public class LessonInfoVo {
     /** 课程类型: self=自建, shared=共享 */
     private String courseType;
 
+    /** 课程创建人显示名，用于共享课程明确归属。 */
+    private String creatorName;
+
+    /** 当前登录教师是否可以设计课程。 */
+    private boolean canDesign;
+
+    /** 当前登录教师是否可以物理删除课程。 */
+    private boolean canDelete;
+
+    /** 不能删除时的明确原因；前端只用于提示，最终权限仍由服务端校验。 */
+    private String deleteBlockReason;
+
     /** 是否包含操作题 */
     private boolean hasPractical;
 
@@ -108,6 +120,38 @@ public class LessonInfoVo {
 
     public void setCourseType(String courseType) {
         this.courseType = courseType;
+    }
+
+    public String getCreatorName() {
+        return creatorName;
+    }
+
+    public void setCreatorName(String creatorName) {
+        this.creatorName = creatorName;
+    }
+
+    public boolean isCanDesign() {
+        return canDesign;
+    }
+
+    public void setCanDesign(boolean canDesign) {
+        this.canDesign = canDesign;
+    }
+
+    public boolean isCanDelete() {
+        return canDelete;
+    }
+
+    public void setCanDelete(boolean canDelete) {
+        this.canDelete = canDelete;
+    }
+
+    public String getDeleteBlockReason() {
+        return deleteBlockReason;
+    }
+
+    public void setDeleteBlockReason(String deleteBlockReason) {
+        this.deleteBlockReason = deleteBlockReason;
     }
 
     public boolean isHasPractical() {

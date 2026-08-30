@@ -30,6 +30,7 @@ import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
 import com.ruoyi.business.domain.ProgrammingQuestionConfig;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
 import com.ruoyi.business.service.StudentToolService;
+import com.ruoyi.business.service.StudentAnswerArchiveService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.service.PracticalRubricSnapshotService;
 import com.ruoyi.business.util.AcademicYearUtils;
@@ -106,6 +107,9 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Autowired
     private StudentToolService studentToolService;
 
+    @Autowired
+    private StudentAnswerArchiveService studentAnswerArchiveService;
+
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
     {
@@ -172,9 +176,12 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonIds(Long[] lessonIds)
     {
-        answerDeletionGuardService.assertLessonsDeletable(lessonIds);
         for (Long lessonId : lessonIds) {
             assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonId));
+        }
+        // 先校验课程归属，避免把答题历史等内部状态暴露给无权管理课程的教师。
+        answerDeletionGuardService.assertLessonsDeletable(lessonIds);
+        for (Long lessonId : lessonIds) {
             assertLessonHasNoGuideSheetHistory(lessonId);
             // 级联删除关联数据
             lessonQuestionMapper.deleteByLessonId(lessonId);
@@ -193,8 +200,8 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonId(Long lessonId)
     {
-        answerDeletionGuardService.assertLessonsDeletable(new Long[] { lessonId });
         assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonId));
+        answerDeletionGuardService.assertLessonsDeletable(new Long[] { lessonId });
         assertLessonHasNoGuideSheetHistory(lessonId);
         lessonQuestionMapper.deleteByLessonId(lessonId);
         lessonAssignmentMapper.deleteByLessonId(lessonId);
@@ -460,8 +467,22 @@ public class BizLessonServiceImpl implements IBizLessonService
         Long lessonId = lessonToSave.getLessonId();
         lessonDetailVo.setLessonId(lessonId);
 
-        lessonQuestionMapper.deleteByLessonId(lessonId);
+        List<Long> previousQuestionIds = lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId);
         List<BizLessonQuestionDetailVo> questions = lessonDetailVo.getQuestions();
+        LinkedHashSet<Long> newQuestionIds = questions == null
+                ? new LinkedHashSet<Long>()
+                : questions.stream().filter(Objects::nonNull)
+                    .map(BizLessonQuestionDetailVo::getQuestionId).filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        LinkedHashSet<Long> removedQuestionIds = previousQuestionIds == null
+                ? new LinkedHashSet<Long>()
+                : previousQuestionIds.stream().filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        removedQuestionIds.removeAll(newQuestionIds);
+        // 先完整归档再移出在线答案表；外层事务保证归档、删关联和重建题目要么全部成功，要么全部回滚。
+        studentAnswerArchiveService.archiveRemovedQuestions(lessonId, removedQuestionIds);
+
+        lessonQuestionMapper.deleteByLessonId(lessonId);
         if (!CollectionUtils.isEmpty(questions)) {
             for (BizLessonQuestionDetailVo question : questions) {
                 if ("practical".equalsIgnoreCase(question.getQuestionType()) && "PYTHON".equalsIgnoreCase(question.getPracticalMode())) {
@@ -959,9 +980,19 @@ public class BizLessonServiceImpl implements IBizLessonService
         groups.stream()
                 .filter(Objects::nonNull)
                 .filter(group -> group.getLessons() != null)
-                .flatMap(group -> group.getLessons().stream())
-                .forEach(lesson -> lesson.setAssignedClasses(classesByLesson.getOrDefault(
-                        lesson.getLessonId() + "#" + lesson.getEntryYear(), new ArrayList<>())));
+                .forEach(group -> group.getLessons().forEach(lesson -> {
+                    List<String> assignedClasses = classesByLesson.getOrDefault(
+                            lesson.getLessonId() + "#" + lesson.getEntryYear(), new ArrayList<>());
+                    if ("shared".equals(lesson.getCourseType()))
+                    {
+                        HashSet<String> managedClasses = group.getAllClassesInGrade() == null
+                                ? new HashSet<>() : new HashSet<>(group.getAllClassesInGrade());
+                        assignedClasses = assignedClasses.stream()
+                                .filter(managedClasses::contains)
+                                .collect(Collectors.toList());
+                    }
+                    lesson.setAssignedClasses(assignedClasses);
+                }));
 
         List<Long> openCollaborationLessonIds = collaborationMapper.selectOpenLessonIdsByLessonIds(lessonIds, deptId);
         if (openCollaborationLessonIds == null) openCollaborationLessonIds = new ArrayList<>();

@@ -173,4 +173,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             si.item_id ASC
     </select>
 
+    <select id="selectQuestionIdsByLessonId" parameterType="java.lang.Long" resultType="java.lang.Long">
+        SELECT question_id
+        FROM biz_lesson_question
+        WHERE lesson_id = #{lessonId}
+        ORDER BY order_num ASC, id ASC
+    </select>
+
 </mapper>

@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.vo.PracticalScoringItemVo;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.StringUtils;
 
 /** 阿里云百炼 OpenAI 兼容视觉接口适配器。 */
 @Service
@@ -85,7 +86,7 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         catch (ServiceException e) { throw e; }
         catch (RestClientResponseException e)
         {
-            throw new ServiceException("千问接口调用失败（HTTP " + e.getRawStatusCode() + "）");
+            throw new ServiceException(friendlyHttpError(e));
         }
         catch (Exception e)
         {
@@ -177,6 +178,51 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
     {
         if (config == null || !TeacherAiConfigService.DEFAULT_ENDPOINT.equals(config.getEndpointUrl()))
             throw new ServiceException("AI 接口地址不在允许列表");
+    }
+
+    String friendlyHttpError(RestClientResponseException exception)
+    {
+        int status = exception.getRawStatusCode();
+        String code = null;
+        String message = null;
+        try
+        {
+            JsonNode root = objectMapper.readTree(exception.getResponseBodyAsString());
+            JsonNode error = root.path("error").isObject() ? root.path("error") : root;
+            code = textOrNull(error.path("code"));
+            message = textOrNull(error.path("message"));
+        }
+        catch (Exception ignored)
+        {
+            // 错误响应不一定是 JSON；此时只返回 HTTP 状态，避免把未知原文直接展示给教师。
+        }
+        String normalizedCode = code == null ? "" : code.toLowerCase();
+        if ("arrearage".equalsIgnoreCase(code))
+            return "阿里云账户可能余额不足或已欠费，请充值后重试";
+        if (normalizedCode.startsWith("invalidapikey"))
+            return "AI Key 无效或已过期，请重新配置";
+        if (normalizedCode.startsWith("throttling") || normalizedCode.contains("ratequota")
+                || normalizedCode.contains("ratelimit") || normalizedCode.contains("rate_limit"))
+            return "请求过于频繁，已触发限流，请稍后重试";
+        String safeMessage = truncateMessage(message, 200);
+        return "千问接口调用失败（HTTP " + status + "）"
+                + (StringUtils.isBlank(safeMessage) ? "" : "：" + safeMessage);
+    }
+
+    private String textOrNull(JsonNode node)
+    {
+        String value = node == null || !node.isValueNode() ? null : node.asText(null);
+        return StringUtils.isBlank(value) ? null : value.trim();
+    }
+
+    private String truncateMessage(String value, int max)
+    {
+        if (value == null) return null;
+        String normalized = value.replaceAll("(?i)bearer\\s+[a-z0-9._~+/=-]+", "Bearer ***")
+                .replaceAll("(?i)sk-[a-z0-9_-]{6,}", "sk-***")
+                .replaceAll("(?i)(api[_ -]?key\\s*[:=]\\s*)[^\\s,;，；]+", "$1***")
+                .replaceAll("\\s+", " ").trim();
+        return normalized.length() <= max ? normalized : normalized.substring(0, max) + "…";
     }
 
     private Integer integerOrNull(JsonNode node) { return node == null || !node.isNumber() ? null : node.asInt(); }

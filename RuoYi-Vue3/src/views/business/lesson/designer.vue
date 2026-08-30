@@ -518,8 +518,8 @@ const form = ref({
   semester: null,
   lessonNum: 1,
   assignedClasses: [], // 改为存储 "entryYear-classCode" 格式
-  initialTheoryOpen: false,
-  initialPracticalOpen: false,
+  initialTheoryOpen: true,
+  initialPracticalOpen: true,
   shuffleMode: 0,      // 出题模式: 0=固定, 1=随机排序, 2=随机抽取
   randomChoiceCount: 0,   // 随机抽取选择题数
   randomJudgmentCount: 0, // 随机抽取判断题数
@@ -768,8 +768,8 @@ function initialize() {
         lessonNum: detail.lessonNum,
         assignedClasses: assignedClasses,
         // 该设置只应用于本次新增加的班级，已有班级状态由后端保留。
-        initialTheoryOpen: false,
-        initialPracticalOpen: false,
+        initialTheoryOpen: true,
+        initialPracticalOpen: true,
         shuffleMode: detail.shuffleMode ?? 0,
         randomChoiceCount: detail.randomChoiceCount ?? 0,
         randomJudgmentCount: detail.randomJudgmentCount ?? 0,
@@ -814,8 +814,8 @@ function initialize() {
       semester: semester !== undefined ? String(semester) : getDefaultSemester(),
       lessonNum: route.query.nextNum ? parseInt(route.query.nextNum, 10) : 1,
       assignedClasses: [],
-      initialTheoryOpen: false,
-      initialPracticalOpen: false,
+      initialTheoryOpen: true,
+      initialPracticalOpen: true,
       shuffleMode: 0,
       randomChoiceCount: 0,
       randomJudgmentCount: 0,

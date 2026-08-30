@@ -18,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.TeacherAiConfig;
+import com.ruoyi.business.domain.AiModelPrice;
 import com.ruoyi.business.domain.dto.PracticalAiJobRequest;
 import com.ruoyi.business.domain.dto.PracticalAiApplyRequest;
 import com.ruoyi.business.domain.dto.TeacherAiConfigRequest;
+import com.ruoyi.business.domain.dto.AiModelPriceRequest;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.PracticalSubmissionVo;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
@@ -31,6 +33,7 @@ import com.ruoyi.business.service.PracticalAiReferenceAnswerService;
 import com.ruoyi.business.service.PracticalAiSuggestionApplyService;
 import com.ruoyi.business.service.PracticalArtifactService;
 import com.ruoyi.business.service.TeacherAiConfigService;
+import com.ruoyi.business.service.AiModelPricingService;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.exception.ServiceException;
@@ -51,6 +54,7 @@ public class PracticalAiGradingController extends BaseController
     @Autowired private PracticalArtifactService artifactService;
     @Autowired private PracticalAiReferenceAnswerService referenceAnswerService;
     @Autowired private PracticalAiSuggestionApplyService suggestionApplyService;
+    @Autowired private AiModelPricingService pricingService;
 
     @GetMapping("/config")
     public AjaxResult config()
@@ -63,7 +67,27 @@ public class PracticalAiGradingController extends BaseController
         status.put("modelName", config == null ? TeacherAiConfigService.DEFAULT_MODEL : config.getModelName());
         status.put("apiKeyHint", config == null ? null : config.getApiKeyHint());
         status.put("enabled", config != null && Boolean.TRUE.equals(config.getEnabled()));
+        status.put("modelPrice", pricingService.describe("QWEN",
+                config == null ? TeacherAiConfigService.DEFAULT_MODEL : config.getModelName()));
         return AjaxResult.success(status);
+    }
+
+    @GetMapping("/model-prices")
+    public AjaxResult modelPrices()
+    {
+        List<Map<String, Object>> result = new java.util.ArrayList<Map<String, Object>>();
+        for (AiModelPrice price : pricingService.list())
+            result.add(pricingService.describe(price.getProviderCode(), price.getModelName()));
+        return AjaxResult.success(result);
+    }
+
+    @PutMapping("/model-prices/{modelName}")
+    @PreAuthorize("@ss.hasRole('admin')")
+    public AjaxResult updateModelPrice(@PathVariable String modelName,
+                                       @RequestBody AiModelPriceRequest request)
+    {
+        return AjaxResult.success("模型参考价已更新",
+                pricingService.update(modelName, request, SecurityUtils.getUsername()));
     }
 
     @PutMapping("/config")

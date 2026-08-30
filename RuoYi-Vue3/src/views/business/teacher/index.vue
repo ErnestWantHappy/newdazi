@@ -43,7 +43,7 @@
             @click="section.isHistory && toggleHistorySection(group, section)"
           >
             <div class="course-grade-heading">
-              <strong>{{ section.gradeName }}课程</strong>
+              <strong>{{ section.isHistory ? `${section.gradeName}开设课程（历史）` : `${section.gradeName}课程` }}</strong>
               <el-tag v-if="section.isCurrent" type="primary" size="small">当前年级</el-tag>
               <el-tag v-else type="info" size="small">历史课程</el-tag>
               <span>{{ section.lessons.length }} 门</span>
@@ -59,9 +59,23 @@
               :key="lesson.lessonId"
               class="lesson-folder"
             >
-              <div class="folder-delete" @click.stop="handleDeleteLesson(lesson.lessonId)">
+              <div
+                v-if="lesson.canDelete"
+                class="folder-delete"
+                title="删除课程"
+                @click.stop="handleDeleteLesson(lesson)"
+              >
                 <el-icon><Close /></el-icon>
               </div>
+              <el-tooltip
+                v-else-if="lesson.courseType !== 'shared'"
+                :content="lesson.deleteBlockReason || '当前课程不能删除'"
+                placement="top"
+              >
+                <div class="folder-delete is-disabled" @click.stop>
+                  <el-icon><Close /></el-icon>
+                </div>
+              </el-tooltip>
 
               <div class="lesson-main">
                 <div class="folder-content">
@@ -69,6 +83,12 @@
                     {{ lesson.lessonTitle }}
                   </div>
                   <div class="folder-info">
+                    <div v-if="lesson.courseType === 'shared'" class="shared-course-meta">
+                      <span class="shared-tag">共享课程</span>
+                      <span class="shared-creator" :title="`创建教师：${lesson.creatorName || '本校教师'}`">
+                        {{ lesson.creatorName || '本校教师' }}
+                      </span>
+                    </div>
                     <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
                       <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
                     </div>
@@ -80,7 +100,12 @@
                 </div>
 
                 <div class="folder-actions">
-                  <div class="action-btn design" @click.stop="handleEditLesson(lesson, group)" title="设计课程">
+                  <div
+                    v-if="lesson.canDesign"
+                    class="action-btn design"
+                    @click.stop="handleEditLesson(lesson, group)"
+                    title="设计课程"
+                  >
                     <el-icon><Edit /></el-icon>
                     <span>设计</span>
                   </div>
@@ -898,7 +923,11 @@ async function goToScoreAnalysis(lesson, group) {
 }
 
 /** 删除课程 */
-function handleDeleteLesson(lessonId) {
+function handleDeleteLesson(lesson) {
+  if (!lesson?.canDelete) {
+    ElMessage.warning(lesson?.deleteBlockReason || '当前课程不能删除');
+    return;
+  }
   ElMessageBox.confirm(
     '是否确认删除该课程？此操作将同时删除所有关联的题目和班级指派，且不可恢复。',
     '警告',
@@ -909,7 +938,7 @@ function handleDeleteLesson(lessonId) {
     }
   )
     .then(() => {
-      delLesson(lessonId).then(() => {
+      delLesson(lesson.lessonId).then(() => {
         ElMessage({
           type: 'success',
           message: '删除成功'
@@ -1309,14 +1338,27 @@ onActivated(() => {
 .shared-tag {
   display: inline-block;
   padding: 2px 6px;
-  margin-left: 4px;
   font-size: 10px;
   color: #fff;
   background: linear-gradient(135deg, #67c23a, #529b2e);
   border-radius: 4px;
-  vertical-align: middle;
   font-weight: normal;
-  transform: translateY(-2px);
+}
+
+.shared-course-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.shared-creator {
+  overflow: hidden;
+  color: #909399;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 删除按钮 */
@@ -1344,6 +1386,14 @@ onActivated(() => {
 .folder-delete:hover {
   background-color: #fef0f0;
   color: #f56c6c;
+}
+.folder-delete.is-disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+.folder-delete.is-disabled:hover {
+  color: #c0c4cc;
+  background-color: #f5f7fa;
 }
 
 .expand-lessons-btn {

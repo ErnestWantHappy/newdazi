@@ -14,6 +14,9 @@
         <result property="questionId" column="question_id"/><result property="entryYear" column="entry_year"/>
         <result property="classCode" column="class_code"/><result property="providerCode" column="provider_code"/>
         <result property="modelName" column="model_name"/><result property="promptVersion" column="prompt_version"/>
+        <result property="inputPricePerThousand" column="input_price_per_1k"/>
+        <result property="outputPricePerThousand" column="output_price_per_1k"/>
+        <result property="priceStatus" column="price_status"/><result property="priceNote" column="price_note"/>
         <result property="scopeMode" column="scope_mode"/><result property="referenceAnswerJson" column="reference_answer_json"/>
         <result property="starterMaterialsJson" column="starter_materials_json"/>
         <result property="preparationStatus" column="preparation_status"/><result property="comparisonPagesJson" column="comparison_pages_json"/>
@@ -61,9 +64,11 @@
     <insert id="insertJob" useGeneratedKeys="true" keyProperty="jobId">
         INSERT INTO biz_practical_ai_job
           (teacher_user_id,dept_id,lesson_id,question_id,entry_year,class_code,provider_code,model_name,
+           input_price_per_1k,output_price_per_1k,price_status,price_note,
            prompt_version,scope_mode,reference_answer_json,starter_materials_json,job_status,total_count,success_count,failed_count,skipped_count,create_time)
         VALUES (#{teacherUserId},#{deptId},#{lessonId},#{questionId},#{entryYear},#{classCode},#{providerCode},
-                #{modelName},#{promptVersion},#{scopeMode},#{referenceAnswerJson,jdbcType=VARCHAR},
+                #{modelName},#{inputPricePerThousand},#{outputPricePerThousand},#{priceStatus},#{priceNote},
+                #{promptVersion},#{scopeMode},#{referenceAnswerJson,jdbcType=VARCHAR},
                 #{starterMaterialsJson,jdbcType=VARCHAR},#{jobStatus},#{totalCount},0,0,#{skippedCount},NOW())
     </insert>
     <select id="selectJob" resultMap="JobResult">

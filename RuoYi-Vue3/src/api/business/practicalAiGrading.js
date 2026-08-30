@@ -6,6 +6,10 @@ export function getAiConfig() { return request({ url: `${base}/config`, method: 
 export function saveAiConfig(data) { return request({ url: `${base}/config`, method: 'put', data }) }
 export function deleteAiConfig() { return request({ url: `${base}/config`, method: 'delete' }) }
 export function testAiConfig() { return request({ url: `${base}/config/test`, method: 'post' }) }
+export function getAiModelPrices() { return request({ url: `${base}/model-prices`, method: 'get' }) }
+export function updateAiModelPrice(modelName, data) {
+  return request({ url: `${base}/model-prices/${encodeURIComponent(modelName)}`, method: 'put', data })
+}
 export function createAiJob(data) { return request({ url: `${base}/jobs`, method: 'post', data }) }
 export function getAiPreflight(params) { return request({ url: `${base}/preflight`, method: 'get', params }) }
 export function getLatestAiJob(params) { return request({ url: `${base}/jobs/latest`, method: 'get', params }) }

@@ -1,5 +1,6 @@
 package com.ruoyi.business.domain;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 /** 一个班级、一道操作题的一次批量 AI 建议任务。 */
@@ -14,6 +15,10 @@ public class PracticalAiJob
     private String classCode;
     private String providerCode;
     private String modelName;
+    private BigDecimal inputPricePerThousand;
+    private BigDecimal outputPricePerThousand;
+    private String priceStatus;
+    private String priceNote;
     private String promptVersion;
     private String scopeMode;
     private String referenceAnswerJson;
@@ -41,6 +46,10 @@ public class PracticalAiJob
     public String getClassCode() { return classCode; } public void setClassCode(String v) { classCode=v; }
     public String getProviderCode() { return providerCode; } public void setProviderCode(String v) { providerCode=v; }
     public String getModelName() { return modelName; } public void setModelName(String v) { modelName=v; }
+    public BigDecimal getInputPricePerThousand() { return inputPricePerThousand; } public void setInputPricePerThousand(BigDecimal v) { inputPricePerThousand=v; }
+    public BigDecimal getOutputPricePerThousand() { return outputPricePerThousand; } public void setOutputPricePerThousand(BigDecimal v) { outputPricePerThousand=v; }
+    public String getPriceStatus() { return priceStatus; } public void setPriceStatus(String v) { priceStatus=v; }
+    public String getPriceNote() { return priceNote; } public void setPriceNote(String v) { priceNote=v; }
     public String getPromptVersion() { return promptVersion; } public void setPromptVersion(String v) { promptVersion=v; }
     public String getScopeMode() { return scopeMode; } public void setScopeMode(String v) { scopeMode=v; }
     public String getReferenceAnswerJson() { return referenceAnswerJson; } public void setReferenceAnswerJson(String v) { referenceAnswerJson=v; }

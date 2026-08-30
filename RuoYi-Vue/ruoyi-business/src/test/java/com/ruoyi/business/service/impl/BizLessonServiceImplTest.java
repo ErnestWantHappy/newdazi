@@ -13,6 +13,7 @@ import com.ruoyi.business.mapper.CollaborationMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.entity.SysDept;
@@ -62,6 +63,8 @@ class BizLessonServiceImplTest
     private BizTeacherClassMapper teacherClassMapper;
     @Mock
     private SysDeptMapper deptMapper;
+    @Mock
+    private AnswerDeletionGuardService answerDeletionGuardService;
 
     @InjectMocks
     private BizLessonServiceImpl service;
@@ -272,6 +275,53 @@ class BizLessonServiceImplTest
     }
 
     @Test
+    void dashboardOnlyShowsManagedClassesOnSharedCourses()
+    {
+        loginTeacher();
+        int academicStartYear = AcademicYearUtils.resolveAcademicStartYear(LocalDate.now());
+        String entryYear = String.valueOf(academicStartYear - 1);
+        SysDept school = new SysDept();
+        school.setDeptId(10L);
+        school.setSchoolType("2");
+        when(deptMapper.selectDeptById(10L)).thenReturn(school);
+        when(teacherClassMapper.selectBizTeacherClassList(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Collections.singletonList(teacherClass(entryYear, "10")));
+        when(bizLessonMapper.selectLessonsByEntryYearAndCreator(entryYear, "teacher", 10L))
+                .thenReturn(Collections.emptyList());
+        LessonInfoVo sharedLesson = lessonInfo(259L, entryYear);
+        sharedLesson.setCourseType("shared");
+        when(bizLessonMapper.selectSharedLessonsByEntryYearAndUser(entryYear, 8L, 10L, "teacher"))
+                .thenReturn(Collections.singletonList(sharedLesson));
+        BizLessonAssignment managed = assignment(259L, entryYear, "10");
+        BizLessonAssignment unrelated = assignment(259L, entryYear, "11");
+        when(lessonAssignmentMapper.selectAssignmentsByLessonIds(Collections.singletonList(259L), 10L))
+                .thenReturn(Arrays.asList(managed, unrelated));
+
+        List<GradeGroupVo> groups = service.getTeacherDashboardData();
+
+        assertEquals(Collections.singletonList("10班"), groups.get(0).getLessons().get(0).getAssignedClasses());
+    }
+
+    @Test
+    void deletingAnotherTeachersLessonChecksOwnershipBeforeAnswerHistory()
+    {
+        loginTeacher();
+        BizLesson sharedLesson = new BizLesson();
+        sharedLesson.setLessonId(259L);
+        sharedLesson.setDeptId(10L);
+        sharedLesson.setCreatorId(99L);
+        sharedLesson.setCreateBy("other-teacher");
+        when(bizLessonMapper.selectBizLessonByLessonId(259L)).thenReturn(sharedLesson);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.deleteBizLessonByLessonId(259L));
+
+        assertEquals("无权管理该课程", error.getMessage());
+        verify(answerDeletionGuardService, never()).assertLessonsDeletable(
+                org.mockito.ArgumentMatchers.any(Long[].class));
+    }
+
+    @Test
     void dashboardLoadsLessonsForGraduatedEntryYear()
     {
         // 小学 2020 级在 7 月 20 日后为「已毕业」(gradeId=-1)，旧逻辑因 gradeId>0 才装课导致空卡片。
@@ -409,6 +459,16 @@ class BizLessonServiceImplTest
         teacherClass.setEntryYear(entryYear);
         teacherClass.setClassCode(classCode);
         return teacherClass;
+    }
+
+    private BizLessonAssignment assignment(Long lessonId, String entryYear, String classCode)
+    {
+        BizLessonAssignment assignment = new BizLessonAssignment();
+        assignment.setLessonId(lessonId);
+        assignment.setEntryYear(entryYear);
+        assignment.setClassCode(classCode);
+        assignment.setDeptId(10L);
+        return assignment;
     }
 
     private LessonInfoVo lessonInfo(Long lessonId, String entryYear)

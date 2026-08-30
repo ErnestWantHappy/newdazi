@@ -15,6 +15,7 @@ import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.PracticalAiEvent;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.TeacherAiConfig;
+import com.ruoyi.business.domain.AiModelPrice;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
 import com.ruoyi.business.domain.TeacherPracticalReferenceAnswer;
 import com.ruoyi.business.domain.vo.PracticalSubmissionVo;
@@ -35,6 +36,7 @@ public class PracticalAiJobService
     @Autowired private PracticalArtifactMapper artifactMapper;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private PracticalFilePolicyService filePolicyService;
+    @Autowired private AiModelPricingService pricingService;
 
     @Transactional(rollbackFor = Exception.class)
     public PracticalAiJob create(Long teacherUserId, Long deptId, Long lessonId, Long questionId,
@@ -66,6 +68,10 @@ public class PracticalAiJobService
         job.setTeacherUserId(teacherUserId); job.setDeptId(deptId); job.setLessonId(lessonId);
         job.setQuestionId(questionId); job.setEntryYear(entryYear); job.setClassCode(classCode);
         job.setProviderCode(config.getProviderCode()); job.setModelName(config.getModelName());
+        AiModelPrice price = pricingService.require(config.getProviderCode(), config.getModelName());
+        job.setInputPricePerThousand(price.getInputPricePerThousand());
+        job.setOutputPricePerThousand(price.getOutputPricePerThousand());
+        job.setPriceStatus(price.getPriceStatus()); job.setPriceNote(price.getPriceNote());
         job.setPromptVersion(PROMPT_VERSION); job.setScopeMode(normalizedScope);
         job.setReferenceAnswerJson(writeJson(referenceAnswers));
         job.setStarterMaterialsJson(writeJson(materials(questionId, "STARTER")));
@@ -94,6 +100,7 @@ public class PracticalAiJobService
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("job", job); result.put("results", results);
         result.put("progress", progress(job, results));
+        result.put("usage", pricingService.usage(job, results));
         result.put("batchAdoptAllowed", StringUtils.isNotBlank(job.getReferenceAnswerJson()));
         return result;
     }

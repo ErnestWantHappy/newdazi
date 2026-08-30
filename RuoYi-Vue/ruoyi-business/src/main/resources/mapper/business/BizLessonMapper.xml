@@ -220,6 +220,10 @@
         <result property="entryYear"    column="entry_year"    />
         <result property="createTime"    column="create_time"    />
         <result property="courseType"    column="course_type"    />
+        <result property="creatorName"   column="creator_name"   />
+        <result property="canDesign"     column="can_design"     />
+        <result property="canDelete"     column="can_delete"     />
+        <result property="deleteBlockReason" column="delete_block_reason" />
         <result property="hasPractical"  column="has_practical"  />
         <result property="lessonMode"    column="lesson_mode"    />
         <result property="autoAdvanceEnabled"    column="auto_advance_enabled"    />
@@ -238,6 +242,20 @@
             entry_year,
             create_time,
             'self' as course_type,
+            COALESCE(NULLIF((SELECT u.nick_name FROM sys_user u WHERE u.user_id = biz_lesson.creator_id LIMIT 1), ''), create_by) as creator_name,
+            1 as can_design,
+            CASE
+                WHEN EXISTS (SELECT 1 FROM biz_student_answer a WHERE a.lesson_id = biz_lesson.lesson_id) THEN 0
+                WHEN EXISTS (SELECT 1 FROM biz_lesson_guide_sheet_binding b WHERE b.lesson_id = biz_lesson.lesson_id) THEN 0
+                ELSE 1
+            END as can_delete,
+            CASE
+                WHEN EXISTS (SELECT 1 FROM biz_student_answer a WHERE a.lesson_id = biz_lesson.lesson_id)
+                    THEN '课程已有学生答题记录，为保留成绩历史不可删除'
+                WHEN EXISTS (SELECT 1 FROM biz_lesson_guide_sheet_binding b WHERE b.lesson_id = biz_lesson.lesson_id)
+                    THEN '该课程存在电子导学单历史快照和答卷，不能物理删除'
+                ELSE NULL
+            END as delete_block_reason,
             (SELECT count(1) FROM biz_lesson_question lq 
              LEFT JOIN biz_question q ON lq.question_id = q.question_id 
              WHERE lq.lesson_id = biz_lesson.lesson_id AND q.question_type = 'practical') > 0 as has_practical,
@@ -361,6 +379,10 @@
             l.entry_year,
             l.create_time,
             'shared' as course_type,
+            COALESCE(NULLIF(creator.nick_name, ''), l.create_by) as creator_name,
+            0 as can_design,
+            0 as can_delete,
+            '共享课程只能由创建教师管理' as delete_block_reason,
             (SELECT count(1) FROM biz_lesson_question lq 
              LEFT JOIN biz_question q ON lq.question_id = q.question_id 
              WHERE lq.lesson_id = l.lesson_id AND q.question_type = 'practical') > 0 as has_practical,
@@ -375,6 +397,7 @@
             ON la.entry_year = tc.entry_year 
             AND la.class_code = tc.class_code
             AND la.dept_id = tc.dept_id
+        LEFT JOIN sys_user creator ON creator.user_id = l.creator_id
         WHERE
             tc.user_id = #{userId}
             AND tc.dept_id = #{deptId}

@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -55,6 +58,26 @@ class QwenPracticalVisionGradingProviderTest
         assertEquals(28, provider.parse(mapper.writeValueAsString(root), input).getSuggestedScore());
     }
 
+    @Test
+    void shouldMapProviderBillingKeyAndThrottleErrors()
+    {
+        assertEquals("阿里云账户可能余额不足或已欠费，请充值后重试",
+                provider.friendlyHttpError(error("Arrearage", "Account balance is insufficient")));
+        assertEquals("AI Key 无效或已过期，请重新配置",
+                provider.friendlyHttpError(error("InvalidApiKey.NotFound", "bad key")));
+        assertEquals("请求过于频繁，已触发限流，请稍后重试",
+                provider.friendlyHttpError(error("Throttling.RateQuota", "slow down")));
+    }
+
+    @Test
+    void shouldKeepSafeServerMessageForUnknownErrors()
+    {
+        assertEquals("千问接口调用失败（HTTP 400）：模型参数无效",
+                provider.friendlyHttpError(error("InvalidParameter", "模型参数无效")));
+        assertEquals("千问接口调用失败（HTTP 400）：API Key: ***，Bearer ***",
+                provider.friendlyHttpError(error("Unknown", "API Key: sk-secret123456，Bearer abc.def.ghi")));
+    }
+
     private PracticalAiGradingInput input()
     {
         PracticalRubricSnapshot rubric = new PracticalRubricSnapshot();
@@ -83,5 +106,13 @@ class QwenPracticalVisionGradingProviderTest
         root.putArray("choices").addObject().putObject("message").put("content", mapper.writeValueAsString(content));
         root.putObject("usage").put("prompt_tokens", 100).put("completion_tokens", 50);
         return mapper.writeValueAsString(root);
+    }
+
+    private HttpClientErrorException error(String code, String message)
+    {
+        String body = "{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}";
+        return HttpClientErrorException.create(HttpStatus.BAD_REQUEST, "Bad Request",
+                HttpHeaders.EMPTY, body.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                java.nio.charset.StandardCharsets.UTF_8);
     }
 }

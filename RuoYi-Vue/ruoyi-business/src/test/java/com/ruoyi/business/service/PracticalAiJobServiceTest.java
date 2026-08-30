@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.domain.PracticalAiJob;
+import com.ruoyi.business.domain.AiModelPrice;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.PracticalAttachment;
 import com.ruoyi.business.domain.TeacherAiConfig;
@@ -36,6 +37,7 @@ class PracticalAiJobServiceTest
     @Mock private PracticalAiReferenceAnswerService referenceAnswerService;
     @Mock private PracticalArtifactMapper artifactMapper;
     @Mock private PracticalFilePolicyService filePolicyService;
+    @Mock private AiModelPricingService pricingService;
     private PracticalAiJobService service;
 
     @BeforeEach
@@ -49,6 +51,8 @@ class PracticalAiJobServiceTest
         ReflectionTestUtils.setField(service, "artifactMapper", artifactMapper);
         ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
         ReflectionTestUtils.setField(service, "filePolicyService", filePolicyService);
+        ReflectionTestUtils.setField(service, "pricingService", pricingService);
+        org.mockito.Mockito.lenient().when(pricingService.require("QWEN", "qwen3.7-plus")).thenReturn(price());
         TeacherPracticalReferenceAnswer reference = new TeacherPracticalReferenceAnswer();
         reference.setReferenceId(1L); reference.setOriginalFileName("answer.png");
         reference.setResourcePath("/profile/upload/answer.png"); reference.setFileExtension("png");
@@ -141,6 +145,16 @@ class PracticalAiJobServiceTest
     {
         TeacherAiConfig config = new TeacherAiConfig();
         config.setProviderCode("QWEN"); config.setModelName("qwen3.7-plus"); return config;
+    }
+
+    private AiModelPrice price()
+    {
+        AiModelPrice price = new AiModelPrice();
+        price.setProviderCode("QWEN"); price.setModelName("qwen3.7-plus");
+        price.setInputPricePerThousand(new java.math.BigDecimal("0.003000"));
+        price.setOutputPricePerThousand(new java.math.BigDecimal("0.009000"));
+        price.setPriceStatus("TO_CONFIRM"); price.setPriceNote("待确认");
+        return price;
     }
 
     private PracticalSubmissionVo submission(boolean eligible)

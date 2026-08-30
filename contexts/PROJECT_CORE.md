@@ -1,7 +1,7 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 版本：v2.9
-> 更新：2026-08-24
+> 版本：v3.4
+> 更新：2026-08-29
 > 用途：新的 Codex、Claude、Gemini 或人工开发者的默认入口。只记录当前仍有效且已验证的事实；历史发布和排障证据见 `contexts/context.md`。
 
 ## 1. 先读什么
@@ -61,7 +61,7 @@
 ## 5. 环境与发布
 
 - 本地：后端 `8080`，Vue3 Vite 默认 `80` 并代理后端。
-- 正式平台：内网主机 `10.52.1.123`，后端 `3009`、Vue3/Nginx `3010`；当前后端与前端均为 `releases/20260824_course_designer_python_input_v1`（v1.26.2，第 19 节）。
+- 正式平台：内网主机 `10.52.1.123`，后端 `3009`、Vue3/Nginx `3010`；当前后端仍为 `releases/20260827_162145_1247099_shared_course_sticky_v1`，前端为 `releases/20260829_course_designer_default_open_v1`（v1.26.5，第 22 节）。
 - 扩展服务：`10.52.1.129` 承载 Judge0、CryptPad、EMQX 等独立服务。
 - 2026-08-21 发布前综合验收：经全链路 4 角色权限、数据一致性、防重幂等、400 活跃并发阶梯压测（13,653 请求，100% 成功，0 丢单）、Python 判题与在线协作 8 房间并发测试，已全项通过并准予发布上线。
 
@@ -301,3 +301,53 @@
 **生产验收**：学生 `2025720103` 的当前课程 279、题目 1883（`noInput=0`）真实自定义运行输入 `123 456`，提交 76 返回 `COMPLETED`、实际输出 `579`、score=null；运行前后课程答案的行数/分数/内容摘要一致，证明未覆盖课程答案。生产 Playwright 验证教师课程 279 的 6 道题、固定操作列、紧凑导学单、协作位置，以及学生 stdin 输入区/自定义运行按钮均通过；截图为 `output/playwright/course-designer-compact-production.png`、`student-python-custom-input-production.png`。
 
 **发布教训与回滚**：首次切换只修改 NSSM `AppDirectory`，但 `AppParameters` 仍显式指向旧 JAR，探活 200 却新接口 404；已改为同时精确替换 JAR、外置 config 与 Nginx release 路径并重启，随后真实接口通过。回滚应用时必须同时把 NSSM AppDirectory/AppParameters 和 Nginx root 切回 `20260824_python_iot_ux_v1`；新增可空字段可兼容保留，无需结构回滚，平台更新记录可按版本精确删除。
+
+## 20. 2026-08-26 操作题旧题答案隔离与 AI 用量/费用可见（release `20260826_operation_ai_usage_archive_v1`，v1.26.3，已上线）
+
+**业务规则**：课程批改、成绩、学情、截止状态和失败预览恢复等所有课程答案统计，只承认仍存在于当前 `biz_lesson_question` 的题目。课程保存移除题目关联时，服务端必须先把对应 `biz_student_answer` 完整复制到 `biz_student_answer_orphan_archive`，写入 `biz_student_answer_orphan_archive_meta` 批次元数据并核对行数，再删除在线答案；任何归档核对失败都回滚课程保存，禁止静默丢失审计证据。
+
+**AI 费用口径**：新增 `biz_ai_model_price` 维护模型输入/输出单价（元/千 token）、价格状态和说明。教师可读取参考价与估算，只有管理员可修改。新建 `biz_practical_ai_job` 时冻结当时单价/状态/说明；任务详情汇总结果表已记录的输入、输出和总 token，并按冻结单价计算理论费用。旧任务没有价格快照时使用当前参考价并明确标注；所有页面固定提示“估算值，实际以阿里云账单为准”。`qwen3.7-plus` 暂按 Qwen-VL-Max 档、`qwen3.6-flash` 暂按 Qwen-VL-Plus 档初始化为 `TO_CONFIRM`，管理员确认前不得把它们表述为官方精确账单价。余额查询仍不在本轮范围。
+
+**异常话术**：百炼 `Arrearage` 映射为余额不足提醒；`InvalidApiKey` 前缀映射为 Key 无效提醒；限流/配额类错误映射为请求过快或配额受限提醒。未知错误只保留 HTTP 状态和截断后的脱敏供应商消息，不回显 Key、提示词、模型原文或堆栈。
+
+**代码与迁移**：未来删题归档由 `StudentAnswerArchiveService` 与 `StudentAnswerArchiveMapper` 在课程保存事务内完成；现有统计 SQL 已统一补当前课程题目关联。迁移为 `sql/lesson_question_answer_archive_v1.sql`（定向归档课程 279 的题目 1882/1883）与 `sql/operation_ai_usage_pricing_v1.sql`（价格表、5 条初始参考价、任务价格快照列），均为幂等脚本；平台更新记录由 `sql/platform_update_operation_ai_usage_archive_v1.sql` 写入。
+
+**本机验证证据**：本机库执行前完整备份为 `backups/20260825_230145_local_before_ai_usage_answer_archive_1247099/xueyeceping_server_20260729_before.sql`，82,284,428 bytes，SHA-256 `AD43A34AED5CBAFD7FB4AB9391A6A5E675643B9B3A4906C7CA080A2FE2DC5DAC`。两份 SQL 连续执行两次均通过；价格行 5、任务价格列 4，归档表与在线答案表字段一致。本机基线早于课程 279，故定向旧答案前检/归档均为 0，不能替代正式库核对。后端专项 16/16、业务全量 371/371、admin clean package（业务 371 + admin 3）和 Vue3 `build:prod` 均通过。浏览器在课程 236 临时插入一条不属于当前课程题目关系的已评分答案后，8 班 `practicalSubmitted` 保持 40，测试行已精确清理为 0；教师价格读取、教师修改价格业务码 403、费用设置弹窗和任务用量抽屉布局均通过，报告与截图在 `output/playwright/20260825-ai-grading-smoke/`。任务用量抽屉使用受控接口桩验证显示，不代表真实模型调用或账单核对。
+
+**正式发布证据**：发布前只读前检确认服务运行、无活动 AI 任务；课程 657/`lesson_id=279` 当前操作题为 2003，已有 119 条在线提交，已删除题目 1882/1883 遗留 7 条答案（5 名学生）。整库备份为 `D:\program\3009dazipingtai\backups\20260826_operation_ai_usage_archive_v1_before\ry-vue_before.sql`，86,253,892 bytes，SHA-256 `CDB7C3910E0F9647BEE88F50242E20610EC5EC6DA721602D0142F7164668D17B`，同目录保留 NSSM 与 Nginx 配置。迁移后旧题在线答案 0、归档答案 7、元数据 7，当前题答案仍为 119；价格行 5、任务价格列 4，平台 1.26.3 更新唯一且 `PUBLISHED`（update_id=53）。运行 JAR SHA-256 `7338F37318D27EBFE80A3887FAF6AA500896282DDF92AE66EB9E6654B0A126A5`，前端 ZIP SHA-256 `1F23F90A58AE466C2D5A625058B88AE79D640FAB3A696FD7F9ADB6A1C34DC3A4`；NSSM、Nginx 已切到新 release，3009、3010 与代理均为 HTTP 200。
+
+**生产浏览器验收与剩余风险**：教师正式账号完成 13 项验收：课程 657 的 1 班接口为 `practicalSubmitted=0/practicalUngraded=0`，下拉框显示“暂无提交”；教师可读 5 个模型价格、修改被业务码 403 拒绝；历史任务 5 的 41 份结果展示真实汇总 `205,240 token`、理论费用 `¥0.7244` 和账单免责声明；页面 JavaScript 错误与非预期 HTTP 错误均为 0，证据位于 `output/playwright/20260826-operation-ai-production/`。本轮没有向模型发送学生作品，也没有修改正式成绩。应用回滚需同时把 NSSM AppDirectory/AppParameters 和 Nginx root 切回 `20260824_course_designer_python_input_v1`；新增兼容表/可空列及已归档旧题答案可保留。若必须数据级回滚，恢复上述整库备份并同步切回旧应用。剩余门禁是管理员按百炼实际计费项确认 `qwen3.7-plus`、`qwen3.6-flash` 的价格映射，以及下一次经授权真实新任务对价格快照和账单差异的核对。
+
+## 21. 2026-08-27 共享课程权限提示与学生端导航吸顶（release `20260827_162145_1247099_shared_course_sticky_v1`，v1.26.4，已上线）
+
+**业务边界**：教师首页继续展示“本人创建课程 + 因负责已指派班级而可见的共享课程”。共享课程只保留批改、成绩等授课协作入口，不允许非创建教师设计或删除；共享课程只展示当前教师实际负责班级与课程指派班级的交集。课程删除在检查答案或导学单历史前先校验课程管理权，避免把越权误报成“已有作答不能删除”。
+
+**接口与前端**：`LessonInfoVo` 新增 `creatorName`、`canDesign`、`canDelete`、`deleteBlockReason`，教师首页直接消费服务端能力，不再由浏览器猜权限。共享卡片显示“共享课程”和创建教师，不渲染设计/删除入口；本人课程有历史数据时保留禁用删除按钮及原因。学生布局解除 `AppMain` 的 `overflow:hidden` 滚动祖先限制，使学生首页、导学单等页面原有 `position: sticky` 顶栏真正吸顶，不使用 `fixed`，因此不新增内容占位或遮挡。
+
+**验证证据**：后端 `BizLessonServiceImplTest` 与 `AnswerDeletionGuardServiceTest` 共 22/22 通过；`ruoyi-admin` 8 模块 clean package 成功；Vue3 `npm run build:prod` 成功。本地 Playwright 验收共享卡片无设计/删除入口，学生页滚动 1100px 后 64px 顶栏仍位于 y=0，实验工具弹窗可正常打开，页面脚本错误为 0。
+
+**正式发布证据**：发布前确认正式环境运行 v1.26.3、无活动 AI 批改任务。整库备份为 `D:\program\3009dazipingtai\backups\20260827_162145_1247099_shared_course_sticky_v1_before\ry-vue_before.sql`，89,104,446 bytes，SHA-256 `75C4F8F6D744DFB85F2EC2DFB019EB310AE8BAB054946D098C5EE9A3B508D28E`，同目录保存 NSSM 和 Nginx 配置。JAR SHA-256 `71E7E85D67611DBA4A5CBDA9101AF64ABB0FFFBCD4E6394FB7F9D80E31C25B36`，前端 ZIP SHA-256 `99DD7D73589A2D5313FB284643374289682B64F623BF21F0451968C7FA7CDD42`，上传前后哈希一致；线上 index SHA-256 `254698CD779AC91BBA8176214B0A62E476809C47364FAE4B87DCB0AD22517885`。NSSM 为 Running，3009、3010 和反向代理均为 HTTP 200；平台更新 1.26.4 唯一且 `PUBLISHED`（update_id=54）。无业务表迁移、无新依赖，课程 259 的 282 条作答在发布前后保持不变。
+
+**正式浏览器验收**：账号 689071 的真实任教范围为 2024级 10班、11班；课程 259 显示“共享课程”和创建教师，只展示这两个负责班级，API 返回 `canDesign=false/canDelete=false`，页面设计按钮 0、删除按钮 0、成绩入口可用。学生账号 2025720103 页面滚动 2721px 后 64px 顶栏仍位于 y=0，实验工具弹窗正常；两端页面错误、控制台错误和 HTTP 500 均为 0。证据位于 `output/playwright/20260827_shared_course_sticky/production/`。
+
+**回滚**：应用回滚时将 NSSM AppDirectory/AppParameters 和 Nginx root 切回 `20260826_operation_ai_usage_archive_v1` 并重启/reload；本轮没有业务数据迁移，无需恢复整库。若回滚应用，应把 1.26.4 平台更新记录改为草稿或按版本精确删除。专题说明见 `contexts/teacher-course-sharing/`。
+
+## 22. 2026-08-29 课程设计器学生开放默认开启（release `20260829_course_designer_default_open_v1`，v1.26.5，已上线）
+
+**业务边界**：课程设计器保留原有“学生开放”理论题、操作题双开关，三个初始化/重置入口均改为默认开启。教师仍可在保存前关闭；后端继续只把初始值应用于新增班级指派，已有班级当前状态不被课程编辑覆盖。成绩查询、课程推进和数据库结构均未修改。
+
+**构建与正式发布**：Vue3 `npm run build:prod` 通过，仅有既有 vform `eval` 与大 chunk 警告。发布前正式库备份为 `D:\program\3009dazipingtai\backups\20260829_course_designer_default_open_v1_before\ry-vue_before.sql`，89,712,914 bytes，SHA-256 `67FF06E647D31953297F3AF5964DF20A6741E90D6A871DD2890E13459D860A99`；Nginx 配置同目录备份。前端 ZIP 本地/服务器 SHA-256 均为 `8C04FF8E09AB9DB0A5C47F4917C5C73DF3F8282B3D581A12DE02AD799CD5029D`，线上 index SHA-256 `32C40F9917ABBE1AC612FDC9636170AB60B87C817F0C07D7F1BCD35BA88AEE1C`。3010 与 `/prod-api` 均为 HTTP 200；后端未重启。
+
+**数据与验收**：未执行业务表迁移，也未批量修改 131 条存量指派；发布前后开启计数保持理论 1、操作 9。平台更新 `1.26.5` 唯一且 `PUBLISHED`（update_id=55）。正式 Playwright 打开课程 279 设计器，确认“学生开放”双开关均为 `true`，页面脚本错误、控制台错误和 HTTP 500 均为 0；未保存课程，截图见 `output/playwright/20260829_course_designer_default_open/student-open-default-on-production.png`。
+
+**回滚**：把 Nginx root 恢复为 `releases/20260827_162145_1247099_shared_course_sticky_v1/frontend` 并 reload；后端和业务数据无需回滚。平台更新记录可按版本 `1.26.5` 精确删除或改为草稿。
+
+## 23. 2026-08-30 小学信息科技实验板标准 MQTT 兼容验证（进行中）
+
+**已验证事实**：真实小学实验板在教师机临时 Broker 上成功使用固件自带 `umqtt.simple.MQTTClient`，可显式传入自定义 ClientID、用户名、密码和完整 Topic，并成功发布 JSON；无需依赖省平台 `mqtt.config(..., projectId, userId)` 固定封装。由此确认小学实验板与现有 EMQX 标准 MQTT 协议兼容。
+
+**129准备状态**：正式 EMQX 新增临时认证账号 `primary_board_probe`，文件 ACL 仅允许其发布已映射的小学测试小组 Topic `county/139/252/2020-07/iot_demo_exp/group01/data`。管理 API 回读通过，账号连接返回 CONNACK 0；`dazi-platform-iot` 仍在线，原平台订阅、班级账号和 device01 规则均完整保留。EMQX、123后端、数据库均未重启，平台代码未修改。
+
+**备份与回滚**：129 SSH 通过 123 跳板完成；ACL 备份位于 `/srv/emqx-school-poc/backups/20260830_050321_before_primary_board_probe/acl.conf`，SHA-256 `6e7df6236dcb759e08831542b40f6124eb3ccb7207bea0644293944454ab37f3`。回滚为删除临时认证账号并从文件授权源移除该单 Topic 规则；不影响 Judge0、CryptPad 或原有 MQTT 账号。
+
+**剩余门禁**：需要在真实板运行 `tmp/小学实验板_直连129_最终验证.zip` 中脚本，确认板端显示 MQTT 连接与发布成功；随后只读核对 EMQX 客户端、`biz_iot_message` 新增记录和教师物联页面。完成前不得宣称小学板到平台全链路验收完成，也不得把临时账号作为正式课堂账号长期分发。

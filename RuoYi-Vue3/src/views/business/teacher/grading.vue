@@ -329,7 +329,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="aiConfigVisible" title="AI 辅助批改设置" width="520px" append-to-body>
+    <el-dialog v-model="aiConfigVisible" title="AI 辅助批改设置" :width="isAdmin ? '720px' : '520px'" append-to-body>
       <el-alert
         title="API Key 只在后端加密保存，页面不会再次显示明文；AI 建议不会自动写入正式成绩。"
         type="info" :closable="false" show-icon style="margin-bottom: 16px"
@@ -346,6 +346,20 @@
             <el-option label="Qwen3.7-Plus（推荐，质量优先）" value="qwen3.7-plus" />
             <el-option label="Qwen3.6-Flash（速度/成本优先）" value="qwen3.6-flash" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="参考费用">
+          <div v-if="currentModelPrice" class="ai-price-note">
+            <div>
+              输入 {{ formatUnitPrice(currentModelPrice.inputPricePerThousand) }} 元/千 token，
+              输出 {{ formatUnitPrice(currentModelPrice.outputPricePerThousand) }} 元/千 token
+            </div>
+            <div>
+              按{{ currentModelPrice.usageEstimateSource === 'MODEL_HISTORY' ? `同模型 ${currentModelPrice.sampleCount} 份历史平均用量` : '参考用量' }}，
+              每份约 {{ formatCostInFen(currentModelPrice.estimatedCostPerGradingYuan) }} 分钱。
+            </div>
+            <small>{{ currentModelPrice.priceNote || '参考价格待管理员维护' }}；估算值，实际以阿里云账单为准。</small>
+          </div>
+          <span v-else class="ai-price-empty">当前模型暂无参考价</span>
         </el-form-item>
         <el-form-item label="API Key">
           <div class="ai-key-field">
@@ -364,6 +378,30 @@
           </div>
         </el-form-item>
       </el-form>
+      <div v-if="isAdmin" class="ai-price-admin">
+        <div class="ai-price-admin-title">管理员参考价维护 <small>单位：元/千 token</small></div>
+        <el-table :data="editableModelPrices" size="small" border>
+          <el-table-column prop="displayName" label="模型" min-width="130" />
+          <el-table-column label="输入价" width="125">
+            <template #default="scope"><el-input-number v-model="scope.row.inputPricePerThousand" :min="0" :max="100" :precision="6" :step="0.0001" controls-position="right" /></template>
+          </el-table-column>
+          <el-table-column label="输出价" width="125">
+            <template #default="scope"><el-input-number v-model="scope.row.outputPricePerThousand" :min="0" :max="100" :precision="6" :step="0.0001" controls-position="right" /></template>
+          </el-table-column>
+          <el-table-column label="状态" width="115">
+            <template #default="scope">
+              <el-select v-model="scope.row.priceStatus">
+                <el-option label="待确认" value="TO_CONFIRM" />
+                <el-option label="参考价" value="REFERENCE" />
+                <el-option label="已确认" value="CONFIRMED" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="scope"><el-button link type="primary" :loading="aiPriceSaving === scope.row.modelName" @click="saveModelPrice(scope.row)">保存</el-button></template>
+          </el-table-column>
+        </el-table>
+      </div>
       <template #footer>
         <el-button v-if="aiConfig?.configured" type="danger" plain @click="removeAiConfig">删除配置</el-button>
         <el-button v-if="aiConfig?.configured" :loading="aiTesting" @click="testSavedAiConfig">测试连通性</el-button>
@@ -430,7 +468,10 @@
         <div><strong>{{ aiProgress?.processingCount || 0 }}</strong><span>处理中</span></div>
         <div><strong>{{ aiProgress?.waitingCount || 0 }}</strong><span>等待中</span></div>
         <div><strong>{{ formatDuration((aiProgress?.averageDurationMs || 0) / 1000) }}</strong><span>平均每份</span></div>
+        <div><strong>{{ formatTokenCount(aiUsage?.totalTokens) }}</strong><span>消耗 token</span></div>
+        <div><strong>{{ formatEstimatedCost(aiUsage?.estimatedCostYuan) }}</strong><span>预计费用</span></div>
       </div>
+      <p class="ai-usage-disclaimer">{{ aiUsage?.disclaimer || '估算值，实际以阿里云账单为准' }}</p>
       <el-progress :percentage="aiCompletionPercentage" :status="aiJob?.jobStatus === 'COMPLETED' ? 'success' : undefined" />
       <div class="ai-current-stage">
         <div><span>当前处理：</span><strong>{{ aiCurrentStudentName }}</strong></div>
@@ -484,12 +525,14 @@ import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, ret
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
 import { getAiConfig, saveAiConfig, deleteAiConfig, testAiConfig, createAiJob, getAiJob, getAiJobEvents,
     getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
-    pauseAiJob, resumeAiJob, cancelAiJob, retryFailedAiJob } from '@/api/business/practicalAiGrading';
+    pauseAiJob, resumeAiJob, cancelAiJob, retryFailedAiJob, getAiModelPrices, updateAiModelPrice } from '@/api/business/practicalAiGrading';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { FullScreen } from '@element-plus/icons-vue';
 import { deadlineStatusMeta, formatDeadlineRemaining, formatDeadlineTime } from '@/utils/practicalDeadline';
+import useUserStore from '@/store/modules/user';
 
 const route = useRoute();
+const userStore = useUserStore();
 const loading = ref(false);
 const STUCK_PREVIEW_TIMEOUT_MS = 10 * 60 * 1000;
 const gradeGroups = ref([]);
@@ -532,8 +575,11 @@ const aiJobBatchAdoptAllowed = ref(false);
 const aiReferenceAccept = '.doc,.docx,.pdf,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png';
 const aiConfig = ref(null);
 const aiConfigForm = ref({ apiKey: '', modelName: 'qwen3.7-plus' });
+const aiModelPrices = ref([]);
+const aiPriceSaving = ref('');
 const aiJob = ref(null);
 const aiProgress = ref(null);
+const aiUsage = ref(null);
 const aiDetailVisible = ref(false);
 const aiEventsLoading = ref(false);
 const aiEvents = ref([]);
@@ -569,6 +615,11 @@ const currentNormalizedPages = computed(() => Array.isArray(currentAttachment.va
     ? currentAttachment.value.normalizedPages : []);
 const currentPreviewStatus = computed(() => currentAttachment.value?.previewStatus || currentStudent.value?.previewStatus || '');
 const currentAiResult = computed(() => aiResultFor(currentStudent.value));
+const isAdmin = computed(() => userStore.roles.includes('admin'));
+const editableModelPrices = computed(() => aiModelPrices.value.filter(item =>
+    ['qwen3.7-plus', 'qwen3.6-flash'].includes(item.modelName)));
+const currentModelPrice = computed(() => aiModelPrices.value.find(item => item.modelName === aiConfigForm.value.modelName)
+    || (aiConfig.value?.modelPrice?.modelName === aiConfigForm.value.modelName ? aiConfig.value.modelPrice : null));
 const currentAiSuggestion = computed(() => currentAiResult.value?.resultStatus === 'SUCCESS' ? currentAiResult.value : null);
 const currentAiSummary = computed(() => {
     if (!currentAiSuggestion.value?.evidenceJson) return '';
@@ -981,10 +1032,29 @@ function loadAiConfigStatus() {
     });
 }
 
+function loadAiModelPrices() {
+    return getAiModelPrices().then(res => {
+        aiModelPrices.value = Array.isArray(res.data) ? res.data : [];
+    });
+}
+
 async function openAiConfig() {
     await loadAiConfigStatus();
+    await loadAiModelPrices();
     aiConfigForm.value.apiKey = '';
     aiConfigVisible.value = true;
+}
+
+async function saveModelPrice(row) {
+    aiPriceSaving.value = row.modelName;
+    try {
+        await updateAiModelPrice(row.modelName, row);
+        ElMessage.success(`${row.displayName} 参考价已更新`);
+        await loadAiConfigStatus();
+        await loadAiModelPrices();
+    } finally {
+        aiPriceSaving.value = '';
+    }
 }
 
 async function submitAiConfig() {
@@ -1090,6 +1160,7 @@ async function pollAiJob() {
         const res = await getAiJob(aiJob.value.jobId);
         aiJob.value = res.data?.job || aiJob.value;
         aiProgress.value = res.data?.progress || aiProgress.value;
+        aiUsage.value = res.data?.usage || aiUsage.value;
         aiJobBatchAdoptAllowed.value = Boolean(res.data?.batchAdoptAllowed);
         const mapped = {};
         for (const result of (res.data?.results || [])) mapped[result.answerId] = result;
@@ -1114,6 +1185,7 @@ async function restoreLatestAiJob() {
         if (!detail?.job) return;
         aiJob.value = detail.job;
         aiProgress.value = detail.progress || null;
+        aiUsage.value = detail.usage || null;
         aiJobBatchAdoptAllowed.value = Boolean(detail.batchAdoptAllowed);
         const mapped = {};
         for (const result of (detail.results || [])) mapped[result.answerId] = result;
@@ -1193,6 +1265,7 @@ function resetAiJobView() {
     stopAiPolling();
     aiJob.value = null;
     aiProgress.value = null;
+    aiUsage.value = null;
     aiDetailVisible.value = false;
     aiEvents.value = [];
     aiResultsByAnswer.value = {};
@@ -1252,6 +1325,26 @@ function formatDuration(seconds) {
     const minutes = Math.floor(value / 60);
     const remain = value % 60;
     return remain ? `${minutes}分${remain}秒` : `${minutes}分钟`;
+}
+
+function formatUnitPrice(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(6).replace(/0+$/, '').replace(/\.$/, '') : '--';
+}
+
+function formatCostInFen(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? (number * 100).toFixed(2).replace(/\.00$/, '') : '--';
+}
+
+function formatTokenCount(value) {
+    const number = Number(value || 0);
+    return Number.isFinite(number) ? Math.round(number).toLocaleString('zh-CN') : '0';
+}
+
+function formatEstimatedCost(value) {
+    const number = Number(value || 0);
+    return Number.isFinite(number) ? `¥${number.toFixed(4)}` : '¥0.0000';
 }
 
 function formatEta(seconds) {
@@ -1623,6 +1716,35 @@ function autoFocusItem() {
   font-size: 13px;
 }
 
+.ai-price-note {
+  width: 100%;
+  padding: 10px 12px;
+  color: #606266;
+  line-height: 1.7;
+  border-radius: 6px;
+  background: #f5f7fa;
+
+  small { color: #909399; }
+}
+
+.ai-price-empty { color: #909399; }
+
+.ai-price-admin {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid #ebeef5;
+
+  :deep(.el-input-number) { width: 100%; }
+}
+
+.ai-price-admin-title {
+  margin-bottom: 10px;
+  color: #303133;
+  font-weight: 600;
+
+  small { margin-left: 8px; color: #909399; font-weight: normal; }
+}
+
 .ai-preflight-counts,
 .ai-starter-note {
   color: #606266;
@@ -1662,7 +1784,7 @@ function autoFocusItem() {
 
 .ai-detail-summary {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-bottom: 14px;
 
@@ -1676,6 +1798,13 @@ function autoFocusItem() {
 
   strong { display: block; color: #409eff; font-size: 20px; }
   span { color: #909399; font-size: 12px; }
+}
+
+.ai-usage-disclaimer {
+  margin: -4px 0 12px;
+  color: #909399;
+  text-align: right;
+  font-size: 12px;
 }
 
 .ai-current-stage {
