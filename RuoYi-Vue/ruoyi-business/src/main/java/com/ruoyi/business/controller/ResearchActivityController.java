@@ -1,10 +1,17 @@
 package com.ruoyi.business.controller;
 
+import java.nio.file.Path;
 import java.util.List;
 import javax.validation.Valid;
 import com.github.pagehelper.PageHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,10 +31,12 @@ import com.ruoyi.business.domain.dto.ResearchResourceQuery;
 import com.ruoyi.business.domain.dto.ResearchTopicQuery;
 import com.ruoyi.business.domain.dto.ResearchTopicSaveRequest;
 import com.ruoyi.business.domain.vo.ResearchPostVo;
+import com.ruoyi.business.domain.vo.ResearchPublicNoticeVo;
 import com.ruoyi.business.domain.vo.ResearchTeacherOptionVo;
 import com.ruoyi.business.domain.vo.ResearchTopicVo;
 import com.ruoyi.business.service.ResearchActivityService;
 import com.ruoyi.common.annotation.Log;
+import com.ruoyi.common.annotation.Anonymous;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.PageDomain;
@@ -217,6 +226,59 @@ public class ResearchActivityController extends BaseController
     public AjaxResult notifyTopic(@PathVariable Long topicId, @Valid @RequestBody ResearchNotificationSendRequest request)
     {
         return success(service.sendNotification(topicId, request));
+    }
+
+    @PostMapping("/topics/{topicId}/public-share")
+    @PreAuthorize("@ss.hasPermi('business:researchActivity:notify') and (@ss.hasRole('researcher') or @ss.hasRole('admin'))")
+    public AjaxResult createPublicShare(@PathVariable Long topicId, @RequestParam(required=false) Integer expireDays)
+    {
+        return success(service.createPublicShare(topicId, expireDays));
+    }
+
+    @GetMapping("/topics/{topicId}/public-share")
+    @PreAuthorize("@ss.hasPermi('business:researchActivity:notify') and (@ss.hasRole('researcher') or @ss.hasRole('admin'))")
+    public AjaxResult publicShareStatus(@PathVariable Long topicId)
+    {
+        return success(service.getPublicShareStatus(topicId));
+    }
+
+    @DeleteMapping("/topics/{topicId}/public-share")
+    @PreAuthorize("@ss.hasPermi('business:researchActivity:notify') and (@ss.hasRole('researcher') or @ss.hasRole('admin'))")
+    public AjaxResult revokePublicShare(@PathVariable Long topicId)
+    {
+        service.revokePublicShare(topicId);
+        return success();
+    }
+
+    @Anonymous
+    @GetMapping("/public/notices/{token}")
+    public ResponseEntity<ResearchPublicNoticeVo> publicNotice(@PathVariable String token)
+    {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("Referrer-Policy", "no-referrer")
+                .body(service.getPublicNotice(token));
+    }
+
+    @Anonymous
+    @GetMapping("/public/notices/{token}/images")
+    public ResponseEntity<Resource> publicNoticeImage(@PathVariable String token, @RequestParam String src)
+    {
+        Path path = service.getPublicNoticeImage(token, src);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("Referrer-Policy", "no-referrer")
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(publicImageMediaType(path))
+                .body(new FileSystemResource(path));
+    }
+
+    private MediaType publicImageMediaType(Path path)
+    {
+        String name = path.getFileName().toString().toLowerCase();
+        if (name.endsWith(".png")) return MediaType.IMAGE_PNG;
+        if (name.endsWith(".webp")) return MediaType.parseMediaType("image/webp");
+        return MediaType.IMAGE_JPEG;
     }
 
     @GetMapping("/notifications/summary")

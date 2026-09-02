@@ -56,18 +56,6 @@ public class PracticalAttachmentConversionService
                 markNormalizationFailed(attachment, "源文件不存在");
                 return;
             }
-            PracticalAttachment cached = attachment.getSha256() == null ? null
-                    : artifactMapper.selectReusableNormalization(
-                            attachment.getSha256(), PracticalPageRenderer.RENDERER_VERSION, attachmentId);
-            if (cached != null && normalizedFilesExist(cached.getNormalizedPagesJson()))
-            {
-                List<String> copiedPages = pageRenderer.copyCachedPages(
-                        attachment, source, parsePages(cached.getNormalizedPagesJson()));
-                markNormalized(attachment, copiedPages,
-                        PracticalPageRenderer.RENDERER_VERSION);
-                return;
-            }
-
             File visualSource = source;
             if ("OFFICE".equals(attachment.getFileKind()))
             {
@@ -102,6 +90,19 @@ public class PracticalAttachmentConversionService
                 return;
             }
 
+            // 页图缓存只省去渲染；PDF 预览必须属于当前附件，不能跳过状态回写。
+            PracticalAttachment cached = attachment.getSha256() == null ? null
+                    : artifactMapper.selectReusableNormalization(
+                            attachment.getSha256(), PracticalPageRenderer.RENDERER_VERSION, attachmentId);
+            if (cached != null && normalizedFilesExist(cached.getNormalizedPagesJson()))
+            {
+                List<String> copiedPages = pageRenderer.copyCachedPages(
+                        attachment, source, parsePages(cached.getNormalizedPagesJson()));
+                markNormalized(attachment, copiedPages,
+                        PracticalPageRenderer.RENDERER_VERSION);
+                return;
+            }
+
             markNormalized(attachment, pageRenderer.render(attachment, visualSource),
                     PracticalPageRenderer.RENDERER_VERSION);
         }
@@ -117,6 +118,32 @@ public class PracticalAttachmentConversionService
     {
         if (artifactMapper.resetAttachmentNormalization(attachmentId, new Date()) <= 0) return false;
         return self.convertAsync(attachmentId);
+    }
+
+    /** 对账旧版本已经生成的 PDF，避免重复转换并消除附件状态误报。 */
+    public boolean reconcileExistingOfficePreview(Long attachmentId)
+    {
+        PracticalAttachment attachment = artifactMapper.selectAttachmentById(attachmentId);
+        if (attachment == null || !"OFFICE".equals(attachment.getFileKind())
+                || attachment.getResourcePath() == null)
+        {
+            return false;
+        }
+        File source = resourceFile(attachment.getResourcePath());
+        String pdfName = source.getName().replaceFirst("(?i)\\.[^.]+$", ".pdf");
+        if (pdfName.equals(source.getName())) pdfName = source.getName() + ".pdf";
+        File pdf = new File(source.getParentFile(), pdfName);
+        if (!pdf.isFile() || pdf.length() <= 0) return false;
+
+        String prefix = attachment.getResourcePath().substring(
+                0, attachment.getResourcePath().lastIndexOf('/') + 1);
+        attachment.setPreviewStatus("success");
+        attachment.setPreviewPath(prefix + pdf.getName());
+        attachment.setPreviewErrorMessage(null);
+        attachment.setUpdateTime(new Date());
+        artifactMapper.updateAttachmentPreview(attachment);
+        syncLegacyPreview(attachment);
+        return true;
     }
 
     private void markNormalized(PracticalAttachment attachment, List<String> pages, String version)

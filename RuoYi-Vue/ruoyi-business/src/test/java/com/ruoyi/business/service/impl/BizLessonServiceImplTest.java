@@ -14,6 +14,7 @@ import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
+import com.ruoyi.business.service.FlowchartService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.entity.SysDept;
@@ -65,6 +66,8 @@ class BizLessonServiceImplTest
     private SysDeptMapper deptMapper;
     @Mock
     private AnswerDeletionGuardService answerDeletionGuardService;
+    @Mock
+    private FlowchartService flowchartService;
 
     @InjectMocks
     private BizLessonServiceImpl service;
@@ -317,6 +320,19 @@ class BizLessonServiceImplTest
                 () -> service.deleteBizLessonByLessonId(259L));
 
         assertEquals("无权管理该课程", error.getMessage());
+        verify(answerDeletionGuardService, never()).assertLessonsDeletable(
+                org.mockito.ArgumentMatchers.any(Long[].class));
+    }
+
+    @Test
+    void repeatedLessonDeleteIsIdempotent()
+    {
+        loginTeacher();
+        when(bizLessonMapper.selectBizLessonByLessonId(283L)).thenReturn(null);
+
+        int affected = service.deleteBizLessonByLessonId(283L);
+
+        assertEquals(0, affected);
         verify(answerDeletionGuardService, never()).assertLessonsDeletable(
                 org.mockito.ArgumentMatchers.any(Long[].class));
     }

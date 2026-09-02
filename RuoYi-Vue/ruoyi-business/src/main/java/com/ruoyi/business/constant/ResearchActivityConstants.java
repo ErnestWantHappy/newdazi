@@ -44,6 +44,9 @@ public final class ResearchActivityConstants
     public static final int MAX_PAGE_SIZE = 50;
     public static final int MAX_LINKS = 3;
     public static final int MAX_IMAGES = 20;
+    public static final int PUBLIC_SHARE_DEFAULT_DAYS = 30;
+    public static final int PUBLIC_SHARE_SHORT_DAYS = 7;
+    public static final int PUBLIC_SHARE_MAX_DAYS = 30;
     public static final long MAX_PACKAGE_BYTES = 50L * 1024L * 1024L;
     public static final long MAX_IMAGE_BYTES = 10L * 1024L * 1024L;
     public static final int MAX_HTML_LENGTH = 500_000;

@@ -30,7 +30,7 @@ public class BizStudent extends BaseEntity
     private String entryYear;
 
     /** 班级编号 */
-    @Excel(name = "班级编号", width = 18, prompt = "只填 01～10，不要写 601、602 等带年级的三位数")
+    @Excel(name = "班级编号", width = 18, prompt = "只填 01～99，不要写 601、602 等带年级的三位数")
     private String classCode;
 
     /** 真实姓名 (用于导入和列表展示) */
@@ -39,6 +39,9 @@ public class BizStudent extends BaseEntity
 
     /** 登录账号 (用于列表展示, 非数据库字段) */
     private String userName;
+
+    /** 登录状态：0正常、1停用（来自 sys_user.status，非学生表字段） */
+    private String status;
 
     /** 部门ID (仅用于数据权限查询, 非数据库字段) */
     private Long deptId;
@@ -115,6 +118,14 @@ public class BizStudent extends BaseEntity
         this.userName = userName;
     }
 
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
     public Long getDeptId() {
         return deptId;
     }
@@ -151,6 +162,7 @@ public class BizStudent extends BaseEntity
                 .append("classCode", getClassCode())
                 .append("studentName", getStudentName())
                 .append("userName", getUserName())
+                .append("status", getStatus())
                 .append("deptId", getDeptId())
                 .toString();
     }

@@ -130,6 +130,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectCurrentLessonByClass" resultType="java.lang.Long">
         SELECT la.lesson_id 
         FROM biz_lesson_assignment la
+        INNER JOIN biz_lesson l ON l.lesson_id = la.lesson_id AND IFNULL(l.status, '0') = '0'
         WHERE la.entry_year = #{entryYear} 
           AND la.class_code = #{classCode}
           AND la.dept_id = #{deptId}
@@ -140,7 +141,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectAssignmentsByLessonId" resultMap="BizLessonAssignmentResult">
         <include refid="selectBizLessonAssignmentVo"/>
         where lesson_id = #{lessonId}
-        order by entry_year, class_code
+        order by entry_year, cast(class_code as unsigned), class_code
     </select>
 
     <select id="selectCurrentAssignmentForUpdate" resultMap="BizLessonAssignmentResult">

@@ -62,6 +62,7 @@
               <div
                 v-if="lesson.canDelete"
                 class="folder-delete"
+                :class="{ 'is-deleting': isLessonDeleting(lesson.lessonId) }"
                 title="删除课程"
                 @click.stop="handleDeleteLesson(lesson)"
               >
@@ -381,6 +382,7 @@ const router = useRouter();
 const route = useRoute();
 const loading = ref(true);
 const gradeGroups = ref([]);
+const deletingLessonIds = ref([]);
 
 function hasUngradedPractical(lesson) {
   return (lesson.practicalDeadlineClasses || []).some(item => Number(item.ungradedCount || 0) > 0);
@@ -922,31 +924,46 @@ async function goToScoreAnalysis(lesson, group) {
   });
 }
 
+function isLessonDeleting(lessonId) {
+  return deletingLessonIds.value.includes(Number(lessonId));
+}
+
+function removeLessonFromDashboard(lessonId) {
+  const targetId = Number(lessonId);
+  gradeGroups.value = gradeGroups.value.map(group => ({
+    ...group,
+    lessons: (group.lessons || []).filter(item => Number(item.lessonId) !== targetId)
+  }));
+}
+
 /** 删除课程 */
-function handleDeleteLesson(lesson) {
+async function handleDeleteLesson(lesson) {
   if (!lesson?.canDelete) {
     ElMessage.warning(lesson?.deleteBlockReason || '当前课程不能删除');
     return;
   }
-  ElMessageBox.confirm(
-    '是否确认删除该课程？此操作将同时删除所有关联的题目和班级指派，且不可恢复。',
-    '警告',
-    {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  )
-    .then(() => {
-      delLesson(lesson.lessonId).then(() => {
-        ElMessage({
-          type: 'success',
-          message: '删除成功'
-        });
-        fetchDashboardData();
-      });
-    })
-    .catch(() => {});
+  if (isLessonDeleting(lesson.lessonId)) return;
+  try {
+    await ElMessageBox.confirm(
+      '是否确认删除该课程？此操作将同时删除所有关联的题目和班级指派，且不可恢复。',
+      '警告',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+    deletingLessonIds.value = [...deletingLessonIds.value, Number(lesson.lessonId)];
+    await delLesson(lesson.lessonId);
+    // 接口成功即先移除卡片，后台刷新只负责校准，避免缓存或网络让老师误以为没删掉。
+    removeLessonFromDashboard(lesson.lessonId);
+    ElMessage.success('删除成功');
+    await fetchDashboardData();
+  } catch (e) {
+    // 用户取消和全局请求拦截器提示都不需要重复弹窗。
+  } finally {
+    deletingLessonIds.value = deletingLessonIds.value.filter(id => id !== Number(lesson.lessonId));
+  }
 }
 
 function refreshDashboard() {
@@ -986,6 +1003,11 @@ onActivated(() => {
   .box-card {
     min-height: calc(100vh - 84px);
   }
+}
+
+.folder-delete.is-deleting {
+  pointer-events: none;
+  opacity: 0.45;
 }
 
 .county-grading-entry {

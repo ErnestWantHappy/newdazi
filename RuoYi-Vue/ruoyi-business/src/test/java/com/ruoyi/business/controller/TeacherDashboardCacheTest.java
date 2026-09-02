@@ -1,17 +1,17 @@
 package com.ruoyi.business.controller;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import com.ruoyi.business.service.IBizLessonService;
+import com.ruoyi.business.service.TeacherDashboardCacheService;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
-import com.ruoyi.common.core.redis.RedisCache;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,7 +25,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class TeacherDashboardCacheTest
 {
     @Mock private IBizLessonService lessonService;
-    @Mock private RedisCache redisCache;
+    @Mock private TeacherDashboardCacheService dashboardCacheService;
     @InjectMocks private TeacherDashboardController controller;
 
     @AfterEach
@@ -44,7 +44,7 @@ class TeacherDashboardCacheTest
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(loginUser, null, Collections.emptyList()));
         AjaxResult cached = AjaxResult.success(Collections.emptyList());
-        when(redisCache.getCacheObject(anyString())).thenReturn(cached);
+        when(dashboardCacheService.get(anyLong(), anyLong())).thenReturn(cached);
 
         AjaxResult result = controller.getDashboardData();
 

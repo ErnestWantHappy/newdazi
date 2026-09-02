@@ -21,6 +21,7 @@ public interface IotMapper
     int insertExperiment(IotExperiment experiment);
 
     IotClassConfig selectClassConfig(@Param("experimentId") Long experimentId, @Param("entryYear") String entryYear, @Param("classCode") String classCode);
+    IotClassConfig selectClassConfigById(@Param("configId") Long configId);
     int insertClassConfig(IotClassConfig config);
     int updateClassConfig(IotClassConfig config);
 

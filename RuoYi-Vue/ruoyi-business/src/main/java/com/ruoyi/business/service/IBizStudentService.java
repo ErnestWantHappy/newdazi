@@ -2,6 +2,9 @@ package com.ruoyi.business.service;
 
 import java.util.List;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.vo.StudentImportResult;
+import com.ruoyi.business.domain.vo.StudentCorrectionPreview;
+import com.ruoyi.business.domain.vo.StudentCorrectionRow;
 
 /**
  * 学生管理Service接口
@@ -75,7 +78,16 @@ public interface IBizStudentService
      * @param operName 操作用户
      * @return 结果
      */
-    public String importStudent(List<BizStudent> studentList, String operName);
+    public StudentImportResult importStudent(List<BizStudent> studentList, String operName);
+
+    /** 只校验并预览批量纠错，不写数据库。 */
+    public StudentCorrectionPreview previewStudentCorrections(List<StudentCorrectionRow> rows);
+
+    /** 原地批量纠错，studentId 和 userId 均保持不变。 */
+    public StudentCorrectionPreview applyStudentCorrections(List<StudentCorrectionRow> rows, String operName);
+
+    /** 批量停用或启用学生登录账号。 */
+    public int updateStudentStatus(Long[] studentIds, String status);
 
     /**
      * 批量重置学生密码

@@ -13,7 +13,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="noticeLevel" column="notice_level"/>
         <result property="noticeScope" column="notice_scope"/>
         <result property="noticeStages" column="notice_stages"/>
+        <result property="publicShareEnabled" column="public_share_enabled"/>
+        <result property="publicShareTokenHash" column="public_share_token_hash"/>
         <result property="activityTime" column="activity_time"/>
+        <result property="publicShareExpireTime" column="public_share_expire_time"/>
         <result property="isPinned" column="is_pinned"/>
         <result property="viewCount" column="view_count"/>
         <result property="replyCount" column="reply_count"/>
@@ -41,7 +44,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="noticeLevel" column="notice_level"/>
         <result property="noticeScope" column="notice_scope"/>
         <result property="noticeStages" column="notice_stages"/>
+        <result property="publicShareEnabled" column="public_share_enabled"/>
+        <result property="publicShareTokenHash" column="public_share_token_hash"/>
         <result property="activityTime" column="activity_time"/>
+        <result property="publicShareExpireTime" column="public_share_expire_time"/>
         <result property="isPinned" column="is_pinned"/>
         <result property="viewCount" column="view_count"/>
         <result property="replyCount" column="reply_count"/>
@@ -149,9 +155,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="creatorName" column="creator_name"/>
     </resultMap>
 
+    <resultMap id="PublicNoticeResult" type="com.ruoyi.business.domain.vo.ResearchPublicNoticeVo">
+        <result property="title" column="title"/>
+        <result property="contentHtml" column="content_html"/>
+        <result property="creatorName" column="creator_name"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="createTime" column="create_time"/>
+        <result property="activityTime" column="activity_time"/>
+    </resultMap>
+
     <sql id="topicEntityColumns">
         topic_id, topic_type, title, content_html, content_text, notice_level, notice_scope,
-        notice_stages, activity_time, is_pinned, view_count, reply_count, download_count, last_activity_time,
+        notice_stages, public_share_enabled, public_share_token_hash, activity_time, public_share_expire_time, is_pinned, view_count, reply_count, download_count, last_activity_time,
         creator_id, dept_id, del_flag, create_by, create_time, update_by, update_time
     </sql>
 
@@ -251,6 +266,34 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="incrementTopicDownload">
         UPDATE biz_research_topic SET download_count=download_count+1 WHERE topic_id=#{topicId} AND del_flag='0'
     </update>
+    <update id="updatePublicShare">
+        UPDATE biz_research_topic
+        SET public_share_enabled='Y', public_share_token_hash=#{tokenHash}, public_share_expire_time=#{expireTime},
+            update_by=#{updateBy}, update_time=NOW()
+        WHERE topic_id=#{topicId} AND topic_type='NOTICE' AND del_flag='0'
+    </update>
+    <update id="revokePublicShare">
+        UPDATE biz_research_topic
+        SET public_share_enabled='N', public_share_token_hash=NULL, public_share_expire_time=NULL,
+            update_by=#{updateBy}, update_time=NOW()
+        WHERE topic_id=#{topicId} AND topic_type='NOTICE' AND del_flag='0'
+    </update>
+    <select id="selectPublicNoticeByTokenHash" resultMap="PublicNoticeResult">
+        SELECT t.title, t.content_html, t.create_time, t.activity_time,
+               u.nick_name AS creator_name, d.dept_name
+        FROM biz_research_topic t
+        LEFT JOIN sys_user u ON u.user_id=t.creator_id
+        LEFT JOIN sys_dept d ON d.dept_id=t.dept_id
+        WHERE t.public_share_enabled='Y' AND t.public_share_token_hash=#{tokenHash}
+          AND t.topic_type='NOTICE' AND t.del_flag='0'
+          AND (t.public_share_expire_time IS NULL OR t.public_share_expire_time &gt; NOW())
+    </select>
+    <select id="selectPublicNoticeHtmlByTokenHash" resultType="java.lang.String">
+        SELECT content_html FROM biz_research_topic
+        WHERE public_share_enabled='Y' AND public_share_token_hash=#{tokenHash}
+          AND topic_type='NOTICE' AND del_flag='0'
+          AND (public_share_expire_time IS NULL OR public_share_expire_time &gt; NOW())
+    </select>
 
     <insert id="insertPost" parameterType="com.ruoyi.business.domain.BizResearchPost"
             useGeneratedKeys="true" keyProperty="postId">

@@ -44,6 +44,11 @@ public interface BizLessonMapper
      */
     public int updateBizLesson(BizLesson bizLesson);
 
+    /** 归档或恢复课程，不触碰题目、指派和历史答题。 */
+    int updateLessonStatus(@Param("lessonId") Long lessonId,
+                           @Param("status") String status,
+                           @Param("updateBy") String updateBy);
+
     /**
      * 删除课程/作业信息
      * 

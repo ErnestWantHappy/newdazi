@@ -20,7 +20,7 @@ public final class StudentImportRules
             throw new ServiceException(classCodeMessage());
         }
         int classNumber = Integer.parseInt(classCode);
-        if (classNumber < 1 || classNumber > 10)
+        if (classNumber < 1 || classNumber > 99)
         {
             throw new ServiceException(classCodeMessage());
         }
@@ -54,7 +54,6 @@ public final class StudentImportRules
 
     private static String classCodeMessage()
     {
-        return "班级编号只能填写 01～10；只填班号，不要写 601、602 等带年级的三位数";
+        return "班级编号只能填写 01～99；只填班号，不要写 601、602 等带年级的三位数";
     }
 }
-

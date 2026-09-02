@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+import com.ruoyi.business.mapper.StudentBusinessRecordMapper;
 import com.ruoyi.common.exception.ServiceException;
 
 /**
@@ -18,6 +19,9 @@ public class AnswerDeletionGuardService
 {
     @Autowired
     private BizStudentAnswerMapper studentAnswerMapper;
+
+    @Autowired
+    private StudentBusinessRecordMapper studentBusinessRecordMapper;
 
     public void assertLessonsDeletable(Long[] lessonIds)
     {
@@ -32,6 +36,9 @@ public class AnswerDeletionGuardService
         List<Long> ids = normalizedIds(studentIds);
         if (!ids.isEmpty() && studentAnswerMapper.countByStudentIds(ids) > 0) {
             throw new ServiceException("学生已有答题记录，为保留成绩历史不可删除");
+        }
+        if (!ids.isEmpty() && studentBusinessRecordMapper.countOtherBusinessRecords(ids) > 0) {
+            throw new ServiceException("学生已有签到、课堂表现、导学单、抽测或作品等业务记录，不能彻底删除，请改为停用账号");
         }
     }
 

@@ -16,8 +16,12 @@ public class BizResearchTopic extends BaseEntity
     private String noticeLevel;
     private String noticeScope;
     private String noticeStages;
+    private String publicShareEnabled;
+    private String publicShareTokenHash;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date activityTime;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date publicShareExpireTime;
     private String isPinned;
     private Long viewCount;
     private Long replyCount;
@@ -43,8 +47,14 @@ public class BizResearchTopic extends BaseEntity
     public void setNoticeScope(String noticeScope) { this.noticeScope = noticeScope; }
     public String getNoticeStages() { return noticeStages; }
     public void setNoticeStages(String noticeStages) { this.noticeStages = noticeStages; }
+    public String getPublicShareEnabled() { return publicShareEnabled; }
+    public void setPublicShareEnabled(String publicShareEnabled) { this.publicShareEnabled = publicShareEnabled; }
+    public String getPublicShareTokenHash() { return publicShareTokenHash; }
+    public void setPublicShareTokenHash(String publicShareTokenHash) { this.publicShareTokenHash = publicShareTokenHash; }
     public Date getActivityTime() { return activityTime; }
     public void setActivityTime(Date activityTime) { this.activityTime = activityTime; }
+    public Date getPublicShareExpireTime() { return publicShareExpireTime; }
+    public void setPublicShareExpireTime(Date publicShareExpireTime) { this.publicShareExpireTime = publicShareExpireTime; }
     public String getIsPinned() { return isPinned; }
     public void setIsPinned(String isPinned) { this.isPinned = isPinned; }
     public Long getViewCount() { return viewCount; }

@@ -806,6 +806,7 @@ public class ScoreQueryController extends BaseController {
         if (result.isEmpty()) {
             Collections.addAll(result,
                     "userName", "className", "studentNo", "studentName",
+                    "lessonDetails",
                     "remark", "avgTyping", "overallTypingSpeed", "overallAccuracy", "overallCompletion",
                     "avgTheory", "avgPractical", "filteredTotal", "totalPerformance", "finalTotal",
                     "filteredAverage", "gradeLevel", "scaledScore");
@@ -981,6 +982,7 @@ public class ScoreQueryController extends BaseController {
             return numA - numB;
         });
         boolean singleLessonMode = selectedLessonIds.size() == 1;
+        boolean includeLessonDetails = selectedColumnSet.contains("lessonDetails");
         Set<Long> targetLessonIdSet = targetLessons.stream()
                 .map(LessonInfoVo::getLessonId)
                 .collect(java.util.stream.Collectors.toSet());
@@ -1010,14 +1012,16 @@ public class ScoreQueryController extends BaseController {
         colIdx = appendExportHeader(headerRow, colIdx, selectedColumnSet, "studentNo", "学号", headerStyle);
         colIdx = appendExportHeader(headerRow, colIdx, selectedColumnSet, "studentName", "姓名", headerStyle);
         
-        // 动态课程表头
-        for (LessonInfoVo lesson : targetLessons) {
-            String title = lesson.getLessonTitle();
-            String[] lessonHeaders = {title + "-作业分", title + "-课堂表现分", title + "-课程总分"};
-            for (String h : lessonHeaders) {
-                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(colIdx++);
-                cell.setCellValue(h);
-                cell.setCellStyle(headerStyle);
+        // 各课程三项明细由教师显式选择，避免“仅课堂表现”仍混入全部成绩。
+        if (includeLessonDetails) {
+            for (LessonInfoVo lesson : targetLessons) {
+                String title = lesson.getLessonTitle();
+                String[] lessonHeaders = {title + "-作业分", title + "-课堂表现分", title + "-课程总分"};
+                for (String h : lessonHeaders) {
+                    org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(colIdx++);
+                    cell.setCellValue(h);
+                    cell.setCellStyle(headerStyle);
+                }
             }
         }
         
@@ -1093,13 +1097,17 @@ public class ScoreQueryController extends BaseController {
                 }
                 
                 if (targetScore == null) {
-                    row.createCell(colIdx++).setCellValue("");
-                    row.createCell(colIdx++).setCellValue("");
-                    row.createCell(colIdx++).setCellValue("");
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue("");
+                        row.createCell(colIdx++).setCellValue("");
+                        row.createCell(colIdx++).setCellValue("");
+                    }
                 } else if (Boolean.TRUE.equals(targetScore.get("isAbsent"))) {
-                    row.createCell(colIdx++).setCellValue("请假");
-                    row.createCell(colIdx++).setCellValue("请假");
-                    row.createCell(colIdx++).setCellValue("请假");
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue("请假");
+                        row.createCell(colIdx++).setCellValue("请假");
+                        row.createCell(colIdx++).setCellValue("请假");
+                    }
                 } else {
                     int scoreVal = numberToInt(targetScore.get("totalScore"));
                     int performanceScore = numberToInt(targetScore.get("performanceScore"));
@@ -1121,9 +1129,11 @@ public class ScoreQueryController extends BaseController {
                         typingCount++;
                     }
 
-                    row.createCell(colIdx++).setCellValue(scoreVal);
-                    row.createCell(colIdx++).setCellValue(performanceScore);
-                    row.createCell(colIdx++).setCellValue(finalScore);
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue(scoreVal);
+                        row.createCell(colIdx++).setCellValue(performanceScore);
+                        row.createCell(colIdx++).setCellValue(finalScore);
+                    }
                 }
             }
             

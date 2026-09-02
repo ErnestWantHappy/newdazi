@@ -277,6 +277,7 @@
                 <!-- 操作题显示评分标准 -->
                 <div v-else-if="scope.row.questionType === 'practical'" class="scoring-info">
                   <div v-if="scope.row.practicalMode === 'PYTHON'" class="no-scoring">操作题 · Python 在线编程（自动判题）</div>
+                  <div v-else-if="scope.row.practicalMode === 'FLOWCHART'" class="no-scoring">操作题 · 画程流程图（结构检查＋教师确认）</div>
                   <div v-else-if="scope.row.scoringItems && scope.row.scoringItems.length > 0">
                     <span class="scoring-label">评分标准：</span>
                     <span v-for="(item, idx) in scope.row.scoringItems" :key="item?.itemId || idx" class="scoring-item">
@@ -297,7 +298,7 @@
             <el-table-column label="题型 / 方式" align="center" width="150">
                <template #default="scope">
                   <dict-tag :options="biz_question_type" :value="scope.row.questionType"/>
-                  <div v-if="scope.row.questionType === 'practical'" class="answer-mode-text">{{ scope.row.practicalMode === 'PYTHON' ? 'Python 编程' : '文件作品' }}</div>
+                  <div v-if="scope.row.questionType === 'practical'" class="answer-mode-text">{{ practicalModeLabel(scope.row.practicalMode) }}</div>
               </template>
             </el-table-column>
             <el-table-column label="分值" align="center" width="105">
@@ -362,8 +363,9 @@
              </el-form-item>
             <el-form-item label="操作方式" prop="practicalMode">
               <el-select v-model="queryParams.practicalMode" placeholder="操作方式" clearable style="width: 140px">
-                <el-option label="Python 在线编程" value="PYTHON" />
-                <el-option label="文件作品" value="FILE" />
+                 <el-option label="Python 在线编程" value="PYTHON" />
+                 <el-option label="画程流程图" value="FLOWCHART" />
+                 <el-option label="文件作品" value="FILE" />
               </el-select>
             </el-form-item>
             <el-form-item>
@@ -409,9 +411,12 @@
              </el-table-column>
              <el-table-column label="作答方式" align="center" width="145">
                <template #default="scope">
-                 <span v-if="scope.row.questionType === 'practical'">{{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}</span>
+                 <span v-if="scope.row.questionType === 'practical'">{{ practicalModeLabel(scope.row.practicalMode) }}</span>
                  <span v-else>-</span>
                </template>
+             </el-table-column>
+             <el-table-column label="出题人" align="center" width="120" show-overflow-tooltip>
+               <template #default="scope">{{ scope.row.nickName || scope.row.createBy || '-' }}</template>
              </el-table-column>
              <el-table-column label="操作" align="center" width="100">
                <template #default="scope">
@@ -985,6 +990,12 @@ function handleRemoveQuestion(row) {
 
 function isFilePractical(row) {
   return row.questionType === 'practical' && (row.practicalMode || 'FILE') === 'FILE';
+}
+
+function practicalModeLabel(mode) {
+  if (mode === 'PYTHON') return 'Python 在线编程';
+  if (mode === 'FLOWCHART') return '画程流程图';
+  return '文件作品';
 }
 
 function isCollaborationQuestion(row) {

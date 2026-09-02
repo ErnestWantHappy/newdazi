@@ -29,6 +29,7 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.service.IBizLessonService;
 import com.ruoyi.business.service.LessonAutoAdvanceService;
+import com.ruoyi.business.service.TeacherDashboardCacheService;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.page.TableDataInfo;
 
@@ -58,6 +59,9 @@ public class BizLessonController extends BaseController
 
     @Autowired
     private BizTeacherClassMapper teacherClassMapper;
+
+    @Autowired
+    private TeacherDashboardCacheService dashboardCacheService;
 
     /**
      * 教师查看某考勤课的各班签到汇总。
@@ -187,8 +191,9 @@ public class BizLessonController extends BaseController
     @PostMapping("/save-all")
     public AjaxResult saveAll(@RequestBody LessonDetailVo lessonDetailVo)
     {
-        // 核心修复：使用 success() 方法替代 toAjax()
-        return success(bizLessonService.saveLessonDetails(lessonDetailVo));
+        LessonDetailVo savedLesson = bizLessonService.saveLessonDetails(lessonDetailVo);
+        dashboardCacheService.evictDepartment(SecurityUtils.getDeptId());
+        return success(savedLesson);
     }
 
     /**
@@ -316,6 +321,26 @@ public class BizLessonController extends BaseController
     @DeleteMapping("/{lessonIds}")
     public AjaxResult remove(@PathVariable Long[] lessonIds)
     {
-        return toAjax(bizLessonService.deleteBizLessonByLessonIds(lessonIds));
+        int rows = bizLessonService.deleteBizLessonByLessonIds(lessonIds);
+        if (rows > 0)
+        {
+            dashboardCacheService.evictDepartment(SecurityUtils.getDeptId());
+        }
+        return rows > 0 ? toAjax(rows) : success("课程已删除或不存在");
+    }
+
+    /** 课程不用了先归档；答题、成绩、题目和历史指派全部保留。 */
+    @PreAuthorize("@ss.hasPermi('business:lesson:edit')")
+    @Log(title = "课程归档状态", businessType = BusinessType.UPDATE)
+    @PutMapping("/status/{lessonId}/{status}")
+    public AjaxResult changeStatus(@PathVariable Long lessonId, @PathVariable String status)
+    {
+        int rows = bizLessonService.updateLessonStatus(lessonId, status);
+        dashboardCacheService.evictDepartment(SecurityUtils.getDeptId());
+        if (rows == 0)
+        {
+            return success("课程状态未变化");
+        }
+        return success("1".equals(status) ? "课程已归档，历史数据仍保留" : "课程已恢复");
     }
 }

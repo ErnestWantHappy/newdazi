@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.FlowchartMapper">
+
+    <select id="selectQuestionConfig" resultType="com.ruoyi.business.domain.FlowchartQuestionConfig">
+        SELECT question_id AS questionId, schema_version AS schemaVersion,
+               starter_json AS starterJson, answer_json AS answerJson,
+               permissions_json AS permissionsJson, rules_json AS rulesJson,
+               config_revision AS configRevision, create_by AS createBy,
+               create_time AS createTime, update_by AS updateBy, update_time AS updateTime
+        FROM biz_flowchart_question
+        WHERE question_id = #{questionId}
+    </select>
+
+    <insert id="insertQuestionConfig" parameterType="com.ruoyi.business.domain.FlowchartQuestionConfig">
+        INSERT INTO biz_flowchart_question
+            (question_id, schema_version, starter_json, answer_json, permissions_json,
+             rules_json, config_revision, create_by, create_time, update_by, update_time)
+        VALUES
+            (#{questionId}, #{schemaVersion}, #{starterJson}, #{answerJson}, #{permissionsJson},
+             #{rulesJson}, 1, #{createBy}, NOW(), #{updateBy}, NOW())
+    </insert>
+
+    <update id="updateQuestionConfig">
+        UPDATE biz_flowchart_question
+        SET schema_version = #{config.schemaVersion},
+            starter_json = #{config.starterJson},
+            answer_json = #{config.answerJson},
+            permissions_json = #{config.permissionsJson},
+            rules_json = #{config.rulesJson},
+            config_revision = config_revision + 1,
+            update_by = #{config.updateBy},
+            update_time = NOW()
+        WHERE question_id = #{config.questionId}
+          AND config_revision = #{expectedRevision}
+    </update>
+
+    <delete id="deleteQuestionConfig">
+        DELETE FROM biz_flowchart_question WHERE question_id = #{questionId}
+    </delete>
+
+    <select id="selectLessonSnapshot" resultType="com.ruoyi.business.domain.FlowchartLessonSnapshot">
+        SELECT snapshot_id AS snapshotId, lesson_id AS lessonId, question_id AS questionId,
+               source_revision AS sourceRevision, schema_version AS schemaVersion,
+               starter_json AS starterJson, answer_json AS answerJson,
+               permissions_json AS permissionsJson, rules_json AS rulesJson,
+               create_time AS createTime
+        FROM biz_flowchart_lesson_snapshot
+        WHERE lesson_id = #{lessonId} AND question_id = #{questionId}
+    </select>
+
+    <insert id="insertLessonSnapshot" parameterType="com.ruoyi.business.domain.FlowchartLessonSnapshot"
+            useGeneratedKeys="true" keyProperty="snapshotId">
+        INSERT IGNORE INTO biz_flowchart_lesson_snapshot
+            (lesson_id, question_id, source_revision, schema_version, starter_json,
+             answer_json, permissions_json, rules_json, create_time)
+        VALUES
+            (#{lessonId}, #{questionId}, #{sourceRevision}, #{schemaVersion}, #{starterJson},
+             #{answerJson}, #{permissionsJson}, #{rulesJson}, NOW())
+    </insert>
+
+    <select id="selectDraft" resultType="com.ruoyi.business.domain.FlowchartDraft">
+        SELECT draft_id AS draftId, student_id AS studentId, lesson_id AS lessonId,
+               question_id AS questionId, schema_version AS schemaVersion,
+               document_json AS documentJson, revision,
+               base_submission_version AS baseSubmissionVersion,
+               create_time AS createTime, update_time AS updateTime
+        FROM biz_flowchart_draft
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
+    </select>
+
+    <select id="selectDraftForUpdate" resultType="com.ruoyi.business.domain.FlowchartDraft">
+        SELECT draft_id AS draftId, student_id AS studentId, lesson_id AS lessonId,
+               question_id AS questionId, schema_version AS schemaVersion,
+               document_json AS documentJson, revision,
+               base_submission_version AS baseSubmissionVersion,
+               create_time AS createTime, update_time AS updateTime
+        FROM biz_flowchart_draft
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
+        FOR UPDATE
+    </select>
+
+    <insert id="insertDraft" parameterType="com.ruoyi.business.domain.FlowchartDraft"
+            useGeneratedKeys="true" keyProperty="draftId">
+        INSERT INTO biz_flowchart_draft
+            (student_id, lesson_id, question_id, schema_version, document_json,
+             revision, base_submission_version, create_time, update_time)
+        VALUES
+            (#{studentId}, #{lessonId}, #{questionId}, #{schemaVersion}, #{documentJson},
+             1, #{baseSubmissionVersion}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE draft_id = LAST_INSERT_ID(draft_id)
+    </insert>
+
+    <update id="updateDraft">
+        UPDATE biz_flowchart_draft
+        SET schema_version = #{draft.schemaVersion},
+            document_json = #{draft.documentJson},
+            revision = revision + 1,
+            update_time = NOW()
+        WHERE student_id = #{draft.studentId}
+          AND lesson_id = #{draft.lessonId}
+          AND question_id = #{draft.questionId}
+          AND revision = #{expectedRevision}
+    </update>
+
+    <insert id="replaceDraftFromSubmission">
+        INSERT INTO biz_flowchart_draft
+            (student_id, lesson_id, question_id, schema_version, document_json,
+             revision, base_submission_version, create_time, update_time)
+        VALUES
+            (#{studentId}, #{lessonId}, #{questionId}, #{schemaVersion}, #{documentJson},
+             1, #{baseSubmissionVersion}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            schema_version = VALUES(schema_version),
+            document_json = VALUES(document_json),
+            revision = revision + 1,
+            base_submission_version = VALUES(base_submission_version),
+            update_time = NOW()
+    </insert>
+
+    <select id="selectNextSubmissionVersion" resultType="int">
+        SELECT COALESCE(MAX(version_no), 0) + 1
+        FROM biz_flowchart_submission
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
+    </select>
+
+    <select id="selectSubmissionByDraftRevision" resultType="com.ruoyi.business.domain.FlowchartSubmission">
+        SELECT submission_id AS submissionId, student_id AS studentId, lesson_id AS lessonId,
+               question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
+               schema_version AS schemaVersion, document_json AS documentJson,
+               rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+        FROM biz_flowchart_submission
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+          AND question_id = #{questionId} AND draft_revision = #{draftRevision}
+    </select>
+
+    <insert id="insertSubmission" parameterType="com.ruoyi.business.domain.FlowchartSubmission"
+            useGeneratedKeys="true" keyProperty="submissionId">
+        INSERT INTO biz_flowchart_submission
+            (student_id, lesson_id, question_id, version_no, draft_revision, schema_version,
+             document_json, rules_snapshot_json, check_result_json, suggested_score, submit_time)
+        VALUES
+            (#{studentId}, #{lessonId}, #{questionId}, #{versionNo}, #{draftRevision}, #{schemaVersion},
+             #{documentJson}, #{rulesSnapshotJson}, #{checkResultJson}, #{suggestedScore}, NOW())
+    </insert>
+
+    <update id="updateSubmissionAnswerId">
+        UPDATE biz_flowchart_submission SET answer_id = #{answerId} WHERE submission_id = #{submissionId}
+    </update>
+
+    <select id="selectLatestSubmission" resultType="com.ruoyi.business.domain.FlowchartSubmission">
+        SELECT submission_id AS submissionId, student_id AS studentId, lesson_id AS lessonId,
+               question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
+               schema_version AS schemaVersion, document_json AS documentJson,
+               rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+        FROM biz_flowchart_submission
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
+        ORDER BY version_no DESC LIMIT 1
+    </select>
+
+    <select id="selectSubmission" resultType="com.ruoyi.business.domain.FlowchartSubmission">
+        SELECT submission_id AS submissionId, student_id AS studentId, lesson_id AS lessonId,
+               question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
+               schema_version AS schemaVersion, document_json AS documentJson,
+               rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+        FROM biz_flowchart_submission
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
+          <if test="versionNo != null">AND version_no = #{versionNo}</if>
+        ORDER BY version_no DESC LIMIT 1
+    </select>
+
+</mapper>

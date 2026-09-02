@@ -28,6 +28,10 @@ export function getIotClassCard(experimentId, entryYear, classCode) {
   return request({ url: '/business/iot/class-card', method: 'get', params: { experimentId, entryYear, classCode } })
 }
 
+export function syncIotClassBroker(configId) {
+  return request({ url: `/business/iot/class-config/${configId}/sync-broker`, method: 'post' })
+}
+
 export function listIotGroups(experimentId, entryYear, classCode) {
   return request({ url: `/business/iot/experiments/${experimentId}/groups`, method: 'get', params: { entryYear, classCode } })
 }

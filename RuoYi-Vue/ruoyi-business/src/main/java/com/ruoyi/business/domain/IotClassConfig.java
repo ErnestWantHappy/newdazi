@@ -29,6 +29,15 @@ public class IotClassConfig extends BaseEntity
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date groupedAt;
 
+    /** Broker 同步状态：PENDING / SYNCED / FAILED。 */
+    private String brokerSyncStatus;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date brokerSyncedAt;
+
+    /** 仅保存脱敏后的故障提示，不保存管理凭据或原始响应。 */
+    private String brokerSyncError;
+
     private String status;
 
     // 非数据库持久化字段（用于向已授权教师/学生返回当前有效解密口令与统计数据）
@@ -74,6 +83,15 @@ public class IotClassConfig extends BaseEntity
 
     public Date getGroupedAt() { return groupedAt; }
     public void setGroupedAt(Date groupedAt) { this.groupedAt = groupedAt; }
+
+    public String getBrokerSyncStatus() { return brokerSyncStatus; }
+    public void setBrokerSyncStatus(String brokerSyncStatus) { this.brokerSyncStatus = brokerSyncStatus; }
+
+    public Date getBrokerSyncedAt() { return brokerSyncedAt; }
+    public void setBrokerSyncedAt(Date brokerSyncedAt) { this.brokerSyncedAt = brokerSyncedAt; }
+
+    public String getBrokerSyncError() { return brokerSyncError; }
+    public void setBrokerSyncError(String brokerSyncError) { this.brokerSyncError = brokerSyncError; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

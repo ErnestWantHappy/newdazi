@@ -14,3 +14,18 @@
 contexts/secrets.local.md
 deploy/judge0/config/judge0.conf
 backups/
+
+# 2026-09-03 增补：本地临时产物与运行残留，禁止入库
+/tmp/
+/logs/
+/BOOT-INF/
+/NUL
+# 误粘贴产生的乱码文件名（根目录，按字节 1~3 长度覆盖）
+/?
+/???
+# 前端构建/发布压缩包与本地构建产物
+/RuoYi-Vue3/dist-host-hw-v1.tar.gz
+/RuoYi-Vue3/dist*.tar.gz
+*.log
+tools/__pycache__/
+tools/tests/__pycache__/

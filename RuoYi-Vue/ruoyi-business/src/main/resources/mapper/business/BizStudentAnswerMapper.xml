@@ -270,7 +270,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                    SUM(CASE WHEN question.question_type = 'practical' AND IFNULL(question.practical_mode, 'FILE') = 'FILE'
                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS file_practical_score,
                    SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'PYTHON'
-                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS python_practical_score,
+                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS python_practical_score,
+                   SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'FLOWCHART'
+                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS flowchart_practical_score,
                    SUM(CASE WHEN question.question_type = 'typing'
                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS typing_total,
                    SUM(CASE WHEN question.question_type IN ('choice', 'judgment')
@@ -280,7 +282,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                    ,SUM(CASE WHEN question.question_type = 'practical' AND IFNULL(question.practical_mode, 'FILE') = 'FILE'
                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS file_practical_total
                    ,SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'PYTHON'
-                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS python_practical_total
+                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS python_practical_total
+                   ,SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'FLOWCHART'
+                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS flowchart_practical_total
             FROM biz_student_answer answer
             INNER JOIN selected_lesson selected ON selected.lesson_id = answer.lesson_id
             INNER JOIN biz_lesson_question lesson_question
@@ -307,6 +311,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                CONCAT(IFNULL(answer_metric.practical_score, 0), '/', IFNULL(answer_metric.practical_total, 0)) AS practicalScore
                ,CONCAT(IFNULL(answer_metric.file_practical_score, 0), '/', IFNULL(answer_metric.file_practical_total, 0)) AS filePracticalScore
                ,CONCAT(IFNULL(answer_metric.python_practical_score, 0), '/', IFNULL(answer_metric.python_practical_total, 0)) AS pythonPracticalScore
+               ,CONCAT(IFNULL(answer_metric.flowchart_practical_score, 0), '/', IFNULL(answer_metric.flowchart_practical_total, 0)) AS flowchartPracticalScore
         FROM answer_metric
         INNER JOIN biz_lesson lesson ON lesson.lesson_id = answer_metric.lesson_id
         LEFT JOIN lesson_total ON lesson_total.lesson_id = answer_metric.lesson_id
@@ -355,6 +360,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             s.remark AS remark,
             #{questionId} AS questionId,
             q.question_content AS questionContent,
+            q.practical_mode AS practicalMode,
             a.student_answer AS studentAnswer,
             a.preview_status AS previewStatus,
             a.preview_path AS previewPath,

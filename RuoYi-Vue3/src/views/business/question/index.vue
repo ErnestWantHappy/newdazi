@@ -76,6 +76,7 @@
       <el-form-item v-if="bankView !== 'PYTHON'" label="操作方式" prop="practicalMode">
         <el-select v-model="queryParams.practicalMode" placeholder="请选择操作方式" clearable style="width: 200px">
           <el-option label="Python 在线编程" value="PYTHON" />
+          <el-option label="画程流程图" value="FLOWCHART" />
           <el-option label="文件作品" value="FILE" />
         </el-select>
       </el-form-item>
@@ -220,7 +221,7 @@
       <el-table-column v-if="bankView !== 'PYTHON'" label="操作方式" align="center" prop="practicalMode" width="140">
         <template #default="scope">
           <span v-if="scope.row.questionType === 'practical'">
-            {{ scope.row.practicalMode === 'PYTHON' ? 'Python 在线编程' : '文件作品' }}
+            {{ practicalModeLabel(scope.row.practicalMode) }}
           </span>
           <span v-else>-</span>
         </template>
@@ -296,6 +297,7 @@
         align="center"
         class-name="small-padding fixed-width"
         width="200"
+        fixed="right"
       >
         <template #default="scope">
           <el-button
@@ -335,7 +337,7 @@
     />
 
     <!-- 添加或修改对话框 -->
-    <el-dialog :title="title" v-model="open" width="980px" append-to-body>
+    <el-dialog :title="title" v-model="open" :width="isFlowchartPracticalQuestion(form) ? '96%' : '980px'" append-to-body>
       <el-form
         ref="questionRef"
         :model="form"
@@ -584,9 +586,10 @@
             <el-radio-group v-model="form.practicalMode">
               <el-radio value="FILE">文件作品</el-radio>
               <el-radio value="PYTHON">Python 在线编程</el-radio>
+              <el-radio value="FLOWCHART">画程流程图</el-radio>
             </el-radio-group>
           </el-form-item>
-          <template v-if="form.practicalMode !== 'PYTHON'">
+          <template v-if="form.practicalMode === 'FILE'">
           <el-form-item label="学生起始文件">
             <file-upload
               v-model="form.filePath"
@@ -702,6 +705,9 @@
             </div>
           </el-form-item>
           </template>
+          <el-form-item v-else-if="form.practicalMode === 'FLOWCHART'" label-width="0">
+            <flowchart-question-designer v-model="form.flowchartConfig" />
+          </el-form-item>
         </div>
       </el-form>
       <template #footer>
@@ -787,6 +793,9 @@ import {
   updateQuestion,
 } from "@/api/business/question";
 import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQuestion, previewProgrammingImport, confirmProgrammingImport } from "@/api/business/programming";
+import { getFlowchartQuestion, saveFlowchartQuestion } from "@/api/business/flowchart";
+import FlowchartQuestionDesigner from "@/components/FlowchartEditor/FlowchartQuestionDesigner.vue";
+import { EMPTY_FLOWCHART, DEFAULT_FLOWCHART_PERMISSIONS, parseFlowchartDocument } from "@/components/FlowchartEditor/schema";
 import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
 import * as XLSX from "xlsx";
@@ -1053,6 +1062,7 @@ function reset() {
     practicalMaterials: [],
     practicalResourceFiles: "",
     practicalReferenceFiles: "",
+    flowchartConfig: defaultFlowchartConfig(),
     programming: defaultProgrammingConfig(),
   };
   proxy.resetForm("questionRef");
@@ -1142,6 +1152,37 @@ function defaultProgrammingConfig() {
 
 function isPythonPracticalQuestion(question) {
   return question?.questionType === "practical" && question?.practicalMode === "PYTHON";
+}
+
+function isFlowchartPracticalQuestion(question) {
+  return question?.questionType === "practical" && question?.practicalMode === "FLOWCHART";
+}
+
+function practicalModeLabel(mode) {
+  if (mode === "PYTHON") return "Python 在线编程";
+  if (mode === "FLOWCHART") return "画程流程图";
+  return "文件作品";
+}
+
+function defaultFlowchartConfig() {
+  return {
+    questionId: null,
+    configRevision: 0,
+    schemaVersion: "1.0",
+    starterJson: JSON.stringify(EMPTY_FLOWCHART),
+    answerJson: JSON.stringify(EMPTY_FLOWCHART),
+    permissionsJson: JSON.stringify(DEFAULT_FLOWCHART_PERMISSIONS),
+    rulesJson: "[]",
+  };
+}
+
+function hasFlowchartRules(rulesJson) {
+  try {
+    const rules = JSON.parse(rulesJson || "[]");
+    return Array.isArray(rules) && rules.length > 0;
+  } catch (_) {
+    return false;
+  }
 }
 
 function addProgrammingCase() {
@@ -1321,6 +1362,14 @@ function handleUpdate(row) {
       }).catch(() => {
         showEditor();
       });
+    } else if (isFlowchartPracticalQuestion(form.value)) {
+      getFlowchartQuestion(_questionId).then((flowchartResponse) => {
+        form.value.flowchartConfig = { ...defaultFlowchartConfig(), ...(flowchartResponse.data || {}) };
+        showEditor();
+      }).catch(() => {
+        form.value.flowchartConfig = defaultFlowchartConfig();
+        showEditor();
+      });
     } else {
       showEditor();
     }
@@ -1332,7 +1381,7 @@ function submitForm(validateAfterSave = false) {
   proxy.$refs["questionRef"].validate(async (valid) => {
     if (valid) {
       // P6.1: 操作题必须配置评分项，且比例值合计必须为100
-      if (form.value.questionType === "practical" && !isPythonPracticalQuestion(form.value)) {
+      if (form.value.questionType === "practical" && form.value.practicalMode === "FILE") {
         if (!form.value.practicalAllowedExtensionList?.length) {
           ElMessage.warning("请至少选择一种学生提交格式");
           return;
@@ -1352,6 +1401,25 @@ function submitForm(validateAfterSave = false) {
           ...splitMaterialPaths(form.value.practicalResourceFiles, "RESOURCE"),
           ...splitMaterialPaths(form.value.practicalReferenceFiles, "REFERENCE"),
         ];
+      }
+
+      if (isFlowchartPracticalQuestion(form.value)) {
+        const config = form.value.flowchartConfig || defaultFlowchartConfig();
+        if (parseFlowchartDocument(config.answerJson).nodes.length === 0) {
+          ElMessage.warning("请先制作画程标准答案");
+          return;
+        }
+        if (parseFlowchartDocument(config.starterJson).nodes.length === 0) {
+          ElMessage.warning("请先制作发给学生的基础流程图");
+          return;
+        }
+        if (!hasFlowchartRules(config.rulesJson)) {
+          ElMessage.warning("请在画程的“检查规则”中从标准答案生成规则");
+          return;
+        }
+        form.value.filePath = null;
+        form.value.practicalMaterials = [];
+        form.value.scoringItems = [];
       }
 
       if (isPythonPracticalQuestion(form.value)) {
@@ -1400,6 +1468,14 @@ function submitForm(validateAfterSave = false) {
           } else {
             proxy.$modal.msgSuccess("Python 题已保存，验证状态已重置为待验证");
           }
+        } else if (isFlowchartPracticalQuestion(form.value)) {
+          if (!questionId) throw new Error("保存题目后未返回题目 ID");
+          const saved = await saveFlowchartQuestion(questionId, {
+            ...form.value.flowchartConfig,
+            questionId,
+          });
+          form.value.flowchartConfig = saved.data || form.value.flowchartConfig;
+          proxy.$modal.msgSuccess("画程流程图题已保存");
         } else {
           proxy.$modal.msgSuccess(questionId === form.value.questionId ? "保存成功" : "新增成功");
         }

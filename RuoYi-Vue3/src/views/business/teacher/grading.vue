@@ -41,6 +41,7 @@
        </div>
       
        <div class="right-actions">
+        <template v-if="!isCurrentFlowchart">
         <el-button plain @click="openAiConfig">AI 设置</el-button>
         <el-button
           type="success"
@@ -71,6 +72,8 @@
         >
           重新转换本班异常文件
         </el-button>
+        </template>
+        <el-tag v-else type="success">结构规则建议＋教师确认</el-tag>
         <el-button type="primary" plain @click="toggleFullscreen">
            <el-icon><FullScreen /></el-icon> {{ isFullscreen ? '退出全屏' : '全屏批改' }}
         </el-button>
@@ -137,7 +140,7 @@
                   'graded': s.submitted && s.score != null,
                   'not-submitted': !s.submitted
                }"
-               @click="s.submitted ? selectStudent(s, index) : null"
+               @click="handleStudentClick(s, index)"
             >
                <div class="s-info">
                    <div class="s-name" :style="s.remark ? { color: '#E6A23C' } : {}">{{ s.studentName }}</div>
@@ -162,7 +165,15 @@
 
       <!-- 中间：预览区 -->
       <div class="preview-panel">
-         <div v-if="currentStudent" class="preview-content">
+         <el-empty
+           v-if="selectedClassCode && !loading && submittedCount === 0"
+           description="当前操作题暂无学生提交；左侧未交学生不能进入批改"
+         />
+         <div v-else-if="currentStudent" class="preview-content">
+             <flowchart-grading-panel v-if="isCurrentFlowchart" :lesson-id="selectedLessonId"
+               :question-id="selectedQuestionId" :student-id="currentStudent.studentId"
+               @apply-suggestion="applyFlowchartSuggestion" />
+             <template v-else>
              <div class="preview-header">
                  <div class="header-info">
                     <span class="student-label">{{ currentStudent.studentName }} 的提交作品</span>
@@ -227,6 +238,7 @@
                 show-icon
              />
              <el-empty v-else description="该生未提交文件或文件不可预览" />
+             </template>
          </div>
          <el-empty v-else description="请从左侧选择一名学生开始批改" />
       </div>
@@ -530,10 +542,12 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { FullScreen } from '@element-plus/icons-vue';
 import { deadlineStatusMeta, formatDeadlineRemaining, formatDeadlineTime } from '@/utils/practicalDeadline';
 import useUserStore from '@/store/modules/user';
+import FlowchartGradingPanel from '@/components/FlowchartEditor/FlowchartGradingPanel.vue';
 
 const route = useRoute();
 const userStore = useUserStore();
 const loading = ref(false);
+let submissionsRequestSeq = 0;
 const STUCK_PREVIEW_TIMEOUT_MS = 10 * 60 * 1000;
 const gradeGroups = ref([]);
 const lessons = ref([]);
@@ -544,6 +558,9 @@ const submissions = ref([]);
 const selectedLessonId = ref(null);
 const selectedClassCode = ref(null);  // P3.5: 选中的班级
 const selectedQuestionId = ref(null);
+const selectedQuestion = computed(() => questions.value.find(item =>
+    String(item.questionId) === String(selectedQuestionId.value)) || null);
+const isCurrentFlowchart = computed(() => String(selectedQuestion.value?.practicalMode || '').toUpperCase() === 'FLOWCHART');
 const deadlineStatus = ref(null);
 
 const selectedLessonTitle = computed(() => {
@@ -656,7 +673,7 @@ const canBatchApplyAiSuggestions = computed(() => Boolean(aiJobBatchAdoptAllowed
     && ['COMPLETED', 'PARTIAL_FAILED'].includes(aiJob.value?.jobStatus)
     && batchAdoptableCount.value > 0 && deadlineStatus.value?.canGrade));
 const canStartAiJob = computed(() => Boolean(
-    aiConfig.value?.configured && aiConfig.value?.masterKeyConfigured
+    !isCurrentFlowchart.value && aiConfig.value?.configured && aiConfig.value?.masterKeyConfigured
     && selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value
     && submittedCount.value > 0 && deadlineStatus.value?.canGrade
     && !['PENDING', 'RUNNING', 'PAUSED', 'CANCEL_REQUESTED'].includes(aiJob.value?.jobStatus)
@@ -768,6 +785,8 @@ function getClassOptionClass(classItem) {
 
 // P3.5: 选择课程后加载班级列表
 async function onLessonChange(val) {
+  submissionsRequestSeq++;
+  loading.value = false;
   resetAiJobView();
   selectedClassCode.value = null;
   selectedQuestionId.value = null;
@@ -828,6 +847,12 @@ function onQuestionChange(val) {
 // P6: 加载评分项
 function loadScoringItems(practicalVersionId = currentStudent.value?.practicalVersionId) {
     if (!selectedLessonId.value || !selectedQuestionId.value) return Promise.resolve();
+    if (isCurrentFlowchart.value) {
+        scoringItems.value = [];
+        itemScores.value = {};
+        useItemScoring.value = false;
+        return Promise.resolve();
+    }
     const lessonId = selectedLessonId.value;
     const questionId = selectedQuestionId.value;
     const requestId = ++scoringItemsRequestId;
@@ -931,12 +956,21 @@ function loadSubmissions() {
     const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
     const entryYear = classInfo?.entryYear || '';
     const previousStudentId = currentStudent.value?.studentId;
+    const requestId = ++submissionsRequestSeq;
     
     loading.value = true;
     return getPracticalSubmissions(selectedLessonId.value, selectedQuestionId.value, selectedClassCode.value, entryYear).then(res => {
-        submissions.value = res.data;
+        if (requestId !== submissionsRequestSeq) return;
+        submissions.value = [...(res.data || [])].sort((left, right) => {
+            const submittedDiff = Number(Boolean(right.submitted)) - Number(Boolean(left.submitted));
+            if (submittedDiff !== 0) return submittedDiff;
+            const leftNo = Number(left.studentNo);
+            const rightNo = Number(right.studentNo);
+            if (Number.isFinite(leftNo) && Number.isFinite(rightNo)) return leftNo - rightNo;
+            return String(left.studentNo || '').localeCompare(String(right.studentNo || ''), 'zh-CN');
+        });
         loading.value = false;
-        restoreLatestAiJob();
+        if (!isCurrentFlowchart.value) restoreLatestAiJob();
         const preservedStudent = previousStudentId != null
             ? submissions.value.find(s => s.studentId === previousStudentId && s.submitted)
             : null;
@@ -951,6 +985,7 @@ function loadSubmissions() {
         currentScore.value = undefined;
         previewUrl.value = '';
     }).catch(() => {
+        if (requestId !== submissionsRequestSeq) return;
         loading.value = false;
         submissions.value = [];
         currentStudent.value = null;
@@ -1475,6 +1510,20 @@ function loadScoringDetailsForStudent(answerId) {
     }).catch(() => {
         // 如果加载失败，保持0
     });
+}
+
+function handleStudentClick(student, index) {
+    if (!student?.submitted) {
+        ElMessage.info(`${student?.studentName || '该学生'}尚未提交当前操作题，暂时不能批改`);
+        return;
+    }
+    selectStudent(student, index);
+}
+
+function applyFlowchartSuggestion(score) {
+    const maxScore = Number(currentStudent.value?.maxScore || 0);
+    currentScore.value = Math.min(maxScore, Math.max(0, Number(score || 0)));
+    ElMessage.success('结构检查建议已填入评分框，请教师复核后提交');
 }
 
 function selectAttachment(index) {

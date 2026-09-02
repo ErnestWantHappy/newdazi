@@ -277,10 +277,10 @@
         </div>
       </template>
       <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }" max-height="600" style="width: 100%">
-        <el-table-column prop="userName" label="账号" width="120" align="center" sortable fixed="left" />
-        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" fixed="left" />
-        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable fixed="left" />
-        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => a.studentName.localeCompare(b.studentName, 'zh-CN')" fixed="left">
+        <el-table-column prop="userName" label="账号" width="120" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
+        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
+        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
+        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => String(a || '').localeCompare(String(b || ''), 'zh-CN')" fixed="left">
           <template #default="scope">
             <el-button link type="primary" @click="showStudentProfile(scope.row)">{{ scope.row.studentName }}</el-button>
           </template>
@@ -334,7 +334,7 @@
                 :label="getLessonName(lessonId)" 
                 align="center"
                 sortable
-                :sort-method="(a, b) => getLessonScore(a, lessonId) - getLessonScore(b, lessonId)"
+                :sort-by="(row) => getLessonScore(row, lessonId)"
                 width="120"
             >
                 <template #default="scope">
@@ -699,6 +699,7 @@ const exportColumnOptions = computed(() => [
   { key: 'className', label: '班级', required: true },
   { key: 'studentNo', label: '学号', required: true },
   { key: 'studentName', label: '姓名', required: true },
+  { key: 'lessonDetails', label: '各课程成绩明细', required: false },
   { key: 'remark', label: '备注', required: false },
   { key: 'avgTyping', label: '打字平均', required: false },
   { key: 'overallTypingSpeed', label: '打字速度', required: false },

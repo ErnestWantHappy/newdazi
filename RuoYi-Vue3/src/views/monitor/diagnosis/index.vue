@@ -213,7 +213,7 @@
             <el-table-column prop="occurTime" label="发生时间" width="170" />
             <el-table-column prop="eventType" label="类型" width="100">
               <template #default="{ row }">
-                <el-tag :type="eventTagType(row.eventType)" size="small">{{ formatEventType(row.eventType) }}</el-tag>
+                <el-tag :type="eventTagType(row)" size="small">{{ formatEventType(row) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="title" label="业务说明" min-width="180" show-overflow-tooltip />
@@ -224,8 +224,8 @@
             <el-table-column prop="sourceUrl" label="接口/SQL" min-width="180" show-overflow-tooltip />
             <el-table-column prop="severity" label="等级" width="88">
               <template #default="{ row }">
-                <el-tag :type="row.severity === 'critical' ? 'danger' : 'warning'" size="small">
-                  {{ row.severity === 'critical' ? '严重' : '关注' }}
+                <el-tag :type="severityTagType(row.severity)" size="small">
+                  {{ severityLabel(row.severity) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -235,6 +235,7 @@
                   <p v-if="row.description"><strong>说明：</strong>{{ row.description }}</p>
                   <p v-if="row.errorMsg"><strong>错误：</strong>{{ row.errorMsg }}</p>
                   <p v-if="row.sqlText"><strong>SQL：</strong>{{ row.sqlText }}</p>
+                  <p v-if="row.advice"><strong>建议：</strong>{{ row.advice }}</p>
                 </div>
               </template>
             </el-table-column>
@@ -247,12 +248,17 @@
       <el-col :xs="24" :lg="12">
         <section class="panel">
           <div class="panel-head">
-            <h2>最近错误</h2>
-            <span>{{ scopeLabel }}内的业务异常与系统错误</span>
+            <h2>最近异常与业务提示</h2>
+            <span>{{ scopeLabel }}内的业务拦截与系统错误，按等级区分</span>
           </div>
           <el-table :data="data.recentErrors || []" height="330" :empty-text="`${scopeLabel}内暂无错误`">
             <el-table-column prop="oper_time" label="时间" width="170" />
             <el-table-column prop="title" label="模块" width="100" show-overflow-tooltip />
+            <el-table-column prop="severity" label="等级" width="76">
+              <template #default="{ row }">
+                <el-tag :type="severityTagType(row.severity)" size="small">{{ severityLabel(row.severity) }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="error_msg" label="错误信息" min-width="160" show-overflow-tooltip />
             <el-table-column prop="advice" label="处置建议" min-width="180" show-overflow-tooltip />
             <el-table-column prop="oper_name" label="用户" width="100" />
@@ -423,12 +429,22 @@ function severityTagType(severity) {
   return 'info'
 }
 
-function formatEventType(type) {
+function severityLabel(severity) {
+  if (severity === 'critical') return '严重'
+  if (severity === 'warning') return '关注'
+  return '提示'
+}
+
+function formatEventType(row) {
+  if (row?.eventType === 'error_api' && row?.category === 'business') return '业务提示'
+  const type = row?.eventType
   const map = { slow_sql: '慢 SQL', slow_api: '慢接口', error_api: '异常' }
   return map[type] || type
 }
 
-function eventTagType(type) {
+function eventTagType(row) {
+  const type = row?.eventType
+  if (row?.severity === 'info') return 'info'
   if (type === 'error_api') return 'danger'
   if (type === 'slow_sql') return 'warning'
   return 'info'

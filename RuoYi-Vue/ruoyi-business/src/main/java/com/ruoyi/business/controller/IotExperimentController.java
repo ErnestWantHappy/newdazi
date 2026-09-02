@@ -51,7 +51,7 @@ public class IotExperimentController extends BaseController
     }
 
     @GetMapping("/class-config")
-    @PreAuthorize("@ss.hasAnyRoles('admin,teacher,researcher')")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
     public AjaxResult classConfig(@RequestParam Long experimentId, @RequestParam String entryYear, @RequestParam String classCode)
     {
         return success(service.getClassConfig(experimentId, entryYear, classCode));
@@ -74,10 +74,18 @@ public class IotExperimentController extends BaseController
     }
 
     @GetMapping("/class-card")
-    @PreAuthorize("@ss.hasAnyRoles('admin,teacher,researcher')")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
     public AjaxResult classCard(@RequestParam Long experimentId, @RequestParam String entryYear, @RequestParam String classCode)
     {
         return success(service.getClassCard(experimentId, entryYear, classCode));
+    }
+
+    @PostMapping("/class-config/{configId}/sync-broker")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
+    @Log(title = "物联网 Broker 权限同步", businessType = BusinessType.UPDATE, isSaveRequestData = false)
+    public AjaxResult syncClassBroker(@PathVariable Long configId)
+    {
+        return success(service.retryClassBrokerSync(configId));
     }
 
     @GetMapping("/experiments/{experimentId}/groups")

@@ -13,6 +13,8 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +50,7 @@ public class PracticalArtifactService
     private static final long AUTO_RETRY_INTERVAL_MILLIS = 60L * 60L * 1000L;
     private static final long RECOVER_STUCK_NORMALIZATION_TIMEOUT_MILLIS = 2L * 60L * 1000L;
     private static final int MAX_NORMALIZATION_RETRY_COUNT = 3;
+    private static final int MAX_MISSING_PREVIEW_RECOVERY_COUNT = 200;
     private static final String CONTEXT_LESSON = "LESSON";
     private static final String TICKET_PREFIX = "student:practical-artifact-ticket:";
 
@@ -344,6 +347,40 @@ public class PracticalArtifactService
     {
         return retryRecoverableAttachments(AUTO_RETRY_INTERVAL_MILLIS,
                 STUCK_NORMALIZATION_TIMEOUT_MILLIS);
+    }
+
+    /**
+     * 旧版本命中页图缓存时会漏掉当前 Office 附件的 PDF 预览写入。
+     * 启动后先对账已生成的 PDF，只有缺失 PDF 的附件才重新入队，避免状态误报和重复转换。
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void recoverOfficeAttachmentsMissingPreviewAfterStartup()
+    {
+        List<PracticalAttachment> attachments = artifactMapper.selectOfficeAttachmentsMissingPreview(
+                MAX_MISSING_PREVIEW_RECOVERY_COUNT);
+        int reconciledCount = 0;
+        int triggeredCount = 0;
+        Date now = new Date();
+        for (PracticalAttachment attachment : attachments)
+        {
+            if (attachment == null || attachment.getAttachmentId() == null) continue;
+            if (conversionService.reconcileExistingOfficePreview(attachment.getAttachmentId()))
+            {
+                reconciledCount++;
+            }
+            else if (artifactMapper.resetOfficeAttachmentMissingPreview(
+                    attachment.getAttachmentId(), now) > 0
+                    && conversionService.convertAsync(attachment.getAttachmentId()))
+            {
+                triggeredCount++;
+            }
+        }
+        if (!attachments.isEmpty())
+        {
+            org.slf4j.LoggerFactory.getLogger(PracticalArtifactService.class).info(
+                    "【逻辑作品预览恢复】检查 {} 条，已有 PDF 对账 {} 条，重新入队 {} 条",
+                    attachments.size(), reconciledCount, triggeredCount);
+        }
     }
 
     /** Office 进程池重建后立即捞回被中断的多附件任务。 */

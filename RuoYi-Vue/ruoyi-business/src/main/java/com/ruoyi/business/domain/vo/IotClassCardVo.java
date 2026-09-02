@@ -1,12 +1,15 @@
 package com.ruoyi.business.domain.vo;
 
+import java.util.Date;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 /**
  * 班级物联配置卡数据对象（用于课堂投屏/打印，不含任何管理凭据）
  */
 public class IotClassCardVo
 {
+    private Long configId;
     private String brokerUrl;
     private Integer brokerPort;
     private String mqttUsername;
@@ -17,6 +20,12 @@ public class IotClassCardVo
     private Integer groupSize;
     private Integer studentCount;
     private Integer groupCount;
+    private String brokerSyncStatus;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date brokerSyncedAt;
+
+    private String brokerSyncError;
     private List<GroupItem> groups;
 
     public static class GroupItem
@@ -26,6 +35,7 @@ public class IotClassCardVo
         private String groupCode;
         private String groupName;
         private String topic;
+        private String pythonClientId;
         private List<String> memberNames;
 
         public Long getGroupId() { return groupId; }
@@ -43,9 +53,15 @@ public class IotClassCardVo
         public String getTopic() { return topic; }
         public void setTopic(String topic) { this.topic = topic; }
 
+        public String getPythonClientId() { return pythonClientId; }
+        public void setPythonClientId(String pythonClientId) { this.pythonClientId = pythonClientId; }
+
         public List<String> getMemberNames() { return memberNames; }
         public void setMemberNames(List<String> memberNames) { this.memberNames = memberNames; }
     }
+
+    public Long getConfigId() { return configId; }
+    public void setConfigId(Long configId) { this.configId = configId; }
 
     public String getBrokerUrl() { return brokerUrl; }
     public void setBrokerUrl(String brokerUrl) { this.brokerUrl = brokerUrl; }
@@ -76,6 +92,15 @@ public class IotClassCardVo
 
     public Integer getGroupCount() { return groupCount; }
     public void setGroupCount(Integer groupCount) { this.groupCount = groupCount; }
+
+    public String getBrokerSyncStatus() { return brokerSyncStatus; }
+    public void setBrokerSyncStatus(String brokerSyncStatus) { this.brokerSyncStatus = brokerSyncStatus; }
+
+    public Date getBrokerSyncedAt() { return brokerSyncedAt; }
+    public void setBrokerSyncedAt(Date brokerSyncedAt) { this.brokerSyncedAt = brokerSyncedAt; }
+
+    public String getBrokerSyncError() { return brokerSyncError; }
+    public void setBrokerSyncError(String brokerSyncError) { this.brokerSyncError = brokerSyncError; }
 
     public List<GroupItem> getGroups() { return groups; }
     public void setGroups(List<GroupItem> groups) { this.groups = groups; }

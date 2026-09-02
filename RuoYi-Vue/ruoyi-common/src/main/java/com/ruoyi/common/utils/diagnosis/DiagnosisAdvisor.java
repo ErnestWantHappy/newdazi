@@ -20,22 +20,30 @@ public final class DiagnosisAdvisor
     {
         String errorMsg = text(row, "error_msg", "errorMsg");
         String operUrl = text(row, "oper_url", "operUrl");
-        if (containsAny(errorMsg, "账号已存在", "已存在", "重复"))
+        if (containsAny(errorMsg, "需达到", "未达到", "请选择", "请至少选择")
+                || (operUrl.contains("/business/lesson") && errorMsg.contains("课程不存在")))
+        {
+            return new DiagnosisAdvice("business", "info",
+                    "这是业务条件未满足或资源已被处理，不代表系统故障；按页面提示刷新或调整条件即可");
+        }
+        if (containsAny(errorMsg, "账号已存在", "生成的登录账号", "Excel 内登录账号"))
         {
             return new DiagnosisAdvice("business", "info",
                     "入学年份+班级+学号组合重复；检查 Excel 是否重复行或与现有学生撞号");
         }
-        if (StringUtils.isNotEmpty(operUrl) && operUrl.contains("/business/question/importData"))
+        if (operUrl.contains("/business/question/importData")
+                && containsAny(errorMsg, "格式", "模板", "题型", "不能为空"))
         {
             return new DiagnosisAdvice("business", "info",
                     "题库导入失败多为 Excel 格式或题型字段问题；按模板逐列核对");
         }
-        if (StringUtils.isNotEmpty(operUrl) && operUrl.contains("/business/student"))
+        if (operUrl.contains("/business/student")
+                && containsAny(errorMsg, "不能为空", "只能填写", "缺少学校", "入学年份必须", "正在处理"))
         {
             return new DiagnosisAdvice("business", "info",
                     "学生管理操作未通过业务校验；核对导入文件字段和已有学生档案");
         }
-        return new DiagnosisAdvice("system", "warning",
+        return new DiagnosisAdvice("system", "critical",
                 "系统异常；复制本条记录给技术人员或 AI 继续排查");
     }
 
@@ -43,10 +51,20 @@ public final class DiagnosisAdvisor
     {
         String operUrl = text(row, "oper_url", "operUrl");
         long costTime = number(row, "cost_time", "costTime");
-        if (StringUtils.isNotEmpty(operUrl) && operUrl.contains("/business/student/importData") && costTime > 10000)
+        if (StringUtils.isNotEmpty(operUrl) && operUrl.contains("/business/student/importData"))
         {
-            return new DiagnosisAdvice("performance", costTime >= 30000 ? "critical" : "warning",
-                    "大批量学生导入会长时间占用接口；建议分批导入、避开上课高峰，导入期间避免多人同时操作");
+            if (costTime >= 30000)
+            {
+                return new DiagnosisAdvice("performance", "critical",
+                        "学生导入超过 30 秒；结合结构化行数和分阶段耗时定位解析、密码或数据库阶段");
+            }
+            if (costTime >= 10000)
+            {
+                return new DiagnosisAdvice("performance", "warning",
+                        "学生导入超过 10 秒；结合结构化行数和分阶段耗时判断实际吞吐");
+            }
+            return new DiagnosisAdvice("performance", "info",
+                    "这是批量导入操作；若优化后仍频繁超过 3 秒，再按分阶段耗时继续排查");
         }
         if (StringUtils.isNotEmpty(operUrl) && operUrl.contains("/export"))
         {
@@ -60,6 +78,19 @@ public final class DiagnosisAdvisor
         }
         return new DiagnosisAdvice("performance", "warning",
                 "接口响应偏慢；如频繁出现，建议联系技术人员排查");
+    }
+
+    /**
+     * 性能事件持久化和历史事件回显共用同一分级入口，避免时间线与诊断摘要口径不一致。
+     */
+    public static DiagnosisAdvice adviseForApiEvent(String operUrl, String errorMsg, long costTime,
+            boolean errorEvent)
+    {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("oper_url", operUrl);
+        row.put("error_msg", errorMsg);
+        row.put("cost_time", costTime);
+        return errorEvent ? adviseForError(row) : adviseForSlowApi(row);
     }
 
     public static DiagnosisAdvice adviseForSlowSql(Map<String, Object> row)

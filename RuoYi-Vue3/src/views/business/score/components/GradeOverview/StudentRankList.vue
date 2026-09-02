@@ -49,13 +49,13 @@
         </template>
       </el-table-column>
       
-      <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)">
+      <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="naturalCodeCompare">
         <template #default="scope">
           <el-tag size="small" effect="plain">{{ scope.row.className }}班</el-tag>
         </template>
       </el-table-column>
 
-      <el-table-column prop="studentNo" label="学号" width="100" align="center" sortable :sort-method="(a, b) => String(a.studentNo ?? '').localeCompare(String(b.studentNo ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' })" />
+      <el-table-column prop="studentNo" label="学号" width="100" align="center" sortable :sort-method="naturalCodeCompare" />
       
       <el-table-column prop="studentName" label="姓名" width="90" align="center" show-overflow-tooltip sortable>
         <template #default="scope">
@@ -112,6 +112,11 @@ const props = defineProps({
 });
 
 const router = useRouter();
+
+// 学号和班级号是字符串字段，按自然数值顺序显示（1、2、10）。
+function naturalCodeCompare(a, b) {
+  return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' });
+}
 
 const displayLimit = ref(props.limit);
 const excludeZero = ref(false);

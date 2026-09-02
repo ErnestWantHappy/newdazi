@@ -8,6 +8,8 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.diagnosis.DiagnosisAdvice;
+import com.ruoyi.common.utils.diagnosis.DiagnosisAdvisor;
 import com.ruoyi.common.utils.sql.SqlBusinessDescriber;
 import com.ruoyi.system.domain.SysOperLog;
 import com.ruoyi.system.domain.SysPerfEvent;
@@ -62,7 +64,11 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         }
         SysPerfEvent event = new SysPerfEvent();
         event.setEventType(isError ? "error_api" : "slow_api");
-        event.setSeverity(isError ? "critical" : (costTime >= 3000 ? "critical" : "warning"));
+        DiagnosisAdvice advice = DiagnosisAdvisor.adviseForApiEvent(
+                operLog.getOperUrl(), operLog.getErrorMsg(), costTime, isError);
+        event.setSeverity(advice.getSeverity());
+        event.setCategory(advice.getCategory());
+        event.setAdvice(advice.getAdvice());
         event.setTitle(StringUtils.isNotEmpty(operLog.getTitle()) ? operLog.getTitle() : "接口请求");
         event.setDescription(buildApiDescription(operLog, isError, isSlow));
         event.setSourceName(operLog.getTitle());
@@ -81,7 +87,13 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         int safeHours = Math.min(Math.max(hours, 1), 168);
         Calendar calendar = Calendar.getInstance();
         calendar.add(Calendar.HOUR_OF_DAY, -safeHours);
-        return perfEventMapper.selectRecentEvents(calendar.getTime(), StringUtils.isEmpty(eventType) ? null : eventType);
+        List<SysPerfEvent> events = perfEventMapper.selectRecentEvents(
+                calendar.getTime(), StringUtils.isEmpty(eventType) ? null : eventType);
+        for (SysPerfEvent event : events)
+        {
+            enrichEvent(event);
+        }
+        return events;
     }
 
     @Override
@@ -123,6 +135,31 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         catch (Exception ignored)
         {
             // 表未初始化或写入失败时不影响主流程
+        }
+    }
+
+    private void enrichEvent(SysPerfEvent event)
+    {
+        if (event == null)
+        {
+            return;
+        }
+        if ("error_api".equals(event.getEventType()) || "slow_api".equals(event.getEventType()))
+        {
+            boolean errorEvent = "error_api".equals(event.getEventType());
+            DiagnosisAdvice advice = DiagnosisAdvisor.adviseForApiEvent(
+                    event.getSourceUrl(), event.getErrorMsg(),
+                    event.getDurationMs() == null ? 0L : event.getDurationMs(), errorEvent);
+            // 历史事件也动态重算，发布后无需改表或批量更新旧记录。
+            event.setSeverity(advice.getSeverity());
+            event.setCategory(advice.getCategory());
+            event.setAdvice(advice.getAdvice());
+            return;
+        }
+        event.setCategory("performance");
+        if (StringUtils.isEmpty(event.getAdvice()))
+        {
+            event.setAdvice("结合 SQL、发生时间和关联接口确认是否持续影响业务");
         }
     }
 

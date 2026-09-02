@@ -5,9 +5,9 @@ import com.ruoyi.business.domain.vo.PracticalGradingStatusVo;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.service.IBizLessonService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
+import com.ruoyi.business.service.TeacherDashboardCacheService;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
-import com.ruoyi.common.core.redis.RedisCache;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.exception.ServiceException;
@@ -36,9 +35,6 @@ import com.ruoyi.common.exception.ServiceException;
 @PreAuthorize("@ss.hasRole('teacher') or @ss.hasRole('admin')")
 public class TeacherDashboardController extends BaseController
 {
-    private static final String DASHBOARD_CACHE_PREFIX = "business:teacher-dashboard:v1:";
-    private static final int DASHBOARD_CACHE_SECONDS = 30;
-
     @Autowired
     private IBizLessonService lessonService;
 
@@ -49,7 +45,7 @@ public class TeacherDashboardController extends BaseController
     private BizStudentAnswerMapper studentAnswerMapper;
 
     @Autowired
-    private RedisCache redisCache;
+    private TeacherDashboardCacheService dashboardCacheService;
 
     private final Map<String, Object> dashboardCacheLocks = new ConcurrentHashMap<>();
 
@@ -59,8 +55,10 @@ public class TeacherDashboardController extends BaseController
     @GetMapping("/dashboard-data")
     public AjaxResult getDashboardData()
     {
-        String cacheKey = DASHBOARD_CACHE_PREFIX + SecurityUtils.getUserId() + ":" + SecurityUtils.getDeptId();
-        AjaxResult cached = redisCache.getCacheObject(cacheKey);
+        Long userId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getDeptId();
+        String cacheKey = userId + ":" + deptId;
+        AjaxResult cached = dashboardCacheService.get(userId, deptId);
         if (cached != null)
         {
             return cached;
@@ -71,14 +69,14 @@ public class TeacherDashboardController extends BaseController
             // 教师首页包含多次班级、课程和指派聚合，同一教师瞬时并发只回源一次。
             synchronized (cacheLock)
             {
-                cached = redisCache.getCacheObject(cacheKey);
+                cached = dashboardCacheService.get(userId, deptId);
                 if (cached != null)
                 {
                     return cached;
                 }
                 List<GradeGroupVo> dashboardData = lessonService.getTeacherDashboardData();
                 AjaxResult result = AjaxResult.success(dashboardData);
-                redisCache.setCacheObject(cacheKey, result, DASHBOARD_CACHE_SECONDS, TimeUnit.SECONDS);
+                dashboardCacheService.put(userId, deptId, result);
                 return result;
             }
         }

@@ -6,6 +6,7 @@ import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizScoringItemMapper; // P6 import
 import com.ruoyi.business.mapper.PracticalArtifactMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
+import com.ruoyi.business.mapper.FlowchartMapper;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
 import com.ruoyi.business.service.AsyncConversionService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
@@ -51,6 +52,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
     @Autowired
     private AnswerDeletionGuardService answerDeletionGuardService;
+
+    @Autowired
+    private FlowchartMapper flowchartMapper;
 
     @Override
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
@@ -170,6 +174,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
                 deletePythonQuestionChildren(questionId);
             }
+            if (isFlowchartPractical(question) || flowchartMapper.selectQuestionConfig(questionId) != null) {
+                flowchartMapper.deleteQuestionConfig(questionId);
+            }
         }
         return bizQuestionMapper.deleteBizQuestionByQuestionIds(questionIds);
     }
@@ -182,6 +189,9 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
             assertPythonQuestionDeletable(questionId);
             deletePythonQuestionChildren(questionId);
+        }
+        if (isFlowchartPractical(question) || flowchartMapper.selectQuestionConfig(questionId) != null) {
+            flowchartMapper.deleteQuestionConfig(questionId);
         }
         return bizQuestionMapper.deleteBizQuestionByQuestionId(questionId);
     }
@@ -275,6 +285,20 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             if (isPythonPractical(bizQuestion)) {
                 // 在线编程由 Judge0 配置和测试点评分，不能混入文件作品和人工评分项。
                 bizQuestion.setPracticalMode("PYTHON");
+                bizQuestion.setFilePath(null);
+                bizQuestion.setPreviewPath(null);
+                bizQuestion.setPreviewStatus(null);
+                bizQuestion.setPracticalAllowedExtensions(null);
+                bizQuestion.setPracticalImageMaxCount(null);
+                bizQuestion.setPracticalMaterials(null);
+                bizQuestion.setScoringItems(null);
+                bizQuestion.setWordCount(null);
+                bizQuestion.setTypingDuration(null);
+                return;
+            }
+            if (isFlowchartPractical(bizQuestion)) {
+                // 画程作品由结构化 JSON 和独立版本表承载，不能混入文件上传与 Office 转换链。
+                bizQuestion.setPracticalMode("FLOWCHART");
                 bizQuestion.setFilePath(null);
                 bizQuestion.setPreviewPath(null);
                 bizQuestion.setPreviewStatus(null);
@@ -431,6 +455,13 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     private boolean isFilePractical(BizQuestion question)
     {
         return question != null && "practical".equals(question.getQuestionType())
-                && !"PYTHON".equalsIgnoreCase(question.getPracticalMode());
+                && (question.getPracticalMode() == null
+                    || "FILE".equalsIgnoreCase(question.getPracticalMode()));
+    }
+
+    private boolean isFlowchartPractical(BizQuestion question)
+    {
+        return question != null && "practical".equals(question.getQuestionType())
+                && "FLOWCHART".equalsIgnoreCase(question.getPracticalMode());
     }
 }

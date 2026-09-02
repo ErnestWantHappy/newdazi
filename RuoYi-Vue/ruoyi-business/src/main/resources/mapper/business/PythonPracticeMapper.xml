@@ -184,7 +184,8 @@
       <if test="entryYear != null and entryYear != ''">AND CAST(pc.entry_year AS BINARY)=CAST(#{entryYear} AS BINARY)</if>
       <if test="classCode != null and classCode != ''">AND CAST(pc.class_code AS BINARY)=CAST(#{classCode} AS BINARY)</if>
     GROUP BY s.student_id,s.student_no,u.nick_name,pc.entry_year,pc.class_code
-    ORDER BY pc.entry_year,pc.class_code,s.student_no
+    ORDER BY pc.entry_year, CAST(pc.class_code AS UNSIGNED), pc.class_code,
+             CAST(s.student_no AS UNSIGNED), s.student_no
   </select>
   <select id="selectPlanAnalyticsQuestions" resultType="map">
     SELECT q.question_id,snap.question_title,snap.difficulty,snap.knowledge_points,

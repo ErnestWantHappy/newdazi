@@ -581,12 +581,14 @@
                   :limit="getPracticalUploadLimit(q)"
                   :before-upload="(file) => beforePracticalUpload(q, file)"
                   :on-success="(res, file) => handleUploadSuccess(q.questionId, res, file)"
-                  :on-error="handleUploadError"
+                  :on-error="(error, file) => handleUploadError(q.questionId, error, file)"
                   :on-exceed="() => handleUploadExceed(q)"
                   :show-file-list="false"
                   :accept="getPracticalAccept(q)"
                 >
-                  <el-button type="success" icon="Upload">选择作品文件</el-button>
+                  <el-button type="primary" icon="Upload" :loading="submittingPracticalQuestionId === q.questionId">
+                    {{ practicalUploads[q.questionId] ? "选择并提交新版本" : "选择并提交作品" }}
+                  </el-button>
                 </el-upload>
 
                 <div v-if="getPracticalDrafts(q.questionId).length" class="practical-draft-list">
@@ -594,15 +596,7 @@
                     <span>{{ draftIndex + 1 }}. {{ draft.originalFileName }}</span>
                     <el-button link type="danger" @click="removePracticalDraft(q.questionId, draftIndex)">移除</el-button>
                   </div>
-                  <el-button
-                    type="primary"
-                    size="small"
-                    :loading="submittingPracticalQuestionId === q.questionId"
-                    @click="commitPracticalArtifact(q)"
-                  >
-                    {{ practicalUploads[q.questionId] ? "提交为新版本" : "确认提交作品" }}
-                  </el-button>
-                  <span class="upload-tip">Office/PDF 仅 1 个；图片可按顺序提交 1～{{ getPracticalUploadLimit(q) }} 张</span>
+                  <span class="upload-tip">文件上传完成后会自动提交。Office/PDF 仅 1 个；图片可按顺序提交 1～{{ getPracticalUploadLimit(q) }} 张</span>
                 </div>
 
                 <!-- 新版本已提交，预览转换由服务器异步完成 -->
@@ -665,6 +659,30 @@
                     <el-button link type="info" @click="downloadSubmittedWork(q.questionId, attachmentIndex)">下载</el-button>
                   </div>
                 </div>
+              </div>
+            </el-card>
+          </div>
+          <div v-if="flowchartPracticalQuestions.length" class="flowchart-question-list">
+            <el-card v-for="(q, index) in flowchartPracticalQuestions" :key="q.questionId" class="practical-card flowchart-card" shadow="hover">
+              <template #header>
+                <div class="card-header">
+                  <span class="badge flowchart-badge">画程流程图</span>
+                  <span class="score-status">
+                    <span v-if="practicalScores[q.questionId] != null" class="scored score-num">{{ practicalScores[q.questionId] }}/{{ q.questionScore }}分</span>
+                    <span v-else-if="practicalUploads[q.questionId]" class="pending">已提交 · 待批阅</span>
+                    <span v-else class="not-submitted">{{ q.questionScore }}分</span>
+                  </span>
+                </div>
+              </template>
+              <div class="question-stem"><span v-if="flowchartPracticalQuestions.length > 1">{{ index + 1 }}. </span>{{ q.questionContent }}</div>
+              <div class="flowchart-entry">
+                <div>
+                  <strong>在平台内直接完成</strong>
+                  <p>拖动图形、连接箭头，系统会自动保存草稿；完成后请点击“完成并提交”。</p>
+                </div>
+                <el-button type="primary" size="large" @click="openFlowchart(q)">
+                  {{ practicalUploads[q.questionId] ? '查看画程作品' : '打开画程开始作答' }}
+                </el-button>
               </div>
             </el-card>
           </div>
@@ -774,8 +792,8 @@
         <el-table-column label="操作" width="150" align="center">
           <template #default="{ row }">
             <span>{{ row.practicalScore }}</span>
-            <small v-if="row.filePracticalScore || row.pythonPracticalScore" class="practical-score-detail">
-              文件 {{ row.filePracticalScore || '0/0' }} · Python {{ row.pythonPracticalScore || '0/0' }}
+            <small v-if="row.filePracticalScore || row.pythonPracticalScore || row.flowchartPracticalScore" class="practical-score-detail">
+              文件 {{ row.filePracticalScore || '0/0' }} · Python {{ row.pythonPracticalScore || '0/0' }} · 画程 {{ row.flowchartPracticalScore || '0/0' }}
             </small>
           </template>
         </el-table-column>
@@ -994,6 +1012,8 @@
 
     <!-- PDF预览组件 -->
     <pdf-preview ref="pdfPreviewRef" />
+    <student-flowchart-dialog v-model="flowchartDialogVisible" :lesson-id="lessonId"
+      :question="activeFlowchartQuestion" @submitted="fetchData" />
   </div>
 </template>
 
@@ -1016,6 +1036,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import PdfPreview from "@/components/PdfPreview/index.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
 import StudentProgrammingQuestion from "@/components/StudentProgrammingQuestion/index.vue";
+import StudentFlowchartDialog from "@/components/FlowchartEditor/StudentFlowchartDialog.vue";
 import { getStudentProgramming } from "@/api/business/programming";
 import { questionTypeLabel } from "@/utils/questionType";
 import Download from "@/plugins/download";
@@ -1425,6 +1446,11 @@ function isPythonPracticalQuestion(question) {
   return String(mode || "").trim().toUpperCase() === "PYTHON";
 }
 
+function isFlowchartPracticalQuestion(question) {
+  const mode = question?.practicalMode ?? question?.practical_mode;
+  return String(mode || "").trim().toUpperCase() === "FLOWCHART";
+}
+
 // 兼容历史 DTO 漏传 practicalMode 的情况：仅对作答方式为空的操作题回查平台后端。
 // 普通文件题的回查会被后端拒绝，仍按文件上传处理，不会误显示为编程题。
 async function resolveMissingPracticalModes(questions, currentLessonId) {
@@ -1445,15 +1471,27 @@ async function resolveMissingPracticalModes(questions, currentLessonId) {
 const pythonPracticalQuestions = computed(() =>
   practicalQuestions.value.filter(isPythonPracticalQuestion)
 );
-const filePracticalQuestions = computed(() =>
-  practicalQuestions.value.filter((q) => !isPythonPracticalQuestion(q))
+const flowchartPracticalQuestions = computed(() =>
+  practicalQuestions.value.filter(isFlowchartPracticalQuestion)
 );
+const filePracticalQuestions = computed(() =>
+  practicalQuestions.value.filter((q) => !isPythonPracticalQuestion(q) && !isFlowchartPracticalQuestion(q))
+);
+const flowchartDialogVisible = ref(false);
+const activeFlowchartQuestion = ref(null);
+
+function openFlowchart(question) {
+  activeFlowchartQuestion.value = question;
+  flowchartDialogVisible.value = true;
+}
 const practicalUploads = ref({}); // { questionId: uploadedFilePath }
 const practicalScores = ref({}); // { questionId: score | null } - null表示未批阅
 const practicalPreviewStatuses = ref({}); // { questionId: previewStatus }
 const practicalPreviewPaths = ref({}); // { questionId: previewPath }
 const practicalArtifacts = ref({}); // { questionId: 当前不可变作品版本 }
 const practicalDrafts = ref({}); // { questionId: 暂存文件凭证[] }
+const practicalUploadStates = ref({});
+const practicalAutoCommitTimers = new Map();
 const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { answer, score, previewStatus, previewPath } }
 const uploadingQuestionId = ref(null); // 正在上传/转换的题目ID（用于显示loading）
 const submittingPracticalQuestionId = ref(null);
@@ -2123,6 +2161,11 @@ function beforePracticalUpload(question, file) {
     ElMessage.error("单个文件不能超过 50MB");
     return false;
   }
+  const state = practicalUploadStates.value[question.questionId] || { pendingFileUids: new Set(), failed: false };
+  if (!state.pendingFileUids.size) state.failed = false;
+  state.pendingFileUids.add(file.uid);
+  practicalUploadStates.value[question.questionId] = state;
+  clearPracticalAutoCommit(question.questionId);
   return true;
 }
 
@@ -2136,8 +2179,33 @@ function removePracticalDraft(questionId, index) {
   practicalDrafts.value[questionId] = drafts;
 }
 
-// 文件先进入短期暂存区，只有学生明确确认后才生成新版本。
+function clearPracticalAutoCommit(questionId) {
+  const timer = practicalAutoCommitTimers.get(questionId);
+  if (timer) {
+    clearTimeout(timer);
+    practicalAutoCommitTimers.delete(questionId);
+  }
+}
+
+function schedulePracticalAutoCommit(question) {
+  const questionId = question.questionId;
+  clearPracticalAutoCommit(questionId);
+  // 同一次选择多张图片时，等待全部上传回调结束后再合并为一个作品版本。
+  practicalAutoCommitTimers.set(questionId, setTimeout(() => {
+    practicalAutoCommitTimers.delete(questionId);
+    const state = practicalUploadStates.value[questionId];
+    if (!state?.pendingFileUids.size && !state?.failed) {
+      commitPracticalArtifact(question).catch(() => {
+        ElMessage.error("作品提交失败，请重新选择文件后再试");
+      });
+    }
+  }, 200));
+}
+
+// 上传成功后立即提交，避免学生再做一次重复的“确认提交”操作。
 function handleUploadSuccess(questionId, res, file) {
+  const state = practicalUploadStates.value[questionId];
+  state?.pendingFileUids.delete(file?.uid);
   if (res.code === 200) {
     practicalDrafts.value[questionId] = [
       ...getPracticalDrafts(questionId),
@@ -2149,8 +2217,9 @@ function handleUploadSuccess(questionId, res, file) {
         fileSize: res.fileSize,
       },
     ];
-    ElMessage.success("文件已暂存，请确认提交作品");
+    schedulePracticalAutoCommit({ questionId });
   } else {
+    if (state) state.failed = true;
     ElMessage.error(res.msg || "上传失败");
   }
 }
@@ -2183,7 +2252,12 @@ async function commitPracticalArtifact(question) {
   }
 }
 
-function handleUploadError() {
+function handleUploadError(questionId, _error, file) {
+  const state = practicalUploadStates.value[questionId];
+  if (state) {
+    state.pendingFileUids.delete(file?.uid);
+    state.failed = true;
+  }
   ElMessage.error("上传失败，请重试");
 }
 
@@ -2409,6 +2483,8 @@ onUnmounted(() => {
   if (gatePollTimer) clearTimeout(gatePollTimer);
   Object.values(timerIntervals).forEach((i) => clearInterval(i));
   Object.values(practicalPollingTimers).forEach((i) => clearTimeout(i));
+  practicalAutoCommitTimers.forEach((timer) => clearTimeout(timer));
+  practicalAutoCommitTimers.clear();
 });
 </script>
 
@@ -2964,6 +3040,14 @@ onUnmounted(() => {
 .practical-card {
   border-radius: 8px;
 }
+
+.flowchart-question-list { display: grid; gap: 14px; margin-bottom: 16px; }
+.flowchart-card { border-color: #b9def0; }
+.flowchart-badge { background: linear-gradient(135deg, #1597bb, #36b37e); color: #fff; }
+.flowchart-entry { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px; margin-top: 12px; border-radius: 12px; background: linear-gradient(135deg, #ecf8ff, #f0f9eb); }
+.flowchart-entry strong { color: #24526d; font-size: 16px; }
+.flowchart-entry p { margin: 6px 0 0; color: #61788b; font-size: 13px; }
+@media (max-width: 760px) { .flowchart-entry { align-items: stretch; flex-direction: column; } }
 
 .material-section {
   display: flex;

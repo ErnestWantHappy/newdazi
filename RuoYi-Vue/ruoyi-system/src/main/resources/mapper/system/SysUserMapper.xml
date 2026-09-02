@@ -156,6 +156,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 	<select id="checkUserNameUnique" parameterType="String" resultMap="SysUserResult">
 		select user_id, user_name from sys_user where user_name = #{userName} and del_flag = '0' limit 1
 	</select>
+
+	<select id="selectActiveUsersByUserNames" resultMap="SysUserResult">
+		select user_id, user_name, dept_id, nick_name, password, del_flag
+		from sys_user
+		where del_flag = '0'
+		  and user_name in
+		<foreach collection="userNames" item="userName" open="(" separator="," close=")">
+			#{userName}
+		</foreach>
+	</select>
 	
 	<select id="checkPhoneUnique" parameterType="String" resultMap="SysUserResult">
 		select user_id, phonenumber from sys_user where phonenumber = #{phonenumber} and del_flag = '0' limit 1
@@ -198,6 +208,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
  			sysdate()
  		)
 	</insert>
+
+	<insert id="batchInsertUsers">
+		insert into sys_user(dept_id, user_name, nick_name, password, create_by, create_time)
+		values
+		<foreach collection="users" item="user" separator=",">
+			(#{user.deptId}, #{user.userName}, #{user.nickName}, #{user.password}, #{user.createBy}, sysdate())
+		</foreach>
+	</insert>
 	
 	<update id="updateUser" parameterType="SysUser">
  		update sys_user
@@ -220,7 +238,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 	</update>
 	
 	<update id="updateUserStatus" parameterType="SysUser">
- 		update sys_user set status = #{status} where user_id = #{userId}
+		update sys_user set status = #{status} where user_id = #{userId}
+	</update>
+
+	<update id="updateStudentAccountIdentity">
+		update sys_user
+		set user_name = #{userName},
+			nick_name = #{nickName},
+			update_by = #{updateBy},
+			update_time = sysdate()
+		where user_id = #{userId}
+		  and del_flag = '0'
 	</update>
 	
 	<update id="updateUserAvatar" parameterType="SysUser">

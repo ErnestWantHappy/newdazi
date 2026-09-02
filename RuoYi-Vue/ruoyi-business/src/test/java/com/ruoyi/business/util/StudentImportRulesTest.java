@@ -14,6 +14,8 @@ class StudentImportRulesTest
     {
         assertEquals("1", StudentImportRules.normalizeClassCode("01"));
         assertEquals("10", StudentImportRules.normalizeClassCode("10"));
+        assertEquals("11", StudentImportRules.normalizeClassCode("11"));
+        assertEquals("99", StudentImportRules.normalizeClassCode("99"));
     }
 
     @Test
@@ -25,6 +27,13 @@ class StudentImportRulesTest
     }
 
     @Test
+    void rejectsClassCodeOutsideOneToNinetyNine()
+    {
+        assertThrows(ServiceException.class, () -> StudentImportRules.normalizeClassCode("00"));
+        assertThrows(ServiceException.class, () -> StudentImportRules.normalizeClassCode("100"));
+    }
+
+    @Test
     void validatesStudentNumberAndEntryYear()
     {
         assertEquals("1", StudentImportRules.normalizeStudentNo("01"));
@@ -33,4 +42,3 @@ class StudentImportRulesTest
         assertThrows(ServiceException.class, () -> StudentImportRules.normalizeEntryYear("25"));
     }
 }
-

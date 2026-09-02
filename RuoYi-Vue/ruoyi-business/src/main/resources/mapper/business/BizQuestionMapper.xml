@@ -167,6 +167,13 @@
             <if test="previewStatus != null">preview_status = #{previewStatus},</if>
             <if test="practicalAllowedExtensions != null">practical_allowed_extensions = #{practicalAllowedExtensions},</if>
             <if test="practicalMode != null and practicalMode != ''">practical_mode = #{practicalMode},</if>
+            <if test="questionType == 'practical' and (practicalMode == 'PYTHON' or practicalMode == 'FLOWCHART')">
+                file_path = NULL,
+                preview_path = NULL,
+                preview_status = NULL,
+                practical_allowed_extensions = NULL,
+                practical_image_max_count = NULL,
+            </if>
             <if test="practicalImageMaxCount != null">practical_image_max_count = #{practicalImageMaxCount},</if>
             <if test="isPublic != null and isPublic != ''">is_public = #{isPublic},</if>
             <if test="typingDuration != null">typing_duration = #{typingDuration},</if>

@@ -61,6 +61,9 @@ public interface IBizLessonService
      */
     public int deleteBizLessonByLessonId(Long lessonId);
 
+    /** 归档/恢复课程，课程ID和历史数据均保留。 */
+    int updateLessonStatus(Long lessonId, String status);
+
     /**
      * 获取教师首页的完整数据
      * @return 教师首页视图对象列表

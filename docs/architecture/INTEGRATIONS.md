@@ -36,7 +36,9 @@ flowchart LR
 - 账号策略：同班共享班级账号和易读课堂口令；Broker ACL 限制班级前缀，班内再按业务 Topic 隔离。
 - 课程级开关：物联入口按 `biz_lesson.iot_enabled` 控制（教师设计器开启、考勤课强制关闭），教师/学生首页与接口均按此过滤；学生概览与教师收集接口还要校验课程已开启。
 - 生产现状（2026-08-21）：EMQX 5.8.8 @ 10.52.1.129；1883 设备接入；管理 API 18083 已开放给内网（原仅 127.0.0.1），平台后端经 `dazi-backend` API 密钥同步班级账号；平台接收器 `IOT_MQTT_ENABLED=true`，以 `platform_iot_subscriber` 订阅 `county/#`；ACL 文件规则：订阅账号只读订阅 county/#、`class_*` 设备收发、device01 测试、deny all。
-- 小学实验板兼容验证（2026-08-30）：真实板已在教师机临时 Broker 上证明固件可直接导入 `umqtt.simple.MQTTClient`，并显式设置 ClientID、用户名、密码、完整 `county/.../data` Topic，省平台 `userId/projectId` 封装不是技术依赖。正式 EMQX 已新增临时账号 `primary_board_probe`，文件 ACL 仅允许发布 `county/139/252/2020-07/iot_demo_exp/group01/data`；账号认证连接返回 CONNACK 0，原规则与平台订阅客户端均保持正常。真板直连 129、消息落库及教师页面显示仍是未完成门禁。
+- 小学实验板兼容验证（2026-08-31 已通过）：真实板可直接导入 `umqtt.simple.MQTTClient`，显式设置 ClientID、用户名、密码和完整 `county/.../data` Topic，省平台 `userId/projectId` 封装不是技术依赖。实验板经临时账号 `primary_board_probe` 直连正式 EMQX，并于 `2026-08-31 09:19:19` 向精确授权 Topic 发布 JSON；平台接收器成功映射实验 1 / 小组 45，生成消息 8966 与 `MESSAGE_RECEIVED` 事件 9025。由此确认“真实小学实验板 → 129 EMQX → 123平台接收器 → 正式数据库”链路闭环；教师页面可视验收不属于本次服务器侧证据。
+- 小学接入正式实现（2026-08-31，release `20260831_primary_iot_v1`）：`biz_iot_class_config` 已增加 `broker_sync_status`、`broker_synced_at`、`broker_sync_error` 三列；后端仅在账号与精确 ACL 同步成功后向教师/学生返回可运行口令和 Python 配置，失败时保留脱敏状态并支持教师重试。正式库 8 条班级配置均为 `SYNCED`；EMQX 内置数据库授权源已启用并按班级回填精确 ACL，`class_* → county/#` 宽规则及临时探针账号已删除。IoT 相关测试 15/15、Vue3 生产构建和正式 MQTT 本班/跨班/订阅隔离验收均通过。
+- 学生端入口修复（2026-08-31，release `20260831_primary_iot_student_python_v2`）：小学实验板 Python 页签默认打开并提供一键复制本人小组代码；初中 Mind+ 参数页签继续保留，后端协议和权限不变。
 - 开关：平台接收器由 `IOT_MQTT_ENABLED` 外置开启，默认关闭；启用前必须验证 SQL、Broker API、订阅账号、ACL 和真实硬件链路。
 - 禁区：学生浏览器不持有 Broker 管理凭据，不能把旧 SIoT 共享弱账号作为多校正式方案。
 - 运维路径：129 的 SSH 只经 123 跳板访问；小学实验板临时 ACL 修改前备份为 `/srv/emqx-school-poc/backups/20260830_050321_before_primary_board_probe/acl.conf`（SHA-256 `6e7df6236dcb759e08831542b40f6124eb3ccb7207bea0644293944454ab37f3`）。回滚时删除临时认证账号、移除对应单 Topic 文件规则；不重启 Judge0、CryptPad 或平台服务。
@@ -53,8 +55,16 @@ flowchart LR
 - 导学单、课堂和 IoT 均为后端 WebSocket，不以浏览器直接连 Broker 代替。
 - 改动时同时验证 Origin、握手身份、课程/班级范围、断线重连和跨房间隔离。
 
+### 2026-09-03 Presence 规划（尚未实现）
+
+- 学生桌面计划增加独立受认证 Presence WebSocket，学生登录后的公共布局连接；30 秒心跳、60 秒 Redis TTL 离线，不逐心跳写 MySQL。
+- 连接 IP 由服务端从可信代理链观察。普通浏览器不能保证读取真实局域网 IP 或计算机名；经过 NAT 时允许多个终端显示同一出口地址。
+- 主入口在班级管理行内，教师首页提供课程/班级快捷入口；该状态不写签到考勤。
+- 作业状态推送继续使用课程/班级授权边界，数据库事务提交后才发事件，并用全量查询校准。
+- 详细契约和容量门禁见 `contexts/class-grouping-and-desktop/ADR-001-server-observed-presence-and-class-entry.md` 与 `contexts/multi-feature-upgrade-20260902/design.md`。
+
 ## 2026-08-21 验收口径（覆盖 2026-08-20）
 
 - CryptPad `/checkup/` 与基础 API 可达只证明服务探活；当前 HTTP/WS 明确是临时验收态，不代表正式传输安全，也不替代同班多人、刷新恢复和保存版本递增验收。
 - Judge0 根地址可达但接口受鉴权保护；没有可用隔离令牌时不得绕过鉴权开展并发压测。
-- EMQX：平台接收器已在正式环境启用并连上 broker（订阅 county/#）；ACL、订阅账号、管理 API 密钥均已配置生效；教师收集页与小组统计待真实设备上报后验证。
+- EMQX：平台接收器已在正式环境启用并连上 broker（订阅 county/#）；内置数据库班级账号、精确 ACL、订阅账号和管理 API 密钥均已配置生效，跨班发布与订阅拒绝已验证。教师收集页、小组统计、双板 10 分钟到达率和断网恢复仍待真实课堂试点。

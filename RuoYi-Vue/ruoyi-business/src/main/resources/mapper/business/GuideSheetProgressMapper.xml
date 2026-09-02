@@ -71,7 +71,7 @@
           AND p.dept_id = #{deptId}
           AND p.entry_year = #{entryYear}
           AND p.class_code = #{classCode}
-        ORDER BY s.student_no, p.student_id
+        ORDER BY CAST(s.student_no AS UNSIGNED), s.student_no, p.student_id
     </select>
 
     <select id="selectByBindingId" parameterType="Long" resultMap="GuideSheetProgressVoResult">
@@ -83,7 +83,8 @@
                ON ans.binding_id = p.binding_id
               AND ans.student_id = p.student_id
         WHERE p.binding_id = #{bindingId}
-        ORDER BY p.dept_id, p.entry_year, p.class_code, s.student_no
+        ORDER BY p.dept_id, p.entry_year, CAST(p.class_code AS UNSIGNED), p.class_code,
+                 CAST(s.student_no AS UNSIGNED), s.student_no
     </select>
 
     <!-- 班级范围必须继承课程指派，不能回退到旧导学单指派。 -->
@@ -123,7 +124,7 @@
           AND la.dept_id = #{deptId}
           AND la.entry_year = #{entryYear}
           AND la.class_code = #{classCode}
-        ORDER BY s.student_no, s.student_id
+        ORDER BY CAST(s.student_no AS UNSIGNED), s.student_no, s.student_id
     </select>
 
     <select id="selectFullProgressByBindingId" parameterType="Long"
@@ -160,7 +161,8 @@
                ON ans.binding_id = b.binding_id
               AND ans.student_id = s.student_id
         WHERE b.binding_id = #{bindingId}
-        ORDER BY la.dept_id, la.entry_year, la.class_code, s.student_no
+        ORDER BY la.dept_id, la.entry_year, CAST(la.class_code AS UNSIGNED), la.class_code,
+                 CAST(s.student_no AS UNSIGNED), s.student_no
     </select>
 
     <select id="selectByBindingAndStudent" resultMap="BizGuideSheetProgressResult">

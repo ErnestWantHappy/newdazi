@@ -40,6 +40,9 @@ public class BizLesson extends BaseEntity
     @Excel(name = "所属学校ID")
     private Long deptId;
 
+    /** 使用状态：0=正常，1=已归档；归档只退出日常教学，不删除历史数据。 */
+    private String status;
+
     /** 出题模式: 0=固定顺序, 1=随机排序, 2=随机抽取 */
     private Integer shuffleMode;
 
@@ -148,6 +151,14 @@ public class BizLesson extends BaseEntity
         this.deptId = deptId;
     }
 
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
     public Integer getShuffleMode() {
         return shuffleMode;
     }
@@ -245,6 +256,7 @@ public class BizLesson extends BaseEntity
                 .append("lessonTitle", getLessonTitle())
                 .append("grade", getGrade())
                 .append("entryYear", getEntryYear())
+                .append("status", getStatus())
                 .append("semester", getSemester())
                 .append("lessonNum", getLessonNum())
                 .append("lessonMode", getLessonMode())

@@ -12,6 +12,7 @@
           <el-button v-if="topic.owner" link type="primary" @click="editingTopic = topic; topicDialog = true">编辑</el-button>
           <el-button v-if="manager" link type="primary" @click="toggleTopicPin">{{ topic.isPinned === 'Y' ? '取消置顶' : '置顶' }}</el-button>
           <el-button v-if="manager && topic.topicType === 'NOTICE'" link type="warning" @click="notifyDialog = true">再次通知</el-button>
+          <el-button v-if="manager && topic.topicType === 'NOTICE'" link type="success" @click="shareDialog = true">分享通知</el-button>
           <el-button v-if="topic.owner || manager" link type="danger" @click="removeTopic">隐藏</el-button>
         </el-space>
       </div>
@@ -44,6 +45,7 @@
     <TopicComposer v-model="topicDialog" :topic="editingTopic" :manager="manager" @saved="loadTopic" />
     <PostComposer v-model="postDialog" :topic-id="topicId" :post="editingPost" @saved="afterPostSaved" />
     <NotificationComposer v-model="notifyDialog" :topic-id="topicId" @sent="loadTopic" />
+    <PublicShareDialog v-model="shareDialog" :topic-id="topicId" />
   </div>
 </template>
 
@@ -55,6 +57,7 @@ import NotificationComposer from './components/NotificationComposer.vue'
 import PostComposer from './components/PostComposer.vue'
 import ResourceCard from './components/ResourceCard.vue'
 import TopicComposer from './components/TopicComposer.vue'
+import PublicShareDialog from './components/PublicShareDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -74,6 +77,7 @@ const editingTopic = ref(null)
 const postDialog = ref(false)
 const editingPost = ref(null)
 const notifyDialog = ref(false)
+const shareDialog = ref(false)
 
 async function loadTopic() {
   loading.value = true

@@ -124,6 +124,42 @@ public class ResearchActivityUploadService
         return target;
     }
 
+    /**
+     * 将富文本中允许的教研图片 URL 映射到本地文件。
+     * 公开通知只能借此读取正文已经引用的图片，不能把整个上传目录暴露为匿名资源。
+     */
+    public Path resolvePublicImagePath(String imageUrl)
+    {
+        if (StringUtils.isBlank(imageUrl) || imageUrl.indexOf('?') >= 0 || imageUrl.indexOf('#') >= 0)
+        {
+            throw new ServiceException("通知图片不存在或已失效", 404);
+        }
+        String relative = imageUrl;
+        String[] prefixes = {
+                "/profile/upload/research-activity/images/",
+                "/dev-api/profile/upload/research-activity/images/",
+                "/prod-api/profile/upload/research-activity/images/" };
+        boolean matched = false;
+        for (String prefix : prefixes)
+        {
+            if (relative.startsWith(prefix))
+            {
+                relative = relative.substring(prefix.length());
+                matched = true;
+                break;
+            }
+        }
+        if (!matched || StringUtils.isBlank(relative)) throw new ServiceException("通知图片不存在或已失效", 404);
+
+        Path root = imageRoot();
+        Path target = root.resolve(relative).normalize();
+        if (!target.startsWith(root) || !Files.isRegularFile(target) || !isPublicImage(target))
+        {
+            throw new ServiceException("通知图片不存在或已失效", 404);
+        }
+        return target;
+    }
+
     public void deleteQuietly(String relativePath)
     {
         if (StringUtils.isBlank(relativePath)) return;
@@ -222,6 +258,12 @@ public class ResearchActivityUploadService
     private String normalizeMime(String mime)
     {
         return mime == null ? "" : mime.toLowerCase(Locale.ROOT).trim();
+    }
+
+    private boolean isPublicImage(Path path)
+    {
+        String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp");
     }
 
     private String two(int value) { return value < 10 ? "0" + value : String.valueOf(value); }

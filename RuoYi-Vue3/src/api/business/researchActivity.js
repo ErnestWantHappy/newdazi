@@ -91,6 +91,19 @@ export function notifyResearchTopic(topicId, data) {
   return request({ url: `${BASE_URL}/topics/${topicId}/notify`, method: 'post', data })
 }
 
+export function createResearchPublicShare(topicId, expireDays) {
+  return request({ url: `${BASE_URL}/topics/${topicId}/public-share`, method: 'post', params: { expireDays } })
+}
+export function getResearchPublicShare(topicId) {
+  return request({ url: `${BASE_URL}/topics/${topicId}/public-share`, method: 'get' })
+}
+export function revokeResearchPublicShare(topicId) {
+  return request({ url: `${BASE_URL}/topics/${topicId}/public-share`, method: 'delete' })
+}
+export function getPublicResearchNotice(token) {
+  return request({ url: `${BASE_URL}/public/notices/${encodeURIComponent(token)}`, method: 'get', headers: { isToken: false } })
+}
+
 export function getResearchNotificationSummary(limit = 5) {
   return request({ url: `${BASE_URL}/notifications/summary`, method: 'get', params: { limit } })
 }

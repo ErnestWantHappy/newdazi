@@ -33,6 +33,7 @@ import com.ruoyi.business.service.StudentToolService;
 import com.ruoyi.business.service.StudentAnswerArchiveService;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
 import com.ruoyi.business.service.PracticalRubricSnapshotService;
+import com.ruoyi.business.service.FlowchartService;
 import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.common.core.domain.entity.SysDept;
@@ -99,6 +100,9 @@ public class BizLessonServiceImpl implements IBizLessonService
     private PracticalRubricSnapshotService practicalRubricSnapshotService;
 
     @Autowired
+    private FlowchartService flowchartService;
+
+    @Autowired
     private ProgrammingJudgeMapper programmingJudgeMapper;
 
     @Autowired
@@ -122,6 +126,10 @@ public class BizLessonServiceImpl implements IBizLessonService
     public List<BizLesson> selectBizLessonList(BizLesson bizLesson)
     {
         bizLesson.setDeptId(SecurityUtils.getDeptId());
+        if (StringUtils.isBlank(bizLesson.getStatus()))
+        {
+            bizLesson.setStatus("0");
+        }
         return bizLessonMapper.selectBizLessonList(bizLesson);
     }
 
@@ -176,20 +184,37 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonIds(Long[] lessonIds)
     {
+        LinkedHashSet<Long> existingLessonIds = new LinkedHashSet<>();
         for (Long lessonId : lessonIds) {
-            assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonId));
+            if (lessonId == null)
+            {
+                continue;
+            }
+            BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+            if (lesson == null)
+            {
+                // 删除请求可能因前端重试而重复到达；不存在的课程按已经删除处理。
+                continue;
+            }
+            assertCanManageLesson(lesson);
+            existingLessonIds.add(lessonId);
         }
+        if (existingLessonIds.isEmpty())
+        {
+            return 0;
+        }
+        Long[] targetIds = existingLessonIds.toArray(new Long[0]);
         // 先校验课程归属，避免把答题历史等内部状态暴露给无权管理课程的教师。
-        answerDeletionGuardService.assertLessonsDeletable(lessonIds);
-        for (Long lessonId : lessonIds) {
+        answerDeletionGuardService.assertLessonsDeletable(targetIds);
+        for (Long lessonId : targetIds) {
             assertLessonHasNoGuideSheetHistory(lessonId);
             // 级联删除关联数据
             lessonQuestionMapper.deleteByLessonId(lessonId);
             lessonAssignmentMapper.deleteByLessonId(lessonId);
             deleteSupervisionFacts(lessonId);
         }
-        int affected = bizLessonMapper.deleteBizLessonByLessonIds(lessonIds);
-        if (affected != lessonIds.length)
+        int affected = bizLessonMapper.deleteBizLessonByLessonIds(targetIds);
+        if (affected != targetIds.length)
         {
             throw new ServiceException("部分课程已发生变化，删除已取消，请刷新后重试");
         }
@@ -200,7 +225,12 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonId(Long lessonId)
     {
-        assertCanManageLesson(bizLessonMapper.selectBizLessonByLessonId(lessonId));
+        BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null)
+        {
+            return 0;
+        }
+        assertCanManageLesson(lesson);
         answerDeletionGuardService.assertLessonsDeletable(new Long[] { lessonId });
         assertLessonHasNoGuideSheetHistory(lessonId);
         lessonQuestionMapper.deleteByLessonId(lessonId);
@@ -212,6 +242,33 @@ public class BizLessonServiceImpl implements IBizLessonService
             throw new ServiceException("课程已发生变化，删除已取消，请刷新后重试");
         }
         return affected;
+    }
+
+    @Override
+    @Transactional
+    public int updateLessonStatus(Long lessonId, String status)
+    {
+        if (!"0".equals(status) && !"1".equals(status))
+        {
+            throw new ServiceException("课程状态只能是正常或已归档");
+        }
+        BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null)
+        {
+            throw new ServiceException("课程不存在，请刷新后重试");
+        }
+        assertCanManageLesson(lesson);
+        String current = StringUtils.defaultIfBlank(lesson.getStatus(), "0");
+        if (status.equals(current))
+        {
+            return 0;
+        }
+        int rows = bizLessonMapper.updateLessonStatus(lessonId, status, SecurityUtils.getUsername());
+        if (rows != 1)
+        {
+            throw new ServiceException("课程状态修改失败，请刷新后重试");
+        }
+        return rows;
     }
 
     @Override
@@ -513,6 +570,7 @@ public class BizLessonServiceImpl implements IBizLessonService
             }
         }
         practicalRubricSnapshotService.snapshotLesson(lessonId, questions, userId);
+        flowchartService.snapshotLesson(lessonId, questions);
 
         // 本节课工具：随课程保存，全量替换
         studentToolService.replaceLessonTools(lessonId, lessonDetailVo.getLessonTools());

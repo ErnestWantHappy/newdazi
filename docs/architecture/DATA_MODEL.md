@@ -23,6 +23,11 @@ erDiagram
     LESSON ||--o{ LESSON_TOOL : 本节课工具
     STUDENT_TOOL ||--o{ STUDENT_TOOL_SCOPE : 适用范围
     SCHOOL ||--o{ STUDENT_TOOL : 常驻工具(可选)
+    QUESTION ||--o| FLOWCHART_QUESTION : 画程配置
+    LESSON ||--o{ FLOWCHART_LESSON_SNAPSHOT : 冻结题目口径
+    STUDENT ||--o{ FLOWCHART_DRAFT : 自动保存
+    STUDENT ||--o{ FLOWCHART_SUBMISSION : 不可变提交
+    STUDENT_ANSWER ||--o| FLOWCHART_SUBMISSION : 当前提交引用
 ```
 
 ## 关键约束
@@ -45,3 +50,13 @@ erDiagram
 - 课程与 Python 题仍通过 `biz_lesson_question` 多行关联，不增加“一课一道 Python 题”唯一约束；合法性由全课程题目分值合计 100、题目启用和 `VALID` 状态共同约束。
 - `biz_student_answer` 只有同时匹配当前 `biz_lesson_question(lesson_id, question_id)` 的记录才能进入批改、成绩、学情、截止进度和预览恢复等在线统计。课程保存移除题目时，必须在同一事务内把在线答案显式列复制到 `biz_student_answer_orphan_archive`，写 `biz_student_answer_orphan_archive_meta` 批次元数据并核对数量后，才能删除在线行和题目关联；归档失败必须回滚课程保存。
 - `biz_ai_model_price` 保存模型输入/输出单价（元/千 token）、状态和说明；`biz_practical_ai_job` 保存新任务创建时的价格快照。任务理论费用只汇总 `biz_practical_ai_result` 已持久化的 token，用 `输入 token × 输入单价/1000 + 输出 token × 输出单价/1000` 计算，不等同于供应商账单。旧任务无快照时可引用当前价格，但必须在接口和页面标明口径。
+- 画程迁移 `sql/flowchart_operation_v1.sql` 只新增四表：`biz_flowchart_question` 保存教师基础图/标准答案/权限/规则和配置修订；`biz_flowchart_lesson_snapshot` 按课程题目唯一冻结口径；`biz_flowchart_draft` 按学生课程题目唯一并以 `revision` 乐观并发；`biz_flowchart_submission` 保存递增版本、来源草稿修订、图文档、规则快照、检查证据和非正式建议分。现有 `biz_student_answer.student_answer` 只保存 `FLOWCHART:<submissionId>` 受控引用，正式分仍在原 `score` 字段。
+- 画程文档真实数据为 `schemaVersion=1.0` 的平台 JSON；只保留四类节点、折线箭头、文字、坐标和受控锁定属性。PNG/SVG、LogicFlow 内部状态和未来 AI 结果都不是当前作品真源。
+- 学生 Excel 导入的账号查重使用 `sys_user(user_name, del_flag)` 联合索引，迁移与回滚分别为 `sql/student_import_governance_v1.sql` 和 `sql/student_import_governance_v1_rollback.sql`。索引是普通索引，兼容同名历史软删除账号；有效账号唯一性继续由同校 Redis 导入锁、批量前检和写后数量核对共同保证。正式库已于 2026-09-01 执行迁移，前检有效用户名重复组为 0，迁移后 `EXPLAIN` 命中 `idx_sys_user_name_del_flag`。
+- 一次学生导入中的 `sys_user`、`sys_user_role`、`biz_student` 和新增 `biz_teacher_class` 必须处于同一事务，按最多 200 条分批写入并核对影响行数；任何一段失败都必须回滚，禁止继续返回“部分成功”。允许在写库前排除格式错误、Excel 内重复和已有有效账号，并在结构化结果中分别计数。
+- 学生安全处理复用既有状态字段：`sys_user.status` 为 `0=正常、1=停用`，停用不改 `biz_student` 及历史成绩；只有经 `StudentBusinessRecordMapper` 确认无答题及其他业务记录的学生才允许硬删除。批量纠错以 `student_id` 定位并原地更新 `user_id` 对应账号和档案，禁止删除重建。
+- `biz_lesson.status` 为 `0=正常、1=已归档`，归档课程仍保留指派、答案和成绩，仅从日常课程查询中过滤；恢复通过课程状态接口完成。迁移脚本为 `sql/lesson_archive_status_v1.sql`，回滚脚本为 `sql/lesson_archive_status_v1_rollback.sql`。
+
+## 2026-09-03 待实施数据模型（未迁移）
+
+通用分组/课时快照、教师班级布局、统一作业状态、独立协作活动/任务版本/小组映射、协作会话事件和 revision 差异仍处于已确认设计、未执行 SQL 状态。拟议表、唯一键、兼容回填和拆分迁移顺序见 `contexts/multi-feature-upgrade-20260902/design.md`；在对应阶段方案再次确认、前检和备份前，不得把这些结构当作现有数据库事实。

@@ -48,6 +48,10 @@ import com.ruoyi.common.utils.StringUtils;
 @Service
 public class IotExperimentService
 {
+    public static final String BROKER_SYNC_PENDING = "PENDING";
+    public static final String BROKER_SYNC_SYNCED = "SYNCED";
+    public static final String BROKER_SYNC_FAILED = "FAILED";
+
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Autowired private IotMapper mapper;
@@ -111,11 +115,12 @@ public class IotExperimentService
     public IotClassConfig getClassConfig(Long experimentId, String entryYear, String classCode)
     {
         IotExperiment experiment = requireExperiment(experimentId);
-        if (!canViewExperiment(experiment)) throw new ServiceException("无权查看该实验数据");
         String ey = entryYear != null ? entryYear.trim() : "";
         String cc = classCode != null ? classCode.replace("班", "").trim() : "";
+        if (!canViewClassConfig(experiment, ey, cc)) throw new ServiceException("无权查看该班级物联配置");
         IotClassConfig config = mapper.selectClassConfig(experimentId, ey, cc);
-        if (config != null && config.getPasscodeCiphertext() != null)
+        if (config != null && BROKER_SYNC_SYNCED.equals(config.getBrokerSyncStatus())
+                && config.getPasscodeCiphertext() != null)
         {
             config.setPasscode(IotPasscodeUtil.decrypt(config.getPasscodeCiphertext(), mqttProperties.getPasscodeSecret()));
         }
@@ -239,6 +244,8 @@ public class IotExperimentService
             config.setGroupVersion(1);
             config.setPasscodeUpdatedAt(new Date());
             config.setGroupedAt(new Date());
+            config.setBrokerSyncStatus(BROKER_SYNC_PENDING);
+            config.setStatus("0");
             config.setCreateBy(SecurityUtils.getUsername());
             mapper.insertClassConfig(config);
             config.setPasscode(passcode);
@@ -254,15 +261,18 @@ public class IotExperimentService
             existingConfig.setPasscodeHash(passcodeHash);
             existingConfig.setGroupVersion(existingConfig.getGroupVersion() != null ? existingConfig.getGroupVersion() + 1 : 1);
             existingConfig.setGroupedAt(new Date());
+            existingConfig.setBrokerSyncStatus(BROKER_SYNC_PENDING);
+            existingConfig.setBrokerSyncedAt(null);
+            existingConfig.setBrokerSyncError(null);
             mapper.updateClassConfig(existingConfig);
             existingConfig.setPasscode(passcode);
             existingConfig.setStudentCount(totalStudents);
             existingConfig.setGroupCount(totalGroups);
         }
 
-        // 同步 EMQX 班级账号与发布 ACL
-        emqxAdapter.syncClassAccount(mqttUsername, passcode);
-        emqxAdapter.syncClassAcl(mqttUsername, buildClassTopicPrefix(experiment, entryYear, classCode));
+        // 只有账号与精确 Topic ACL 均成功后，前端才允许分发可运行配置。
+        syncClassBroker(existingConfig, experiment, passcode, false);
+        existingConfig.setPasscode(BROKER_SYNC_SYNCED.equals(existingConfig.getBrokerSyncStatus()) ? passcode : null);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("classConfig", existingConfig);
@@ -300,12 +310,15 @@ public class IotExperimentService
         config.setPasscodeHash(hash);
         config.setPasscodeVersion(config.getPasscodeVersion() != null ? config.getPasscodeVersion() + 1 : 1);
         config.setPasscodeUpdatedAt(new Date());
+        config.setBrokerSyncStatus(BROKER_SYNC_PENDING);
+        config.setBrokerSyncedAt(null);
+        config.setBrokerSyncError(null);
         mapper.updateClassConfig(config);
 
-        // 同步更新 EMQX 账号密码
-        emqxAdapter.syncClassAccount(config.getMqttUsername(), newPasscode);
+        // 同步新密码、精确 ACL，并踢掉仍持有旧口令的在线连接。
+        syncClassBroker(config, experiment, newPasscode, true);
 
-        config.setPasscode(newPasscode);
+        config.setPasscode(BROKER_SYNC_SYNCED.equals(config.getBrokerSyncStatus()) ? newPasscode : null);
         return config;
     }
 
@@ -316,15 +329,18 @@ public class IotExperimentService
     {
         requirePasscodeSecret();
         IotExperiment experiment = requireExperiment(experimentId);
-        if (!canViewExperiment(experiment)) throw new ServiceException("无权查看该班级配置卡");
-
         String ey = entryYear != null ? entryYear.trim() : "";
         String cc = classCode != null ? classCode.replace("班", "").trim() : "";
+        if (!canViewClassConfig(experiment, ey, cc)) throw new ServiceException("无权查看该班级配置卡");
 
         IotClassConfig config = mapper.selectClassConfig(experimentId, ey, cc);
         if (config == null || config.getGroupedAt() == null)
         {
             throw new ServiceException("该班级尚未生成分组快照");
+        }
+        if (!BROKER_SYNC_SYNCED.equals(config.getBrokerSyncStatus()))
+        {
+            throw new ServiceException("班级 MQTT 权限尚未同步成功，请先在班级配置中点击“重试同步”");
         }
 
         String passcode = IotPasscodeUtil.decrypt(config.getPasscodeCiphertext(), mqttProperties.getPasscodeSecret());
@@ -337,6 +353,7 @@ public class IotExperimentService
         );
 
         IotClassCardVo vo = new IotClassCardVo();
+        vo.setConfigId(config.getConfigId());
         vo.setBrokerUrl(parseBrokerHost(mqttProperties.getBrokerUrl()));
         vo.setBrokerPort(parseBrokerPort(mqttProperties.getBrokerUrl()));
         vo.setMqttUsername(config.getMqttUsername());
@@ -347,6 +364,9 @@ public class IotExperimentService
         vo.setGroupSize(config.getGroupSize());
         vo.setStudentCount(groupStudents.size());
         vo.setGroupCount(groups.size());
+        vo.setBrokerSyncStatus(config.getBrokerSyncStatus());
+        vo.setBrokerSyncedAt(config.getBrokerSyncedAt());
+        vo.setBrokerSyncError(config.getBrokerSyncError());
 
         List<IotClassCardVo.GroupItem> groupItems = new ArrayList<>();
         for (IotGroup g : groups)
@@ -357,6 +377,7 @@ public class IotExperimentService
             item.setGroupCode(g.getGroupCode());
             item.setGroupName(g.getGroupName());
             item.setTopic(g.getTopic());
+            item.setPythonClientId(buildPrimaryClientId(g.getGroupId()));
             item.setMemberNames(memberMap.getOrDefault(g.getGroupId(), Collections.emptyList()));
             groupItems.add(item);
         }
@@ -422,12 +443,18 @@ public class IotExperimentService
 
         // 查询班级配置
         IotClassConfig classConfig = mapper.selectClassConfig(experiment.getExperimentId(), student.getEntryYear(), student.getClassCode());
-        if (classConfig != null && classConfig.getPasscodeCiphertext() != null)
+        if (classConfig != null)
         {
-            vo.setBrokerUrl(parseBrokerHost(mqttProperties.getBrokerUrl()));
-            vo.setBrokerPort(parseBrokerPort(mqttProperties.getBrokerUrl()));
-            vo.setMqttUsername(classConfig.getMqttUsername());
-            vo.setPasscode(IotPasscodeUtil.decrypt(classConfig.getPasscodeCiphertext(), mqttProperties.getPasscodeSecret()));
+            vo.setBrokerSyncStatus(classConfig.getBrokerSyncStatus());
+            vo.setBrokerSyncError(classConfig.getBrokerSyncError());
+            if (BROKER_SYNC_SYNCED.equals(classConfig.getBrokerSyncStatus())
+                    && classConfig.getPasscodeCiphertext() != null)
+            {
+                vo.setBrokerUrl(parseBrokerHost(mqttProperties.getBrokerUrl()));
+                vo.setBrokerPort(parseBrokerPort(mqttProperties.getBrokerUrl()));
+                vo.setMqttUsername(classConfig.getMqttUsername());
+                vo.setPasscode(IotPasscodeUtil.decrypt(classConfig.getPasscodeCiphertext(), mqttProperties.getPasscodeSecret()));
+            }
         }
 
         // 查询学生所属小组快照
@@ -442,6 +469,7 @@ public class IotExperimentService
                 vo.setGroupName(group.getGroupName());
                 vo.setGroupCode(group.getGroupCode());
                 vo.setTopic(group.getTopic());
+                vo.setPythonClientId(buildPrimaryClientId(group.getGroupId()));
                 vo.setLastSeenAt(group.getLastSeenAt());
                 vo.setIsOnline(group.getLastSeenAt() != null && System.currentTimeMillis() - group.getLastSeenAt().getTime() < 120000);
 
@@ -464,6 +492,24 @@ public class IotExperimentService
         }
 
         return vo;
+    }
+
+    /**
+     * 教师手动重试班级账号与精确 Topic 权限同步。
+     */
+    @Transactional
+    public IotClassConfig retryClassBrokerSync(Long configId)
+    {
+        requirePasscodeSecret();
+        IotClassConfig config = mapper.selectClassConfigById(configId);
+        if (config == null) throw new ServiceException("班级物联配置不存在");
+        IotExperiment experiment = requireExperiment(config.getExperimentId());
+        if (!canViewClassConfig(experiment, config.getEntryYear(), config.getClassCode()))
+            throw new ServiceException("无权同步该班级物联配置");
+        String passcode = IotPasscodeUtil.decrypt(config.getPasscodeCiphertext(), mqttProperties.getPasscodeSecret());
+        syncClassBroker(config, experiment, passcode, true);
+        config.setPasscode(BROKER_SYNC_SYNCED.equals(config.getBrokerSyncStatus()) ? passcode : null);
+        return config;
     }
 
     /**
@@ -540,9 +586,9 @@ public class IotExperimentService
     public List<IotGroup> listGroups(Long experimentId, String entryYear, String classCode)
     {
         IotExperiment experiment = requireExperiment(experimentId);
-        if (!canViewExperiment(experiment)) throw new ServiceException("无权查看该实验数据");
         String ey = entryYear != null ? entryYear.trim() : "";
         String cc = classCode != null ? classCode.replace("班", "").trim() : "";
+        if (!canViewClassConfig(experiment, ey, cc)) throw new ServiceException("无权查看该班级物联数据");
         List<IotGroup> groups = mapper.selectGroupsByExperimentAndClass(experimentId, ey, cc);
 
         List<IotGroupStudent> allStudents = mapper.selectGroupStudentsByExperimentAndClass(experimentId, ey, cc);
@@ -724,6 +770,63 @@ public class IotExperimentService
         return result;
     }
 
+    /**
+     * 将数据库中的课堂口令同步为 EMQX 账号，并绑定到本班 Topic 前缀。
+     * 任一步失败都保留 FAILED 状态，前端据此阻止分发半成功的连接参数。
+     */
+    private void syncClassBroker(IotClassConfig config, IotExperiment experiment, String passcode, boolean disconnectOldClients)
+    {
+        config.setBrokerSyncStatus(BROKER_SYNC_PENDING);
+        config.setBrokerSyncedAt(null);
+        config.setBrokerSyncError(null);
+        mapper.updateClassConfig(config);
+
+        if (StringUtils.isEmpty(passcode))
+        {
+            markBrokerSyncFailed(config, "课堂口令解密失败，请检查服务器加密密钥");
+            return;
+        }
+        if (!emqxAdapter.isBuiltInAuthorizationReady())
+        {
+            markBrokerSyncFailed(config, "EMQX 精确授权源未就绪");
+            return;
+        }
+        if (!emqxAdapter.syncClassAccount(config.getMqttUsername(), passcode))
+        {
+            markBrokerSyncFailed(config, "EMQX 班级账号同步失败");
+            return;
+        }
+        if (!emqxAdapter.syncClassAcl(config.getMqttUsername(),
+                buildClassTopicPrefix(experiment, config.getEntryYear(), config.getClassCode())))
+        {
+            markBrokerSyncFailed(config, "EMQX 班级 Topic 权限同步失败");
+            return;
+        }
+        if (disconnectOldClients && !emqxAdapter.disconnectClientsByUsername(config.getMqttUsername()))
+        {
+            markBrokerSyncFailed(config, "新权限已写入，但旧 MQTT 连接清理失败，请重试");
+            return;
+        }
+
+        config.setBrokerSyncStatus(BROKER_SYNC_SYNCED);
+        config.setBrokerSyncedAt(new Date());
+        config.setBrokerSyncError(null);
+        mapper.updateClassConfig(config);
+    }
+
+    private void markBrokerSyncFailed(IotClassConfig config, String message)
+    {
+        config.setBrokerSyncStatus(BROKER_SYNC_FAILED);
+        config.setBrokerSyncedAt(null);
+        config.setBrokerSyncError(message);
+        mapper.updateClassConfig(config);
+    }
+
+    private String buildPrimaryClientId(Long groupId)
+    {
+        return "primary_g" + (groupId == null ? "0" : groupId);
+    }
+
     public String buildClassTopicPrefix(IotExperiment experiment, String entryYear, String classCode)
     {
         String classSegment = (classCode.matches("\\d") ? "0" + classCode : classCode);
@@ -791,6 +894,13 @@ public class IotExperimentService
     {
         if (canManageExperiment(experiment)) return true;
         return mapper.countTeacherGroupScope(experiment.getExperimentId(), SecurityUtils.getUserId(), SecurityUtils.getDeptId()) > 0;
+    }
+
+    private boolean canViewClassConfig(IotExperiment experiment, String entryYear, String classCode)
+    {
+        return canManageExperiment(experiment)
+                || mapper.countTeacherClassScope(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
+                        entryYear, classCode) > 0;
     }
 
     private boolean belongsToSchool(Long deptId) { return deptId != null && deptId.equals(SecurityUtils.getDeptId()); }

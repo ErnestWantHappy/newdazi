@@ -18,6 +18,9 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.vo.StudentImportResult;
+import com.ruoyi.business.domain.vo.StudentCorrectionPreview;
+import com.ruoyi.business.domain.vo.StudentCorrectionRow;
 import com.ruoyi.business.service.IBizStudentService;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.page.TableDataInfo;
@@ -149,7 +152,7 @@ public class BizStudentController extends BaseController
         second.setEntryYear("2025");
         second.setClassCode("02");
         second.setStudentName("示例学生二");
-        second.setRemark("班号只填 01～10，不要写 601、602");
+        second.setRemark("班号只填 01～99，不要写 601、602");
 
         // 模板带两行示例，避免教师把年级号误写进班级编号。
         util.exportExcel(response, Arrays.asList(first, second), "学生导入模板");
@@ -163,11 +166,70 @@ public class BizStudentController extends BaseController
     @PostMapping("/importData")
     public AjaxResult importData(MultipartFile file) throws Exception
     {
+        long startedAt = System.currentTimeMillis();
         ExcelUtil<BizStudent> util = new ExcelUtil<BizStudent>(BizStudent.class);
         List<BizStudent> studentList = util.importExcel(file.getInputStream());
+        long parsedAt = System.currentTimeMillis();
         String operName = SecurityUtils.getUsername();
-        String message = bizStudentService.importStudent(studentList, operName);
-        return AjaxResult.success(message);
+        StudentImportResult result = bizStudentService.importStudent(studentList, operName);
+        result.setParseDurationMs(parsedAt - startedAt);
+        result.setTotalDurationMs(System.currentTimeMillis() - startedAt);
+        return AjaxResult.success(result.getMessage(), result);
+    }
+
+    /** 下载当前筛选结果作为纠错底表，永久编号和原账号由系统自动带出。 */
+    @PreAuthorize("@ss.hasPermi('business:student:import')")
+    @Log(title = "学生批量纠错", businessType = BusinessType.EXPORT)
+    @PostMapping("/correctionTemplate")
+    public void correctionTemplate(HttpServletResponse response, BizStudent query)
+    {
+        query.setStatus("all");
+        List<BizStudent> students = bizStudentService.selectBizStudentList(query);
+        List<StudentCorrectionRow> rows = new java.util.ArrayList<>();
+        for (BizStudent student : students)
+        {
+            StudentCorrectionRow row = new StudentCorrectionRow();
+            row.setStudentId(student.getStudentId());
+            row.setOriginalUserName(student.getUserName());
+            row.setStudentName(student.getStudentName());
+            row.setEntryYear(student.getEntryYear());
+            row.setClassCode(student.getClassCode());
+            row.setStudentNo(student.getStudentNo());
+            row.setRemark(student.getRemark());
+            rows.add(row);
+        }
+        new ExcelUtil<StudentCorrectionRow>(StudentCorrectionRow.class)
+                .exportExcel(response, rows, "学生批量纠错表");
+    }
+
+    /** 上传纠错表只做校验和预览，不改数据库。 */
+    @PreAuthorize("@ss.hasPermi('business:student:import')")
+    @PostMapping("/correction/preview")
+    public AjaxResult previewCorrection(MultipartFile file) throws Exception
+    {
+        ExcelUtil<StudentCorrectionRow> util = new ExcelUtil<StudentCorrectionRow>(StudentCorrectionRow.class);
+        List<StudentCorrectionRow> rows = util.importExcel(file.getInputStream());
+        return success(bizStudentService.previewStudentCorrections(rows));
+    }
+
+    /** 用户确认预览后原地更新，studentId 和 userId 均保持不变。 */
+    @PreAuthorize("@ss.hasPermi('business:student:edit')")
+    @Log(title = "学生批量纠错", businessType = BusinessType.UPDATE)
+    @PostMapping("/correction/apply")
+    public AjaxResult applyCorrection(@RequestBody List<StudentCorrectionRow> rows)
+    {
+        StudentCorrectionPreview result = bizStudentService.applyStudentCorrections(rows, SecurityUtils.getUsername());
+        return AjaxResult.success("已纠错 " + result.getChangedCount() + " 名学生，历史答题和成绩保持不变", result);
+    }
+
+    /** 停用只禁止登录和退出日常名单，不删除学生及历史数据。 */
+    @PreAuthorize("@ss.hasPermi('business:student:edit')")
+    @Log(title = "学生账号状态", businessType = BusinessType.UPDATE)
+    @PutMapping("/status/{status}")
+    public AjaxResult changeStatus(@PathVariable String status, @RequestBody Long[] studentIds)
+    {
+        int rows = bizStudentService.updateStudentStatus(studentIds, status);
+        return AjaxResult.success("0".equals(status) ? "已恢复 " + rows + " 名学生" : "已停用 " + rows + " 名学生");
     }
 
     /**

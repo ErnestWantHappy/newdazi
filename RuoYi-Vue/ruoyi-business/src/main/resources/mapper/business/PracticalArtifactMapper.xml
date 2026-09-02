@@ -245,6 +245,35 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LIMIT 200
     </select>
 
+    <select id="selectOfficeAttachmentsMissingPreview" resultMap="AttachmentResult">
+        SELECT attachment.*
+        FROM biz_practical_attachment attachment
+        INNER JOIN biz_student_answer answer
+                ON answer.practical_version_id = attachment.version_id
+               AND attachment.file_order = 0
+        WHERE attachment.file_kind = 'OFFICE'
+          AND attachment.preview_status IN ('pending', 'converting')
+          AND attachment.normalized_status = 'success'
+          AND attachment.normalized_pages_json IS NOT NULL
+        ORDER BY attachment.attachment_id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="resetOfficeAttachmentMissingPreview">
+        UPDATE biz_practical_attachment
+        SET preview_status = 'pending',
+            preview_path = NULL,
+            preview_error_message = NULL,
+            normalized_status = 'pending',
+            normalized_error_message = NULL,
+            update_time = #{retryTime}
+        WHERE attachment_id = #{attachmentId}
+          AND file_kind = 'OFFICE'
+          AND preview_status IN ('pending', 'converting')
+          AND normalized_status = 'success'
+          AND normalized_pages_json IS NOT NULL
+    </update>
+
     <update id="resetAttachmentNormalization">
         UPDATE biz_practical_attachment
         SET normalized_status = 'pending',

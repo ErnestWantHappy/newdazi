@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">IOT CLASSROOM</p>
         <h2>物联网实验工作台</h2>
-        <p class="muted">在 Mind+ 的 SIoT 模块中连接 EMQX MQTT 服务，使用掌控板完成编程；本页面提供本组 Topic、课堂连接参数与本组收到的数据。</p>
+        <p class="muted">小学实验板请使用 Python 代码连接 MQTT；初中掌控板继续使用 Mind+。本页面提供本组代码、Topic 和实验数据。</p>
       </div>
       <div class="heading-actions">
         <el-button text type="primary" @click="goHome">返回学生首页</el-button>
@@ -23,7 +23,7 @@
         <span class="notice-title">课堂物联使用提示</span>
       </template>
       <div class="notice-body">
-        本班同学使用相同的 MQTT 账号和课堂口令；不同小组使用各自专属的 Topic。请在 Mind+ 积木中严格填入本组 Topic，不要修改。（注：此为课堂业务隔离，非组间强安全隔离）
+        本班同学使用相同的 MQTT 账号和课堂口令；不同小组使用各自专属的 Topic。小学实验板直接复制本组 Python 代码，初中掌控板使用 Mind+ 参数。（注：不同班级由 Broker ACL 隔离）
       </div>
     </el-alert>
 
@@ -41,6 +41,14 @@
     />
 
     <template v-else>
+      <el-alert
+        v-if="overview.brokerSyncStatus && overview.brokerSyncStatus !== 'SYNCED'"
+        class="mb-3"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="本班 MQTT 连接参数尚未准备完成，请联系老师在物联配置页重试同步。历史数据仍可正常查看。"
+      />
       <!-- 实验概览与参数卡片 -->
       <el-row :gutter="20">
         <!-- 左侧：实验与班级凭据 -->
@@ -79,11 +87,40 @@
               </el-descriptions-item>
             </el-descriptions>
 
-            <div class="copy-all-bar mt-3">
-              <el-button type="primary" size="large" icon="DocumentCopy" class="full-btn" @click="copyMindPlusConfig">
-                一键复制 Mind+ SIoT / EMQX 配置参数
-              </el-button>
-            </div>
+            <el-tabs v-model="connectMode" class="mt-3">
+              <el-tab-pane label="小学实验板 Python" name="python">
+                <el-alert
+                  type="info"
+                  :closable="false"
+                  title="复制后粘贴到 Python v1.0_N17，再在代码顶部填写本地 2.4G WiFi 名称和密码。"
+                  class="mb-2"
+                />
+                <el-button
+                  type="success"
+                  size="large"
+                  icon="DocumentCopy"
+                  class="full-btn"
+                  :disabled="overview.brokerSyncStatus !== 'SYNCED' || !overview.groupId"
+                  @click="copyPrimaryPythonConfig"
+                >
+                  一键复制我组的实验板 Python 代码
+                </el-button>
+              </el-tab-pane>
+              <el-tab-pane label="初中 Mind+" name="mindplus">
+                <div class="copy-all-bar">
+                  <el-button
+                    type="primary"
+                    size="large"
+                    icon="DocumentCopy"
+                    class="full-btn"
+                    :disabled="overview.brokerSyncStatus !== 'SYNCED'"
+                    @click="copyMindPlusConfig"
+                  >
+                    一键复制 Mind+ SIoT / EMQX 配置参数
+                  </el-button>
+                </div>
+              </el-tab-pane>
+            </el-tabs>
           </el-card>
         </el-col>
 
@@ -199,12 +236,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getIotStudentOverview, listIotStudentMessages } from '@/api/business/iot'
 import { copyToClipboard } from '@/utils/clipboard'
+import { buildPrimaryIotPythonCode } from '@/utils/iotPythonTemplate'
 
 const route = useRoute()
 const router = useRouter()
 const lessonId = ref(Number(route.query.lessonId) || undefined)
 const overview = ref(null)
 const loading = ref(false)
+// 小学实验板是当前页面的默认入口；初中掌控板仍可切换到 Mind+。
+const connectMode = ref('python')
 
 // 本组历史数据（分页倒序）
 const historyRows = ref([])
@@ -302,6 +342,20 @@ function copyMindPlusConfig() {
   const o = overview.value
   const text = `服务器：${o.brokerUrl || '10.52.1.129'}\n端口：${o.brokerPort || 1883}\n账号：${o.mqttUsername}\n密码：${o.passcode}\nTopic：${o.topic}`
   copyText(text, 'Mind+ 配置参数')
+}
+
+function copyPrimaryPythonConfig() {
+  if (!overview.value) return
+  const o = overview.value
+  const code = buildPrimaryIotPythonCode({
+    brokerUrl: o.brokerUrl,
+    brokerPort: o.brokerPort,
+    clientId: o.pythonClientId,
+    username: o.mqttUsername,
+    password: o.passcode,
+    topic: o.topic
+  })
+  copyText(code, '本组实验板 Python 代码')
 }
 
 function formatTime(value) {

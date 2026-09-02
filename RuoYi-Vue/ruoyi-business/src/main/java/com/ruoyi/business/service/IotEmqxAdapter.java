@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.ruoyi.business.config.IotMqttProperties;
 
@@ -117,6 +118,8 @@ public class IotEmqxAdapter
             rules.add(rule);
 
             JSONObject body = new JSONObject();
+            // EMQX v5 的用户规则 PUT 接口要求同时携带 username，缺少时会返回 400。
+            body.put("username", username);
             body.put("rules", rules);
 
             HttpResult response = sendRequest(aclUrl, "PUT", body.toJSONString());
@@ -134,6 +137,87 @@ public class IotEmqxAdapter
         catch (Exception e)
         {
             log.warn("EMQX 班级 ACL 设置异常 username={}, 原因: {}", username, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 确认精确授权使用的内置数据库数据源已经启用。
+     * 未就绪时不能把班级参数发给学生，否则账号可能落入旧的宽泛文件规则。
+     */
+    public boolean isBuiltInAuthorizationReady()
+    {
+        if (!isApiConfigured()) return false;
+        String url = trimTrailingSlash(properties.getEmqxApiUrl()) + "/authorization/sources";
+        try
+        {
+            HttpResult response = sendRequest(url, "GET", null);
+            if (response.statusCode != 200) return false;
+
+            Object parsed = JSON.parse(response.body);
+            JSONArray sources = null;
+            if (parsed instanceof JSONArray)
+            {
+                sources = (JSONArray) parsed;
+            }
+            else if (parsed instanceof JSONObject)
+            {
+                JSONObject object = (JSONObject) parsed;
+                sources = object.getJSONArray("sources");
+                if (sources == null) sources = object.getJSONArray("data");
+            }
+            if (sources == null) return false;
+
+            for (int i = 0; i < sources.size(); i++)
+            {
+                JSONObject source = sources.getJSONObject(i);
+                if (source != null && "built_in_database".equals(source.getString("type"))
+                        && !Boolean.FALSE.equals(source.getBoolean("enable")))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (Exception e)
+        {
+            log.warn("EMQX 精确授权源检查异常，原因: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 按账号踢掉旧 MQTT 连接。口令轮换后立即执行，避免旧会话继续发布。
+     */
+    public boolean disconnectClientsByUsername(String username)
+    {
+        if (!isApiConfigured() || username == null || username.trim().isEmpty()) return false;
+        String baseUrl = trimTrailingSlash(properties.getEmqxApiUrl());
+        String listUrl = baseUrl + "/clients?username=" + urlEncode(username) + "&limit=1000";
+        try
+        {
+            HttpResult response = sendRequest(listUrl, "GET", null);
+            if (response.statusCode != 200) return false;
+            JSONObject object = JSON.parseObject(response.body);
+            JSONArray clients = object == null ? null : object.getJSONArray("data");
+            if (clients == null || clients.isEmpty()) return true;
+
+            boolean success = true;
+            for (int i = 0; i < clients.size(); i++)
+            {
+                String clientId = clients.getJSONObject(i).getString("clientid");
+                if (clientId == null || clientId.trim().isEmpty()) continue;
+                HttpResult deleteResponse = sendRequest(baseUrl + "/clients/" + urlEncode(clientId), "DELETE", null);
+                if (deleteResponse.statusCode != 200 && deleteResponse.statusCode != 204 && deleteResponse.statusCode != 404)
+                {
+                    success = false;
+                }
+            }
+            return success;
+        }
+        catch (Exception e)
+        {
+            log.warn("EMQX 旧连接清理异常 username={}, 原因: {}", username, e.getMessage());
             return false;
         }
     }

@@ -163,21 +163,15 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
             }
             catch (Exception ex)
             {
-                failed++;
-                failMsgs.add(pureClass + "班：推进失败");
-                log.warn("手动推进班级失败 class={}: {}", pureClass, ex.getMessage());
+                // 未达条件由 ServiceException 分支汇总；未知异常必须继续上抛，不能伪装成普通跳过。
+                log.error("手动推进班级发生系统异常 class={}", pureClass, ex);
+                throw new ServiceException(pureClass + "班推进时发生系统异常，请稍后重试");
             }
         }
         result.put("advanced", advanced);
         result.put("failed", failed);
         result.put("successMessages", successMsgs);
         result.put("failMessages", failMsgs);
-        if (advanced == 0 && failed > 0)
-        {
-            // 全部失败时抛错，便于前端统一提示
-            String detail = failMsgs.isEmpty() ? "所选班级均未推进成功" : String.join("；", failMsgs);
-            throw new ServiceException(detail);
-        }
         StringBuilder msg = new StringBuilder();
         msg.append("成功推进 ").append(advanced).append(" 个班级");
         if (failed > 0)

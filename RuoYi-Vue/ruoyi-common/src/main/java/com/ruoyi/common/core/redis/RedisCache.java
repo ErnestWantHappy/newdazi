@@ -50,6 +50,29 @@ public class RedisCache
     }
 
     /**
+     * 仅在键不存在时写入带有效期的值，用于业务防重锁。
+     */
+    public <T> Boolean setCacheObjectIfAbsent(final String key, final T value, final long timeout,
+            final TimeUnit timeUnit)
+    {
+        return redisTemplate.opsForValue().setIfAbsent(key, value, timeout, timeUnit);
+    }
+
+    /**
+     * 只有锁值仍属于当前调用方时才删除，避免超时后误删其他请求的新锁。
+     */
+    public boolean deleteObjectIfValueMatches(final String key, final Object expectedValue)
+    {
+        String script = "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                + "return redis.call('del', KEYS[1]) else return 0 end";
+        org.springframework.data.redis.core.script.DefaultRedisScript<Long> redisScript =
+                new org.springframework.data.redis.core.script.DefaultRedisScript<>(script, Long.class);
+        Long deleted = (Long) redisTemplate.execute(redisScript,
+                java.util.Collections.singletonList(key), expectedValue);
+        return deleted != null && deleted > 0;
+    }
+
+    /**
      * 设置有效时间
      *
      * @param key Redis键

@@ -32,6 +32,9 @@ public class IotStudentOverviewVo
     private Integer brokerPort;
     private String mqttUsername;
     private String passcode;
+    private String pythonClientId;
+    private String brokerSyncStatus;
+    private String brokerSyncError;
 
     private List<StudentMemberVo> groupMembers;
 
@@ -128,6 +131,15 @@ public class IotStudentOverviewVo
 
     public String getPasscode() { return passcode; }
     public void setPasscode(String passcode) { this.passcode = passcode; }
+
+    public String getPythonClientId() { return pythonClientId; }
+    public void setPythonClientId(String pythonClientId) { this.pythonClientId = pythonClientId; }
+
+    public String getBrokerSyncStatus() { return brokerSyncStatus; }
+    public void setBrokerSyncStatus(String brokerSyncStatus) { this.brokerSyncStatus = brokerSyncStatus; }
+
+    public String getBrokerSyncError() { return brokerSyncError; }
+    public void setBrokerSyncError(String brokerSyncError) { this.brokerSyncError = brokerSyncError; }
 
     public List<StudentMemberVo> getGroupMembers() { return groupMembers; }
     public void setGroupMembers(List<StudentMemberVo> groupMembers) { this.groupMembers = groupMembers; }

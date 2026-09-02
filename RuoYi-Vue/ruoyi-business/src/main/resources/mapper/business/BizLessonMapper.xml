@@ -23,6 +23,7 @@
         <result property="iotEnabled"    column="iot_enabled"    />
         <result property="creatorId"    column="creator_id"    />
         <result property="deptId"    column="dept_id"    />
+        <result property="status"    column="status"    />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
@@ -32,7 +33,7 @@
     <sql id="selectBizLessonVo">
         select lesson_id, lesson_title, grade, entry_year, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count,
                lesson_mode, teacher_note, auto_advance_enabled, auto_advance_threshold_pct, auto_advance_delay_hours, auto_advance_ready_time,
-               iot_enabled, creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
+               iot_enabled, creator_id, dept_id, status, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
 
     <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
@@ -44,6 +45,7 @@
             <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
             <if test="creatorId != null"> and creator_id = #{creatorId}</if>
             <if test="deptId != null"> and dept_id = #{deptId}</if>
+            <if test="status != null and status != '' and status != 'all'"> and IFNULL(status, '0') = #{status}</if>
         </where>
     </select>
 
@@ -135,6 +137,12 @@
         update biz_lesson set auto_advance_ready_time = null where lesson_id = #{lessonId}
     </update>
 
+    <update id="updateLessonStatus">
+        update biz_lesson
+        set status = #{status}, update_by = #{updateBy}, update_time = now(), auto_advance_ready_time = null
+        where lesson_id = #{lessonId}
+    </update>
+
     <!-- 教师统一推进策略：读一门常规课配置即可 -->
     <select id="selectAdvancePolicyByCreator" resultMap="BizLessonResult">
         select lesson_id, lesson_title, grade, entry_year, semester, lesson_num,
@@ -145,6 +153,7 @@
         from biz_lesson
         where create_by = #{creatorName}
           and dept_id = #{deptId}
+          and IFNULL(status, '0') = '0'
           and IFNULL(lesson_mode, 'assessment') &lt;&gt; 'attendance'
         order by update_time desc, lesson_id desc
         limit 1
@@ -198,6 +207,7 @@
         inner join biz_lesson_assignment a on a.lesson_id = l.lesson_id
         where IFNULL(l.auto_advance_enabled, 0) = 1
           and IFNULL(l.lesson_mode, 'assessment') &lt;&gt; 'attendance'
+          and IFNULL(l.status, '0') = '0'
     </select>
 
     <delete id="deleteBizLessonByLessonId" parameterType="Long">
@@ -270,6 +280,7 @@
             entry_year = #{entryYear}
           AND create_by = #{creatorName}
           AND dept_id = #{deptId}
+          AND IFNULL(status, '0') = '0'
         ORDER BY
             create_time DESC,
             lesson_id DESC
@@ -404,6 +415,7 @@
             AND l.entry_year = #{entryYear}
             AND la.entry_year = #{entryYear}
             AND l.create_by != #{creatorName}
+            AND IFNULL(l.status, '0') = '0'
         ORDER BY
             l.create_time DESC,
             l.lesson_id DESC

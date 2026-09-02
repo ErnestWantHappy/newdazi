@@ -31,6 +31,9 @@ public class PracticalSubmissionVo {
     
     /** 题目内容 */
     private String questionContent;
+
+    /** 操作题作答方式：FILE、PYTHON、FLOWCHART */
+    private String practicalMode;
     
     /** 学生答案（文件路径） */
     private String studentAnswer;
@@ -97,6 +100,9 @@ public class PracticalSubmissionVo {
 
     public String getQuestionContent() { return questionContent; }
     public void setQuestionContent(String questionContent) { this.questionContent = questionContent; }
+
+    public String getPracticalMode() { return practicalMode; }
+    public void setPracticalMode(String practicalMode) { this.practicalMode = practicalMode; }
 
     public String getStudentAnswer() { return studentAnswer; }
     public void setStudentAnswer(String studentAnswer) { this.studentAnswer = studentAnswer; }

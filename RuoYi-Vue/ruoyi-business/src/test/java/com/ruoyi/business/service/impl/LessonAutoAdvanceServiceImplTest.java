@@ -14,6 +14,7 @@ import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.LessonClassScopeMapper;
+import com.ruoyi.common.exception.ServiceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -115,6 +118,22 @@ class LessonAutoAdvanceServiceImplTest
         assertEquals(0, result.get("advanced"));
         assertEquals(1, result.get("skipped"));
         verify(assignmentMapper, never()).selectAssignmentsByLessonId(anyLong());
+    }
+
+    @Test
+    void unmetManualAdvanceConditionReturnsStructuredBusinessResult()
+    {
+        LessonAutoAdvanceServiceImpl proxy = spy(service);
+        ReflectionTestUtils.setField(service, "self", proxy);
+        doThrow(new ServiceException("有成绩 0/43 人，需达到 50%"))
+                .when(proxy).manualAdvanceOneClassTx("2025", "7");
+
+        Map<String, Object> result = service.manualAdvanceClasses("2025", Collections.singletonList("7班"));
+
+        assertEquals(0, result.get("advanced"));
+        assertEquals(1, result.get("failed"));
+        assertEquals("成功推进 0 个班级，1 个未达条件或无法推进（7班：有成绩 0/43 人，需达到 50%）",
+                result.get("message"));
     }
 
     @Test

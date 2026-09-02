@@ -73,6 +73,11 @@ public interface PracticalArtifactMapper
             @Param("stuckBefore") Date stuckBefore,
             @Param("maxRetryCount") Integer maxRetryCount);
 
+    List<PracticalAttachment> selectOfficeAttachmentsMissingPreview(@Param("limit") Integer limit);
+
+    int resetOfficeAttachmentMissingPreview(@Param("attachmentId") Long attachmentId,
+                                            @Param("retryTime") Date retryTime);
+
     int resetAttachmentNormalization(@Param("attachmentId") Long attachmentId,
                                      @Param("retryTime") Date retryTime);
 

@@ -6,6 +6,7 @@
 flowchart LR
     U[管理员 / 教师 / 学生 / 教研员] --> FE[Vue3 前端\nRuoYi-Vue3]
     FE -->|HTTP / WebSocket| API[Spring Boot\nruoyi-admin + ruoyi-business]
+    FE --> LF[画程 LogicFlow\n随 Vue3 制品发布]
     API --> DB[(MySQL)]
     API --> REDIS[(Redis)]
     API --> FILES[uploadPath 文件与作品]
@@ -24,6 +25,8 @@ flowchart LR
 - `RuoYi-Vue3/src/api`：前端 API 封装；`views`：角色和业务页面；`router`、`permission.js`：前端路由与守卫。
 
 动态路由、Spring 注入、MyBatis XML 和反射会让静态调用图不完整。因此排查端到端链路必须至少核对：前端 API → Controller → Service → Mapper XML/SQL → 权限校验 → 单测或接口证据。
+
+画程的 LogicFlow 仅是 Vue3 内嵌图编辑底座，不是独立服务，也不拥有课程权限或作品真源。教师配置、课程快照、学生草稿、正式提交、结构检查和成绩确认均由 `ruoyi-business` 与 MySQL 承担；浏览器离线备份只用于防丢和冲突恢复，不能绕过服务端修订号与交卷事务。
 
 ## 真实时间链路
 

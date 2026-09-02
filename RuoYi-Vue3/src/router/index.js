@@ -48,6 +48,12 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/public/research-notice/:token',
+    component: () => import('@/views/public/researchNotice'),
+    hidden: true,
+    meta: { title: '活动通知' }
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true

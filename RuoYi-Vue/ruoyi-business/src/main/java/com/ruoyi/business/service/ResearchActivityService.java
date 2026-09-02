@@ -3,6 +3,7 @@ package com.ruoyi.business.service;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -11,7 +12,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Base64;
+import java.util.Calendar;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +41,8 @@ import com.ruoyi.business.domain.dto.ResearchTopicSaveRequest;
 import com.ruoyi.business.domain.vo.ResearchNotificationSummaryVo;
 import com.ruoyi.business.domain.vo.ResearchNotificationVo;
 import com.ruoyi.business.domain.vo.ResearchPostVo;
+import com.ruoyi.business.domain.vo.ResearchPublicNoticeVo;
+import com.ruoyi.business.domain.vo.ResearchPublicShareVo;
 import com.ruoyi.business.domain.vo.ResearchResourceVo;
 import com.ruoyi.business.domain.vo.ResearchTeacherOptionVo;
 import com.ruoyi.business.domain.vo.ResearchTopicVo;
@@ -51,6 +59,8 @@ import com.ruoyi.common.utils.StringUtils;
 public class ResearchActivityService
 {
     private static final Logger log = LoggerFactory.getLogger(ResearchActivityService.class);
+    private static final SecureRandom PUBLIC_SHARE_RANDOM = new SecureRandom();
+    private static final Pattern PUBLIC_SHARE_TOKEN = Pattern.compile("^[A-Za-z0-9_-]{43}$");
 
     @Autowired private ResearchActivityMapper mapper;
     @Autowired private ResearchActivityAccessService accessService;
@@ -459,6 +469,117 @@ public class ResearchActivityService
     {
         accessService.requireReadableRole();
         return uploadService.storeImage(file);
+    }
+
+    @Transactional
+    public ResearchPublicShareVo createPublicShare(Long topicId, Integer expireDays)
+    {
+        accessService.requireManager();
+        requireNoticeTopic(topicId);
+        Date expireTime = publicShareExpireTime(expireDays);
+        byte[] bytes = new byte[32];
+        PUBLIC_SHARE_RANDOM.nextBytes(bytes);
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        int affected = mapper.updatePublicShare(topicId, DigestUtils.sha256Hex(token), expireTime, SecurityUtils.getUsername());
+        if (affected != 1) throw new ServiceException("通知不存在或无法生成分享链接");
+
+        ResearchPublicShareVo result = publicShareStatus(topicId);
+        // 明文令牌只在本次生成响应中短暂返回，数据库永不保存。
+        result.setShareUrl(token);
+        return result;
+    }
+
+    public ResearchPublicShareVo getPublicShareStatus(Long topicId)
+    {
+        accessService.requireManager();
+        requireNoticeTopic(topicId);
+        return publicShareStatus(topicId);
+    }
+
+    @Transactional
+    public void revokePublicShare(Long topicId)
+    {
+        accessService.requireManager();
+        requireNoticeTopic(topicId);
+        if (mapper.revokePublicShare(topicId, SecurityUtils.getUsername()) != 1)
+        {
+            throw new ServiceException("通知不存在或无法撤销分享链接");
+        }
+    }
+
+    public ResearchPublicNoticeVo getPublicNotice(String token)
+    {
+        return requirePublicNotice(token);
+    }
+
+    public Path getPublicNoticeImage(String token, String imageUrl)
+    {
+        String tokenHash = validateAndHashPublicToken(token);
+        String contentHtml = mapper.selectPublicNoticeHtmlByTokenHash(tokenHash);
+        if (StringUtils.isBlank(contentHtml) || !containsImageSource(contentHtml, imageUrl))
+        {
+            throw new ServiceException("通知图片不存在或已失效", 404);
+        }
+        return uploadService.resolvePublicImagePath(imageUrl);
+    }
+
+    private ResearchPublicNoticeVo requirePublicNotice(String token)
+    {
+        ResearchPublicNoticeVo notice = mapper.selectPublicNoticeByTokenHash(validateAndHashPublicToken(token));
+        if (notice == null) throw new ServiceException("该通知不存在或已失效", 404);
+        return notice;
+    }
+
+    private String validateAndHashPublicToken(String token)
+    {
+        if (token == null || !PUBLIC_SHARE_TOKEN.matcher(token).matches())
+        {
+            throw new ServiceException("该通知不存在或已失效", 404);
+        }
+        return DigestUtils.sha256Hex(token);
+    }
+
+    private void requireNoticeTopic(Long topicId)
+    {
+        BizResearchTopic topic = accessService.requireActiveTopic(topicId);
+        if (!ResearchActivityConstants.TOPIC_NOTICE.equals(topic.getTopicType()))
+        {
+            throw new ServiceException("只有活动通知可以生成公开分享链接");
+        }
+    }
+
+    private ResearchPublicShareVo publicShareStatus(Long topicId)
+    {
+        BizResearchTopic topic = accessService.requireActiveTopic(topicId);
+        ResearchPublicShareVo result = new ResearchPublicShareVo();
+        boolean active = ResearchActivityConstants.YES.equals(topic.getPublicShareEnabled())
+                && StringUtils.isNotBlank(topic.getPublicShareTokenHash())
+                && (topic.getPublicShareExpireTime() == null || topic.getPublicShareExpireTime().after(new Date()));
+        result.setEnabled(active);
+        result.setExpireTime(topic.getPublicShareExpireTime());
+        return result;
+    }
+
+    private Date publicShareExpireTime(Integer expireDays)
+    {
+        int days = expireDays == null ? ResearchActivityConstants.PUBLIC_SHARE_DEFAULT_DAYS : expireDays;
+        if (days == 0) return null;
+        if (days != ResearchActivityConstants.PUBLIC_SHARE_SHORT_DAYS
+                && days != ResearchActivityConstants.PUBLIC_SHARE_MAX_DAYS)
+        {
+            throw new ServiceException("分享有效期仅支持7天、30天或永久");
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        calendar.add(Calendar.DAY_OF_YEAR, days);
+        return calendar.getTime();
+    }
+
+    private boolean containsImageSource(String contentHtml, String imageUrl)
+    {
+        if (StringUtils.isBlank(imageUrl)) return false;
+        return Jsoup.parseBodyFragment(contentHtml).select("img[src]").stream()
+                .anyMatch(image -> imageUrl.equals(image.attr("src")));
     }
 
     private int sendNotificationInternal(Long topicId, ResearchNotificationSendRequest request)

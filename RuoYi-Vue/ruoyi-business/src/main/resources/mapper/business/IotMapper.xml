@@ -31,6 +31,9 @@
         <result property="groupVersion" column="group_version"/>
         <result property="passcodeUpdatedAt" column="passcode_updated_at"/>
         <result property="groupedAt" column="grouped_at"/>
+        <result property="brokerSyncStatus" column="broker_sync_status"/>
+        <result property="brokerSyncedAt" column="broker_synced_at"/>
+        <result property="brokerSyncError" column="broker_sync_error"/>
         <result property="status" column="status"/>
         <result property="createBy" column="create_by"/>
         <result property="createTime" column="create_time"/>
@@ -131,9 +134,15 @@
         where c.experiment_id = #{experimentId} and c.entry_year = #{entryYear} and c.class_code = #{classCode}
     </select>
 
+    <select id="selectClassConfigById" resultMap="classConfigResult">
+        select c.*
+        from biz_iot_class_config c
+        where c.config_id = #{configId}
+    </select>
+
     <insert id="insertClassConfig" parameterType="IotClassConfig" useGeneratedKeys="true" keyProperty="configId">
-        insert into biz_iot_class_config (experiment_id, dept_id, entry_year, class_code, group_size, mqtt_username, passcode_ciphertext, passcode_hash, passcode_version, group_version, passcode_updated_at, grouped_at, status, create_by, create_time)
-        values (#{experimentId}, #{deptId}, #{entryYear}, #{classCode}, #{groupSize}, #{mqttUsername}, #{passcodeCiphertext}, #{passcodeHash}, #{passcodeVersion}, #{groupVersion}, #{passcodeUpdatedAt}, #{groupedAt}, '0', #{createBy}, now())
+        insert into biz_iot_class_config (experiment_id, dept_id, entry_year, class_code, group_size, mqtt_username, passcode_ciphertext, passcode_hash, passcode_version, group_version, passcode_updated_at, grouped_at, broker_sync_status, broker_synced_at, broker_sync_error, status, create_by, create_time)
+        values (#{experimentId}, #{deptId}, #{entryYear}, #{classCode}, #{groupSize}, #{mqttUsername}, #{passcodeCiphertext}, #{passcodeHash}, #{passcodeVersion}, #{groupVersion}, #{passcodeUpdatedAt}, #{groupedAt}, #{brokerSyncStatus}, #{brokerSyncedAt}, #{brokerSyncError}, '0', #{createBy}, now())
     </insert>
 
     <update id="updateClassConfig" parameterType="IotClassConfig">
@@ -146,6 +155,9 @@
             group_version = #{groupVersion},
             passcode_updated_at = #{passcodeUpdatedAt},
             grouped_at = #{groupedAt},
+            broker_sync_status = #{brokerSyncStatus},
+            broker_synced_at = #{brokerSyncedAt},
+            broker_sync_error = #{brokerSyncError},
             status = #{status},
             update_time = now()
         where config_id = #{configId}

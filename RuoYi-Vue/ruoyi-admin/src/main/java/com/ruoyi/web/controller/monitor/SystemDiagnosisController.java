@@ -546,15 +546,17 @@ public class SystemDiagnosisController
         {
             risks.add("Redis 缓存不可用，登录令牌、验证码、防重提交和限流可能受影响。");
         }
-        if (!errors.isEmpty())
+        long actionableErrors = countActionable(errors);
+        if (actionableErrors > 0)
         {
-            risks.add("近 " + diagnosisHours + " 小时内有 " + errors.size() + " 条异常操作，请查看错误信息与处置建议。");
+            risks.add("近 " + diagnosisHours + " 小时内有 " + actionableErrors + " 条需关注异常，请查看错误信息与处置建议。");
         }
-        if (!slowOperations.isEmpty())
+        long actionableSlowOperations = countActionable(slowOperations);
+        if (actionableSlowOperations > 0)
         {
-            risks.add("近 " + diagnosisHours + " 小时内有 " + slowOperations.size() + " 个慢接口，可能影响并发体验。");
+            risks.add("近 " + diagnosisHours + " 小时内有 " + actionableSlowOperations + " 个需关注慢接口，可能影响并发体验。");
         }
-        if (!slowSql.isEmpty() && errors.isEmpty() && slowOperations.isEmpty())
+        if (!slowSql.isEmpty() && actionableErrors == 0 && actionableSlowOperations == 0)
         {
             risks.add("Druid 已记录 SQL 耗时，建议结合慢接口和操作日志定位用户行为。");
         }
@@ -584,6 +586,17 @@ public class SystemDiagnosisController
         health.put("risks", risks);
         health.put("scopeLabel", formatScopeLabel(diagnosisHours));
         return health;
+    }
+
+    private long countActionable(List<Map<String, Object>> rows)
+    {
+        if (rows == null)
+        {
+            return 0L;
+        }
+        return rows.stream()
+                .filter(row -> !"info".equals(String.valueOf(row.get("severity"))))
+                .count();
     }
 
     @SuppressWarnings("unchecked")

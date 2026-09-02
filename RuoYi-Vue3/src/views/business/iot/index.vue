@@ -61,12 +61,19 @@
                 已生成第 {{ classConfig.groupVersion || 1 }} 版分组快照 ({{ currentGroups.length }} 组)
               </el-tag>
               <el-tag v-else type="info" size="small">尚未生成分组</el-tag>
+              <el-tag
+                v-if="classConfig?.groupedAt"
+                :type="brokerStatusType(classConfig.brokerSyncStatus)"
+                size="small"
+              >
+                {{ brokerStatusLabel(classConfig.brokerSyncStatus) }}
+              </el-tag>
             </div>
             <div class="header-actions">
               <el-button
                 type="success"
                 icon="FullScreen"
-                :disabled="!classConfig?.groupedAt"
+                :disabled="!classConfig?.groupedAt || classConfig?.brokerSyncStatus !== 'SYNCED'"
                 @click="openClassCard"
               >
                 课堂配置卡 (投屏/打印)
@@ -76,6 +83,25 @@
         </template>
 
         <div class="console-body">
+          <el-alert
+            v-if="classConfig?.groupedAt && classConfig?.brokerSyncStatus !== 'SYNCED'"
+            class="mb-3"
+            :type="classConfig?.brokerSyncStatus === 'FAILED' ? 'error' : 'warning'"
+            :closable="false"
+            show-icon
+          >
+            <template #title>
+              {{ classConfig?.brokerSyncError || 'MQTT 账号与精确 Topic 权限正在等待同步' }}
+              <el-button
+                link
+                type="primary"
+                :loading="syncingBroker"
+                @click="retryBrokerSync"
+              >
+                重试同步
+              </el-button>
+            </template>
+          </el-alert>
           <el-row :gutter="20" class="align-center">
             <!-- 班级账号与 6 位口令 -->
             <el-col :xs="24" :sm="12" :lg="10">
@@ -371,6 +397,8 @@
           <p class="card-class-subtitle">{{ classCard.entryYear }}级{{ classCard.classCode }}班 课堂配置卡</p>
         </div>
 
+        <el-tabs v-model="classCardMode">
+          <el-tab-pane label="初中 Mind+" name="mindplus">
         <el-descriptions :column="2" border class="server-meta-table mb-3">
           <el-descriptions-item label="MQTT 服务器">
             <span class="meta-val highlight">{{ classCard.brokerUrl }}</span>
@@ -413,6 +441,37 @@
             title="提示：同班学生使用相同的 MQTT 账号和课堂口令；各组请在 Mind+ SIoT 模块中配置对应的专属 Topic。"
           />
         </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="小学实验板 Python" name="python">
+            <el-alert
+              type="success"
+              :closable="false"
+              show-icon
+              title="已使用与初中相同的班级账号和小组 Topic。选择小组复制代码，再在 N17 工具中填写本地 2.4G WiFi。"
+              class="mb-3"
+            />
+            <el-descriptions :column="2" border class="server-meta-table mb-3">
+              <el-descriptions-item label="MQTT 服务器"><code>{{ classCard.brokerUrl }}</code></el-descriptions-item>
+              <el-descriptions-item label="端口"><code>{{ classCard.brokerPort }}</code></el-descriptions-item>
+              <el-descriptions-item label="班级账号"><code>{{ classCard.mqttUsername }}</code></el-descriptions-item>
+              <el-descriptions-item label="课堂口令"><span class="passcode-large">{{ classCard.passcode }}</span></el-descriptions-item>
+            </el-descriptions>
+            <div class="group-projection-grid">
+              <div v-for="g in classCard.groups" :key="`python-${g.groupId}`" class="proj-group-card">
+                <div class="proj-group-header">
+                  <span class="p-group-title">{{ g.groupName }}</span>
+                  <el-button type="primary" size="small" icon="CopyDocument" @click="copyPrimaryPython(g)">
+                    复制本组 Python 代码
+                  </el-button>
+                </div>
+                <div class="proj-group-topic"><span class="p-topic-label">ClientID:</span> <code>{{ g.pythonClientId }}</code></div>
+                <div class="proj-group-topic"><span class="p-topic-label">Topic:</span> <code class="p-topic-val">{{ g.topic }}</code></div>
+                <div class="proj-group-members">{{ (g.memberNames || []).join('、') }}</div>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
 
       <template #footer>
@@ -437,9 +496,11 @@ import {
   listIotGroups,
   listIotLessonClasses,
   listIotMessages,
-  rotateIotClassPasscode
+  rotateIotClassPasscode,
+  syncIotClassBroker
 } from '@/api/business/iot'
 import { copyToClipboard } from '@/utils/clipboard'
+import { buildPrimaryIotPythonCode } from '@/utils/iotPythonTemplate'
 
 const query = new URLSearchParams(window.location.search)
 const lessonId = ref(Number(query.get('lessonId')) || undefined)
@@ -461,11 +522,13 @@ const loading = ref(false)
 const saving = ref(false)
 const groupingLoading = ref(false)
 const rotating = ref(false)
+const syncingBroker = ref(false)
 const errorMessage = ref('')
 
 const experimentDialog = ref(false)
 const classCardDialog = ref(false)
 const classCard = ref(null)
+const classCardMode = ref('mindplus')
 
 const experimentForm = reactive({ activityCode: '', title: '', description: '' })
 
@@ -785,7 +848,11 @@ function confirmRotatePasscode() {
         classCode: cls.classCode
       })
       classConfig.value = res?.data || classConfig.value
-      ElMessage.success('课堂口令已轮换为：' + (res?.data?.passcode || ''))
+      if (res?.data?.brokerSyncStatus === 'SYNCED') {
+        ElMessage.success('课堂口令已轮换为：' + (res?.data?.passcode || ''))
+      } else {
+        ElMessage.error(res?.data?.brokerSyncError || '新口令已保存，但 MQTT 权限同步失败，请点击重试同步')
+      }
     } catch (error) {
       ElMessage.error(error?.message || '口令轮换失败')
     } finally {
@@ -800,10 +867,41 @@ async function openClassCard() {
   try {
     const res = await getIotClassCard(experimentId.value, cls.entryYear, cls.classCode)
     classCard.value = res?.data || null
+    classCardMode.value = 'mindplus'
     classCardDialog.value = true
   } catch (error) {
     ElMessage.error(error?.message || '获取配置卡失败')
   }
+}
+
+async function retryBrokerSync() {
+  if (!classConfig.value?.configId) return
+  syncingBroker.value = true
+  try {
+    const res = await syncIotClassBroker(classConfig.value.configId)
+    classConfig.value = res?.data || classConfig.value
+    if (classConfig.value?.brokerSyncStatus === 'SYNCED') {
+      ElMessage.success('MQTT 账号与班级 Topic 权限同步成功')
+    } else {
+      ElMessage.error(classConfig.value?.brokerSyncError || '同步失败，请检查 EMQX 服务')
+    }
+  } catch (error) {
+    ElMessage.error(error?.message || '同步失败，请稍后重试')
+  } finally {
+    syncingBroker.value = false
+  }
+}
+
+function brokerStatusLabel(status) {
+  if (status === 'SYNCED') return 'MQTT 权限已同步'
+  if (status === 'FAILED') return 'MQTT 权限同步失败'
+  return 'MQTT 权限待同步'
+}
+
+function brokerStatusType(status) {
+  if (status === 'SYNCED') return 'success'
+  if (status === 'FAILED') return 'danger'
+  return 'warning'
 }
 
 async function copyText(text, label = '内容') {
@@ -814,6 +912,20 @@ async function copyText(text, label = '内容') {
   } else {
     ElMessage.warning(`无法自动复制，请手动选中复制：${text}`)
   }
+}
+
+function copyPrimaryPython(group) {
+  if (!classCard.value || !group) return
+  const c = classCard.value
+  const code = buildPrimaryIotPythonCode({
+    brokerUrl: c.brokerUrl,
+    brokerPort: c.brokerPort,
+    clientId: group.pythonClientId,
+    username: c.mqttUsername,
+    password: c.passcode,
+    topic: group.topic
+  })
+  copyText(code, `${group.groupName} Python 代码`)
 }
 
 function copyAllCardText() {
