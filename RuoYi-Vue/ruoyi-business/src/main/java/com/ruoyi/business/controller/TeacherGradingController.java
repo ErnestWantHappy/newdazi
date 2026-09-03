@@ -28,6 +28,7 @@ import com.ruoyi.business.service.PracticalScoringPolicyService;
 import com.ruoyi.business.service.PracticalGradingDeadlineService;
 import com.ruoyi.business.service.PracticalArtifactService;
 import com.ruoyi.business.service.PracticalRubricSnapshotService;
+import com.ruoyi.business.service.ClassroomTaskStateService;
 
 /**
  * 教师批改操作题 Controller
@@ -74,6 +75,9 @@ public class TeacherGradingController extends BaseController {
 
     @Autowired
     private PracticalRubricSnapshotService rubricSnapshotService;
+
+    @Autowired
+    private ClassroomTaskStateService classroomTaskStateService;
 
     /**
      * 获取课程的班级列表（用于批改页面班级选择下拉框）
@@ -197,6 +201,13 @@ public class TeacherGradingController extends BaseController {
         PracticalRubricSnapshot rubricSnapshot = rubricSnapshotService.resolve(
                 answer.getPracticalVersionId(), answer.getLessonId(), lessonQuestion,
                 SecurityUtils.getUserId());
+        if (rubricSnapshot == null) {
+            return AjaxResult.error("评分标准快照不存在，请刷新后重试");
+        }
+        if (request.getRubricSnapshotId() != null
+                && !Objects.equals(request.getRubricSnapshotId(), rubricSnapshot.getSnapshotId())) {
+            return AjaxResult.error("评分标准已发生变化，请刷新后重新批改");
+        }
         int questionScore = rubricSnapshot.getQuestionScore();
 
         List<com.ruoyi.business.domain.BizScoringDetail> scoringDetails =
@@ -209,6 +220,7 @@ public class TeacherGradingController extends BaseController {
                     scoringDetail.setAnswerId(request.getAnswerId());
                     scoringDetail.setItemId(detail.getItemId());
                     scoringDetail.setScore(detail.getScore());
+                    scoringDetail.setStarCount(detail.getStarCount());
                 }
                 scoringDetails.add(scoringDetail);
             }
@@ -216,7 +228,8 @@ public class TeacherGradingController extends BaseController {
         List<com.ruoyi.business.domain.vo.PracticalScoringItemVo> scoringItems =
                 rubricSnapshotService.buildScoringItems(rubricSnapshot);
         int finalScore = practicalScoringPolicyService.resolveFinalScore(
-                request.getScore(), questionScore, scoringItems, scoringDetails);
+                request.getMode(), request.getScore(), request.getStarCount(),
+                questionScore, scoringItems, scoringDetails);
 
         // 期限校验必须和改分处于同一事务，避免已逾期后仍写入部分评分明细。
         practicalGradingDeadlineService.assertCanGrade(request.getAnswerId());
@@ -227,6 +240,12 @@ public class TeacherGradingController extends BaseController {
         for (com.ruoyi.business.domain.BizScoringDetail detail : scoringDetails) {
             scoringDetailMapper.insertBizScoringDetail(detail);
         }
+
+        BizStudent student = studentMapper.selectBizStudentByStudentId(answer.getStudentId());
+        if (student == null || student.getDeptId() == null) throw new ServiceException("学生档案不存在");
+        // 管理员批改时当前部门未必就是学生学校，状态归属必须使用学生档案的学校。
+        classroomTaskStateService.markSafely(student, student.getDeptId(), answer.getLessonId(),
+                answer.getQuestionId(), ClassroomTaskStateService.GRADED);
 
         return AjaxResult.success("批改成功");
     }
@@ -345,6 +364,9 @@ public class TeacherGradingController extends BaseController {
         private Integer score;
         private Integer expectedScore;
         private Long practicalVersionId;
+        private Long rubricSnapshotId;
+        private String mode;
+        private Integer starCount;
         @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private Date submitTime;
         private java.util.List<ScoringDetailRequest> scoringDetails;
@@ -361,6 +383,15 @@ public class TeacherGradingController extends BaseController {
         public Long getPracticalVersionId() { return practicalVersionId; }
         public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
 
+        public Long getRubricSnapshotId() { return rubricSnapshotId; }
+        public void setRubricSnapshotId(Long rubricSnapshotId) { this.rubricSnapshotId = rubricSnapshotId; }
+
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
+
+        public Integer getStarCount() { return starCount; }
+        public void setStarCount(Integer starCount) { this.starCount = starCount; }
+
         public Date getSubmitTime() { return submitTime; }
         public void setSubmitTime(Date submitTime) { this.submitTime = submitTime; }
 
@@ -373,12 +404,16 @@ public class TeacherGradingController extends BaseController {
     public static class ScoringDetailRequest {
         private Long itemId;
         private Integer score;
+        private Integer starCount;
 
         public Long getItemId() { return itemId; }
         public void setItemId(Long itemId) { this.itemId = itemId; }
 
         public Integer getScore() { return score; }
         public void setScore(Integer score) { this.score = score; }
+
+        public Integer getStarCount() { return starCount; }
+        public void setStarCount(Integer starCount) { this.starCount = starCount; }
     }
 
     public static class RetryPreviewRequest {

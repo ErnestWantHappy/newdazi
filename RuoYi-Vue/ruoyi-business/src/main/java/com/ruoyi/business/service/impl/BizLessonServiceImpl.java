@@ -1,6 +1,7 @@
 package com.ruoyi.business.service.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
@@ -113,6 +116,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private StudentAnswerArchiveService studentAnswerArchiveService;
+
+    @Autowired
+    private BizStudentAnswerMapper studentAnswerMapper;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -387,7 +393,12 @@ public class BizLessonServiceImpl implements IBizLessonService
 
         BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null) return null;
-        assertCanManageLesson(lesson);
+        assertCanViewLesson(lesson);
+
+        boolean isCreator = loginUser.getUserId().equals(lesson.getCreatorId())
+                || (lesson.getCreatorId() == null && loginUser.getUsername().equals(lesson.getCreateBy()));
+        boolean canManage = SecurityUtils.isAdmin(loginUser.getUserId()) || isCreator;
+        final Long viewerDeptId = deptId;
 
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         List<String> assignedClassCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
@@ -395,7 +406,15 @@ public class BizLessonServiceImpl implements IBizLessonService
         if (CollectionUtils.isEmpty(assignedClassCodes)) {
             assignedClassCodes = new ArrayList<>();
         } else {
-            // 新增：为班级编码补充“班”字，保持与前端复选框一致
+            // 共享教师只能看到本人负责班级与课程指派班级的交集。
+            if (!canManage)
+            {
+                assignedClassCodes = assignedClassCodes.stream()
+                        .filter(code -> canManageAssignedClass(loginUser.getUserId(), viewerDeptId,
+                                lesson.getEntryYear(), code))
+                        .collect(Collectors.toList());
+            }
+            // 为班级编码补充“班”字，保持与前端复选框一致
             assignedClassCodes = assignedClassCodes.stream()
                     .filter(StringUtils::isNotBlank)
                     .map(code -> code.endsWith("班") ? code : code + "班")
@@ -444,6 +463,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         detailVo.setGuideSheetBinding(binding);
         detailVo.setGuideSheetEnabled(binding != null && "Y".equals(binding.getEnabled()));
         detailVo.setSourceSheetId(binding == null ? null : binding.getSourceSheetId());
+        detailVo.setCanDesign(canManage);
+        detailVo.setReadOnly(!canManage);
 
         return detailVo;
     }
@@ -524,8 +545,28 @@ public class BizLessonServiceImpl implements IBizLessonService
         Long lessonId = lessonToSave.getLessonId();
         lessonDetailVo.setLessonId(lessonId);
 
+        List<BizLessonQuestionDetailVo> previousQuestions = lessonId == null
+                ? Collections.emptyList()
+                : lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+        Map<Long, BizLessonQuestionDetailVo> previousQuestionMap = previousQuestions.stream()
+                .filter(q -> q != null && q.getQuestionId() != null)
+                .collect(Collectors.toMap(BizLessonQuestionDetailVo::getQuestionId, q -> q, (a, b) -> a));
+
         List<Long> previousQuestionIds = lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId);
         List<BizLessonQuestionDetailVo> questions = lessonDetailVo.getQuestions();
+        if (lessonId != null && questions != null) {
+            for (BizLessonQuestionDetailVo q : questions) {
+                if (q == null || q.getQuestionId() == null) continue;
+                BizLessonQuestionDetailVo prev = previousQuestionMap.get(q.getQuestionId());
+                if (prev != null && prev.getQuestionScore() != null && !Objects.equals(q.getQuestionScore(), prev.getQuestionScore())) {
+                    if (studentAnswerMapper.countAnswersByLessonAndQuestion(lessonId, q.getQuestionId()) > 0) {
+                        String title = StringUtils.isNotEmpty(prev.getQuestionContent()) ? prev.getQuestionContent() : String.valueOf(q.getQuestionId());
+                        if (title.length() > 20) title = title.substring(0, 20) + "...";
+                        throw new ServiceException("题目“" + title + "”已有学生答题提交记录，不能修改题目分值");
+                    }
+                }
+            }
+        }
         LinkedHashSet<Long> newQuestionIds = questions == null
                 ? new LinkedHashSet<Long>()
                 : questions.stream().filter(Objects::nonNull)
@@ -905,6 +946,50 @@ public class BizLessonServiceImpl implements IBizLessonService
         {
             throw new ServiceException("无权管理该课程");
         }
+    }
+
+    private void assertCanViewLesson(BizLesson lesson)
+    {
+        if (lesson == null)
+        {
+            throw new ServiceException("课程不存在");
+        }
+        Long userId = SecurityUtils.getUserId();
+        if (SecurityUtils.isAdmin(userId))
+        {
+            return;
+        }
+        Long deptId = SecurityUtils.getDeptId();
+        boolean sameDept = lesson.getDeptId() != null && lesson.getDeptId().equals(deptId);
+        boolean creator = userId.equals(lesson.getCreatorId())
+                || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
+        if (!sameDept || (!creator && !hasManagedAssignedClass(lesson, userId, deptId)))
+        {
+            throw new ServiceException("无权查看该课程");
+        }
+    }
+
+    private boolean hasManagedAssignedClass(BizLesson lesson, Long userId, Long deptId)
+    {
+        List<String> assignedClasses = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                lesson.getLessonId(), lesson.getEntryYear());
+        if (CollectionUtils.isEmpty(assignedClasses)) return false;
+        return assignedClasses.stream().anyMatch(code ->
+                canManageAssignedClass(userId, deptId, lesson.getEntryYear(), code));
+    }
+
+    private boolean canManageAssignedClass(Long userId, Long deptId, String entryYear, String classCode)
+    {
+        if (userId == null || deptId == null || StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+        {
+            return false;
+        }
+        BizTeacherClass managed = new BizTeacherClass();
+        managed.setUserId(userId);
+        managed.setDeptId(deptId);
+        managed.setEntryYear(entryYear.trim());
+        managed.setClassCode(classCode.trim().replace("班", ""));
+        return teacherClassMapper.checkTeacherClassExists(managed) > 0;
     }
 
     private void assertLessonHasNoGuideSheetHistory(Long lessonId)

@@ -56,6 +56,9 @@ public interface BizStudentAnswerMapper
 
     /** 统计指定题目的答题记录，用于阻止删题破坏历史成绩。 */
     int countByQuestionIds(@Param("questionIds") List<Long> questionIds);
+
+    /** 统计指定课程和题目的答题记录数量，用于阻止在已有提交时修改题目总分。 */
+    int countAnswersByLessonAndQuestion(@Param("lessonId") Long lessonId, @Param("questionId") Long questionId);
     
     /**
      * 查询某课程的所有答题记录

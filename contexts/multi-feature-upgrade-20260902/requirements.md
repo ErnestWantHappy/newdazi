@@ -1,6 +1,6 @@
 # 2026-09-02 多功能改造总需求
 
-> 状态：需求已完成四轮确认，尚未开始业务代码、SQL或正式发布。
+> 状态：需求已完成四轮确认。P0-A/P0-B、P1-A/P1-B/P1-C 已完成本地核心代码纠偏；P1-D 已完成统一状态核心链路但尚未覆盖全部计划页面。新增 SQL 未执行，未做真实角色浏览器验收，未发布正式服务器；P2、P3-PoC、P3 尚未开发。
 > 详细专题继续以 `contexts/teacher-course-sharing/`、`contexts/operation-artifact-ai-grading/`、`contexts/flowchart-tool/`、`contexts/class-grouping-and-desktop/`、`contexts/online-collaboration/` 为准。
 
 ## 1. 目标

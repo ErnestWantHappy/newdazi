@@ -189,8 +189,10 @@ function closeCurrentSocket() {
   }
 }
 
-function connectClassroom(deptId, entryYear, classCode) {
-  const path = [deptId, entryYear, classCode].map(value => encodeURIComponent(String(value))).join('/')
+function connectClassroom(deptId, entryYear, classCode, lessonId) {
+  const parts = [deptId, entryYear, classCode]
+  if (lessonId !== undefined && lessonId !== null && lessonId !== '') parts.push(lessonId)
+  const path = parts.map(value => encodeURIComponent(String(value))).join('/')
   return connect(`/ws/classroom/${path}`)
 }
 

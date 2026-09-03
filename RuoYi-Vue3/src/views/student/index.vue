@@ -460,7 +460,7 @@
                   :key="opt"
                   class="option-radio"
                   :class="{ active: answers[q.questionId] === opt }"
-                  @click="!theorySubmitted && (answers[q.questionId] = opt)"
+                  @click="selectTheoryAnswer(q.questionId, opt)"
                 >
                   <span class="opt-label">{{ opt }}</span>
                   <span class="opt-text">{{
@@ -474,7 +474,7 @@
                 v-else-if="q.questionType === 'judgment'"
                 class="audit-group"
               >
-                <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted">
+                <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted" @change="markQuestionWorking(q.questionId)">
                   <el-radio value="T" border>正确</el-radio>
                   <el-radio value="F" border>错误</el-radio>
                 </el-radio-group>
@@ -1027,6 +1027,7 @@ import {
   studentCheckin,
   submitPracticalArtifact,
   deletePracticalArtifact,
+  markClassroomTaskState,
 } from "@/api/business/studentHome";
 import { checkCurrentCountyExam } from "@/api/business/countyExam";
 import { updateUserPwd } from "@/api/system/user";
@@ -1481,6 +1482,7 @@ const flowchartDialogVisible = ref(false);
 const activeFlowchartQuestion = ref(null);
 
 function openFlowchart(question) {
+  markQuestionWorking(question.questionId);
   activeFlowchartQuestion.value = question;
   flowchartDialogVisible.value = true;
 }
@@ -1496,6 +1498,31 @@ const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { an
 const uploadingQuestionId = ref(null); // 正在上传/转换的题目ID（用于显示loading）
 const submittingPracticalQuestionId = ref(null);
 const practicalPollingTimers = {};
+const enteredTaskIds = new Set();
+const workingTaskIds = new Set();
+
+function reportTaskState(questionId, taskState) {
+  if (!lessonId.value || !questionId) return Promise.resolve();
+  return markClassroomTaskState({ lessonId: lessonId.value, questionId, taskState }).catch(() => undefined);
+}
+
+function markQuestionEntered(questionId) {
+  if (enteredTaskIds.has(questionId) || submittedAnswers.value[questionId]) return;
+  enteredTaskIds.add(questionId);
+  reportTaskState(questionId, 'ENTERED');
+}
+
+function markQuestionWorking(questionId) {
+  if (workingTaskIds.has(questionId) || submittedAnswers.value[questionId]) return;
+  workingTaskIds.add(questionId);
+  reportTaskState(questionId, 'WORKING');
+}
+
+function selectTheoryAnswer(questionId, answer) {
+  if (theorySubmitted.value) return;
+  answers.value[questionId] = answer;
+  markQuestionWorking(questionId);
+}
 
 // 操作题总分
 const practicalTotalScore = computed(() => {
@@ -1664,6 +1691,10 @@ async function fetchData(opts = {}) {
       initTypingStates();
       initPracticalStates(); // 初始化操作题状态
       initTheoryState(); // 初始化理论测试状态（检查是否已提交）
+      if (!silent) {
+        [...theoryQuestions.value, ...typingQuestions.value, ...practicalQuestions.value]
+          .forEach((question) => markQuestionEntered(question.questionId));
+      }
     }
   } catch (err) {
     // 静默轮询失败不清空现有状态，下个周期再试；避免一次网络抖动抹掉整页课程
@@ -1847,6 +1878,7 @@ function initTypingStates() {
 
 // 点击"开始练习"按钮
 function startTypingPractice(qid) {
+  markQuestionWorking(qid);
   const state = typingStates.value[qid];
   if (!state || state.started) return;
 
@@ -1910,6 +1942,7 @@ function handlePasteBlock() {
 }
 
 function handleTypingInput(qid, val) {
+  markQuestionWorking(qid);
   updateTypingStats(qid, val);
 
   // 检测是否打完所有字
@@ -2152,6 +2185,7 @@ function getPracticalUploadLimit(question) {
 }
 
 function beforePracticalUpload(question, file) {
+  markQuestionWorking(question.questionId);
   const extension = String(file?.name || "").split(".").pop().toLowerCase();
   if (!getPracticalAllowedExtensions(question).includes(extension)) {
     ElMessage.error(`当前题目不允许上传 .${extension || "未知"} 文件`);

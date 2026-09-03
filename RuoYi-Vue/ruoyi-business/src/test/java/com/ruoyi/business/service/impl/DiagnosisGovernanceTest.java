@@ -64,6 +64,16 @@ class DiagnosisGovernanceTest
     }
 
     @Test
+    void accessBoundaryRejectionsRemainVisibleAsSecurityWarnings()
+    {
+        DiagnosisAdvice advice = DiagnosisAdvisor.adviseForApiEvent(
+                "/business/lesson/283", "无权限查看其他教师的课程", 1, true);
+
+        assertEquals("security", advice.getCategory());
+        assertEquals("warning", advice.getSeverity());
+    }
+
+    @Test
     void persistedAndHistoricalEventsUseTheSameDynamicClassification()
     {
         SysOperLog operLog = new SysOperLog();

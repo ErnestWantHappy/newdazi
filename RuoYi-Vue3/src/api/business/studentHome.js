@@ -44,6 +44,15 @@ export function deletePracticalArtifact(data) {
   })
 }
 
+// 上报进入题目或开始作答；提交/批改状态由服务端业务动作自动生成。
+export function markClassroomTaskState(data) {
+  return request({
+    url: '/business/classroom-state/student',
+    method: 'post',
+    data
+  })
+}
+
 // 获取学生历史成绩单
 export function getHistoryScores(year) {
   return request({

@@ -371,6 +371,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
+            COALESCE(state.task_state,
+                CASE WHEN a.answer_id IS NULL THEN 'NOT_ENTERED'
+                     WHEN a.score IS NULL THEN 'SUBMITTED' ELSE 'GRADED' END) AS taskState,
+            COALESCE(state.state_version, 0) AS stateVersion,
+            state.changed_at AS stateChangedAt,
             CASE WHEN a.answer_id IS NOT NULL
                        AND a.student_answer IS NOT NULL
                        AND TRIM(a.student_answer) &lt;&gt; '' THEN 1 ELSE 0 END AS submitted
@@ -387,6 +392,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
            <if test="questionId != null">
                AND a.question_id = #{questionId}
            </if>
+        LEFT JOIN biz_student_task_state state
+          ON state.student_id = s.student_id
+         AND state.lesson_id = #{lessonId}
+         AND state.question_id = #{questionId}
         INNER JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
         INNER JOIN biz_question q ON q.question_id = lq.question_id
         WHERE s.class_code = #{classCode}
@@ -802,5 +811,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                  AND COALESCE(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
           )
         ORDER BY CAST(s.student_no AS UNSIGNED) ASC, a.submit_time ASC
+    </select>
+
+    <select id="countAnswersByLessonAndQuestion" resultType="int">
+        SELECT count(1)
+        FROM biz_student_answer
+        WHERE lesson_id = #{lessonId}
+          AND question_id = #{questionId}
+          AND submit_time IS NOT NULL
     </select>
 </mapper>

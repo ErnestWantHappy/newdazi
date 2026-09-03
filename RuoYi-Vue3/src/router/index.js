@@ -100,7 +100,7 @@ export const constantRoutes = [
         path: 'grading',
         component: () => import('@/views/business/teacher/grading'),
         name: 'TeacherGrading',
-        meta: { title: '批改操作题', activeMenu: '/business/teacher' }
+        meta: { title: '批改操作题', activeMenu: '/business/teacher', noCache: true }
       }
     ]
   },

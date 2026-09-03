@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.business.domain.FlowchartQuestionConfig;
 import com.ruoyi.business.service.FlowchartService;
+import com.ruoyi.business.service.ClassroomTaskStateService;
+import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.domain.BizStudent;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.exception.ServiceException;
@@ -22,6 +26,9 @@ import com.ruoyi.common.utils.SecurityUtils;
 @RequestMapping("/business/flowchart")
 public class FlowchartController extends BaseController {
     private final FlowchartService service;
+
+    @Autowired private ClassroomTaskStateService taskStateService;
+    @Autowired private BizStudentMapper studentMapper;
 
     public FlowchartController(FlowchartService service) { this.service = service; }
 
@@ -60,17 +67,27 @@ public class FlowchartController extends BaseController {
     @PreAuthorize("@studentSs.isStudent()")
     @PutMapping("/student/draft")
     public AjaxResult draft(@RequestBody Map<String, Object> request) {
-        return success(service.saveDraft(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
-                requiredLong(request, "lessonId"), requiredLong(request, "questionId"),
-                requiredInt(request, "expectedRevision"), requiredString(request, "documentJson")));
+        Long lessonId = requiredLong(request, "lessonId");
+        Long questionId = requiredLong(request, "questionId");
+        Object result = service.saveDraft(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
+                lessonId, questionId, requiredInt(request, "expectedRevision"), requiredString(request, "documentJson"));
+        BizStudent student = currentStudent();
+        taskStateService.markSafely(student, student.getDeptId(), lessonId, questionId,
+                ClassroomTaskStateService.WORKING);
+        return success(result);
     }
 
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/student/submit")
     public AjaxResult submit(@RequestBody Map<String, Object> request) {
-        return success(service.submit(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
-                requiredLong(request, "lessonId"), requiredLong(request, "questionId"),
-                requiredInt(request, "expectedRevision")));
+        Long lessonId = requiredLong(request, "lessonId");
+        Long questionId = requiredLong(request, "questionId");
+        Object result = service.submit(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
+                lessonId, questionId, requiredInt(request, "expectedRevision"));
+        BizStudent student = currentStudent();
+        taskStateService.markSafely(student, student.getDeptId(), lessonId, questionId,
+                ClassroomTaskStateService.SUBMITTED);
+        return success(result);
     }
 
     @PreAuthorize("@studentSs.isStudent()")
@@ -94,6 +111,12 @@ public class FlowchartController extends BaseController {
         if (value instanceof Number) return ((Number) value).longValue();
         try { return Long.valueOf(String.valueOf(value)); }
         catch (NumberFormatException e) { throw new ServiceException(key + " 参数不正确"); }
+    }
+
+    private BizStudent currentStudent() {
+        BizStudent student = studentMapper.selectBizStudentByUserId(SecurityUtils.getUserId());
+        if (student == null) throw new ServiceException("未找到学生信息");
+        return student;
     }
 
     private Integer requiredInt(Map<String, Object> request, String key) {

@@ -34,7 +34,7 @@ class WebSocketConfigTest
     @Test
     void shouldRegisterOnlyConfiguredOrigins()
     {
-        when(registry.addHandler(handler, "/ws/classroom/*/*/*")).thenReturn(registration);
+        when(registry.addHandler(handler, "/ws/classroom/*/*/*", "/ws/classroom/*/*/*/*")).thenReturn(registration);
         when(registration.addInterceptors(interceptor)).thenReturn(registration);
         WebSocketHandlerRegistration iotRegistration = org.mockito.Mockito.mock(WebSocketHandlerRegistration.class);
         when(registry.addHandler(iotHandler, "/ws/iot/*")).thenReturn(iotRegistration);

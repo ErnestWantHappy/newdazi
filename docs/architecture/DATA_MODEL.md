@@ -10,6 +10,8 @@ erDiagram
     LESSON }o--o{ CLASS : 指派
     LESSON ||--o{ QUESTION : 包含
     STUDENT ||--o{ STUDENT_ANSWER : 课程作答
+    STUDENT ||--o{ STUDENT_TASK_STATE : 课堂任务状态
+    LESSON ||--o{ STUDENT_TASK_STATE : 课程题目六态
     STUDENT_ANSWER ||--o| ORPHAN_ANSWER_ARCHIVE : 删题前审计归档
     AI_MODEL_PRICE ||--o{ AI_GRADING_JOB : 创建时冻结单价
     PYTHON_PLAN ||--o{ PYTHON_PLAN_VERSION : 版本
@@ -57,6 +59,9 @@ erDiagram
 - 学生安全处理复用既有状态字段：`sys_user.status` 为 `0=正常、1=停用`，停用不改 `biz_student` 及历史成绩；只有经 `StudentBusinessRecordMapper` 确认无答题及其他业务记录的学生才允许硬删除。批量纠错以 `student_id` 定位并原地更新 `user_id` 对应账号和档案，禁止删除重建。
 - `biz_lesson.status` 为 `0=正常、1=已归档`，归档课程仍保留指派、答案和成绩，仅从日常课程查询中过滤；恢复通过课程状态接口完成。迁移脚本为 `sql/lesson_archive_status_v1.sql`，回滚脚本为 `sql/lesson_archive_status_v1_rollback.sql`。
 
-## 2026-09-03 待实施数据模型（未迁移）
+## 2026-09-03 多功能改造数据模型状态
 
-通用分组/课时快照、教师班级布局、统一作业状态、独立协作活动/任务版本/小组映射、协作会话事件和 revision 差异仍处于已确认设计、未执行 SQL 状态。拟议表、唯一键、兼容回填和拆分迁移顺序见 `contexts/multi-feature-upgrade-20260902/design.md`；在对应阶段方案再次确认、前检和备份前，不得把这些结构当作现有数据库事实。
+- `biz_student_task_state` 已完成本地领域类、Mapper、服务和迁移脚本，但尚未在本机或正式数据库执行。唯一键为 `lesson_id + question_id + student_id`；字段保存学校、六态 `task_state`、单调递增 `state_version`、`changed_at` 和审计时间。
+- `sql/student_task_state_v1.sql` 会从当前课程仍引用的历史答案回填可确定的 `SUBMITTED/GRADED`，不猜测 `ENTERED/WORKING`；全班查询对无记录学生投影为 `NOT_ENTERED`、版本 0。回滚脚本为 `sql/student_task_state_v1_rollback.sql`。
+- 星级评分不新增成绩表字段，`NUMERIC/STAR_TOTAL/STAR_ITEM` 仅为请求契约；正式成绩继续写既有整数列。
+- 通用分组/课时快照、教师班级布局、独立协作活动/任务版本/小组映射、协作会话事件和 revision 差异仍处于已确认设计、未执行 SQL 状态。详见 `contexts/multi-feature-upgrade-20260902/design.md`。

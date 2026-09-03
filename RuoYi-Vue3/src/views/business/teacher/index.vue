@@ -111,6 +111,15 @@
                     <span>设计</span>
                   </div>
                   <div
+                    v-if="!lesson.canDesign"
+                    class="action-btn preview"
+                    @click.stop="previewSharedLesson(lesson)"
+                    title="只读预览所有题目"
+                  >
+                    <el-icon><View /></el-icon>
+                    <span>预览</span>
+                  </div>
+                  <div
                     v-if="lesson.lessonMode === 'attendance'"
                     class="action-btn grade"
                     @click.stop="openCheckinRoster(lesson, group)"
@@ -356,18 +365,113 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 共享课程只读预览抽屉 -->
+    <el-drawer
+      v-model="sharedPreviewVisible"
+      size="65%"
+      destroy-on-close
+      class="shared-lesson-drawer"
+    >
+      <template #header>
+        <div class="shared-drawer-header">
+          <div class="title-row">
+            <span class="lesson-name">{{ currentPreviewLesson?.lessonTitle }}</span>
+            <el-tag type="warning" effect="dark" size="small">共享预览·只读</el-tag>
+          </div>
+          <div class="meta-row">
+            <span>创建教师：{{ currentPreviewLesson?.creatorName || '本校教师' }}</span>
+            <span class="divider">|</span>
+            <span>共 {{ previewQuestions.length }} 道题目</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-loading="sharedPreviewLoading" class="shared-drawer-body">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="您正在只读预览他人共享课程。该界面不提供设计、删除、复制或修改操作。"
+          style="margin-bottom: 16px;"
+        />
+        <div v-if="!sharedPreviewLoading && previewQuestions.length === 0" class="empty-questions">
+          暂无题目数据
+        </div>
+        <div
+          v-for="(q, index) in previewQuestions"
+          :key="q.questionId || index"
+          class="preview-q-card"
+        >
+          <div class="q-header">
+            <div class="q-left">
+              <span class="q-idx">第 {{ index + 1 }} 题</span>
+              <el-tag size="small" :type="getQuestionTypeTag(q.questionType)">
+                {{ getQuestionTypeName(q.questionType, q.practicalMode) }}
+              </el-tag>
+              <span class="q-score">{{ q.questionScore || 0 }} 分</span>
+            </div>
+          </div>
+          <div class="q-content">{{ q.questionContent }}</div>
+
+          <!-- 选择题选项 -->
+          <div v-if="q.questionType === 'choice'" class="q-options">
+            <div v-if="q.optionA" class="option-item" :class="{ 'is-answer': q.answer === 'A' }">
+              <span class="opt-label">A.</span>
+              <span class="opt-text">{{ q.optionA }}</span>
+            </div>
+            <div v-if="q.optionB" class="option-item" :class="{ 'is-answer': q.answer === 'B' }">
+              <span class="opt-label">B.</span>
+              <span class="opt-text">{{ q.optionB }}</span>
+            </div>
+            <div v-if="q.optionC" class="option-item" :class="{ 'is-answer': q.answer === 'C' }">
+              <span class="opt-label">C.</span>
+              <span class="opt-text">{{ q.optionC }}</span>
+            </div>
+            <div v-if="q.optionD" class="option-item" :class="{ 'is-answer': q.answer === 'D' }">
+              <span class="opt-label">D.</span>
+              <span class="opt-text">{{ q.optionD }}</span>
+            </div>
+            <div class="q-answer-box">
+              参考答案：<span class="ans-text">{{ q.answer }}</span>
+            </div>
+          </div>
+
+          <!-- 判断题答案 -->
+          <div v-else-if="q.questionType === 'judgment'" class="q-answer-box">
+            参考答案：<span class="ans-text">{{ q.answer === 'T' ? '正确' : '错误' }}</span>
+          </div>
+
+          <!-- 打字题或操作题提示 -->
+          <div v-else-if="q.questionType === 'practical'" class="q-practical-meta">
+            <span>操作题类型：{{ q.practicalMode || '文件作品' }}</span>
+            <div v-if="q.answer" class="practical-ref">
+              <span>参考答案/提示：</span>
+              <pre>{{ q.answer }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="shared-drawer-footer">
+          <el-button @click="sharedPreviewVisible = false">关闭预览</el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup name="TeacherDashboard">
 import ResearchNotificationBar from '@/views/business/researchActivity/components/ResearchNotificationBar.vue'
-import { computed, ref, onMounted, onActivated, watch } from 'vue';
+import { computed, ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getDashboardData, getDashboardPracticalStatus } from '@/api/business/teacher';
 import { getCollaborationLesson } from '@/api/business/collaboration';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
 import {
   delLesson,
+  getLessonDetails,
   getLessonCheckinRoster,
   getLessonCheckinSummary,
   getAdvancePolicy,
@@ -375,7 +479,7 @@ import {
   manualAdvanceLesson
 } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, MoreFilled, DArrowRight, Setting } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, MoreFilled, DArrowRight, Setting, View } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
@@ -397,6 +501,50 @@ const expandedHistoryKeys = ref(new Set());
 const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
 const pendingCountyGradingCount = computed(() => countyGradingEntry.value.pendingTaskCount ?? countyGradingEntry.value.taskCount ?? 0);
 const checkinDialogVisible = ref(false);
+
+// P1-C: 共享课程只读预览
+const sharedPreviewVisible = ref(false);
+const sharedPreviewLoading = ref(false);
+const currentPreviewLesson = ref(null);
+const previewQuestions = ref([]);
+
+function getQuestionTypeTag(type) {
+  switch (type) {
+    case 'choice': return 'primary';
+    case 'judgment': return 'success';
+    case 'practical': return 'warning';
+    case 'typing': return 'info';
+    default: return '';
+  }
+}
+
+function getQuestionTypeName(type, practicalMode) {
+  if (type === 'choice') return '单选题';
+  if (type === 'judgment') return '判断题';
+  if (type === 'typing') return '打字题';
+  if (type === 'practical') {
+    if (practicalMode === 'PYTHON') return '操作题 (Python)';
+    if (practicalMode === 'FLOWCHART') return '操作题 (画程)';
+    return '操作题 (作品文件)';
+  }
+  return type || '题目';
+}
+
+async function previewSharedLesson(lesson) {
+  currentPreviewLesson.value = lesson;
+  sharedPreviewVisible.value = true;
+  sharedPreviewLoading.value = true;
+  previewQuestions.value = [];
+  try {
+    const res = await getLessonDetails(lesson.lessonId);
+    previewQuestions.value = res.data?.questions || [];
+  } catch (e) {
+    ElMessage.error('加载共享课程题目失败');
+  } finally {
+    sharedPreviewLoading.value = false;
+  }
+}
+
 const checkinDialogTitle = ref('签到名单');
 const checkinLoading = ref(false);
 const checkinRows = ref([]);
@@ -633,7 +781,6 @@ async function handleAddNewLesson(group, section) {
       grade: section.gradeId,
       entryYear: group.entryYear,
       gradeName: group.gradeName,
-      classes: JSON.stringify(group.allClassesInGrade),
       nextNum: maxLessonNum + 1
     }
   });
@@ -973,8 +1120,25 @@ function refreshDashboard() {
 
 let skipFirstActivatedRefresh = true;
 let lastDashboardRefreshToken = '';
+let dashboardStatusTimer = null;
+
+function startDashboardStatusCalibration() {
+  if (dashboardStatusTimer) clearInterval(dashboardStatusTimer);
+  dashboardStatusTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && gradeGroups.value.length) {
+      fetchPracticalStatuses(gradeGroups.value, dashboardRequestSeq);
+    }
+  }, 10000);
+}
+
+function stopDashboardStatusCalibration() {
+  if (dashboardStatusTimer) clearInterval(dashboardStatusTimer);
+  dashboardStatusTimer = null;
+}
+
 onMounted(() => {
   refreshDashboard();
+  startDashboardStatusCalibration();
 });
 
 // 保存空课程后可能复用首页组件，监听保存标记确保新课程立即出现。
@@ -989,6 +1153,7 @@ watch(
 
 // 从其他页面返回时（如课程设计页），重新加载数据
 onActivated(() => {
+  startDashboardStatusCalibration();
   // KeepAlive 首次挂载会紧接着触发 activated，跳过这一次以免首页重复请求。
   if (skipFirstActivatedRefresh) {
     skipFirstActivatedRefresh = false;
@@ -996,6 +1161,9 @@ onActivated(() => {
   }
   refreshDashboard();
 });
+
+onDeactivated(stopDashboardStatusCalibration);
+onBeforeUnmount(stopDashboardStatusCalibration);
 </script>
 
 <style scoped lang="scss">
@@ -1484,5 +1652,118 @@ onActivated(() => {
   border: 1px solid #dcdfe6;
   border-radius: 6px;
   box-shadow: none;
+}
+
+/* 共享课程预览抽屉 */
+.shared-drawer-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    .lesson-name {
+      font-size: 18px;
+      font-weight: bold;
+      color: #303133;
+    }
+  }
+  .meta-row {
+    font-size: 13px;
+    color: #909399;
+    .divider {
+      margin: 0 8px;
+    }
+  }
+}
+.shared-drawer-body {
+  padding: 0 10px 20px;
+  .preview-q-card {
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #fafafa;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    .q-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      .q-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        .q-idx {
+          font-weight: bold;
+          color: #303133;
+        }
+        .q-score {
+          font-size: 13px;
+          color: #e6a23c;
+          font-weight: 500;
+        }
+      }
+    }
+    .q-content {
+      font-size: 14px;
+      color: #303133;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .q-options {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      .option-item {
+        padding: 6px 10px;
+        background: #fff;
+        border: 1px solid #ebeef5;
+        border-radius: 4px;
+        font-size: 13px;
+        &.is-answer {
+          border-color: #67c23a;
+          background: #f0f9eb;
+          color: #67c23a;
+          font-weight: 500;
+        }
+        .opt-label {
+          margin-right: 6px;
+          font-weight: bold;
+        }
+      }
+    }
+    .q-answer-box {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #ecf5ff;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #409eff;
+      .ans-text {
+        font-weight: bold;
+      }
+    }
+    .q-practical-meta {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #606266;
+      .practical-ref {
+        margin-top: 8px;
+        pre {
+          background: #f4f4f5;
+          padding: 8px;
+          border-radius: 4px;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
+      }
+    }
+  }
+}
+.shared-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

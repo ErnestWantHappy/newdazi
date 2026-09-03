@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizStudentTaskStateMapper">
+    <resultMap id="TaskStateResult" type="com.ruoyi.business.domain.BizStudentTaskState">
+        <id property="stateId" column="state_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="taskState" column="task_state"/>
+        <result property="stateVersion" column="state_version"/>
+        <result property="changedAt" column="changed_at"/>
+        <result property="studentName" column="student_name"/>
+        <result property="studentNo" column="student_no"/>
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+    </resultMap>
+
+    <insert id="upsert" parameterType="com.ruoyi.business.domain.BizStudentTaskState">
+        INSERT INTO biz_student_task_state
+            (dept_id, lesson_id, question_id, student_id, task_state, state_version, changed_at, create_time, update_time)
+        VALUES
+            (#{deptId}, #{lessonId}, #{questionId}, #{studentId}, #{taskState}, 1, #{changedAt}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            state_version = state_version + CASE
+                WHEN task_state &lt;&gt; VALUES(task_state)
+                 AND (
+                    VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED')
+                    OR (VALUES(task_state) = 'WORKING'
+                        AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED'))
+                    OR (VALUES(task_state) = 'ENTERED'
+                        AND task_state IN ('NOT_ENTERED', 'ENTERED'))
+                 ) THEN 1 ELSE 0 END,
+            dept_id = CASE
+                WHEN VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED')
+                  OR (VALUES(task_state) = 'WORKING'
+                      AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED'))
+                  OR (VALUES(task_state) = 'ENTERED'
+                      AND task_state IN ('NOT_ENTERED', 'ENTERED'))
+                THEN VALUES(dept_id) ELSE dept_id END,
+            changed_at = CASE
+                WHEN task_state &lt;&gt; VALUES(task_state)
+                 AND (
+                    VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED')
+                    OR (VALUES(task_state) = 'WORKING'
+                        AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED'))
+                    OR (VALUES(task_state) = 'ENTERED'
+                        AND task_state IN ('NOT_ENTERED', 'ENTERED'))
+                 ) THEN VALUES(changed_at) ELSE changed_at END,
+            task_state = CASE
+                WHEN VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED') THEN VALUES(task_state)
+                WHEN VALUES(task_state) = 'WORKING'
+                     AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED') THEN VALUES(task_state)
+                WHEN VALUES(task_state) = 'ENTERED'
+                     AND task_state IN ('NOT_ENTERED', 'ENTERED') THEN VALUES(task_state)
+                ELSE task_state END,
+            update_time = NOW()
+    </insert>
+
+    <select id="selectOne" resultMap="TaskStateResult">
+        SELECT state_id, dept_id, lesson_id, question_id, student_id,
+               task_state, state_version, changed_at
+        FROM biz_student_task_state
+        WHERE lesson_id = #{lessonId}
+          AND question_id = #{questionId}
+          AND student_id = #{studentId}
+        LIMIT 1
+    </select>
+
+    <select id="selectClassStates" resultMap="TaskStateResult">
+        SELECT state.state_id, user.dept_id,
+               #{lessonId} AS lesson_id, #{questionId} AS question_id,
+               student.student_id,
+               COALESCE(state.task_state, 'NOT_ENTERED') AS task_state,
+               COALESCE(state.state_version, 0) AS state_version,
+               state.changed_at,
+               user.nick_name AS student_name, student.student_no,
+               student.entry_year, student.class_code
+        FROM biz_student student
+        INNER JOIN sys_user user ON user.user_id = student.user_id AND user.del_flag = '0'
+        LEFT JOIN biz_student_task_state state
+          ON state.student_id = student.student_id
+         AND state.lesson_id = #{lessonId}
+         AND state.question_id = #{questionId}
+        WHERE user.dept_id = #{deptId}
+          AND student.entry_year = #{entryYear}
+          AND student.class_code = #{classCode}
+        ORDER BY CAST(student.student_no AS UNSIGNED), student.student_no, student.student_id
+    </select>
+</mapper>

@@ -37,8 +37,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LogicFlow, {
-  DiamondNode, DiamondNodeModel, EllipseNode, EllipseNodeModel,
-  PolygonNode, PolygonNodeModel, RectNode, RectNodeModel
+  DiamondNode, DiamondNodeModel, PolygonNode, PolygonNodeModel,
+  RectNode, RectNodeModel
 } from '@logicflow/core'
 import '@logicflow/core/es/index.css'
 import {
@@ -79,14 +79,47 @@ const palette = [
   { key: 'inputOutput', type: 'inputOutput', label: '输入/输出', text: '输入或输出' }
 ]
 
-class TerminalModel extends EllipseNodeModel {
-  setAttributes() { this.rx = 72; this.ry = 34 }
+class TerminalModel extends RectNodeModel {
+  setAttributes() { this.width = 148; this.height = 64; this.radius = 32 }
+  getNodeStyle() {
+    const style = super.getNodeStyle()
+    style.fill = '#ecf8ff'
+    style.stroke = '#1597bb'
+    return style
+  }
+  getDefaultAnchor() {
+    const { x, y, width, height, id } = this
+    return [
+      { x, y: y - height / 2, id: `${id}_top`, direction: 'top' },
+      { x: x + width / 2, y, id: `${id}_right`, direction: 'right' },
+      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' },
+      { x: x - width / 2, y, id: `${id}_left`, direction: 'left' }
+    ]
+  }
 }
 class ProcessModel extends RectNodeModel {
-  setAttributes() { this.width = 148; this.height = 64; this.radius = 6 }
+  setAttributes() { this.width = 148; this.height = 64; this.radius = 0 }
+  getDefaultAnchor() {
+    const { x, y, width, height, id } = this
+    return [
+      { x, y: y - height / 2, id: `${id}_top`, direction: 'top' },
+      { x: x + width / 2, y, id: `${id}_right`, direction: 'right' },
+      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' },
+      { x: x - width / 2, y, id: `${id}_left`, direction: 'left' }
+    ]
+  }
 }
 class DecisionModel extends DiamondNodeModel {
   setAttributes() { this.rx = 82; this.ry = 48 }
+  getDefaultAnchor() {
+    const { x, y, rx, ry, id } = this
+    return [
+      { x, y: y - ry, id: `${id}_top`, direction: 'top' },
+      { x: x + rx, y, id: `${id}_right`, direction: 'right' },
+      { x, y: y + ry, id: `${id}_bottom`, direction: 'bottom' },
+      { x: x - rx, y, id: `${id}_left`, direction: 'left' }
+    ]
+  }
 }
 class InputOutputModel extends PolygonNodeModel {
   setAttributes() {
@@ -95,14 +128,16 @@ class InputOutputModel extends PolygonNodeModel {
   }
 
   getDefaultAnchor() {
-    // 多边形默认把四个顶点作为锚点；流程图应从四条边的中点连接，便于小学生对齐箭头。
+    // 多边形四条边的中点作为吸附锚点，便于对齐箭头与节点移动随动
     const points = this.pointsPosition
+    const directions = ['top', 'right', 'bottom', 'left']
     return points.map((point, index) => {
       const next = points[(index + 1) % points.length]
       return {
         x: (point.x + next.x) / 2,
         y: (point.y + next.y) / 2,
-        id: `${this.id}_${index}`
+        id: `${this.id}_${index}`,
+        direction: directions[index] || 'center'
       }
     })
   }
@@ -124,7 +159,7 @@ onMounted(async () => {
     }
   })
   lf.batchRegister([
-    { type: 'terminal', view: EllipseNode, model: TerminalModel },
+    { type: 'terminal', view: RectNode, model: TerminalModel },
     { type: 'process', view: RectNode, model: ProcessModel },
     { type: 'decision', view: DiamondNode, model: DecisionModel },
     { type: 'inputOutput', view: PolygonNode, model: InputOutputModel }
@@ -136,6 +171,14 @@ onMounted(async () => {
     polygon: { fill: '#f0f9eb', stroke: '#4aa564' },
     polyline: { stroke: '#476582', strokeWidth: 2 },
     arrow: { fill: '#476582', stroke: '#476582' },
+    // 小圆点保持画面清楚，悬浮圆承担更大的鼠标/触摸板命中区。
+    anchor: {
+      r: 7,
+      fill: '#ffffff',
+      stroke: '#1677b8',
+      strokeWidth: 2,
+      hover: { r: 14, fill: '#409eff', fillOpacity: 0.2, stroke: '#409eff' }
+    },
     nodeText: { color: '#1f2d3d', fontSize: 15 },
     edgeText: { color: '#34495e', fontSize: 14, background: { fill: '#ffffff' } }
   })
@@ -293,6 +336,10 @@ async function exportPng() {
   const height = Math.max(canvasRef.value.clientHeight, 500)
   clone.setAttribute('width', width)
   clone.setAttribute('height', height)
+  const viewBox = svg.getAttribute('viewBox')
+  if (viewBox) {
+    clone.setAttribute('viewBox', viewBox)
+  }
   const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   try {
@@ -321,7 +368,7 @@ async function exportPng() {
 .shape-button:hover { border-color: #409eff; color: #1677b8; transform: translateY(-1px); }
 .shape-button:disabled { cursor: not-allowed; opacity: .45; transform: none; }
 .shape-icon { display: inline-block; width: 24px; height: 16px; border: 2px solid #3182ce; background: #ecf8ff; }
-.shape-terminal { border-radius: 50%; }
+.shape-terminal { border-radius: 999px; }
 .shape-decision { width: 17px; height: 17px; transform: rotate(45deg); background: #fff8e6; border-color: #e6a23c; }
 .shape-inputOutput { transform: skew(-18deg); background: #f0f9eb; border-color: #4aa564; }
 .huacheng-hint { display: flex; justify-content: space-between; gap: 12px; padding: 7px 14px; color: #5d7284; font-size: 13px; background: #fbfdff; border-bottom: 1px solid #eef5fa; }

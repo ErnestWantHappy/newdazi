@@ -290,10 +290,15 @@ public class PracticalArtifactService
                         submission.getPracticalVersionId());
                 if (version != null)
                 {
+                    submission.setVersionNo(version.getVersionNo());
                     submission.setRubricSnapshotId(version.getRubricSnapshotId());
                     PracticalRubricSnapshot rubric = rubricSnapshotService.resolve(
                             version.getVersionId(), null, null, null);
-                    if (rubric != null) submission.setMaxScore(rubric.getQuestionScore());
+                    if (rubric != null)
+                    {
+                        submission.setMaxScore(rubric.getQuestionScore());
+                        submission.setRubricSnapshotVersion(rubric.getSnapshotVersion());
+                    }
                 }
                 submission.setAttachments(artifactMapper.selectAttachmentsByVersion(
                         submission.getPracticalVersionId()));

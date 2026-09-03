@@ -70,9 +70,10 @@ public class ClassroomWebSocketHandshakeInterceptor implements HandshakeIntercep
 
         String[] segments = request.getURI().getPath().split("/");
         if (segments.length < 6) return reject(response);
-        String deptId = segments[segments.length - 3];
-        String entryYear = segments[segments.length - 2];
-        String classCode = normalizeClassCode(segments[segments.length - 1]);
+        boolean explicitLesson = segments.length >= 7;
+        String deptId = segments[segments.length - (explicitLesson ? 4 : 3)];
+        String entryYear = segments[segments.length - (explicitLesson ? 3 : 2)];
+        String classCode = normalizeClassCode(segments[segments.length - (explicitLesson ? 2 : 1)]);
         if (!deptId.equals(String.valueOf(loginUser.getDeptId()))) return reject(response);
         Long numericDeptId;
         try
@@ -98,7 +99,21 @@ public class ClassroomWebSocketHandshakeInterceptor implements HandshakeIntercep
                     || hasUnfinishedCountyExam(student, numericDeptId)) return reject(response);
         }
 
-        Long lessonId = assignmentMapper.selectCurrentLessonByClass(entryYear, classCode, numericDeptId);
+        Long currentLessonId = assignmentMapper.selectCurrentLessonByClass(entryYear, classCode, numericDeptId);
+        Long lessonId = currentLessonId;
+        if (explicitLesson)
+        {
+            try
+            {
+                lessonId = Long.valueOf(segments[segments.length - 1]);
+            }
+            catch (NumberFormatException e)
+            {
+                return reject(response);
+            }
+            // 学生只能进入自己班级的当前课程；教师可订阅有真实班级关系的历史课程。
+            if (!teacher && !lessonId.equals(currentLessonId)) return reject(response);
+        }
         BizLesson lesson = lessonId == null ? null : lessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null || lesson.getDeptId() == null || !numericDeptId.equals(lesson.getDeptId()))
         {
@@ -108,12 +123,27 @@ public class ClassroomWebSocketHandshakeInterceptor implements HandshakeIntercep
         {
             return reject(response);
         }
+        if (teacher && explicitLesson && !isLessonRelatedToClass(lessonId, numericDeptId, entryYear, classCode))
+        {
+            return reject(response);
+        }
 
-        attributes.put("roomKey", deptId + "_" + entryYear + "_" + classCode + "_" + lessonId);
+        attributes.put("roomKey", ClassroomRoomKey.of(numericDeptId, entryYear, classCode, lessonId));
         attributes.put("userId", loginUser.getUserId());
         attributes.put("teacher", teacher);
         attributes.put("lessonId", lessonId);
         return true;
+    }
+
+    private boolean isLessonRelatedToClass(Long lessonId, Long deptId, String entryYear, String classCode)
+    {
+        List<com.ruoyi.business.domain.BizLessonAssignment> assignments = assignmentMapper.selectAssignmentsByLessonId(lessonId);
+        return (assignments != null && assignments.stream().anyMatch(assignment ->
+                deptId.equals(assignment.getDeptId())
+                        && entryYear.equals(assignment.getEntryYear())
+                        && classCode.equals(normalizeClassCode(assignment.getClassCode()))))
+                || assignmentMapper.countHistoricalAssignment(
+                        lessonId, entryYear, classCode, deptId) > 0;
     }
 
     private boolean hasTeacherCourseScope(LoginUser loginUser, BizLesson lesson, Long deptId,
@@ -149,10 +179,8 @@ public class ClassroomWebSocketHandshakeInterceptor implements HandshakeIntercep
 
     private String normalizeClassCode(String classCode)
     {
-        if (classCode == null) return "";
-        String normalized = classCode.trim();
-        return normalized.endsWith("班")
-                ? normalized.substring(0, normalized.length() - 1) : normalized;
+        String normalized = ClassroomRoomKey.normalizeClassCode(classCode);
+        return normalized == null ? "" : normalized;
     }
 
     private boolean reject(ServerHttpResponse response)

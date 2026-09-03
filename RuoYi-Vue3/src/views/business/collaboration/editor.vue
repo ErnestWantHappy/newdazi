@@ -27,12 +27,12 @@
       <el-button size="small" @click="reload">重新加载</el-button>
     </div>
     <div v-if="error" class="editor-error"><el-result icon="warning" title="协作暂时不可用" :sub-title="error"><template #extra><el-button type="primary" @click="reload">重新加载</el-button><el-button @click="copyDiagnostics">复制诊断信息</el-button></template></el-result></div>
-    <div v-else ref="container" id="cryptpad-editor" class="editor-container"><el-skeleton v-if="loading" :rows="8" animated /></div>
+    <div v-else :key="editorContainerId" ref="container" :id="editorContainerId" class="editor-container"><el-skeleton v-if="loading" :rows="8" animated /></div>
   </div>
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
@@ -46,14 +46,27 @@ const error = ref('')
 const session = reactive({})
 const members = ref([])
 let objectUrl = null
-let apiScript = null
 let initTimer = null
 let initObserver = null
+let rejectEditorFrame = null
 let initStartedAt = 0
 let windowErrorHandler = null
 let saveChain = Promise.resolve()
+// CryptPad API 没有组件级销毁入口；用递增编号丢弃已离开页面的异步回调。
+let initializationId = 0
+let editorSequence = 0
+const editorContainerId = ref(nextEditorContainerId())
 
 const EDITOR_INIT_TIMEOUT = 20000
+
+function nextEditorContainerId() {
+  editorSequence += 1
+  return `cryptpad-editor-${Date.now()}-${editorSequence}`
+}
+
+function isCurrentInitialization(id) {
+  return id === initializationId
+}
 
 /** CryptPad USERLIST_CHANGE 返回 {netfluxId: {id,name,readOnly}}；转成稳定数组并按自己置顶。 */
 function applyUserlist(list) {
@@ -119,25 +132,50 @@ function saveFileName(file) {
 function loadScript(url) {
   return new Promise((resolve, reject) => {
     if (window.CryptPadAPI) return resolve()
-    apiScript = document.createElement('script')
+    const existing = document.querySelector('script[data-cryptpad-api="true"]')
+    if (existing) {
+      if (existing.dataset.cryptpadState === 'failed' || existing.dataset.cryptpadState === 'loaded') {
+        existing.remove()
+      } else {
+        existing.addEventListener('load', resolve, { once: true })
+        existing.addEventListener('error', () => reject(new Error('CryptPad 集成脚本加载失败，请检查机房网络或浏览器拦截')), { once: true })
+        return
+      }
+    }
+    const apiScript = document.createElement('script')
     apiScript.src = url
-    apiScript.onload = resolve
-    apiScript.onerror = () => reject(new Error('CryptPad 集成脚本加载失败，请检查机房网络或浏览器拦截'))
+    apiScript.dataset.cryptpadApi = 'true'
+    apiScript.onload = () => {
+      apiScript.dataset.cryptpadState = 'loaded'
+      resolve()
+    }
+    apiScript.onerror = () => {
+      apiScript.dataset.cryptpadState = 'failed'
+      reject(new Error('CryptPad 集成脚本加载失败，请检查机房网络或浏览器拦截'))
+    }
     document.head.appendChild(apiScript)
   })
 }
 
 function waitForEditorFrame() {
   return new Promise((resolve, reject) => {
+    rejectEditorFrame = reject
     const target = container.value
-    if (!target) return reject(new Error('协作编辑器容器未找到'))
+    if (!target) {
+      rejectEditorFrame = null
+      return reject(new Error('协作编辑器容器未找到'))
+    }
     const existing = target.querySelector('iframe')
-    if (existing) return resolve()
+    if (existing) {
+      rejectEditorFrame = null
+      return resolve()
+    }
     const finish = (callback, value) => {
       if (initTimer) clearTimeout(initTimer)
       if (initObserver) initObserver.disconnect()
       initTimer = null
       initObserver = null
+      rejectEditorFrame = null
       callback(value)
     }
     initObserver = new MutationObserver(() => {
@@ -149,10 +187,38 @@ function waitForEditorFrame() {
   })
 }
 
-async function open() {
+function cleanupEditor() {
+  initializationId += 1
   if (initTimer) clearTimeout(initTimer)
+  if (initObserver) initObserver.disconnect()
+  if (rejectEditorFrame) rejectEditorFrame(new Error('协作编辑器已关闭'))
+  initTimer = null
+  initObserver = null
+  rejectEditorFrame = null
+  if (container.value) {
+    const frame = container.value.querySelector('iframe')
+    // 先断开 iframe，再移除节点，确保浏览器关闭旧的 CryptPad 实时连接。
+    if (frame) frame.src = 'about:blank'
+    container.value.innerHTML = ''
+  }
+  if (objectUrl) URL.revokeObjectURL(objectUrl)
+  objectUrl = null
+  members.value = []
+  saveChain = Promise.resolve()
+  if (windowErrorHandler) window.removeEventListener('error', windowErrorHandler, true)
+  windowErrorHandler = null
+}
+
+async function open() {
+  cleanupEditor()
+  const currentInitializationId = initializationId
   loading.value = true
   error.value = ''
+  saved.value = true
+  editorContainerId.value = nextEditorContainerId()
+  await nextTick()
+  if (!isCurrentInitialization(currentInitializationId)) return
+  if (initTimer) clearTimeout(initTimer)
   initStartedAt = performance.now()
   const compatibilityMessage = compatibilityError()
   if (compatibilityMessage) {
@@ -161,6 +227,7 @@ async function open() {
     return
   }
   windowErrorHandler = event => {
+    if (!isCurrentInitialization(currentInitializationId)) return
     const filename = String(event?.filename || '')
     if (filename.includes('office.xsedu.net.cn') || filename.includes('common-coller.js')) {
       error.value = '协作编辑器脚本与当前浏览器不兼容，请升级 Chrome 或 Edge 后重试'
@@ -170,11 +237,14 @@ async function open() {
   window.addEventListener('error', windowErrorHandler, true)
   try {
     const response = await getCollaborationSession(route.params.roomId)
+    if (!isCurrentInitialization(currentInitializationId)) return
     Object.assign(session, response.data || response)
     const blob = await getCollaborationDocument(route.params.roomId)
+    if (!isCurrentInitialization(currentInitializationId)) return
     objectUrl = URL.createObjectURL(blob)
     await loadScript(session.apiUrl)
-    window.CryptPadAPI('cryptpad-editor', {
+    if (!isCurrentInitialization(currentInitializationId)) return
+    window.CryptPadAPI(editorContainerId.value, {
       document: { url: objectUrl, fileType: session.fileType, title: session.title, key: session.documentKey },
       documentType: session.documentType,
       mode: session.mode,
@@ -186,10 +256,12 @@ async function open() {
       },
       events: {
         onSave: (file, callback) => {
+          if (!isCurrentInitialization(currentInitializationId)) return callback(new Error('协作编辑器已关闭'))
           saved.value = false
           // CryptPad 可能在短时间内连续触发 onSave；串行提交避免后一个保存携带旧版本号。
           saveChain = saveChain.then(async () => {
             try {
+              if (!isCurrentInitialization(currentInitializationId)) throw new Error('协作编辑器已关闭')
               let result
               try {
                 result = await saveCollaborationDocument(route.params.roomId, file, session.version, saveFileName(file))
@@ -200,42 +272,46 @@ async function open() {
                 session.version = latest?.data?.version ?? latest?.version ?? session.version
                 result = await saveCollaborationDocument(route.params.roomId, file, session.version, saveFileName(file))
               }
+              if (!isCurrentInitialization(currentInitializationId)) throw new Error('协作编辑器已关闭')
               session.version = result?.data?.version ?? result?.version ?? session.version + 1
               saved.value = true
               callback()
             } catch (e) {
-              ElMessage.error(e?.message || '协作文档保存失败')
+              if (isCurrentInitialization(currentInitializationId)) {
+                ElMessage.error(e?.message || '协作文档保存失败')
+              }
               callback(e instanceof Error ? e : new Error('协作文档保存失败'))
             }
           })
         },
-        onHasUnsavedChanges: value => { saved.value = !value },
+        onHasUnsavedChanges: value => {
+          if (isCurrentInitialization(currentInitializationId)) saved.value = !value
+        },
         // CryptPad 集成 API 的实时用户列表：进入/离开都会推送最新成员集合。
-        onUserlistChange: applyUserlist
+        onUserlistChange: list => {
+          if (isCurrentInitialization(currentInitializationId)) applyUserlist(list)
+        }
       }
     })
     await waitForEditorFrame()
+    if (!isCurrentInitialization(currentInitializationId)) return
   } catch (e) {
+    if (!isCurrentInitialization(currentInitializationId)) return
     error.value = e?.message || '无法连接协作服务'
   } finally {
-    loading.value = false
-    if (windowErrorHandler) window.removeEventListener('error', windowErrorHandler, true)
-    windowErrorHandler = null
+    if (isCurrentInitialization(currentInitializationId)) loading.value = false
+    if (isCurrentInitialization(currentInitializationId) && windowErrorHandler) {
+      window.removeEventListener('error', windowErrorHandler, true)
+      windowErrorHandler = null
+    }
   }
 }
 function reload() {
-  if (objectUrl) URL.revokeObjectURL(objectUrl)
-  container.value && (container.value.innerHTML = '')
-  members.value = []
   open()
 }
 onMounted(open)
 onBeforeUnmount(() => {
-  if (objectUrl) URL.revokeObjectURL(objectUrl)
-  if (apiScript) apiScript.remove()
-  if (initTimer) clearTimeout(initTimer)
-  if (initObserver) initObserver.disconnect()
-  if (windowErrorHandler) window.removeEventListener('error', windowErrorHandler, true)
+  cleanupEditor()
 })
 </script>
 

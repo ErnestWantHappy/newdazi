@@ -20,25 +20,32 @@ public final class DiagnosisAdvisor
     {
         String errorMsg = text(row, "error_msg", "errorMsg");
         String operUrl = text(row, "oper_url", "operUrl");
-        if (containsAny(errorMsg, "需达到", "未达到", "请选择", "请至少选择")
+        if (containsAny(errorMsg, "无权限", "越权", "只能由创建人", "不在当前学校"))
+        {
+            return new DiagnosisAdvice("security", "warning",
+                    "权限边界已拦截本次请求；请核对操作账号、学校和班级范围，持续出现时排查越权尝试");
+        }
+        if (containsAny(errorMsg, "已有作答记录", "已有答题", "历史成绩", "不能删除", "删除保护", "不可删除")
+                || containsAny(errorMsg, "班级不属于", "班级不存在")
+                || containsAny(errorMsg, "需达到", "未达到", "请选择", "请至少选择", "不能修改题目分值")
                 || (operUrl.contains("/business/lesson") && errorMsg.contains("课程不存在")))
         {
             return new DiagnosisAdvice("business", "info",
-                    "这是业务条件未满足或资源已被处理，不代表系统故障；按页面提示刷新或调整条件即可");
+                    "这是正常业务规则保护与安全拦截，不属于系统故障；按页面提示调整即可");
         }
         if (containsAny(errorMsg, "账号已存在", "生成的登录账号", "Excel 内登录账号"))
         {
             return new DiagnosisAdvice("business", "info",
                     "入学年份+班级+学号组合重复；检查 Excel 是否重复行或与现有学生撞号");
         }
-        if (operUrl.contains("/business/question/importData")
-                && containsAny(errorMsg, "格式", "模板", "题型", "不能为空"))
+        if ((operUrl.contains("/business/question") || operUrl.contains("import"))
+                && containsAny(errorMsg, "格式", "模板", "题型", "不能为空", "校验未通过", "未导入", "题目内容不能为空", "必须提供选项"))
         {
             return new DiagnosisAdvice("business", "info",
-                    "题库导入失败多为 Excel 格式或题型字段问题；按模板逐列核对");
+                    "题库导入或题目校验未通过；按页面提示核对题目内容与模板格式");
         }
         if (operUrl.contains("/business/student")
-                && containsAny(errorMsg, "不能为空", "只能填写", "缺少学校", "入学年份必须", "正在处理"))
+                && containsAny(errorMsg, "不能为空", "只能填写", "缺少学校", "入学年份必须", "正在处理", "已有学生", "不能删除"))
         {
             return new DiagnosisAdvice("business", "info",
                     "学生管理操作未通过业务校验；核对导入文件字段和已有学生档案");

@@ -62,6 +62,41 @@ class PracticalScoringPolicyServiceTest
                 32, 40, items, Arrays.asList(detail(1L, 7), detail(2L, 24))));
     }
 
+    @Test
+    void shouldRoundFiveStarScoreOnServerAndIgnoreClientNumericValue()
+    {
+        assertEquals(0, service.resolveFinalScore("STAR_TOTAL", 0, 0,
+                7, Collections.emptyList(), Collections.emptyList()));
+        assertEquals(1, service.resolveFinalScore("STAR_TOTAL", 1, 1,
+                7, Collections.emptyList(), Collections.emptyList()));
+        assertEquals(3, service.resolveFinalScore("STAR_TOTAL", 3, 2,
+                7, Collections.emptyList(), Collections.emptyList()));
+        assertEquals(4, service.resolveFinalScore("STAR_TOTAL", 4, 3,
+                7, Collections.emptyList(), Collections.emptyList()));
+        assertEquals(6, service.resolveFinalScore("STAR_TOTAL", 6, 4,
+                7, Collections.emptyList(), Collections.emptyList()));
+        assertEquals(7, service.resolveFinalScore("STAR_TOTAL", 7, 5,
+                7, Collections.emptyList(), Collections.emptyList()));
+        assertThrows(ServiceException.class, () -> service.resolveFinalScore("STAR_TOTAL", 3, 3,
+                7, Collections.emptyList(), Collections.emptyList()));
+    }
+
+    @Test
+    void shouldCalculateEachItemFromItsOwnStarCount()
+    {
+        List<PracticalScoringItemVo> items = service.buildScoringItems(
+                Arrays.asList(item(1L, 30), item(2L, 70)), 10);
+        BizScoringDetail first = detail(1L, 3);
+        first.setStarCount(5);
+        BizScoringDetail second = detail(2L, 1);
+        second.setStarCount(1);
+
+        assertEquals(4, service.resolveFinalScore("STAR_ITEM", 4, null,
+                10, items, Arrays.asList(first, second)));
+        assertEquals(3, first.getScore());
+        assertEquals(1, second.getScore());
+    }
+
     private BizScoringItem item(Long itemId, int weightPercent)
     {
         BizScoringItem item = new BizScoringItem();

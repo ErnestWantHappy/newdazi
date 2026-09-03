@@ -47,6 +47,7 @@ import com.ruoyi.business.service.PracticalGradingDeadlineService;
 import com.ruoyi.business.service.StudentAnswerSubmissionService;
 import com.ruoyi.business.service.PracticalArtifactService;
 import com.ruoyi.business.service.StudentToolService;
+import com.ruoyi.business.service.ClassroomTaskStateService;
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.dto.PracticalArtifactSubmitRequest;
 import com.ruoyi.business.domain.dto.PracticalArtifactDeleteRequest;
@@ -113,6 +114,9 @@ public class StudentHomeController extends BaseController
 
     @Autowired
     private StudentToolService studentToolService;
+
+    @Autowired
+    private ClassroomTaskStateService classroomTaskStateService;
 
     @Value("${student.submission-grace-minutes:15}")
     private long submissionGraceMinutes;
@@ -449,6 +453,8 @@ public class StudentHomeController extends BaseController
         PracticalArtifactVo result = practicalArtifactService.submitLessonArtifact(
                 student.getStudentId(), loginUser.getUserId(), question,
                 request.getLessonId(), request.getExpectedVersionId(), request.getUploadTokens());
+        classroomTaskStateService.markSafely(student, student.getDeptId(), request.getLessonId(),
+                request.getQuestionId(), ClassroomTaskStateService.SUBMITTED);
         triggerPracticalDeadlineCheck(
                 request.getLessonId(), loginUser.getDeptId(), student.getEntryYear(), student.getClassCode());
         return AjaxResult.success("作品提交成功", result);
@@ -703,6 +709,12 @@ public class StudentHomeController extends BaseController
         answersToSave.sort(java.util.Comparator.comparing(BizStudentAnswer::getQuestionId));
         java.util.List<Long> pendingConversionAnswerIds = persistAnswersWithDeadlockRetry(
                 studentId, lessonId, answersToSave);
+
+        for (BizStudentAnswer savedAnswer : answersToSave) {
+            classroomTaskStateService.markSafely(student, student.getDeptId(), lessonId, savedAnswer.getQuestionId(),
+                    savedAnswer.getScore() == null
+                            ? ClassroomTaskStateService.SUBMITTED : ClassroomTaskStateService.GRADED);
+        }
 
         triggerPendingPracticalConversions(pendingConversionAnswerIds);
         triggerPracticalDeadlineCheck(

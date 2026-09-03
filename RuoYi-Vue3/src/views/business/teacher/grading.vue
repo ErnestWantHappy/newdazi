@@ -154,7 +154,8 @@
                      {{ getPreviewStatusText(s) }}
                    </div>
                </div>
-               <div class="s-status" v-if="!s.submitted">未交</div>
+               <div class="s-status task-state-returned" v-if="s.taskState === 'RETURNED'">已退回</div>
+               <div class="s-status" v-else-if="!s.submitted" :class="taskStateClass(s.taskState)">{{ taskStateLabel(s.taskState) }}</div>
                <div class="s-status score-num" v-else-if="s.score != null">{{ s.score }}分</div>
                <div class="s-status ungrad" v-else>未批</div>
                <div v-if="aiResultFor(s)?.resultStatus === 'SUCCESS'" class="s-ai">AI {{ aiResultFor(s).suggestedScore }}分</div>
@@ -250,6 +251,10 @@
             
             <div class="question-info">
                 <div class="q-score">满分：{{ currentStudent.maxScore }} 分</div>
+                <!-- P0-A: 按提交绑定快照批改；旧提交用旧标准，新提交用最新标准 -->
+                <div class="rubric-version-tag" v-if="rubricVersionLabel">
+                   <el-tag size="small" type="info">{{ rubricVersionLabel }}</el-tag>
+                </div>
             </div>
 
             <div v-if="currentAiSuggestion" class="ai-suggestion-card">
@@ -301,8 +306,21 @@
                    controls-position="right"
                    size="large"
                    ref="scoreInputRef"
+                   @change="onOverallNumericChange"
                    @keyup.enter="submitScore"
                 />
+                <div class="star-rating-helper" :title="starScaleTitle(currentStudent.maxScore)">
+                   <el-rate
+                      :model-value="overallStarCount"
+                      :disabled="submitting || !deadlineStatus?.canGrade"
+                      clearable
+                      show-text
+                      :texts="starScoreTexts(currentStudent.maxScore)"
+                      @change="onOverallRateChange"
+                   />
+                   <span class="star-hint">{{ starSelectionText(currentStudent.maxScore, overallStarCount) }}</span>
+                   <el-button link type="warning" :disabled="submitting || !deadlineStatus?.canGrade" @click="clearOverallScore">0 分/清零</el-button>
+                </div>
             </div>
             
             <!-- P6: 分项评分模式 -->
@@ -310,6 +328,16 @@
                   <div v-for="(item, index) in scoringItems" :key="item.itemId" class="item-row">
                      <span class="item-name">{{ item.itemName }}</span>
                      <div class="item-input">
+                         <el-rate
+                            class="item-star-rate"
+                            :model-value="itemStarCounts[item.itemId] || 0"
+                            :disabled="submitting || !deadlineStatus?.canGrade"
+                            clearable
+                            show-text
+                            :texts="starScoreTexts(item.maxScore)"
+                            @change="val => onItemRateChange(item, val)"
+                            :title="starScaleTitle(item.maxScore)"
+                         />
                         <el-input-number 
                            :ref="el => setItemInputRef(el, index)"
                            v-model="itemScores[item.itemId]" 
@@ -318,10 +346,11 @@
                            :max="item.maxScore"
                            :precision="0"
                            size="small"
-                           @change="onItemScoreChange"
+                            @change="() => onItemNumericChange(item)"
                            @keydown.enter="onItemEnter(index)"
                         />
-                        <span class="item-max">/ {{ item.maxScore }} 分</span>
+                         <span class="item-max">/ {{ item.maxScore }} 分</span>
+                         <el-button link type="warning" :disabled="submitting || !deadlineStatus?.canGrade" @click="clearItemScore(item)">清零</el-button>
                      </div>
                   </div>
                   <div class="item-total">
@@ -331,6 +360,9 @@
             
             <el-button type="primary" size="large" class="submit-btn" :loading="submitting" :disabled="submitting || !deadlineStatus?.canGrade" @click="submitScore">
                提交并下一位 (Enter)
+            </el-button>
+            <el-button type="warning" plain :disabled="submitting || !deadlineStatus?.canGrade || currentStudent.taskState === 'RETURNED'" @click="returnCurrentTask">
+               退回重交
             </el-button>
             
             <div class="nav-actions">
@@ -533,7 +565,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
-import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission } from '@/api/business/teacherGrading';
+import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission, returnClassroomTask } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
 import { getAiConfig, saveAiConfig, deleteAiConfig, testAiConfig, createAiJob, getAiJob, getAiJobEvents,
     getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
@@ -543,6 +575,7 @@ import { FullScreen } from '@element-plus/icons-vue';
 import { deadlineStatusMeta, formatDeadlineRemaining, formatDeadlineTime } from '@/utils/practicalDeadline';
 import useUserStore from '@/store/modules/user';
 import FlowchartGradingPanel from '@/components/FlowchartEditor/FlowchartGradingPanel.vue';
+import websocketClient from '@/plugins/websocket';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -614,6 +647,19 @@ const scoreInputRef = ref(null);
 const scoringItems = ref([]);      // 评分项列表
 const itemScores = ref({});        // 各评分项得分 { itemId: score }
 const useItemScoring = ref(false); // 是否使用分项评分
+const gradingInputMode = ref('NUMERIC');
+const overallStarCount = ref(0);
+const itemStarCounts = ref({});
+
+// P0-A: 批改页标注“作品 vN · 评分依据 vM（提交时）”；历史未回填版本的数据不显示，避免误导
+const rubricVersionLabel = computed(() => {
+    const student = currentStudent.value;
+    if (!student?.submitted || !student?.practicalVersionId) return '';
+    const parts = [];
+    if (student.versionNo != null) parts.push(`作品 v${student.versionNo}`);
+    if (student.rubricSnapshotVersion != null) parts.push(`评分依据 v${student.rubricSnapshotVersion}（提交时）`);
+    return parts.join(' · ');
+});
 
 const currentAttachments = computed(() => {
     const attachments = currentStudent.value?.attachments;
@@ -727,10 +773,70 @@ const itemTotalScore = computed(() => {
     return total;
 });
 
+// 课堂状态以 REST 全量结果为准；WebSocket 只用于触发提前刷新。
+let unsubTaskState = null;
+let classroomStateTimer = null;
+let realtimeRefreshTimer = null;
+
+function syncClassroomSocket() {
+    const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
+    if (!classInfo || !selectedLessonId.value) return;
+    const deptId = userStore.deptId;
+    const entryYear = classInfo.entryYear || '';
+    const classCode = selectedClassCode.value;
+    if (deptId && entryYear && classCode) {
+        websocketClient.connectClassroom(deptId, entryYear, classCode, selectedLessonId.value);
+    }
+}
+
+function initGradingWebSocket() {
+    if (unsubTaskState) unsubTaskState();
+    unsubTaskState = websocketClient.on('TASK_STATE_UPDATE', (payload) => {
+        if (!payload || !payload.lessonId) return;
+        if (String(payload.lessonId) !== String(selectedLessonId.value)) return;
+        if (String(payload.questionId) !== String(selectedQuestionId.value)) return;
+        const targetStudent = submissions.value.find(s => String(s.studentId) === String(payload.studentId));
+        if (targetStudent) {
+            const incomingVersion = Number(payload.stateVersion || 0);
+            const currentVersion = Number(targetStudent.stateVersion || 0);
+            if (incomingVersion <= currentVersion) return;
+            targetStudent.taskState = payload.taskState;
+            targetStudent.stateVersion = incomingVersion;
+        }
+        scheduleRealtimeRefresh();
+    });
+}
+
+function scheduleRealtimeRefresh() {
+    if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = setTimeout(() => {
+        realtimeRefreshTimer = null;
+        loadSubmissions({ silent: true });
+    }, 250);
+}
+
+function startClassroomStateCalibration() {
+    if (classroomStateTimer) clearInterval(classroomStateTimer);
+    classroomStateTimer = setInterval(() => {
+        if (selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value) loadSubmissions({ silent: true });
+    }, 10000);
+}
+
+function taskStateLabel(state) {
+    return ({ NOT_ENTERED: '未进入', ENTERED: '已进入', WORKING: '作答中',
+        SUBMITTED: '已提交', GRADED: '已批改', RETURNED: '已退回' })[state] || '未进入';
+}
+
+function taskStateClass(state) {
+    return `task-state-${String(state || 'NOT_ENTERED').toLowerCase()}`;
+}
+
 // 初始化加载课程数据
 onMounted(() => {
   fetchDashboardData();
   loadAiConfigStatus();
+  initGradingWebSocket();
+  startClassroomStateCalibration();
   document.addEventListener('keydown', handleGlobalKeydown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
   
@@ -738,9 +844,17 @@ onMounted(() => {
   const queryLessonId = route.query.lessonId;
   if (queryLessonId) {
     selectedLessonId.value = parseInt(queryLessonId);
-    // 等待数据加载后触发change，或者直接触发
     onLessonChange(selectedLessonId.value);
   }
+});
+
+onBeforeUnmount(() => {
+  if (unsubTaskState) unsubTaskState();
+  if (classroomStateTimer) clearInterval(classroomStateTimer);
+  if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+  websocketClient.disconnect();
+  document.removeEventListener('keydown', handleGlobalKeydown);
+  document.removeEventListener('fullscreenchange', handleFullscreenChange);
 });
 
 function handleGlobalKeydown(e) {
@@ -850,6 +964,9 @@ function loadScoringItems(practicalVersionId = currentStudent.value?.practicalVe
     if (isCurrentFlowchart.value) {
         scoringItems.value = [];
         itemScores.value = {};
+        itemStarCounts.value = {};
+        overallStarCount.value = 0;
+        gradingInputMode.value = 'NUMERIC';
         useItemScoring.value = false;
         return Promise.resolve();
     }
@@ -866,8 +983,10 @@ function loadScoringItems(practicalVersionId = currentStudent.value?.practicalVe
         scoringItems.value = res.data || [];
         // 重置分项得分
         itemScores.value = {};
+        itemStarCounts.value = {};
         scoringItems.value.forEach(item => {
             itemScores.value[item.itemId] = 0;
+            itemStarCounts.value[item.itemId] = 0;
         });
         // 如果有评分项，默认使用分项评分
         useItemScoring.value = scoringItems.value.length > 0;
@@ -876,16 +995,71 @@ function loadScoringItems(practicalVersionId = currentStudent.value?.practicalVe
 
 // P6: 评分模式切换
 function onScoringModeChange(useItem) {
+    gradingInputMode.value = 'NUMERIC';
+    overallStarCount.value = 0;
     if (useItem) {
         // 切换到分项评分时，重置分项得分
         scoringItems.value.forEach(item => {
             itemScores.value[item.itemId] = 0;
+            itemStarCounts.value[item.itemId] = 0;
         });
     }
 }
 
-function onItemScoreChange() {
-    // 可以在此添加额外的逻辑，当前仅依赖computed属性即可
+// P1-B: 五星辅助打分逻辑
+function calculateStarScore(maxScore, stars) {
+    const max = Number(maxScore || 0);
+    const count = Number(stars || 0);
+    return max > 0 ? Math.round(max * count / 5) : 0;
+}
+
+function starScoreTexts(maxScore) {
+    return [1, 2, 3, 4, 5].map(stars => `${stars}星 = ${calculateStarScore(maxScore, stars)}分`);
+}
+
+function starScaleTitle(maxScore) {
+    return starScoreTexts(maxScore).join('；');
+}
+
+function starSelectionText(maxScore, stars) {
+    return stars ? `${stars} 星 = ${calculateStarScore(maxScore, stars)} 分` : '五星辅助评分';
+}
+
+function onOverallRateChange(stars) {
+    const max = currentStudent.value?.maxScore;
+    if (!max || max <= 0) return;
+    overallStarCount.value = Number(stars || 0);
+    gradingInputMode.value = 'STAR_TOTAL';
+    currentScore.value = calculateStarScore(max, overallStarCount.value);
+}
+
+function clearOverallScore() {
+    overallStarCount.value = 0;
+    gradingInputMode.value = 'STAR_TOTAL';
+    currentScore.value = 0;
+}
+
+function onOverallNumericChange() {
+    overallStarCount.value = 0;
+    gradingInputMode.value = 'NUMERIC';
+}
+
+function onItemRateChange(item, stars) {
+    if (!item?.maxScore || item.maxScore <= 0) return;
+    itemStarCounts.value[item.itemId] = Number(stars || 0);
+    itemScores.value[item.itemId] = calculateStarScore(item.maxScore, itemStarCounts.value[item.itemId]);
+    gradingInputMode.value = 'STAR_ITEM';
+}
+
+function clearItemScore(item) {
+    itemStarCounts.value[item.itemId] = 0;
+    itemScores.value[item.itemId] = 0;
+    gradingInputMode.value = 'STAR_ITEM';
+}
+
+function onItemNumericChange(item) {
+    itemStarCounts.value[item.itemId] = 0;
+    gradingInputMode.value = 'NUMERIC';
 }
 
 // P6: 评分项输入框引用数组
@@ -949,8 +1123,9 @@ function focusFirstItem() {
 }
 
 // 加载提交记录
-function loadSubmissions() {
+function loadSubmissions(options = {}) {
     if (!selectedLessonId.value || !selectedQuestionId.value || !selectedClassCode.value) return;
+    const silent = options.silent === true;
     
     // P5: 获取当前班级的entryYear
     const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
@@ -958,7 +1133,7 @@ function loadSubmissions() {
     const previousStudentId = currentStudent.value?.studentId;
     const requestId = ++submissionsRequestSeq;
     
-    loading.value = true;
+    if (!silent) loading.value = true;
     return getPracticalSubmissions(selectedLessonId.value, selectedQuestionId.value, selectedClassCode.value, entryYear).then(res => {
         if (requestId !== submissionsRequestSeq) return;
         submissions.value = [...(res.data || [])].sort((left, right) => {
@@ -969,12 +1144,18 @@ function loadSubmissions() {
             if (Number.isFinite(leftNo) && Number.isFinite(rightNo)) return leftNo - rightNo;
             return String(left.studentNo || '').localeCompare(String(right.studentNo || ''), 'zh-CN');
         });
-        loading.value = false;
+        if (!silent) loading.value = false;
         if (!isCurrentFlowchart.value) restoreLatestAiJob();
+        syncClassroomSocket();
         const preservedStudent = previousStudentId != null
             ? submissions.value.find(s => s.studentId === previousStudentId && s.submitted)
             : null;
         const nextStudent = preservedStudent || submissions.value.find(s => s.submitted);
+        if (nextStudent && silent && preservedStudent) {
+            currentStudent.value = preservedStudent;
+            currentIndex.value = submissions.value.findIndex(s => s.studentId === preservedStudent.studentId);
+            return;
+        }
         if (nextStudent) {
             const idx = submissions.value.findIndex(s => s.studentId === nextStudent.studentId);
             selectStudent(nextStudent, idx);
@@ -986,13 +1167,13 @@ function loadSubmissions() {
         previewUrl.value = '';
     }).catch(() => {
         if (requestId !== submissionsRequestSeq) return;
-        loading.value = false;
+        if (!silent) loading.value = false;
         submissions.value = [];
         currentStudent.value = null;
         currentIndex.value = -1;
         currentScore.value = undefined;
         previewUrl.value = '';
-        ElMessage.error('加载学生提交记录失败');
+        if (!silent) ElMessage.error('加载学生提交记录失败');
     });
 }
 
@@ -1460,6 +1641,9 @@ function selectStudent(student, index) {
     currentIndex.value = index;
     currentAttachmentIndex.value = 0;
     currentScore.value = student.score != null ? student.score : null; // 默认为空，方便直接输入
+    gradingInputMode.value = 'NUMERIC';
+    overallStarCount.value = 0;
+    itemStarCounts.value = {};
     const scoringItemsPromise = loadScoringItems(student.practicalVersionId)
     
     // 生成预览URL
@@ -1550,13 +1734,17 @@ async function submitScore() {
     // P6: 如果使用分项评分，计算总分
     let finalScore = currentScore.value;
     let scoringDetails = null;
+    const requestMode = useItemScoring.value
+        ? (gradingInputMode.value === 'STAR_ITEM' ? 'STAR_ITEM' : 'NUMERIC')
+        : (gradingInputMode.value === 'STAR_TOTAL' ? 'STAR_TOTAL' : 'NUMERIC');
     
     if (useItemScoring.value && scoringItems.value.length > 0) {
         // 使用分项评分
         finalScore = itemTotalScore.value;
         scoringDetails = scoringItems.value.map(item => ({
             itemId: item.itemId,
-            score: itemScores.value[item.itemId] || 0
+            score: itemScores.value[item.itemId] || 0,
+            starCount: requestMode === 'STAR_ITEM' ? (itemStarCounts.value[item.itemId] || 0) : null
         }));
     }
     
@@ -1585,6 +1773,9 @@ async function submitScore() {
         score: finalScore,
         expectedScore,
         practicalVersionId: targetStudent.practicalVersionId || null,
+        rubricSnapshotId: targetStudent.rubricSnapshotId || null,
+        mode: requestMode,
+        starCount: requestMode === 'STAR_TOTAL' ? overallStarCount.value : null,
         submitTime: targetStudent.submitTime,
         scoringDetails: scoringDetails
     };
@@ -1619,6 +1810,40 @@ async function submitScore() {
 
     if (shouldAdvance) {
         nextSubmittedStudent();
+    }
+}
+
+async function returnCurrentTask() {
+    if (!currentStudent.value || submitting.value) return;
+    const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
+    if (!classInfo?.entryYear) {
+        ElMessage.error('当前班级届别缺失，请刷新后重试');
+        return;
+    }
+    try {
+        await ElMessageBox.confirm(
+            `确定将 ${currentStudent.value.studentName} 的当前作品退回重交吗？原作品和成绩会保留用于审计。`,
+            '退回重交', { type: 'warning' }
+        );
+        submitting.value = true;
+        await returnClassroomTask({
+            lessonId: selectedLessonId.value,
+            questionId: selectedQuestionId.value,
+            studentId: currentStudent.value.studentId,
+            entryYear: classInfo.entryYear,
+            classCode: selectedClassCode.value
+        });
+        currentStudent.value.taskState = 'RETURNED';
+        const row = submissions.value.find(item => item.studentId === currentStudent.value.studentId);
+        if (row) row.taskState = 'RETURNED';
+        ElMessage.success('已退回，等待学生重新提交');
+    } catch (error) {
+        // Element Plus 取消确认使用 cancel/close，接口失败必须明确反馈给教师。
+        if (error !== 'cancel' && error !== 'close') {
+            ElMessage.error(error?.msg || error?.message || '退回失败，请刷新后重试');
+        }
+    } finally {
+        submitting.value = false;
     }
 }
 
@@ -2112,6 +2337,9 @@ function autoFocusItem() {
           font-weight: normal;
           font-size: 12px;
        }
+       &.task-state-entered { color: #409eff; }
+       &.task-state-working { color: #e6a23c; }
+       &.task-state-returned { color: #f56c6c; }
     }
     
     // P5: 未提交学生灰显样式
@@ -2371,5 +2599,26 @@ function autoFocusItem() {
   color: #67c23a;
   font-size: 11px;
   white-space: nowrap;
+}
+
+.star-rating-helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #fdf6ec;
+  border-radius: 6px;
+  border: 1px dashed #f5dab1;
+
+  .star-hint {
+    font-size: 12px;
+    color: #e6a23c;
+    font-weight: 500;
+  }
+}
+
+.item-star-rate {
+  margin-right: 6px;
 }
 </style>

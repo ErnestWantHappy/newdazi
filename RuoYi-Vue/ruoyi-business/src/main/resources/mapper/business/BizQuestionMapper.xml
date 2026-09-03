@@ -172,7 +172,6 @@
                 preview_path = NULL,
                 preview_status = NULL,
                 practical_allowed_extensions = NULL,
-                practical_image_max_count = NULL,
             </if>
             <if test="practicalImageMaxCount != null">practical_image_max_count = #{practicalImageMaxCount},</if>
             <if test="isPublic != null and isPublic != ''">is_public = #{isPublic},</if>

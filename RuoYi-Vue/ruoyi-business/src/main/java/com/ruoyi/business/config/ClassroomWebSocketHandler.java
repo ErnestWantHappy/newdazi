@@ -48,9 +48,9 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
         String type = payload.getString("type");
         if ("heartbeat".equals(type)) return;
         boolean teacher = Boolean.TRUE.equals(session.getAttributes().get("teacher"));
-        if (("page_change".equals(type) || "refresh".equals(type) || "message".equals(type)) && !teacher)
+        if (!teacher)
         {
-            session.sendMessage(new TextMessage("{\"type\":\"error\",\"message\":\"无课堂控制权限\"}"));
+            session.sendMessage(new TextMessage("{\"type\":\"error\",\"message\":\"学生连接只允许心跳消息\"}"));
             return;
         }
 
@@ -84,12 +84,10 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
     private void removeSession(WebSocketSession session)
     {
         String roomKey = String.valueOf(session.getAttributes().get("roomKey"));
-        Map<String, WebSocketSession> room = rooms.get(roomKey);
-        if (room != null)
-        {
+        rooms.computeIfPresent(roomKey, (key, room) -> {
             room.remove(session.getId());
-            if (room.isEmpty()) rooms.remove(roomKey, room);
-        }
+            return room.isEmpty() ? null : room;
+        });
     }
 
     private void broadcast(String roomKey, String payload)
@@ -113,5 +111,16 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
                 removeSession(target);
             }
         }
+    }
+
+    /**
+     * 向指定学校、年级、班级和课程的课堂连接广播状态变更消息
+     */
+    public void broadcastToClassroom(Long deptId, String entryYear, String classCode, Long lessonId, String payload)
+    {
+        if (deptId == null || entryYear == null || classCode == null || lessonId == null) return;
+        String targetRoomKey = ClassroomRoomKey.of(deptId, entryYear, classCode, lessonId);
+        if (targetRoomKey == null) return;
+        broadcast(targetRoomKey, payload);
     }
 }

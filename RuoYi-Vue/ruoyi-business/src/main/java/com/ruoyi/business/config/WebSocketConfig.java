@@ -41,7 +41,7 @@ public class WebSocketConfig implements WebSocketConfigurer
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry)
     {
-        registry.addHandler(handler, "/ws/classroom/*/*/*")
+        registry.addHandler(handler, "/ws/classroom/*/*/*", "/ws/classroom/*/*/*/*")
                 .addInterceptors(interceptor)
                 .setAllowedOrigins(allowedOrigins);
         registry.addHandler(iotHandler, "/ws/iot/*")

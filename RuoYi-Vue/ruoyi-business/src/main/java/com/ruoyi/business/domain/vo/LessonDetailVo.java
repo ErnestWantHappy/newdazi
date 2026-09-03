@@ -77,6 +77,12 @@ public class LessonDetailVo extends BaseEntity {
     /** 当前年级下所有可选的班级列表 */
     private List<String> allClassesInGrade;
 
+    /** 是否有权编辑/修改该课程 */
+    private Boolean canDesign;
+
+    /** 是否为共享只读预览模式 */
+    private Boolean readOnly;
+
     // --- 所有字段的 Getter and Setter ---
 
     public Long getLessonId() {
@@ -297,5 +303,21 @@ public class LessonDetailVo extends BaseEntity {
 
     public void setAllClassesInGrade(List<String> allClassesInGrade) {
         this.allClassesInGrade = allClassesInGrade;
+    }
+
+    public Boolean getCanDesign() {
+        return canDesign;
+    }
+
+    public void setCanDesign(Boolean canDesign) {
+        this.canDesign = canDesign;
+    }
+
+    public Boolean getReadOnly() {
+        return readOnly;
+    }
+
+    public void setReadOnly(Boolean readOnly) {
+        this.readOnly = readOnly;
     }
 }

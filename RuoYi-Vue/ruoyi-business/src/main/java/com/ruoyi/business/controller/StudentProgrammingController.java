@@ -22,6 +22,7 @@ import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.business.service.ProgrammingSubmissionService;
 import com.ruoyi.business.service.ProgrammingSubmissionWorker;
+import com.ruoyi.business.service.ClassroomTaskStateService;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -37,6 +38,7 @@ public class StudentProgrammingController extends BaseController {
     @Autowired private GuideSheetAccessService guideSheetAccessService;
     @Autowired private ProgrammingSubmissionService programmingSubmissionService;
     @Autowired private ProgrammingSubmissionWorker programmingSubmissionWorker;
+    @Autowired private ClassroomTaskStateService taskStateService;
 
     @GetMapping("/{lessonId}/{questionId}")
     public AjaxResult detail(@PathVariable Long lessonId, @PathVariable Long questionId) {
@@ -49,7 +51,10 @@ public class StudentProgrammingController extends BaseController {
 
     @PutMapping("/draft")
     public AjaxResult saveDraft(@RequestBody StudentProgrammingRequest request) {
-        BizStudent student = currentStudent(); programmingSubmissionService.saveDraft(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode); return success("草稿已保存");
+        BizStudent student = currentStudent(); programmingSubmissionService.saveDraft(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode);
+        taskStateService.markSafely(student, student.getDeptId(), request.lessonId, request.questionId,
+                ClassroomTaskStateService.WORKING);
+        return success("草稿已保存");
     }
 
     @PostMapping("/run")
@@ -67,6 +72,8 @@ public class StudentProgrammingController extends BaseController {
     private AjaxResult submit(StudentProgrammingRequest request, String kind, HttpServletRequest httpRequest) {
         BizStudent student = currentStudent(); guideSheetAccessService.assertNoPendingCountyExam();
         ProgrammingSubmission submission = programmingSubmissionService.submit(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode, request.customInput, request.submissionKey, kind, httpRequest.getRemoteAddr(), programmingSubmissionWorker);
+        taskStateService.markSafely(student, student.getDeptId(), request.lessonId, request.questionId,
+                "SUBMIT".equals(kind) ? ClassroomTaskStateService.SUBMITTED : ClassroomTaskStateService.WORKING);
         List<StudentProgrammingSubmissionVo> history = programmingSubmissionService.getStudentHistory(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId);
         StudentProgrammingSubmissionVo safe = history.stream().filter(item -> submission.getSubmissionId().equals(item.getSubmissionId())).findFirst().orElse(null);
         String message = "RUN".equals(kind) ? "示例运行已进入队列" : ("CUSTOM_RUN".equals(kind) ? "自定义运行已进入队列" : "正式提交已进入队列");

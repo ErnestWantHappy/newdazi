@@ -66,6 +66,13 @@ public class PracticalSubmissionVo {
     
     /** P5: 是否已提交 */
     private Boolean submitted;
+
+    /** 服务端权威任务状态及版本；用于实时消息乱序保护。 */
+    private String taskState;
+    private Long stateVersion;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date stateChangedAt;
     
     /** 学生备注 */
     private String remark;
@@ -73,8 +80,14 @@ public class PracticalSubmissionVo {
     /** 当前逻辑作品版本；历史未回填数据可空 */
     private Long practicalVersionId;
 
+    /** 当前提交的作品版本号，用于批改页展示“作品 vN”。 */
+    private Integer versionNo;
+
     /** 当前提交绑定的评分标准快照。 */
     private Long rubricSnapshotId;
+
+    /** 提交绑定快照的版本号，用于批改页展示“评分依据 vM（提交时）”。 */
+    private Integer rubricSnapshotVersion;
 
     /** 当前版本附件，按作品顺序排列 */
     private List<PracticalAttachment> attachments = new ArrayList<PracticalAttachment>();
@@ -133,6 +146,13 @@ public class PracticalSubmissionVo {
     
     public Boolean getSubmitted() { return submitted; }
     public void setSubmitted(Boolean submitted) { this.submitted = submitted; }
+
+    public String getTaskState() { return taskState; }
+    public void setTaskState(String taskState) { this.taskState = taskState; }
+    public Long getStateVersion() { return stateVersion; }
+    public void setStateVersion(Long stateVersion) { this.stateVersion = stateVersion; }
+    public Date getStateChangedAt() { return stateChangedAt; }
+    public void setStateChangedAt(Date stateChangedAt) { this.stateChangedAt = stateChangedAt; }
     
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
@@ -140,8 +160,14 @@ public class PracticalSubmissionVo {
     public Long getPracticalVersionId() { return practicalVersionId; }
     public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
 
+    public Integer getVersionNo() { return versionNo; }
+    public void setVersionNo(Integer versionNo) { this.versionNo = versionNo; }
+
     public Long getRubricSnapshotId() { return rubricSnapshotId; }
     public void setRubricSnapshotId(Long rubricSnapshotId) { this.rubricSnapshotId = rubricSnapshotId; }
+
+    public Integer getRubricSnapshotVersion() { return rubricSnapshotVersion; }
+    public void setRubricSnapshotVersion(Integer rubricSnapshotVersion) { this.rubricSnapshotVersion = rubricSnapshotVersion; }
 
     public List<PracticalAttachment> getAttachments() { return attachments; }
     public void setAttachments(List<PracticalAttachment> attachments) { this.attachments = attachments; }

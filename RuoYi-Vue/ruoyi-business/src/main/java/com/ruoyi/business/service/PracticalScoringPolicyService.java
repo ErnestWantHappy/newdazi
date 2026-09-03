@@ -1,6 +1,8 @@
 package com.ruoyi.business.service;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -19,6 +21,10 @@ import com.ruoyi.common.exception.ServiceException;
 @Service
 public class PracticalScoringPolicyService
 {
+    public static final String MODE_NUMERIC = "NUMERIC";
+    public static final String MODE_STAR_TOTAL = "STAR_TOTAL";
+    public static final String MODE_STAR_ITEM = "STAR_ITEM";
+
     public List<PracticalScoringItemVo> buildScoringItems(
             List<BizScoringItem> items, int questionScore)
     {
@@ -57,6 +63,20 @@ public class PracticalScoringPolicyService
                                  List<PracticalScoringItemVo> scoringItems,
                                  List<BizScoringDetail> scoringDetails)
     {
+        return resolveFinalScore(MODE_NUMERIC, requestedScore, null,
+                questionScore, scoringItems, scoringDetails);
+    }
+
+    /**
+     * 星级结果必须由服务端按快照满分重算；前端分数只用于发现陈旧或篡改请求。
+     */
+    public int resolveFinalScore(String mode,
+                                 Integer requestedScore,
+                                 Integer starCount,
+                                 int questionScore,
+                                 List<PracticalScoringItemVo> scoringItems,
+                                 List<BizScoringDetail> scoringDetails)
+    {
         if (requestedScore == null)
         {
             throw new ServiceException("分数不能为空");
@@ -64,6 +84,29 @@ public class PracticalScoringPolicyService
         if (requestedScore < 0 || requestedScore > questionScore)
         {
             throw new ServiceException("分数必须在0到题目满分之间");
+        }
+        String normalizedMode = mode == null || mode.trim().isEmpty()
+                ? MODE_NUMERIC : mode.trim().toUpperCase();
+        if (MODE_STAR_TOTAL.equals(normalizedMode))
+        {
+            if (scoringDetails != null && !scoringDetails.isEmpty())
+            {
+                throw new ServiceException("整题评星不能同时提交分项明细");
+            }
+            int calculated = calculateStarScore(questionScore, starCount);
+            if (requestedScore != calculated)
+            {
+                throw new ServiceException("星级折算分数已变化，请刷新后重试");
+            }
+            return calculated;
+        }
+        if (MODE_STAR_ITEM.equals(normalizedMode))
+        {
+            return resolveStarItemScore(requestedScore, scoringItems, scoringDetails);
+        }
+        if (!MODE_NUMERIC.equals(normalizedMode))
+        {
+            throw new ServiceException("评分模式无效");
         }
         if (scoringDetails == null || scoringDetails.isEmpty())
         {
@@ -108,5 +151,66 @@ public class PracticalScoringPolicyService
             throw new ServiceException("分项得分合计必须与总分一致");
         }
         return detailTotal;
+    }
+
+    private int resolveStarItemScore(Integer requestedScore,
+                                     List<PracticalScoringItemVo> scoringItems,
+                                     List<BizScoringDetail> scoringDetails)
+    {
+        if (scoringItems == null || scoringItems.isEmpty())
+        {
+            throw new ServiceException("当前题目没有有效评分项，不能使用逐项评星");
+        }
+        if (scoringDetails == null || scoringDetails.size() != scoringItems.size())
+        {
+            throw new ServiceException("请完成全部评分项");
+        }
+        Map<Long, Integer> maxScores = new HashMap<Long, Integer>();
+        for (PracticalScoringItemVo item : scoringItems)
+        {
+            maxScores.put(item.getItemId(), item.getMaxScore());
+        }
+        Set<Long> submittedItemIds = new HashSet<Long>();
+        int total = 0;
+        for (BizScoringDetail detail : scoringDetails)
+        {
+            if (detail == null || detail.getItemId() == null)
+            {
+                throw new ServiceException("评分项参数不完整");
+            }
+            Integer maxScore = maxScores.get(detail.getItemId());
+            if (maxScore == null || !submittedItemIds.add(detail.getItemId()))
+            {
+                throw new ServiceException("评分项不属于当前题目或存在重复");
+            }
+            int calculated = calculateStarScore(maxScore, detail.getStarCount());
+            if (detail.getScore() == null || detail.getScore() != calculated)
+            {
+                throw new ServiceException("评分项星级折算分数已变化，请刷新后重试");
+            }
+            detail.setScore(calculated);
+            total += calculated;
+        }
+        if (total != requestedScore)
+        {
+            throw new ServiceException("评分项星级合计与总分不一致");
+        }
+        return total;
+    }
+
+    public int calculateStarScore(int maxScore, Integer starCount)
+    {
+        if (maxScore < 0)
+        {
+            throw new ServiceException("评分满分不能为负数");
+        }
+        if (starCount == null || starCount < 0 || starCount > 5)
+        {
+            throw new ServiceException("星级必须是0到5之间的整数");
+        }
+        return BigDecimal.valueOf(maxScore)
+                .multiply(BigDecimal.valueOf(starCount))
+                .divide(BigDecimal.valueOf(5), 0, RoundingMode.HALF_UP)
+                .intValue();
     }
 }

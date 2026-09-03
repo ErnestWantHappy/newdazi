@@ -4,6 +4,15 @@
 
 采用“先修正确性，再建共享状态底座，最后改协作模型”的增量路线。P0 热修不等待分组大功能；通用分组和学生桌面先独立交付；在线协作只读取已经稳定的课时分组快照，避免在一个版本中同时重写课程、分组、房间、成绩和实时通信。
 
+### 1.1 2026-09-03 本地实现说明
+
+- 共享课程没有新增专用复制接口，也没有引入独立 `SharedLessonReadService`；当前以 `BizLessonServiceImpl` 的服务端能力判断和既有课程详情 DTO 做最小改造。只有同校且管理班级与课程指派有交集的教师可只读预览，复制/设计/删除/修改均不开放。
+- 星级评分没有新增成绩表字段；`mode/starCount/rubricSnapshotId` 作为保存请求契约，由服务端重算整数成绩。若后续需要长期审计输入模式，再独立评估迁移，不能把拟议字段当作已存在事实。
+- 统一状态采用 `ClassroomTaskStateService` 加独立事务写入器，REST 为 `/business/classroom-state/student`、`/business/classroom-state/class`、`/business/classroom-state/return`；状态是展示旁路，主事务提交后才写入，失败只告警。课堂 WebSocket 事件名为 `TASK_STATE_UPDATE`。旧三段房间路径继续兼容，新四段路径显式携带 `lessonId`，房间键统一规范化班号。
+- `biz_student_task_state` 的本地迁移实际保存当前状态、版本和最后变化时间，不保存每个状态的独立时间列。历史答案回填为可确定的 `SUBMITTED/GRADED`；全班查询对无记录学生返回 `NOT_ENTERED`、版本 0。
+- 批改页使用版本事件、250ms 合并刷新和 10 秒校准；教师首页操作题状态使用 10 秒校准。计划中的成绩/提交列表统一 store、学生桌面与 Presence 尚未实现。
+- 本节只记录本地源码事实；`sql/student_task_state_v1.sql` 尚未在任何数据库执行，也未发布服务器。
+
 ```text
 学生端公共布局
   ├─ Presence WebSocket ─> 在线状态服务 ─> Redis TTL ─> 学生桌面
@@ -65,11 +74,11 @@
 
 ### 4.1 P0/P1 小改字段
 
-- `biz_student_answer.score_input_mode varchar(16) NULL`：`NUMERIC`、`STAR_TOTAL`、`STAR_ITEM`；历史空值按 `NUMERIC` 展示。若不希望为辅助交互迁移字段，可把该项降为审计日志，但推荐保留以便解释成绩来源。
+- 星级输入模式当前不落 `biz_student_answer` 新字段；历史成绩结构保持不变，服务器只信任重算后的整数成绩。
 - `biz_student_task_state`：统一记录课程题目级课堂状态。
   - 业务键：`lesson_id + question_id + student_id`
-  - 字段：`state`、`state_version`、`entered_time`、`started_time`、`submitted_time`、`graded_time`、`returned_time`、`update_time`
-  - 状态只允许单向或显式重交流转；重复事件幂等。
+  - 实际字段：`state_id`、`dept_id`、`lesson_id`、`question_id`、`student_id`、`task_state`、`state_version`、`changed_at`、审计时间
+  - 状态只允许单向或显式重交流转；低阶段页面事件不能把已提交/已批改状态降级。
 
 ### 4.2 通用分组
 
@@ -130,10 +139,9 @@
 
 ### 5.1 共享课程
 
-- `GET /business/lesson/{lessonId}/shared-view`
-  - 返回课程基本信息、当前教师可见班级、已引用题目只读 DTO 和能力对象。
-  - `capabilities={canViewContent:true,canDesign:false,canDelete:false,canCopy:false}`。
-- 不能复用设计器更新接口；所有修改接口继续执行管理权校验。
+- 复用既有课程详情读取接口，返回课程基本信息、当前教师可见班级、已引用题目和服务端能力字段。
+- 非创建教师必须通过“同校 + 管理班级和课程指派有交集”校验；能力固定为 `readOnly=true`、`canDesign=false`，页面不提供删除、复制或修改入口。
+- 所有修改接口继续执行课程管理权校验；课程之外的创建者私人题库不开放。
 
 ### 5.2 星级评分与快照
 
@@ -155,12 +163,14 @@
 
 ### 5.3 统一作业状态
 
-- `GET /business/classroom-state?lessonId=&entryYear=&classCode=`：返回全班学生状态、版本和汇总。
+- `GET /business/classroom-state/class?lessonId=&questionId=&entryYear=&classCode=`：返回全班学生状态和版本；无状态行按 `NOT_ENTERED`、版本 0 返回。
+- `POST /business/classroom-state/student`：学生仅可上报本人当前课程题目的 `ENTERED/WORKING`。
+- `POST /business/classroom-state/return`：有课程班级权限的教师把指定学生任务标为 `RETURNED`，保留原作品和评分用于审计。
 - WebSocket 事件：
 
 ```json
 {
-  "type": "student_task_state_changed",
+  "type": "TASK_STATE_UPDATE",
   "lessonId": 293,
   "questionId": 2029,
   "studentId": 1001,

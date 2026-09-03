@@ -7,6 +7,7 @@ import java.util.Map;
 import javax.servlet.http.Cookie;
 
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.CountyExamClass;
 import com.ruoyi.business.domain.CountyExamStudent;
@@ -99,10 +100,38 @@ class ClassroomWebSocketSecurityTest
         assertFalse(handshake(new HashMap<>()));
     }
 
+    @Test
+    void teacherCanSubscribeExplicitHistoricalLessonOnlyWithClassEvidence()
+    {
+        LoginUser teacher = loginUser(8L, 10L, "teacher");
+        when(tokenService.getLoginUser("token")).thenReturn(teacher);
+        when(assignmentMapper.selectCurrentLessonByClass("2025", "1", 10L)).thenReturn(99L);
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(3L);
+        lesson.setDeptId(10L);
+        lesson.setCreatorId(8L);
+        when(lessonMapper.selectBizLessonByLessonId(3L)).thenReturn(lesson);
+        BizLessonAssignment historical = new BizLessonAssignment();
+        historical.setDeptId(10L);
+        historical.setEntryYear("2025");
+        historical.setClassCode("1班");
+        when(assignmentMapper.selectAssignmentsByLessonId(3L))
+                .thenReturn(Collections.singletonList(historical));
+
+        Map<String, Object> attributes = new HashMap<>();
+        assertTrue(handshake("/ws/classroom/10/2025/1/3", attributes));
+        assertTrue(String.valueOf(attributes.get("roomKey")).endsWith("_3"));
+    }
+
     private boolean handshake(Map<String, Object> attributes)
     {
+        return handshake("/ws/classroom/10/2025/1", attributes);
+    }
+
+    private boolean handshake(String uri, Map<String, Object> attributes)
+    {
         MockHttpServletRequest servletRequest = new MockHttpServletRequest();
-        servletRequest.setRequestURI("/ws/classroom/10/2025/1");
+        servletRequest.setRequestURI(uri);
         servletRequest.setCookies(new Cookie("Admin-Token", "token"));
         return interceptor.beforeHandshake(new ServletServerHttpRequest(servletRequest),
                 response, handler, attributes);
