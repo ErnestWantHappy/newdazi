@@ -131,6 +131,13 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/business/classroom-desktop',
+    component: Layout,
+    hidden: true,
+    roles: ['admin', 'teacher'],
+    children: [{ path: '', component: () => import('@/views/business/classroomDesktop/index.vue'), name: 'ClassroomDesktop', meta: { title: '学生桌面', noCache: true } }]
+  },
+  {
     path: '/business/research-activity',
     component: Layout,
     hidden: true,
