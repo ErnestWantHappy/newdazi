@@ -48,6 +48,7 @@ LogicFlow 只负责浏览器中的图编辑与只读渲染。平台后端拥有�
 
 - 题库页：`practicalMode=FLOWCHART` 时隐藏文件上传和 Python 配置，显示“编辑标准答案”“编辑基础图”“生成检查规则”。
 - 课程设计器：把 `FLOWCHART` 展示为“画程流程图”，沿用操作题选择与分值。
+- 题库管理和课程设计器：通过只读预览接口展示学生基础图；公开题预览仅返回基础图，标准答案和规则仍只允许创建者或管理员通过编辑配置接口读取。
 - 学生首页：流程图题显示“打开画程”，不显示文件上传；弹出或全屏编辑后自动保存并明确提交。
 - 教师批改：流程图题不走 Office/PDF 预览，改为只读画布＋检查面板；分数保存继续走现有接口。
 
@@ -119,6 +120,7 @@ LogicFlow 只负责浏览器中的图编辑与只读渲染。平台后端拥有�
 ### 教师题目配置
 
 - `GET /business/flowchart/question/{questionId}`：读取配置。
+- `GET /business/flowchart/question/{questionId}/preview`：读取选题预览，仅返回学生基础图；创建者、管理员或公开题可访问。
 - `PUT /business/flowchart/question/{questionId}`：保存配置，携带 `expectedRevision`。
 - `POST /business/flowchart/question/generate-rules`：从请求中的标准答案生成检查点草稿。
 

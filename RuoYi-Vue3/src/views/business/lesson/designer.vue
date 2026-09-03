@@ -310,10 +310,10 @@
               <template #default="scope">
                 <!-- 新增：操作题支持在已选列表中直接预览 -->
                 <el-button
-                  v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON')"
+                  v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON' || scope.row.practicalMode === 'FLOWCHART')"
                   link
                   type="success"
-                  @click="scope.row.practicalMode === 'PYTHON' ? openPythonPreview(scope.row) : handlePreviewFile(scope.row)"
+                  @click="previewPracticalQuestion(scope.row)"
                 >预览</el-button>
                 <el-button link type="danger" @click="handleRemoveQuestion(scope.row)">移除</el-button>
               </template>
@@ -420,11 +420,11 @@
              </el-table-column>
              <el-table-column label="操作" align="center" width="100">
                <template #default="scope">
-                 <el-button
-                   v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON')"
-                   link
-                   type="success"
-                   @click="scope.row.practicalMode === 'PYTHON' ? openPythonPreview(scope.row) : handlePreviewFile(scope.row)"
+                  <el-button
+                    v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON' || scope.row.practicalMode === 'FLOWCHART')"
+                    link
+                    type="success"
+                    @click="previewPracticalQuestion(scope.row)"
                  >预览</el-button>
                  <el-button 
                    link 
@@ -466,6 +466,7 @@
         </el-descriptions>
       </template>
     </el-dialog>
+    <flowchart-question-preview-dialog v-model="flowchartPreviewVisible" :question="flowchartPreviewQuestion" />
     <el-dialog v-model="collaborationMaterialVisible" title="选择在线协作文件" width="520px" append-to-body>
       <p class="collaboration-material-tip">请选择用于协作的文件作品及起始文件。每个授课班会获得一份独立副本。</p>
       <el-radio-group v-model="collaborationForm.materialId" class="collaboration-material-list">
@@ -489,6 +490,7 @@ import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
 import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
 import { getQuestion, listQuestion } from "@/api/business/question";
 import { previewProgrammingQuestion } from "@/api/business/programming";
+import FlowchartQuestionPreviewDialog from '@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue';
 import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
@@ -509,6 +511,8 @@ const pythonPreviewVisible = ref(false);
 const pythonPreviewQuestion = ref(null);
 const pythonPreviewConfig = ref({});
 const pythonPreviewCases = ref([]);
+const flowchartPreviewVisible = ref(false);
+const flowchartPreviewQuestion = ref(null);
 const collaborationForm = ref({ enabled: false, questionId: null, materialId: null });
 const collaborationCandidates = ref([]);
 const collaborationMaterialVisible = ref(false);
@@ -1186,6 +1190,19 @@ async function openPythonPreview(row) {
   pythonPreviewVisible.value = true;
 }
 
+function previewPracticalQuestion(row) {
+  if (row.practicalMode === 'FLOWCHART') {
+    flowchartPreviewQuestion.value = row;
+    flowchartPreviewVisible.value = true;
+    return;
+  }
+  if (row.practicalMode === 'PYTHON') {
+    openPythonPreview(row);
+    return;
+  }
+  handlePreviewFile(row);
+}
+
 
 
 // 批量设置分数
@@ -1335,6 +1352,7 @@ onMounted(() => {
   line-height: 1;
   cursor: help;
 }
+
 .feature-settings,
 .initial-gate-panel {
   width: 100%;

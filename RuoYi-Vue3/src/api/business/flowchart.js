@@ -4,6 +4,10 @@ export function getFlowchartQuestion(questionId) {
   return request({ url: `/business/flowchart/question/${questionId}`, method: 'get' })
 }
 
+export function getFlowchartQuestionPreview(questionId) {
+  return request({ url: `/business/flowchart/question/${questionId}/preview`, method: 'get' })
+}
+
 export function saveFlowchartQuestion(questionId, data) {
   return request({ url: `/business/flowchart/question/${questionId}`, method: 'put', data })
 }

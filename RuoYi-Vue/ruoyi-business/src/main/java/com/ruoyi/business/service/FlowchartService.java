@@ -63,6 +63,20 @@ public class FlowchartService {
         return config == null ? defaultConfig(questionId) : config;
     }
 
+    /**
+     * 选题预览只提供学生会拿到的基础图，避免公开题的标准答案和结构规则被读取。
+     */
+    public Map<String, Object> teacherPreview(Long questionId, Long userId, boolean admin) {
+        BizQuestion question = requireFlowchartQuestion(questionId);
+        assertQuestionPreviewAccess(question, userId, admin);
+        FlowchartQuestionConfig config = flowchartMapper.selectQuestionConfig(questionId);
+        Map<String, Object> preview = new HashMap<>();
+        preview.put("questionId", questionId);
+        preview.put("schemaVersion", config == null ? FlowchartDocumentService.SCHEMA_VERSION : config.getSchemaVersion());
+        preview.put("starterJson", config == null ? FlowchartDocumentService.EMPTY_DOCUMENT : config.getStarterJson());
+        return preview;
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public FlowchartQuestionConfig saveTeacherConfig(Long questionId, FlowchartQuestionConfig request,
                                                      Long userId, boolean admin, String username) {
@@ -266,11 +280,25 @@ public class FlowchartService {
     }
 
     private void assertQuestionOwner(Long questionId, Long userId, boolean admin) {
-        BizQuestion question = questionMapper.selectBizQuestionByQuestionId(questionId);
-        if (question == null) throw new ServiceException("题目不存在");
+        BizQuestion question = requireFlowchartQuestion(questionId);
         if (!admin && (question.getCreatorId() == null || !question.getCreatorId().equals(userId))) {
             throw new ServiceException("无权查看或修改他人创建的画程题目");
         }
+    }
+
+    private BizQuestion requireFlowchartQuestion(Long questionId) {
+        BizQuestion question = questionMapper.selectBizQuestionByQuestionId(questionId);
+        if (question == null) throw new ServiceException("题目不存在");
+        if (!isFlowchartQuestion(question)) throw new ServiceException("当前题目不是画程流程图操作题");
+        return question;
+    }
+
+    private void assertQuestionPreviewAccess(BizQuestion question, Long userId, boolean admin) {
+        if (admin || (userId != null && userId.equals(question.getCreatorId()))
+                || "Y".equalsIgnoreCase(question.getIsPublic()) || "1".equals(question.getIsPublic())) {
+            return;
+        }
+        throw new ServiceException("无权预览他人创建的私有画程题目");
     }
 
     private boolean isFlowchartQuestion(BizQuestion question) {

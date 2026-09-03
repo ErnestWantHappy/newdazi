@@ -39,6 +39,16 @@ public class FlowchartController extends BaseController {
         return success(service.teacherConfig(questionId, userId, SecurityUtils.isAdmin(userId)));
     }
 
+    /**
+     * 课程选题时允许查看公开题的学生基础图，但不暴露标准答案和结构规则。
+     */
+    @PreAuthorize("@ss.hasPermi('business:question:query') or @ss.hasPermi('business:question:edit')")
+    @GetMapping("/question/{questionId}/preview")
+    public AjaxResult questionPreview(@PathVariable Long questionId) {
+        Long userId = SecurityUtils.getUserId();
+        return success(service.teacherPreview(questionId, userId, SecurityUtils.isAdmin(userId)));
+    }
+
     @PreAuthorize("@ss.hasPermi('business:question:edit') or @ss.hasPermi('business:question:add')")
     @PutMapping("/question/{questionId}")
     public AjaxResult saveQuestion(@PathVariable Long questionId,

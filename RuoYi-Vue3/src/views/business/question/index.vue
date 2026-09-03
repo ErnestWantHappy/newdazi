@@ -301,7 +301,7 @@
       >
         <template #default="scope">
           <el-button
-            v-if="scope.row.questionType === 'practical' && scope.row.previewPath"
+            v-if="isFlowchartPracticalQuestion(scope.row) || (scope.row.questionType === 'practical' && scope.row.previewPath)"
             link
             type="success"
             icon="View"
@@ -781,6 +781,8 @@
         </div>
       </template>
     </el-dialog>
+
+    <flowchart-question-preview-dialog v-model="flowchartPreviewVisible" :question="flowchartPreviewQuestion" />
   </div>
 </template>
 
@@ -795,6 +797,7 @@ import {
 import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQuestion, previewProgrammingImport, confirmProgrammingImport } from "@/api/business/programming";
 import { getFlowchartQuestion, saveFlowchartQuestion } from "@/api/business/flowchart";
 import FlowchartQuestionDesigner from "@/components/FlowchartEditor/FlowchartQuestionDesigner.vue";
+import FlowchartQuestionPreviewDialog from "@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue";
 import { EMPTY_FLOWCHART, DEFAULT_FLOWCHART_PERMISSIONS, parseFlowchartDocument } from "@/components/FlowchartEditor/schema";
 import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
@@ -826,6 +829,8 @@ const pythonImportOpen = ref(false);
 const pythonImportLoading = ref(false);
 const pythonImportConfirming = ref(false);
 const pythonImportReport = ref(null);
+const flowchartPreviewVisible = ref(false);
+const flowchartPreviewQuestion = ref(null);
 
 const data = reactive({
   form: {},
@@ -1594,6 +1599,11 @@ function submitFileForm() {
 
 /** 预览操作题附件 */
 function handlePreview(row) {
+  if (isFlowchartPracticalQuestion(row)) {
+    flowchartPreviewQuestion.value = row;
+    flowchartPreviewVisible.value = true;
+    return;
+  }
   if (row.previewPath) {
     const baseUrl = import.meta.env.VITE_APP_BASE_API;
     // /profile/** 已禁止静态直读，必须通过服务端做登录态和题目归属校验。
