@@ -180,4 +180,31 @@
         VALUES (#{roomId}, #{publicFileId}, #{callbackType}, #{callbackStatus}, #{wpsRequestId},
                 #{userId}, #{remoteIp}, #{durationMs}, #{errorCode}, #{errorMessage}, #{createTime})
     </insert>
+
+    <insert id="insertActivity" parameterType="map" useGeneratedKeys="true" keyProperty="activityId">
+        INSERT INTO biz_collab_activity(lesson_id,dept_id,entry_year,class_code,snapshot_id,activity_title,creator_user_id)
+        VALUES(#{lessonId},#{deptId},#{entryYear},#{classCode},#{snapshotId},#{activityTitle},#{creatorUserId})
+    </insert>
+    <insert id="insertTaskVersion" parameterType="map" useGeneratedKeys="true" keyProperty="taskVersionId">
+        INSERT INTO biz_collab_task_version(activity_id,question_id,source_material_id,version_name,sort_no)
+        VALUES(#{activityId},#{questionId},#{sourceMaterialId},#{versionName},#{sortNo})
+    </insert>
+    <insert id="insertGroupTask" parameterType="map">
+        INSERT INTO biz_collab_group_task(activity_id,snapshot_group_id,task_version_id,room_id) VALUES(#{activityId},#{snapshotGroupId},#{taskVersionId},#{roomId})
+    </insert>
+    <select id="selectActivity" resultType="map">SELECT activity_id AS activityId,lesson_id AS lessonId,dept_id AS deptId,entry_year AS entryYear,class_code AS classCode,snapshot_id AS snapshotId,activity_title AS activityTitle,status,frozen_time AS frozenTime,create_time AS createTime FROM biz_collab_activity WHERE activity_id=#{activityId}</select>
+    <select id="selectActivitiesByLesson" resultType="map">SELECT activity_id AS activityId,lesson_id AS lessonId,entry_year AS entryYear,class_code AS classCode,activity_title AS activityTitle,status,frozen_time AS frozenTime,create_time AS createTime FROM biz_collab_activity WHERE lesson_id=#{lessonId} AND dept_id=#{deptId} ORDER BY create_time DESC</select>
+    <select id="selectGroupTasks" resultType="map">SELECT gt.snapshot_group_id AS snapshotGroupId,gt.task_version_id AS taskVersionId,gt.room_id AS roomId,t.version_name AS versionName,t.question_id AS questionId,t.source_material_id AS sourceMaterialId FROM biz_collab_group_task gt JOIN biz_collab_task_version t ON t.task_version_id=gt.task_version_id WHERE gt.activity_id=#{activityId} ORDER BY gt.snapshot_group_id</select>
+    <select id="selectSnapshotGroups" resultType="map">SELECT snapshot_group_id AS snapshotGroupId,group_no AS groupNo,group_name AS groupName,leader_student_id AS leaderStudentId FROM biz_lesson_group_snapshot_group WHERE snapshot_id=#{snapshotId} ORDER BY sort_no,group_no</select>
+    <select id="selectStudentIdByUserId" resultType="long">SELECT student_id FROM biz_student WHERE user_id=#{userId} LIMIT 1</select>
+    <insert id="insertOperationEvent">INSERT INTO biz_collab_operation_event(room_id,user_id,student_id,event_type,event_detail,create_time) VALUES(#{roomId},#{userId},#{studentId},#{eventType},#{eventDetail},#{createTime})</insert>
+    <select id="selectOperationEvents" resultType="map">SELECT e.event_id AS eventId,e.room_id AS roomId,e.user_id AS userId,e.student_id AS studentId,e.event_type AS eventType,e.event_detail AS eventDetail,e.create_time AS createTime,COALESCE(s.student_no,u.user_name) AS actorName FROM biz_collab_operation_event e LEFT JOIN biz_student s ON s.student_id=e.student_id LEFT JOIN sys_user u ON u.user_id=e.user_id WHERE e.room_id=#{roomId} ORDER BY e.create_time DESC,e.event_id DESC</select>
+    <select id="countActivityRoomMembership" resultType="int">SELECT COUNT(1) FROM biz_collab_group_task gt JOIN biz_collab_activity a ON a.activity_id=gt.activity_id JOIN biz_lesson_group_snapshot_member sm ON sm.snapshot_group_id=gt.snapshot_group_id WHERE gt.room_id=#{roomId} AND sm.student_id=#{studentId} AND a.status='OPEN'</select>
+    <select id="countActivityRoom" resultType="int">SELECT COUNT(1) FROM biz_collab_group_task WHERE room_id=#{roomId}</select>
+    <insert id="insertRevisionDiff">INSERT INTO biz_collab_revision_diff(revision_id,diff_status,summary_text,error_message,processed_time) VALUES(#{revisionId},#{status},#{summary},#{error},#{processedTime})</insert>
+    <update id="updateRevisionDiff">UPDATE biz_collab_revision_diff SET diff_status=#{status},summary_text=#{summary},error_message=#{error},processed_time=#{processedTime} WHERE revision_id=#{revisionId}</update>
+    <select id="selectRevisionByRoomVersion" resultType="map">SELECT revision_id AS revisionId,room_id AS roomId,version_no AS versionNo,file_path AS filePath,file_name AS fileName FROM biz_collab_revision WHERE room_id=#{roomId} AND version_no=#{versionNo}</select>
+    <select id="selectRevisionPair" resultType="map">SELECT nowr.revision_id AS revisionId,nowr.room_id AS roomId,nowr.version_no AS versionNo,nowr.file_path AS filePath,prevr.file_path AS previousFilePath FROM biz_collab_revision nowr LEFT JOIN biz_collab_revision prevr ON prevr.room_id=nowr.room_id AND prevr.version_no=nowr.version_no-1 WHERE nowr.room_id=#{roomId} AND nowr.version_no=#{versionNo}</select>
+    <update id="freezeActivityForRoom">UPDATE biz_collab_activity a JOIN biz_collab_group_task gt ON gt.activity_id=a.activity_id SET a.frozen_time=COALESCE(a.frozen_time,#{frozenTime}) WHERE gt.room_id=#{roomId}</update>
+    <select id="selectSnapshotsByLesson" resultType="map">SELECT snapshot_id AS snapshotId,entry_year AS entryYear,class_code AS classCode,source_scheme_id AS sourceSchemeId,frozen_time AS frozenTime FROM biz_lesson_group_snapshot WHERE lesson_id=#{lessonId} AND dept_id=#{deptId} ORDER BY frozen_time DESC</select>
 </mapper>

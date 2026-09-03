@@ -26,6 +26,12 @@ class WebSocketConfigTest
     private IotWebSocketHandshakeInterceptor iotInterceptor;
 
     @Mock
+    private StudentPresenceWebSocketHandler presenceHandler;
+
+    @Mock
+    private StudentPresenceHandshakeInterceptor presenceInterceptor;
+
+    @Mock
     private WebSocketHandlerRegistry registry;
 
     @Mock
@@ -39,13 +45,17 @@ class WebSocketConfigTest
         WebSocketHandlerRegistration iotRegistration = org.mockito.Mockito.mock(WebSocketHandlerRegistration.class);
         when(registry.addHandler(iotHandler, "/ws/iot/*")).thenReturn(iotRegistration);
         when(iotRegistration.addInterceptors(iotInterceptor)).thenReturn(iotRegistration);
+        WebSocketHandlerRegistration presenceRegistration = org.mockito.Mockito.mock(WebSocketHandlerRegistration.class);
+        when(registry.addHandler(presenceHandler, "/ws/presence/*")).thenReturn(presenceRegistration);
+        when(presenceRegistration.addInterceptors(presenceInterceptor)).thenReturn(presenceRegistration);
 
-        WebSocketConfig config = new WebSocketConfig(handler, interceptor, iotHandler, iotInterceptor,
+        WebSocketConfig config = new WebSocketConfig(handler, interceptor, iotHandler, iotInterceptor, presenceHandler, presenceInterceptor,
                 "http://localhost, http://127.0.0.1:80");
 
         config.registerWebSocketHandlers(registry);
 
         verify(registration).setAllowedOrigins("http://localhost", "http://127.0.0.1:80");
         verify(iotRegistration).setAllowedOrigins("http://localhost", "http://127.0.0.1:80");
+        verify(presenceRegistration).setAllowedOrigins("http://localhost", "http://127.0.0.1:80");
     }
 }

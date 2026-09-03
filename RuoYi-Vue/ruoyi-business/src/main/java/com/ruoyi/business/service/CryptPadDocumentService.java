@@ -29,6 +29,7 @@ public class CryptPadDocumentService
     @Autowired private CollaborationRoomService roomService;
     @Autowired private CollaborationMapper mapper;
     @Autowired private CollaborationSecretService secretService;
+    @Autowired private CollaborationRevisionDiffService revisionDiffService;
 
     @Value("${collaboration.provider:}")
     private String provider;
@@ -52,6 +53,8 @@ public class CryptPadDocumentService
     public Map<String, Object> save(Long roomId, MultipartFile upload, Integer expectedVersion) throws IOException
     {
         CollaborationRoom room = authorizedRoom(roomId);
+        mapper.insertOperationEvent(roomId, SecurityUtils.getUserId(), mapper.selectStudentIdByUserId(SecurityUtils.getUserId()),
+                "SAVE_TRIGGER", null, new Date());
         if (!"OPEN".equals(room.getStatus())) throw new ServiceException("协作文档当前不可编辑");
         if (upload == null || upload.isEmpty()) throw new ServiceException("保存文件不能为空");
         if (upload.getSize() > maxFileBytes) throw new ServiceException("保存文件超过在线协作大小限制");
@@ -84,6 +87,18 @@ public class CryptPadDocumentService
                 throw new ServiceException("协作文档发生并发保存冲突，请刷新后重试");
             mapper.insertRevision(roomId, nextVersion, safeName(upload.getOriginalFilename(), room.getCurrentFileName()),
                     path, Files.size(target), sha256, "sha256", sha256, false, SecurityUtils.getUserId(), now);
+            mapper.insertOperationEvent(roomId, SecurityUtils.getUserId(), mapper.selectStudentIdByUserId(SecurityUtils.getUserId()),
+                    "SAVE_SUCCESS", "version=" + nextVersion, now);
+            // 差异提取只能丰富课堂审计，不能拖慢或否决已成功的协作文档保存。
+            try
+            {
+                revisionDiffService.pending(roomId, nextVersion);
+                revisionDiffService.extract(roomId, nextVersion);
+            }
+            catch (Exception ignored)
+            {
+                // 审计差异任务不可用时仍以已保存的协作文档版本为准。
+            }
             CollaborationRoom updated = roomService.requireRoom(roomId);
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("roomId", roomId);

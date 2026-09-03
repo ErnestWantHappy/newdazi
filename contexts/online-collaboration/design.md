@@ -68,6 +68,13 @@ WPS 云端实际返回 `no such host`；必须先由信息中心完成公网 DNS
 
 三阶段保存第二步创建短期票据，WPS 使用一次性公开 PUT 地址上传到临时文件。完成回调在事务内校验票据、大小与摘要，原子移动到正式版本目录并推进房间版本。
 
+### 2026-09-03 小组活动扩展（本机已迁移）
+
+- `biz_class_group_scheme`、`biz_class_group_member`、`biz_lesson_group_snapshot`、`biz_lesson_group_snapshot_group`、`biz_lesson_group_snapshot_member` 与教师布局表保存通用分组、组长和课时冻结事实。
+- `biz_collab_activity` 保存非计分活动；`biz_collab_task_version` 保存从当前课程操作题文件材料复制得到的起始版本；`biz_collab_group_task` 显式绑定课时小组、任务版本和独立房间。
+- `biz_collab_operation_event` 记录 `ENTER`、`HEARTBEAT`、`LEAVE`、`SAVE_TRIGGER`、`SAVE_SUCCESS`；`biz_collab_revision_diff` 记录相邻 revision 的 `PENDING/SUCCESS/FAILED` 结构摘要。差异提取使用既有 `conversionExecutor` 异步执行，失败不影响已保存版本。
+- 旧 `biz_collab_room` 与 revision 不回填为小组映射，继续以历史全班模式读取；新活动房间以任务版本作为内部隔离标识，不接入个人答案或成绩链路。
+
 ## 3. 权限
 
 - 教师管理：课程本校，且为课程创建人或管理员。

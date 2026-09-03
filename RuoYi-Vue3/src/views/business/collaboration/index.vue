@@ -50,6 +50,18 @@
         <el-table-column label="保存时间" width="170"><template #default="{ row }">{{ formatTime(row.createTime) }}</template></el-table-column>
       </el-table>
     </el-dialog>
+    <el-card shadow="never" class="activity-card">
+      <template #header><div class="member-header"><span>非计分小组协作</span><el-button link type="primary" @click="prepareActivities">刷新分组快照</el-button></div></template>
+      <el-alert type="info" :closable="false" show-icon title="每个小组拥有独立文档，不写入个人答案或成绩。版本列表中的保存人仅表示触发保存者，不表示全部内容作者。" class="revision-alert" />
+      <el-form label-width="100px" class="settings-form">
+        <el-form-item label="课时分组快照"><el-select v-model="activityForm.snapshotId" placeholder="请先在班级分组中冻结课时快照" style="width:100%" @change="syncGroupTasks"><el-option v-for="item in activitySetup.snapshots" :key="item.snapshotId" :label="`${item.entryYear}级${item.classCode}班 · ${formatTime(item.frozenTime)}`" :value="item.snapshotId" /></el-select></el-form-item>
+        <el-form-item label="活动名称"><el-input v-model="activityForm.activityTitle" maxlength="120" /></el-form-item>
+        <el-form-item v-for="group in selectedSnapshotGroups" :key="group.snapshotGroupId" :label="group.groupName"><el-select v-model="activityForm.groupTasks[group.snapshotGroupId]" placeholder="选择该组起始文件" style="width:100%"><el-option v-for="item in activitySetup.candidates" :key="`${group.snapshotGroupId}-${item.materialId}`" :label="item.fileName" :value="item.materialId" /></el-select></el-form-item>
+        <el-form-item><el-button type="primary" :disabled="!selectedSnapshotGroups.length" :loading="activitySaving" @click="createActivity">创建小组协作活动</el-button></el-form-item>
+      </el-form>
+      <el-table :data="activities" size="small" stripe empty-text="尚未创建小组协作活动"><el-table-column prop="activityTitle" label="活动" min-width="180" /><el-table-column prop="entryYear" label="届别" width="80" /><el-table-column prop="classCode" label="班级" width="80" /><el-table-column prop="frozenTime" label="首名学生进入后冻结" min-width="170"><template #default="{ row }">{{ formatTime(row.frozenTime) }}</template></el-table-column><el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" @click="openActivity(row)">小组与轨迹</el-button></template></el-table-column></el-table>
+    </el-card>
+    <el-dialog v-model="activityDialogVisible" :title="activityDetail?.activityTitle || '小组协作轨迹'" width="820px"><el-table :data="activityDetail?.groupTasks || []" size="small" stripe><el-table-column prop="snapshotGroupId" label="快照组" width="100"/><el-table-column prop="versionName" label="起始文件" min-width="220"/><el-table-column prop="roomId" label="房间" width="90"/><el-table-column label="轨迹" width="100"><template #default="{ row }"><el-button link type="primary" @click="openTimeline(row)">查看</el-button></template></el-table-column></el-table><el-divider>操作轨迹</el-divider><el-timeline v-if="timeline.length"><el-timeline-item v-for="item in timeline" :key="item.eventId" :timestamp="formatTime(item.createTime)">{{ item.actorName || item.userId }} · {{ item.eventType }}<span v-if="item.eventDetail">（{{ item.eventDetail }}）</span></el-timeline-item></el-timeline><el-empty v-else description="选择小组查看操作轨迹" /></el-dialog>
     <el-card shadow="never" class="member-card">
       <template #header><div class="member-header"><span>课程学生成员</span><el-tag type="info">{{ members.length }}人</el-tag></div></template>
       <el-table :data="members" stripe empty-text="当前课程暂无学生成员">
@@ -66,7 +78,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getCollaborationLesson, getCollaborationRevisions, saveCollaborationLesson } from '@/api/business/collaboration'
+import { createCollaborationActivity, getCollaborationActivities, getCollaborationActivitySetup, getCollaborationLesson, getCollaborationRevisions, getCollaborationTimeline, saveCollaborationLesson } from '@/api/business/collaboration'
+import request from '@/utils/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -82,6 +95,14 @@ const filteredMaterials = computed(() => candidates.value.filter(item => item.qu
 const revisionDialogVisible = ref(false)
 const revisionsLoading = ref(false)
 const revisions = ref([])
+const activitySaving = ref(false)
+const activitySetup = reactive({ snapshots: [], candidates: [] })
+const activityForm = reactive({ snapshotId: null, activityTitle: '', groupTasks: {} })
+const activities = ref([])
+const activityDialogVisible = ref(false)
+const activityDetail = ref(null)
+const timeline = ref([])
+const selectedSnapshotGroups = computed(() => activitySetup.snapshots.find(item => item.snapshotId === activityForm.snapshotId)?.groups || [])
 
 async function load() {
   const data = await getCollaborationLesson(lessonId.value)
@@ -93,7 +114,34 @@ async function load() {
   form.enabled = Boolean(payload.enabled)
   form.questionId = payload.questionId || candidates.value[0]?.questionId || null
   form.materialId = payload.materialId || candidates.value.find(item => item.questionId === form.questionId)?.materialId || null
+  await Promise.all([prepareActivities(), loadActivities()])
 }
+async function prepareActivities() {
+  const res = await getCollaborationActivitySetup(lessonId.value)
+  const data = res.data || res || {}
+  activitySetup.snapshots = data.snapshots || []
+  activitySetup.candidates = data.candidates || []
+}
+async function loadActivities() { const res = await getCollaborationActivities(lessonId.value); activities.value = res.data || res || [] }
+function syncGroupTasks() {
+  const first = activitySetup.candidates[0]?.materialId || null
+  const tasks = {}
+  selectedSnapshotGroups.value.forEach(group => { tasks[group.snapshotGroupId] = first })
+  activityForm.groupTasks = tasks
+}
+async function createActivity() {
+  const tasks = selectedSnapshotGroups.value.map(group => {
+    const materialId = activityForm.groupTasks[group.snapshotGroupId]
+    const candidate = activitySetup.candidates.find(item => item.materialId === materialId)
+    return { snapshotGroupId: group.snapshotGroupId, materialId, questionId: candidate?.questionId, versionName: candidate?.fileName }
+  })
+  if (tasks.some(item => !item.materialId || !item.questionId)) return ElMessage.warning('请为每个小组选择起始文件')
+  activitySaving.value = true
+  try { await createCollaborationActivity(lessonId.value, { snapshotId: activityForm.snapshotId, activityTitle: activityForm.activityTitle, entryYear: activitySetup.snapshots.find(item => item.snapshotId === activityForm.snapshotId)?.entryYear, classCode: activitySetup.snapshots.find(item => item.snapshotId === activityForm.snapshotId)?.classCode, groupTasks: tasks }); ElMessage.success('小组协作活动已创建'); await loadActivities() } finally { activitySaving.value = false }
+}
+async function openActivity(row) { const res = await requestActivity(row.activityId); activityDetail.value = res; timeline.value = []; activityDialogVisible.value = true }
+async function requestActivity(activityId) { const res = await request({ url: `/business/collaboration/activity/${activityId}`, method: 'get' }); return res.data || res || {} }
+async function openTimeline(row) { const res = await getCollaborationTimeline(row.roomId); timeline.value = res.data || res || [] }
 function syncMaterial() { form.materialId = filteredMaterials.value[0]?.materialId || null }
 async function submit() {
   saving.value = true
@@ -135,6 +183,7 @@ onMounted(load)
 .settings-form { max-width: 760px; margin-top: 24px; }
 .option-file { float: right; color: #909399; }
 .room-card { margin-top: 16px; }
+.activity-card { margin-top: 16px; }
 .member-card { margin-top: 16px; }
 .member-header { display: flex; justify-content: space-between; align-items: center; }
 .revision-alert { margin-bottom: 12px; }

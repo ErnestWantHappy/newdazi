@@ -100,4 +100,27 @@ public interface CollaborationMapper
                             @Param("errorCode") String errorCode,
                             @Param("errorMessage") String errorMessage,
                             @Param("createTime") Date createTime);
+
+    int insertActivity(Map<String,Object> row);
+    int insertTaskVersion(Map<String,Object> row);
+    int insertGroupTask(Map<String,Object> row);
+    Map<String,Object> selectActivity(@Param("activityId") Long activityId);
+    List<Map<String,Object>> selectActivitiesByLesson(@Param("lessonId") Long lessonId, @Param("deptId") Long deptId);
+    List<Map<String,Object>> selectGroupTasks(@Param("activityId") Long activityId);
+    List<Map<String,Object>> selectSnapshotGroups(@Param("snapshotId") Long snapshotId);
+    Long selectStudentIdByUserId(@Param("userId") Long userId);
+    int insertOperationEvent(@Param("roomId") Long roomId, @Param("userId") Long userId,
+                             @Param("studentId") Long studentId, @Param("eventType") String eventType,
+                             @Param("eventDetail") String eventDetail, @Param("createTime") Date createTime);
+    List<Map<String,Object>> selectOperationEvents(@Param("roomId") Long roomId);
+    int countActivityRoomMembership(@Param("roomId") Long roomId, @Param("studentId") Long studentId);
+    int countActivityRoom(@Param("roomId") Long roomId);
+    int insertRevisionDiff(@Param("revisionId") Long revisionId, @Param("status") String status,
+                           @Param("summary") String summary, @Param("error") String error, @Param("processedTime") Date processedTime);
+    int updateRevisionDiff(@Param("revisionId") Long revisionId, @Param("status") String status,
+                           @Param("summary") String summary, @Param("error") String error, @Param("processedTime") Date processedTime);
+    Map<String,Object> selectRevisionByRoomVersion(@Param("roomId") Long roomId, @Param("versionNo") Integer versionNo);
+    Map<String,Object> selectRevisionPair(@Param("roomId") Long roomId, @Param("versionNo") Integer versionNo);
+    int freezeActivityForRoom(@Param("roomId") Long roomId, @Param("frozenTime") Date frozenTime);
+    List<Map<String,Object>> selectSnapshotsByLesson(@Param("lessonId") Long lessonId, @Param("deptId") Long deptId);
 }

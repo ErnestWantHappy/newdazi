@@ -48,6 +48,7 @@ class CollaborationRoomServiceAccessTest
                 new UsernamePasswordAuthenticationToken(loginUser, null, Collections.emptyList()));
 
         BizStudent student = new BizStudent();
+        student.setStudentId(7001L);
         student.setUserId(5551L);
         student.setEntryYear("2025");
         student.setClassCode("1");
@@ -86,11 +87,33 @@ class CollaborationRoomServiceAccessTest
         assertTrue(error.getMessage().contains("只能进入自己当前课程的班级协作房间"));
     }
 
+    @Test
+    void studentCanEnterOwnGroupActivityRoom()
+    {
+        when(collaborationMapper.countActivityRoom(99L)).thenReturn(1);
+        when(collaborationMapper.countActivityRoomMembership(99L, 7001L)).thenReturn(1);
+
+        String scope = ReflectionTestUtils.invokeMethod(service, "requireRoomAccess", room("1"), 5551L);
+
+        assertEquals("STUDENT", scope);
+    }
+
+    @Test
+    void studentCannotEnterAnotherGroupActivityRoom()
+    {
+        when(collaborationMapper.countActivityRoom(99L)).thenReturn(1);
+        when(collaborationMapper.countActivityRoomMembership(99L, 7001L)).thenReturn(0);
+
+        assertThrows(ServiceException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "requireRoomAccess", room("1"), 5551L));
+    }
+
     private CollaborationRoom room(String classCode)
     {
         CollaborationRoom room = new CollaborationRoom();
         room.setDeptId(169L);
         room.setLessonId(268L);
+        room.setRoomId(99L);
         room.setEntryYear("2025");
         room.setClassCode(classCode);
         return room;

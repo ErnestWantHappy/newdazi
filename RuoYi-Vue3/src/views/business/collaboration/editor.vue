@@ -36,7 +36,7 @@ import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
-import { getCollaborationDocument, getCollaborationSession, saveCollaborationDocument } from '@/api/business/collaboration'
+import { getCollaborationDocument, getCollaborationSession, heartbeatCollaborationRoom, leaveCollaborationRoom, saveCollaborationDocument } from '@/api/business/collaboration'
 
 const route = useRoute()
 const container = ref(null)
@@ -52,6 +52,7 @@ let rejectEditorFrame = null
 let initStartedAt = 0
 let windowErrorHandler = null
 let saveChain = Promise.resolve()
+let heartbeatTimer = null
 // CryptPad API 没有组件级销毁入口；用递增编号丢弃已离开页面的异步回调。
 let initializationId = 0
 let editorSequence = 0
@@ -188,6 +189,8 @@ function waitForEditorFrame() {
 }
 
 function cleanupEditor() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
+  heartbeatTimer = null
   initializationId += 1
   if (initTimer) clearTimeout(initTimer)
   if (initObserver) initObserver.disconnect()
@@ -239,6 +242,7 @@ async function open() {
     const response = await getCollaborationSession(route.params.roomId)
     if (!isCurrentInitialization(currentInitializationId)) return
     Object.assign(session, response.data || response)
+    if (session.scope === 'STUDENT') heartbeatTimer = setInterval(() => heartbeatCollaborationRoom(route.params.roomId).catch(() => {}), 30000)
     const blob = await getCollaborationDocument(route.params.roomId)
     if (!isCurrentInitialization(currentInitializationId)) return
     objectUrl = URL.createObjectURL(blob)
@@ -311,6 +315,7 @@ function reload() {
 }
 onMounted(open)
 onBeforeUnmount(() => {
+  if (session.scope === 'STUDENT') leaveCollaborationRoom(route.params.roomId).catch(() => {})
   cleanupEditor()
 })
 </script>

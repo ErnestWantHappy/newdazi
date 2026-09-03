@@ -200,9 +200,11 @@ public class CollaborationRoomService
         {
             if (student.getEntryYear().equals(room.getEntryYear())
                     && normalizeClass(student.getClassCode()).equals(normalizeClass(room.getClassCode()))
-                    && "OPEN".equals(room.getStatus()))
+                && "OPEN".equals(room.getStatus()))
             {
-                matches.add(room);
+                if (collaborationMapper.countActivityRoom(room.getRoomId()) == 0
+                        || collaborationMapper.countActivityRoomMembership(room.getRoomId(), student.getStudentId()) > 0)
+                    matches.add(room);
             }
         }
         return publicRooms(matches, false);
@@ -217,6 +219,9 @@ public class CollaborationRoomService
         // 先完成班级权限判断，再阻断不可达配置，避免向无权用户暴露内部网络诊断。
         requireReady();
         collaborationMapper.markRoomOpened(roomId, new Date());
+        collaborationMapper.insertOperationEvent(roomId, userId,
+                collaborationMapper.selectStudentIdByUserId(userId), "ENTER", null, new Date());
+        if ("STUDENT".equals(scope)) collaborationMapper.freezeActivityForRoom(roomId, new Date());
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         if (isCryptPadProvider())
         {
@@ -294,6 +299,46 @@ public class CollaborationRoomService
         CollaborationRoom room = collaborationMapper.selectRoomByPublicFileId(fileId);
         if (room == null) throw new ServiceException("协作文档不存在");
         return room;
+    }
+
+    /** 为非计分小组活动复制独立起始文件；taskVersionId 仅作为房间内部题目标识，成绩链路不会读取。 */
+    public CollaborationRoom createGroupActivityRoom(BizLesson lesson, String entryYear, String classCode,
+                                                      PracticalQuestionMaterial material, Long taskVersionId,
+                                                      String title) throws IOException
+    {
+        validateMaterial(material);
+        String fileId = "g" + UUID.randomUUID().toString().replace("-", "");
+        String extension = normalizeExtension(material.getFileExtension(), material.getOriginalFileName());
+        String fileName = sanitizeFileName(material.getOriginalFileName(), extension);
+        String relativePath = "collaboration/rooms/" + fileId + "/v1." + extension;
+        Path target = resolveStoredFile(relativePath);
+        Files.createDirectories(target.getParent());
+        Files.copy(resolveMaterialPath(material.getResourcePath()), target, StandardCopyOption.COPY_ATTRIBUTES);
+        Date now = new Date();
+        CollaborationRoom room = new CollaborationRoom();
+        room.setProvider(providerName()); room.setProviderSessionKey(isCryptPadProvider() ? secretService.encrypt(secretService.generateKey()) : null);
+        room.setPublicFileId(fileId); room.setLessonId(lesson.getLessonId()); room.setQuestionId(taskVersionId);
+        room.setSourceMaterialId(material.getMaterialId()); room.setDeptId(lesson.getDeptId()); room.setEntryYear(entryYear); room.setClassCode(normalizeClass(classCode));
+        room.setRoomTitle(truncate(StringUtils.defaultIfBlank(title, lesson.getLessonTitle()) + " - " + classCode + "组协作", 240)); room.setStatus("OPEN"); room.setCurrentVersion(1);
+        room.setCurrentFileName(fileName); room.setCurrentFilePath(relativePath); room.setCurrentFileExtension(extension); room.setCurrentMimeType(material.getMimeType());
+        room.setCurrentFileSize(Files.size(target)); room.setCurrentSha256(digest(target, "SHA-256")); room.setCreatorUserId(SecurityUtils.getUserId()); room.setModifierUserId(SecurityUtils.getUserId()); room.setCreateTime(now); room.setUpdateTime(now);
+        collaborationMapper.insertRoom(room);
+        collaborationMapper.insertRevision(room.getRoomId(), 1, fileName, relativePath, room.getCurrentFileSize(), room.getCurrentSha256(), "sha256", room.getCurrentSha256(), false, SecurityUtils.getUserId(), now);
+        return room;
+    }
+
+    /**
+     * 小组活动只能复用当前课程已选操作题的可编辑起始文件，不能按题目 ID 跨课程取材料。
+     */
+    public PracticalQuestionMaterial requireGroupActivityStarter(Long lessonId, Long questionId, Long materialId)
+            throws IOException
+    {
+        if (questionId == null || materialId == null)
+            throw new ServiceException("任务版本缺少操作题或起始文件");
+        requirePracticalQuestion(lessonId, questionId);
+        PracticalQuestionMaterial material = requireStarterMaterial(questionId, materialId);
+        validateMaterial(material);
+        return material;
     }
 
     /** 文档下载和保存接口共用同一套平台房间权限校验。 */
@@ -399,6 +444,9 @@ public class CollaborationRoomService
                     || !room.getEntryYear().equals(student.getEntryYear())
                     || !normalizeClass(room.getClassCode()).equals(normalizeClass(student.getClassCode())))
                 throw new ServiceException("只能进入自己当前课程的班级协作房间");
+            if (collaborationMapper.countActivityRoom(room.getRoomId()) > 0
+                    && collaborationMapper.countActivityRoomMembership(room.getRoomId(), student.getStudentId()) == 0)
+                throw new ServiceException("只能进入本人小组的协作房间");
             return "STUDENT";
         }
         BizLesson lesson = requireTeacherLesson(room.getLessonId());

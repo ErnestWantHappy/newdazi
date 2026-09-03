@@ -64,4 +64,4 @@ erDiagram
 - `biz_student_task_state` 已完成本地领域类、Mapper、服务和迁移脚本，但尚未在本机或正式数据库执行。唯一键为 `lesson_id + question_id + student_id`；字段保存学校、六态 `task_state`、单调递增 `state_version`、`changed_at` 和审计时间。
 - `sql/student_task_state_v1.sql` 会从当前课程仍引用的历史答案回填可确定的 `SUBMITTED/GRADED`，不猜测 `ENTERED/WORKING`；全班查询对无记录学生投影为 `NOT_ENTERED`、版本 0。回滚脚本为 `sql/student_task_state_v1_rollback.sql`。
 - 星级评分不新增成绩表字段，`NUMERIC/STAR_TOTAL/STAR_ITEM` 仅为请求契约；正式成绩继续写既有整数列。
-- 通用分组/课时快照、教师班级布局、独立协作活动/任务版本/小组映射、协作会话事件和 revision 差异仍处于已确认设计、未执行 SQL 状态。详见 `contexts/multi-feature-upgrade-20260902/design.md`。
+- 本机开发库已执行 `sql/class_grouping_v1.sql` 与 `sql/group_collaboration_v1.sql`：通用分组、课时快照、教师班级布局、独立协作活动/任务版本/小组映射、协作会话事件和 revision 差异表已存在。小组协作不写 `biz_student_answer`，不复用物联网分组事实；正式服务器仍须独立前检、备份、迁移和后检。详见 `contexts/online-collaboration/`。
