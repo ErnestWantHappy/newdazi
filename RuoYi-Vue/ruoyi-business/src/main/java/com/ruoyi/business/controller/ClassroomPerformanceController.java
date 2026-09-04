@@ -62,10 +62,18 @@ public class ClassroomPerformanceController extends BaseController {
         if (performance.getScore() < -10 || performance.getScore() > 10) {
             return AjaxResult.error("平时分范围为 -10 到 +10");
         }
+        if (org.apache.commons.lang3.StringUtils.isBlank(performance.getReason())) {
+            return AjaxResult.error("请填写课堂表现原因");
+        }
 
         String scopeError = validateStudentLessonScope(performance.getStudentId(), performance.getLessonId());
         if (scopeError != null) {
             return AjaxResult.error(scopeError);
+        }
+
+        BizClassroomPerformance existing = performanceMapper.selectByStudentAndLesson(performance.getStudentId(), performance.getLessonId());
+        if (existing != null && Integer.valueOf(1).equals(existing.getIsAbsent())) {
+            return AjaxResult.error("该学生本节课已请假，请先取消请假后再记录课堂表现");
         }
 
         performance.setTeacherId(SecurityUtils.getUserId());
@@ -104,6 +112,14 @@ public class ClassroomPerformanceController extends BaseController {
             performance.setReason(item.getReason());
             performance.setTeacherId(teacherId);
             performance.setDeptId(deptId);
+
+            if (org.apache.commons.lang3.StringUtils.isBlank(performance.getReason())) {
+                return AjaxResult.error("请填写每条课堂表现的原因");
+            }
+            BizClassroomPerformance existing = performanceMapper.selectByStudentAndLesson(item.getStudentId(), request.getLessonId());
+            if (existing != null && Integer.valueOf(1).equals(existing.getIsAbsent())) {
+                return AjaxResult.error("存在已请假的学生，请先取消请假后再记录课堂表现");
+            }
 
             if (performance.getScore() < -10) {
                 performance.setScore(-10);

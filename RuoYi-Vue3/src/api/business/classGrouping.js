@@ -4,6 +4,10 @@ export function getClassroomDesktop(params) {
   return request({ url: '/business/class-group/desktop', method: 'get', params })
 }
 
+export function getClassroomDesktopOverview(params) {
+  return request({ url: '/business/class-group/desktop/overview', method: 'get', params })
+}
+
 export function saveClassroomLayout(data) {
   return request({ url: '/business/class-group/desktop/layout', method: 'put', data })
 }

@@ -159,7 +159,7 @@
           type="success"
           plain
           icon="Edit"
-          :disabled="single"
+          :disabled="single || !canManageSelectedQuestions"
           @click="handleUpdate"
           v-hasPermi="['business:question:edit']"
           >修改</el-button
@@ -170,7 +170,7 @@
           type="danger"
           plain
           icon="Delete"
-          :disabled="multiple"
+          :disabled="multiple || !canManageSelectedQuestions"
           @click="handleDelete"
           v-hasPermi="['business:question:remove']"
           >删除</el-button
@@ -309,6 +309,7 @@
             >预览</el-button
           >
           <el-button
+            v-if="canManageQuestion(scope.row)"
             link
             type="primary"
             icon="Edit"
@@ -317,6 +318,7 @@
             >修改</el-button
           >
           <el-button
+            v-if="canManageQuestion(scope.row)"
             link
             type="primary"
             icon="Delete"
@@ -808,8 +810,10 @@ import {
   isSessionExpiredError,
   refreshAuthorizationHeader
 } from "@/utils/session";
+import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance();
+const userStore = useUserStore();
 const { biz_question_type, sys_yes_no, biz_grade, biz_semester } =
   proxy.useDict("biz_question_type", "sys_yes_no", "biz_grade", "biz_semester");
 
@@ -818,6 +822,7 @@ const open = ref(false);
 const loading = ref(true);
 const showSearch = ref(true);
 const ids = ref([]);
+const selectedQuestions = ref([]);
 const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
@@ -831,6 +836,7 @@ const pythonImportConfirming = ref(false);
 const pythonImportReport = ref(null);
 const flowchartPreviewVisible = ref(false);
 const flowchartPreviewQuestion = ref(null);
+const originalFlowchartConfig = ref(null);
 
 const data = reactive({
   form: {},
@@ -851,6 +857,7 @@ const data = reactive({
 });
 
 const { queryParams, form } = toRefs(data);
+const canManageSelectedQuestions = computed(() => selectedQuestions.value.length > 0 && selectedQuestions.value.every(canManageQuestion));
 
 // --- 动态校验规则 ---
 const rules = computed(() => {
@@ -1036,6 +1043,7 @@ function cancelUpload() {
 // 表单重置
 function reset() {
   pythonStep.value = 0;
+  originalFlowchartConfig.value = null;
   form.value = {
     questionId: null,
     questionType: null,
@@ -1181,6 +1189,41 @@ function defaultFlowchartConfig() {
   };
 }
 
+/**
+ * 操作题名称等基础信息与流程图配置分开保存，避免未改图时无意义地写入配置并占用乐观锁修订号。
+ */
+function comparableFlowchartConfig(config) {
+  return {
+    starterJson: canonicalizeFlowchartJson(config?.starterJson),
+    answerJson: canonicalizeFlowchartJson(config?.answerJson),
+    permissionsJson: canonicalizeFlowchartJson(config?.permissionsJson),
+    rulesJson: canonicalizeFlowchartJson(config?.rulesJson),
+  };
+}
+
+function canonicalizeFlowchartJson(value) {
+  try {
+    return JSON.stringify(sortFlowchartJson(JSON.parse(value || '{}')));
+  } catch (_) {
+    return String(value || '');
+  }
+}
+
+function sortFlowchartJson(value) {
+  if (Array.isArray(value)) return value.map(sortFlowchartJson);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((result, key) => {
+      result[key] = sortFlowchartJson(value[key]);
+      return result;
+    }, {});
+  }
+  return value;
+}
+
+function flowchartConfigChanged(config) {
+  return JSON.stringify(comparableFlowchartConfig(config)) !== JSON.stringify(originalFlowchartConfig.value);
+}
+
 function hasFlowchartRules(rulesJson) {
   try {
     const rules = JSON.parse(rulesJson || "[]");
@@ -1188,6 +1231,32 @@ function hasFlowchartRules(rulesJson) {
   } catch (_) {
     return false;
   }
+}
+
+/**
+ * 与后端 FlowchartDocumentService 保持同一拦截口径，提前指出具体图元；题干富文本不走这里。
+ */
+function invalidFlowchartTextMessage(documentJson, documentName) {
+  let document
+  try {
+    document = JSON.parse(documentJson || '{}')
+  } catch (_) {
+    return ''
+  }
+  const unsafeText = (value) => {
+    const text = typeof value === 'object' && value ? String(value.value || '') : String(value || '')
+    return /<\/?[A-Za-z][^<>]*>/i.test(text)
+      || /<!--[\s\S]*?-->/.test(text)
+      || /\bjavascript\s*:/i.test(text)
+  }
+  const entries = [
+    ...(Array.isArray(document.nodes) ? document.nodes : []).map((item, index) => ({ item, label: `第 ${index + 1} 个节点` })),
+    ...(Array.isArray(document.edges) ? document.edges : []).map((item, index) => ({ item, label: `第 ${index + 1} 条连线` }))
+  ]
+  const invalid = entries.find(({ item }) => unsafeText(item?.text))
+  return invalid
+    ? `${documentName}${invalid.label}的文字不能包含 HTML 标签、HTML 注释或 javascript: 脚本文本，请删除后再保存`
+    : ''
 }
 
 function addProgrammingCase() {
@@ -1322,6 +1391,7 @@ function resetQuery() {
 
 // 多选框选中数据
 function handleSelectionChange(selection) {
+  selectedQuestions.value = selection;
   ids.value = selection.map((item) => item.questionId);
   single.value = selection.length != 1;
   multiple.value = !selection.length;
@@ -1370,6 +1440,7 @@ function handleUpdate(row) {
     } else if (isFlowchartPracticalQuestion(form.value)) {
       getFlowchartQuestion(_questionId).then((flowchartResponse) => {
         form.value.flowchartConfig = { ...defaultFlowchartConfig(), ...(flowchartResponse.data || {}) };
+        originalFlowchartConfig.value = comparableFlowchartConfig(form.value.flowchartConfig);
         showEditor();
       }).catch(() => {
         form.value.flowchartConfig = defaultFlowchartConfig();
@@ -1379,6 +1450,10 @@ function handleUpdate(row) {
       showEditor();
     }
   });
+}
+
+function canManageQuestion(question) {
+  return userStore.roles.includes("admin") || String(question?.creatorId || "") === String(userStore.id || "");
 }
 
 /** 保存普通题，或保存 Python 题后用参考代码验证全部测试点。 */
@@ -1410,6 +1485,12 @@ function submitForm(validateAfterSave = false) {
 
       if (isFlowchartPracticalQuestion(form.value)) {
         const config = form.value.flowchartConfig || defaultFlowchartConfig();
+        const unsafeTextMessage = invalidFlowchartTextMessage(config.starterJson, '学生基础图')
+          || invalidFlowchartTextMessage(config.answerJson, '标准答案')
+        if (unsafeTextMessage) {
+          ElMessage.warning(unsafeTextMessage)
+          return
+        }
         if (parseFlowchartDocument(config.answerJson).nodes.length === 0) {
           ElMessage.warning("请先制作画程标准答案");
           return;
@@ -1475,12 +1556,17 @@ function submitForm(validateAfterSave = false) {
           }
         } else if (isFlowchartPracticalQuestion(form.value)) {
           if (!questionId) throw new Error("保存题目后未返回题目 ID");
-          const saved = await saveFlowchartQuestion(questionId, {
-            ...form.value.flowchartConfig,
-            questionId,
-          });
-          form.value.flowchartConfig = saved.data || form.value.flowchartConfig;
-          proxy.$modal.msgSuccess("画程流程图题已保存");
+          if (flowchartConfigChanged(form.value.flowchartConfig)) {
+            const saved = await saveFlowchartQuestion(questionId, {
+              ...form.value.flowchartConfig,
+              questionId,
+            });
+            form.value.flowchartConfig = saved.data || form.value.flowchartConfig;
+            originalFlowchartConfig.value = comparableFlowchartConfig(form.value.flowchartConfig);
+            proxy.$modal.msgSuccess("画程流程图题已保存");
+          } else {
+            proxy.$modal.msgSuccess("题目已保存");
+          }
         } else {
           proxy.$modal.msgSuccess(questionId === form.value.questionId ? "保存成功" : "新增成功");
         }

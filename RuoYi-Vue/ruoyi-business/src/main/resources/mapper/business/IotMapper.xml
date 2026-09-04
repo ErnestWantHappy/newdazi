@@ -125,6 +125,14 @@
         values (#{lessonId}, #{deptId}, #{activityCode}, #{title}, #{description}, #{topicPrefix}, '0', #{createBy}, now())
     </insert>
 
+    <delete id="deleteMessagesByLessonId">delete from biz_iot_message where experiment_id in (select experiment_id from biz_iot_experiment where lesson_id = #{lessonId})</delete>
+    <delete id="deleteEventsByLessonId">delete from biz_iot_event where experiment_id in (select experiment_id from biz_iot_experiment where lesson_id = #{lessonId})</delete>
+    <delete id="deleteGroupStudentsByLessonId">delete from biz_iot_group_student where experiment_id in (select experiment_id from biz_iot_experiment where lesson_id = #{lessonId})</delete>
+    <delete id="deleteDevicesByLessonId">delete from biz_iot_device where group_id in (select group_id from biz_iot_group where experiment_id in (select experiment_id from biz_iot_experiment where lesson_id = #{lessonId}))</delete>
+    <delete id="deleteGroupsByLessonId">delete from biz_iot_group where experiment_id in (select experiment_id from biz_iot_experiment where lesson_id = #{lessonId})</delete>
+    <delete id="deleteClassConfigsByLessonId">delete from biz_iot_class_config where experiment_id in (select experiment_id from biz_iot_experiment where lesson_id = #{lessonId})</delete>
+    <delete id="deleteExperimentsByLessonId">delete from biz_iot_experiment where lesson_id = #{lessonId}</delete>
+
     <!-- 班级配置与口令快照 -->
     <select id="selectClassConfig" resultMap="classConfigResult">
         select c.*,

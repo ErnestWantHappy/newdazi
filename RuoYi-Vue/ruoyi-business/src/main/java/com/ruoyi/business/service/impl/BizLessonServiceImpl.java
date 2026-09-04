@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.mapper.IotMapper;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.service.IBizLessonService;
 import org.apache.commons.lang3.StringUtils; // 新增：引入字符串工具类，便于班级编码清洗
@@ -110,6 +111,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private CollaborationMapper collaborationMapper;
+
+    @Autowired
+    private IotMapper iotMapper;
 
     @Autowired
     private StudentToolService studentToolService;
@@ -217,6 +221,7 @@ public class BizLessonServiceImpl implements IBizLessonService
             // 级联删除关联数据
             lessonQuestionMapper.deleteByLessonId(lessonId);
             lessonAssignmentMapper.deleteByLessonId(lessonId);
+            deleteIotData(lessonId);
             deleteSupervisionFacts(lessonId);
         }
         int affected = bizLessonMapper.deleteBizLessonByLessonIds(targetIds);
@@ -241,6 +246,7 @@ public class BizLessonServiceImpl implements IBizLessonService
         assertLessonHasNoGuideSheetHistory(lessonId);
         lessonQuestionMapper.deleteByLessonId(lessonId);
         lessonAssignmentMapper.deleteByLessonId(lessonId);
+        deleteIotData(lessonId);
         deleteSupervisionFacts(lessonId);
         int affected = bizLessonMapper.deleteBizLessonByLessonId(lessonId);
         if (affected != 1)
@@ -692,6 +698,18 @@ public class BizLessonServiceImpl implements IBizLessonService
         practicalGradingDeadlineMapper.deleteAuditsByLessonId(lessonId);
         practicalGradingDeadlineMapper.deleteDeadlinesByLessonId(lessonId);
         lessonClassScopeMapper.deleteByLessonId(lessonId);
+    }
+
+    /** 物联网实验通过外键挂在课程下，必须先清理子表再删除实验和课程。 */
+    private void deleteIotData(Long lessonId)
+    {
+        iotMapper.deleteMessagesByLessonId(lessonId);
+        iotMapper.deleteEventsByLessonId(lessonId);
+        iotMapper.deleteGroupStudentsByLessonId(lessonId);
+        iotMapper.deleteDevicesByLessonId(lessonId);
+        iotMapper.deleteGroupsByLessonId(lessonId);
+        iotMapper.deleteClassConfigsByLessonId(lessonId);
+        iotMapper.deleteExperimentsByLessonId(lessonId);
     }
 
     /**

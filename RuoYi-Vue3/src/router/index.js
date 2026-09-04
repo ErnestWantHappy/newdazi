@@ -135,7 +135,7 @@ export const constantRoutes = [
     component: Layout,
     hidden: true,
     roles: ['admin', 'teacher'],
-    children: [{ path: '', component: () => import('@/views/business/classroomDesktop/index.vue'), name: 'ClassroomDesktop', meta: { title: '学生桌面', noCache: true } }]
+    children: [{ path: '', component: () => import('@/views/business/classroomDesktop/index.vue'), name: 'ClassroomDesktop', meta: { title: '课堂监控', noCache: true } }]
   },
   {
     path: '/business/research-activity',

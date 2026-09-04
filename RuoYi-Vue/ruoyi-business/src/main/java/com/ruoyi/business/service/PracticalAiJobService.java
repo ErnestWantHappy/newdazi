@@ -50,16 +50,18 @@ public class PracticalAiJobService
         PracticalAiJob running = mapper.selectActiveJob(teacherUserId, lessonId, questionId, entryYear, classCode);
         if (running != null) return running;
 
-        List<PracticalQuestionMaterial> referenceAnswers = effectiveReferenceAnswers(
-                teacherUserId, deptId, lessonId, questionId);
-        if (referenceAnswers.isEmpty())
+        boolean flowchart = isFlowchart(submissions);
+        List<PracticalQuestionMaterial> referenceAnswers = flowchart
+                ? Collections.<PracticalQuestionMaterial>emptyList()
+                : effectiveReferenceAnswers(teacherUserId, deptId, lessonId, questionId);
+        if (!flowchart && referenceAnswers.isEmpty())
             throw new ServiceException("AI 批改前必须上传教师参考答案");
 
         int eligible = 0;
         int skipped = 0;
         for (PracticalSubmissionVo submission : submissions)
         {
-            if (eligible(submission) && selectedByScope(submission, normalizedScope)) eligible++;
+            if (eligible(submission, flowchart) && selectedByScope(submission, normalizedScope)) eligible++;
             else if (Boolean.TRUE.equals(submission.getSubmitted())) skipped++;
         }
         if (eligible == 0) throw new ServiceException("本班暂无已完成页图转换的操作题作品");
@@ -73,18 +75,21 @@ public class PracticalAiJobService
         job.setOutputPricePerThousand(price.getOutputPricePerThousand());
         job.setPriceStatus(price.getPriceStatus()); job.setPriceNote(price.getPriceNote());
         job.setPromptVersion(PROMPT_VERSION); job.setScopeMode(normalizedScope);
-        job.setReferenceAnswerJson(writeJson(referenceAnswers));
+        job.setReferenceAnswerJson(flowchart ? "FLOWCHART" : writeJson(referenceAnswers));
         job.setStarterMaterialsJson(writeJson(materials(questionId, "STARTER")));
         job.setJobStatus("PENDING");
         job.setTotalCount(eligible); job.setSkippedCount(skipped);
         mapper.insertJob(job);
         for (PracticalSubmissionVo submission : submissions)
         {
-            if (!eligible(submission) || !selectedByScope(submission, normalizedScope)) continue;
+            if (!eligible(submission, flowchart) || !selectedByScope(submission, normalizedScope)) continue;
             PracticalAiResult result = new PracticalAiResult();
             result.setJobId(job.getJobId()); result.setAnswerId(submission.getAnswerId());
             result.setPracticalVersionId(submission.getPracticalVersionId());
-            result.setRubricSnapshotId(submission.getRubricSnapshotId()); result.setResultStatus("PENDING");
+            // 流程图没有普通文档评分快照，但结果表要求非空；提交版本本身就是不可变评分锚点。
+            result.setRubricSnapshotId(flowchart ? submission.getFlowchartSubmissionId()
+                    : submission.getRubricSnapshotId());
+            result.setResultStatus("PENDING");
             mapper.insertResult(result);
         }
         addEvent(job.getJobId(), null, "INFO", "QUEUED",
@@ -128,20 +133,22 @@ public class PracticalAiJobService
             if (!Boolean.TRUE.equals(submission.getSubmitted())) continue;
             submitted++;
             if (submission.getScore() != null) graded++;
-            if (eligible(submission))
+            if (eligible(submission, isFlowchart(submissions)))
             {
                 ready++;
                 if (submission.getScore() == null) readyUngraded++;
             }
         }
-        List<PracticalQuestionMaterial> references = effectiveReferenceAnswers(
-                teacherUserId, deptId, lessonId, questionId);
+        List<PracticalQuestionMaterial> references = isFlowchart(submissions)
+                ? Collections.<PracticalQuestionMaterial>emptyList()
+                : effectiveReferenceAnswers(teacherUserId, deptId, lessonId, questionId);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("submittedCount", submitted); result.put("gradedCount", graded);
         result.put("ungradedCount", submitted - graded); result.put("readyCount", ready);
         result.put("readyUngradedCount", readyUngraded);
-        result.put("referenceReady", !references.isEmpty());
-        result.put("referenceFileName", references.isEmpty() ? null : references.get(0).getOriginalFileName());
+        result.put("referenceReady", isFlowchart(submissions) || !references.isEmpty());
+        result.put("referenceFileName", isFlowchart(submissions) ? "课程标准答案流程图（自动生成）"
+                : (references.isEmpty() ? null : references.get(0).getOriginalFileName()));
         result.put("starterCount", materials(questionId, "STARTER").size());
         return result;
     }
@@ -266,15 +273,24 @@ public class PracticalAiJobService
         return job;
     }
 
-    private boolean eligible(PracticalSubmissionVo submission)
+    private boolean eligible(PracticalSubmissionVo submission, boolean flowchart)
     {
         if (submission == null || !Boolean.TRUE.equals(submission.getSubmitted())
                 || submission.getAnswerId() == null || submission.getPracticalVersionId() == null
-                || submission.getRubricSnapshotId() == null || submission.getAttachments() == null
-                || submission.getAttachments().isEmpty()) return false;
+                || (!flowchart && (submission.getRubricSnapshotId() == null || submission.getAttachments() == null
+                || submission.getAttachments().isEmpty()))) return false;
+        if (flowchart) return "FLOWCHART".equalsIgnoreCase(submission.getPracticalMode());
         return submission.getAttachments().stream().allMatch(attachment ->
                 "success".equalsIgnoreCase(attachment.getNormalizedStatus())
                 && attachment.getNormalizedPages() != null && !attachment.getNormalizedPages().isEmpty());
+    }
+
+    private boolean isFlowchart(List<PracticalSubmissionVo> submissions)
+    {
+        if (submissions == null) return false;
+        for (PracticalSubmissionVo submission : submissions)
+            if (submission != null && "FLOWCHART".equalsIgnoreCase(submission.getPracticalMode())) return true;
+        return false;
     }
 
     private boolean selectedByScope(PracticalSubmissionVo submission, String scopeMode)

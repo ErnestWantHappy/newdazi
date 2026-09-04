@@ -11,23 +11,37 @@ import { AppMain } from './components'
 let socket
 let heartbeatTimer
 let reconnectTimer
+let disposed = false
 
 function deviceId() {
   const key = 'classroom-presence-device-id'
   let id = localStorage.getItem(key)
-  if (!id) { id = crypto.randomUUID().replace(/-/g, ''); localStorage.setItem(key, id) }
+  if (!id) {
+    // 内网 HTTP 不提供 randomUUID，仍需生成稳定的本机终端标识以维持 Presence 连接。
+    id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+    localStorage.setItem(key, id)
+  }
   return id
 }
 
 function connectPresence() {
+  if (disposed) return
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   socket = new WebSocket(`${protocol}//${window.location.host}/ws/presence/${deviceId()}`)
-  socket.onopen = () => { heartbeatTimer = window.setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send('{"type":"heartbeat"}') }, 30000) }
-  socket.onclose = () => { window.clearInterval(heartbeatTimer); reconnectTimer = window.setTimeout(connectPresence, 5000) }
+  socket.onopen = () => {
+    if (disposed) { socket.close(); return }
+    heartbeatTimer = window.setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send('{"type":"heartbeat"}') }, 30000)
+  }
+  socket.onclose = () => {
+    window.clearInterval(heartbeatTimer)
+    if (!disposed) reconnectTimer = window.setTimeout(connectPresence, 5000)
+  }
 }
 
-onMounted(connectPresence)
-onBeforeUnmount(() => { window.clearInterval(heartbeatTimer); window.clearTimeout(reconnectTimer); socket?.close() })
+onMounted(() => { disposed = false; connectPresence() })
+onBeforeUnmount(() => { disposed = true; window.clearInterval(heartbeatTimer); window.clearTimeout(reconnectTimer); socket?.close() })
 </script>
 
 <style lang="scss" scoped>

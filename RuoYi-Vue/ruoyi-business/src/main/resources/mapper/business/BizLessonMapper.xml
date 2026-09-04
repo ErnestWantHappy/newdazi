@@ -365,7 +365,7 @@
               OR EXISTS (
                   SELECT 1
                   FROM biz_student_answer ans
-                  INNER JOIN biz_student s ON s.student_id = ans.student_id
+                  INNER JOIN biz_student s ON s.user_id = ans.student_id
                   INNER JOIN sys_user su ON su.user_id = s.user_id
                   INNER JOIN biz_teacher_class tc
                           ON tc.dept_id = su.dept_id

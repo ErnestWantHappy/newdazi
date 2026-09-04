@@ -17,11 +17,14 @@ import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.PracticalRubricSnapshot;
+import com.ruoyi.business.domain.FlowchartSubmission;
 import com.ruoyi.business.domain.vo.PracticalScoringItemVo;
 import com.ruoyi.business.mapper.BizScoringDetailMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.PracticalAiGradingMapper;
 import com.ruoyi.business.mapper.PracticalRubricSnapshotMapper;
+import com.ruoyi.business.mapper.FlowchartMapper;
+import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 
@@ -40,6 +43,8 @@ public class PracticalAiSuggestionApplyService
     @Autowired private PracticalScoringPolicyService scoringPolicyService;
     @Autowired private PracticalGradingDeadlineService deadlineService;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private FlowchartMapper flowchartMapper;
+    @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> apply(Long jobId, Long teacherUserId, Long deptId, String applyMode)
@@ -60,9 +65,12 @@ public class PracticalAiSuggestionApplyService
         {
             if (!"SUCCESS".equals(result.getResultStatus())) continue;
             BizStudentAnswer answer = answerMapper.selectByIdForUpdate(result.getAnswerId());
+            boolean flowchart = "FLOWCHART".equals(job.getReferenceAnswerJson());
             if (answer == null || !Objects.equals(job.getLessonId(), answer.getLessonId())
                     || !Objects.equals(job.getQuestionId(), answer.getQuestionId())
-                    || !Objects.equals(result.getPracticalVersionId(), answer.getPracticalVersionId()))
+                    || (!flowchart && !Objects.equals(result.getPracticalVersionId(), answer.getPracticalVersionId()))
+                    || (flowchart && (!Objects.equals(result.getPracticalVersionId(), answer.getPracticalVersionId())
+                    || !("FLOWCHART:" + result.getPracticalVersionId()).equals(answer.getStudentAnswer()))))
             {
                 skippedVersion++;
                 aiMapper.updateApplyStatus(result.getResultId(), "SKIPPED_VERSION_CHANGED", null, null);
@@ -76,6 +84,29 @@ public class PracticalAiSuggestionApplyService
             }
             try
             {
+                if (flowchart) {
+                    FlowchartSubmission submission = flowchartMapper.selectSubmissionById(result.getPracticalVersionId());
+                    if (submission == null || !Objects.equals(submission.getAnswerId(), answer.getAnswerId()))
+                        throw new ServiceException("流程图提交版本已变化");
+                    int maxScore = resolveFlowchartScore(job.getLessonId(), job.getQuestionId());
+                    if (result.getSuggestedScore() == null || result.getSuggestedScore() < 0
+                            || result.getSuggestedScore() > maxScore)
+                        throw new ServiceException("AI 流程图建议分无效");
+                    Integer oldScore = answer.getScore();
+                    List<BizScoringDetail> oldDetails = detailMapper.selectDetailsByAnswerId(answer.getAnswerId());
+                    deadlineService.assertCanGrade(answer.getAnswerId());
+                    answerMapper.updateScore(answer.getAnswerId(), result.getSuggestedScore().intValue());
+                    detailMapper.deleteBizScoringDetailByAnswerId(answer.getAnswerId());
+                    PracticalAiApplyAudit audit = buildAudit(job, result, teacherUserId, applyMode,
+                            oldScore, result.getSuggestedScore().intValue(), oldDetails,
+                            new ArrayList<BizScoringDetail>());
+                    aiMapper.insertApplyAudit(audit);
+                    String applyStatus = OVERWRITE_ALL.equals(applyMode) ? "APPLIED_OVERWRITE" : "APPLIED";
+                    aiMapper.updateApplyStatus(result.getResultId(), applyStatus, teacherUserId, new Date());
+                    applied++;
+                    if (oldScore == null) filledUngraded++; else overwritten++;
+                    continue;
+                }
                 PracticalRubricSnapshot snapshot = snapshotMapper.selectByVersionId(result.getPracticalVersionId());
                 if (snapshot == null || !Objects.equals(result.getRubricSnapshotId(), snapshot.getSnapshotId()))
                     throw new ServiceException("评分标准快照已失效");
@@ -113,6 +144,15 @@ public class PracticalAiSuggestionApplyService
         summary.put("skippedManualCount", skippedManual);
         summary.put("skippedVersionCount", skippedVersion); summary.put("failedCount", failed);
         return summary;
+    }
+
+    private int resolveFlowchartScore(Long lessonId, Long questionId)
+    {
+        for (com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo item :
+                lessonQuestionMapper.selectDetailsByLessonId(lessonId))
+            if (questionId.equals(item.getQuestionId()) && item.getQuestionScore() != null)
+                return item.getQuestionScore().intValue();
+        throw new ServiceException("流程图题目分值无效");
     }
 
     /** 保留旧接口语义，避免已打开页面或旧客户端误触覆盖模式。 */

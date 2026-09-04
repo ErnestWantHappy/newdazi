@@ -172,4 +172,13 @@
         ORDER BY version_no DESC LIMIT 1
     </select>
 
+    <select id="selectSubmissionById" resultType="com.ruoyi.business.domain.FlowchartSubmission">
+        SELECT submission_id AS submissionId, student_id AS studentId, lesson_id AS lessonId,
+               question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
+               schema_version AS schemaVersion, document_json AS documentJson,
+               rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+        FROM biz_flowchart_submission WHERE submission_id = #{submissionId}
+    </select>
+
 </mapper>

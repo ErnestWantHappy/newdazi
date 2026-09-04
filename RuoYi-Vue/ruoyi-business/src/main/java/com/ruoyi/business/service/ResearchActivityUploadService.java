@@ -2,6 +2,8 @@ package com.ruoyi.business.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -130,11 +132,12 @@ public class ResearchActivityUploadService
      */
     public Path resolvePublicImagePath(String imageUrl)
     {
-        if (StringUtils.isBlank(imageUrl) || imageUrl.indexOf('?') >= 0 || imageUrl.indexOf('#') >= 0)
+        String resourcePath = unwrapResourceViewUrl(imageUrl);
+        if (StringUtils.isBlank(resourcePath) || resourcePath.indexOf('?') >= 0 || resourcePath.indexOf('#') >= 0)
         {
             throw new ServiceException("通知图片不存在或已失效", 404);
         }
-        String relative = imageUrl;
+        String relative = resourcePath;
         String[] prefixes = {
                 "/profile/upload/research-activity/images/",
                 "/dev-api/profile/upload/research-activity/images/",
@@ -158,6 +161,45 @@ public class ResearchActivityUploadService
             throw new ServiceException("通知图片不存在或已失效", 404);
         }
         return target;
+    }
+
+    private String unwrapResourceViewUrl(String imageUrl)
+    {
+        if (StringUtils.isBlank(imageUrl)) return imageUrl;
+        if (imageUrl.startsWith("/profile/upload/research-activity/images/")
+                || imageUrl.startsWith("/dev-api/profile/upload/research-activity/images/")
+                || imageUrl.startsWith("/prod-api/profile/upload/research-activity/images/"))
+        {
+            return imageUrl;
+        }
+
+        try
+        {
+            URI uri = URI.create(imageUrl);
+            String path = uri.getPath();
+            if (!"/common/resource/view".equals(path)
+                    && !"/dev-api/common/resource/view".equals(path)
+                    && !"/prod-api/common/resource/view".equals(path))
+            {
+                return imageUrl;
+            }
+            String rawQuery = uri.getRawQuery();
+            if (StringUtils.isBlank(rawQuery)) return null;
+            String resource = null;
+            for (String item : rawQuery.split("&"))
+            {
+                int separator = item.indexOf('=');
+                String name = separator < 0 ? item : item.substring(0, separator);
+                if (!"resource".equals(URLDecoder.decode(name, "UTF-8"))) continue;
+                if (resource != null || separator < 0) return null;
+                resource = URLDecoder.decode(item.substring(separator + 1), "UTF-8");
+            }
+            return resource;
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
     }
 
     public void deleteQuietly(String relativePath)

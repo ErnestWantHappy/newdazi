@@ -10,8 +10,9 @@
 </template>
 <script setup>
 import { getPublicResearchNotice } from '@/api/business/researchActivity.js'
+import { isResearchNoticeImageSource } from '@/views/business/researchActivity/utils/publicNoticeImage.js'
 const route = useRoute(); const loading = ref(true); const error = ref(false); const notice = ref(null); const token = computed(() => String(route.params.token || '')); const baseApi = import.meta.env.VITE_APP_BASE_API || ''
-function renderContent(html) { if (!html) return ''; const wrapper = document.createElement('div'); wrapper.innerHTML = html; wrapper.querySelectorAll('img[src]').forEach(image => { const src = image.getAttribute('src') || ''; if (src.startsWith('/profile/upload/research-activity/images/') || src.startsWith('/dev-api/profile/upload/research-activity/images/') || src.startsWith('/prod-api/profile/upload/research-activity/images/')) { image.setAttribute('src', `${baseApi}/business/research-activity/public/notices/${encodeURIComponent(token.value)}/images?src=${encodeURIComponent(src)}`) } image.setAttribute('loading', 'lazy') }); return wrapper.innerHTML }
+function renderContent(html) { if (!html) return ''; const wrapper = document.createElement('div'); wrapper.innerHTML = html; wrapper.querySelectorAll('img[src]').forEach(image => { const src = image.getAttribute('src') || ''; if (isResearchNoticeImageSource(src)) { image.setAttribute('src', `${baseApi}/business/research-activity/public/notices/${encodeURIComponent(token.value)}/images?src=${encodeURIComponent(src)}`) } image.setAttribute('loading', 'lazy') }); return wrapper.innerHTML }
 async function load() { loading.value = true; error.value = false; try { notice.value = await getPublicResearchNotice(token.value) } catch { error.value = true } finally { loading.value = false } }
 onMounted(load)
 </script>

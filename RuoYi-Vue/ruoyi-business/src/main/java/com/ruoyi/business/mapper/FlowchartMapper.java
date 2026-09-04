@@ -46,5 +46,5 @@ public interface FlowchartMapper {
                                          @Param("lessonId") Long lessonId,
                                          @Param("questionId") Long questionId,
                                          @Param("versionNo") Integer versionNo);
+    FlowchartSubmission selectSubmissionById(@Param("submissionId") Long submissionId);
 }
-

@@ -2,8 +2,11 @@ package com.ruoyi.business.service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,10 +19,7 @@ class ResearchActivityUploadServiceTest
 {
     private final ResearchActivityUploadService service = new ResearchActivityUploadService();
 
-    ResearchActivityUploadServiceTest()
-    {
-        ReflectionTestUtils.setField(service, "profile", "target/research-upload-test");
-    }
+    @TempDir Path tempDir;
 
     @Test
     void accepts49MiBAndExactly50MiBButRejectsOneByteMore() throws Exception
@@ -76,6 +76,32 @@ class ResearchActivityUploadServiceTest
                 hex(0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50))));
         assertThrows(ServiceException.class, () -> service.validateImage(
                 file("fake.png", "image/png", 100, "plain".getBytes())));
+    }
+
+    @Test
+    void resolvesCurrentResourceViewImageUrl() throws Exception
+    {
+        ReflectionTestUtils.setField(service, "profile", tempDir.toString());
+        Path image = tempDir.resolve("upload/research-activity/images/2026/09/04/example.png");
+        Files.createDirectories(image.getParent());
+        Files.write(image, hex(0x89, 0x50, 0x4E, 0x47));
+
+        assertEquals(image.toAbsolutePath().normalize(), service.resolvePublicImagePath(
+                "/prod-api/common/resource/view?resource=%2Fprofile%2Fupload%2Fresearch-activity%2Fimages%2F2026%2F09%2F04%2Fexample.png"));
+        assertEquals(image.toAbsolutePath().normalize(), service.resolvePublicImagePath(
+                "/common/resource/view?resource=/profile/upload/research-activity/images/2026/09/04/example.png"));
+    }
+
+    @Test
+    void rejectsResourceViewOutsideResearchImageDirectory() throws Exception
+    {
+        ReflectionTestUtils.setField(service, "profile", tempDir.toString());
+        assertThrows(ServiceException.class, () -> service.resolvePublicImagePath(
+                "/prod-api/common/resource/view?resource=/profile/upload/2026/09/04/private.png"));
+        assertThrows(ServiceException.class, () -> service.resolvePublicImagePath(
+                "/prod-api/common/resource/view?resource=../../outside.png"));
+        assertThrows(ServiceException.class, () -> service.resolvePublicImagePath(
+                "/prod-api/common/resource/view?resource=/profile/upload/research-activity/images/a.png&resource=/profile/upload/research-activity/images/b.png"));
     }
 
     private MultipartFile file(String name, String mime, long size, byte[] header) throws Exception

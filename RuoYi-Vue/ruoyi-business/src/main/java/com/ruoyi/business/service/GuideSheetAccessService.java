@@ -270,6 +270,35 @@ public class GuideSheetAccessService
         assertTeacherClassScope(lesson, currentDeptId, entryYear, normalizedClassCode);
     }
 
+    /**
+     * 校验教师可查看指定课程班级，并返回课程实际所属学校。
+     * 课程创建者的账号主部门可能因历史任教关系与课程学校不同，此时仍须以课程、指派和班级管理事实校验。
+     */
+    public Long requireViewableLessonClassDept(Long lessonId, String entryYear, String classCode)
+    {
+        if (lessonId == null || StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+        {
+            throw new ServiceException("课程、入学年份和班级编号必须同时提供");
+        }
+        String normalizedClassCode = normalizeClassCode(classCode);
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        Long userId = SecurityUtils.getUserId();
+        Long lessonDeptId = lesson == null ? null : lesson.getDeptId();
+        boolean creator = isLessonCreator(lesson, userId);
+        if (lessonDeptId == null || (!SecurityUtils.isAdmin(userId) && !creator
+                && !lessonDeptId.equals(SecurityUtils.getDeptId())))
+        {
+            throw new ServiceException("课程不存在或不属于当前学校");
+        }
+        assertLessonEntryYear(lesson, entryYear);
+        if (!isLessonAssignedToClass(lessonId, lessonDeptId, entryYear, normalizedClassCode))
+        {
+            throw new ServiceException("该课程未指派给当前班级");
+        }
+        assertTeacherClassScope(lesson, lessonDeptId, entryYear, normalizedClassCode);
+        return lessonDeptId;
+    }
+
     public BizStudent requireCurrentStudent()
     {
         BizStudent student = studentMapper.selectBizStudentByUserId(SecurityUtils.getUserId());

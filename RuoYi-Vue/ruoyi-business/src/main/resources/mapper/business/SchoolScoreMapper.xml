@@ -51,7 +51,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             
         FROM biz_student_answer a
         INNER JOIN biz_lesson l ON a.lesson_id = l.lesson_id
-        INNER JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN biz_student s ON a.student_id = s.user_id
         INNER JOIN sys_user u ON s.user_id = u.user_id
         INNER JOIN sys_dept d ON u.dept_id = d.dept_id
         WHERE d.del_flag = '0' 
@@ -79,7 +79,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ROUND(SUM(CASE WHEN a.score >= 90 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS excellent_rate
         FROM biz_student_answer a
         INNER JOIN biz_lesson l ON a.lesson_id = l.lesson_id
-        INNER JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN biz_student s ON a.student_id = s.user_id
         INNER JOIN sys_user u ON s.user_id = u.user_id
         INNER JOIN sys_dept d ON u.dept_id = d.dept_id
         WHERE u.dept_id = #{deptId}

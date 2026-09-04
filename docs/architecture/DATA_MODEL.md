@@ -53,6 +53,7 @@ erDiagram
 - `biz_student_answer` 只有同时匹配当前 `biz_lesson_question(lesson_id, question_id)` 的记录才能进入批改、成绩、学情、截止进度和预览恢复等在线统计。课程保存移除题目时，必须在同一事务内把在线答案显式列复制到 `biz_student_answer_orphan_archive`，写 `biz_student_answer_orphan_archive_meta` 批次元数据并核对数量后，才能删除在线行和题目关联；归档失败必须回滚课程保存。
 - `biz_ai_model_price` 保存模型输入/输出单价（元/千 token）、状态和说明；`biz_practical_ai_job` 保存新任务创建时的价格快照。任务理论费用只汇总 `biz_practical_ai_result` 已持久化的 token，用 `输入 token × 输入单价/1000 + 输出 token × 输出单价/1000` 计算，不等同于供应商账单。旧任务无快照时可引用当前价格，但必须在接口和页面标明口径。
 - 画程迁移 `sql/flowchart_operation_v1.sql` 只新增四表：`biz_flowchart_question` 保存教师基础图/标准答案/权限/规则和配置修订；`biz_flowchart_lesson_snapshot` 按课程题目唯一冻结口径；`biz_flowchart_draft` 按学生课程题目唯一并以 `revision` 乐观并发；`biz_flowchart_submission` 保存递增版本、来源草稿修订、图文档、规则快照、检查证据和非正式建议分。现有 `biz_student_answer.student_answer` 只保存 `FLOWCHART:<submissionId>` 受控引用，正式分仍在原 `score` 字段。
+- 流程图 AI 不新增成绩表或 AI 专用流程图表：`PracticalAiJob/Result` 复用普通文档操作题任务链，`PracticalAiResult.rubric_snapshot_id` 在流程图场景保存 `submission_id` 作为非空版本锚点；学生图和课程标准答案由服务端渲染为 JPG，JSON、结构检查和规则快照只作为模型辅助上下文。
 - 画程文档真实数据为 `schemaVersion=1.0` 的平台 JSON；只保留四类节点、折线箭头、文字、坐标和受控锁定属性。PNG/SVG、LogicFlow 内部状态和未来 AI 结果都不是当前作品真源。
 - 学生 Excel 导入的账号查重使用 `sys_user(user_name, del_flag)` 联合索引，迁移与回滚分别为 `sql/student_import_governance_v1.sql` 和 `sql/student_import_governance_v1_rollback.sql`。索引是普通索引，兼容同名历史软删除账号；有效账号唯一性继续由同校 Redis 导入锁、批量前检和写后数量核对共同保证。正式库已于 2026-09-01 执行迁移，前检有效用户名重复组为 0，迁移后 `EXPLAIN` 命中 `idx_sys_user_name_del_flag`。
 - 一次学生导入中的 `sys_user`、`sys_user_role`、`biz_student` 和新增 `biz_teacher_class` 必须处于同一事务，按最多 200 条分批写入并核对影响行数；任何一段失败都必须回滚，禁止继续返回“部分成功”。允许在写库前排除格式错误、Excel 内重复和已有有效账号，并在结构化结果中分别计数。
@@ -61,7 +62,12 @@ erDiagram
 
 ## 2026-09-03 多功能改造数据模型状态
 
-- `biz_student_task_state` 已完成本地领域类、Mapper、服务和迁移脚本，但尚未在本机或正式数据库执行。唯一键为 `lesson_id + question_id + student_id`；字段保存学校、六态 `task_state`、单调递增 `state_version`、`changed_at` 和审计时间。
+- `biz_student_task_state` 已完成本地领域类、Mapper、服务和迁移脚本，并已在本机开发库执行；正式数据库尚未迁移。唯一键为 `lesson_id + question_id + student_id`；字段保存学校、六态 `task_state`、单调递增 `state_version`、`changed_at` 和审计时间。
 - `sql/student_task_state_v1.sql` 会从当前课程仍引用的历史答案回填可确定的 `SUBMITTED/GRADED`，不猜测 `ENTERED/WORKING`；全班查询对无记录学生投影为 `NOT_ENTERED`、版本 0。回滚脚本为 `sql/student_task_state_v1_rollback.sql`。
+- 课堂大屏不增加汇总表：`/business/classroom-state/summary` 以班级学生为基准，关联当前课程题目和 `biz_student_task_state` 实时聚合总题数、已开始题数、各状态题数及最后变更时间；座位、分组和 Presence 仍分别从其既有事实读取。
 - 星级评分不新增成绩表字段，`NUMERIC/STAR_TOTAL/STAR_ITEM` 仅为请求契约；正式成绩继续写既有整数列。
 - 本机开发库已执行 `sql/class_grouping_v1.sql` 与 `sql/group_collaboration_v1.sql`：通用分组、课时快照、教师班级布局、独立协作活动/任务版本/小组映射、协作会话事件和 revision 差异表已存在。小组协作不写 `biz_student_answer`，不复用物联网分组事实；正式服务器仍须独立前检、备份、迁移和后检。详见 `contexts/online-collaboration/`。
+- 分组方案的同名保存以 `scheme_version` 递增保留历史版本。课时快照生成须先通过课程创建者（管理员除外）、学校与课程班级指派校验；教师个人座位布局提交须精确覆盖当前班全体学生，禁止外班、重复或遗漏学生，且校验必须先于旧布局删除。
+# 课程删除与物联网外键链路（2026-09-04）
+
+`biz_lesson` 被 `biz_iot_experiment` 引用；实验下游还包括 `biz_iot_class_config`、`biz_iot_group`、`biz_iot_group_student`、`biz_iot_device`、`biz_iot_message` 和 `biz_iot_event`。课程物理删除必须在同一事务按“消息/事件、组员、设备、小组、班级配置、实验、课程关联、课程”的顺序清理，不能依赖数据库级联。当前实现已在 `IotMapper` 与 `BizLessonServiceImpl` 接入该顺序；正式发布前需完成构建和真实课程回归。

@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.FlowchartLessonSnapshot;
+import com.ruoyi.business.domain.FlowchartSubmission;
 import com.ruoyi.business.domain.PracticalAiEvent;
 import com.ruoyi.business.domain.PracticalAiJob;
 import com.ruoyi.business.domain.PracticalAiResult;
@@ -21,6 +23,8 @@ import com.ruoyi.business.domain.PracticalQuestionMaterial;
 import com.ruoyi.business.domain.PracticalRubricSnapshot;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+import com.ruoyi.business.mapper.FlowchartMapper;
+import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.PracticalAiGradingMapper;
 import com.ruoyi.business.mapper.PracticalArtifactMapper;
 import com.ruoyi.business.mapper.PracticalRubricSnapshotMapper;
@@ -41,6 +45,9 @@ public class PracticalAiJobWorker
     @Autowired private PracticalVisionGradingProvider provider;
     @Autowired private PracticalPageRenderer pageRenderer;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private FlowchartMapper flowchartMapper;
+    @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
+    @Autowired private FlowchartImageRenderer flowchartImageRenderer;
 
     @Async("practicalAiExecutor")
     public void run(Long jobId)
@@ -57,7 +64,8 @@ public class PracticalAiJobWorker
         {
             aiMapper.updateJobStatus(jobId, "RUNNING", new Date(), null, null);
             event(jobId, null, "INFO", "JOB_STARTED", "AI 批改任务开始或继续执行");
-            List<ComparisonPage> comparisonPages = prepareComparisonPages(job);
+            List<ComparisonPage> comparisonPages = "FLOWCHART".equals(job.getReferenceAnswerJson())
+                    ? new ArrayList<ComparisonPage>() : prepareComparisonPages(job);
             TeacherAiConfig config = configService.status(job.getTeacherUserId());
             String apiKey = configService.apiKey(config);
             for (PracticalAiResult candidate : aiMapper.selectResultsByJob(jobId))
@@ -75,7 +83,7 @@ public class PracticalAiJobWorker
                 PracticalAiResult result = aiMapper.selectResult(candidate.getResultId());
                 aiMapper.updateJobHeartbeat(jobId, result.getResultId());
                 event(jobId, result.getResultId(), "INFO", "PREPARING_STUDENT", "开始准备本份学生作品");
-                gradeOne(jobId, config, apiKey, result, comparisonPages);
+                gradeOne(job, config, apiKey, result, comparisonPages);
                 aiMapper.updateJobHeartbeat(jobId, null);
                 aiMapper.updateJobCounts(jobId);
             }
@@ -90,29 +98,42 @@ public class PracticalAiJobWorker
         }
     }
 
-    private void gradeOne(Long jobId, TeacherAiConfig config, String apiKey, PracticalAiResult result,
+    private void gradeOne(PracticalAiJob job, TeacherAiConfig config, String apiKey, PracticalAiResult result,
                           List<ComparisonPage> comparisonPages)
     {
         long startedAt = System.currentTimeMillis();
         try
         {
             BizStudentAnswer answer = answerMapper.selectById(result.getAnswerId());
-            if (answer == null || !result.getPracticalVersionId().equals(answer.getPracticalVersionId()))
+            boolean flowchart = "FLOWCHART".equals(job.getReferenceAnswerJson());
+            boolean sameFlowchartSubmission = flowchart
+                    && result.getPracticalVersionId().equals(answer == null ? null : answer.getPracticalVersionId())
+                    && ("FLOWCHART:" + result.getPracticalVersionId()).equals(answer == null ? null : answer.getStudentAnswer());
+            if (answer == null || (flowchart ? !sameFlowchartSubmission
+                    : !result.getPracticalVersionId().equals(answer.getPracticalVersionId())))
                 throw new ServiceException("学生已补交，原 AI 任务版本失效");
-            PracticalRubricSnapshot rubric = snapshotMapper.selectByVersionId(result.getPracticalVersionId());
-            if (rubric == null || !result.getRubricSnapshotId().equals(rubric.getSnapshotId()))
-                throw new ServiceException("提交版本未绑定有效评分标准快照");
             PracticalAiGradingInput input = new PracticalAiGradingInput();
-            input.setRubric(rubric);
-            input.setScoringItems(rubricService.buildScoringItems(rubric));
-            loadPages(result.getPracticalVersionId(), input);
+            if ("FLOWCHART".equals(job.getReferenceAnswerJson())) {
+                prepareFlowchartInput(answer, result, input);
+            } else {
+                PracticalRubricSnapshot rubric = snapshotMapper.selectByVersionId(result.getPracticalVersionId());
+                if (rubric == null || !result.getRubricSnapshotId().equals(rubric.getSnapshotId()))
+                    throw new ServiceException("提交版本未绑定有效评分标准快照");
+                input.setRubric(rubric);
+                input.setScoringItems(rubricService.buildScoringItems(rubric));
+                loadPages(result.getPracticalVersionId(), input);
+            }
             addComparisonPages(comparisonPages, input);
 
-            updateStage(jobId, result.getResultId(), "REQUESTING_MODEL", "作品页图已准备，正在等待视觉模型返回");
+            updateStage(job.getJobId(), result.getResultId(), "REQUESTING_MODEL", "作品页图已准备，正在等待视觉模型返回");
             PracticalAiGradingOutput output = provider.grade(config, apiKey, input);
-            updateStage(jobId, result.getResultId(), "VALIDATING_RESULT", "模型已返回，正在校验分项分数并保存建议");
+            updateStage(job.getJobId(), result.getResultId(), "VALIDATING_RESULT", "模型已返回，正在校验分项分数并保存建议");
             BizStudentAnswer latest = answerMapper.selectById(result.getAnswerId());
-            if (latest == null || !result.getPracticalVersionId().equals(latest.getPracticalVersionId()))
+            boolean latestFlowchartSubmission = flowchart
+                    && result.getPracticalVersionId().equals(latest == null ? null : latest.getPracticalVersionId())
+                    && ("FLOWCHART:" + result.getPracticalVersionId()).equals(latest == null ? null : latest.getStudentAnswer());
+            if (latest == null || (flowchart ? !latestFlowchartSubmission
+                    : !result.getPracticalVersionId().equals(latest.getPracticalVersionId())))
                 throw new ServiceException("AI 返回前学生已补交，本建议已作废");
             result.setResultStatus("SUCCESS");
             result.setProcessingStage("COMPLETED");
@@ -127,7 +148,7 @@ public class PracticalAiJobWorker
             result.setFinishTime(new Date());
             result.setDurationMs(System.currentTimeMillis() - startedAt);
             aiMapper.updateResult(result);
-            event(jobId, result.getResultId(), "INFO", "COMPLETED", "本份 AI 建议已完成并保存");
+            event(job.getJobId(), result.getResultId(), "INFO", "COMPLETED", "本份 AI 建议已完成并保存");
         }
         catch (Exception e)
         {
@@ -138,8 +159,46 @@ public class PracticalAiJobWorker
             result.setFinishTime(new Date());
             result.setDurationMs(System.currentTimeMillis() - startedAt);
             aiMapper.updateResult(result);
-            event(jobId, result.getResultId(), "ERROR", "FAILED", message);
+            event(job.getJobId(), result.getResultId(), "ERROR", "FAILED", message);
         }
+    }
+
+    private void prepareFlowchartInput(BizStudentAnswer answer, PracticalAiResult result,
+                                       PracticalAiGradingInput input) throws Exception {
+        FlowchartSubmission submission = flowchartMapper.selectSubmissionById(result.getPracticalVersionId());
+        if (submission == null || !result.getAnswerId().equals(submission.getAnswerId()))
+            throw new ServiceException("流程图提交版本不存在或已失效");
+        FlowchartLessonSnapshot snapshot = flowchartMapper.selectLessonSnapshot(
+                submission.getLessonId(), submission.getQuestionId());
+        if (snapshot == null) throw new ServiceException("流程图课程快照不存在");
+        PracticalRubricSnapshot rubric = new PracticalRubricSnapshot();
+        rubric.setLessonId(submission.getLessonId()); rubric.setQuestionId(submission.getQuestionId());
+        rubric.setQuestionContent("流程图操作题：依据题干、标准答案图和学生作品图判断完成质量");
+        rubric.setQuestionScore(resolveQuestionScore(submission.getLessonId(), submission.getQuestionId()));
+        rubric.setScoringItemsJson("[]");
+        input.setRubric(rubric);
+        input.setScoringItems(new ArrayList<com.ruoyi.business.domain.vo.PracticalScoringItemVo>());
+        File dir = new File(RuoYiConfig.getProfile(), "upload/ai-flowchart/" + result.getResultId());
+        File student = flowchartImageRenderer.render(submission.getDocumentJson(), new File(dir, "student.jpg"));
+        File answerImage = flowchartImageRenderer.render(snapshot.getAnswerJson(), new File(dir, "answer.jpg"));
+        input.setPageImages(new ArrayList<File>()); input.setPageLabels(new ArrayList<String>());
+        input.getPageImages().add(student); input.getPageLabels().add("学生流程图作品");
+        input.getPageImages().add(answerImage); input.getPageLabels().add("教师标准答案图（仅供对照）");
+        java.util.Map<String, Object> auxiliary = new java.util.LinkedHashMap<String, Object>();
+        auxiliary.put("studentDocumentJson", submission.getDocumentJson());
+        auxiliary.put("answerDocumentJson", snapshot.getAnswerJson());
+        auxiliary.put("structureCheckResult", submission.getCheckResultJson());
+        auxiliary.put("structureRules", submission.getRulesSnapshotJson());
+        input.setAuxiliaryContextJson(objectMapper.writeValueAsString(auxiliary));
+    }
+
+    private int resolveQuestionScore(Long lessonId, Long questionId) {
+        for (com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo item :
+                lessonQuestionMapper.selectDetailsByLessonId(lessonId)) {
+            if (questionId.equals(item.getQuestionId()) && item.getQuestionScore() != null)
+                return item.getQuestionScore().intValue();
+        }
+        throw new ServiceException("流程图题目分值无效");
     }
 
     private void updateStage(Long jobId, Long resultId, String stage, String message)

@@ -1,19 +1,37 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 版本：v3.21
+> 版本：v3.27
 
-> 更新：2026-09-03
+> 更新：2026-09-04
 > 用途：新的 Codex、Claude、Gemini 或人工开发者的默认入口。只记录当前仍有效且已验证的事实；历史发布和排障证据见 `contexts/context.md`。
+
+## 2026-09-04 上线前探索测试纠偏（本机实现，未发布）
+
+- 课堂大屏会忽略 URL 中 `lessonId=undefined`、空值和非正整数，不再为这类历史链接持续请求作答进度接口；终端在线监控仍可独立降级。分组方案保存、自动生成、快照和座位保存的请求体缺少年级/班级时改为明确提示“请选择年级/班级”，不再把空值转成字符串 `null` 后误报没有管理权限；非法方案号同样给出明确提示。
+- 流程图题保存时，前后端一致拦截 HTML 标签、HTML 注释和 `javascript:` 文本；错误精确指出“学生基础图第 N 个节点”或“标准答案第 N 条连线”，普通比较表达式如 `a < b` 不会被误判。题库修改普通字段时，未改流程图配置不会重复写入并抢占配置修订号。
+- 流程图预览接口仍只返回学生基础图，但新增 `configReady` 布尔值；课程设计器据此禁止将缺基础图、缺标准答案或旧格式异常配置加入课程。课程快照建立时复核同一条件，历史半成品配置返回教师可理解的未完成提示，不再在选题页面抛出异常或泄露标准答案。
+- 流程图批改改按“课程创建者或负责当前班级的共享教师”校验；公共题的非创建教师不再错误显示修改、删除入口。教师主部门不再被猜作负责班级部门，找不到或跨学校同年级同班号有歧义时明确拒绝。
+- 学生离开页面后 Presence WebSocket 不再继续自动重连；课堂大屏的 `NOT_ENTERED` 使用合法展示类型。`sql/student_task_state_v1.sql` 已包含 `NOT_ENTERED`，但本轮未执行 SQL、未部署正式服务器。学生桌面“连接 IP”仍只能表示服务端观察到的地址；因 NAT 显示同一网关 IP 的客户端方案尚未开始。
+- 验证：`FlowchartDocumentServiceTest`、`FlowchartServicePreviewTest`、`ClassGroupingServiceTest` 共 13/13 通过；Vue3 `npm run build:prod` 通过（2915 模块，仅有既有 `vform3` `eval` 与大包警告）。尚未使用浏览器和真实多角色数据完成本轮流程图保存、选课、学生提交、批改闭环，正式发布前必须补做。
+
+## 2026-09-04 课堂监控大屏聚合读取（本机实现，未发布）
+
+- 新增 `GET /business/class-group/desktop/overview`，服务端按课程和教师管理班级校验后，一次返回学生基本信息、备注、分组/组长、Presence 在线状态、连接 IP、任务状态、打字/理论/操作题汇总、课堂表现和请假状态；以班级学生为主表，未作答学生仍显示。
+- 返回 `hasTyping`、`hasTheory`、`hasPractical`，前端仅渲染本节课实际布置的题型；没有理论题或操作题时不显示对应数据块。操作题存在 `score=0` 时按已批改结果显示 0 分；课堂表现保存要求原因，已请假学生由后端拒绝表现分修改。
+- 分组自动生成支持 `membersPerGroup`，默认按学号连续分组；保留旧 `groupCount` 请求兼容。空请求、空学生列表等边界不会进入非法 `IN ()` 查询。
+- 本地验证：`mvn -pl ruoyi-business -am test -q` 通过，`npm run build:prod` 通过；本轮未执行 SQL、未启动正式服务器、未部署正式环境。仍需本地浏览器验证无题型隐藏、0 分批改、表现分/请假交互和课程权限边界。
 
 ## 2026-09-03 P2 通用分组、学生桌面与 P3 小组协作（本机迁移及代码验证完成，未发布）
 
 - 新增 `sql/class_grouping_v1.sql`，建立通用班级分组方案、成员、课时分组快照、教师个人座位布局表；不复用物联网分组表。
 - 后端新增 `/business/class-group` 接口：方案查询/保存/自动生成/删除、课时快照生成、学生桌面查询和布局保存。服务端按教师管理班级校验范围，保存方案时校验当前班级学生不重不漏，默认学号最小者为视觉组长；组长不改变权限。
 - 学生端公共 `StudentLayout` 建立独立 `/ws/presence/{deviceId}` 认证连接，30 秒心跳、Redis 60 秒 TTL，教师桌面聚合多设备在线数和服务端观察到的连接 IP；不写签到考勤、不接受浏览器自报 IP。
-- Vue3 班级管理每行增加“学生桌面”入口，桌面支持终端/作业状态视图切换、默认学号网格和教师个人拖动布局；教师协作页可创建小组活动、查看小组房间与操作轨迹，学生编辑器每 30 秒上报心跳并在离开时记录事件。
+- Vue3 班级管理每行保留“学生桌面”入口；教师首页课程卡片新增“课堂”入口，经已指派班级选择后进入课堂监控大屏。大屏默认按学号网格和教师个人布局展示终端在线、多设备数、连接 IP 与真实课程作答进度，分组默认折叠为开关；教师协作页可创建小组活动、查看小组房间与操作轨迹，学生编辑器每 30 秒上报心跳并在离开时记录事件。
 - 新增独立非计分协作活动、任务版本、小组房间映射、操作轨迹和 revision 差异摘要。每个课时快照小组取得独立文档副本；学生只能进入本人小组房间，首名学生进入后冻结活动。保存触发者仅表示触发保存的会话，不能被当作版本内容的全部作者；协作全程不写 `biz_student_answer`，不改变成绩、课程总分或自动推进。
 - 本机迁移：已在 `xueyeceping_server_20260729` 完成 `sql/class_grouping_v1.sql` 与 `sql/group_collaboration_v1.sql`，后检新增分组、活动、任务映射、轨迹和差异表均存在。迁移前备份分别为 `backups/20260903_163318_before_class_grouping`（SHA-256：`8BCBC34D66A4A1ABCAF8E1C8D357D333BE37EC418AEC0AC0B213D66AE5BE2F3A`）和 `backups/20260903_164649_before_group_collaboration`（SHA-256：`9EF7C170335A0A9F56FB018C7D20F24A9C605813D9F5C6569C4B92086D5FCD20`）。正式服务器未迁移、未发布。
 - 已验证：`CollaborationRoomServiceAccessTest`、`CollaborationRevisionDiffServiceTest`、`CryptPadDocumentServiceAuditFailureTest`、`WebSocketConfigTest` 共 9 项通过，0 失败、0 错误；`mvn -pl ruoyi-admin -am clean package -DskipTests`（8 模块）和 Vue3 `npm run build:prod`（2912 模块）均通过，`git diff --check` 无错误。未进行浏览器、真实多人、断线恢复、历史房间回归或容量验收。
+- 2026-09-03 上线前复审修复：冻结课时分组快照前，服务端同时校验课程所属学校、课程创建者（管理员除外）与该课程已指派目标班级；座位布局在删除旧布局前校验请求精确覆盖当前班全部学生，拒绝外班、重复和遗漏学生；同名分组方案自动递增版本。学生桌面移除尚未接通后端的作业状态切换，改为每 30 秒在可见页面静默刷新 Presence，并显示多终端数。内网 HTTP 缺少 `crypto.randomUUID` 时会生成兼容的本地设备 ID；Presence 仅在后端连接来自本机 Nginx 时采信代理转发 IP。`ClassGroupingServiceTest` 与 `WebSocketConfigTest` 定向 5/5、`mvn -pl ruoyi-business -am test` 430/430、Vue3 `npm run build:prod` 均通过；`sql/student_task_state_v1.sql` 已在本机开发库执行，正式服务器未迁移、未发布。
+- 课堂大屏本机验收：教师课程 `372` 的 2025 级 7 班显示 47 名学生，任务汇总为 46 人“未进入”、1 人“已提交”，无“状态同步中”或“作答进度暂不可用”降级提示；打开分组开关后显示 47 个分组标签，关闭后任务状态不变。后端已按新包重启并返回 HTTP 200。
 
 ## 2026-09-03 多功能改造 P0-P1（本地纠偏完成，未发布）
 
@@ -34,13 +52,13 @@
    - 非创建教师必须同时满足同校、本人管理班级与课程指派班级有交集，才能读取课程内全部已引用题目；公有/私有不再二次过滤，返回班级仅限管理交集。
    - 共享教师能力固定为只读：无设计、删除、复制、修改入口。先前越界增加的“复制为我的课程”前后端代码已删除；同校但无负责班级关系仍拒绝。
 5. **P1-D 统一作业状态（核心链路本地实现）**
-   - 新增 `biz_student_task_state`，状态为 `NOT_ENTERED/ENTERED/WORKING/SUBMITTED/GRADED/RETURNED`，唯一键为课程+题目+学生，`state_version` 用于丢弃乱序消息。迁移和回滚脚本为 `sql/student_task_state_v1.sql`、`sql/student_task_state_v1_rollback.sql`；脚本尚未执行。
+   - 新增 `biz_student_task_state`，状态为 `NOT_ENTERED/ENTERED/WORKING/SUBMITTED/GRADED/RETURNED`，唯一键为课程+题目+学生，`state_version` 用于丢弃乱序消息。迁移和回滚脚本为 `sql/student_task_state_v1.sql`、`sql/student_task_state_v1_rollback.sql`；迁移已在本机开发库执行，正式服务器尚未执行。
    - 学生打开/开始作答、流程图与 Python 草稿、正式提交、教师批改/退回均接入统一状态；状态作为展示旁路，在答案、作品或批改主事务成功后以独立事务写入，状态表失败只告警，不能使主业务返回失败。教师批改页接收版本化 `TASK_STATE_UPDATE`，250ms 合并刷新并每 10 秒全量校准，新提交不会切走当前批改学生。教师首页操作题状态每 10 秒校准。
-   - WebSocket 推送改为事务 `afterCommit`，课堂房间支持显式 `lessonId`，统一规范化班号并原子清理断开连接；学生只能订阅当前课，教师订阅历史课仍需通过课程班级关系和管理范围校验。学生连接仅允许心跳，不能伪造状态事件。成绩页共享状态 store、学生桌面和 Presence 仍属后续阶段，不能宣称 P1-D 全页面完成。
+   - WebSocket 推送改为事务 `afterCommit`，课堂房间支持显式 `lessonId`，统一规范化班号并原子清理断开连接；学生只能订阅当前课，教师订阅历史课仍需通过课程班级关系和管理范围校验。学生连接仅允许心跳，不能伪造状态事件。课堂大屏已接入受课程班级范围校验的 REST 全班汇总接口，每 10 秒校准任务进度；Presence 仍独立负责在线、多设备和连接 IP。任务状态 SQL 未迁移时，大屏明确降级；教师真实课程班级的本机浏览器验收已完成。
 6. **本地验证边界**
-   - 已完成定向回归：`ClassroomTaskStateServiceTest`、`ClassroomWebSocketSecurityTest`、`BizQuestionPracticalImageMaxCountTest`、`DiagnosisGovernanceTest` 共 17 项，0 失败、0 错误；随后执行 `mvn -pl ruoyi-business -am test`，生成的 94 份 Surefire 报告均无失败或错误标记。
+   - 已完成定向回归：`ClassroomTaskStateServiceTest`、`ClassroomWebSocketSecurityTest`、`BizQuestionPracticalImageMaxCountTest`、`DiagnosisGovernanceTest` 共 17 项，0 失败、0 错误；课堂大屏汇总新增 `ClassroomTaskStateSummaryServiceTest` 后，与 `ClassroomTaskStateServiceTest` 定向执行共 5 项、0 失败、0 错误。此前还执行过 `mvn -pl ruoyi-business -am test`，生成的 94 份 Surefire 报告均无失败或错误标记。
    - `mvn -pl ruoyi-admin -am clean package -DskipTests`：8 个 Maven 模块全部 `BUILD SUCCESS`；`npm run build:prod`：2909 个模块转换完成，生产构建成功。仅有既有依赖的弃用/eval/大包提示，无构建错误。
-   - 尚未做本机真实数据库迁移、角色页面浏览器冒烟、正式账号/真实课程验证或服务器发布。
+   - 已完成本机真实数据库迁移和教师真实课程班级浏览器验收；尚未进行正式服务器迁移、发布或正式环境验收。
 
 ## 2026-09-02 多功能改造规划（方案已收口，P0-P1 本地实施中）
 
@@ -52,7 +70,7 @@
 - 已确认通用分组方向：班级可保存多套方案，课程生成课时快照；教师端学生桌面是机房终端监控网格，主要显示姓名、在线/离线、IP、分组和视觉组长，并分离“调整座位”和“调整分组”。它不承担点名，不写考勤，现有签到考勤课仍是考勤入口。专题入口为 `contexts/class-grouping-and-desktop/`。
 - 学生桌面主入口确定放在现有“班级管理”页面每个已管理班级的操作列，教师首页增加携带当前课程/班级的快捷入口；不改造一级菜单结构，不归入教师工具或在线协作。在线由学生登录后的独立认证 WebSocket + Redis TTL 表达，30 秒心跳、60 秒离线；服务端展示可信代理链观察到的“连接 IP”，普通浏览器不能保证取得真实网卡 IP 或计算机名。
 - 已确认在线协作升级不计分、不写个人答案，并从操作题解耦为独立课堂协作活动：同一活动可有多个起始文件版本，按课时小组进入不同房间；历史全班房间保留为全班组。操作轨迹包含进出、心跳、保存和相邻版本变化摘要，但当前 Provider 只能确定保存触发者，不能直接证明版本内全部变化的实际作者；最后一项仍需 PoC 门禁。详见 `contexts/online-collaboration/` 与 ADR-006。
-- P0-P1 已进入本地代码实施，但新增任务状态 SQL 尚未执行，也未发布；P2/P3 已完成本机代码与迁移，正式网络能否观察到每台学生机独立连接 IP，以及 CryptPad/OnlyOffice 能否提供比“小组版本差异”更精确的作者数据，仍必须通过后续 PoC/机房验收确认。
+- P0-P1 已完成任务状态 SQL 的本机迁移和课堂大屏验收，仍未发布；P2/P3 已完成本机代码与迁移，正式网络能否观察到每台学生机独立连接 IP，以及 CryptPad/OnlyOffice 能否提供比“小组版本差异”更精确的作者数据，仍必须通过后续 PoC/机房验收确认。
 - 第二轮已确认：数字评分仍为默认，五星为辅助并支持整题/逐项切换；星级结果按题目或评分项满分的五等比例四舍五入为整数，零星显式清零。旧作品使用提交时评价标准快照，重新提交绑定最新快照，已有提交后禁止修改题目总分。学生提交采用认证 WebSocket 推送加周期性全量校准，并同步接入教师首页、成绩/提交列表、批改页和学生桌面；打开题目为“已进入”，首次保存为“作答中”，正式提交为“已提交待批”。决策见 `contexts/operation-artifact-ai-grading/ADR-007-integer-star-rating-and-rubric-snapshot.md`。
 
 ## 2026-09-02 画程流程图前端恢复（已正式发布 1.28.6）
@@ -462,6 +480,18 @@
 
 **回滚与剩余风险**：应用回滚可导入上述 `nssm-before.reg`、恢复 `nginx.conf.before` 并重启后端/热重载 Nginx，分别回到后端 `20260827_162145_1247099_shared_course_sticky_v1` 和前端 `20260829_course_designer_default_open_v1`。数据回滚优先停用画程入口并保留四张新表；当前正式表为空，仍禁止无备份删表。尚未完成双页面草稿冲突、重复提交、越权、补交、PNG 导出、真实机房 Chrome/Edge 和 400 学生自动保存容量专项；这些是后续加固项，不影响本次教师设计器和基础发布验收结论。
 
+## 37. 2026-09-03 流程图操作题视觉 AI 批改（本地实现，未发布）
+
+**已确认方案**：流程图 AI 采用“图片主判 + 结构上下文辅助”的混合方案。学生流程图作品图和课程冻结的标准答案图是主要评分依据；流程图 JSON、结构检查结果和规则快照只作为辅助上下文、解释信息和风险提示，旧结构规则不得单独决定最终分数。教师不需要重复上传参考文件，系统从课程标准答案 JSON 自动渲染标准答案图。
+
+**任务与版本边界**：流程图复用普通文档操作题的 `PracticalAiJob/Result` 任务队列、进度、暂停、重试、失败重跑、审计和批量采用流程。服务端为每份提交渲染学生图和标准答案图，并在 AI 调用前后校验 `FLOWCHART:<submissionId>` 与当前 `biz_student_answer` 引用；学生补交后旧任务/建议失效。流程图结果把 `submission_id` 放入现有结果表的非空版本锚点字段，不新增成绩表或 AI 专用流程图表。
+
+**教师确认边界**：AI 只保存建议分、分项证据、置信度和总评，批改页明确提示图片主判及结构信息仅供参考；“采用到评分框”只填入当前评分框，教师仍需复核或修改后调用现有评分接口写正式成绩。批量采用同样重新校验提交版本和引用，不能绕过教师确认。
+
+**本机验证（2026-09-03）**：`mvn -pl ruoyi-business -am test` 通过 431 项，0 失败、0 错误；Vue3 `npm run build:prod` 通过，2915 个模块转换完成；`git diff --check` 无空白错误。未执行数据库迁移、远程发布或本轮流程图 AI 真实模型/浏览器现场验收。
+
+**文档与风险**：专题需求、设计、任务和新增 `ADR-004-hybrid-visual-ai-with-structural-context.md` 已同步。当前风险是视觉模型实际调用成本、图片渲染与真实题型的评分稳定性仍需低峰期用真实配置抽样复核；模型不可用时保留人工评分和结构检查查看能力，不自动把结构分降级为正式成绩。正式发布前仍需按现有备份、迁移、制品和浏览器验收流程执行。
+
 ## 25. 2026-08-31 教师工具统一网关与 3006 自动服务（1.27.1，已上线）
 
 **服务器状态**：正式主机 `10.52.1.123` 已将教师工具统一到 D 盘 Nginx 的 80 端口路径：邮件 `/tools/mail/` → 3002、 小学实验 `/tools/primary-lab/` → 3003、网络仿真 `/tools/network/` → 3020、物联网数据演示 `/tools/iot-data/` → 3006、图像识别 `/tools/image-recognition/` → 3001。内部服务端口不作为教师入口要求开放；Nginx 负责反向代理和必要的资源路径改写。
@@ -583,3 +613,11 @@
 **正式发布与验证**：3010 前端已切换至 `releases/20260902_student_entry_year_grade_v1/frontend`，线上学生管理模块为 `student-entry-year-grade-20260902.js`，SHA-256 `F0AEF9F6F851B86092E6F6AC347F5CA4332CF30AF3760B4584A51F2E9A189B87`。正式库平台更新 `1.28.3` 为 `PUBLISHED`（`update_id=68`）。`UnifiedNginx` 为 Running；3009、3010、`/prod-api`、80、3012 均 HTTP 200。浏览器验收通过：管理员可进入学生管理，入学年份下拉显示 `（1年级）`，无页面异常和控制台错误；报告见 `output/playwright/20260902_student_entry_year_grade_v1/report.json`。
 
 **备份与回滚**：发布前整库备份位于 `D:\program\3009dazipingtai\backups\20260902_student_entry_year_grade_v1_before\ry-vue_before.sql`，165,011,196 bytes，SHA-256 `9661D33CF475A2C67A80F08CB60AC257059FA95A29DF17659FE63F81106EDC3C`，同目录保留 `nginx.conf.before`、前端包和平台更新 SQL。回滚只需将 3010 root 恢复为 `releases/20260902_student_correction_upload_hotfix_v1/frontend` 并重启 `UnifiedNginx`；无需后端重启或业务 SQL 回滚，必要时仅按版本精确撤销 `1.28.3` 平台更新记录。
+# 2026-09-04 正式服务器删除小学物联网课程故障处理
+
+- 正式库 `ry-vue` 中确认课程 ID `285` 为“**小学物联网**”（初中部部门 `169`，创建者 `104`），原有 1 条 `biz_iot_experiment`、1 条课程题目关联、1 条班级配置、23 个小组和 46 条组员记录。
+- 删除失败根因：`biz_lesson` 被 `biz_iot_experiment.lesson_id` 外键引用，且物联网实验继续被配置、分组、组员、消息/事件等子表引用；课程删除服务此前未清理物联网链路，数据库返回外键约束错误，前端显示通用“数据处理失败，请稍后重试”。
+- 已在正式服务器先完成整库备份：`D:\program\3009dazipingtai\backups\20260904_125919_before_delete_primary_iot_lesson_285\ry-vue_before.sql`，大小 106,270,331 bytes，SHA-256 `9BE7FB0069A6219E0100348902A043764B0914FBE40996A31DBBA2FA22B44698`。
+- 已按外键顺序完成正式删除并复核：课程 285、实验、配置、小组、组员、课程题目和班级指派均为 0；未重启服务，其他课程未修改。
+- 本机代码已补充 `IotMapper` 按课程级联删除消息、事件、组员、设备、小组、班级配置和实验，并接入 `BizLessonServiceImpl` 单删/批删事务；`mvn -pl ruoyi-business -am test -DskipTests -q` 通过，尚未发布正式服务器。
+- 剩余风险：正式库仍缺少本机近期 `biz_student_task_state`、协作等迁移表，相关页面已有独立数据库错误；本轮未处理、未执行新增 SQL。课程删除的代码修复仅保留在本地工作区，用户已明确要求不得修改正式服务器；除非用户另行明确授权，禁止发布、执行 SQL、重启或再次远程写入。未来若获授权，需重新构建、备份并做课程删除回归。

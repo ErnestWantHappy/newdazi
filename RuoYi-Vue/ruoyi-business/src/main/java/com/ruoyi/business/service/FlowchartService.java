@@ -74,6 +74,8 @@ public class FlowchartService {
         preview.put("questionId", questionId);
         preview.put("schemaVersion", config == null ? FlowchartDocumentService.SCHEMA_VERSION : config.getSchemaVersion());
         preview.put("starterJson", config == null ? FlowchartDocumentService.EMPTY_DOCUMENT : config.getStarterJson());
+        // 选题页面只需要知道题目能否进入课堂，不能因此返回标准答案或规则内容。
+        preview.put("configReady", isLessonConfigReady(config));
         return preview;
     }
 
@@ -88,8 +90,8 @@ public class FlowchartService {
         FlowchartQuestionConfig normalized = new FlowchartQuestionConfig();
         normalized.setQuestionId(questionId);
         normalized.setSchemaVersion(FlowchartDocumentService.SCHEMA_VERSION);
-        normalized.setStarterJson(documentService.normalizeDocument(request.getStarterJson()));
-        normalized.setAnswerJson(documentService.normalizeDocument(request.getAnswerJson()));
+        normalized.setStarterJson(documentService.normalizeDocument(request.getStarterJson(), "学生基础图"));
+        normalized.setAnswerJson(documentService.normalizeDocument(request.getAnswerJson(), "标准答案"));
         if (documentService.readDocument(normalized.getStarterJson()).path("nodes").isEmpty()) {
             throw new ServiceException("请先制作发给学生的基础流程图");
         }
@@ -254,7 +256,7 @@ public class FlowchartService {
                                                  Integer versionNo) {
         BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
         if (student == null) throw new ServiceException("学生不存在");
-        guideSheetAccessService.assertCanViewLessonClass(lessonId, student.getEntryYear(), student.getClassCode());
+        guideSheetAccessService.requireViewableLessonClassDept(lessonId, student.getEntryYear(), student.getClassCode());
         FlowchartSubmission submission = flowchartMapper.selectSubmission(
                 studentId, lessonId, questionId, versionNo);
         if (submission == null) throw new ServiceException("未找到学生的画程提交");
@@ -343,7 +345,7 @@ public class FlowchartService {
         FlowchartLessonSnapshot snapshot = flowchartMapper.selectLessonSnapshot(lessonId, questionId);
         if (snapshot != null) return snapshot;
         FlowchartQuestionConfig config = flowchartMapper.selectQuestionConfig(questionId);
-        if (config == null) throw new ServiceException("画程题目尚未完成基础图和标准答案配置");
+        if (!isLessonConfigReady(config)) throw new ServiceException("画程题目尚未完成基础图和标准答案配置，请先由出题教师完成配置后再保存课程");
         snapshot = new FlowchartLessonSnapshot();
         snapshot.setLessonId(lessonId);
         snapshot.setQuestionId(questionId);
@@ -355,6 +357,21 @@ public class FlowchartService {
         snapshot.setRulesJson(config.getRulesJson());
         flowchartMapper.insertLessonSnapshot(snapshot);
         return flowchartMapper.selectLessonSnapshot(lessonId, questionId);
+    }
+
+    /**
+     * 历史数据可能已有配置行但只写入了其中一张图。课程快照必须同时具备学生基础图和教师标准答案，
+     * 否则学生虽然能作答，教师批改时却没有可用的对照依据。
+     */
+    private boolean isLessonConfigReady(FlowchartQuestionConfig config) {
+        if (config == null) return false;
+        try {
+            return !documentService.readDocument(config.getStarterJson()).path("nodes").isEmpty()
+                    && !documentService.readDocument(config.getAnswerJson()).path("nodes").isEmpty();
+        } catch (ServiceException ignored) {
+            // 早期或异常配置不能让题库列表白屏；一律要求出题教师重新打开并保存规范配置。
+            return false;
+        }
     }
 
     private int lessonQuestionScore(Long lessonId, Long questionId) {

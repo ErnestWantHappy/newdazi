@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { gradesForSchoolType, isFutureActivityTime, lessonLabel, linkStatus } from '../researchActivityFormat.js'
+import { isResearchNoticeImageSource } from '../publicNoticeImage.js'
 import { MAX_FILE_BYTES, normalizeExpireTime, normalizeResourcePayload, validateLinks, validatePackageFile } from '../resourceForm.js'
 
 test('学段只返回对应绝对年级', () => {
@@ -50,4 +51,12 @@ test('活动时间可不填，填写时必须晚于当前时间', () => {
   assert.equal(isFutureActivityTime('2026-07-23 10:01:00', now), true)
   assert.equal(isFutureActivityTime('2026-07-23 09:59:00', now), false)
   assert.equal(isFutureActivityTime('不是时间', now), false)
+})
+
+test('公开通知识别新旧教研图片地址且拒绝其他资源', () => {
+  assert.equal(isResearchNoticeImageSource('/profile/upload/research-activity/images/2026/09/a.png'), true)
+  assert.equal(isResearchNoticeImageSource('/prod-api/common/resource/view?resource=/profile/upload/research-activity/images/2026/09/a.png'), true)
+  assert.equal(isResearchNoticeImageSource('/prod-api/common/resource/view?resource=%2Fprofile%2Fupload%2Fresearch-activity%2Fimages%2Fa.png'), true)
+  assert.equal(isResearchNoticeImageSource('/prod-api/common/resource/view?resource=/profile/upload/private/a.png'), false)
+  assert.equal(isResearchNoticeImageSource('https://example.com/a.png'), false)
 })

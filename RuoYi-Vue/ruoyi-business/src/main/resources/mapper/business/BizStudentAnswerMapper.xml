@@ -184,7 +184,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN biz_lesson_question current_lq
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id
-        JOIN biz_student s ON a.student_id = s.student_id
+        JOIN biz_student s ON a.student_id = s.user_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
         AND u.dept_id = #{deptId}
@@ -220,7 +220,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN biz_lesson_question current_lq
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id
-        LEFT JOIN biz_student s ON a.student_id = s.student_id
+        LEFT JOIN biz_student s ON a.student_id = s.user_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
         GROUP BY a.student_id, u.nick_name, s.student_no, s.class_code
@@ -368,6 +368,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.preview_last_retry_time AS previewLastRetryTime,
             a.preview_error_message AS previewErrorMessage,
             a.practical_version_id AS practicalVersionId,
+            fs.submission_id AS flowchartSubmissionId,
+            fs.version_no AS versionNo,
             a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
@@ -387,7 +389,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN (
                 <include refid="latestAnswerIdSubquery"/>
             ) latest ON latest.answer_id = a1.answer_id
-        ) a ON s.student_id = a.student_id
+        ) a ON s.user_id = a.student_id
            AND a.lesson_id = #{lessonId}
            <if test="questionId != null">
                AND a.question_id = #{questionId}
@@ -396,6 +398,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           ON state.student_id = s.student_id
          AND state.lesson_id = #{lessonId}
          AND state.question_id = #{questionId}
+        LEFT JOIN biz_flowchart_submission fs
+          ON fs.answer_id = a.answer_id
+         AND fs.lesson_id = #{lessonId}
+         AND fs.question_id = #{questionId}
         INNER JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
         INNER JOIN biz_question q ON q.question_id = lq.question_id
         WHERE s.class_code = #{classCode}
@@ -592,7 +598,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a1.lesson_id
                AND current_lq.question_id = a1.question_id
-        ) a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
+        ) a ON s.user_id = a.student_id AND a.lesson_id = #{lessonId}
         LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND lq.lesson_id = #{lessonId}
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         WHERE s.class_code = #{classCode} 
@@ -613,7 +619,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
-        JOIN biz_student s ON a.student_id = s.student_id
+        JOIN biz_student s ON a.student_id = s.user_id
         INNER JOIN biz_lesson_question lq
             ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
         JOIN biz_question q ON a.question_id = q.question_id
@@ -667,7 +673,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a.lesson_id
                AND current_lq.question_id = a.question_id
-            INNER JOIN biz_student s ON a.student_id = s.student_id
+            INNER JOIN biz_student s ON a.student_id = s.user_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             INNER JOIN biz_teacher_class tc
                 ON s.entry_year = tc.entry_year
@@ -702,7 +708,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 ON current_lq.lesson_id = a1.lesson_id
                AND current_lq.question_id = a1.question_id
             WHERE a1.lesson_id = #{lessonId}
-        ) ans ON ans.student_id = s.student_id
+        ) ans ON ans.student_id = s.user_id
         LEFT JOIN biz_question q ON ans.question_id = q.question_id
         LEFT JOIN biz_classroom_performance p
             ON p.student_id = s.student_id
@@ -728,7 +734,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 ON current_lq.lesson_id = a.lesson_id
                AND current_lq.question_id = a.question_id
             WHERE a.lesson_id = #{lessonId}
-        ) ans ON ans.student_id = s.student_id
+        ) ans ON ans.student_id = s.user_id
         LEFT JOIN biz_classroom_performance p
             ON p.student_id = s.student_id
             AND p.lesson_id = #{lessonId}
@@ -746,7 +752,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a.lesson_id
                AND current_lq.question_id = a.question_id
-            INNER JOIN biz_student s ON s.student_id = a.student_id
+            INNER JOIN biz_student s ON s.user_id = a.student_id
             INNER JOIN sys_user u ON u.user_id = s.user_id
             WHERE a.lesson_id = #{lessonId}
               AND s.entry_year = #{entryYear}
@@ -792,7 +798,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id
         INNER JOIN biz_question q ON q.question_id = a.question_id
-        INNER JOIN biz_student s ON s.student_id = a.student_id
+        INNER JOIN biz_student s ON s.user_id = a.student_id
         INNER JOIN sys_user u ON u.user_id = s.user_id
         WHERE q.question_type = 'practical'
           AND a.lesson_id = #{lessonId}

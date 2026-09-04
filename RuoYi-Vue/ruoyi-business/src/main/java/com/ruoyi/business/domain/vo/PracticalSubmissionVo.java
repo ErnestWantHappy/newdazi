@@ -86,6 +86,9 @@ public class PracticalSubmissionVo {
     /** 当前提交绑定的评分标准快照。 */
     private Long rubricSnapshotId;
 
+    /** 流程图正式提交版本ID；文件作品为空。 */
+    private Long flowchartSubmissionId;
+
     /** 提交绑定快照的版本号，用于批改页展示“评分依据 vM（提交时）”。 */
     private Integer rubricSnapshotVersion;
 
@@ -165,6 +168,9 @@ public class PracticalSubmissionVo {
 
     public Long getRubricSnapshotId() { return rubricSnapshotId; }
     public void setRubricSnapshotId(Long rubricSnapshotId) { this.rubricSnapshotId = rubricSnapshotId; }
+
+    public Long getFlowchartSubmissionId() { return flowchartSubmissionId; }
+    public void setFlowchartSubmissionId(Long flowchartSubmissionId) { this.flowchartSubmissionId = flowchartSubmissionId; }
 
     public Integer getRubricSnapshotVersion() { return rubricSnapshotVersion; }
     public void setRubricSnapshotVersion(Integer rubricSnapshotVersion) { this.rubricSnapshotVersion = rubricSnapshotVersion; }

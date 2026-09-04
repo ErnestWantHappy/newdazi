@@ -19,6 +19,13 @@ public interface IotMapper
     IotExperiment selectExperimentById(@Param("experimentId") Long experimentId);
     List<IotExperiment> selectExperimentsByLesson(@Param("lessonId") Long lessonId, @Param("deptId") Long deptId);
     int insertExperiment(IotExperiment experiment);
+    int deleteMessagesByLessonId(@Param("lessonId") Long lessonId);
+    int deleteEventsByLessonId(@Param("lessonId") Long lessonId);
+    int deleteGroupStudentsByLessonId(@Param("lessonId") Long lessonId);
+    int deleteDevicesByLessonId(@Param("lessonId") Long lessonId);
+    int deleteGroupsByLessonId(@Param("lessonId") Long lessonId);
+    int deleteClassConfigsByLessonId(@Param("lessonId") Long lessonId);
+    int deleteExperimentsByLessonId(@Param("lessonId") Long lessonId);
 
     IotClassConfig selectClassConfig(@Param("experimentId") Long experimentId, @Param("entryYear") String entryYear, @Param("classCode") String classCode);
     IotClassConfig selectClassConfigById(@Param("configId") Long configId);

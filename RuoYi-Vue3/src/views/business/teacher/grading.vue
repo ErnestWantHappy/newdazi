@@ -41,7 +41,6 @@
        </div>
       
        <div class="right-actions">
-        <template v-if="!isCurrentFlowchart">
         <el-button plain @click="openAiConfig">AI 设置</el-button>
         <el-button
           type="success"
@@ -72,8 +71,6 @@
         >
           重新转换本班异常文件
         </el-button>
-        </template>
-        <el-tag v-else type="success">结构规则建议＋教师确认</el-tag>
         <el-button type="primary" plain @click="toggleFullscreen">
            <el-icon><FullScreen /></el-icon> {{ isFullscreen ? '退出全屏' : '全屏批改' }}
         </el-button>
@@ -173,6 +170,7 @@
          <div v-else-if="currentStudent" class="preview-content">
              <flowchart-grading-panel v-if="isCurrentFlowchart" :lesson-id="selectedLessonId"
                :question-id="selectedQuestionId" :student-id="currentStudent.studentId"
+               :ai-suggestion="currentAiSuggestion" :ai-summary="currentAiSummary"
                @apply-suggestion="applyFlowchartSuggestion" />
              <template v-else>
              <div class="preview-header">
@@ -470,7 +468,7 @@
             全班重新生成建议（只作对照，不覆盖已有人工成绩）
           </el-radio>
         </el-radio-group>
-        <div class="ai-reference-row">
+        <div v-if="!isCurrentFlowchart" class="ai-reference-row">
           <div>
             <strong>教师参考答案（AI 批改必填）</strong>
             <div class="ai-reference-name" :class="{ 'is-missing': !aiPreflight?.referenceReady }">
@@ -484,14 +482,15 @@
             </el-button>
           </el-upload>
         </div>
-        <el-alert v-if="aiPreflight && !aiPreflight.referenceReady" title="请先上传教师参考答案，才能开始 AI 批改。"
+        <el-alert v-if="!isCurrentFlowchart && aiPreflight && !aiPreflight.referenceReady" title="请先上传教师参考答案，才能开始 AI 批改。"
           type="warning" :closable="false" style="margin-top: 12px" />
-        <div class="ai-starter-note">空白起始材料：{{ aiPreflight?.starterCount || 0 }} 个；没有起始材料时，AI 仍会按题干与参考答案评分。</div>
+        <div v-if="isCurrentFlowchart" class="ai-starter-note">流程图课程标准答案图会自动生成并作为对照，学生作品图片为主要评分依据，结构检查结果仅供参考。</div>
+        <div v-else class="ai-starter-note">空白起始材料：{{ aiPreflight?.starterCount || 0 }} 个；没有起始材料时，AI 仍会按题干与参考答案评分。</div>
       </div>
       <template #footer>
         <el-button @click="aiJobDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="aiStarting"
-          :disabled="!aiPreflight?.referenceReady || selectedAiScopeCount <= 0" @click="startAiJob">
+          :disabled="(!isCurrentFlowchart && !aiPreflight?.referenceReady) || selectedAiScopeCount <= 0" @click="startAiJob">
           确认生成建议
         </el-button>
       </template>
@@ -647,9 +646,16 @@ const scoreInputRef = ref(null);
 const scoringItems = ref([]);      // 评分项列表
 const itemScores = ref({});        // 各评分项得分 { itemId: score }
 const useItemScoring = ref(false); // 是否使用分项评分
+// 按课程和操作题记住本次批改会话的模式，切换学生时不重复选择。
+const scoringModeByQuestion = ref({});
 const gradingInputMode = ref('NUMERIC');
 const overallStarCount = ref(0);
 const itemStarCounts = ref({});
+
+function scoringModeKey(lessonId = selectedLessonId.value,
+    classCode = selectedClassCode.value, questionId = selectedQuestionId.value) {
+    return `${lessonId}:${classCode || ''}:${questionId}`;
+}
 
 // P0-A: 批改页标注“作品 vN · 评分依据 vM（提交时）”；历史未回填版本的数据不显示，避免误导
 const rubricVersionLabel = computed(() => {
@@ -719,7 +725,7 @@ const canBatchApplyAiSuggestions = computed(() => Boolean(aiJobBatchAdoptAllowed
     && ['COMPLETED', 'PARTIAL_FAILED'].includes(aiJob.value?.jobStatus)
     && batchAdoptableCount.value > 0 && deadlineStatus.value?.canGrade));
 const canStartAiJob = computed(() => Boolean(
-    !isCurrentFlowchart.value && aiConfig.value?.configured && aiConfig.value?.masterKeyConfigured
+    aiConfig.value?.configured && aiConfig.value?.masterKeyConfigured
     && selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value
     && submittedCount.value > 0 && deadlineStatus.value?.canGrade
     && !['PENDING', 'RUNNING', 'PAUSED', 'CANCEL_REQUESTED'].includes(aiJob.value?.jobStatus)
@@ -988,13 +994,19 @@ function loadScoringItems(practicalVersionId = currentStudent.value?.practicalVe
             itemScores.value[item.itemId] = 0;
             itemStarCounts.value[item.itemId] = 0;
         });
-        // 如果有评分项，默认使用分项评分
-        useItemScoring.value = scoringItems.value.length > 0;
+        const modeKey = scoringModeKey(lessonId, selectedClassCode.value, questionId);
+        // 首次进入沿用原有默认值；教师手动切换后，同题其他学生沿用该模式。
+        useItemScoring.value = Object.prototype.hasOwnProperty.call(scoringModeByQuestion.value, modeKey)
+            ? scoringModeByQuestion.value[modeKey]
+            : scoringItems.value.length > 0;
     });
 }
 
 // P6: 评分模式切换
 function onScoringModeChange(useItem) {
+    if (selectedLessonId.value && selectedQuestionId.value) {
+        scoringModeByQuestion.value[scoringModeKey()] = !!useItem;
+    }
     gradingInputMode.value = 'NUMERIC';
     overallStarCount.value = 0;
     if (useItem) {
@@ -1576,7 +1588,7 @@ function formatAiTime(value) {
 
 function aiResultFor(student) {
     const result = student?.answerId ? aiResultsByAnswer.value[student.answerId] : null;
-    return result && result.practicalVersionId === student.practicalVersionId ? result : null;
+    return result && String(result.practicalVersionId) === String(student.practicalVersionId) ? result : null;
 }
 
 function formatConfidence(value) {
@@ -1707,7 +1719,7 @@ function handleStudentClick(student, index) {
 function applyFlowchartSuggestion(score) {
     const maxScore = Number(currentStudent.value?.maxScore || 0);
     currentScore.value = Math.min(maxScore, Math.max(0, Number(score || 0)));
-    ElMessage.success('结构检查建议已填入评分框，请教师复核后提交');
+    ElMessage.success('建议分已填入评分框，请教师复核后提交');
 }
 
 function selectAttachment(index) {

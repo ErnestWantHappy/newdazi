@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistration;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
@@ -57,5 +58,18 @@ class WebSocketConfigTest
         verify(registration).setAllowedOrigins("http://localhost", "http://127.0.0.1:80");
         verify(iotRegistration).setAllowedOrigins("http://localhost", "http://127.0.0.1:80");
         verify(presenceRegistration).setAllowedOrigins("http://localhost", "http://127.0.0.1:80");
+    }
+
+    @Test
+    void shouldUseNginxForwardedAddressOnlyForLoopbackConnection()
+    {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("127.0.0.1");
+        request.addHeader("X-Real-IP", "10.52.12.34");
+
+        org.junit.jupiter.api.Assertions.assertEquals("10.52.12.34", StudentPresenceHandshakeInterceptor.connectionIp(request));
+
+        request.setRemoteAddr("10.52.12.35");
+        org.junit.jupiter.api.Assertions.assertEquals("10.52.12.35", StudentPresenceHandshakeInterceptor.connectionIp(request));
     }
 }

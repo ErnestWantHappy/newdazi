@@ -28,6 +28,10 @@ public class FlowchartDocumentService {
     private static final int MAX_EDGES = 400;
     private static final int MAX_TEXT_LENGTH = 200;
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
+    /** 只拦截形态完整的 HTML 标签，避免把 a < b 这样的比较表达式误判为标签。 */
+    private static final Pattern HTML_TAG = Pattern.compile("(?is)<\\/?[A-Za-z][^<>]*>");
+    private static final Pattern HTML_COMMENT = Pattern.compile("(?is)<!--.*?-->");
+    private static final Pattern SCRIPT_PROTOCOL = Pattern.compile("(?is).*\\bjavascript\\s*:.*");
     private static final Set<String> NODE_TYPES = new HashSet<String>();
     static {
         NODE_TYPES.add("terminal");
@@ -43,6 +47,14 @@ public class FlowchartDocumentService {
     }
 
     public String normalizeDocument(String json) {
+        return normalizeDocument(json, "流程图");
+    }
+
+    /**
+     * 题目配置会同时保存基础图和标准答案。保留来源名称，才能让教师准确找到需要修改的文字；
+     * 学生草稿继续使用默认名称，不改变既有接口语义。
+     */
+    public String normalizeDocument(String json, String documentName) {
         if (json == null || json.trim().isEmpty()) json = EMPTY_DOCUMENT;
         if (json.getBytes(StandardCharsets.UTF_8).length > MAX_DOCUMENT_BYTES) {
             throw new ServiceException("流程图内容超过 512KB，请减少节点或文字");
@@ -73,7 +85,7 @@ public class FlowchartDocumentService {
                 safe.put("type", type);
                 safe.put("x", coordinate(node.get("x")));
                 safe.put("y", coordinate(node.get("y")));
-                safe.put("text", safeText(node.get("text")));
+                safe.put("text", safeText(node.get("text"), documentName + "第 " + safeNodes.size() + " 个节点"));
                 ObjectNode properties = safe.putObject("properties");
                 JsonNode sourceProperties = node.get("properties");
                 properties.put("locked", booleanValue(sourceProperties, "locked", false));
@@ -95,7 +107,7 @@ public class FlowchartDocumentService {
                 safe.put("type", "polyline");
                 safe.put("sourceNodeId", source);
                 safe.put("targetNodeId", target);
-                safe.put("text", safeText(edge.get("text")));
+                safe.put("text", safeText(edge.get("text"), documentName + "第 " + safeEdges.size() + " 条连线"));
                 ObjectNode properties = safe.putObject("properties");
                 JsonNode sourceProperties = edge.get("properties");
                 properties.put("locked", booleanValue(sourceProperties, "locked", false));
@@ -165,15 +177,17 @@ public class FlowchartDocumentService {
         return Math.round(value * 100.0d) / 100.0d;
     }
 
-    private String safeText(JsonNode source) {
+    private String safeText(JsonNode source, String location) {
         if (source == null || source.isNull()) return "";
         String value;
         if (source.isObject() && source.has("value")) value = source.get("value").asText("");
         else value = source.asText("");
         value = value.replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]", "").trim();
-        if (value.length() > MAX_TEXT_LENGTH) throw new ServiceException("节点或连线文字最多 200 个字符");
-        if (value.contains("<") || value.contains(">") || value.matches("(?is).*javascript\\s*:.*")) {
-            throw new ServiceException("流程图文字不能包含 HTML 或脚本内容");
+        if (value.length() > MAX_TEXT_LENGTH) throw new ServiceException(location + "文字最多 200 个字符");
+        if (HTML_TAG.matcher(value).find()
+                || HTML_COMMENT.matcher(value).find()
+                || SCRIPT_PROTOCOL.matcher(value).matches()) {
+            throw new ServiceException(location + "的文字不能包含 HTML 标签、HTML 注释或 javascript: 脚本文本，请删除后再保存");
         }
         return value;
     }

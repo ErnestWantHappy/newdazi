@@ -31,10 +31,24 @@ class FlowchartDocumentServiceTest {
 
     @Test
     void shouldRejectHtmlAndDanglingEdges() {
+        ServiceException html = assertThrows(ServiceException.class, () -> service.normalizeDocument(
+                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"process\",\"x\":1,\"y\":1,\"text\":\"<script>\"}],\"edges\":[]}", "标准答案"));
+        assertTrue(html.getMessage().contains("标准答案第 1 个节点"));
+        assertTrue(html.getMessage().contains("HTML 标签"));
         assertThrows(ServiceException.class, () -> service.normalizeDocument(
-                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"process\",\"x\":1,\"y\":1,\"text\":\"<script>\"}],\"edges\":[]}"));
+                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"process\",\"x\":1,\"y\":1,\"text\":\"<!-- comment -->\"}],\"edges\":[]}"));
+        assertThrows(ServiceException.class, () -> service.normalizeDocument(
+                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"process\",\"x\":1,\"y\":1,\"text\":\"javascript:alert(1)\"}],\"edges\":[]}"));
         assertThrows(ServiceException.class, () -> service.normalizeDocument(
                 "{\"nodes\":[],\"edges\":[{\"id\":\"e1\",\"sourceNodeId\":\"n1\",\"targetNodeId\":\"n2\"}]}"));
+    }
+
+    @Test
+    void shouldAllowComparisonOperatorsInText() throws Exception {
+        String normalized = service.normalizeDocument(
+                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"decision\",\"x\":1,\"y\":1,\"text\":\"tu < 36?\"}],\"edges\":[]}");
+
+        assertEquals("tu < 36?", objectMapper.readTree(normalized).path("nodes").get(0).path("text").asText());
     }
 
     @Test

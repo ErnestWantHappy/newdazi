@@ -153,8 +153,12 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         contract.set("rubric", objectMapper.valueToTree(input.getScoringItems()));
         contract.put("imageCount", input.getPageImages().size());
         contract.set("imageLabels", objectMapper.valueToTree(input.getPageLabels()));
+        if (StringUtils.isNotBlank(input.getAuxiliaryContextJson())) {
+            contract.set("flowchartAuxiliaryContext", objectMapper.readTree(input.getAuxiliaryContextJson()));
+        }
         return "请先识别标签：学生作品是待评分内容；空白起始材料用于判断学生实际完成了哪些修改；教师参考答案表示目标完成状态。"
              + "必须比较学生作品、空白起始材料和教师参考答案后再逐项评分。教师参考答案只能作为对照，不得当作学生作品；"
+             + "流程图题以学生作品图和标准答案图为主要依据，JSON与结构检查仅作辅助，旧结构规则不得单独决定分数。"
              + "证据中的 page 只填写学生作品页码，不填写空白材料或教师参考答案页码。"
              + "每项分数必须是0到maxScore之间的整数；总分必须等于逐项分数之和且不超过题目满分。\n"
              + "评分输入：" + objectMapper.writeValueAsString(contract) + "\n"

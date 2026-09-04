@@ -152,6 +152,17 @@
 
               <div class="lesson-entry-footer">
                 <el-button
+                  class="lesson-entry-btn"
+                  size="small"
+                  type="primary"
+                  text
+                  @click.stop="goToClassroom(lesson, group)"
+                >
+                  <el-icon><Monitor /></el-icon>
+                  <span>课堂</span>
+                </el-button>
+                <span v-if="lesson.hasCollaboration || lesson.iotEnabled" class="entry-divider" />
+                <el-button
                   v-if="lesson.hasCollaboration"
                   class="lesson-entry-btn"
                   size="small"
@@ -479,7 +490,7 @@ import {
   manualAdvanceLesson
 } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, MoreFilled, DArrowRight, Setting, View } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, Monitor, MoreFilled, DArrowRight, Setting, View } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
@@ -905,6 +916,26 @@ function handleEditLesson(lesson, group) {
   router.push({
     path: `/business/lesson-auth/designer/${lesson.lessonId}`,
     query: { entryYear: lesson.entryYear || group.entryYear }
+  });
+}
+
+/** 课堂入口按课程已指派班级选择，避免教师手工填课程或班级编号。 */
+async function goToClassroom(lesson, group) {
+  const classCode = await classDialogRef.value.open(null, lesson.lessonId, 'classroom');
+  if (!classCode) return;
+  const entryYear = String(lesson.entryYear || group.entryYear || '');
+  if (!entryYear) {
+    ElMessage.error('课程缺少入学年份，无法进入课堂');
+    return;
+  }
+  router.push({
+    path: '/business/classroom-desktop',
+    query: {
+      lessonId: lesson.lessonId,
+      lessonTitle: lesson.lessonTitle || '',
+      entryYear,
+      classCode
+    }
   });
 }
 

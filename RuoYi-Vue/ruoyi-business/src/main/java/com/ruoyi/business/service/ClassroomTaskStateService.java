@@ -1,9 +1,12 @@
 package com.ruoyi.business.service;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import com.ruoyi.business.config.ClassroomRoomKey;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizStudentTaskState;
+import com.ruoyi.business.domain.vo.ClassroomStudentTaskSummaryVo;
 import com.ruoyi.business.mapper.BizStudentTaskStateMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +78,48 @@ public class ClassroomTaskStateService
     {
         return stateMapper.selectClassStates(deptId, lessonId, questionId,
                 entryYear == null ? null : entryYear.trim(), ClassroomRoomKey.normalizeClassCode(classCode));
+    }
+
+    public List<ClassroomStudentTaskSummaryVo> listClassSummary(Long deptId, Long lessonId,
+                                                                  String entryYear, String classCode)
+    {
+        List<ClassroomStudentTaskSummaryVo> summaries = stateMapper.selectClassSummary(deptId, lessonId,
+                entryYear == null ? null : entryYear.trim(), ClassroomRoomKey.normalizeClassCode(classCode));
+        if (summaries == null || summaries.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        List<ClassroomStudentTaskSummaryVo> result = new ArrayList<>();
+        for (ClassroomStudentTaskSummaryVo summary : summaries)
+        {
+            // MyBatis 在某些历史班级的左连接结果中可能返回空行，不能让一条脏行阻断整班监控。
+            if (summary == null)
+            {
+                continue;
+            }
+            summary.setTaskState(resolveSummaryState(summary));
+            result.add(summary);
+        }
+        return result;
+    }
+
+    /**
+     * 课程汇总优先呈现教师此刻最需要处理的状态，题目明细仍以状态表为准。
+     */
+    private String resolveSummaryState(ClassroomStudentTaskSummaryVo summary)
+    {
+        if (number(summary.getTotalQuestionCount()) == 0) return "NO_TASK";
+        if (number(summary.getReturnedQuestionCount()) > 0) return RETURNED;
+        if (number(summary.getWorkingQuestionCount()) > 0) return WORKING;
+        if (number(summary.getEnteredQuestionCount()) > 0) return ENTERED;
+        if (number(summary.getSubmittedQuestionCount()) > 0) return SUBMITTED;
+        if (number(summary.getGradedQuestionCount()) > 0) return GRADED;
+        return NOT_ENTERED;
+    }
+
+    private int number(Integer value)
+    {
+        return value == null ? 0 : value;
     }
 
 }

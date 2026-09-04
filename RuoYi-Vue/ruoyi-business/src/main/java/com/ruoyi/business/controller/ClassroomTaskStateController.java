@@ -4,6 +4,7 @@ import java.util.List;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizStudentTaskState;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
+import com.ruoyi.business.domain.vo.ClassroomStudentTaskSummaryVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
@@ -63,11 +64,24 @@ public class ClassroomTaskStateController extends BaseController
                                       @RequestParam String entryYear,
                                       @RequestParam String classCode)
     {
-        guideSheetAccessService.assertCanViewLessonClass(lessonId, entryYear, classCode);
+        Long lessonDeptId = guideSheetAccessService.requireViewableLessonClassDept(lessonId, entryYear, classCode);
         assertQuestionBelongsToLesson(lessonId, questionId);
         List<BizStudentTaskState> states = taskStateService.listClassStates(
-                SecurityUtils.getDeptId(), lessonId, questionId, entryYear, classCode);
+                lessonDeptId, lessonId, questionId, entryYear, classCode);
         return success(states);
+    }
+
+    /** 教师课堂大屏的全班课程状态汇总，终端在线状态由学生桌面接口独立提供。 */
+    @PreAuthorize("@ss.hasRole('teacher') or @ss.hasRole('admin')")
+    @GetMapping("/summary")
+    public AjaxResult listClassSummary(@RequestParam Long lessonId,
+                                       @RequestParam String entryYear,
+                                       @RequestParam String classCode)
+    {
+        Long lessonDeptId = guideSheetAccessService.requireViewableLessonClassDept(lessonId, entryYear, classCode);
+        List<ClassroomStudentTaskSummaryVo> summaries = taskStateService.listClassSummary(
+                lessonDeptId, lessonId, entryYear, classCode);
+        return success(summaries);
     }
 
     @PreAuthorize("@ss.hasRole('teacher') or @ss.hasRole('admin')")
@@ -79,11 +93,11 @@ public class ClassroomTaskStateController extends BaseController
         {
             throw new ServiceException("退回参数不完整");
         }
-        guideSheetAccessService.assertCanViewLessonClass(
+        Long lessonDeptId = guideSheetAccessService.requireViewableLessonClassDept(
                 request.getLessonId(), request.getEntryYear(), request.getClassCode());
         assertQuestionBelongsToLesson(request.getLessonId(), request.getQuestionId());
         BizStudent student = studentMapper.selectBizStudentByStudentId(request.getStudentId());
-        if (student == null || !SecurityUtils.getDeptId().equals(student.getDeptId())
+        if (student == null || !lessonDeptId.equals(student.getDeptId())
                 || !request.getEntryYear().trim().equals(student.getEntryYear())
                 || !normalizeClassCode(request.getClassCode()).equals(normalizeClassCode(student.getClassCode())))
         {

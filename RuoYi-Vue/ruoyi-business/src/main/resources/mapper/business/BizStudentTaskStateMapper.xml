@@ -87,4 +87,33 @@
           AND student.class_code = #{classCode}
         ORDER BY CAST(student.student_no AS UNSIGNED), student.student_no, student.student_id
     </select>
+
+    <select id="selectClassSummary" resultType="com.ruoyi.business.domain.vo.ClassroomStudentTaskSummaryVo">
+        SELECT student.student_id AS studentId,
+               user.nick_name AS studentName,
+               student.student_no AS studentNo,
+               (SELECT COUNT(1) FROM biz_lesson_question question
+                 WHERE question.lesson_id = #{lessonId}) AS totalQuestionCount,
+               COUNT(state.state_id) AS startedQuestionCount,
+               SUM(CASE WHEN state.task_state = 'ENTERED' THEN 1 ELSE 0 END) AS enteredQuestionCount,
+               SUM(CASE WHEN state.task_state = 'WORKING' THEN 1 ELSE 0 END) AS workingQuestionCount,
+               SUM(CASE WHEN state.task_state = 'SUBMITTED' THEN 1 ELSE 0 END) AS submittedQuestionCount,
+               SUM(CASE WHEN state.task_state = 'GRADED' THEN 1 ELSE 0 END) AS gradedQuestionCount,
+               SUM(CASE WHEN state.task_state = 'RETURNED' THEN 1 ELSE 0 END) AS returnedQuestionCount,
+               MAX(state.changed_at) AS changedAt
+        FROM biz_student student
+        INNER JOIN sys_user user ON user.user_id = student.user_id
+            AND user.del_flag = '0'
+        LEFT JOIN biz_student_task_state state ON state.student_id = student.student_id
+            AND state.dept_id = #{deptId}
+            AND state.lesson_id = #{lessonId}
+            AND EXISTS (SELECT 1 FROM biz_lesson_question relation
+                        WHERE relation.lesson_id = #{lessonId}
+                          AND relation.question_id = state.question_id)
+        WHERE user.dept_id = #{deptId}
+          AND student.entry_year = #{entryYear}
+          AND student.class_code = #{classCode}
+        GROUP BY student.student_id, user.nick_name, student.student_no
+        ORDER BY CAST(student.student_no AS UNSIGNED), student.student_no, student.student_id
+    </select>
 </mapper>

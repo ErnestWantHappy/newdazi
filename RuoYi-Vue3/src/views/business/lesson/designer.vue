@@ -430,7 +430,7 @@
                    link 
                    type="primary" 
                    @click="handleAddQuestion(scope.row)" 
-                   :disabled="isQuestionSelected(scope.row.questionId)"
+                  :disabled="isQuestionSelected(scope.row.questionId) || addingQuestionIds.has(scope.row.questionId)"
                  >添加</el-button>
                </template>
              </el-table-column>
@@ -487,10 +487,12 @@
 import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
-import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
+import { getCollaborationHealth, getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
 import { getQuestion, listQuestion } from "@/api/business/question";
 import { previewProgrammingQuestion } from "@/api/business/programming";
+import { getFlowchartQuestionPreview } from '@/api/business/flowchart';
 import FlowchartQuestionPreviewDialog from '@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue';
+import { parseFlowchartDocument } from '@/components/FlowchartEditor/schema';
 import { getMyClasses } from "@/api/business/teacherClass";
 import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
@@ -513,6 +515,7 @@ const pythonPreviewConfig = ref({});
 const pythonPreviewCases = ref([]);
 const flowchartPreviewVisible = ref(false);
 const flowchartPreviewQuestion = ref(null);
+const addingQuestionIds = ref(new Set());
 const collaborationForm = ref({ enabled: false, questionId: null, materialId: null });
 const collaborationCandidates = ref([]);
 const collaborationMaterialVisible = ref(false);
@@ -683,7 +686,7 @@ function sortQuestions() {
 
 // 提交表单
 function submitForm() {
-  proxy.$refs["lessonRef"].validate(valid => {
+  proxy.$refs["lessonRef"].validate(async valid => {
     if (valid) {
       if (form.value.guideSheetEnabled && !form.value.guideSheetSourceSheetId) {
         proxy.$modal.msgError('已开启电子导学单，请先选择一份导学单模板。');
@@ -704,6 +707,24 @@ function submitForm() {
 
       // 提交前确保排序
       sortQuestions();
+
+      // 在线协作与课程主体分开保存，先做健康检查，避免课程保存成功后协作同步才失败。
+      if (collaborationForm.value.enabled) {
+        try {
+          const healthResponse = await getCollaborationHealth();
+          const health = healthResponse.data || healthResponse;
+          if (!health.ready) {
+            const problems = Array.isArray(health.problems) ? health.problems.filter(Boolean) : [];
+            proxy.$modal.msgError(problems.length
+              ? `在线协作暂不可用：${problems.join('；')}`
+              : '在线协作功能当前未开启');
+            return;
+          }
+        } catch (error) {
+          proxy.$modal.msgError(error?.message || '无法检查在线协作配置，请联系管理员。');
+          return;
+        }
+      }
       
       // 考勤课强制关闭自动推进，避免误开
       const isAttendanceSubmit = form.value.lessonMode === 'attendance'
@@ -725,7 +746,12 @@ function submitForm() {
       if (form.value.lessonId) {
         // 修改模式使用 saveAll
         saveAllLessonDetails(data).then(async response => {
-          await synchronizeCollaboration(response.data?.lessonId || response.lessonId || form.value.lessonId);
+          try {
+            await synchronizeCollaboration(response.data?.lessonId || response.lessonId || form.value.lessonId);
+          } catch (error) {
+            proxy.$modal.msgError(error?.message || '课程已保存，但在线协作配置未保存。');
+            return;
+          }
           proxy.$modal.msgSuccess("修改成功");
           // 修改成功后跳转回来源页面（通常是教师首页或列表页）
           if (route.query.redirect) {
@@ -740,7 +766,12 @@ function submitForm() {
       } else {
         // 新增模式
         saveAllLessonDetails(data).then(async response => {
-          await synchronizeCollaboration(response.data?.lessonId || response.lessonId);
+          try {
+            await synchronizeCollaboration(response.data?.lessonId || response.lessonId);
+          } catch (error) {
+            proxy.$modal.msgError(error?.message || '课程已保存，但在线协作配置未保存。');
+            return;
+          }
           proxy.$modal.msgSuccess("新增成功");
           router.push({ path: '/teacher-dashboard/index', query: { refresh: String(Date.now()) } });
         });
@@ -948,12 +979,28 @@ function isQuestionSelected(questionId) {
   return selectedQuestions.value.some(q => q.questionId === questionId);
 }
 
-function handleAddQuestion(row) {
+async function handleAddQuestion(row) {
+    if (isQuestionSelected(row.questionId) || addingQuestionIds.value.has(row.questionId)) return;
     if (row.questionType === 'typing') {
         const hasTyping = selectedQuestions.value.some(q => q.questionType === 'typing');
         if (hasTyping) {
             proxy.$modal.msgError('一门课程最多只能添加一道打字题。');
             return;
+        }
+    }
+    if (row.questionType === 'practical' && row.practicalMode === 'FLOWCHART') {
+        addingQuestionIds.value.add(row.questionId);
+        try {
+            const response = await getFlowchartQuestionPreview(row.questionId);
+              if (!response.data?.configReady) {
+                 proxy.$modal.msgWarning('该画程流程图题尚未完成基础图和标准答案配置，请先由出题教师完成配置后再选入课程。');
+                 return;
+              }
+        } catch (_) {
+            proxy.$modal.msgWarning('无法确认该画程流程图题是否已配置完成，暂不能选入课程。');
+            return;
+        } finally {
+            addingQuestionIds.value.delete(row.questionId);
         }
     }
     if (!isQuestionSelected(row.questionId)) {
@@ -1154,6 +1201,14 @@ async function synchronizeCollaboration(lessonId) {
   if (!collaborationForm.value.enabled) {
     if (form.value.lessonId) await saveCollaborationLesson(lessonId, { enabled: false });
     return;
+  }
+  // 课程主体和协作房间是两个接口；先检查全局 Provider，避免主体保存成功后才暴露笼统错误。
+  const healthResponse = await getCollaborationHealth();
+  const health = healthResponse.data || healthResponse;
+  if (!health.ready) {
+    collaborationForm.value = { enabled: false, questionId: null, materialId: null };
+    const problems = Array.isArray(health.problems) ? health.problems.filter(Boolean) : [];
+    throw new Error(problems.length ? `在线协作暂不可用：${problems.join('；')}` : '在线协作功能当前未开启');
   }
   const desired = { ...collaborationForm.value };
   await loadCollaborationSettings(lessonId);

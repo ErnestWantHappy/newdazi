@@ -27,6 +27,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -197,6 +198,29 @@ class GuideSheetAccessServiceTest
 
         assertThrows(ServiceException.class,
                 () -> service.assertCanViewLessonClass(3L, "2025", "1班"));
+    }
+
+    @Test
+    void lessonCreatorCanViewOwnLessonUsingLessonDepartmentInsteadOfAccountHomeDepartment()
+    {
+        login(40L, 10L, "creator");
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(3L);
+        lesson.setDeptId(20L);
+        lesson.setCreatorId(40L);
+        lesson.setEntryYear("2025");
+        BizLessonAssignment assignment = new BizLessonAssignment();
+        assignment.setLessonId(3L);
+        assignment.setDeptId(20L);
+        assignment.setEntryYear("2025");
+        assignment.setClassCode("1");
+        when(lessonMapper.selectBizLessonByLessonId(3L)).thenReturn(lesson);
+        when(lessonAssignmentMapper.selectBizLessonAssignmentList(any()))
+                .thenReturn(Collections.singletonList(assignment));
+
+        Long lessonDeptId = service.requireViewableLessonClassDept(3L, "2025", "1班");
+
+        assertEquals(20L, lessonDeptId);
     }
 
     private void login(Long userId, Long deptId, String username)

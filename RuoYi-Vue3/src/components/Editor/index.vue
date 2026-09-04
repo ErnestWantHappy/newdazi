@@ -325,6 +325,9 @@ function insertUploadedImage(res, index = null) {
   const targetIndex = index == null ? savedIndex : index
   quill.insertEmbed(targetIndex, "image", imageUrlFromResponse(res), "user")
   quill.setSelection(targetIndex + 1, 0, "silent")
+  // 图片可能是编辑前的最后一步操作，必须立即把 Quill 的真实 HTML 同步给外层表单。
+  content.value = quill.root.innerHTML
+  emit('update:modelValue', content.value)
   return true
 }
 
