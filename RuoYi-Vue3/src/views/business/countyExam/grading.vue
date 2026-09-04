@@ -56,7 +56,15 @@
             </div>
             <el-button v-if="detail.studentAnswer" :icon="Download" @click="openFile(detail.studentAnswer)">下载原文件</el-button>
           </div>
-          <iframe v-if="previewUrl" :src="previewUrl" class="preview-frame" />
+          <div v-if="normalizedPages.length" class="county-normalized-pages">
+            <img
+              v-for="(pagePath, pageIndex) in normalizedPages"
+              :key="pagePath"
+              :src="protectedPreviewUrl(pagePath)"
+              :alt="`答卷第 ${pageIndex + 1} 页`"
+            />
+          </div>
+          <iframe v-else-if="previewUrl" :src="previewUrl" class="preview-frame" />
           <div v-else class="preview-empty">
             <el-icon><Document /></el-icon>
             <strong>{{ previewEmptyTitle }}</strong>
@@ -160,9 +168,12 @@ const pendingCount = computed(() => Math.max(submittedCount.value - gradedCount.
 const currentIndex = computed(() => tasks.value.findIndex(item => item.answerId === currentAnswerId.value))
 const currentTaskNumber = computed(() => currentIndex.value >= 0 ? currentIndex.value + 1 : '-')
 const maxScore = computed(() => Number(detail.value?.questionScore || 0))
+const normalizedPages = computed(() => Array.isArray(detail.value?.normalizedPages)
+  ? detail.value.normalizedPages
+  : [])
 const previewUrl = computed(() => {
   if (!detail.value?.previewPath) return ''
-  return import.meta.env.VITE_APP_BASE_API + '/common/resource/view?resource=' + encodeURIComponent(detail.value.previewPath)
+  return protectedPreviewUrl(detail.value.previewPath)
 })
 const previewEmptyTitle = computed(() => {
   if (detail.value?.previewStatus === 'pending') return '预览等待生成'
@@ -314,6 +325,9 @@ function focusNumberInput(inputRef) {
 }
 
 function previewStatusLabel(task) {
+  if (task.normalizedStatus === 'success') return '页图可预览'
+  if (task.normalizedStatus === 'converting') return '页图生成中'
+  if (task.normalizedStatus === 'failed') return '页图暂不可用'
   if (task.previewPath || task.previewStatus === 'success') return '可预览'
   if (task.previewStatus === 'pending') return '待转换'
   if (task.previewStatus === 'converting') return '转换中'
@@ -323,7 +337,11 @@ function previewStatusLabel(task) {
 
 function openFile(path) {
   if (!path) return
-  window.open(import.meta.env.VITE_APP_BASE_API + path, '_blank')
+  window.open(import.meta.env.VITE_APP_BASE_API + '/common/download/resource?resource=' + encodeURIComponent(path), '_blank')
+}
+
+function protectedPreviewUrl(path) {
+  return import.meta.env.VITE_APP_BASE_API + '/common/resource/view?resource=' + encodeURIComponent(path)
 }
 
 function trimText(text, length) {
@@ -549,6 +567,24 @@ onBeforeUnmount(() => {
   min-height: 0;
   border: 0;
   background: #fff;
+}
+
+.county-normalized-pages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  background: #eef1f5;
+
+  img {
+    display: block;
+    width: min(100%, 1200px);
+    height: auto;
+    margin: 0 auto 14px;
+    border-radius: 4px;
+    background: #fff;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
+  }
 }
 
 .preview-empty {

@@ -6,11 +6,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.business.mapper.StudentProfileMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.vo.StudentProfileVo;
 import com.ruoyi.business.service.IStudentProfileService;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.system.mapper.SysDeptMapper;
+import com.ruoyi.common.exception.ServiceException;
 
 /**
  * 学生成绩画像 Service 实现
@@ -26,6 +29,9 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
 
     @Autowired
     private SysDeptMapper deptMapper;
+
+    @Autowired
+    private BizTeacherClassMapper teacherClassMapper;
 
     @Override
     public StudentProfileVo getStudentProfile(Long studentId, String academicYearStart, String academicYearEnd) {
@@ -242,22 +248,42 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
     @Override
     public List<Map<String, Object>> getClassList() {
         Long deptId = SecurityUtils.getDeptId();
-        List<BizStudent> list = studentMapper.selectDistinctYearAndClassByDeptId(deptId);
-        
-        return list.stream().map(s -> {
+        Long userId = SecurityUtils.getUserId();
+        if (SecurityUtils.isAdmin(userId)) {
+            List<BizStudent> list = studentMapper.selectDistinctYearAndClassByDeptId(deptId);
+            return list.stream().map(s -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("entryYear", s.getEntryYear());
+                map.put("classCode", s.getClassCode());
+                return map;
+            }).collect(Collectors.toList());
+        }
+        return teacherClassMapper.selectTeacherClassListWithCount(userId, deptId).stream().map(tc -> {
             Map<String, Object> map = new HashMap<>();
-            map.put("entryYear", s.getEntryYear());
-            map.put("classCode", s.getClassCode());
+            map.put("entryYear", tc.getEntryYear());
+            map.put("classCode", tc.getClassCode());
             return map;
         }).collect(Collectors.toList());
     }
 
     @Override
     public List<BizStudent> getStudentList(String entryYear, String classCode) {
+        Long userId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getDeptId();
+        if (!SecurityUtils.isAdmin(userId)) {
+            BizTeacherClass managed = new BizTeacherClass();
+            managed.setUserId(userId);
+            managed.setDeptId(deptId);
+            managed.setEntryYear(entryYear);
+            managed.setClassCode(classCode);
+            if (teacherClassMapper.checkTeacherClassExists(managed) <= 0) {
+                throw new ServiceException("只能查看自己管理的班级");
+            }
+        }
         BizStudent query = new BizStudent();
         query.setEntryYear(entryYear);
         query.setClassCode(classCode);
-        query.setDeptId(SecurityUtils.getDeptId());
+        query.setDeptId(deptId);
         List<BizStudent> list = studentMapper.selectBizStudentList(query);
         
         // 去重 (以 studentId 为准)
@@ -272,35 +298,8 @@ public class StudentProfileServiceImpl implements IStudentProfileService {
      * 根据入学年份计算年级名称
      */
     private String calculateGradeName(String entryYear, String schoolType) {
-        if (entryYear == null) return "未知年级";
-        
-        Calendar now = Calendar.getInstance();
-        int currentYear = now.get(Calendar.YEAR);
-        int currentMonth = now.get(Calendar.MONTH) + 1;
-        
-        int academicStartYear = currentYear;
-        if (currentMonth < 7) {
-            academicStartYear = currentYear - 1;
-        }
-        
-        int yearsInSchool = academicStartYear - Integer.parseInt(entryYear) + 1;
-        
-        String[] gradeNames;
-        if ("1".equals(schoolType)) {
-            // 小学
-            gradeNames = new String[]{"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"};
-        } else if ("3".equals(schoolType)) {
-            // 高中
-            gradeNames = new String[]{"高一", "高二", "高三"};
-        } else {
-            // 默认初中
-            gradeNames = new String[]{"七年级", "八年级", "九年级"};
-        }
-        
-        if (yearsInSchool >= 1 && yearsInSchool <= gradeNames.length) {
-            return gradeNames[yearsInSchool - 1];
-        }
-        return "未知年级";
+        return com.ruoyi.business.util.AcademicYearUtils.resolveGradeName(
+                entryYear, schoolType, java.time.LocalDate.now());
     }
 
     /**

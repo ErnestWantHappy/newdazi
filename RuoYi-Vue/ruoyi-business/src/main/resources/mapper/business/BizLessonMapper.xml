@@ -8,13 +8,22 @@
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
         <result property="grade"    column="grade"    />
+        <result property="entryYear"    column="entry_year"    />
         <result property="semester"    column="semester"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="shuffleMode"    column="shuffle_mode"    />
         <result property="randomChoiceCount"    column="random_choice_count"    />
         <result property="randomJudgmentCount"    column="random_judgment_count"    />
+        <result property="lessonMode"    column="lesson_mode"    />
+        <result property="teacherNote"    column="teacher_note"    />
+        <result property="autoAdvanceEnabled"    column="auto_advance_enabled"    />
+        <result property="autoAdvanceThresholdPct"    column="auto_advance_threshold_pct"    />
+        <result property="autoAdvanceDelayHours"    column="auto_advance_delay_hours"    />
+        <result property="autoAdvanceReadyTime"    column="auto_advance_ready_time"    />
+        <result property="iotEnabled"    column="iot_enabled"    />
         <result property="creatorId"    column="creator_id"    />
         <result property="deptId"    column="dept_id"    />
+        <result property="status"    column="status"    />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
@@ -22,7 +31,9 @@
     </resultMap>
 
     <sql id="selectBizLessonVo">
-        select lesson_id, lesson_title, grade, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count, creator_id, dept_id, create_by, create_time, update_by, update_time from biz_lesson
+        select lesson_id, lesson_title, grade, entry_year, semester, lesson_num, shuffle_mode, random_choice_count, random_judgment_count,
+               lesson_mode, teacher_note, auto_advance_enabled, auto_advance_threshold_pct, auto_advance_delay_hours, auto_advance_ready_time,
+               iot_enabled, creator_id, dept_id, status, create_by, create_time, update_by, update_time from biz_lesson
     </sql>
 
     <select id="selectBizLessonList" parameterType="BizLesson" resultMap="BizLessonResult">
@@ -30,9 +41,11 @@
         <where>
             <if test="lessonTitle != null  and lessonTitle != ''"> and lesson_title like concat('%', #{lessonTitle}, '%')</if>
             <if test="grade != null "> and grade = #{grade}</if>
+            <if test="entryYear != null and entryYear != ''"> and entry_year = #{entryYear}</if>
             <if test="semester != null  and semester != ''"> and semester = #{semester}</if>
             <if test="creatorId != null"> and creator_id = #{creatorId}</if>
             <if test="deptId != null"> and dept_id = #{deptId}</if>
+            <if test="status != null and status != '' and status != 'all'"> and IFNULL(status, '0') = #{status}</if>
         </where>
     </select>
 
@@ -46,11 +59,19 @@
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="lessonTitle != null and lessonTitle != ''">lesson_title,</if>
             <if test="grade != null">grade,</if>
+            <if test="entryYear != null and entryYear != ''">entry_year,</if>
             <if test="semester != null and semester != ''">semester,</if>
             <if test="lessonNum != null">lesson_num,</if>
             <if test="shuffleMode != null">shuffle_mode,</if>
             <if test="randomChoiceCount != null">random_choice_count,</if>
             <if test="randomJudgmentCount != null">random_judgment_count,</if>
+            <if test="lessonMode != null and lessonMode != ''">lesson_mode,</if>
+            <if test="teacherNote != null">teacher_note,</if>
+            <if test="autoAdvanceEnabled != null">auto_advance_enabled,</if>
+            <if test="autoAdvanceThresholdPct != null">auto_advance_threshold_pct,</if>
+            <if test="autoAdvanceDelayHours != null">auto_advance_delay_hours,</if>
+            <if test="autoAdvanceReadyTime != null">auto_advance_ready_time,</if>
+            <if test="iotEnabled != null">iot_enabled,</if>
             <if test="creatorId != null">creator_id,</if>
             <if test="deptId != null">dept_id,</if>
             <if test="createBy != null and createBy != ''">create_by,</if>
@@ -61,11 +82,19 @@
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="lessonTitle != null and lessonTitle != ''">#{lessonTitle},</if>
             <if test="grade != null">#{grade},</if>
+            <if test="entryYear != null and entryYear != ''">#{entryYear},</if>
             <if test="semester != null and semester != ''">#{semester},</if>
             <if test="lessonNum != null">#{lessonNum},</if>
             <if test="shuffleMode != null">#{shuffleMode},</if>
             <if test="randomChoiceCount != null">#{randomChoiceCount},</if>
             <if test="randomJudgmentCount != null">#{randomJudgmentCount},</if>
+            <if test="lessonMode != null and lessonMode != ''">#{lessonMode},</if>
+            <if test="teacherNote != null">#{teacherNote},</if>
+            <if test="autoAdvanceEnabled != null">#{autoAdvanceEnabled},</if>
+            <if test="autoAdvanceThresholdPct != null">#{autoAdvanceThresholdPct},</if>
+            <if test="autoAdvanceDelayHours != null">#{autoAdvanceDelayHours},</if>
+            <if test="autoAdvanceReadyTime != null">#{autoAdvanceReadyTime},</if>
+            <if test="iotEnabled != null">#{iotEnabled},</if>
             <if test="creatorId != null">#{creatorId},</if>
             <if test="deptId != null">#{deptId},</if>
             <if test="createBy != null and createBy != ''">#{createBy},</if>
@@ -80,11 +109,19 @@
         <trim prefix="SET" suffixOverrides=",">
             <if test="lessonTitle != null and lessonTitle != ''">lesson_title = #{lessonTitle},</if>
             <if test="grade != null">grade = #{grade},</if>
+            <if test="entryYear != null and entryYear != ''">entry_year = #{entryYear},</if>
             <if test="semester != null and semester != ''">semester = #{semester},</if>
             <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
             <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
             <if test="randomChoiceCount != null">random_choice_count = #{randomChoiceCount},</if>
             <if test="randomJudgmentCount != null">random_judgment_count = #{randomJudgmentCount},</if>
+            <if test="lessonMode != null and lessonMode != ''">lesson_mode = #{lessonMode},</if>
+            <if test="teacherNote != null">teacher_note = #{teacherNote},</if>
+            <if test="autoAdvanceEnabled != null">auto_advance_enabled = #{autoAdvanceEnabled},</if>
+            <if test="autoAdvanceThresholdPct != null">auto_advance_threshold_pct = #{autoAdvanceThresholdPct},</if>
+            <if test="autoAdvanceDelayHours != null">auto_advance_delay_hours = #{autoAdvanceDelayHours},</if>
+            <if test="autoAdvanceReadyTime != null">auto_advance_ready_time = #{autoAdvanceReadyTime},</if>
+            <if test="iotEnabled != null">iot_enabled = #{iotEnabled},</if>
             <if test="creatorId != null">creator_id = #{creatorId},</if>
             <if test="deptId != null">dept_id = #{deptId},</if>
             <if test="createBy != null and createBy != ''">create_by = #{createBy},</if>
@@ -94,6 +131,84 @@
         </trim>
         where lesson_id = #{lessonId}
     </update>
+
+    <!-- 仅清除达标时间（关闭自动推进或改配置时重置） -->
+    <update id="clearAutoAdvanceReadyTime">
+        update biz_lesson set auto_advance_ready_time = null where lesson_id = #{lessonId}
+    </update>
+
+    <update id="updateLessonStatus">
+        update biz_lesson
+        set status = #{status}, update_by = #{updateBy}, update_time = now(), auto_advance_ready_time = null
+        where lesson_id = #{lessonId}
+    </update>
+
+    <!-- 教师统一推进策略：读一门常规课配置即可 -->
+    <select id="selectAdvancePolicyByCreator" resultMap="BizLessonResult">
+        select lesson_id, lesson_title, grade, entry_year, semester, lesson_num,
+               shuffle_mode, random_choice_count, random_judgment_count,
+               lesson_mode, teacher_note, auto_advance_enabled, auto_advance_threshold_pct,
+               auto_advance_delay_hours, auto_advance_ready_time,
+               creator_id, dept_id, create_by, create_time, update_by, update_time
+        from biz_lesson
+        where create_by = #{creatorName}
+          and dept_id = #{deptId}
+          and IFNULL(status, '0') = '0'
+          and IFNULL(lesson_mode, 'assessment') &lt;&gt; 'attendance'
+        order by update_time desc, lesson_id desc
+        limit 1
+    </select>
+
+    <!-- 统一策略必须独立于课程存在，否则教师无常规课时无法保存设置。 -->
+    <select id="selectAdvancePolicyByTeacher" resultMap="BizLessonResult">
+        select auto_advance_enabled, auto_advance_threshold_pct, auto_advance_delay_hours,
+               teacher_id as creator_id, dept_id, create_by, create_time, update_by, update_time
+        from biz_lesson_advance_policy
+        where teacher_id = #{teacherId}
+          and dept_id = #{deptId}
+        limit 1
+    </select>
+
+    <insert id="upsertAdvancePolicy">
+        insert into biz_lesson_advance_policy
+            (teacher_id, dept_id, auto_advance_enabled, auto_advance_threshold_pct,
+             auto_advance_delay_hours, create_by, create_time, update_by, update_time)
+        values
+            (#{teacherId}, #{deptId}, #{autoAdvanceEnabled}, #{autoAdvanceThresholdPct},
+             #{autoAdvanceDelayHours}, #{updateBy}, now(), #{updateBy}, now())
+        on duplicate key update
+            auto_advance_enabled = values(auto_advance_enabled),
+            auto_advance_threshold_pct = values(auto_advance_threshold_pct),
+            auto_advance_delay_hours = values(auto_advance_delay_hours),
+            update_by = values(update_by),
+            update_time = values(update_time)
+    </insert>
+
+    <!-- 教师统一推进策略：同步到本校全部常规课，并清空达标时间以便重新计时 -->
+    <update id="updateAdvancePolicyByCreator">
+        update biz_lesson
+        set auto_advance_enabled = #{autoAdvanceEnabled},
+            auto_advance_threshold_pct = #{autoAdvanceThresholdPct},
+            auto_advance_delay_hours = #{autoAdvanceDelayHours},
+            auto_advance_ready_time = null
+        where (creator_id = #{teacherId} or (creator_id is null and create_by = #{creatorName}))
+          and dept_id = #{deptId}
+          and IFNULL(lesson_mode, 'assessment') &lt;&gt; 'attendance'
+    </update>
+
+    <!-- 待扫描：开启自动推进且为测评课的当前指派课程 -->
+    <select id="selectAutoAdvanceCandidates" resultMap="BizLessonResult">
+        select distinct l.lesson_id, l.lesson_title, l.grade, l.entry_year, l.semester, l.lesson_num,
+               l.shuffle_mode, l.random_choice_count, l.random_judgment_count,
+               l.lesson_mode, l.teacher_note, l.auto_advance_enabled, l.auto_advance_threshold_pct,
+               l.auto_advance_delay_hours, l.auto_advance_ready_time,
+               l.creator_id, l.dept_id, l.create_by, l.create_time, l.update_by, l.update_time
+        from biz_lesson l
+        inner join biz_lesson_assignment a on a.lesson_id = l.lesson_id
+        where IFNULL(l.auto_advance_enabled, 0) = 1
+          and IFNULL(l.lesson_mode, 'assessment') &lt;&gt; 'attendance'
+          and IFNULL(l.status, '0') = '0'
+    </select>
 
     <delete id="deleteBizLessonByLessonId" parameterType="Long">
         delete from biz_lesson where lesson_id = #{lessonId}
@@ -110,66 +225,208 @@
     <resultMap type="com.ruoyi.business.domain.vo.LessonInfoVo" id="LessonInfoVoResult">
         <result property="lessonId"    column="lesson_id"    />
         <result property="lessonTitle"    column="lesson_title"    />
+        <result property="grade"    column="grade"    />
         <result property="lessonNum"    column="lesson_num"    />
+        <result property="entryYear"    column="entry_year"    />
         <result property="createTime"    column="create_time"    />
         <result property="courseType"    column="course_type"    />
+        <result property="creatorName"   column="creator_name"   />
+        <result property="canDesign"     column="can_design"     />
+        <result property="canDelete"     column="can_delete"     />
+        <result property="deleteBlockReason" column="delete_block_reason" />
         <result property="hasPractical"  column="has_practical"  />
+        <result property="lessonMode"    column="lesson_mode"    />
+        <result property="autoAdvanceEnabled"    column="auto_advance_enabled"    />
+        <result property="autoAdvanceThresholdPct"    column="auto_advance_threshold_pct"    />
+        <result property="autoAdvanceDelayHours"    column="auto_advance_delay_hours"    />
+        <result property="iotEnabled"    column="iot_enabled"    />
     </resultMap>
 
-    <!-- 查询我创建的课程 -->
-    <select id="selectLessonsByGradeAndCreator" resultMap="LessonInfoVoResult">
+    <!-- 课程归届以持久化 entry_year 为准，grade 只是创建时的课程内容年级快照。 -->
+    <select id="selectLessonsByEntryYearAndCreator" resultMap="LessonInfoVoResult">
         SELECT
             lesson_id,
             lesson_title,
+            grade,
             lesson_num,
+            entry_year,
             create_time,
             'self' as course_type,
+            COALESCE(NULLIF((SELECT u.nick_name FROM sys_user u WHERE u.user_id = biz_lesson.creator_id LIMIT 1), ''), create_by) as creator_name,
+            1 as can_design,
+            CASE
+                WHEN EXISTS (SELECT 1 FROM biz_student_answer a WHERE a.lesson_id = biz_lesson.lesson_id) THEN 0
+                WHEN EXISTS (SELECT 1 FROM biz_lesson_guide_sheet_binding b WHERE b.lesson_id = biz_lesson.lesson_id) THEN 0
+                ELSE 1
+            END as can_delete,
+            CASE
+                WHEN EXISTS (SELECT 1 FROM biz_student_answer a WHERE a.lesson_id = biz_lesson.lesson_id)
+                    THEN '课程已有学生答题记录，为保留成绩历史不可删除'
+                WHEN EXISTS (SELECT 1 FROM biz_lesson_guide_sheet_binding b WHERE b.lesson_id = biz_lesson.lesson_id)
+                    THEN '该课程存在电子导学单历史快照和答卷，不能物理删除'
+                ELSE NULL
+            END as delete_block_reason,
             (SELECT count(1) FROM biz_lesson_question lq 
              LEFT JOIN biz_question q ON lq.question_id = q.question_id 
-             WHERE lq.lesson_id = biz_lesson.lesson_id AND q.question_type = 'practical') > 0 as has_practical
+             WHERE lq.lesson_id = biz_lesson.lesson_id AND q.question_type = 'practical') > 0 as has_practical,
+            IFNULL(lesson_mode, 'assessment') as lesson_mode,
+            IFNULL(auto_advance_enabled, 0) as auto_advance_enabled,
+            IFNULL(auto_advance_threshold_pct, 50) as auto_advance_threshold_pct,
+            IFNULL(auto_advance_delay_hours, 2.0) as auto_advance_delay_hours,
+            IFNULL(iot_enabled, 0) as iot_enabled
         FROM
             biz_lesson
         WHERE
-            grade = #{grade}
+            entry_year = #{entryYear}
           AND create_by = #{creatorName}
           AND dept_id = #{deptId}
+          AND IFNULL(status, '0') = '0'
         ORDER BY
             create_time DESC,
             lesson_id DESC
     </select>
 
+    <!-- 成绩页：排除纯考勤课（不计作业均分分母）；导学单课程仍按原规则纳入。 -->
+    <select id="selectScoreLessons" resultMap="LessonInfoVoResult">
+        SELECT
+            l.lesson_id,
+            l.lesson_title,
+            l.grade,
+            l.lesson_num,
+            l.entry_year,
+            l.create_time,
+            CASE WHEN l.creator_id = #{userId} OR l.create_by = #{creatorName}
+                 THEN 'self' ELSE 'shared' END AS course_type,
+            EXISTS (
+                SELECT 1
+                FROM biz_lesson_question lq
+                INNER JOIN biz_question q ON q.question_id = lq.question_id
+                WHERE lq.lesson_id = l.lesson_id
+                  AND q.question_type = 'practical'
+            ) AS has_practical,
+            IFNULL(l.lesson_mode, 'assessment') as lesson_mode,
+            IFNULL(l.iot_enabled, 0) as iot_enabled
+        FROM biz_lesson l
+        WHERE l.dept_id = #{deptId}
+          AND IFNULL(l.lesson_mode, 'assessment') &lt;&gt; 'attendance'
+          AND l.entry_year = #{entryYear}
+          AND (
+              (l.entry_year = #{entryYear} AND (l.creator_id = #{userId} OR l.create_by = #{creatorName}))
+              OR (
+                  l.entry_year = #{entryYear}
+                  AND EXISTS (
+                      SELECT 1
+                      FROM biz_lesson_assignment la
+                      INNER JOIN biz_teacher_class tc
+                              ON tc.dept_id = la.dept_id
+                             AND tc.entry_year = la.entry_year
+                             AND tc.class_code = la.class_code
+                      WHERE la.lesson_id = l.lesson_id
+                        AND la.dept_id = #{deptId}
+                        AND la.entry_year = #{entryYear}
+                        AND tc.user_id = #{userId}
+                  )
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM biz_lesson_guide_sheet_binding b
+                  INNER JOIN biz_lesson_assignment la ON la.lesson_id = b.lesson_id
+                  WHERE b.lesson_id = l.lesson_id
+                    AND b.is_current = 'Y'
+                    AND b.enabled = 'Y'
+                    AND la.dept_id = #{deptId}
+                    AND la.entry_year = #{entryYear}
+                    AND (
+                        l.creator_id = #{userId}
+                        OR l.create_by = #{creatorName}
+                        OR EXISTS (
+                            SELECT 1
+                            FROM biz_teacher_class tc
+                            WHERE tc.user_id = #{userId}
+                              AND tc.dept_id = la.dept_id
+                              AND tc.entry_year = la.entry_year
+                              AND tc.class_code = la.class_code
+                        )
+                    )
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM biz_lesson_assignment_history h
+                  INNER JOIN biz_teacher_class tc
+                          ON tc.dept_id = h.dept_id
+                         <!-- 历史表沿用 MySQL 8 默认排序规则，需显式对齐旧业务表后再比较。 -->
+                         AND tc.entry_year = h.entry_year COLLATE utf8mb4_general_ci
+                         AND tc.class_code = h.class_code COLLATE utf8mb4_general_ci
+                  WHERE (h.lesson_id = l.lesson_id OR h.next_lesson_id = l.lesson_id)
+                    AND h.dept_id = #{deptId}
+                    AND h.entry_year = #{entryYear}
+                    AND tc.user_id = #{userId}
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM biz_student_answer ans
+                  INNER JOIN biz_student s ON s.user_id = ans.student_id
+                  INNER JOIN sys_user su ON su.user_id = s.user_id
+                  INNER JOIN biz_teacher_class tc
+                          ON tc.dept_id = su.dept_id
+                         AND tc.entry_year = s.entry_year
+                         AND tc.class_code = s.class_code
+                  WHERE ans.lesson_id = l.lesson_id
+                    AND su.dept_id = #{deptId}
+                    AND s.entry_year = #{entryYear}
+                    AND tc.user_id = #{userId}
+              )
+          )
+        ORDER BY l.create_time DESC, l.lesson_id DESC
+    </select>
+
     <!-- 查询共享给我的课程（指派给我管理班级的、非我创建的课程） -->
-    <select id="selectSharedLessonsByGradeAndUser" resultMap="LessonInfoVoResult">
+    <select id="selectSharedLessonsByEntryYearAndUser" resultMap="LessonInfoVoResult">
         SELECT DISTINCT
             l.lesson_id,
             l.lesson_title,
+            l.grade,
             l.lesson_num,
+            l.entry_year,
             l.create_time,
             'shared' as course_type,
+            COALESCE(NULLIF(creator.nick_name, ''), l.create_by) as creator_name,
+            0 as can_design,
+            0 as can_delete,
+            '共享课程只能由创建教师管理' as delete_block_reason,
             (SELECT count(1) FROM biz_lesson_question lq 
              LEFT JOIN biz_question q ON lq.question_id = q.question_id 
-             WHERE lq.lesson_id = l.lesson_id AND q.question_type = 'practical') > 0 as has_practical
+             WHERE lq.lesson_id = l.lesson_id AND q.question_type = 'practical') > 0 as has_practical,
+            IFNULL(l.lesson_mode, 'assessment') as lesson_mode,
+            IFNULL(l.auto_advance_enabled, 0) as auto_advance_enabled,
+            IFNULL(l.auto_advance_threshold_pct, 50) as auto_advance_threshold_pct,
+            IFNULL(l.auto_advance_delay_hours, 2.0) as auto_advance_delay_hours,
+            IFNULL(l.iot_enabled, 0) as iot_enabled
         FROM biz_lesson l
         INNER JOIN biz_lesson_assignment la ON l.lesson_id = la.lesson_id
         INNER JOIN biz_teacher_class tc 
             ON la.entry_year = tc.entry_year 
             AND la.class_code = tc.class_code
             AND la.dept_id = tc.dept_id
+        LEFT JOIN sys_user creator ON creator.user_id = l.creator_id
         WHERE
             tc.user_id = #{userId}
             AND tc.dept_id = #{deptId}
-            AND l.grade = #{grade}
+            AND l.entry_year = #{entryYear}
+            AND la.entry_year = #{entryYear}
             AND l.create_by != #{creatorName}
+            AND IFNULL(l.status, '0') = '0'
         ORDER BY
             l.create_time DESC,
             l.lesson_id DESC
     </select>
 
-    <select id="selectMaxLessonNumByGradeAndCreator" resultType="java.lang.Integer">
+    <select id="selectMaxLessonNumByEntryYearGradeAndCreator" resultType="java.lang.Integer">
         SELECT IFNULL(MAX(lesson_num), 0)
         FROM biz_lesson
-        WHERE grade = #{grade}
-          AND create_by = #{creatorName}
+        WHERE entry_year = #{entryYear}
+          AND grade = #{grade}
+          AND (creator_id = #{creatorId} OR create_by = #{creatorName})
           AND dept_id = #{deptId}
     </select>
 </mapper>

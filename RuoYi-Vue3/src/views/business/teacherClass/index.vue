@@ -28,6 +28,9 @@
                 <el-button link type="primary" icon="User" @click="handleStudentManage(scope.row)">
                   学生管理
                 </el-button>
+                <el-button link type="success" icon="Monitor" @click="handleDesktop(scope.row)">
+                  学生桌面
+                </el-button>
                 <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['business:teacherClass:remove']">
                   移除管理
                 </el-button>
@@ -200,6 +203,10 @@ function handleStudentManage(row) {
       classCode: row.classCode
     }
   })
+}
+
+function handleDesktop(row) {
+  router.push({ path: '/business/classroom-desktop', query: { entryYear: row.entryYear, classCode: row.classCode } })
 }
 
 onMounted(() => {

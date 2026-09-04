@@ -65,6 +65,7 @@
 import { ref, onMounted } from 'vue';
 import { getCurrentLesson } from '@/api/business/studentHome';
 import { Loading } from '@element-plus/icons-vue';
+import { questionTypeLabel } from '@/utils/questionType';
 
 const loading = ref(true);
 const hasLesson = ref(false);
@@ -72,13 +73,7 @@ const lessonTitle = ref('');
 const questions = ref([]);
 
 function getQuestionTypeLabel(type) {
-  const typeMap = {
-    'choice': '选择题',
-    'judgment': '判断题',
-    'typing': '打字题',
-    'practical': '实操题'
-  };
-  return typeMap[type] || type;
+  return questionTypeLabel(type);
 }
 
 function fetchCurrentLesson() {

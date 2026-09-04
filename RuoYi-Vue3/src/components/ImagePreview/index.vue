@@ -37,10 +37,7 @@ const realSrc = computed(() => {
     return
   }
   let real_src = props.src.split(",")[0]
-  if (isExternal(real_src)) {
-    return real_src
-  }
-  return import.meta.env.VITE_APP_BASE_API + real_src
+  return resolveImageUrl(real_src)
 })
 
 const realSrcList = computed(() => {
@@ -50,13 +47,18 @@ const realSrcList = computed(() => {
   let real_src_list = props.src.split(",")
   let srcList = []
   real_src_list.forEach(item => {
-    if (isExternal(item)) {
-      return srcList.push(item)
-    }
-    return srcList.push(import.meta.env.VITE_APP_BASE_API + item)
+    return srcList.push(resolveImageUrl(item))
   })
   return srcList
 })
+
+function resolveImageUrl(path) {
+  if (path.includes('/profile/upload/')) {
+    return import.meta.env.VITE_APP_BASE_API + '/common/resource/view?resource=' + encodeURIComponent(path)
+  }
+  if (isExternal(path)) return path
+  return import.meta.env.VITE_APP_BASE_API + path
+}
 
 const realWidth = computed(() =>
   typeof props.width == "string" ? props.width : `${props.width}px`

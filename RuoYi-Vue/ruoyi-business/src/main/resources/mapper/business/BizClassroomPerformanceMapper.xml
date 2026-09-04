@@ -86,6 +86,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             update_time = NOW()
     </insert>
 
+    <!-- 缺考/请假专用原子 upsert：依赖 uk_student_lesson 唯一键，
+         并发双击不再触发 DuplicateKeyException，也不会在取消请假时误清表现分 -->
+    <insert id="upsertAbsent" parameterType="com.ruoyi.business.domain.BizClassroomPerformance">
+        INSERT INTO biz_classroom_performance (student_id, lesson_id, score, reason, teacher_id, dept_id, is_absent, create_time)
+        VALUES (#{studentId}, #{lessonId}, 0, '请假/缺考', #{teacherId}, #{deptId}, #{isAbsent}, NOW())
+        ON DUPLICATE KEY UPDATE
+            is_absent = #{isAbsent},
+            score = IF(#{isAbsent} = 1, 0, score),
+            reason = IF(#{isAbsent} = 1, '请假/缺考', reason),
+            update_time = NOW()
+    </insert>
+
     <!-- 查询学生的所有课程平时分记录 -->
     <select id="selectByStudentId" resultMap="BizClassroomPerformanceResult">
         SELECT * FROM biz_classroom_performance WHERE student_id = #{studentId}

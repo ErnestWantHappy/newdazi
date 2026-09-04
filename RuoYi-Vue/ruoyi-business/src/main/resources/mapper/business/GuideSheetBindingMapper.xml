@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.GuideSheetBindingMapper">
+
+    <resultMap type="BizLessonGuideSheetBinding" id="GuideSheetBindingResult">
+        <id property="bindingId" column="binding_id" />
+        <result property="lessonId" column="lesson_id" />
+        <result property="sourceSheetId" column="source_sheet_id" />
+        <result property="sourceVersion" column="source_version" />
+        <result property="snapshotTitle" column="snapshot_title" />
+        <result property="snapshotGrade" column="snapshot_grade" />
+        <result property="snapshotSemester" column="snapshot_semester" />
+        <result property="snapshotLessonNum" column="snapshot_lesson_num" />
+        <result property="snapshotFormJson" column="snapshot_form_json" />
+        <result property="snapshotMaxPages" column="snapshot_max_pages" />
+        <result property="snapshotTeacherMachineIp" column="snapshot_teacher_machine_ip" />
+        <result property="isCurrent" column="is_current" />
+        <result property="enabled" column="enabled" />
+        <result property="creatorId" column="creator_id" />
+        <result property="archivedTime" column="archived_time" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <sql id="selectGuideSheetBindingColumns">
+        binding_id, lesson_id, source_sheet_id, source_version, snapshot_title,
+        snapshot_grade, snapshot_semester, snapshot_lesson_num, snapshot_form_json,
+        snapshot_max_pages, snapshot_teacher_machine_ip, is_current, enabled,
+        creator_id, archived_time, create_by, create_time, update_by, update_time
+    </sql>
+
+    <select id="selectByBindingId" parameterType="Long" resultMap="GuideSheetBindingResult">
+        SELECT <include refid="selectGuideSheetBindingColumns" />
+        FROM biz_lesson_guide_sheet_binding
+        WHERE binding_id = #{bindingId}
+    </select>
+
+    <select id="selectCurrentByLessonId" parameterType="Long" resultMap="GuideSheetBindingResult">
+        SELECT <include refid="selectGuideSheetBindingColumns" />
+        FROM biz_lesson_guide_sheet_binding
+        WHERE lesson_id = #{lessonId}
+          AND is_current = 'Y'
+        LIMIT 1
+    </select>
+
+    <select id="selectEnabledByLessonId" parameterType="Long" resultMap="GuideSheetBindingResult">
+        SELECT <include refid="selectGuideSheetBindingColumns" />
+        FROM biz_lesson_guide_sheet_binding
+        WHERE lesson_id = #{lessonId}
+          AND is_current = 'Y'
+          AND enabled = 'Y'
+        LIMIT 1
+    </select>
+
+    <select id="countCurrentByLessonId" parameterType="Long" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_lesson_guide_sheet_binding
+        WHERE lesson_id = #{lessonId}
+          AND is_current = 'Y'
+    </select>
+
+    <select id="countByLessonId" parameterType="Long" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_lesson_guide_sheet_binding
+        WHERE lesson_id = #{lessonId}
+    </select>
+
+    <insert id="insertBinding" parameterType="BizLessonGuideSheetBinding"
+            useGeneratedKeys="true" keyProperty="bindingId">
+        INSERT INTO biz_lesson_guide_sheet_binding (
+            lesson_id, source_sheet_id, source_version, snapshot_title,
+            snapshot_grade, snapshot_semester, snapshot_lesson_num, snapshot_form_json,
+            snapshot_max_pages, snapshot_teacher_machine_ip, is_current, enabled,
+            creator_id, archived_time, create_by, create_time, update_by, update_time
+        ) VALUES (
+            #{lessonId}, #{sourceSheetId}, #{sourceVersion}, #{snapshotTitle},
+            #{snapshotGrade}, #{snapshotSemester}, #{snapshotLessonNum}, #{snapshotFormJson},
+            #{snapshotMaxPages}, #{snapshotTeacherMachineIp}, #{isCurrent}, #{enabled},
+            #{creatorId}, #{archivedTime}, #{createBy}, #{createTime}, #{updateBy}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateEnabled">
+        UPDATE biz_lesson_guide_sheet_binding
+        SET enabled = #{enabled},
+            update_by = #{updateBy},
+            update_time = #{updateTime}
+        WHERE binding_id = #{bindingId}
+          AND is_current = 'Y'
+    </update>
+
+    <update id="archiveCurrentByLessonId">
+        UPDATE biz_lesson_guide_sheet_binding
+        SET is_current = 'N',
+            enabled = 'N',
+            archived_time = #{archivedTime},
+            update_by = #{updateBy},
+            update_time = #{archivedTime}
+        WHERE lesson_id = #{lessonId}
+          AND is_current = 'Y'
+    </update>
+
+</mapper>

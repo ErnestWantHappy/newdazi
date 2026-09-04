@@ -5,116 +5,203 @@
 <mapper namespace="com.ruoyi.business.mapper.GuideSheetProgressMapper">
 
     <resultMap type="BizGuideSheetProgress" id="BizGuideSheetProgressResult">
-        <result property="id"            column="id"             />
-        <result property="sheetId"       column="sheet_id"       />
-        <result property="studentId"     column="student_id"     />
-        <result property="classCode"     column="class_code"     />
-        <result property="currentPage"   column="current_page"   />
-        <result property="isSubmitted"   column="is_submitted"   />
+        <id property="id" column="id" />
+        <result property="bindingId" column="binding_id" />
+        <result property="studentId" column="student_id" />
+        <result property="deptId" column="dept_id" />
+        <result property="entryYear" column="entry_year" />
+        <result property="classCode" column="class_code" />
+        <result property="currentPage" column="current_page" />
+        <result property="isSubmitted" column="is_submitted" />
         <result property="lastHeartbeat" column="last_heartbeat" />
         <result property="progressDetail" column="progress_detail" />
     </resultMap>
 
-    <resultMap type="com.ruoyi.business.domain.vo.GuideSheetProgressVo" id="GuideSheetProgressVoResult">
-        <result property="id"            column="id"             />
-        <result property="studentId"    column="student_id"      />
-        <result property="studentName"  column="student_name"    />
-        <result property="studentNo"    column="student_no"      />
-        <result property="entryYear"    column="entry_year"      />
-        <result property="classCode"    column="class_code"      />
-        <result property="currentPage"  column="current_page"    />
-        <result property="isSubmitted"  column="is_submitted"    />
-        <result property="lastHeartbeat" column="last_heartbeat"  />
+    <resultMap type="com.ruoyi.business.domain.vo.GuideSheetProgressVo"
+               id="GuideSheetProgressVoResult">
+        <id property="id" column="id" />
+        <result property="bindingId" column="binding_id" />
+        <result property="answerId" column="answer_id" />
+        <result property="studentId" column="student_id" />
+        <result property="studentName" column="student_name" />
+        <result property="studentUserName" column="student_user_name" />
+        <result property="studentNo" column="student_no" />
+        <result property="deptId" column="dept_id" />
+        <result property="entryYear" column="entry_year" />
+        <result property="classCode" column="class_code" />
+        <result property="currentPage" column="current_page" />
+        <result property="isSubmitted" column="is_submitted" />
+        <result property="answerStatus" column="answer_status" />
+        <result property="autoScore" column="auto_score" />
+        <result property="manualAdjustment" column="manual_adjustment" />
+        <result property="totalScore" column="total_score" />
+        <result property="gradingStatus" column="grading_status" />
+        <result property="lastHeartbeat" column="last_heartbeat" />
+        <result property="submitTime" column="submit_time" />
         <result property="progressDetail" column="progress_detail" />
-        <result property="answerJson"   column="answer_json"     />
+        <result property="answerJson" column="answer_json" />
     </resultMap>
 
-    <select id="selectBySheetAndClass" resultMap="GuideSheetProgressVoResult">
-        SELECT p.id, p.student_id, s.entry_year, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
-               p.progress_detail,
-               u.nick_name as student_name, s.student_no
+    <sql id="selectProgressWithAnswerColumns">
+        p.id, p.binding_id, ans.answer_id, p.student_id,
+        u.nick_name AS student_name, u.user_name AS student_user_name,
+        s.student_no, p.dept_id, p.entry_year, p.class_code,
+        p.current_page, p.is_submitted, ans.status AS answer_status,
+        ans.auto_score, ans.manual_adjustment, ans.total_score, ans.grading_status,
+        p.last_heartbeat, ans.submit_time,
+        CASE
+            WHEN ans.status = '2' THEN
+                CONCAT(
+                    '{"type":"grading","totalScore":', COALESCE(ans.total_score, 0),
+                    ',"details":', COALESCE(ans.grading_detail, '[]'), '}'
+                )
+            ELSE p.progress_detail
+        END AS progress_detail
+    </sql>
+
+    <select id="selectByBindingAndClass" resultMap="GuideSheetProgressVoResult">
+        SELECT <include refid="selectProgressWithAnswerColumns" />
         FROM biz_guide_sheet_progress p
-        LEFT JOIN biz_student s ON p.student_id = s.student_id
-        LEFT JOIN sys_user u ON s.user_id = u.user_id
-        WHERE p.sheet_id = #{sheetId}
-          AND s.entry_year = #{entryYear}
+        INNER JOIN biz_student s ON s.student_id = p.student_id
+        INNER JOIN sys_user u ON u.user_id = s.user_id
+        LEFT JOIN biz_guide_sheet_answer ans
+               ON ans.binding_id = p.binding_id
+              AND ans.student_id = p.student_id
+        WHERE p.binding_id = #{bindingId}
+          AND p.dept_id = #{deptId}
+          AND p.entry_year = #{entryYear}
           AND p.class_code = #{classCode}
-        ORDER BY p.last_heartbeat DESC
+        ORDER BY CAST(s.student_no AS UNSIGNED), s.student_no, p.student_id
     </select>
 
-    <select id="selectBySheetId" resultMap="GuideSheetProgressVoResult">
-        SELECT p.id, p.student_id, s.entry_year, p.class_code, p.current_page, p.is_submitted, p.last_heartbeat,
-               p.progress_detail,
-               u.nick_name as student_name, s.student_no
+    <select id="selectByBindingId" parameterType="Long" resultMap="GuideSheetProgressVoResult">
+        SELECT <include refid="selectProgressWithAnswerColumns" />
         FROM biz_guide_sheet_progress p
-        LEFT JOIN biz_student s ON p.student_id = s.student_id
-        LEFT JOIN sys_user u ON s.user_id = u.user_id
-        WHERE p.sheet_id = #{sheetId}
-        ORDER BY p.class_code, s.student_no
+        INNER JOIN biz_student s ON s.student_id = p.student_id
+        INNER JOIN sys_user u ON u.user_id = s.user_id
+        LEFT JOIN biz_guide_sheet_answer ans
+               ON ans.binding_id = p.binding_id
+              AND ans.student_id = p.student_id
+        WHERE p.binding_id = #{bindingId}
+        ORDER BY p.dept_id, p.entry_year, CAST(p.class_code AS UNSIGNED), p.class_code,
+                 CAST(s.student_no AS UNSIGNED), s.student_no
     </select>
 
-    <!-- 获取班级全部学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress -->
-    <select id="selectFullProgressBySheetAndClass" resultMap="GuideSheetProgressVoResult">
-        SELECT s.student_id, s.student_no, s.entry_year, s.class_code, u.nick_name as student_name,
-               COALESCE(p.current_page, 0) as current_page,
-               COALESCE(p.is_submitted, 'N') as is_submitted,
-               p.last_heartbeat, p.id,
-               CASE
-                 WHEN p.is_submitted = 'Y' THEN
-                   CONCAT('{"type":"grading","totalScore":', COALESCE(ans.total_score, 0), ',"details":', COALESCE(ans.grading_detail, '[]'), '}')
-                 ELSE p.progress_detail
-               END as progress_detail,
-               ans.answer_json
-        FROM biz_guide_sheet_assignment a
-        INNER JOIN biz_student s ON s.class_code = a.class_code AND s.entry_year = a.entry_year
-        INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = a.dept_id
-        LEFT JOIN biz_guide_sheet_progress p ON s.student_id = p.student_id AND p.sheet_id = #{sheetId}
-        LEFT JOIN biz_guide_sheet_answer ans ON s.student_id = ans.student_id AND ans.sheet_id = #{sheetId}
-        WHERE a.sheet_id = #{sheetId}
-          AND a.entry_year = #{entryYear}
-          AND a.class_code = #{classCode}
-        ORDER BY s.student_no
+    <!-- 班级范围必须继承课程指派，不能回退到旧导学单指派。 -->
+    <select id="selectFullProgressByBindingAndClass" resultMap="GuideSheetProgressVoResult">
+        SELECT DISTINCT
+            p.id, b.binding_id, ans.answer_id, s.student_id,
+            u.nick_name AS student_name, u.user_name AS student_user_name,
+            s.student_no, la.dept_id, s.entry_year, s.class_code,
+            COALESCE(p.current_page, ans.current_page, 0) AS current_page,
+            COALESCE(p.is_submitted, IF(ans.status = '2', 'Y', 'N')) AS is_submitted,
+            COALESCE(ans.status, '0') AS answer_status,
+            ans.auto_score, COALESCE(ans.manual_adjustment, 0) AS manual_adjustment,
+            ans.total_score, ans.grading_status, p.last_heartbeat, ans.submit_time,
+            CASE
+                WHEN ans.status = '2' THEN
+                    CONCAT(
+                        '{"type":"grading","totalScore":', COALESCE(ans.total_score, 0),
+                        ',"details":', COALESCE(ans.grading_detail, '[]'), '}'
+                    )
+                ELSE p.progress_detail
+            END AS progress_detail
+        FROM biz_lesson_guide_sheet_binding b
+        INNER JOIN biz_lesson_assignment la ON la.lesson_id = b.lesson_id
+        INNER JOIN biz_student s
+                ON s.entry_year = la.entry_year
+               AND s.class_code = la.class_code
+        INNER JOIN sys_user u
+                ON u.user_id = s.user_id
+               AND u.dept_id = la.dept_id
+        LEFT JOIN biz_guide_sheet_progress p
+               ON p.binding_id = b.binding_id
+              AND p.student_id = s.student_id
+        LEFT JOIN biz_guide_sheet_answer ans
+               ON ans.binding_id = b.binding_id
+              AND ans.student_id = s.student_id
+        WHERE b.binding_id = #{bindingId}
+          AND la.dept_id = #{deptId}
+          AND la.entry_year = #{entryYear}
+          AND la.class_code = #{classCode}
+        ORDER BY CAST(s.student_no AS UNSIGNED), s.student_no, s.student_id
     </select>
 
-    <!-- 获取全部班级学生进度（含未开始的学生），通过 biz_guide_sheet_assignment + biz_student LEFT JOIN progress -->
-    <select id="selectFullProgressBySheetId" resultMap="GuideSheetProgressVoResult">
-        SELECT s.student_id, s.student_no, s.entry_year, s.class_code, u.nick_name as student_name,
-               COALESCE(p.current_page, 0) as current_page,
-               COALESCE(p.is_submitted, 'N') as is_submitted,
-               p.last_heartbeat, p.id,
-               CASE
-                 WHEN p.is_submitted = 'Y' THEN
-                   CONCAT('{"type":"grading","totalScore":', COALESCE(ans.total_score, 0), ',"details":', COALESCE(ans.grading_detail, '[]'), '}')
-                 ELSE p.progress_detail
-               END as progress_detail,
-               ans.answer_json
-        FROM biz_guide_sheet_assignment a
-        INNER JOIN biz_student s ON s.class_code = a.class_code AND s.entry_year = a.entry_year
-        INNER JOIN sys_user u ON s.user_id = u.user_id AND u.dept_id = a.dept_id
-        LEFT JOIN biz_guide_sheet_progress p ON s.student_id = p.student_id AND p.sheet_id = #{sheetId}
-        LEFT JOIN biz_guide_sheet_answer ans ON s.student_id = ans.student_id AND ans.sheet_id = #{sheetId}
-        WHERE a.sheet_id = #{sheetId}
-        ORDER BY s.class_code, s.student_no
+    <select id="selectFullProgressByBindingId" parameterType="Long"
+            resultMap="GuideSheetProgressVoResult">
+        SELECT DISTINCT
+            p.id, b.binding_id, ans.answer_id, s.student_id,
+            u.nick_name AS student_name, u.user_name AS student_user_name,
+            s.student_no, la.dept_id, s.entry_year, s.class_code,
+            COALESCE(p.current_page, ans.current_page, 0) AS current_page,
+            COALESCE(p.is_submitted, IF(ans.status = '2', 'Y', 'N')) AS is_submitted,
+            COALESCE(ans.status, '0') AS answer_status,
+            ans.auto_score, COALESCE(ans.manual_adjustment, 0) AS manual_adjustment,
+            ans.total_score, ans.grading_status, p.last_heartbeat, ans.submit_time,
+            CASE
+                WHEN ans.status = '2' THEN
+                    CONCAT(
+                        '{"type":"grading","totalScore":', COALESCE(ans.total_score, 0),
+                        ',"details":', COALESCE(ans.grading_detail, '[]'), '}'
+                    )
+                ELSE p.progress_detail
+            END AS progress_detail
+        FROM biz_lesson_guide_sheet_binding b
+        INNER JOIN biz_lesson_assignment la ON la.lesson_id = b.lesson_id
+        INNER JOIN biz_student s
+                ON s.entry_year = la.entry_year
+               AND s.class_code = la.class_code
+        INNER JOIN sys_user u
+                ON u.user_id = s.user_id
+               AND u.dept_id = la.dept_id
+        LEFT JOIN biz_guide_sheet_progress p
+               ON p.binding_id = b.binding_id
+              AND p.student_id = s.student_id
+        LEFT JOIN biz_guide_sheet_answer ans
+               ON ans.binding_id = b.binding_id
+              AND ans.student_id = s.student_id
+        WHERE b.binding_id = #{bindingId}
+        ORDER BY la.dept_id, la.entry_year, CAST(la.class_code AS UNSIGNED), la.class_code,
+                 CAST(s.student_no AS UNSIGNED), s.student_no
     </select>
 
-    <select id="selectBySheetAndStudent" resultMap="BizGuideSheetProgressResult">
-        SELECT id, sheet_id, student_id, class_code, current_page, is_submitted, last_heartbeat, progress_detail
+    <select id="selectByBindingAndStudent" resultMap="BizGuideSheetProgressResult">
+        SELECT id, binding_id, student_id, dept_id, entry_year, class_code,
+               current_page, is_submitted, last_heartbeat, progress_detail
         FROM biz_guide_sheet_progress
-        WHERE sheet_id = #{sheetId} AND student_id = #{studentId}
+        WHERE binding_id = #{bindingId}
+          AND student_id = #{studentId}
     </select>
 
     <insert id="insertOrUpdate" parameterType="BizGuideSheetProgress">
-        INSERT INTO biz_guide_sheet_progress (sheet_id, student_id, class_code, current_page, is_submitted, last_heartbeat, progress_detail)
-        VALUES (#{sheetId}, #{studentId}, #{classCode}, #{currentPage}, #{isSubmitted}, #{lastHeartbeat}, #{progressDetail})
+        INSERT INTO biz_guide_sheet_progress (
+            binding_id, student_id, dept_id, entry_year, class_code,
+            current_page, is_submitted, last_heartbeat, progress_detail
+        ) VALUES (
+            #{bindingId}, #{studentId}, #{deptId}, #{entryYear}, #{classCode},
+            #{currentPage}, #{isSubmitted}, #{lastHeartbeat}, #{progressDetail}
+        )
         ON DUPLICATE KEY UPDATE
             current_page = VALUES(current_page),
             is_submitted = IF(is_submitted = 'Y', 'Y', VALUES(is_submitted)),
             last_heartbeat = VALUES(last_heartbeat),
-            progress_detail = VALUES(progress_detail)
+            progress_detail = COALESCE(VALUES(progress_detail), progress_detail)
     </insert>
 
-    <delete id="deleteBySheetId" parameterType="Long">
-        delete from biz_guide_sheet_progress where sheet_id = #{sheetId}
-    </delete>
+    <insert id="insertStartedIfAbsent" parameterType="BizGuideSheetProgress">
+        INSERT INTO biz_guide_sheet_progress (
+            binding_id, student_id, dept_id, entry_year, class_code,
+            current_page, is_submitted, last_heartbeat, progress_detail
+        ) VALUES (
+            #{bindingId}, #{studentId}, #{deptId}, #{entryYear}, #{classCode},
+            0, 'N', #{lastHeartbeat}, NULL
+        )
+        ON DUPLICATE KEY UPDATE
+            last_heartbeat = CASE
+                WHEN last_heartbeat IS NULL OR last_heartbeat &lt; VALUES(last_heartbeat)
+                    THEN VALUES(last_heartbeat)
+                ELSE last_heartbeat
+            END
+    </insert>
 
 </mapper>

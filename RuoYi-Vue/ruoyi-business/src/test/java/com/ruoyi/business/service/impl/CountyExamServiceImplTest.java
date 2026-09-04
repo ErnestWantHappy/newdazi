@@ -5,6 +5,7 @@ import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.CountyExam;
 import com.ruoyi.business.domain.CountyExamClass;
 import com.ruoyi.business.domain.CountyExamGrader;
+import com.ruoyi.business.domain.CountyExamQuestion;
 import com.ruoyi.business.domain.CountyExamStudent;
 import com.ruoyi.business.domain.dto.CountyExamGradeRequest;
 import com.ruoyi.business.domain.dto.CountyExamSubmitRequest;
@@ -19,9 +20,12 @@ import com.ruoyi.business.mapper.CountyExamQuestionMapper;
 import com.ruoyi.business.mapper.CountyExamStudentMapper;
 import com.ruoyi.business.service.ICountyExamService;
 import com.ruoyi.common.core.domain.entity.SysUser;
+import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.core.domain.model.LoginUser;
+import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.exception.ServiceException;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -75,6 +80,9 @@ class CountyExamServiceImplTest
 
     @Mock
     private BizStudentMapper bizStudentMapper;
+
+    @Mock
+    private RedisCache redisCache;
 
     @InjectMocks
     private CountyExamServiceImpl service;
@@ -152,9 +160,13 @@ class CountyExamServiceImplTest
     void shouldOnlyAcceptWorkPathFromCurrentStudentQuestionScope()
     {
         String ownPath = "/profile/upload/county-exam/7/20/101/2026/07/11/abcdef.docx";
+        String randomPath = "/profile/upload/county-exam/7/101/random/2026/07/11/abcdef.docx";
 
         assertTrue(service.isStudentWorkPath(ownPath, 7L, 20L, 101L));
         assertFalse(service.isStudentWorkPath(ownPath, 7L, 21L, 101L));
+        when(redisCache.getCacheObject("student:county-exam-upload-owner:" + randomPath)).thenReturn(20L);
+        assertTrue(service.isStudentWorkPath(randomPath, 7L, 20L, 101L));
+        assertFalse(service.isStudentWorkPath(randomPath, 7L, 21L, 101L));
         assertFalse(service.isStudentWorkPath(
                 "/profile/upload/county-exam/7/20/101/../../other.docx", 7L, 20L, 101L));
     }
@@ -247,6 +259,158 @@ class CountyExamServiceImplTest
                         request, Collections.singletonList(item)));
     }
 
+    @Test
+    void shouldCalculateRandomPaperScoreFromActualDrawCount()
+    {
+        CountyExam exam = exam("0");
+        exam.setShuffleMode(2);
+        exam.setRandomChoiceCount(2);
+        exam.setRandomJudgmentCount(1);
+
+        int total = CountyExamServiceImpl.calculateEffectiveTotalScore(exam, Arrays.asList(
+                scoredQuestion(1L, "typing", 20),
+                scoredQuestion(2L, "practical", 55),
+                scoredQuestion(3L, "choice", 10),
+                scoredQuestion(4L, "choice", 10),
+                scoredQuestion(5L, "choice", 10),
+                scoredQuestion(6L, "judgment", 5),
+                scoredQuestion(7L, "judgment", 5)));
+
+        assertEquals(100, total);
+    }
+
+    @Test
+    void saveQuestionsShouldPersistEffectiveRandomPaperTotal()
+    {
+        loginResearcher(90L);
+        CountyExam exam = exam("0");
+        exam.setShuffleMode(2);
+        exam.setRandomChoiceCount(2);
+        exam.setRandomJudgmentCount(1);
+        when(countyExamMapper.selectCountyExamByIdForUpdate(7L)).thenReturn(exam);
+        when(questionMapper.batchInsert(any())).thenReturn(7);
+        when(questionMapper.selectDetailsByExamId(7L)).thenReturn(Arrays.asList(
+                scoredQuestion(1L, "typing", 20),
+                scoredQuestion(2L, "practical", 55),
+                scoredQuestion(3L, "choice", 10),
+                scoredQuestion(4L, "choice", 10),
+                scoredQuestion(5L, "choice", 10),
+                scoredQuestion(6L, "judgment", 5),
+                scoredQuestion(7L, "judgment", 5)));
+        List<CountyExamQuestion> payload = Arrays.asList(
+                paperQuestion(1L, 20), paperQuestion(2L, 55),
+                paperQuestion(3L, 10), paperQuestion(4L, 10), paperQuestion(5L, 10),
+                paperQuestion(6L, 5), paperQuestion(7L, 5));
+
+        assertEquals(7, service.saveQuestions(7L, payload));
+
+        ArgumentCaptor<CountyExam> captor = ArgumentCaptor.forClass(CountyExam.class);
+        verify(countyExamMapper).updateCountyExam(captor.capture());
+        assertEquals(100, captor.getValue().getTotalScore());
+    }
+
+    @Test
+    void shouldRejectDifferentScoresInsideRandomQuestionType()
+    {
+        CountyExam exam = exam("0");
+        exam.setShuffleMode(2);
+        exam.setRandomChoiceCount(1);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> CountyExamServiceImpl.calculateEffectiveTotalScore(exam, Arrays.asList(
+                        scoredQuestion(1L, "choice", 10),
+                        scoredQuestion(2L, "choice", 20))));
+
+        assertTrue(error.getMessage().contains("分值必须一致"));
+    }
+
+    @Test
+    void shouldSwitchAcademicYearOnJulyTwentieth()
+    {
+        Calendar before = Calendar.getInstance();
+        before.set(2026, Calendar.JULY, 19);
+        Calendar onCutoff = Calendar.getInstance();
+        onCutoff.set(2026, Calendar.JULY, 20);
+
+        assertEquals(2025, CountyExamServiceImpl.resolveAcademicStartYear(before));
+        assertEquals(2026, CountyExamServiceImpl.resolveAcademicStartYear(onCutoff));
+    }
+
+    @Test
+    void shouldIgnoreProtectedStateFieldsWhenCreatingExam()
+    {
+        loginResearcher(90L);
+        CountyExam input = exam("3");
+        input.setGradingEnabled("1");
+        input.setTotalScore(999);
+        input.setOpenTime(new Date());
+        input.setCloseTime(new Date());
+        input.setPublishTime(new Date());
+        when(countyExamMapper.insertCountyExam(any())).thenReturn(1);
+
+        assertEquals(1, service.insertCountyExam(input));
+
+        assertEquals("0", input.getStatus());
+        assertEquals("0", input.getGradingEnabled());
+        assertEquals(0, input.getTotalScore());
+        assertEquals(null, input.getOpenTime());
+        assertEquals(null, input.getCloseTime());
+        assertEquals(null, input.getPublishTime());
+    }
+
+    @Test
+    void shouldUpdateOnlyEditableDraftFields()
+    {
+        loginResearcher(90L);
+        CountyExam saved = exam("0");
+        saved.setExamId(7L);
+        when(countyExamMapper.selectCountyExamById(7L)).thenReturn(saved);
+        when(countyExamMapper.updateDraftFields(any())).thenReturn(1);
+        CountyExam request = new CountyExam();
+        request.setExamId(7L);
+        request.setStatus("3");
+        request.setGradingEnabled("1");
+        request.setTotalScore(999);
+        request.setShuffleMode(2);
+        request.setRandomChoiceCount(2);
+        request.setRandomJudgmentCount(1);
+
+        service.updateCountyExam(request);
+
+        ArgumentCaptor<CountyExam> captor = ArgumentCaptor.forClass(CountyExam.class);
+        verify(countyExamMapper).updateDraftFields(captor.capture());
+        CountyExam update = captor.getValue();
+        assertEquals(null, update.getStatus());
+        assertEquals(null, update.getGradingEnabled());
+        assertEquals(null, update.getTotalScore());
+        assertEquals(2, update.getRandomChoiceCount());
+        assertEquals(1, update.getRandomJudgmentCount());
+    }
+
+    @Test
+    void shouldRejectGradingAfterExamWasPublishedUnderLock()
+    {
+        login(50L, 10L, "teacher");
+        com.ruoyi.business.domain.CountyExamAnswer answer =
+                new com.ruoyi.business.domain.CountyExamAnswer();
+        answer.setAnswerId(12L);
+        answer.setExamId(7L);
+        answer.setStudentId(20L);
+        answer.setQuestionId(101L);
+        answer.setGraderId(50L);
+        when(answerMapper.selectById(12L)).thenReturn(answer);
+        when(countyExamMapper.selectCountyExamByIdForUpdate(7L)).thenReturn(exam("3"));
+        CountyExamGradeRequest request = new CountyExamGradeRequest();
+        request.setAnswerId(12L);
+        request.setScore(10);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.gradeAnswer(request));
+
+        assertTrue(error.getMessage().contains("未开放评卷"));
+        verify(answerMapper, never()).updateGrade(any(), any(), any());
+    }
+
     private void prepareStudentContext(String status)
     {
         SysUser user = new SysUser();
@@ -284,6 +448,62 @@ class CountyExamServiceImplTest
         examStudent.setDeadlineTime(new Date(System.currentTimeMillis() + 60000L));
         when(studentMapper.selectByExamAndStudent(7L, 20L)).thenReturn(examStudent);
         when(studentMapper.selectByExamAndStudentForUpdate(7L, 20L)).thenReturn(examStudent);
+    }
+
+    private void loginResearcher(Long userId)
+    {
+        SysRole role = new SysRole();
+        role.setRoleKey("researcher");
+        SysUser user = new SysUser();
+        user.setUserId(userId);
+        user.setUserName("researcher");
+        user.setRoles(Collections.singletonList(role));
+        LoginUser loginUser = new LoginUser(userId, 100L, user, Collections.emptySet());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(loginUser, null, Collections.emptyList()));
+    }
+
+    private void login(Long userId, Long deptId, String username)
+    {
+        SysUser user = new SysUser();
+        user.setUserId(userId);
+        user.setDeptId(deptId);
+        user.setUserName(username);
+        user.setRoles(Collections.emptyList());
+        LoginUser loginUser = new LoginUser(userId, deptId, user, Collections.emptySet());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(loginUser, null, Collections.emptyList()));
+    }
+
+    private CountyExam exam(String status)
+    {
+        CountyExam exam = new CountyExam();
+        exam.setExamId(7L);
+        exam.setExamName("区域抽测");
+        exam.setSchoolType("1");
+        exam.setExamGrade(6);
+        exam.setStatus(status);
+        exam.setGradingEnabled("0");
+        exam.setShuffleMode(0);
+        exam.setRandomChoiceCount(0);
+        exam.setRandomJudgmentCount(0);
+        exam.setDurationMinutes(40);
+        return exam;
+    }
+
+    private BizLessonQuestionDetailVo scoredQuestion(Long questionId, String type, int score)
+    {
+        BizLessonQuestionDetailVo question = question(questionId, type);
+        question.setQuestionScore((long) score);
+        return question;
+    }
+
+    private CountyExamQuestion paperQuestion(Long questionId, int score)
+    {
+        CountyExamQuestion question = new CountyExamQuestion();
+        question.setQuestionId(questionId);
+        question.setQuestionScore(score);
+        return question;
     }
 
     private BizLessonQuestionDetailVo question(Long questionId, String type)

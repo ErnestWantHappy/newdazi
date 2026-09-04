@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.StudentBusinessRecordMapper">
+    <!--
+      答题记录仍由 AnswerDeletionGuardService 单独检查并保留原有明确话术。
+      这里覆盖其他会以 student_id 保存历史事实的核心业务表。
+    -->
+    <select id="countOtherBusinessRecords" resultType="int">
+        SELECT
+            EXISTS(SELECT 1 FROM biz_student_answer_orphan_archive WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_lesson_checkin WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_classroom_performance WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_guide_sheet_answer WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_county_exam_student WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_county_exam_answer WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_county_exam_paper_question WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_programming_draft WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_programming_submission WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_python_practice_draft WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_python_practice_submission WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_python_practice_progress WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_iot_group_student WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_flowchart_draft WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+          + EXISTS(SELECT 1 FROM biz_flowchart_submission WHERE student_id IN
+                <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+    </select>
+</mapper>

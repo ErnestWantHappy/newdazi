@@ -56,7 +56,7 @@
             SELECT a.lesson_id, a.student_id, SUM(a.score) AS total_score
             FROM biz_student_answer a
             INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
-            INNER JOIN biz_student s ON s.student_id = a.student_id
+            INNER JOIN biz_student s ON s.user_id = a.student_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             WHERE s.entry_year = #{entryYear}
               AND s.class_code = #{classCode}
@@ -125,7 +125,7 @@
             MAX(a.submit_time) AS submitTime
         FROM biz_student_answer a
         INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
-        INNER JOIN biz_student s ON s.student_id = a.student_id
+        INNER JOIN biz_student s ON s.user_id = a.student_id
         INNER JOIN sys_user u ON s.user_id = u.user_id
         WHERE s.entry_year = #{entryYear}
           AND s.class_code = #{classCode}

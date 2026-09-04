@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.ClassGroupingMapper">
+  <select id="selectSchemes" resultType="map">select scheme_id as schemeId, dept_id as deptId, entry_year as entryYear, class_code as classCode, scheme_name as schemeName, scheme_version as schemeVersion, status, creator_user_id as creatorUserId, create_time as createTime, update_time as updateTime from biz_class_group_scheme where dept_id=#{deptId} and entry_year=#{entryYear} and class_code=#{classCode} and status='0' order by scheme_name, scheme_version desc</select>
+  <select id="selectScheme" resultType="map">select scheme_id as schemeId, dept_id as deptId, entry_year as entryYear, class_code as classCode, scheme_name as schemeName, scheme_version as schemeVersion, status, creator_user_id as creatorUserId from biz_class_group_scheme where scheme_id=#{schemeId}</select>
+  <select id="selectGroups" resultType="map">select group_id as groupId, scheme_id as schemeId, group_no as groupNo, group_name as groupName, color, sort_no as sortNo, leader_student_id as leaderStudentId from biz_class_group where scheme_id=#{schemeId} order by sort_no, group_no</select>
+  <select id="selectMembers" resultType="map">select m.scheme_id as schemeId, m.group_id as groupId, m.student_id as studentId, m.sort_no as sortNo, u.nick_name as studentName, s.student_no as studentNo from biz_class_group_member m join biz_student s on s.student_id=m.student_id join sys_user u on u.user_id=s.user_id where m.scheme_id=#{schemeId} order by m.group_id,m.sort_no,cast(s.student_no as unsigned)</select>
+  <select id="countManagedClass" resultType="int">select count(1) from biz_teacher_class where user_id=#{userId} and dept_id=#{deptId} and entry_year=#{entryYear} and class_code=#{classCode}</select>
+  <select id="selectManagedClassDeptIds" resultType="long">select distinct dept_id from biz_teacher_class where user_id=#{userId} and entry_year=#{entryYear} and class_code=#{classCode} order by dept_id</select>
+  <select id="countLessonAssignment" resultType="int">select count(1) from biz_lesson_assignment where lesson_id=#{lessonId} and dept_id=#{deptId} and entry_year=#{entryYear} and class_code=#{classCode}</select>
+  <select id="selectClassStudents" resultType="map">select s.student_id as studentId,s.student_no as studentNo,u.nick_name as studentName,u.user_id as userId from biz_student s join sys_user u on u.user_id=s.user_id and u.del_flag='0' and u.status='0' where u.dept_id=#{deptId} and s.entry_year=#{entryYear} and s.class_code=#{classCode} order by cast(s.student_no as unsigned),s.student_no</select>
+  <select id="selectNextSchemeVersion" resultType="int">select coalesce(max(scheme_version), 0) + 1 from biz_class_group_scheme where dept_id=#{deptId} and entry_year=#{entryYear} and class_code=#{classCode} and scheme_name=#{schemeName}</select>
+  <insert id="insertScheme" parameterType="map" useGeneratedKeys="true" keyProperty="schemeId">insert into biz_class_group_scheme(dept_id,entry_year,class_code,scheme_name,scheme_version,status,creator_user_id,create_time,update_time) values(#{deptId},#{entryYear},#{classCode},#{schemeName},#{schemeVersion},'0',#{creatorUserId},now(),now())</insert>
+  <insert id="insertGroup" parameterType="map" useGeneratedKeys="true" keyProperty="groupId">insert into biz_class_group(scheme_id,group_no,group_name,color,sort_no,leader_student_id) values(#{schemeId},#{groupNo},#{groupName},#{color},#{sortNo},#{leaderStudentId})</insert>
+  <insert id="insertMember" parameterType="map">insert into biz_class_group_member(scheme_id,group_id,student_id,sort_no) values(#{schemeId},#{groupId},#{studentId},#{sortNo})</insert>
+  <delete id="deleteMembers">delete from biz_class_group_member where scheme_id=#{schemeId}</delete>
+  <delete id="deleteGroups">delete from biz_class_group where scheme_id=#{schemeId}</delete>
+  <delete id="deleteScheme">delete from biz_class_group_scheme where scheme_id=#{schemeId}</delete>
+  <insert id="insertSnapshot" parameterType="map" useGeneratedKeys="true" keyProperty="snapshotId">insert into biz_lesson_group_snapshot(lesson_id,dept_id,entry_year,class_code,source_scheme_id,source_scheme_version,snapshot_hash,frozen_time) values(#{lessonId},#{deptId},#{entryYear},#{classCode},#{sourceSchemeId},#{sourceSchemeVersion},#{snapshotHash},now())</insert>
+  <select id="selectSnapshot" resultType="map">select snapshot_id as snapshotId, lesson_id as lessonId, dept_id as deptId, entry_year as entryYear, class_code as classCode, source_scheme_id as sourceSchemeId, source_scheme_version as sourceSchemeVersion, snapshot_hash as snapshotHash, frozen_time as frozenTime from biz_lesson_group_snapshot where lesson_id=#{lessonId} and dept_id=#{deptId} and entry_year=#{entryYear} and class_code=#{classCode}</select>
+  <insert id="insertSnapshotGroup" parameterType="map" useGeneratedKeys="true" keyProperty="snapshotGroupId">insert into biz_lesson_group_snapshot_group(snapshot_id,group_no,group_name,color,sort_no,leader_student_id) values(#{snapshotId},#{groupNo},#{groupName},#{color},#{sortNo},#{leaderStudentId})</insert>
+  <insert id="insertSnapshotMember" parameterType="map">insert into biz_lesson_group_snapshot_member(snapshot_id,snapshot_group_id,student_id,sort_no) values(#{snapshotId},#{snapshotGroupId},#{studentId},#{sortNo})</insert>
+  <select id="selectDesktopStudents" resultType="map">select s.student_id as studentId,s.student_no as studentNo,u.nick_name as studentName,u.user_id as userId,s.remark as remark,g.group_id as groupId,g.group_no as groupNo,g.group_name as groupName,g.color as groupColor,g.leader_student_id as leaderStudentId,li.grid_row as gridRow,li.grid_col as gridCol,li.sort_no as sortNo from biz_student s join sys_user u on u.user_id=s.user_id and u.del_flag='0' and u.status='0' left join biz_class_group_member gm on gm.student_id=s.student_id and gm.scheme_id=(select x.scheme_id from biz_class_group_scheme x where x.dept_id=#{deptId} and x.entry_year=#{entryYear} and x.class_code=#{classCode} and x.status='0' order by x.create_time desc,x.scheme_id desc limit 1) left join biz_class_group g on g.group_id=gm.group_id left join biz_classroom_layout_item li on li.student_id=s.student_id and li.layout_id=#{layoutId} where u.dept_id=#{deptId} and s.entry_year=#{entryYear} and s.class_code=#{classCode} order by coalesce(li.sort_no,999999),cast(s.student_no as unsigned),s.student_no</select>
+  <select id="selectDesktopAnswerOverview" resultType="map">
+    SELECT a.student_id AS studentId,
+      SUM(CASE WHEN q.question_type = 'typing' AND a.submit_time IS NOT NULL THEN 1 ELSE 0 END) AS typingAnsweredCount,
+      SUM(CASE WHEN q.question_type = 'typing' AND a.submit_time IS NOT NULL THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
+      ROUND(AVG(CASE WHEN q.question_type = 'typing' AND a.submit_time IS NOT NULL THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
+      ROUND(AVG(CASE WHEN q.question_type = 'typing' AND a.submit_time IS NOT NULL THEN a.accuracy_rate ELSE NULL END), 1) AS avgTypingAccuracy,
+      SUM(CASE WHEN q.question_type IN ('choice', 'judgment') AND a.submit_time IS NOT NULL THEN 1 ELSE 0 END) AS theoryAnsweredCount,
+      SUM(CASE WHEN q.question_type IN ('choice', 'judgment') AND a.submit_time IS NOT NULL AND a.is_correct = 1 THEN 1 ELSE 0 END) AS theoryCorrectCount,
+      SUM(CASE WHEN q.question_type IN ('choice', 'judgment') AND a.submit_time IS NOT NULL THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
+      SUM(CASE WHEN q.question_type = 'practical' THEN 1 ELSE 0 END) AS practicalAnsweredCount,
+      SUM(CASE WHEN q.question_type = 'practical' AND a.submit_time IS NOT NULL THEN 1 ELSE 0 END) AS practicalSubmittedCount,
+      SUM(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 ELSE 0 END) AS practicalScoredCount,
+      SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore
+    FROM biz_student_answer a
+    INNER JOIN (
+      SELECT MAX(answer_id) AS answer_id FROM biz_student_answer GROUP BY student_id, lesson_id, question_id
+    ) latest ON latest.answer_id = a.answer_id
+    INNER JOIN biz_lesson_question lq ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+    INNER JOIN biz_question q ON q.question_id = a.question_id
+    WHERE a.lesson_id = #{lessonId}
+      AND a.student_id IN
+      <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">#{studentId}</foreach>
+    GROUP BY a.student_id
+  </select>
+  <select id="selectLayout" resultType="map">select layout_id as layoutId,teacher_user_id as teacherUserId,dept_id as deptId,entry_year as entryYear,class_code as classCode,columns_count as columnsCount,layout_version as layoutVersion,update_time as updateTime from biz_classroom_layout where teacher_user_id=#{teacherUserId} and dept_id=#{deptId} and entry_year=#{entryYear} and class_code=#{classCode}</select>
+  <select id="selectLayoutItems" resultType="map">select layout_id as layoutId,student_id as studentId,grid_row as gridRow,grid_col as gridCol,sort_no as sortNo from biz_classroom_layout_item where layout_id=#{layoutId} order by sort_no</select>
+  <insert id="insertLayout" parameterType="map" useGeneratedKeys="true" keyProperty="layoutId">insert into biz_classroom_layout(teacher_user_id,dept_id,entry_year,class_code,columns_count,layout_version,update_time) values(#{teacherUserId},#{deptId},#{entryYear},#{classCode},#{columnsCount},1,now())</insert>
+  <update id="updateLayout">update biz_classroom_layout set columns_count=#{columnsCount},layout_version=layout_version+1,update_time=now() where layout_id=#{layoutId}</update>
+  <delete id="deleteLayoutItems">delete from biz_classroom_layout_item where layout_id=#{layoutId}</delete>
+  <insert id="insertLayoutItem" parameterType="map">insert into biz_classroom_layout_item(layout_id,student_id,grid_row,grid_col,sort_no) values(#{layoutId},#{studentId},#{gridRow},#{gridCol},#{sortNo})</insert>
+</mapper>

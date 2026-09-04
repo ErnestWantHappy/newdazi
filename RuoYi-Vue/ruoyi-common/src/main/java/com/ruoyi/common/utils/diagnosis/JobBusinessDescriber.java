@@ -31,6 +31,13 @@ public final class JobBusinessDescriber
                     "每小时",
                     "platform");
         }
+        if (target.contains("libreOfficeMaintenanceTask.healthCheckAndRecover"))
+        {
+            return new JobDescription("LibreOffice分钟级自愈",
+                    "健康巡检不健康时清理重启 Office 池并捞回卡住预览",
+                    "每分钟",
+                    "platform");
+        }
         if (target.contains("libreOfficeMaintenanceTask.cleanupAndRestart"))
         {
             return new JobDescription("LibreOffice维护清理",
@@ -81,6 +88,10 @@ public final class JobBusinessDescriber
         if ("0 0 0 * * ?".equals(cron))
         {
             return "每天 00:00";
+        }
+        if ("0 0/1 * * * ?".equals(cron) || "0 * * * * ?".equals(cron))
+        {
+            return "每分钟";
         }
         if (cron.startsWith("0/"))
         {

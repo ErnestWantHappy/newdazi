@@ -12,10 +12,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="assignerId"    column="assigner_id"    />
         <result property="deptId"    column="dept_id"    />
         <result property="assignTime"    column="assign_time"    />
+        <result property="autoAdvanceReadyTime" column="auto_advance_ready_time" />
+        <result property="theoryOpen"    column="theory_open"    />
+        <result property="practicalOpen" column="practical_open" />
     </resultMap>
 
     <sql id="selectBizLessonAssignmentVo">
-        select assignment_id, lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time from biz_lesson_assignment
+        select assignment_id, lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time,
+               auto_advance_ready_time, theory_open, practical_open from biz_lesson_assignment
     </sql>
 
     <select id="selectBizLessonAssignmentList" parameterType="BizLessonAssignment" resultMap="BizLessonAssignmentResult">
@@ -24,6 +28,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="lessonId != null "> and lesson_id = #{lessonId}</if>
             <if test="entryYear != null  and entryYear != ''"> and entry_year = #{entryYear}</if>
             <if test="classCode != null  and classCode != ''"> and class_code = #{classCode}</if>
+            <if test="deptId != null"> and dept_id = #{deptId}</if>
             <if test="assignTime != null "> and assign_time = #{assignTime}</if>
         </where>
     </select>
@@ -78,11 +83,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <!-- 新增：根据课程ID查询所有被指派的班级编号 -->
-    <select id="selectClassCodesByLessonId" parameterType="java.lang.Long" resultType="java.lang.String">
+    <select id="selectClassCodesByLessonIdAndEntryYear" resultType="java.lang.String">
         SELECT DISTINCT class_code
         FROM biz_lesson_assignment
         WHERE lesson_id = #{lessonId}
+          AND entry_year = #{entryYear}
         ORDER BY CAST(class_code AS UNSIGNED) ASC, class_code ASC
+    </select>
+
+    <select id="selectAssignmentsByLessonIds" resultMap="BizLessonAssignmentResult">
+        <include refid="selectBizLessonAssignmentVo"/>
+        WHERE dept_id = #{deptId}
+          AND lesson_id IN
+          <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+              #{lessonId}
+          </foreach>
+        ORDER BY lesson_id, CAST(class_code AS UNSIGNED), class_code
     </select>
 
     <!-- 新增：根据课程ID删除所有指派记录 -->
@@ -92,9 +108,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 新增：批量新增课程指派记录 -->
     <insert id="batchInsert" parameterType="java.util.List">
-        INSERT INTO biz_lesson_assignment (lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time) VALUES
+        INSERT INTO biz_lesson_assignment
+            (lesson_id, entry_year, class_code, assigner_id, dept_id, assign_time, theory_open, practical_open)
+        VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.deptId}, #{item.assignTime})
+            (#{item.lessonId}, #{item.entryYear}, #{item.classCode}, #{item.assignerId}, #{item.deptId}, #{item.assignTime},
+             #{item.theoryOpen}, #{item.practicalOpen})
         </foreach>
     </insert>
 
@@ -111,11 +130,101 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectCurrentLessonByClass" resultType="java.lang.Long">
         SELECT la.lesson_id 
         FROM biz_lesson_assignment la
+        INNER JOIN biz_lesson l ON l.lesson_id = la.lesson_id AND IFNULL(l.status, '0') = '0'
         WHERE la.entry_year = #{entryYear} 
           AND la.class_code = #{classCode}
           AND la.dept_id = #{deptId}
         ORDER BY la.assign_time DESC, la.assignment_id DESC
         LIMIT 1
+    </select>
+
+    <select id="selectAssignmentsByLessonId" resultMap="BizLessonAssignmentResult">
+        <include refid="selectBizLessonAssignmentVo"/>
+        where lesson_id = #{lessonId}
+        order by entry_year, cast(class_code as unsigned), class_code
+    </select>
+
+    <select id="selectCurrentAssignmentForUpdate" resultMap="BizLessonAssignmentResult">
+        <include refid="selectBizLessonAssignmentVo"/>
+        where entry_year = #{entryYear}
+          and class_code = #{classCode}
+          and dept_id = #{deptId}
+        limit 1
+        for update
+    </select>
+
+    <update id="updateLessonGate">
+        update biz_lesson_assignment
+        <choose>
+            <when test="kind == 'theory'">set theory_open = #{open}</when>
+            <otherwise>set practical_open = #{open}</otherwise>
+        </choose>
+        where assignment_id = #{assignmentId}
+    </update>
+
+    <update id="advanceCurrentAssignment">
+        update biz_lesson_assignment
+        set lesson_id = #{nextLessonId},
+            assigner_id = #{assignerId},
+            assign_time = #{assignTime},
+            auto_advance_ready_time = null,
+            theory_open = 0,
+            practical_open = 0
+        where assignment_id = #{assignmentId}
+          and lesson_id = #{currentLessonId}
+    </update>
+
+    <update id="markAutoAdvanceReady">
+        update biz_lesson_assignment
+        set auto_advance_ready_time = #{readyTime}
+        where assignment_id = #{assignmentId}
+          and auto_advance_ready_time is null
+    </update>
+
+    <update id="clearAssignmentReadyTime">
+        update biz_lesson_assignment
+        set auto_advance_ready_time = null
+        where assignment_id = #{assignmentId}
+          and auto_advance_ready_time is not null
+    </update>
+
+    <update id="clearReadyTimesByTeacher">
+        update biz_lesson_assignment a
+        inner join biz_lesson l on l.lesson_id = a.lesson_id
+        set a.auto_advance_ready_time = null
+        where l.dept_id = #{deptId}
+          and (l.creator_id = #{teacherId} or (l.creator_id is null and l.create_by = #{creatorName}))
+          and ifnull(l.lesson_mode, 'assessment') &lt;&gt; 'attendance'
+    </update>
+
+    <insert id="insertAdvanceHistory">
+        insert into biz_lesson_assignment_history
+            (assignment_id, lesson_id, next_lesson_id, entry_year, class_code, dept_id,
+             assigner_id, assigned_time, advanced_by, advance_source, advanced_time)
+        values
+            (#{assignment.assignmentId}, #{assignment.lessonId}, #{nextLessonId},
+             #{assignment.entryYear}, #{assignment.classCode}, #{assignment.deptId},
+             #{assignment.assignerId}, #{assignment.assignTime}, #{advancedBy},
+             #{advanceSource}, #{advancedTime})
+    </insert>
+
+    <select id="countRecentAdvanceHistory" resultType="int">
+        select count(1)
+        from biz_lesson_assignment_history
+        where (lesson_id = #{lessonId} or next_lesson_id = #{lessonId})
+          and entry_year = #{entryYear}
+          and class_code = #{classCode}
+          and dept_id = #{deptId}
+          and advanced_time &gt;= #{advancedAfter}
+    </select>
+
+    <select id="countHistoricalAssignment" resultType="int">
+        select count(1)
+        from biz_lesson_assignment_history
+        where lesson_id = #{lessonId}
+          and entry_year = #{entryYear}
+          and class_code = #{classCode}
+          and dept_id = #{deptId}
     </select>
 
 </mapper>

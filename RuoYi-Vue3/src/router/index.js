@@ -48,6 +48,12 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/public/research-notice/:token',
+    component: () => import('@/views/public/researchNotice'),
+    hidden: true,
+    meta: { title: '活动通知' }
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true
@@ -94,7 +100,7 @@ export const constantRoutes = [
         path: 'grading',
         component: () => import('@/views/business/teacher/grading'),
         name: 'TeacherGrading',
-        meta: { title: '批改操作题', activeMenu: '/business/teacher' }
+        meta: { title: '批改操作题', activeMenu: '/business/teacher', noCache: true }
       }
     ]
   },
@@ -123,12 +129,114 @@ export const constantRoutes = [
         meta: { title: '学生画像', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/business/classroom-desktop',
+    component: Layout,
+    hidden: true,
+    roles: ['admin', 'teacher'],
+    children: [{ path: '', component: () => import('@/views/business/classroomDesktop/index.vue'), name: 'ClassroomDesktop', meta: { title: '课堂监控', noCache: true } }]
+  },
+  {
+    path: '/business/research-activity',
+    component: Layout,
+    hidden: true,
+    roles: ['teacher', 'researcher', 'admin'],
+    children: [
+      {
+        path: 'detail/:topicId(\\d+)',
+        component: () => import('@/views/business/researchActivity/detail.vue'),
+        name: 'ResearchActivityDetail',
+        meta: { title: '教研活动详情', activeMenu: '/research-activity', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/business/research-notifications',
+    component: Layout,
+    hidden: true,
+    roles: ['teacher', 'researcher', 'admin'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/researchActivity/notifications.vue'),
+        name: 'ResearchActivityNotifications',
+        meta: { title: '教研活动通知', activeMenu: '/research-activity', noCache: true }
+      }
+    ]
   }
-  
+  ,{
+    path: '/business/collaboration',
+    component: Layout,
+    hidden: true,
+    roles: ['admin', 'teacher'],
+    children: [
+      {
+        path: 'lesson/:lessonId(\\d+)',
+        component: () => import('@/views/business/collaboration/index'),
+        name: 'CollaborationLesson',
+        meta: { title: '课程在线协作', activeMenu: '/business/lesson' }
+      },
+      {
+        path: 'editor/:roomId(\\d+)',
+        component: () => import('@/views/business/collaboration/editor'),
+        name: 'CollaborationTeacherEditor',
+        meta: { title: '班级协作编辑', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/student/collaboration',
+    component: () => import('@/layout/StudentLayout'),
+    hidden: true,
+    roles: ['student'],
+    children: [
+      {
+        path: ':roomId(\\d+)',
+        component: () => import('@/views/student/collaboration'),
+        name: 'StudentCollaboration',
+        meta: { title: '班级在线协作', noCache: true }
+      },
+      {
+        path: 'editor/:roomId(\\d+)',
+        component: () => import('@/views/business/collaboration/editor'),
+        name: 'StudentCollaborationEditor',
+        meta: { title: '班级协作编辑', noCache: true }
+      }
+    ]
+  },
 ]
 
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
+  {
+    path: '/business/iot',
+    component: Layout,
+    roles: ['admin', 'teacher', 'researcher'],
+    // 数据库菜单已提供正式侧边栏入口，保留静态路由只用于兼容旧书签。
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/iot/index'),
+        name: 'IotExperimentDashboard',
+        meta: { title: '物联网实验', icon: 'monitor', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/help-center',
+    component: Layout,
+    roles: ['admin', 'teacher', 'researcher'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/help/index'),
+        name: 'HelpCenter',
+        meta: { title: '帮助中心', icon: 'question', noCache: true }
+      }
+    ]
+  },
   {
     path: '/platform',
     component: Layout,
@@ -168,19 +276,34 @@ export const dynamicRoutes = [
         component: () => import('@/views/student/guideSheet/index'),
         name: 'StudentGuideSheet',
         meta: { title: '电子导学单', icon: 'guide-sheet' }
+      },
+      {
+        path: 'python-practice',
+        component: () => import('@/views/student/pythonPractice'),
+        name: 'StudentPythonPracticeInHome',
+        meta: { title: 'Python 练习', icon: 'code' }
+      },
+      {
+        path: 'iot',
+        component: () => import('@/views/student/iot'),
+        name: 'StudentIot',
+        meta: { title: '物联实验', icon: 'component' }
       }
     ]
   },
+  // 区域抽测列表只走 sys_menu 动态菜单，避免教研员侧栏出现两个「区域抽测」。
+  // 保留隐藏静态路由，兼容书签 /business/county-exam 与角色兜底进入。
   {
     path: '/business/county-exam',
     component: Layout,
     roles: ['admin', 'researcher'],
+    hidden: true,
     children: [
       {
         path: '',
         component: () => import('@/views/business/countyExam/index'),
         name: 'CountyExamStatic',
-        meta: { title: '区域抽测', icon: 'education' }
+        meta: { title: '区域抽测', icon: 'education', activeMenu: '/county-exam' }
       }
     ]
   },
@@ -228,6 +351,34 @@ export const dynamicRoutes = [
     redirect: '/teacher-dashboard/index'
   },
   {
+    path: '/business/teacher-tools/manage',
+    component: Layout,
+    permissions: ['business:teacherTool:manage'],
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/teacherTools/manage'),
+        name: 'TeacherToolsManage',
+        meta: { title: '教师工具管理', activeMenu: '/teacher-tools', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/student-tool/manage',
+    component: Layout,
+    permissions: ['business:studentTool:manage'],
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/business/studentTool/manage'),
+        name: 'StudentToolManage',
+        meta: { title: '学生实验工具管理', activeMenu: '/student-tool', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/business/guide-sheet',
     component: Layout,
     hidden: true,
@@ -248,7 +399,7 @@ export const dynamicRoutes = [
     permissions: ['business:guideSheet:dashboard'],
     children: [
       {
-        path: ':sheetId(\\d+)',
+        path: ':bindingId(\\d+)',
         component: () => import('@/views/business/guideSheet/dashboard'),
         name: 'GuideSheetDashboard',
         meta: { title: '导学单看板', activeMenu: '/business/guide-sheet-list' }

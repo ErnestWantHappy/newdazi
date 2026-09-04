@@ -13,15 +13,22 @@
       </el-form-item>
       <el-form-item label="入学年份" prop="entryYear">
          <el-select v-model="queryParams.entryYear" placeholder="请选择年份" clearable style="width: 200px">
-            <el-option v-for="year in entryYearOptions" :key="year" :label="year" :value="year" />
+            <el-option v-for="year in entryYearOptions" :key="year" :label="formatEntryYear(year)" :value="year" />
          </el-select>
       </el-form-item>
       <el-form-item label="班级" prop="classCode">
          <el-select v-model="queryParams.classCode" placeholder="请选择班级" clearable style="width: 200px">
-           <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+           <el-option v-for="n in 99" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
          </el-select>
       </el-form-item>
-      <el-form-item label="账号状态" prop="lockStatus">
+      <el-form-item label="使用状态" prop="status">
+         <el-select v-model="queryParams.status" placeholder="正常" style="width: 120px">
+           <el-option label="正常使用" value="0" />
+           <el-option label="已停用" value="1" />
+           <el-option label="全部" value="all" />
+         </el-select>
+      </el-form-item>
+      <el-form-item label="登录锁定" prop="lockStatus">
          <el-select v-model="queryParams.lockStatus" placeholder="全部" clearable style="width: 120px">
            <el-option label="全部" value="" />
            <el-option label="正常" value="normal" />
@@ -55,6 +62,16 @@
         >批量导入</el-button>
       </el-col>
       <el-col :span="1.5">
+        <el-button type="primary" plain icon="EditPen" @click="openCorrection" v-hasPermi="['business:student:import']">
+          批量纠错
+        </el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button type="warning" plain icon="CircleClose" :disabled="multiple" @click="handleBatchStatus('1')" v-hasPermi="['business:student:edit']">
+          批量停用
+        </el-button>
+      </el-col>
+      <el-col :span="1.5">
         <el-button
           type="danger"
           plain
@@ -73,6 +90,15 @@
           v-hasPermi="['business:student:edit']"
         >批量重置密码</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="success"
+          plain
+          icon="Download"
+          @click="handleExport"
+          v-hasPermi="['business:student:export']"
+        >导出</el-button>
+      </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
@@ -87,11 +113,14 @@
         </template>
       </el-table-column>
       <el-table-column label="学号" align="center" prop="studentNo" />
-      <el-table-column label="入学年份" align="center" prop="entryYear" />
+      <el-table-column label="入学年份" align="center" prop="entryYear">
+        <template #default="scope">{{ formatEntryYear(scope.row.entryYear) }}</template>
+      </el-table-column>
       <el-table-column label="状态" align="center" width="80">
         <template #default="scope">
-          <span v-if="lockStatusMap[scope.row.userName]" style="color: #F56C6C; font-weight: 500;">锁定</span>
-          <span v-else>正常</span>
+          <el-tag v-if="scope.row.status === '1'" type="info">已停用</el-tag>
+          <el-tag v-else-if="lockStatusMap[scope.row.userName]" type="danger">锁定</el-tag>
+          <el-tag v-else type="success">正常</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="备注" align="center" prop="remark" min-width="100" show-overflow-tooltip>
@@ -114,11 +143,14 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" width="280" class-name="small-padding fixed-width">
+      <el-table-column label="操作" align="center" width="350" class-name="small-padding fixed-width">
         <template #default="scope">
           <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)">修改</el-button>
           <el-button link :type="lockStatusMap[scope.row.userName] ? 'warning' : 'primary'" icon="Key" @click="handleResetPwd(scope.row)">
             {{ lockStatusMap[scope.row.userName] ? '重置密码并解锁' : '重置密码' }}
+          </el-button>
+          <el-button link :type="scope.row.status === '1' ? 'success' : 'warning'" @click="handleRowStatus(scope.row)">
+            {{ scope.row.status === '1' ? '恢复' : '停用' }}
           </el-button>
           <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)">删除</el-button>
         </template>
@@ -141,16 +173,16 @@
         </el-form-item>
         <el-form-item label="入学年份" prop="entryYear">
            <el-select v-model="form.entryYear" placeholder="请选择入学年份" style="width:100%">
-              <el-option v-for="year in entryYearOptions" :key="year" :label="year" :value="year" />
+              <el-option v-for="year in entryYearOptions" :key="year" :label="formatEntryYear(year)" :value="year" />
            </el-select>
         </el-form-item>
         <el-form-item label="班级编号" prop="classCode">
            <el-select v-model="form.classCode" placeholder="请选择班级编号" style="width:100%">
-             <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+             <el-option v-for="n in 99" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
            </el-select>
         </el-form-item>
         <el-form-item label="学号" prop="studentNo">
-          <el-input v-model="form.studentNo" placeholder="请输入学生在本班的学号(1-99)" />
+          <el-input v-model="form.studentNo" placeholder="请输入本班学号，例如 01" maxlength="2" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" placeholder="如：转班、转校、休学等" />
@@ -165,6 +197,16 @@
     </el-dialog>
 
     <el-dialog :title="upload.title" v-model="upload.open" width="400px" append-to-body>
+      <el-alert
+        class="student-import-alert"
+        style="margin-bottom: 16px"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <template #title><b>班级编号只填 01～99，不要填写年级号</b></template>
+        <div>正确：学号 01、入学年份 2025、班级编号 01；错误：班级编号 601、602。</div>
+      </el-alert>
       <el-upload
         ref="uploadRef"
         :limit="1"
@@ -175,6 +217,7 @@
         :on-progress="handleFileUploadProgress"
         :on-success="handleFileSuccess"
         :on-error="handleFileError"
+        :before-upload="validateStudentImportFile"
         :auto-upload="false"
         drag
       >
@@ -192,6 +235,58 @@
           <el-button type="primary" @click="submitFileForm">确 定</el-button>
           <el-button @click="upload.open = false">取 消</el-button>
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog title="批量纠错学生信息" v-model="correction.open" width="1050px" append-to-body>
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 14px">
+        <template #title>先下载当前学生纠错表，只修改姓名、年份、班级、学号和备注。</template>
+        不要修改“学生永久编号”和“原登录账号”。确认后 studentId 不变，原来的答题、成绩和作品都会保留。
+      </el-alert>
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px">
+        <el-button type="primary" plain icon="Download" @click="downloadCorrectionTemplate">下载当前纠错表</el-button>
+        <el-upload
+          ref="correctionUploadRef"
+          :auto-upload="false"
+          :limit="1"
+          accept=".xlsx,.xls"
+          :on-change="handleCorrectionFile"
+          :on-remove="clearCorrection"
+        >
+          <el-button type="primary" plain icon="Upload">选择修改后的 Excel</el-button>
+        </el-upload>
+        <el-button type="primary" :loading="correction.previewing" :disabled="!correction.file" @click="previewCorrection">校验并预览</el-button>
+      </div>
+      <div v-if="correction.result" style="margin-bottom:10px">
+        共 {{ correction.result.totalCount }} 条；可执行 {{ correction.result.validCount }} 条；有变化
+        {{ correction.result.changedCount }} 条；错误 {{ correction.result.invalidCount }} 条。
+      </div>
+      <el-table v-if="correction.result" :data="correction.result.rows" max-height="430" border size="small">
+        <el-table-column label="行" prop="rowNumber" width="55" />
+        <el-table-column label="永久编号" prop="studentId" width="100" />
+        <el-table-column label="原账号" prop="currentUserName" min-width="145" />
+        <el-table-column label="新账号" prop="targetUserName" min-width="145" />
+        <el-table-column label="姓名" prop="studentName" width="100" />
+        <el-table-column label="新班级" width="120">
+          <template #default="scope">{{ scope.row.entryYear }}级 {{ scope.row.classCode }}班</template>
+        </el-table-column>
+        <el-table-column label="新学号" prop="studentNo" width="75" />
+        <el-table-column label="结果" min-width="220">
+          <template #default="scope">
+            <el-tag :type="scope.row.valid ? (scope.row.changed ? 'warning' : 'info') : 'danger'">
+              {{ scope.row.message }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="correction.open = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="correction.applying"
+          :disabled="!correction.result || correction.result.invalidCount > 0 || correction.result.changedCount === 0"
+          @click="applyCorrection"
+        >确认纠错</el-button>
       </template>
     </el-dialog>
 
@@ -214,18 +309,18 @@
               <el-form label-width="80px">
                 <el-form-item label="入学年份">
                   <el-select v-model="deleteDialog.entryYear" placeholder="请选择年份" style="width: 200px">
-                    <el-option v-for="year in entryYearOptions" :key="year" :label="year" :value="year" />
+                    <el-option v-for="year in entryYearOptions" :key="year" :label="formatEntryYear(year)" :value="year" />
                   </el-select>
                 </el-form-item>
                 <el-form-item label="班级">
                   <el-select v-model="deleteDialog.classCode" placeholder="请选择班级" style="width: 200px">
-                    <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+                    <el-option v-for="n in 99" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
                   </el-select>
                 </el-form-item>
               </el-form>
               <div style="color: #F56C6C; font-size: 13px; margin-top: 10px; line-height: 1.5;">
                 <el-icon style="vertical-align: middle; margin-right: 4px;"><warning /></el-icon>
-                <span style="vertical-align: middle;">警告：此操作将彻底清空该班级下<b>全部有效学生账号</b>及其关联数据，无需逐页勾选，不可恢复！</span>
+                <span style="vertical-align: middle;">只会彻底删除<b>没有任何业务记录</b>的学生；有答题、成绩或其他记录的学生会被系统拦住，请改用“停用”。</span>
               </div>
             </div>
           </el-radio>
@@ -245,7 +340,12 @@
 import { getCurrentInstance, reactive, ref, toRefs, watch, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import useUserStore from "@/store/modules/user";
-import { listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus, delStudentByClass } from "@/api/business/student";
+import * as XLSX from "xlsx";
+import { calculateYearsInSection } from "@/utils/academicYear";
+import {
+  listStudent, getStudent, delStudent, addStudent, updateStudent, resetStudentPwd, getLockStatus,
+  delStudentByClass, previewStudentCorrection, applyStudentCorrection, changeStudentStatus
+} from "@/api/business/student";
 import {
   handleSessionExpired,
   isSessionExpiredCode,
@@ -270,6 +370,14 @@ const title = ref("");
 const lockStatusMap = ref({});
 const editingRemarkId = ref(null); // 当前正在编辑备注的学生ID
 
+const correction = reactive({
+  open: false,
+  file: null,
+  result: null,
+  previewing: false,
+  applying: false
+});
+
 const deleteDialog = reactive({
   open: false,
   mode: 'selected',
@@ -283,6 +391,29 @@ for (let i = 0; i < 10; i++) {
   entryYearOptions.value.push(String(currentYear - i));
 }
 
+// 当前校区的学部决定同一个入学年份对应的年级；切换校区后自动重新计算。
+const currentSchoolType = computed(() => {
+  const currentSchool = (userStore.schools || []).find(
+    school => Number(school.deptId) === Number(userStore.currentDeptId)
+  );
+  if (currentSchool?.schoolType) return String(currentSchool.schoolType);
+  const deptName = String(currentSchool?.deptName || "");
+  if (deptName.includes("初中")) return "2";
+  if (deptName.includes("高中")) return "3";
+  return "1";
+});
+
+function formatEntryYear(year) {
+  if (year == null || year === "") return "-";
+  const grade = calculateYearsInSection(year);
+  const schoolType = currentSchoolType.value;
+  if (grade == null) return String(year);
+  if (schoolType === "1" && grade >= 1 && grade <= 6) return `${year}（${grade}年级）`;
+  if (schoolType === "2" && grade >= 1 && grade <= 3) return `${year}（初${grade}）`;
+  if (schoolType === "3" && grade >= 1 && grade <= 3) return `${year}（高${grade}）`;
+  return String(year);
+}
+
 const data = reactive({
   form: {},
   queryParams: {
@@ -291,6 +422,7 @@ const data = reactive({
     studentName: null,
     entryYear: null,
     classCode: null,
+    status: "0",
     lockStatus: null,
     deptId: userStore.currentDeptId || null,
   },
@@ -298,7 +430,10 @@ const data = reactive({
     studentName: [ { required: true, message: "学生姓名不能为空", trigger: "blur" } ],
     entryYear: [ { required: true, message: "入学年份不能为空", trigger: "change" } ],
     classCode: [ { required: true, message: "班级编号不能为空", trigger: "change" } ],
-    studentNo: [ { required: true, message: "学号不能为空", trigger: "blur" } ],
+    studentNo: [
+      { required: true, message: "学号不能为空", trigger: "blur" },
+      { pattern: /^(0?[1-9]|[1-9]\d)$/, message: "学号只能填写 01～99", trigger: "blur" }
+    ],
   }
 });
 
@@ -548,10 +683,122 @@ function handleImport() {
   upload.open = true;
 };
 
+function openCorrection() {
+  correction.open = true;
+  correction.file = null;
+  correction.result = null;
+}
+
+function downloadCorrectionTemplate() {
+  proxy.download('business/student/correctionTemplate', {
+    studentName: queryParams.value.studentName,
+    entryYear: queryParams.value.entryYear,
+    classCode: queryParams.value.classCode,
+    deptId: userStore.currentDeptId || null
+  }, `student_correction_${new Date().getTime()}.xlsx`)
+}
+
+function handleCorrectionFile(uploadFile) {
+  correction.file = uploadFile.raw;
+  correction.result = null;
+}
+
+function clearCorrection() {
+  correction.file = null;
+  correction.result = null;
+}
+
+async function previewCorrection() {
+  if (!correction.file) return;
+  correction.previewing = true;
+  try {
+    const response = await previewStudentCorrection(correction.file);
+    correction.result = response.data;
+  } finally {
+    correction.previewing = false;
+  }
+}
+
+function applyCorrection() {
+  if (!correction.result || correction.result.invalidCount > 0) return;
+  proxy.$modal.confirm(`确认原地纠错 ${correction.result.changedCount} 名学生吗？学生永久编号和历史成绩不会改变。`).then(async () => {
+    correction.applying = true;
+    try {
+      const response = await applyStudentCorrection(correction.result.rows);
+      proxy.$modal.msgSuccess(response.msg || "纠错完成");
+      correction.open = false;
+      getList();
+    } finally {
+      correction.applying = false;
+    }
+  }).catch(() => {});
+}
+
+function handleBatchStatus(status) {
+  if (!ids.value.length) return;
+  const verb = status === '1' ? '停用' : '恢复';
+  proxy.$modal.confirm(`确认${verb}已选的 ${ids.value.length} 名学生吗？停用不会删除历史数据。`).then(() => {
+    return changeStudentStatus(ids.value, status);
+  }).then(response => {
+    proxy.$modal.msgSuccess(response.msg || `${verb}成功`);
+    getList();
+  }).catch(() => {});
+}
+
+function handleRowStatus(row) {
+  const status = row.status === '1' ? '0' : '1';
+  const verb = status === '1' ? '停用' : '恢复';
+  proxy.$modal.confirm(`确认${verb}学生“${row.studentName}”吗？${status === '1' ? '停用后不能登录，但历史数据仍保留。' : ''}`).then(() => {
+    return changeStudentStatus([row.studentId], status);
+  }).then(response => {
+    proxy.$modal.msgSuccess(response.msg || `${verb}成功`);
+    getList();
+  }).catch(() => {});
+}
+
 /** 下载模板操作 */
 function importTemplate() {
-  proxy.download("business/student/importTemplate", { deptId: userStore.currentDeptId || null }, `student_template_${new Date().getTime()}.xlsx`);
+  const rows = [
+    ["学号", "入学年份", "班级编号", "真实姓名", "备注"],
+    ["01", "2025", "01", "示例学生一", "示例行，导入前请替换"],
+    ["02", "2025", "02", "示例学生二", "班号只填 01～99，不要写 601、602"]
+  ];
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet["!cols"] = [{ wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 38 }];
+  ["A2", "A3", "C2", "C3"].forEach(cell => {
+    if (worksheet[cell]) worksheet[cell].z = "@";
+  });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "学生导入数据");
+  XLSX.writeFile(workbook, `student_template_${new Date().getTime()}.xlsx`);
 };
+
+/**
+ * 上传前先在浏览器检查班号。这样教师能立即看到具体行号，避免把 601、602
+ * 这类“年级 + 班号”误写法提交到服务器后才发现整批失败。
+ */
+async function validateStudentImportFile(rawFile) {
+  try {
+    const workbook = XLSX.read(await rawFile.arrayBuffer(), { type: "array", raw: false });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+    const invalidRows = [];
+    rows.slice(1).forEach((row, index) => {
+      if (row.every(value => String(value).trim() === "")) return;
+      const classCode = String(row[2] ?? "").trim();
+      const classNumber = Number(classCode);
+      if (!/^\d{1,2}$/.test(classCode) || classNumber < 1 || classNumber > 99) invalidRows.push(index + 2);
+    });
+    if (invalidRows.length) {
+      proxy.$modal.msgError(`第 ${invalidRows.slice(0, 5).join("、")} 行班级编号无效：只填 01～99，不要写 601、602 等带年级的三位数。`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    proxy.$modal.msgError("无法读取 Excel，请重新下载平台模板后填写。");
+    return false;
+  }
+}
 
 import { ElLoading } from 'element-plus';
 
@@ -580,7 +827,12 @@ const handleFileSuccess = (response, file, fileList) => {
   if (uploadLoadingInstance) {
     uploadLoadingInstance.close();
   }
-  proxy.$alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + "</div>", "导入结果", { dangerouslyUseHTMLString: true });
+  const metrics = response?.data || {};
+  const hasMetrics = Number.isFinite(Number(metrics.totalCount));
+  const summary = hasMetrics
+    ? `<div style="padding:10px 12px;margin-bottom:8px;background:#f5f7fa;border-radius:4px;">共 ${metrics.totalCount} 条，成功 ${metrics.successCount} 条，失败 ${metrics.failureCount} 条；总耗时 ${metrics.totalDurationMs} ms</div>`
+    : "";
+  proxy.$alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + summary + response.msg + "</div>", "导入结果", { dangerouslyUseHTMLString: true });
   getList();
 };
 

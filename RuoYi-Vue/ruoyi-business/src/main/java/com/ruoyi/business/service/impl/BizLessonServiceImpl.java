@@ -1,15 +1,20 @@
 package com.ruoyi.business.service.impl;
 
 import java.util.ArrayList;
-import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+
 import com.ruoyi.business.domain.BizLessonAssignment;
+import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.BizLessonQuestion;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
@@ -17,12 +22,26 @@ import com.ruoyi.business.domain.vo.GradeGroupVo;
 import com.ruoyi.business.domain.vo.LessonDetailVo;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
+import com.ruoyi.business.mapper.CollaborationMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.mapper.GuideSheetBindingMapper;
+import com.ruoyi.business.mapper.LessonClassScopeMapper;
+import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
+import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
+import com.ruoyi.business.domain.ProgrammingQuestionConfig;
+import com.ruoyi.business.service.LessonGuideSheetBindingService;
+import com.ruoyi.business.service.StudentToolService;
+import com.ruoyi.business.service.StudentAnswerArchiveService;
+import com.ruoyi.business.service.AnswerDeletionGuardService;
+import com.ruoyi.business.service.PracticalRubricSnapshotService;
+import com.ruoyi.business.service.FlowchartService;
+import com.ruoyi.business.util.AcademicYearUtils;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.common.core.domain.model.LoginUser;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import org.slf4j.Logger;
@@ -30,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.mapper.IotMapper;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.service.IBizLessonService;
 import org.apache.commons.lang3.StringUtils; // 新增：引入字符串工具类，便于班级编码清洗
@@ -60,26 +80,88 @@ public class BizLessonServiceImpl implements IBizLessonService
     private BizLessonAssignmentMapper lessonAssignmentMapper;
 
     @Autowired
+    private LessonClassScopeMapper lessonClassScopeMapper;
+
+    @Autowired
+    private PracticalGradingDeadlineMapper practicalGradingDeadlineMapper;
+
+    @Autowired
     private BizTeacherClassMapper teacherClassMapper;
 
     @Autowired
     private com.ruoyi.business.mapper.BizQuestionMapper bizQuestionMapper;
 
+    @Autowired
+    private GuideSheetBindingMapper guideSheetBindingMapper;
+
+    @Autowired
+    private LessonGuideSheetBindingService lessonGuideSheetBindingService;
+
+    @Autowired
+    private AnswerDeletionGuardService answerDeletionGuardService;
+
+    @Autowired
+    private PracticalRubricSnapshotService practicalRubricSnapshotService;
+
+    @Autowired
+    private FlowchartService flowchartService;
+
+    @Autowired
+    private ProgrammingJudgeMapper programmingJudgeMapper;
+
+    @Autowired
+    private CollaborationMapper collaborationMapper;
+
+    @Autowired
+    private IotMapper iotMapper;
+
+    @Autowired
+    private StudentToolService studentToolService;
+
+    @Autowired
+    private StudentAnswerArchiveService studentAnswerArchiveService;
+
+    @Autowired
+    private BizStudentAnswerMapper studentAnswerMapper;
+
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
     {
-        return bizLessonMapper.selectBizLessonByLessonId(lessonId);
+        BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+        assertCanManageLesson(lesson);
+        return lesson;
     }
 
     @Override
     public List<BizLesson> selectBizLessonList(BizLesson bizLesson)
     {
+        bizLesson.setDeptId(SecurityUtils.getDeptId());
+        if (StringUtils.isBlank(bizLesson.getStatus()))
+        {
+            bizLesson.setStatus("0");
+        }
         return bizLessonMapper.selectBizLessonList(bizLesson);
     }
 
     @Override
     public int insertBizLesson(BizLesson bizLesson)
     {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (bizLesson.getGrade() == null)
+        {
+            throw new ServiceException("课程开设年级不能为空");
+        }
+        if (StringUtils.isBlank(bizLesson.getEntryYear()))
+        {
+            bizLesson.setEntryYear(calculateEntryYearFromGrade(bizLesson.getGrade()));
+        }
+        bizLesson.setCreatorId(loginUser.getUserId());
+        bizLesson.setDeptId(loginUser.getDeptId());
+        bizLesson.setCreateBy(loginUser.getUsername());
+        Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByEntryYearGradeAndCreator(
+                bizLesson.getEntryYear(), bizLesson.getGrade(), loginUser.getUserId(),
+                loginUser.getUsername(), loginUser.getDeptId());
+        bizLesson.setLessonNum((maxLessonNum == null ? 0 : maxLessonNum) + 1);
         if (bizLesson.getCreateTime() == null) {
             bizLesson.setCreateTime(new Date());
         }
@@ -89,26 +171,116 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Override
     public int updateBizLesson(BizLesson bizLesson)
     {
-        return bizLessonMapper.updateBizLesson(bizLesson);
+        BizLesson existing = bizLessonMapper.selectBizLessonByLessonId(bizLesson.getLessonId());
+        assertCanManageLesson(existing);
+        preserveLessonEntryYear(existing, bizLesson.getEntryYear());
+        preserveLessonGrade(existing, bizLesson.getGrade());
+        bizLesson.setEntryYear(existing.getEntryYear());
+        bizLesson.setGrade(existing.getGrade());
+        bizLesson.setLessonNum(existing.getLessonNum());
+        bizLesson.setCreatorId(existing.getCreatorId());
+        bizLesson.setDeptId(existing.getDeptId());
+        bizLesson.setUpdateBy(SecurityUtils.getUsername());
+        bizLesson.setUpdateTime(new Date());
+        int affected = bizLessonMapper.updateBizLesson(bizLesson);
+        if (affected != 1)
+        {
+            throw new ServiceException("课程已被其他操作修改或删除，请刷新后重试");
+        }
+        return affected;
     }
 
     @Override
     @Transactional
     public int deleteBizLessonByLessonIds(Long[] lessonIds)
     {
+        LinkedHashSet<Long> existingLessonIds = new LinkedHashSet<>();
         for (Long lessonId : lessonIds) {
+            if (lessonId == null)
+            {
+                continue;
+            }
+            BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+            if (lesson == null)
+            {
+                // 删除请求可能因前端重试而重复到达；不存在的课程按已经删除处理。
+                continue;
+            }
+            assertCanManageLesson(lesson);
+            existingLessonIds.add(lessonId);
+        }
+        if (existingLessonIds.isEmpty())
+        {
+            return 0;
+        }
+        Long[] targetIds = existingLessonIds.toArray(new Long[0]);
+        // 先校验课程归属，避免把答题历史等内部状态暴露给无权管理课程的教师。
+        answerDeletionGuardService.assertLessonsDeletable(targetIds);
+        for (Long lessonId : targetIds) {
+            assertLessonHasNoGuideSheetHistory(lessonId);
             // 级联删除关联数据
             lessonQuestionMapper.deleteByLessonId(lessonId);
             lessonAssignmentMapper.deleteByLessonId(lessonId);
+            deleteIotData(lessonId);
+            deleteSupervisionFacts(lessonId);
         }
-        // 删除课程本身
-        return bizLessonMapper.deleteBizLessonByLessonIds(lessonIds);
+        int affected = bizLessonMapper.deleteBizLessonByLessonIds(targetIds);
+        if (affected != targetIds.length)
+        {
+            throw new ServiceException("部分课程已发生变化，删除已取消，请刷新后重试");
+        }
+        return affected;
     }
 
     @Override
+    @Transactional
     public int deleteBizLessonByLessonId(Long lessonId)
     {
-        return bizLessonMapper.deleteBizLessonByLessonId(lessonId);
+        BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null)
+        {
+            return 0;
+        }
+        assertCanManageLesson(lesson);
+        answerDeletionGuardService.assertLessonsDeletable(new Long[] { lessonId });
+        assertLessonHasNoGuideSheetHistory(lessonId);
+        lessonQuestionMapper.deleteByLessonId(lessonId);
+        lessonAssignmentMapper.deleteByLessonId(lessonId);
+        deleteIotData(lessonId);
+        deleteSupervisionFacts(lessonId);
+        int affected = bizLessonMapper.deleteBizLessonByLessonId(lessonId);
+        if (affected != 1)
+        {
+            throw new ServiceException("课程已发生变化，删除已取消，请刷新后重试");
+        }
+        return affected;
+    }
+
+    @Override
+    @Transactional
+    public int updateLessonStatus(Long lessonId, String status)
+    {
+        if (!"0".equals(status) && !"1".equals(status))
+        {
+            throw new ServiceException("课程状态只能是正常或已归档");
+        }
+        BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null)
+        {
+            throw new ServiceException("课程不存在，请刷新后重试");
+        }
+        assertCanManageLesson(lesson);
+        String current = StringUtils.defaultIfBlank(lesson.getStatus(), "0");
+        if (status.equals(current))
+        {
+            return 0;
+        }
+        int rows = bizLessonMapper.updateLessonStatus(lessonId, status, SecurityUtils.getUsername());
+        if (rows != 1)
+        {
+            throw new ServiceException("课程状态修改失败，请刷新后重试");
+        }
+        return rows;
     }
 
     @Override
@@ -125,49 +297,7 @@ public class BizLessonServiceImpl implements IBizLessonService
             return new ArrayList<>();
         }
         String username = loginUser != null ? loginUser.getUsername() : "unknown";
-        log.info("【教师首页数据】开始获取数据，教师: {}, 学校ID: {}", username, deptId);
-
-        // ====== 一次性诊断日志 START ======
-        log.info("===== 【诊断】教师: {}, user_id: {}, sys_user.dept_id: {}, 当前上下文deptId(可能已切换): {} =====",
-                username, loginUser.getUserId(),
-                loginUser.getUser() != null ? loginUser.getUser().getDeptId() : "null(user对象为空)",
-                deptId);
-
-        // 打印该教师创建的所有 biz_lesson 记录
-        BizLesson queryAll = new BizLesson();
-        List<BizLesson> diagLessons = bizLessonMapper.selectBizLessonList(queryAll);
-        log.info("【诊断】biz_lesson 全表共 {} 条记录", diagLessons.size());
-        for (BizLesson lesson : diagLessons) {
-            if (username.equals(lesson.getCreateBy())) {
-                log.info("【诊断】  该教师的课程: lesson_id={}, title={}, grade={}, dept_id={}, creator_id={}, create_by={}",
-                        lesson.getLessonId(), lesson.getLessonTitle(), lesson.getGrade(),
-                        lesson.getDeptId(), lesson.getCreatorId(), lesson.getCreateBy());
-            }
-        }
-
-        // 打印当前 deptId 对应的学校信息
-        SysDept currentDept = deptMapper.selectDeptById(deptId);
-        log.info("【诊断】当前上下文 dept_id={} 对应的学校: name={}, school_code={}, school_type={}",
-                deptId,
-                currentDept != null ? currentDept.getDeptName() : "null",
-                currentDept != null ? currentDept.getSchoolCode() : "null",
-                currentDept != null ? currentDept.getSchoolType() : "null");
-
-        // 打印 sys_user.dept_id 对应的学校信息
-        Long userOriginalDeptId = loginUser.getUser() != null ? loginUser.getUser().getDeptId() : null;
-        // 注意：selectSchool 切换后 user.getDeptId() 已经被改写为当前选中的，因此这里可能与 deptId 相同
-        // 我们需要查看 manageDepts (所有归属学校)
-        if (loginUser.getDeptIds() != null) {
-            log.info("【诊断】该教师可管理的所有 deptIds: {}", loginUser.getDeptIds());
-            for (Long did : loginUser.getDeptIds()) {
-                SysDept d = deptMapper.selectDeptById(did);
-                if (d != null) {
-                    log.info("【诊断】  dept_id={}, name={}, school_code={}, school_type={}", 
-                            d.getDeptId(), d.getDeptName(), d.getSchoolCode(), d.getSchoolType());
-                }
-            }
-        }
-        // ====== 一次性诊断日志 END ======
+        log.debug("【教师首页数据】开始获取数据，教师: {}, 学校ID: {}", username, deptId);
 
         SysDept school = deptMapper.selectDeptById(deptId);
         if (school == null) {
@@ -175,14 +305,14 @@ public class BizLessonServiceImpl implements IBizLessonService
             return new ArrayList<>();
         }
         String schoolType = school.getSchoolType();
-        log.info("【教师首页数据】学校类型: {}", schoolType);
+        log.debug("【教师首页数据】学校类型: {}", schoolType);
 
         // 改为从教师管理的班级表（biz_teacher_class）获取年级分组，而不是全校学生
         BizTeacherClass tcQuery = new BizTeacherClass();
         tcQuery.setUserId(loginUser.getUserId());
         tcQuery.setDeptId(deptId);
         List<BizTeacherClass> managedClasses = teacherClassMapper.selectBizTeacherClassList(tcQuery);
-        log.info("【教师首页数据】步骤1: 从 biz_teacher_class 查询到 {} 条该教师管理的班级记录。", managedClasses.size());
+        log.debug("【教师首页数据】步骤1: 从 biz_teacher_class 查询到 {} 条该教师管理的班级记录。", managedClasses.size());
 
         Map<String, List<String>> yearClassMap = managedClasses.stream()
                 .filter(Objects::nonNull)
@@ -193,11 +323,11 @@ public class BizLessonServiceImpl implements IBizLessonService
                             Collectors.collectingAndThen(Collectors.toList(), 
                                 list -> list.stream().distinct().collect(Collectors.toList())))
                 ));
-        log.info("【教师首页数据】步骤2: 成功按入学年份分组，共 {} 个年份组。", yearClassMap.size());
+        log.debug("【教师首页数据】步骤2: 成功按入学年份分组，共 {} 个年份组。", yearClassMap.size());
 
         List<GradeGroupVo> result = new ArrayList<>();
         for (String entryYear : yearClassMap.keySet()) {
-            log.info("【教师首页数据】步骤3: 正在处理入学年份: {}", entryYear);
+            log.debug("【教师首页数据】步骤3: 正在处理入学年份: {}", entryYear);
             GradeGroupVo gradeGroup = new GradeGroupVo();
             gradeGroup.setEntryYear(entryYear);
 
@@ -205,59 +335,49 @@ public class BizLessonServiceImpl implements IBizLessonService
             gradeGroup.setGradeName(gradeInfo.keySet().iterator().next());
             Long currentGradeId = gradeInfo.values().iterator().next();
             gradeGroup.setGradeId(currentGradeId);
-            log.info("【教师首页数据】计算得出年级为: {}, 年级ID: {}", gradeGroup.getGradeName(), currentGradeId);
+            log.debug("【教师首页数据】计算得出年级为: {}, 年级ID: {}", gradeGroup.getGradeName(), currentGradeId);
 
             gradeGroup.setAllClassesInGrade(yearClassMap.get(entryYear));
 
-            if (currentGradeId > 0) {
-                // 查询我创建的课程
-                List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByGradeAndCreator(currentGradeId, username, deptId);
-                log.info("【教师首页数据】为该年级查询到 {} 门自建课程。", selfLessons.size());
+            // 按稳定 entry_year 装课：已毕业(gradeId=-1)/新生(0) 也必须查课，
+            // 禁止用「当前年级号 > 0」误杀历史届课程卡片。
+            List<LessonInfoVo> selfLessons = bizLessonMapper.selectLessonsByEntryYearAndCreator(entryYear, username, deptId);
+            log.debug("【教师首页数据】届别 {}（{}）自建课程 {} 门。", entryYear, gradeGroup.getGradeName(),
+                    selfLessons == null ? 0 : selfLessons.size());
 
-                // 查询共享给我的课程
-                List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByGradeAndUser(
-                        currentGradeId, loginUser.getUserId(), deptId, username);
-                log.info("【教师首页数据】为该年级查询到 {} 门共享课程。", sharedLessons.size());
+            List<LessonInfoVo> sharedLessons = bizLessonMapper.selectSharedLessonsByEntryYearAndUser(
+                    entryYear, loginUser.getUserId(), deptId, username);
+            log.debug("【教师首页数据】届别 {} 共享课程 {} 门。", entryYear,
+                    sharedLessons == null ? 0 : sharedLessons.size());
 
-                // 合并并按创建时间降序排列（最新创建的在前）
-                List<LessonInfoVo> allLessons = new ArrayList<>();
+            List<LessonInfoVo> allLessons = new ArrayList<>();
+            if (selfLessons != null) {
                 allLessons.addAll(selfLessons);
-                allLessons.addAll(sharedLessons);
-                // 自建和共享课程合并后统一排序，确保最新课程固定在左上角。
-                allLessons.sort((a, b) -> {
-                    long timeA = a.getCreateTime() == null ? 0L : a.getCreateTime().getTime();
-                    long timeB = b.getCreateTime() == null ? 0L : b.getCreateTime().getTime();
-                    int byCreateTime = Long.compare(timeB, timeA);
-                    if (byCreateTime != 0) {
-                        return byCreateTime;
-                    }
-                    long idA = a.getLessonId() == null ? 0L : a.getLessonId();
-                    long idB = b.getLessonId() == null ? 0L : b.getLessonId();
-                    return Long.compare(idB, idA);
-                });
-                 
-                // 填充每个课程的已指派班级
-                for (LessonInfoVo lesson : allLessons) {
-                    List<String> classCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lesson.getLessonId());
-                    if (classCodes != null && !classCodes.isEmpty()) {
-                        List<String> formattedCodes = classCodes.stream()
-                            .filter(StringUtils::isNotBlank)
-                            .map(code -> code.endsWith("班") ? code : code + "班")
-                            .collect(Collectors.toList());
-                        lesson.setAssignedClasses(formattedCodes);
-                    }
-                }
-
-                gradeGroup.setLessons(allLessons);
-            } else {
-                gradeGroup.setLessons(new ArrayList<>());
             }
+            if (sharedLessons != null) {
+                allLessons.addAll(sharedLessons);
+            }
+            // 自建和共享课程合并后统一排序，确保最新课程固定在左上角。
+            allLessons.sort((a, b) -> {
+                long timeA = a.getCreateTime() == null ? 0L : a.getCreateTime().getTime();
+                long timeB = b.getCreateTime() == null ? 0L : b.getCreateTime().getTime();
+                int byCreateTime = Long.compare(timeB, timeA);
+                if (byCreateTime != 0) {
+                    return byCreateTime;
+                }
+                long idA = a.getLessonId() == null ? 0L : a.getLessonId();
+                long idB = b.getLessonId() == null ? 0L : b.getLessonId();
+                return Long.compare(idB, idA);
+            });
+
+            gradeGroup.setLessons(allLessons);
 
             result.add(gradeGroup);
         }
 
         result.sort((a, b) -> b.getEntryYear().compareTo(a.getEntryYear()));
-        log.info("【教师首页数据】数据组装完成，共返回 {} 个年级组的数据。", result.size());
+        fillDashboardAssignments(result, deptId);
+        log.debug("【教师首页数据】数据组装完成，共返回 {} 个年级组的数据。", result.size());
 
         return result;
     }
@@ -279,13 +399,28 @@ public class BizLessonServiceImpl implements IBizLessonService
 
         BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null) return null;
+        assertCanViewLesson(lesson);
+
+        boolean isCreator = loginUser.getUserId().equals(lesson.getCreatorId())
+                || (lesson.getCreatorId() == null && loginUser.getUsername().equals(lesson.getCreateBy()));
+        boolean canManage = SecurityUtils.isAdmin(loginUser.getUserId()) || isCreator;
+        final Long viewerDeptId = deptId;
 
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
-        List<String> assignedClassCodes = lessonAssignmentMapper.selectClassCodesByLessonId(lessonId);
+        List<String> assignedClassCodes = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                lessonId, lesson.getEntryYear());
         if (CollectionUtils.isEmpty(assignedClassCodes)) {
             assignedClassCodes = new ArrayList<>();
         } else {
-            // 新增：为班级编码补充“班”字，保持与前端复选框一致
+            // 共享教师只能看到本人负责班级与课程指派班级的交集。
+            if (!canManage)
+            {
+                assignedClassCodes = assignedClassCodes.stream()
+                        .filter(code -> canManageAssignedClass(loginUser.getUserId(), viewerDeptId,
+                                lesson.getEntryYear(), code))
+                        .collect(Collectors.toList());
+            }
+            // 为班级编码补充“班”字，保持与前端复选框一致
             assignedClassCodes = assignedClassCodes.stream()
                     .filter(StringUtils::isNotBlank)
                     .map(code -> code.endsWith("班") ? code : code + "班")
@@ -293,35 +428,49 @@ public class BizLessonServiceImpl implements IBizLessonService
                     .collect(Collectors.toList());
         }
 
-        List<String> allClassesInGrade = new ArrayList<>();
-        if (lesson.getGrade() != null) {
-            SysDept school = deptMapper.selectDeptById(deptId);
-            List<BizStudent> students = bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId);
-            for (BizStudent student : students) {
-                Map<String, Long> gradeInfo = calculateGradeInfo(student.getEntryYear(), school.getSchoolType());
-                Long currentGradeId = gradeInfo.values().stream().findFirst().orElse(null);
-                if (currentGradeId != null && currentGradeId >= 0 && lesson.getGrade().equals(currentGradeId)) {
-                    allClassesInGrade.add(student.getClassCode() + "班");
-                }
-            }
-            allClassesInGrade = allClassesInGrade.stream()
-                    .filter(StringUtils::isNotBlank)
-                    .distinct()
-                    .sorted()
-                    .collect(Collectors.toList()); // 新增：班级列表去重排序，保证展示稳定
-        }
+        BizTeacherClass classQuery = new BizTeacherClass();
+        classQuery.setUserId(loginUser.getUserId());
+        classQuery.setDeptId(deptId);
+        classQuery.setEntryYear(lesson.getEntryYear());
+        List<String> allClassesInGrade = teacherClassMapper.selectBizTeacherClassList(classQuery).stream()
+                .map(BizTeacherClass::getClassCode)
+                .filter(StringUtils::isNotBlank)
+                .map(code -> code.endsWith("班") ? code : code + "班")
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
 
         detailVo.setLessonId(lesson.getLessonId());
         detailVo.setLessonTitle(lesson.getLessonTitle());
         detailVo.setGrade(lesson.getGrade());
+        detailVo.setEntryYear(lesson.getEntryYear());
         detailVo.setSemester(lesson.getSemester());
         detailVo.setLessonNum(lesson.getLessonNum());
         detailVo.setShuffleMode(lesson.getShuffleMode() != null ? lesson.getShuffleMode() : 0);
         detailVo.setRandomChoiceCount(lesson.getRandomChoiceCount() != null ? lesson.getRandomChoiceCount() : 0);
         detailVo.setRandomJudgmentCount(lesson.getRandomJudgmentCount() != null ? lesson.getRandomJudgmentCount() : 0);
+        // 历史课无 lesson_mode 时按测评课处理
+        detailVo.setLessonMode(normalizeLessonMode(lesson.getLessonMode()));
+        detailVo.setTeacherNote(lesson.getTeacherNote());
+        // 考勤课不暴露自动推进配置；测评课返回库内配置（默认关）
+        boolean attendanceDetail = "attendance".equals(normalizeLessonMode(lesson.getLessonMode()));
+        detailVo.setAutoAdvanceEnabled(attendanceDetail ? Boolean.FALSE : Boolean.TRUE.equals(lesson.getAutoAdvanceEnabled()));
+        detailVo.setAutoAdvanceThresholdPct(lesson.getAutoAdvanceThresholdPct() != null ? lesson.getAutoAdvanceThresholdPct() : 50);
+        detailVo.setAutoAdvanceDelayHours(lesson.getAutoAdvanceDelayHours() != null
+                ? lesson.getAutoAdvanceDelayHours() : new java.math.BigDecimal("2.0"));
+        // 物联网开关：考勤课一律按关闭返回，前端仅对常规课显示入口。
+        detailVo.setIotEnabled(!attendanceDetail && Boolean.TRUE.equals(lesson.getIotEnabled()));
         detailVo.setQuestions(questions);
         detailVo.setAssignedClassCodes(assignedClassCodes);
         detailVo.setAllClassesInGrade(allClassesInGrade);
+        // 本节课工具：课程设计器回填，学生端面板先展示
+        detailVo.setLessonTools(studentToolService.getLessonTools(lessonId));
+        BizLessonGuideSheetBinding binding = guideSheetBindingMapper.selectCurrentByLessonId(lessonId);
+        detailVo.setGuideSheetBinding(binding);
+        detailVo.setGuideSheetEnabled(binding != null && "Y".equals(binding.getEnabled()));
+        detailVo.setSourceSheetId(binding == null ? null : binding.getSourceSheetId());
+        detailVo.setCanDesign(canManage);
+        detailVo.setReadOnly(!canManage);
 
         return detailVo;
     }
@@ -334,38 +483,119 @@ public class BizLessonServiceImpl implements IBizLessonService
         Long userId = loginUser.getUserId();
         Long deptId = loginUser.getUser().getDeptId();
 
+        BizLesson existingLesson = null;
+        if (lessonDetailVo.getLessonId() != null)
+        {
+            existingLesson = bizLessonMapper.selectBizLessonByLessonId(lessonDetailVo.getLessonId());
+            assertCanManageLesson(existingLesson);
+        }
+        validateLessonContent(lessonDetailVo);
+
+        String entryYear = StringUtils.trimToNull(lessonDetailVo.getEntryYear());
+        if (existingLesson != null)
+        {
+            preserveLessonEntryYear(existingLesson, entryYear);
+            entryYear = existingLesson.getEntryYear();
+            preserveLessonGrade(existingLesson, lessonDetailVo.getGrade());
+            lessonDetailVo.setGrade(existingLesson.getGrade());
+        }
+        if (StringUtils.isBlank(entryYear))
+        {
+            entryYear = calculateEntryYearFromGrade(lessonDetailVo.getGrade());
+        }
+        validateEntryYear(entryYear);
+        lessonDetailVo.setEntryYear(entryYear);
+
         BizLesson lessonToSave = new BizLesson();
         lessonToSave.setLessonId(lessonDetailVo.getLessonId());
         lessonToSave.setDeptId(deptId);
         lessonToSave.setLessonTitle(lessonDetailVo.getLessonTitle());
         lessonToSave.setGrade(lessonDetailVo.getGrade());
+        lessonToSave.setEntryYear(entryYear);
         lessonToSave.setSemester(lessonDetailVo.getSemester());
-        Integer lessonNum = lessonDetailVo.getLessonNum();
-        if (lessonToSave.getLessonId() == null && (lessonNum == null || lessonNum <= 0)) {
-            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByGradeAndCreator(
-                    lessonDetailVo.getGrade(), username, deptId);
+        Integer lessonNum;
+        if (lessonToSave.getLessonId() == null) {
+            Integer maxLessonNum = bizLessonMapper.selectMaxLessonNumByEntryYearGradeAndCreator(
+                    entryYear, lessonDetailVo.getGrade(), userId, username, deptId);
             lessonNum = (maxLessonNum == null ? 0 : maxLessonNum) + 1;
+        } else {
+            lessonNum = existingLesson.getLessonNum();
         }
         lessonToSave.setLessonNum(lessonNum);
         lessonToSave.setShuffleMode(lessonDetailVo.getShuffleMode() != null ? lessonDetailVo.getShuffleMode() : 0);
         lessonToSave.setRandomChoiceCount(lessonDetailVo.getRandomChoiceCount() != null ? lessonDetailVo.getRandomChoiceCount() : 0);
         lessonToSave.setRandomJudgmentCount(lessonDetailVo.getRandomJudgmentCount() != null ? lessonDetailVo.getRandomJudgmentCount() : 0);
+        String normalizedMode = normalizeLessonMode(lessonDetailVo.getLessonMode());
+        lessonToSave.setLessonMode(normalizedMode);
+        // 允许清空教师说明
+        lessonToSave.setTeacherNote(lessonDetailVo.getTeacherNote() == null ? "" : lessonDetailVo.getTeacherNote().trim());
+        // 推进策略：考勤强制关；常规课一律采用教师统一策略（不在设计器逐课配置）
+        applyTeacherAdvancePolicyToLesson(lessonToSave, userId, deptId, normalizedMode);
+        // 物联网开关：考勤课强制关闭；常规课按设计器选择保存。
+        lessonToSave.setIotEnabled("attendance".equals(normalizedMode)
+                ? Boolean.FALSE : Boolean.TRUE.equals(lessonDetailVo.getIotEnabled()));
 
         if (lessonToSave.getLessonId() == null) {
+            lessonToSave.setCreatorId(userId);
             lessonToSave.setCreateBy(username);
             lessonToSave.setCreateTime(new Date());
             bizLessonMapper.insertBizLesson(lessonToSave);
         } else {
             lessonToSave.setUpdateBy(username);
             lessonToSave.setUpdateTime(new Date());
-            bizLessonMapper.updateBizLesson(lessonToSave);
+            if (bizLessonMapper.updateBizLesson(lessonToSave) != 1)
+            {
+                throw new ServiceException("课程已被其他操作修改或删除，请刷新后重试");
+            }
         }
         Long lessonId = lessonToSave.getLessonId();
         lessonDetailVo.setLessonId(lessonId);
 
-        lessonQuestionMapper.deleteByLessonId(lessonId);
+        List<BizLessonQuestionDetailVo> previousQuestions = lessonId == null
+                ? Collections.emptyList()
+                : lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+        Map<Long, BizLessonQuestionDetailVo> previousQuestionMap = previousQuestions.stream()
+                .filter(q -> q != null && q.getQuestionId() != null)
+                .collect(Collectors.toMap(BizLessonQuestionDetailVo::getQuestionId, q -> q, (a, b) -> a));
+
+        List<Long> previousQuestionIds = lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId);
         List<BizLessonQuestionDetailVo> questions = lessonDetailVo.getQuestions();
+        if (lessonId != null && questions != null) {
+            for (BizLessonQuestionDetailVo q : questions) {
+                if (q == null || q.getQuestionId() == null) continue;
+                BizLessonQuestionDetailVo prev = previousQuestionMap.get(q.getQuestionId());
+                if (prev != null && prev.getQuestionScore() != null && !Objects.equals(q.getQuestionScore(), prev.getQuestionScore())) {
+                    if (studentAnswerMapper.countAnswersByLessonAndQuestion(lessonId, q.getQuestionId()) > 0) {
+                        String title = StringUtils.isNotEmpty(prev.getQuestionContent()) ? prev.getQuestionContent() : String.valueOf(q.getQuestionId());
+                        if (title.length() > 20) title = title.substring(0, 20) + "...";
+                        throw new ServiceException("题目“" + title + "”已有学生答题提交记录，不能修改题目分值");
+                    }
+                }
+            }
+        }
+        LinkedHashSet<Long> newQuestionIds = questions == null
+                ? new LinkedHashSet<Long>()
+                : questions.stream().filter(Objects::nonNull)
+                    .map(BizLessonQuestionDetailVo::getQuestionId).filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        LinkedHashSet<Long> removedQuestionIds = previousQuestionIds == null
+                ? new LinkedHashSet<Long>()
+                : previousQuestionIds.stream().filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        removedQuestionIds.removeAll(newQuestionIds);
+        // 先完整归档再移出在线答案表；外层事务保证归档、删关联和重建题目要么全部成功，要么全部回滚。
+        studentAnswerArchiveService.archiveRemovedQuestions(lessonId, removedQuestionIds);
+
+        lessonQuestionMapper.deleteByLessonId(lessonId);
         if (!CollectionUtils.isEmpty(questions)) {
+            for (BizLessonQuestionDetailVo question : questions) {
+                if ("practical".equalsIgnoreCase(question.getQuestionType()) && "PYTHON".equalsIgnoreCase(question.getPracticalMode())) {
+                    ProgrammingQuestionConfig config = programmingJudgeMapper.selectConfig(question.getQuestionId());
+                    if (config == null || !"1".equals(config.getEnabled()) || !"VALID".equals(config.getValidationStatus())) {
+                        throw new ServiceException("Python 题“" + question.getQuestionContent() + "”尚未通过参考代码验证，不能加入课程");
+                    }
+                }
+            }
             List<BizLessonQuestion> questionToInsert = questions.stream().map(q -> {
                 BizLessonQuestion item = new BizLessonQuestion();
                 item.setLessonId(lessonId);
@@ -386,11 +616,29 @@ public class BizLessonServiceImpl implements IBizLessonService
                 }
             }
         }
+        practicalRubricSnapshotService.snapshotLesson(lessonId, questions, userId);
+        flowchartService.snapshotLesson(lessonId, questions);
 
+        // 本节课工具：随课程保存，全量替换
+        studentToolService.replaceLessonTools(lessonId, lessonDetailVo.getLessonTools());
+
+        // 保存课程会重建指派行；先保留原班级的课堂开放状态，避免普通编辑把已上课班级重新关掉。
+        final String assignmentEntryYear = entryYear;
+        List<BizLessonAssignment> previousAssignments = lessonAssignmentMapper.selectAssignmentsByLessonId(lessonId);
+        Map<String, BizLessonAssignment> previousByClass = previousAssignments == null
+                ? new HashMap<>()
+                : previousAssignments.stream()
+                    .filter(Objects::nonNull)
+                    .filter(item -> Objects.equals(deptId, item.getDeptId()))
+                    .filter(item -> Objects.equals(assignmentEntryYear, item.getEntryYear()))
+                    .filter(item -> StringUtils.isNotBlank(item.getClassCode()))
+                    .collect(Collectors.toMap(BizLessonAssignment::getClassCode, item -> item, (left, right) -> left));
+
+        lessonClassScopeMapper.markLessonAssignmentsInactive(lessonId);
         lessonAssignmentMapper.deleteByLessonId(lessonId);
         List<String> classCodes = lessonDetailVo.getAssignedClassCodes();
         if (!CollectionUtils.isEmpty(classCodes)) {
-            String entryYear = calculateEntryYearFromGrade(lessonDetailVo.getGrade());
+            validateAssignedClasses(userId, deptId, entryYear, classCodes);
             List<BizLessonAssignment> assignments = new ArrayList<>();
             for (String classCode : classCodes) {
                 if (StringUtils.isBlank(classCode)) {
@@ -399,7 +647,7 @@ public class BizLessonServiceImpl implements IBizLessonService
                 String pureClassCode = classCode.replace("班", "").trim();
                 
                 // 【核心】班级互斥：删除该班级在其他课程的指派
-                lessonAssignmentMapper.deleteOtherAssignmentsByClass(entryYear, pureClassCode, deptId, lessonId);
+                deactivateOtherCurrentAssignments(deptId, entryYear, pureClassCode, lessonId);
                 
                 BizLessonAssignment assignment = new BizLessonAssignment();
                 assignment.setLessonId(lessonId);
@@ -408,13 +656,363 @@ public class BizLessonServiceImpl implements IBizLessonService
                 assignment.setEntryYear(entryYear);
                 assignment.setAssignerId(userId);
                 assignment.setAssignTime(new Date());
+                BizLessonAssignment previous = previousByClass.get(pureClassCode);
+                applyInitialGatePolicy(assignment, previous, lessonDetailVo);
                 assignments.add(assignment);
             }
             if (!assignments.isEmpty()) {
                 lessonAssignmentMapper.batchInsert(assignments);
+                for (BizLessonAssignment assignment : assignments) {
+                    lessonClassScopeMapper.upsertCurrentAssignment(assignment);
+                }
             }
         }
+        BizLessonGuideSheetBinding binding = lessonGuideSheetBindingService.synchronize(
+                lessonDetailVo, lessonId, userId, username);
+        lessonDetailVo.setGuideSheetBinding(binding);
+        lessonDetailVo.setSourceSheetId(binding == null ? null : binding.getSourceSheetId());
+        lessonDetailVo.setGuideSheetEnabled(binding != null && "Y".equals(binding.getEnabled()));
         return lessonDetailVo;
+    }
+
+    /** 只有新班级采用设计器初始策略；已有班级必须保留课堂中的真实开关状态。 */
+    private void applyInitialGatePolicy(BizLessonAssignment assignment,
+                                        BizLessonAssignment previous,
+                                        LessonDetailVo detailVo)
+    {
+        if (previous != null)
+        {
+            assignment.setTheoryOpen(previous.getTheoryOpen() == null ? 0 : previous.getTheoryOpen());
+            assignment.setPracticalOpen(previous.getPracticalOpen() == null ? 0 : previous.getPracticalOpen());
+            return;
+        }
+        assignment.setTheoryOpen(Boolean.TRUE.equals(detailVo.getInitialTheoryOpen()) ? 1 : 0);
+        assignment.setPracticalOpen(Boolean.TRUE.equals(detailVo.getInitialPracticalOpen()) ? 1 : 0);
+    }
+
+    /**
+     * 课程物理删除时同步清理本功能新增事实，避免监管对账产生孤儿记录。
+     */
+    private void deleteSupervisionFacts(Long lessonId)
+    {
+        practicalGradingDeadlineMapper.deleteAuditsByLessonId(lessonId);
+        practicalGradingDeadlineMapper.deleteDeadlinesByLessonId(lessonId);
+        lessonClassScopeMapper.deleteByLessonId(lessonId);
+    }
+
+    /** 物联网实验通过外键挂在课程下，必须先清理子表再删除实验和课程。 */
+    private void deleteIotData(Long lessonId)
+    {
+        iotMapper.deleteMessagesByLessonId(lessonId);
+        iotMapper.deleteEventsByLessonId(lessonId);
+        iotMapper.deleteGroupStudentsByLessonId(lessonId);
+        iotMapper.deleteDevicesByLessonId(lessonId);
+        iotMapper.deleteGroupsByLessonId(lessonId);
+        iotMapper.deleteClassConfigsByLessonId(lessonId);
+        iotMapper.deleteExperimentsByLessonId(lessonId);
+    }
+
+    /**
+     * 课程设计器改派班级时，当前指派表和稳定事实必须在同一事务同步切换。
+     */
+    void deactivateOtherCurrentAssignments(Long deptId, String entryYear,
+                                           String classCode, Long currentLessonId)
+    {
+        lessonClassScopeMapper.markOtherAssignmentsInactive(
+                deptId, entryYear, classCode, currentLessonId);
+        lessonAssignmentMapper.deleteOtherAssignmentsByClass(
+                entryYear, classCode, deptId, currentLessonId);
+    }
+
+    private void validateLessonContent(LessonDetailVo detailVo)
+    {
+        String lessonMode = normalizeLessonMode(detailVo.getLessonMode());
+        detailVo.setLessonMode(lessonMode);
+
+        List<BizLessonQuestionDetailVo> questions = detailVo.getQuestions();
+        boolean hasOrdinaryQuestions = !CollectionUtils.isEmpty(questions);
+        if (hasOrdinaryQuestions)
+        {
+            long totalScore = 0L;
+            for (BizLessonQuestionDetailVo question : questions)
+            {
+                if (question == null || question.getQuestionId() == null || question.getQuestionScore() == null
+                        || question.getQuestionScore() < 0)
+                {
+                    throw new ServiceException("课程题目或分值配置不完整");
+                }
+                totalScore += question.getQuestionScore();
+            }
+            if (totalScore != 100L)
+            {
+                throw new ServiceException("普通题目总分必须为100分");
+            }
+        }
+
+        BizLessonGuideSheetBinding current = detailVo.getLessonId() == null
+                ? null : guideSheetBindingMapper.selectCurrentByLessonId(detailVo.getLessonId());
+
+        // 考勤课：允许 0 题、不绑导学单；若已加题或启用导学单则自动按测评规则校验（升级路径）
+        if ("attendance".equals(lessonMode))
+        {
+            if (hasOrdinaryQuestions || Boolean.TRUE.equals(detailVo.getGuideSheetEnabled()) || current != null)
+            {
+                // 已具备测评内容时，仍允许保持 attendance 标记，但内容规则与测评课一致
+                if (Boolean.TRUE.equals(detailVo.getGuideSheetEnabled())
+                        && detailVo.getSourceSheetId() == null && current == null)
+                {
+                    throw new ServiceException("开启电子导学单时必须选择一份导学单");
+                }
+            }
+            return;
+        }
+
+        if (!hasOrdinaryQuestions && !Boolean.TRUE.equals(detailVo.getGuideSheetEnabled()) && current == null)
+        {
+            throw new ServiceException("请至少添加普通题目或启用电子导学单（考勤课请将课程用途设为「课堂考勤」）");
+        }
+
+        if (Boolean.TRUE.equals(detailVo.getGuideSheetEnabled()))
+        {
+            if (detailVo.getSourceSheetId() == null && current == null)
+            {
+                throw new ServiceException("开启电子导学单时必须选择一份导学单");
+            }
+        }
+    }
+
+    /** 归一化课程用途；非法值回退为测评课，避免脏数据阻断保存 */
+    private String normalizeLessonMode(String lessonMode)
+    {
+        if ("attendance".equalsIgnoreCase(lessonMode))
+        {
+            return "attendance";
+        }
+        return "assessment";
+    }
+
+    /**
+     * 写入自动推进配置：考勤课强制关闭；阈值 30～100；延迟 0.5～24 小时。
+     */
+    private void applyAutoAdvanceConfig(BizLesson lessonToSave, LessonDetailVo detailVo, String lessonMode)
+    {
+        if ("attendance".equals(lessonMode))
+        {
+            lessonToSave.setAutoAdvanceEnabled(Boolean.FALSE);
+            lessonToSave.setAutoAdvanceThresholdPct(50);
+            lessonToSave.setAutoAdvanceDelayHours(new java.math.BigDecimal("2.0"));
+            return;
+        }
+        boolean enabled = Boolean.TRUE.equals(detailVo.getAutoAdvanceEnabled());
+        lessonToSave.setAutoAdvanceEnabled(enabled);
+        int pct = detailVo.getAutoAdvanceThresholdPct() != null ? detailVo.getAutoAdvanceThresholdPct() : 50;
+        if (pct < 30)
+        {
+            pct = 30;
+        }
+        if (pct > 100)
+        {
+            pct = 100;
+        }
+        lessonToSave.setAutoAdvanceThresholdPct(pct);
+        java.math.BigDecimal delay = detailVo.getAutoAdvanceDelayHours() != null
+                ? detailVo.getAutoAdvanceDelayHours()
+                : new java.math.BigDecimal("2.0");
+        if (delay.compareTo(new java.math.BigDecimal("0.5")) < 0)
+        {
+            delay = new java.math.BigDecimal("0.5");
+        }
+        if (delay.compareTo(new java.math.BigDecimal("24")) > 0)
+        {
+            delay = new java.math.BigDecimal("24");
+        }
+        lessonToSave.setAutoAdvanceDelayHours(delay);
+    }
+
+    /**
+     * 常规课跟随教师统一推进策略；考勤强制关闭。
+     */
+    private void applyTeacherAdvancePolicyToLesson(BizLesson lessonToSave, Long teacherId, Long deptId, String lessonMode)
+    {
+        if ("attendance".equals(lessonMode))
+        {
+            lessonToSave.setAutoAdvanceEnabled(Boolean.FALSE);
+            lessonToSave.setAutoAdvanceThresholdPct(50);
+            lessonToSave.setAutoAdvanceDelayHours(new java.math.BigDecimal("2.0"));
+            return;
+        }
+        BizLesson policy = bizLessonMapper.selectAdvancePolicyByTeacher(teacherId, deptId);
+        if (policy == null)
+        {
+            lessonToSave.setAutoAdvanceEnabled(Boolean.FALSE);
+            lessonToSave.setAutoAdvanceThresholdPct(50);
+            lessonToSave.setAutoAdvanceDelayHours(new java.math.BigDecimal("2.0"));
+            return;
+        }
+        lessonToSave.setAutoAdvanceEnabled(Boolean.TRUE.equals(policy.getAutoAdvanceEnabled()));
+        lessonToSave.setAutoAdvanceThresholdPct(
+                policy.getAutoAdvanceThresholdPct() != null ? policy.getAutoAdvanceThresholdPct() : 50);
+        lessonToSave.setAutoAdvanceDelayHours(
+                policy.getAutoAdvanceDelayHours() != null ? policy.getAutoAdvanceDelayHours() : new java.math.BigDecimal("2.0"));
+    }
+
+    @Override
+    public Map<String, Object> getTeacherAdvancePolicy()
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        Long teacherId = loginUser.getUserId();
+        Long deptId = loginUser.getDeptId();
+        BizLesson sample = bizLessonMapper.selectAdvancePolicyByTeacher(teacherId, deptId);
+        Map<String, Object> policy = new HashMap<>();
+        if (sample == null)
+        {
+            policy.put("autoAdvanceEnabled", Boolean.FALSE);
+            policy.put("autoAdvanceThresholdPct", 50);
+            policy.put("autoAdvanceDelayHours", new java.math.BigDecimal("2.0"));
+            policy.put("hasPolicy", Boolean.FALSE);
+            return policy;
+        }
+        policy.put("autoAdvanceEnabled", Boolean.TRUE.equals(sample.getAutoAdvanceEnabled()));
+        policy.put("autoAdvanceThresholdPct",
+                sample.getAutoAdvanceThresholdPct() != null ? sample.getAutoAdvanceThresholdPct() : 50);
+        policy.put("autoAdvanceDelayHours",
+                sample.getAutoAdvanceDelayHours() != null ? sample.getAutoAdvanceDelayHours() : new java.math.BigDecimal("2.0"));
+        policy.put("hasPolicy", Boolean.TRUE);
+        return policy;
+    }
+
+    @Override
+    public Map<String, Object> updateTeacherAdvancePolicy(LessonDetailVo config)
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        String username = loginUser.getUsername();
+        Long teacherId = loginUser.getUserId();
+        Long deptId = loginUser.getDeptId();
+        LessonDetailVo safe = config != null ? config : new LessonDetailVo();
+        BizLesson probe = new BizLesson();
+        applyAutoAdvanceConfig(probe, safe, "assessment");
+        bizLessonMapper.upsertAdvancePolicy(
+                teacherId,
+                deptId,
+                Boolean.TRUE.equals(probe.getAutoAdvanceEnabled()),
+                probe.getAutoAdvanceThresholdPct(),
+                probe.getAutoAdvanceDelayHours(),
+                username);
+        int rows = bizLessonMapper.updateAdvancePolicyByCreator(
+                teacherId,
+                username,
+                deptId,
+                Boolean.TRUE.equals(probe.getAutoAdvanceEnabled()),
+                probe.getAutoAdvanceThresholdPct(),
+                probe.getAutoAdvanceDelayHours(),
+                username);
+        lessonAssignmentMapper.clearReadyTimesByTeacher(teacherId, username, deptId);
+        Map<String, Object> policy = getTeacherAdvancePolicy();
+        policy.put("updatedLessons", rows);
+        return policy;
+    }
+
+    private void validateAssignedClasses(Long userId, Long deptId, String entryYear, List<String> classCodes)
+    {
+        if (StringUtils.isBlank(entryYear))
+        {
+            throw new ServiceException("无法根据课程年级确定入学年份");
+        }
+        java.util.Set<String> available = bizStudentMapper.selectDistinctYearAndClassByDeptId(deptId).stream()
+                .filter(Objects::nonNull)
+                .filter(student -> entryYear.equals(student.getEntryYear()))
+                .map(BizStudent::getClassCode)
+                .filter(StringUtils::isNotBlank)
+                .collect(java.util.stream.Collectors.toSet());
+        for (String classCode : classCodes)
+        {
+            String normalized = StringUtils.trimToEmpty(classCode).replace("班", "");
+            if (!available.contains(normalized))
+            {
+                throw new ServiceException("班级不存在或不属于当前学校：" + classCode);
+            }
+            if (!SecurityUtils.isAdmin(userId))
+            {
+                BizTeacherClass managed = new BizTeacherClass();
+                managed.setUserId(userId);
+                managed.setDeptId(deptId);
+                managed.setEntryYear(entryYear);
+                managed.setClassCode(normalized);
+                if (teacherClassMapper.checkTeacherClassExists(managed) <= 0)
+                {
+                    throw new ServiceException("只能指派自己管理的班级：" + classCode);
+                }
+            }
+        }
+    }
+
+    private void assertCanManageLesson(BizLesson lesson)
+    {
+        if (lesson == null)
+        {
+            throw new ServiceException("课程不存在");
+        }
+        Long userId = SecurityUtils.getUserId();
+        if (SecurityUtils.isAdmin(userId))
+        {
+            return;
+        }
+        boolean sameDept = lesson.getDeptId() != null && lesson.getDeptId().equals(SecurityUtils.getDeptId());
+        boolean creator = userId.equals(lesson.getCreatorId())
+                || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
+        if (!sameDept || !creator)
+        {
+            throw new ServiceException("无权管理该课程");
+        }
+    }
+
+    private void assertCanViewLesson(BizLesson lesson)
+    {
+        if (lesson == null)
+        {
+            throw new ServiceException("课程不存在");
+        }
+        Long userId = SecurityUtils.getUserId();
+        if (SecurityUtils.isAdmin(userId))
+        {
+            return;
+        }
+        Long deptId = SecurityUtils.getDeptId();
+        boolean sameDept = lesson.getDeptId() != null && lesson.getDeptId().equals(deptId);
+        boolean creator = userId.equals(lesson.getCreatorId())
+                || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
+        if (!sameDept || (!creator && !hasManagedAssignedClass(lesson, userId, deptId)))
+        {
+            throw new ServiceException("无权查看该课程");
+        }
+    }
+
+    private boolean hasManagedAssignedClass(BizLesson lesson, Long userId, Long deptId)
+    {
+        List<String> assignedClasses = lessonAssignmentMapper.selectClassCodesByLessonIdAndEntryYear(
+                lesson.getLessonId(), lesson.getEntryYear());
+        if (CollectionUtils.isEmpty(assignedClasses)) return false;
+        return assignedClasses.stream().anyMatch(code ->
+                canManageAssignedClass(userId, deptId, lesson.getEntryYear(), code));
+    }
+
+    private boolean canManageAssignedClass(Long userId, Long deptId, String entryYear, String classCode)
+    {
+        if (userId == null || deptId == null || StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+        {
+            return false;
+        }
+        BizTeacherClass managed = new BizTeacherClass();
+        managed.setUserId(userId);
+        managed.setDeptId(deptId);
+        managed.setEntryYear(entryYear.trim());
+        managed.setClassCode(classCode.trim().replace("班", ""));
+        return teacherClassMapper.checkTeacherClassExists(managed) > 0;
+    }
+
+    private void assertLessonHasNoGuideSheetHistory(Long lessonId)
+    {
+        lessonGuideSheetBindingService.assertLessonHasNoHistory(lessonId);
     }
 
     private Map<String, Long> calculateGradeInfo(String entryYear, String schoolType) {
@@ -425,16 +1023,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         }
         try {
             int entryYearInt = Integer.parseInt(entryYear);
-            Calendar now = Calendar.getInstance();
-            int currentYear = now.get(Calendar.YEAR);
-            int currentMonth = now.get(Calendar.MONTH) + 1;
-            int currentDay = now.get(Calendar.DAY_OF_MONTH);
-
-            int gradeNum = (currentYear - entryYearInt);
-
-            if (currentMonth > 7 || (currentMonth == 7 && currentDay >= 20)) {
-                gradeNum += 1;
-            }
+            int gradeNum = AcademicYearUtils.resolveAcademicStartYear(java.time.LocalDate.now())
+                    - entryYearInt + 1;
 
             if (gradeNum <= 0) {
                 gradeInfo.put("新生", 0L);
@@ -477,26 +1067,109 @@ public class BizLessonServiceImpl implements IBizLessonService
     }
 
     private String calculateEntryYearFromGrade(Long grade) {
-        if (grade == null) return null;
-        Calendar now = Calendar.getInstance();
-        int currentYear = now.get(Calendar.YEAR);
-        int currentMonth = now.get(Calendar.MONTH) + 1;
-        int currentDay = now.get(Calendar.DAY_OF_MONTH);
-
-        int gradeNum = grade.intValue();
-        if (grade > 9) {
-            gradeNum = grade.intValue() - 9;
-        } else if (grade > 6) {
-            gradeNum = grade.intValue() - 6;
+        if (grade == null) {
+            throw new ServiceException("课程年级不能为空");
         }
-
-        // 入学年份 = 当前学年起始年 - (学段内年级序号 - 1)
-        // 例如：2025学年，七年级(gradeNum=1)的入学年份是 2025 - (1-1) = 2025
-        int academicStartYear = currentYear;
-        if (currentMonth < 7 || (currentMonth == 7 && currentDay < 20)) {
-            academicStartYear = currentYear - 1;
+        try {
+            return AcademicYearUtils.resolveEntryYear(grade.intValue(), java.time.LocalDate.now());
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException(e.getMessage());
         }
-        int entryYear = academicStartYear - gradeNum + 1;
-        return String.valueOf(entryYear);
+    }
+
+    private void preserveLessonEntryYear(BizLesson existing, String requestedEntryYear)
+    {
+        if (existing == null || StringUtils.isBlank(existing.getEntryYear()))
+        {
+            throw new ServiceException("课程所属入学年份缺失，请先执行学年迁移");
+        }
+        if (StringUtils.isNotBlank(requestedEntryYear)
+                && !existing.getEntryYear().equals(requestedEntryYear.trim()))
+        {
+            throw new ServiceException("课程所属入学年份不可修改，如需跨届使用请复制为新课程");
+        }
+    }
+
+    /**
+     * 开设年级决定历史分栏、课次和推进边界，普通编辑只能修改课程内容，不能迁移年级。
+     */
+    private void preserveLessonGrade(BizLesson existing, Long requestedGrade)
+    {
+        if (existing == null || existing.getGrade() == null)
+        {
+            throw new ServiceException("课程开设年级缺失，请先治理历史数据");
+        }
+        if (requestedGrade != null && !existing.getGrade().equals(requestedGrade))
+        {
+            throw new ServiceException("课程开设年级不可修改，如需跨年级使用请复制为新课程");
+        }
+    }
+
+    /** 一次读取全部课程的当前指派，避免教师首页随课程数增长产生 N+1 查询。 */
+    private void fillDashboardAssignments(List<GradeGroupVo> groups, Long deptId)
+    {
+        List<Long> lessonIds = groups.stream()
+                .filter(Objects::nonNull)
+                .flatMap(group -> group.getLessons() == null
+                        ? java.util.stream.Stream.<LessonInfoVo>empty()
+                        : group.getLessons().stream())
+                .map(LessonInfoVo::getLessonId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (lessonIds.isEmpty())
+        {
+            return;
+        }
+        List<BizLessonAssignment> assignments = lessonAssignmentMapper.selectAssignmentsByLessonIds(lessonIds, deptId);
+        if (assignments == null)
+        {
+            assignments = new ArrayList<>();
+        }
+        Map<String, List<String>> classesByLesson = assignments.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getLessonId() != null && StringUtils.isNotBlank(item.getEntryYear()))
+                .collect(Collectors.groupingBy(
+                        item -> item.getLessonId() + "#" + item.getEntryYear(),
+                        Collectors.mapping(BizLessonAssignment::getClassCode,
+                                Collectors.collectingAndThen(
+                                        Collectors.toCollection(LinkedHashSet::new),
+                                        values -> values.stream()
+                                                .filter(StringUtils::isNotBlank)
+                                                .map(code -> code.endsWith("班") ? code : code + "班")
+                                                .collect(Collectors.toList())))));
+        groups.stream()
+                .filter(Objects::nonNull)
+                .filter(group -> group.getLessons() != null)
+                .forEach(group -> group.getLessons().forEach(lesson -> {
+                    List<String> assignedClasses = classesByLesson.getOrDefault(
+                            lesson.getLessonId() + "#" + lesson.getEntryYear(), new ArrayList<>());
+                    if ("shared".equals(lesson.getCourseType()))
+                    {
+                        HashSet<String> managedClasses = group.getAllClassesInGrade() == null
+                                ? new HashSet<>() : new HashSet<>(group.getAllClassesInGrade());
+                        assignedClasses = assignedClasses.stream()
+                                .filter(managedClasses::contains)
+                                .collect(Collectors.toList());
+                    }
+                    lesson.setAssignedClasses(assignedClasses);
+                }));
+
+        List<Long> openCollaborationLessonIds = collaborationMapper.selectOpenLessonIdsByLessonIds(lessonIds, deptId);
+        if (openCollaborationLessonIds == null) openCollaborationLessonIds = new ArrayList<>();
+        HashSet<Long> openCollaborationSet = new HashSet<>(openCollaborationLessonIds);
+        groups.stream()
+                .filter(Objects::nonNull)
+                .filter(group -> group.getLessons() != null)
+                .flatMap(group -> group.getLessons().stream())
+                .forEach(lesson -> lesson.setHasCollaboration(openCollaborationSet.contains(lesson.getLessonId())));
+    }
+
+    private void validateEntryYear(String entryYear)
+    {
+        if (StringUtils.isBlank(entryYear) || !entryYear.matches("\\d{4}"))
+        {
+            throw new ServiceException("课程所属入学年份格式错误");
+        }
     }
 }

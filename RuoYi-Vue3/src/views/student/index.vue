@@ -1,61 +1,148 @@
+
 <template>
   <div class="student-dashboard">
     <!-- 顶部导航栏 -->
     <header class="dashboard-header">
-      <div class="header-left">
-        <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
-        <span class="platform-name">智慧课堂 - 学生端</span>
-        <div class="view-toggle">
-          <el-button size="small" type="primary" disabled>主页</el-button>
-          <el-button size="small" plain @click="switchToGuideSheet">电子导学单</el-button>
-        </div>
-      </div>
-      <div class="header-right">
-        <div class="header-actions">
-          <el-button
-            type="primary"
-            link
-            icon="Timer"
-            @click="handleCommand('history')"
-            >历史成绩</el-button
-          >
-          <el-button
-            type="danger"
-            link
-            icon="Edit"
-            @click="handleCommand('wrong_book')"
-            >我的错题</el-button
-          >
-        </div>
-        <el-divider direction="vertical" class="header-divider" />
-        <el-dropdown trigger="click" @command="handleCommand">
-          <div class="user-info">
-            <el-avatar :size="36" shape="circle" icon="UserFilled" />
-            <span class="user-name">{{
-              studentInfo.studentName || "同学"
-            }}</span>
-            <el-icon><CaretBottom /></el-icon>
+      <div class="dashboard-header__inner">
+        <div class="header-left">
+          <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
+          <span class="platform-name">智慧课堂 - 学生端</span>
+          <div v-if="hasGuideSheet" class="view-toggle" role="tablist" aria-label="课程内容切换">
+            <el-button
+              size="small"
+              :type="activeLearningMode === 'daily' ? 'primary' : 'default'"
+              :plain="activeLearningMode !== 'daily'"
+              @click="switchToDailyCourse"
+            >日常课程题目</el-button>
+            <el-button
+              size="small"
+              :type="activeLearningMode === 'guide' ? 'primary' : 'default'"
+              :plain="activeLearningMode !== 'guide'"
+              @click="switchToGuideSheet"
+            >电子导学单</el-button>
           </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="password">修改密码</el-dropdown-item>
-              <el-dropdown-item divided command="logout"
-                >退出登录</el-dropdown-item
-              >
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        </div>
+        <div class="header-right">
+          <div class="header-actions">
+            <el-button
+              v-if="iotEnabled"
+              type="success"
+              link
+              icon="Cpu"
+              @click="$router.push({ path: '/student/iot', query: { lessonId } })"
+              >物联实验</el-button
+            >
+            <el-button
+              type="warning"
+              link
+              icon="Cpu"
+              @click="$router.push('/student/python-practice')"
+              >Python 练习</el-button
+            >
+            <el-button
+              type="info"
+              link
+              icon="Link"
+              @click="studentToolVisible = true"
+              >学生实验工具</el-button
+            >
+            <el-button
+              type="primary"
+              link
+              icon="Timer"
+              @click="handleCommand('history')"
+              >历史成绩</el-button
+            >
+            <el-button
+              type="danger"
+              link
+              icon="Edit"
+              @click="handleCommand('wrong_book')"
+              >我的错题</el-button
+            >
+          </div>
+          <el-divider direction="vertical" class="header-divider" />
+          <el-dropdown trigger="click" @command="handleCommand">
+            <div class="user-info">
+              <el-avatar :size="36" shape="circle" icon="UserFilled" />
+              <span class="user-name">{{
+                studentInfo.studentName || "同学"
+              }}</span>
+              <el-icon><CaretBottom /></el-icon>
+            </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item divided command="logout"
+                  >退出登录</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </div>
     </header>
 
+    <!-- 学生实验工具面板：先本节课，后常驻；点击新标签页打开 -->
+    <el-dialog
+      v-model="studentToolVisible"
+      title="学生实验工具"
+      width="560px"
+      append-to-body
+      destroy-on-close
+      class="student-tool-dialog"
+    >
+      <div v-if="!hasToolList" class="student-tool-empty">
+        <el-empty description="当前没有可用的实验工具" :image-size="80" />
+      </div>
+      <template v-else>
+        <div v-if="lessonTools.length" class="tool-group">
+          <div class="tool-group-title">
+            <el-icon><Collection /></el-icon> 本节课工具
+          </div>
+          <div class="tool-grid">
+            <div v-for="tool in lessonTools" :key="'l' + tool.toolId" class="tool-item">
+              <el-link type="primary" :href="tool.toolUrl" target="_blank" rel="noopener noreferrer">
+                <el-icon><Link /></el-icon>{{ tool.toolName }}
+              </el-link>
+            </div>
+          </div>
+        </div>
+        <div v-if="residentTools.length" class="tool-group">
+          <div class="tool-group-title">
+            <el-icon><Star /></el-icon> 常驻工具
+          </div>
+          <div class="tool-grid">
+            <div v-for="tool in residentTools" :key="'r' + tool.toolId" class="tool-item">
+              <el-link type="primary" :href="tool.toolUrl" target="_blank" rel="noopener noreferrer">
+                <el-icon><Link /></el-icon>{{ tool.toolName }}
+              </el-link>
+            </div>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 加载中 -->
-    <div v-if="loading" class="loading-container">
+    <div v-if="loading && activeLearningMode === 'daily'" class="loading-container">
       <el-icon class="is-loading"><Loading /></el-icon>
       <p>正在加载课程内容...</p>
     </div>
 
+    <el-result
+      v-else-if="accessCheckFailed"
+      icon="warning"
+      title="暂时无法进入课程"
+      sub-title="系统未能确认区域抽测状态，请检查网络后重试。为保证抽测优先级，当前不会加载日常课程。"
+      class="access-error-state"
+    >
+      <template #extra>
+        <el-button type="primary" :loading="loading" @click="fetchData">重新检查</el-button>
+      </template>
+    </el-result>
+
     <!-- 主内容区 -->
-    <main v-else class="main-content">
+    <main v-else v-show="activeLearningMode === 'daily'" class="main-content">
       <!-- 课程信息Banner -->
       <div class="lesson-banner" v-if="hasLesson">
         <div class="banner-content">
@@ -66,8 +153,7 @@
                 studentInfo.deptName
               }}</el-tag>
               <el-tag type="success" effect="dark"
-                >{{ studentInfo.gradeName
-                }}{{ studentInfo.classCode }}班</el-tag
+                >{{ studentClassLabel }}</el-tag
               >
               <el-tag type="warning" effect="dark">{{
                 studentInfo.studentName || "同学"
@@ -96,10 +182,48 @@
       <!-- 无课程提示 -->
       <el-empty v-if="!hasLesson" description="暂无课程，请休息一下吧~" />
 
+      <!-- 课堂考勤：展示课程名、签到状态、教师说明；不计作业分 -->
+      <div v-else-if="lessonMode === 'attendance'" class="task-container attendance-panel">
+        <el-card shadow="never" class="attendance-card">
+          <div class="attendance-header">
+            <el-tag type="warning" effect="dark">课堂考勤</el-tag>
+            <h2 class="attendance-title">{{ lessonTitle }}</h2>
+          </div>
+          <p v-if="teacherNote" class="attendance-note">{{ teacherNote }}</p>
+          <p v-else class="attendance-note muted">教师暂无额外说明，请完成签到即可。</p>
+          <div class="attendance-status">
+            <template v-if="checkedIn">
+              <el-result icon="success" title="已签到" :sub-title="checkinTimeText">
+              </el-result>
+            </template>
+            <template v-else>
+              <el-button type="primary" size="large" :loading="checkinLoading" @click="handleStudentCheckin">
+                立即签到
+              </el-button>
+              <p class="attendance-hint">签到不计作业分，不计入作业均分。</p>
+            </template>
+          </div>
+        </el-card>
+      </div>
+
       <div v-else class="task-container">
+        <!-- 题目未开放提示：课程有题但老师未在课堂开启 -->
+        <el-alert v-if="!theoryOpen && hasTheory && !practicalOpen && hasPractical" type="info" :closable="false" show-icon class="gate-tip"
+          title="本课理论测试题与操作题暂未开放，请等老师在课堂开启后作答" />
+        <el-alert v-else-if="!theoryOpen && hasTheory" type="info" :closable="false" show-icon class="gate-tip"
+          title="本课理论测试题暂未开放，请等老师在课堂开启后作答" />
+        <el-alert v-else-if="!practicalOpen && hasPractical" type="info" :closable="false" show-icon class="gate-tip"
+          title="本课操作题暂未开放，请等老师在课堂开启后作答" />
+        <el-card v-if="collaborationRooms.length" shadow="never" class="collaboration-card">
+          <template #header><div class="card-header"><span>班级在线协作</span><el-tag type="success">同班共享</el-tag></div></template>
+          <div v-for="room in collaborationRooms" :key="room.roomId" class="collaboration-room-row">
+            <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.fileName }} · 第 {{ room.version }} 版</span></div>
+            <el-button type="primary" @click="openCollaboration(room)">进入房间</el-button>
+          </div>
+        </el-card>
         <!-- 空状态提示 -->
         <el-empty 
-          v-if="typingQuestions.length === 0 && theoryQuestions.length === 0 && practicalQuestions.length === 0" 
+          v-if="typingQuestions.length === 0 && theoryQuestions.length === 0 && practicalQuestions.length === 0"
           description="本课程暂无练习题目" 
         />
         <!-- 1. 打字练习区域 -->
@@ -336,7 +460,7 @@
                   :key="opt"
                   class="option-radio"
                   :class="{ active: answers[q.questionId] === opt }"
-                  @click="!theorySubmitted && (answers[q.questionId] = opt)"
+                  @click="selectTheoryAnswer(q.questionId, opt)"
                 >
                   <span class="opt-label">{{ opt }}</span>
                   <span class="opt-text">{{
@@ -350,7 +474,7 @@
                 v-else-if="q.questionType === 'judgment'"
                 class="audit-group"
               >
-                <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted">
+                <el-radio-group v-model="answers[q.questionId]" :disabled="theorySubmitted" @change="markQuestionWorking(q.questionId)">
                   <el-radio value="T" border>正确</el-radio>
                   <el-radio value="F" border>错误</el-radio>
                 </el-radio-group>
@@ -385,7 +509,7 @@
           </div>
           <div class="practical-list">
             <el-card
-              v-for="(q, index) in practicalQuestions"
+              v-for="(q, index) in filePracticalQuestions"
               :key="q.questionId"
               class="practical-card"
               shadow="hover"
@@ -422,7 +546,7 @@
 
               <!-- 题目描述 -->
               <div class="question-stem">
-                <span v-if="practicalQuestions.length > 1">{{ index + 1 }}. </span>
+                <span v-if="filePracticalQuestions.length > 1">{{ index + 1 }}. </span>
                 {{ q.questionContent }}
               </div>
 
@@ -435,38 +559,47 @@
               </div>
 
               <!-- 素材文件下载 -->
-              <div v-if="q.filePath" class="material-section">
+              <div v-if="getStudentMaterials(q).length" class="material-section">
                 <span class="material-label">素材文件：</span>
-                <span class="material-name">{{ getFileName(q.filePath) }}</span>
-                <el-button
-                  type="primary"
-                  size="small"
-                  icon="Download"
-                  @click="downloadMaterial(q.filePath)"
-                >
-                  下载素材
-                </el-button>
+                <div class="material-files">
+                  <div v-for="(material, materialIndex) in getStudentMaterials(q)" :key="material.materialId || materialIndex" class="material-file-row">
+                    <span class="material-name">{{ material.originalFileName || getFileName(material.resourcePath) }}</span>
+                    <el-button type="primary" size="small" icon="Download" @click="downloadMaterial(material.resourcePath, material.originalFileName)">下载</el-button>
+                  </div>
+                </div>
               </div>
 
               <!-- 作品上传区域 -->
               <div class="upload-section">
                 <span class="upload-label">提交作品：</span>
                 <el-upload
-                  v-if="!practicalUploads[q.questionId]"
                   class="work-uploader"
                   :action="uploadUrl"
+                  :data="{ lessonId, questionId: q.questionId }"
                   :headers="uploadHeaders"
-                  :limit="1"
-                  :on-success="(res) => handleUploadSuccess(q.questionId, res)"
-                  :on-error="handleUploadError"
-                  :on-exceed="handleUploadExceed"
+                  :multiple="true"
+                  :limit="getPracticalUploadLimit(q)"
+                  :before-upload="(file) => beforePracticalUpload(q, file)"
+                  :on-success="(res, file) => handleUploadSuccess(q.questionId, res, file)"
+                  :on-error="(error, file) => handleUploadError(q.questionId, error, file)"
+                  :on-exceed="() => handleUploadExceed(q)"
                   :show-file-list="false"
-                  accept=".docx,.doc,.pdf,.pptx,.ppt,.xlsx,.xls"
+                  :accept="getPracticalAccept(q)"
                 >
-                  <el-button type="success" icon="Upload">上传作品</el-button>
+                  <el-button type="primary" icon="Upload" :loading="submittingPracticalQuestionId === q.questionId">
+                    {{ practicalUploads[q.questionId] ? "选择并提交新版本" : "选择并提交作品" }}
+                  </el-button>
                 </el-upload>
 
-                <!-- 上传已成功，预览转换由服务器异步完成 -->
+                <div v-if="getPracticalDrafts(q.questionId).length" class="practical-draft-list">
+                  <div v-for="(draft, draftIndex) in getPracticalDrafts(q.questionId)" :key="draft.uploadToken" class="draft-file">
+                    <span>{{ draftIndex + 1 }}. {{ draft.originalFileName }}</span>
+                    <el-button link type="danger" @click="removePracticalDraft(q.questionId, draftIndex)">移除</el-button>
+                  </div>
+                  <span class="upload-tip">文件上传完成后会自动提交。Office/PDF 仅 1 个；图片可按顺序提交 1～{{ getPracticalUploadLimit(q) }} 张</span>
+                </div>
+
+                <!-- 新版本已提交，预览转换由服务器异步完成 -->
                 <div
                   v-else-if="uploadingQuestionId === q.questionId"
                   class="uploading-status"
@@ -476,11 +609,11 @@
                 </div>
 
                 <!-- 已上传文件展示 -->
-                <div v-else class="uploaded-file">
+                <div v-else-if="practicalUploads[q.questionId]" class="uploaded-file">
                   <el-icon><Document /></el-icon>
                   <div class="uploaded-meta">
                     <span class="file-name">{{
-                      getFileName(practicalUploads[q.questionId])
+                      getPracticalDisplayName(q.questionId)
                     }}</span>
                     <span
                       class="preview-state"
@@ -489,7 +622,7 @@
                       {{ getPracticalPreviewLabel(q.questionId) }}
                     </span>
                   </div>
-                  <el-button-group>
+                  <el-button-group v-if="getPracticalAttachments(q.questionId).length <= 1">
                     <el-button
                       type="primary"
                       size="small"
@@ -514,12 +647,57 @@
                     >
                   </el-button-group>
                 </div>
+                <div v-if="getPracticalAttachments(q.questionId).length > 1" class="practical-attachment-list">
+                  <div v-for="(attachment, attachmentIndex) in getPracticalAttachments(q.questionId)" :key="attachment.attachmentId || attachmentIndex" class="attachment-row">
+                    <span>{{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}</span>
+                    <el-button
+                      link
+                      type="primary"
+                      :disabled="!canPreviewPractical(q.questionId, attachmentIndex)"
+                      @click="previewWork(q.questionId, attachmentIndex)"
+                    >预览</el-button>
+                    <el-button link type="info" @click="downloadSubmittedWork(q.questionId, attachmentIndex)">下载</el-button>
+                  </div>
+                </div>
               </div>
             </el-card>
           </div>
+          <div v-if="flowchartPracticalQuestions.length" class="flowchart-question-list">
+            <el-card v-for="(q, index) in flowchartPracticalQuestions" :key="q.questionId" class="practical-card flowchart-card" shadow="hover">
+              <template #header>
+                <div class="card-header">
+                  <span class="badge flowchart-badge">画程流程图</span>
+                  <span class="score-status">
+                    <span v-if="practicalScores[q.questionId] != null" class="scored score-num">{{ practicalScores[q.questionId] }}/{{ q.questionScore }}分</span>
+                    <span v-else-if="practicalUploads[q.questionId]" class="pending">已提交 · 待批阅</span>
+                    <span v-else class="not-submitted">{{ q.questionScore }}分</span>
+                  </span>
+                </div>
+              </template>
+              <div class="question-stem"><span v-if="flowchartPracticalQuestions.length > 1">{{ index + 1 }}. </span>{{ q.questionContent }}</div>
+              <div class="flowchart-entry">
+                <div>
+                  <strong>在平台内直接完成</strong>
+                  <p>拖动图形、连接箭头，系统会自动保存草稿；完成后请点击“完成并提交”。</p>
+                </div>
+                <el-button type="primary" size="large" @click="openFlowchart(q)">
+                  {{ practicalUploads[q.questionId] ? '查看画程作品' : '打开画程开始作答' }}
+                </el-button>
+              </div>
+            </el-card>
+          </div>
+          <student-programming-question v-for="q in pythonPracticalQuestions" :key="q.questionId" :lesson-id="lessonId" :question="q" @completed="fetchData" />
         </div>
       </div>
     </main>
+
+    <student-guide-sheet
+      v-if="hasGuideSheet && activeLearningMode === 'guide'"
+      ref="guideSheetRef"
+      embedded
+      :expected-binding-id="guideSheetBindingId"
+      @switch-mode="activeLearningMode = 'daily'"
+    />
 
     <!-- 修改密码弹窗 -->
     <el-dialog
@@ -611,12 +789,14 @@
           width="80"
           align="center"
         />
-        <el-table-column
-          prop="practicalScore"
-          label="操作"
-          width="80"
-          align="center"
-        />
+        <el-table-column label="操作" width="150" align="center">
+          <template #default="{ row }">
+            <span>{{ row.practicalScore }}</span>
+            <small v-if="row.filePracticalScore || row.pythonPracticalScore || row.flowchartPracticalScore" class="practical-score-detail">
+              文件 {{ row.filePracticalScore || '0/0' }} · Python {{ row.pythonPracticalScore || '0/0' }} · 画程 {{ row.flowchartPracticalScore || '0/0' }}
+            </small>
+          </template>
+        </el-table-column>
         <el-table-column label="提交时间" width="160" align="center">
           <template #default="{ row }">
             {{ formatDateTime(row.submitTime) }}
@@ -832,6 +1012,8 @@
 
     <!-- PDF预览组件 -->
     <pdf-preview ref="pdfPreviewRef" />
+    <student-flowchart-dialog v-model="flowchartDialogVisible" :lesson-id="lessonId"
+      :question="activeFlowchartQuestion" @submitted="fetchData" />
   </div>
 </template>
 
@@ -842,6 +1024,10 @@ import {
   submitAnswers as submitAnswersApi,
   getHistoryScores,
   getWrongQuestions,
+  studentCheckin,
+  submitPracticalArtifact,
+  deletePracticalArtifact,
+  markClassroomTaskState,
 } from "@/api/business/studentHome";
 import { checkCurrentCountyExam } from "@/api/business/countyExam";
 import { updateUserPwd } from "@/api/system/user";
@@ -849,6 +1035,13 @@ import useUserStore from "@/store/modules/user";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import PdfPreview from "@/components/PdfPreview/index.vue";
+import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
+import StudentProgrammingQuestion from "@/components/StudentProgrammingQuestion/index.vue";
+import StudentFlowchartDialog from "@/components/FlowchartEditor/StudentFlowchartDialog.vue";
+import { getStudentProgramming } from "@/api/business/programming";
+import { questionTypeLabel } from "@/utils/questionType";
+import Download from "@/plugins/download";
+import { getCurrentCollaborationRooms } from "@/api/business/collaboration";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -859,7 +1052,27 @@ const userStore = useUserStore();
 const loading = ref(true);
 const hasLesson = ref(false);
 const lessonId = ref(null);
+// 学生实验工具 + 题目开放开关状态
+const studentToolVisible = ref(false);
+const lessonTools = ref([]);
+const residentTools = ref([]);
+const hasToolList = computed(() => lessonTools.value.length > 0 || residentTools.value.length > 0);
+const theoryOpen = ref(false);
+const practicalOpen = ref(false);
+const hasTheory = ref(false);
+const hasPractical = ref(false);
 const lessonTitle = ref("");
+const lessonMode = ref("assessment");
+const teacherNote = ref("");
+const checkedIn = ref(false);
+const checkinTime = ref(null);
+const checkinLoading = ref(false);
+const iotEnabled = ref(false);
+const hasGuideSheet = ref(false);
+const guideSheetBindingId = ref(null);
+const activeLearningMode = ref("daily");
+const guideSheetRef = ref(null);
+const accessCheckFailed = ref(false);
 const allQuestions = ref([]);
 const lessonConfig = ref({
   shuffleMode: 0,
@@ -867,6 +1080,28 @@ const lessonConfig = ref({
   randomJudgmentCount: 0,
 });
 const studentInfo = ref({});
+const studentClassLabel = computed(() => {
+  const gradeName = studentInfo.value.gradeName || '未知年级'
+  const classCode = studentInfo.value.classCode || ''
+  const gradeLabel = gradeName === '已毕业' && studentInfo.value.entryYear
+    ? `${studentInfo.value.entryYear}级（已毕业）`
+    : gradeName
+  return `${gradeLabel}${classCode}班`
+})
+const collaborationRooms = ref([]);
+
+function openCollaboration(room) {
+  router.push(`/student/collaboration/${room.roomId}`);
+}
+
+const checkinTimeText = computed(() => {
+  if (!checkinTime.value) return "签到成功";
+  try {
+    return `签到时间：${new Date(checkinTime.value).toLocaleString()}`;
+  } catch (e) {
+    return "签到成功";
+  }
+});
 
 // 确定性随机：使用 seed 生成固定随机序列
 function seededRandom(seed) {
@@ -897,8 +1132,6 @@ function applyRandomShuffle(questions, config, studentId, lessonIdVal) {
   
   // 生成唯一种子：studentId + lessonId
   const seed = (studentId || 0) * 10000 + (lessonIdVal || 0);
-  console.log('🎲 随机出题 seed计算:', { studentId, lessonIdVal, seed, shuffleMode, randomChoiceCount, randomJudgmentCount });
-  
   // 分类
   const typing = questions.filter(q => q.questionType === 'typing');
   const practical = questions.filter(q => q.questionType === 'practical');
@@ -1078,7 +1311,6 @@ async function loadWrongQuestions() {
   wrongResults.value = {};
   try {
     const res = await getWrongQuestions(selectedWrongLessonId.value);
-    console.log("Wrong questions data:", res);
     let list = [];
     if (Array.isArray(res)) {
       list = res;
@@ -1186,10 +1418,13 @@ const theorySubmitted = ref(false);
 const typingQuestions = computed(() =>
   allQuestions.value.filter((q) => q.questionType === "typing")
 );
+// 理论题：老师课堂上开启后才显示（老师未开启时不渲染作答区）
 const theoryQuestions = computed(() =>
-  allQuestions.value.filter((q) =>
-    ["choice", "judgment"].includes(q.questionType)
-  )
+  theoryOpen.value
+    ? allQuestions.value.filter((q) =>
+        ["choice", "judgment"].includes(q.questionType)
+      )
+    : []
 );
 
 // 理论测试总分
@@ -1200,17 +1435,94 @@ const theoryTotalScore = computed(() => {
   );
 });
 
-// 操作题
+// 操作题：老师课堂上开启后才显示（老师未开启时不渲染作答区）
 const practicalQuestions = computed(() =>
-  allQuestions.value.filter((q) => q.questionType === "practical")
+  practicalOpen.value
+    ? allQuestions.value.filter((q) => q.questionType === "practical")
+    : []
 );
+// 兼容历史接口的下划线字段和不同大小写，避免 Python 题误回退到文件上传。
+function isPythonPracticalQuestion(question) {
+  const mode = question?.practicalMode ?? question?.practical_mode;
+  return String(mode || "").trim().toUpperCase() === "PYTHON";
+}
+
+function isFlowchartPracticalQuestion(question) {
+  const mode = question?.practicalMode ?? question?.practical_mode;
+  return String(mode || "").trim().toUpperCase() === "FLOWCHART";
+}
+
+// 兼容历史 DTO 漏传 practicalMode 的情况：仅对作答方式为空的操作题回查平台后端。
+// 普通文件题的回查会被后端拒绝，仍按文件上传处理，不会误显示为编程题。
+async function resolveMissingPracticalModes(questions, currentLessonId) {
+  const pending = (questions || []).filter(
+    (question) => question?.questionType === "practical" && !String(question?.practicalMode ?? question?.practical_mode ?? "").trim()
+  );
+  await Promise.all(pending.map(async (question) => {
+    try {
+      const result = await getStudentProgramming(currentLessonId, question.questionId);
+      if (String(result?.data?.config?.languageCode || "").toLowerCase() === "python") {
+        question.practicalMode = "PYTHON";
+      }
+    } catch (error) {
+      // 无 Python 配置或没有权限时保留 FILE 回退，不影响普通操作题作答。
+    }
+  }));
+}
+const pythonPracticalQuestions = computed(() =>
+  practicalQuestions.value.filter(isPythonPracticalQuestion)
+);
+const flowchartPracticalQuestions = computed(() =>
+  practicalQuestions.value.filter(isFlowchartPracticalQuestion)
+);
+const filePracticalQuestions = computed(() =>
+  practicalQuestions.value.filter((q) => !isPythonPracticalQuestion(q) && !isFlowchartPracticalQuestion(q))
+);
+const flowchartDialogVisible = ref(false);
+const activeFlowchartQuestion = ref(null);
+
+function openFlowchart(question) {
+  markQuestionWorking(question.questionId);
+  activeFlowchartQuestion.value = question;
+  flowchartDialogVisible.value = true;
+}
 const practicalUploads = ref({}); // { questionId: uploadedFilePath }
 const practicalScores = ref({}); // { questionId: score | null } - null表示未批阅
 const practicalPreviewStatuses = ref({}); // { questionId: previewStatus }
 const practicalPreviewPaths = ref({}); // { questionId: previewPath }
+const practicalArtifacts = ref({}); // { questionId: 当前不可变作品版本 }
+const practicalDrafts = ref({}); // { questionId: 暂存文件凭证[] }
+const practicalUploadStates = ref({});
+const practicalAutoCommitTimers = new Map();
 const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { answer, score, previewStatus, previewPath } }
 const uploadingQuestionId = ref(null); // 正在上传/转换的题目ID（用于显示loading）
+const submittingPracticalQuestionId = ref(null);
 const practicalPollingTimers = {};
+const enteredTaskIds = new Set();
+const workingTaskIds = new Set();
+
+function reportTaskState(questionId, taskState) {
+  if (!lessonId.value || !questionId) return Promise.resolve();
+  return markClassroomTaskState({ lessonId: lessonId.value, questionId, taskState }).catch(() => undefined);
+}
+
+function markQuestionEntered(questionId) {
+  if (enteredTaskIds.has(questionId) || submittedAnswers.value[questionId]) return;
+  enteredTaskIds.add(questionId);
+  reportTaskState(questionId, 'ENTERED');
+}
+
+function markQuestionWorking(questionId) {
+  if (workingTaskIds.has(questionId) || submittedAnswers.value[questionId]) return;
+  workingTaskIds.add(questionId);
+  reportTaskState(questionId, 'WORKING');
+}
+
+function selectTheoryAnswer(questionId, answer) {
+  if (theorySubmitted.value) return;
+  answers.value[questionId] = answer;
+  markQuestionWorking(questionId);
+}
 
 // 操作题总分
 const practicalTotalScore = computed(() => {
@@ -1255,7 +1567,9 @@ const courseMyScore = computed(() => {
 
   // 操作题得分（已批阅的）
   practicalQuestions.value.forEach((q) => {
-    const score = practicalScores.value[q.questionId];
+    const score = isPythonPracticalQuestion(q)
+      ? submittedAnswers.value[q.questionId]?.score
+      : practicalScores.value[q.questionId];
     if (score !== null && score !== undefined) {
       total += score;
       hasAnyScore = true;
@@ -1270,7 +1584,9 @@ const practicalMyScore = computed(() => {
   let total = 0;
   let hasAnyScore = false;
   practicalQuestions.value.forEach((q) => {
-    const score = practicalScores.value[q.questionId];
+    const score = isPythonPracticalQuestion(q)
+      ? submittedAnswers.value[q.questionId]?.score
+      : practicalScores.value[q.questionId];
     if (score !== null && score !== undefined) {
       total += score;
       hasAnyScore = true;
@@ -1294,25 +1610,55 @@ const typingMyScore = computed(() => {
 });
 
 // 上传配置
-const uploadUrl = import.meta.env.VITE_APP_BASE_API + "/common/upload";
+const uploadUrl = import.meta.env.VITE_APP_BASE_API + "/business/student-home/practical-upload";
 const uploadHeaders = computed(() => ({
   Authorization: "Bearer " + userStore.token,
 }));
 
-// 加载数据
-async function fetchData() {
-  loading.value = true;
+// 加载数据（silent=静默轮询：不触发整屏 loading，失败时保留现有页面状态）
+async function fetchData(opts = {}) {
+  const silent = opts && opts.silent === true;
+  if (!silent) {
+    loading.value = true;
+  }
+  accessCheckFailed.value = false;
   try {
-    const countyExamRes = await checkCurrentCountyExam().catch(() => ({ data: { hasExam: false } }));
+    // 区域抽测检查失败时停止加载日常课程，避免网络异常导致优先级失效。
+    const countyExamRes = await checkCurrentCountyExam();
     if (countyExamRes.data?.hasExam && !countyExamRes.data?.ended) {
       router.replace("/student/county-exam");
       return;
     }
     const res = await getCurrentLesson();
+    try {
+      const collaborationRes = await getCurrentCollaborationRooms();
+      collaborationRooms.value = collaborationRes.data || collaborationRes || [];
+    } catch (collaborationError) {
+      collaborationRooms.value = [];
+    }
+    if (res.blockedByCountyExam) {
+      router.replace("/student/county-exam");
+      return;
+    }
     hasLesson.value = res.hasLesson || false;
+    hasGuideSheet.value = false;
+    guideSheetBindingId.value = null;
+    lessonMode.value = "assessment";
+    teacherNote.value = "";
+    checkedIn.value = false;
+    checkinTime.value = null;
+    iotEnabled.value = false;
     if (res.hasLesson) {
       lessonId.value = res.lessonId;
       lessonTitle.value = res.lessonTitle;
+      lessonMode.value = res.lessonMode === "attendance" ? "attendance" : "assessment";
+      teacherNote.value = res.teacherNote || "";
+      checkedIn.value = Boolean(res.checkedIn);
+      checkinTime.value = res.checkinTime || null;
+      // 课程级物联网开关：只有教师开启后才显示「物联实验」入口。
+      iotEnabled.value = Boolean(res.iotEnabled);
+      guideSheetBindingId.value = res.guideSheetBindingId || res.guideSheetBinding?.bindingId || null;
+      hasGuideSheet.value = Boolean(res.guideSheetEnabled && guideSheetBindingId.value);
       
       // 保存课程随机配置
       lessonConfig.value = {
@@ -1323,16 +1669,7 @@ async function fetchData() {
       
       // 应用随机逻辑
       const rawQuestions = res.questions || [];
-      
-      // Debug: 打印操作题评分标准
-      rawQuestions.filter(q => q.questionType === 'practical').forEach(q => {
-        console.log('📋 操作题评分标准 Debug:', {
-          questionId: q.questionId,
-          questionContent: q.questionContent?.substring(0, 30),
-          scoringItems: q.scoringItems,
-          scoringItemsLength: q.scoringItems?.length
-        });
-      });
+      await resolveMissingPracticalModes(rawQuestions, res.lessonId);
       
       const studentId = res.studentInfo?.studentId || 0;
       allQuestions.value = applyRandomShuffle(
@@ -1344,20 +1681,67 @@ async function fetchData() {
       
       studentInfo.value = res.studentInfo || {};
       submittedAnswers.value = res.submittedAnswers || {};
+      // 学生实验工具与题目开放开关（班级x当前课程，推进自动复位）
+      lessonTools.value = res.studentTools?.lessonTools || [];
+      residentTools.value = res.studentTools?.residentTools || [];
+      theoryOpen.value = Boolean(res.theoryOpen);
+      practicalOpen.value = Boolean(res.practicalOpen);
+      hasTheory.value = Boolean(res.hasTheory);
+      hasPractical.value = Boolean(res.hasPractical);
       initTypingStates();
       initPracticalStates(); // 初始化操作题状态
       initTheoryState(); // 初始化理论测试状态（检查是否已提交）
+      if (!silent) {
+        [...theoryQuestions.value, ...typingQuestions.value, ...practicalQuestions.value]
+          .forEach((question) => markQuestionEntered(question.questionId));
+      }
     }
   } catch (err) {
-    console.error(err);
+    // 静默轮询失败不清空现有状态，下个周期再试；避免一次网络抖动抹掉整页课程
+    if (silent) {
+      return;
+    }
+    // 抽测状态无法确认时保持关闭，禁止回落到日常课程。
+    accessCheckFailed.value = true;
+    hasLesson.value = false;
+    hasGuideSheet.value = false;
+    guideSheetBindingId.value = null;
+    lessonMode.value = "assessment";
+    teacherNote.value = "";
+    checkedIn.value = false;
+    checkinTime.value = null;
+    iotEnabled.value = false;
+    allQuestions.value = [];
+    lessonTools.value = [];
+    residentTools.value = [];
+    theoryOpen.value = false;
+    practicalOpen.value = false;
+    hasTheory.value = false;
+    hasPractical.value = false;
+    activeLearningMode.value = 'daily';
   } finally {
     loading.value = false;
   }
 }
 
+async function handleStudentCheckin() {
+  if (!lessonId.value || checkinLoading.value) return;
+  checkinLoading.value = true;
+  try {
+    const res = await studentCheckin(lessonId.value);
+    checkedIn.value = true;
+    checkinTime.value = res.checkinTime || new Date().toISOString();
+    ElMessage.success(res.msg || "签到成功");
+  } catch (e) {
+    // request 拦截器通常已提示
+  } finally {
+    checkinLoading.value = false;
+  }
+}
+
 // 初始化操作题状态（加载已提交的作品）
 function initPracticalStates() {
-  practicalQuestions.value.forEach((q) => {
+  filePracticalQuestions.value.forEach((q) => {
     syncPracticalSubmission(q.questionId, submittedAnswers.value[q.questionId]);
   });
 }
@@ -1368,11 +1752,13 @@ function syncPracticalSubmission(questionId, submitted) {
     practicalScores.value[questionId] = submitted.score;
     practicalPreviewPaths.value[questionId] = submitted.previewPath || "";
     practicalPreviewStatuses.value[questionId] = submitted.previewStatus || (submitted.previewPath ? "success" : "");
+    practicalArtifacts.value[questionId] = submitted.artifact || null;
   } else {
     delete practicalUploads.value[questionId];
     delete practicalScores.value[questionId];
     delete practicalPreviewStatuses.value[questionId];
     delete practicalPreviewPaths.value[questionId];
+    delete practicalArtifacts.value[questionId];
   }
 }
 
@@ -1492,6 +1878,7 @@ function initTypingStates() {
 
 // 点击"开始练习"按钮
 function startTypingPractice(qid) {
+  markQuestionWorking(qid);
   const state = typingStates.value[qid];
   if (!state || state.started) return;
 
@@ -1555,6 +1942,7 @@ function handlePasteBlock() {
 }
 
 function handleTypingInput(qid, val) {
+  markQuestionWorking(qid);
   updateTypingStats(qid, val);
 
   // 检测是否打完所有字
@@ -1637,13 +2025,6 @@ function autoSubmitTyping(qid) {
   if (timeSpent < 1) timeSpent = 1;
 
   const submitTimes = { [qid]: timeSpent };
-
-  console.log("=== 前端提交调试 Start ===");
-  console.log("题目ID:", qid);
-  console.log("提交内容:", answers.value[qid]);
-  console.log("实际耗时:", timeSpent, "秒");
-  console.log("当前统计状态:", JSON.parse(JSON.stringify(state)));
-  console.log("=== 前端提交调试 End ===");
 
   // 打字详情统计
   const typingStats = {
@@ -1773,121 +2154,222 @@ function getFileName(filePath) {
 }
 
 // 下载素材文件
-function downloadMaterial(filePath) {
+function downloadMaterial(filePath, originalFileName) {
   if (!filePath) return;
-  const baseUrl = import.meta.env.VITE_APP_BASE_API;
-  const fullUrl = baseUrl + filePath;
-  // 使用a标签下载
-  const link = document.createElement("a");
-  link.href = fullUrl;
-  link.download = getFileName(filePath);
-  link.target = "_blank";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  Download.resource(filePath, `课堂题目素材_${originalFileName || getFileName(filePath)}`);
 }
 
-// 上传成功处理
-function handleUploadSuccess(questionId, res) {
-  if (res.code === 200) {
-    const filePath = res.fileName;
-    practicalUploads.value[questionId] = filePath;
-    practicalScores.value[questionId] = null; // 刚上传，未批阅
-    practicalPreviewStatuses.value[questionId] = "";
-    practicalPreviewPaths.value[questionId] = "";
+function getPracticalAllowedExtensions(question) {
+  const configured = String(question?.practicalAllowedExtensions || "").toLowerCase()
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return configured.length
+    ? configured
+    : ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"];
+}
 
-    // 设置loading状态（后端会进行LibreOffice转换，需要等待）
-    uploadingQuestionId.value = questionId;
+function getStudentMaterials(question) {
+  if (Array.isArray(question?.practicalMaterials) && question.practicalMaterials.length) {
+    return question.practicalMaterials;
+  }
+  return question?.filePath ? [{ resourcePath: question.filePath }] : [];
+}
 
-    // 提交到后端保存（会触发异步LibreOffice转换）
-    submitAnswersApi({
-      lessonId: lessonId.value,
-      answers: { [questionId]: filePath },
-    })
-      .then(async () => {
-        const submitted = await refreshPracticalSubmission(questionId);
-        const previewStatus = submitted?.previewStatus || "";
-        if (previewStatus === "success" || submitted?.previewPath) {
-          uploadingQuestionId.value = null;
-          ElMessage.success("作品已上传，可以直接预览");
-          return;
-        }
-        if (previewStatus === "failed") {
-          uploadingQuestionId.value = null;
-          ElMessage.warning("作品已上传，但当前文件暂不支持在线预览，请下载原文件查看");
-          return;
-        }
-        ElMessage.info("作品已上传，正在后台转换为预览格式，请稍候...");
-        schedulePracticalPreviewPolling(questionId);
-      })
-      .catch(() => {
-        ElMessage.warning("作品已上传，但保存到服务器失败，请重试");
-        uploadingQuestionId.value = null;
-        clearPracticalPolling(questionId);
+function getPracticalAccept(question) {
+  return getPracticalAllowedExtensions(question).map((item) => `.${item}`).join(",");
+}
+
+function getPracticalUploadLimit(question) {
+  return Math.min(Math.max(Number(question?.practicalImageMaxCount || 10), 1), 10);
+}
+
+function beforePracticalUpload(question, file) {
+  markQuestionWorking(question.questionId);
+  const extension = String(file?.name || "").split(".").pop().toLowerCase();
+  if (!getPracticalAllowedExtensions(question).includes(extension)) {
+    ElMessage.error(`当前题目不允许上传 .${extension || "未知"} 文件`);
+    return false;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error("单个文件不能超过 50MB");
+    return false;
+  }
+  const state = practicalUploadStates.value[question.questionId] || { pendingFileUids: new Set(), failed: false };
+  if (!state.pendingFileUids.size) state.failed = false;
+  state.pendingFileUids.add(file.uid);
+  practicalUploadStates.value[question.questionId] = state;
+  clearPracticalAutoCommit(question.questionId);
+  return true;
+}
+
+function getPracticalDrafts(questionId) {
+  return practicalDrafts.value[questionId] || [];
+}
+
+function removePracticalDraft(questionId, index) {
+  const drafts = [...getPracticalDrafts(questionId)];
+  drafts.splice(index, 1);
+  practicalDrafts.value[questionId] = drafts;
+}
+
+function clearPracticalAutoCommit(questionId) {
+  const timer = practicalAutoCommitTimers.get(questionId);
+  if (timer) {
+    clearTimeout(timer);
+    practicalAutoCommitTimers.delete(questionId);
+  }
+}
+
+function schedulePracticalAutoCommit(question) {
+  const questionId = question.questionId;
+  clearPracticalAutoCommit(questionId);
+  // 同一次选择多张图片时，等待全部上传回调结束后再合并为一个作品版本。
+  practicalAutoCommitTimers.set(questionId, setTimeout(() => {
+    practicalAutoCommitTimers.delete(questionId);
+    const state = practicalUploadStates.value[questionId];
+    if (!state?.pendingFileUids.size && !state?.failed) {
+      commitPracticalArtifact(question).catch(() => {
+        ElMessage.error("作品提交失败，请重新选择文件后再试");
       });
+    }
+  }, 200));
+}
+
+// 上传成功后立即提交，避免学生再做一次重复的“确认提交”操作。
+function handleUploadSuccess(questionId, res, file) {
+  const state = practicalUploadStates.value[questionId];
+  state?.pendingFileUids.delete(file?.uid);
+  if (res.code === 200) {
+    practicalDrafts.value[questionId] = [
+      ...getPracticalDrafts(questionId),
+      {
+        uploadToken: res.uploadToken,
+        originalFileName: res.newFileName || file?.name || getFileName(res.fileName),
+        fileKind: res.fileKind,
+        fileExtension: res.fileExtension,
+        fileSize: res.fileSize,
+      },
+    ];
+    schedulePracticalAutoCommit({ questionId });
   } else {
+    if (state) state.failed = true;
     ElMessage.error(res.msg || "上传失败");
   }
 }
 
-function handleUploadError() {
+async function commitPracticalArtifact(question) {
+  const questionId = question.questionId;
+  const drafts = getPracticalDrafts(questionId);
+  if (!drafts.length || submittingPracticalQuestionId.value) return;
+  submittingPracticalQuestionId.value = questionId;
+  try {
+    await submitPracticalArtifact({
+      lessonId: lessonId.value,
+      questionId,
+      expectedVersionId: practicalArtifacts.value[questionId]?.versionId || null,
+      uploadTokens: drafts.map((item) => item.uploadToken),
+    });
+    practicalDrafts.value[questionId] = [];
+    uploadingQuestionId.value = questionId;
+    const submitted = await refreshPracticalSubmission(questionId);
+    const previewStatus = submitted?.previewStatus || "";
+    if (previewStatus === "success" || submitted?.previewPath) {
+      uploadingQuestionId.value = null;
+      ElMessage.success("作品提交成功，可以直接预览");
+    } else {
+      ElMessage.success("作品提交成功，预览正在后台生成");
+      schedulePracticalPreviewPolling(questionId);
+    }
+  } finally {
+    submittingPracticalQuestionId.value = null;
+  }
+}
+
+function handleUploadError(questionId, _error, file) {
+  const state = practicalUploadStates.value[questionId];
+  if (state) {
+    state.pendingFileUids.delete(file?.uid);
+    state.failed = true;
+  }
   ElMessage.error("上传失败，请重试");
 }
 
-function handleUploadExceed() {
-  ElMessage.warning("操作题仅允许上传 1 个文件");
+function handleUploadExceed(question) {
+  ElMessage.warning(`图片作品最多 ${getPracticalUploadLimit(question)} 张，Office/PDF 只能选择 1 个`);
+}
+
+function getPracticalAttachments(questionId) {
+  const attachments = practicalArtifacts.value[questionId]?.attachments;
+  if (Array.isArray(attachments) && attachments.length) return attachments;
+  const resourcePath = practicalUploads.value[questionId];
+  return resourcePath ? [{ resourcePath, previewPath: practicalPreviewPaths.value[questionId], previewStatus: practicalPreviewStatuses.value[questionId] }] : [];
+}
+
+function getPracticalDisplayName(questionId) {
+  const attachments = getPracticalAttachments(questionId);
+  if (attachments.length > 1) return `${attachments.length} 个文件（图片组）`;
+  return attachments[0]?.originalFileName || getFileName(attachments[0]?.resourcePath);
 }
 
 function getPracticalPreviewLabel(questionId) {
+  // C3：交卷成功与预览成功解耦的文案
   const status = practicalPreviewStatuses.value[questionId];
-  if (practicalPreviewPaths.value[questionId]) return "可预览";
+  if (getPracticalAttachments(questionId).some(isPracticalAttachmentPreviewable)) return "可预览";
   if (status === "success") return "可预览";
-  if (status === "pending") return "待转换";
-  if (status === "converting") return "转换中";
-  if (status === "failed") return "预览暂不可用";
+  if (status === "pending") return "已交卷·预览排队";
+  if (status === "converting") return "已交卷·预览转换中";
+  if (status === "failed") return "已交卷·预览暂不可用";
   return "待处理";
 }
 
 function getPracticalPreviewClass(questionId) {
   const status = practicalPreviewStatuses.value[questionId];
-  if (practicalPreviewPaths.value[questionId]) return "success";
+  if (getPracticalAttachments(questionId).some(isPracticalAttachmentPreviewable)) return "success";
   if (status === "success") return "success";
   if (status === "pending" || status === "converting") return "pending";
   if (status === "failed") return "failed";
   return "";
 }
 
-function canPreviewPractical(questionId) {
-  return !!practicalPreviewPaths.value[questionId];
+function isPracticalAttachmentPreviewable(attachment) {
+  if (!attachment) return false;
+  // 历史图片可能没有旧 previewPath，但图片源文件本身就是可预览资源。
+  if (attachment.fileKind === "IMAGE") return !!attachment.resourcePath;
+  return !!attachment.previewPath && attachment.previewStatus !== "failed";
 }
 
-function downloadSubmittedWork(questionId) {
-  const filePath = practicalUploads.value[questionId];
+function canPreviewPractical(questionId, attachmentIndex = 0) {
+  const attachment = getPracticalAttachments(questionId)[attachmentIndex];
+  return isPracticalAttachmentPreviewable(attachment);
+}
+
+function downloadSubmittedWork(questionId, attachmentIndex = 0) {
+  const attachment = getPracticalAttachments(questionId)[attachmentIndex];
+  const filePath = attachment?.resourcePath;
   if (!filePath) return;
-  const link = document.createElement("a");
-  link.href = import.meta.env.VITE_APP_BASE_API + filePath;
-  link.download = getFileName(filePath);
-  link.target = "_blank";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  Download.resource(filePath, `学生操作题作品_${attachment?.originalFileName || getFileName(filePath)}`);
 }
 
 // 预览作品（使用PDF预览组件，借助后端LibreOffice转换）
-function previewWork(questionId) {
-  const filePath = practicalUploads.value[questionId];
+function previewWork(questionId, attachmentIndex = 0) {
+  const attachment = getPracticalAttachments(questionId)[attachmentIndex];
+  const filePath = attachment?.resourcePath;
   if (!filePath) return;
   const baseUrl = import.meta.env.VITE_APP_BASE_API;
-  const previewStatus = practicalPreviewStatuses.value[questionId];
-  const previewPath = practicalPreviewPaths.value[questionId];
+  const previewStatus = attachment?.previewStatus || practicalPreviewStatuses.value[questionId];
+  const previewPath = attachment?.previewPath || practicalPreviewPaths.value[questionId];
 
   // 使用后端专用的预览接口，解决特殊字符文件名导致的404问题
   // 接口地址: /common/resource/view?resource=xxx
   const previewApi = `${baseUrl}/common/resource/view?resource=`;
 
+  if (attachment?.fileKind === "IMAGE" && filePath) {
+    window.open(previewApi + encodeURIComponent(filePath), "_blank", "noopener,noreferrer");
+    return;
+  }
   if (previewStatus === "success" && previewPath) {
     const resourceUrl = previewApi + encodeURIComponent(previewPath);
-    console.log("【Preview】Actual Preview URL:", resourceUrl);
     pdfPreviewRef.value?.open(resourceUrl);
     return;
   }
@@ -1895,13 +2377,13 @@ function previewWork(questionId) {
   if (previewStatus === "pending" || previewStatus === "converting") {
     ElMessage.info(
       previewStatus === "pending"
-        ? "作品已上传，正在排队转换，请稍候再试"
-        : "作品已上传，正在转换预览，请稍候再试"
+        ? "交卷已成功，预览排队中，请稍候再试或先下载原文件"
+        : "交卷已成功，预览转换中，请稍候再试或先下载原文件"
     );
     return;
   }
 
-  ElMessage.warning("作品已上传，预览暂不可用，请下载原文件查看");
+  ElMessage.warning("交卷已成功，预览暂不可用，请下载原文件查看");
 }
 
 // 删除已上传作品
@@ -1909,23 +2391,24 @@ function deleteWork(questionId) {
   ElMessageBox.confirm("确定删除已上传的作品吗？删除后需重新上传", "提示", {
     type: "warning",
   }).then(() => {
-    // 从后端删除记录
-    submitAnswersApi({
+    deletePracticalArtifact({
       lessonId: lessonId.value,
-      answers: { [questionId]: "" }, // 空字符串表示删除
+      questionId,
+      expectedVersionId: practicalArtifacts.value[questionId]?.versionId || null,
     }).then(() => {
       clearPracticalPolling(questionId);
       delete practicalUploads.value[questionId];
       delete practicalScores.value[questionId];
       delete practicalPreviewStatuses.value[questionId];
       delete practicalPreviewPaths.value[questionId];
+      delete practicalArtifacts.value[questionId];
       ElMessage.success("已删除");
     });
   });
 }
 
 function getQuestionTypeLabel(type) {
-  return { choice: "选择题", judgment: "判断题" }[type] || type;
+  return questionTypeLabel(type);
 }
 
 function handleCommand(cmd) {
@@ -1950,7 +2433,6 @@ async function loadHistoryScores() {
   historyLoading.value = true;
   try {
     const res = await getHistoryScores(historyYear.value);
-    console.log("History data:", res);
     // 兼容可能的数据结构：可能是直接数组，也可能是 {code, data}
     let list = [];
     if (Array.isArray(res)) {
@@ -1980,16 +2462,63 @@ function formatDateTime(dateStr) {
 }
 
 function switchToGuideSheet() {
-  router.push('/student/guide-sheet');
+  if (hasGuideSheet.value) activeLearningMode.value = 'guide';
+}
+
+async function switchToDailyCourse() {
+  const canLeave = await guideSheetRef.value?.ensureCanLeave?.()
+  if (canLeave !== false) activeLearningMode.value = 'daily'
+}
+
+// 防误关：还有没交的作答或正在进行的打字题时，刷新/关闭页面前浏览器强制二次确认
+const beforeUnloadHandler = (e) => {
+  const hasPendingAnswer = Object.values(answers.value || {}).some(
+    (v) => v !== null && v !== undefined && v !== ""
+  );
+  const hasRunningTyping = Object.values(typingStates.value || {}).some(
+    (s) => s && s.started && !s.submitted
+  );
+  if (hasPendingAnswer || hasRunningTyping) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+};
+
+// 老师开启题目后学生端自动出现：页面可见时每 60 秒静默重拉一次课程数据
+let gatePollTimer = null;
+// 是否有进行中的打字作答（已开始未提交）；此时刷新会重置计时与进度，必须跳过
+function hasActiveTypingSession() {
+  return Object.values(typingStates.value).some(
+    (s) => s && s.started && !s.submitted
+  );
+}
+function scheduleGatePoll() {
+  if (gatePollTimer) clearTimeout(gatePollTimer);
+  gatePollTimer = setTimeout(async () => {
+    if (document.visibilityState === "visible" && !hasActiveTypingSession()) {
+      try {
+        await fetchData({ silent: true });
+      } catch (e) {
+        // 静默失败，下个周期再试
+      }
+    }
+    scheduleGatePoll();
+  }, 60000);
 }
 
 onMounted(() => {
+  window.addEventListener("beforeunload", beforeUnloadHandler);
   fetchData();
+  scheduleGatePoll();
 });
 
 onUnmounted(() => {
+  window.removeEventListener("beforeunload", beforeUnloadHandler);
+  if (gatePollTimer) clearTimeout(gatePollTimer);
   Object.values(timerIntervals).forEach((i) => clearInterval(i));
   Object.values(practicalPollingTimers).forEach((i) => clearTimeout(i));
+  practicalAutoCommitTimers.forEach((timer) => clearTimeout(timer));
+  practicalAutoCommitTimers.clear();
 });
 </script>
 
@@ -2005,13 +2534,20 @@ onUnmounted(() => {
   height: 64px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: 0 32px;
   position: sticky;
   top: 0;
   z-index: 2000;
+}
+
+.dashboard-header__inner {
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header-left {
@@ -2075,8 +2611,46 @@ onUnmounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
+.attendance-panel {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.attendance-card {
+  border-radius: 12px;
+}
+.attendance-header {
+  text-align: center;
+  margin-bottom: 12px;
+}
+.attendance-title {
+  margin: 12px 0 0;
+  font-size: 24px;
+  color: #1f2d3d;
+}
+.attendance-note {
+  text-align: center;
+  color: #303133;
+  line-height: 1.6;
+  margin: 8px 0 20px;
+}
+.attendance-note.muted {
+  color: #909399;
+}
+.attendance-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.attendance-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
+}
 .lesson-banner {
   margin-bottom: 24px;
 }
@@ -2133,6 +2707,27 @@ onUnmounted(() => {
 
 .section-block {
   margin-bottom: 40px;
+}
+
+.collaboration-card {
+  margin-bottom: 20px;
+}
+.collaboration-room-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+.collaboration-room-row:last-child {
+  border-bottom: 0;
+}
+.collaboration-meta {
+  display: block;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .section-title {
@@ -2480,6 +3075,14 @@ onUnmounted(() => {
   border-radius: 8px;
 }
 
+.flowchart-question-list { display: grid; gap: 14px; margin-bottom: 16px; }
+.flowchart-card { border-color: #b9def0; }
+.flowchart-badge { background: linear-gradient(135deg, #1597bb, #36b37e); color: #fff; }
+.flowchart-entry { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px; margin-top: 12px; border-radius: 12px; background: linear-gradient(135deg, #ecf8ff, #f0f9eb); }
+.flowchart-entry strong { color: #24526d; font-size: 16px; }
+.flowchart-entry p { margin: 6px 0 0; color: #61788b; font-size: 13px; }
+@media (max-width: 760px) { .flowchart-entry { align-items: stretch; flex-direction: column; } }
+
 .material-section {
   display: flex;
   align-items: center;
@@ -2501,11 +3104,47 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.material-files {
+  flex: 1;
+}
+
+.material-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+
 .upload-section {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
+}
+
+.practical-draft-list,
+.practical-attachment-list {
+  min-width: 360px;
+  padding: 10px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.draft-file,
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.upload-tip {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .uploaded-file {
@@ -2607,6 +3246,52 @@ onUnmounted(() => {
   height: 20px;
 }
 </style>
+/* 学生实验工具面板（对话框挂 body，需全局样式） */
+.gate-tip {
+  margin-bottom: 14px;
+}
+.student-tool-dialog .tool-group {
+  margin-bottom: 16px;
+}
+.student-tool-dialog .tool-group:last-child {
+  margin-bottom: 0;
+}
+.student-tool-dialog .tool-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 8px;
+}
+.student-tool-dialog .tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+}
+.student-tool-dialog .tool-item {
+  padding: 6px 10px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.student-tool-dialog .tool-item .el-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.student-tool-dialog .student-tool-empty {
+  padding: 10px 0;
+}
+@media (max-width: 600px) {
+  .student-tool-dialog .tool-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 <style lang="scss" scoped>
 /* 错题本相关 */
@@ -2750,5 +3435,83 @@ onUnmounted(() => {
   color: #f56c6c;
   font-weight: bold;
   font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    height: auto;
+    min-height: 64px;
+    padding: 8px 12px;
+  }
+  .dashboard-header__inner {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-left {
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+  }
+  .logo {
+    height: 28px;
+  }
+  .platform-name {
+    overflow: hidden;
+    max-width: 96px;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .view-toggle {
+    margin-left: auto;
+  }
+  .view-toggle :deep(.el-button) {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+  .header-right {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid #edf0f2;
+    padding-top: 6px;
+  }
+  .header-actions {
+    display: flex;
+    min-width: 0;
+  }
+  .header-actions :deep(.el-button) {
+    margin-left: 8px;
+  }
+  .header-divider {
+    margin: 0 8px;
+  }
+  .header-right .user-info {
+    padding: 4px;
+  }
+  .user-name {
+    display: none;
+  }
+  .main-content {
+    padding: 12px;
+  }
+  .banner-content {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .lesson-banner h1 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .platform-name {
+    display: none;
+  }
+  .view-toggle :deep(.el-button) {
+    font-size: 12px;
+  }
 }
 </style>

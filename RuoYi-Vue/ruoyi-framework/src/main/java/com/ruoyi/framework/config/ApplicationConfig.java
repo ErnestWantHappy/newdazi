@@ -22,6 +22,10 @@ public class ApplicationConfig
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer jacksonObjectMapperCustomization()
     {
-        return jacksonObjectMapperBuilder -> jacksonObjectMapperBuilder.timeZone(TimeZone.getDefault());
+        return jacksonObjectMapperBuilder -> jacksonObjectMapperBuilder
+                .timeZone(TimeZone.getDefault())
+                // 诊断/监控指标偶发 Double.NaN（如 OSHI 首次采样、Druid 统计），
+                // 默认序列化会写出非法 JSON 导致整个接口 500；改为带引号的 "NaN" 保证响应可用。
+                .featuresToEnable(com.fasterxml.jackson.core.JsonGenerator.Feature.QUOTE_NON_NUMERIC_NUMBERS);
     }
 }

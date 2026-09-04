@@ -17,24 +17,6 @@ export function getLesson(lessonId) {
   })
 }
 
-// 新增课程/作业信息
-export function addLesson(data) {
-  return request({
-    url: '/business/lesson',
-    method: 'post',
-    data: data
-  })
-}
-
-// 修改课程/作业信息
-export function updateLesson(data) {
-  return request({
-    url: '/business/lesson',
-    method: 'put',
-    data: data
-  })
-}
-
 // 删除课程/作业信息
 export function delLesson(lessonId) {
   return request({
@@ -62,5 +44,52 @@ export function saveAllLessonDetails(data) {
     url: '/business/lesson/save-all',
     method: 'post',
     data: data
+  })
+}
+
+/** 教师查看班级签到名单 */
+export function getLessonCheckinRoster(params) {
+  return request({
+    url: '/business/lesson/checkin-roster',
+    method: 'get',
+    params
+  })
+}
+
+/** 教师首页：读取统一课程推进策略 */
+export function getAdvancePolicy() {
+  return request({
+    url: '/business/lesson/advance-policy',
+    method: 'get'
+  })
+}
+
+/** 教师首页：保存统一课程推进策略（同步到全部常规课） */
+export function updateAdvancePolicy(data) {
+  return request({
+    url: '/business/lesson/advance-policy',
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 手动一键课堂推进：多选班级，自动识别各班当前课，有成绩达统一阈值即推进
+ * @param {{ entryYear: string, classCodes: string[] }} data
+ */
+export function manualAdvanceLesson(data) {
+  return request({
+    url: '/business/lesson/manual-advance',
+    method: 'post',
+    data
+  })
+}
+
+/** 教师查看考勤课各班签到汇总 */
+export function getLessonCheckinSummary(params) {
+  return request({
+    url: '/business/lesson/checkin-summary',
+    method: 'get',
+    params
   })
 }

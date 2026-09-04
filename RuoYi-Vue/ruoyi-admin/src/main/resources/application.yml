@@ -16,15 +16,35 @@ ruoyi:
   libre-office:
     home: C:\Program Files\LibreOffice
     instance-count: 5
-    process-warn-threshold: 10
-    max-tasks-per-process: 30
+    # 每个实例通常有 soffice + soffice.bin，5 实例常态约 10 进程；
+    # 阈值过低会在高峰误触发整池重建，导致 converting 任务卡住。
+    # 按「实例数×4 + 余量」：5×4+5=25，避免正常并发被误杀。
+    process-warn-threshold: 25
+    # 每实例处理 N 个任务后回收进程；过小会在 100～200 并发中途整池轮换卡住
+    # 县考高峰单波可达数百份，提到 200 减少中途回收
+    max-tasks-per-process: 200
     task-execution-timeout: 300000
     task-queue-timeout: 120000
     process-timeout: 120000
     max-retry: 1
-  # 操作题预览转换队列容量
+    # 方案 B 自愈：连续服务级失败达到阈值才主动重建（配合分钟级健康巡检）
+    failure-threshold: 3
+    # 两次整池重建最小间隔，防止抖动反复杀池（毫秒）
+    rebuild-cooldown-ms: 120000
+    # 在途转换挂起超过该时间视为半死信号；应明显小于 task-execution-timeout
+    soft-hang-timeout-ms: 120000
+  # 操作题预览转换队列：交卷与预览解耦，高峰只排队不拖垮提交
   conversion:
     queue-capacity: 800
+    # 领取 pending→converting 的调度池（不做 LibreOffice）
+    dispatch-core-size: 10
+    dispatch-max-size: 20
+    dispatch-queue-capacity: 2000
+  # Python 判题线程只负责向 Judge0 提交和轮询；生产值应与 129 的 worker 数量配套调整。
+  judge:
+    core-pool-size: ${JUDGE0_EXECUTOR_CORE_POOL_SIZE:2}
+    max-pool-size: ${JUDGE0_EXECUTOR_MAX_POOL_SIZE:4}
+    queue-capacity: ${JUDGE0_EXECUTOR_QUEUE_CAPACITY:500}
 
 # 开发环境配置
 server:
@@ -47,7 +67,15 @@ server:
 # 日志配置
 logging:
   level:
-    com.ruoyi: debug
+    # 生产高并发下 DEBUG 会放大日志 I/O，需要排障时再通过外置配置临时开启。
+    com.ruoyi: info
+    # 导学单 JSON 含学生答卷和评分配置，禁止作为 MyBatis SQL 参数写入日志
+    com.ruoyi.business.mapper.GuideSheetAnswerMapper: info
+    com.ruoyi.business.mapper.GuideSheetBindingMapper: info
+    com.ruoyi.business.mapper.GuideSheetDraftMapper: info
+    com.ruoyi.business.mapper.GuideSheetMapper: info
+    com.ruoyi.business.mapper.GuideSheetProgressMapper: info
+    com.ruoyi.business.mapper.GuideSheetUploadMapper: info
     org.springframework: warn
 
 # 用户配置
@@ -70,9 +98,10 @@ spring:
   servlet:
     multipart:
       # 单个文件大小
-      max-file-size: 10MB
+      max-file-size: 55MB
       # 设置总上传的文件大小
-      max-request-size: 20MB
+    max-request-size: 60MB
+
   # 服务模块
   devtools:
     restart:
@@ -100,6 +129,22 @@ spring:
         max-active: 8
         # #连接池最大阻塞等待时间（使用负值表示没有限制）
         max-wait: -1ms
+
+# Python 判题服务默认关闭；生产通过环境变量 JUDGE0_MODE/JUDGE0_BASE_URL/JUDGE0_AUTH_TOKEN 外置配置。
+judge0:
+  mode: ${JUDGE0_MODE:disabled}
+  base-url: ${JUDGE0_BASE_URL:}
+  auth-header: ${JUDGE0_AUTH_HEADER:X-Judge0-Token}
+  auth-token: ${JUDGE0_AUTH_TOKEN:}
+  python-language-id: ${JUDGE0_PYTHON_LANGUAGE_ID:71}
+  connect-timeout-ms: ${JUDGE0_CONNECT_TIMEOUT_MS:2000}
+  read-timeout-ms: ${JUDGE0_READ_TIMEOUT_MS:4000}
+  poll-interval-ms: ${JUDGE0_POLL_INTERVAL_MS:500}
+  max-polls: ${JUDGE0_MAX_POLLS:24}
+  student-submits-per-minute: ${JUDGE0_STUDENT_SUBMITS_PER_MINUTE:10}
+  class-concurrency: ${JUDGE0_CLASS_CONCURRENCY:8}
+  max-source-bytes: ${JUDGE0_MAX_SOURCE_BYTES:65536}
+  recovery-timeout-seconds: ${JUDGE0_RECOVERY_TIMEOUT_SECONDS:180}
 
 management:
   health:
@@ -134,7 +179,7 @@ pagehelper:
 # Swagger配置
 swagger:
   # 是否开启swagger
-  enabled: true
+  enabled: ${SWAGGER_ENABLED:false}
   # 请求前缀
   pathMapping: /dev-api
 
@@ -146,6 +191,38 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
+
+# 学生提交配置。课程推进后保留短暂补交窗口，当前课仍会立即切换。
+student:
+  submission-grace-minutes: ${STUDENT_SUBMISSION_GRACE_MINUTES:15}
+
+# Swagger 示例接口默认不注册，仅本机显式开启。
+demo:
+  enabled: ${DEMO_ENABLED:false}
+
+# 在线协作 Provider。历史 WPS 配置保留用于回滚，当前默认使用 CryptPad。
+collaboration:
+  enabled: ${COLLABORATION_ENABLED:false}
+  provider: ${COLLABORATION_PROVIDER:CRYPTPAD}
+  cryptpad:
+    base-url: ${CRYPTPAD_BASE_URL:}
+    api-url: ${CRYPTPAD_API_URL:}
+    key-secret: ${COLLABORATION_KEY_SECRET:}
+    autosave-seconds: ${CRYPTPAD_AUTOSAVE_SECONDS:15}
+    max-file-bytes: ${CRYPTPAD_MAX_FILE_BYTES:52428800}
+    remote-embedding: ${CRYPTPAD_REMOTE_EMBEDDING:true}
+  wps:
+    enabled: ${WPS_WEBOFFICE_ENABLED:false}
+    app-id: ${WPS_WEBOFFICE_APP_ID:}
+    app-secret: ${WPS_WEBOFFICE_APP_SECRET:}
+    public-base-url: ${WPS_WEBOFFICE_PUBLIC_BASE_URL:}
+    # 使用 WPS 控制台下载并部署的官方 web-office-sdk-solution.umd.js 地址。
+    sdk-url: ${WPS_WEBOFFICE_SDK_URL:}
+    endpoint: ${WPS_WEBOFFICE_ENDPOINT:https://o.wpsgo.com}
+    token-secret: ${WPS_WEBOFFICE_TOKEN_SECRET:}
+    token-minutes: ${WPS_WEBOFFICE_TOKEN_MINUTES:120}
+    # 免费测试应用当前单文件限制为 5MB；正式授权后可通过外置配置调整。
+    test-max-file-bytes: ${WPS_WEBOFFICE_TEST_MAX_FILE_BYTES:5242880}
 
 # 电子导学单配置。密钥仅从部署环境注入，禁止写入表单数据。
 guide-sheet:
@@ -160,3 +237,26 @@ guide-sheet:
   teacher-helper:
     enabled: ${GUIDE_SHEET_HELPER_ENABLED:false}
     port: ${GUIDE_SHEET_HELPER_PORT:5000}
+
+# 初中物联网 MQTT 服务端接收器。默认关闭，正式环境由外置环境变量开启。
+iot:
+  mqtt:
+    enabled: ${IOT_MQTT_ENABLED:false}
+    broker-url: ${IOT_MQTT_BROKER_URL:tcp://127.0.0.1:1883}
+    username: ${IOT_MQTT_USERNAME:}
+    password: ${IOT_MQTT_PASSWORD:}
+    subscription: ${IOT_MQTT_SUBSCRIPTION:county/#}
+    client-id: ${IOT_MQTT_CLIENT_ID:dazi-platform-iot}
+    max-payload-bytes: ${IOT_MQTT_MAX_PAYLOAD_BYTES:16000}
+    max-messages-per-minute: ${IOT_MQTT_MAX_MESSAGES_PER_MINUTE:120}
+    max-messages-per-minute-global: ${IOT_MQTT_MAX_MESSAGES_PER_MINUTE_GLOBAL:5000}
+    max-topic-length: ${IOT_MQTT_MAX_TOPIC_LENGTH:256}
+    # 课堂口令密钥必须由部署环境注入，禁止在配置文件或源码中设置默认值。
+    passcode-secret: ${IOT_PASSCODE_SECRET:}
+    siot-credential-sync-enabled: ${IOT_SIOT_CREDENTIAL_SYNC_ENABLED:false}
+    siot-db-path: ${IOT_SIOT_DB_PATH:}
+    credential-ttl-minutes: ${IOT_CREDENTIAL_TTL_MINUTES:120}
+    # SIoT 2618 兼容模式：设备共用现有 Broker 账号，平台仅写入各设备独立 Topic 授权。
+    # 账号密码只由服务器环境变量注入，禁止写入 Git、日志或上下文文档。
+    device-username: ${IOT_DEVICE_USERNAME:}
+    device-password: ${IOT_DEVICE_PASSWORD:}

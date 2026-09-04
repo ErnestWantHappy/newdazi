@@ -5,6 +5,10 @@ import { tansParams, blobValidate } from '@/utils/ruoyi'
 import cache from '@/plugins/cache'
 import { saveAs } from 'file-saver'
 import {
+  rememberBlobDownloadFilename,
+  resolveBlobDownloadFilename
+} from '@/utils/downloadFilename'
+import {
   isRelogin,
   handleSessionExpired,
   isSessionExpiredCode,
@@ -31,7 +35,12 @@ function parseResponseMessage(data, code) {
 
 async function parseBlobError(data) {
   const resText = await data.text()
-  return JSON.parse(resText)
+  try {
+    return JSON.parse(resText)
+  } catch (_error) {
+    // 网关故障页或代理返回的 HTML/CSS 不能再触发二次解析异常，避免覆盖原始下载失败原因。
+    return { code: 500, msg: resText.trim().slice(0, 200) || errorCode.default }
+  }
 }
 
 service.interceptors.request.use(config => {
@@ -84,7 +93,7 @@ service.interceptors.request.use(config => {
 service.interceptors.response.use(async res => {
   if (res.request.responseType === 'blob' || res.request.responseType === 'arraybuffer') {
     if (blobValidate(res.data)) {
-      return res.data
+      return rememberBlobDownloadFilename(res.data, res.headers)
     }
     const rspObj = await parseBlobError(res.data)
     const code = parseResponseCode(rspObj)
@@ -154,7 +163,7 @@ export function download(url, params, filename, config) {
     ...config
   }).then(async data => {
     if (blobValidate(data)) {
-      saveAs(new Blob([data]), filename)
+      saveAs(data, resolveBlobDownloadFilename(data, filename))
       return
     }
     const rspObj = await parseBlobError(data)

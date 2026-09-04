@@ -109,8 +109,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </insert>
     <!-- 为课程题目详情创建一个明确的结果映射 -->
     <resultMap id="BizLessonQuestionDetailResult" type="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        <id property="questionId" column="question_id"/>
         <result property="lessonId" column="lesson_id"/>
-        <result property="questionId" column="question_id"/>
         <result property="questionScore" column="question_score"/>
         <result property="orderNum" column="order_num"/>
         <result property="questionContent" column="question_content"/>
@@ -124,7 +124,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="wordCount" column="word_count"/>
         <result property="previewPath" column="preview_path"/>
         <result property="filePath" column="file_path"/>
-        <collection property="scoringItems" ofType="com.ruoyi.business.domain.BizScoringItem" column="question_id" select="selectScoringItemsByQuestionId"/>
+        <result property="practicalAllowedExtensions" column="practical_allowed_extensions"/>
+        <result property="practicalMode" column="practical_mode"/>
+        <result property="practicalImageMaxCount" column="practical_image_max_count"/>
+        <collection property="scoringItems" ofType="com.ruoyi.business.domain.BizScoringItem">
+            <id property="itemId" column="scoring_item_id"/>
+            <result property="questionId" column="scoring_question_id"/>
+            <result property="itemName" column="scoring_item_name"/>
+            <result property="itemScore" column="scoring_item_score"/>
+            <result property="orderNum" column="scoring_order_num"/>
+        </collection>
     </resultMap>
     <!-- 查询题目完整信息 -->
     <select id="selectDetailsByLessonId" parameterType="java.lang.Long" resultMap="BizLessonQuestionDetailResult">
@@ -143,21 +152,32 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.typing_duration,
             q.word_count,
             q.preview_path,
-            q.file_path
+            q.file_path,
+            q.practical_allowed_extensions,
+            q.practical_mode,
+            q.practical_image_max_count,
+            si.item_id AS scoring_item_id,
+            si.question_id AS scoring_question_id,
+            si.item_name AS scoring_item_name,
+            si.item_score AS scoring_item_score,
+            si.order_num AS scoring_order_num
         FROM
             biz_lesson_question lq
                 LEFT JOIN biz_question q ON lq.question_id = q.question_id
+                LEFT JOIN biz_scoring_item si ON q.question_id = si.question_id
         WHERE
             lq.lesson_id = #{lessonId}
         ORDER BY
-            lq.order_num ASC
+            lq.order_num ASC,
+            si.order_num ASC,
+            si.item_id ASC
     </select>
 
-    <select id="selectScoringItemsByQuestionId" resultType="com.ruoyi.business.domain.BizScoringItem">
-        SELECT item_id AS itemId, question_id AS questionId, item_name AS itemName, item_score AS itemScore, order_num AS orderNum
-        FROM biz_scoring_item
-        WHERE question_id = #{questionId}
-        ORDER BY order_num ASC
+    <select id="selectQuestionIdsByLessonId" parameterType="java.lang.Long" resultType="java.lang.Long">
+        SELECT question_id
+        FROM biz_lesson_question
+        WHERE lesson_id = #{lessonId}
+        ORDER BY order_num ASC, id ASC
     </select>
 
 </mapper>

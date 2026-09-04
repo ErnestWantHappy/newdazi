@@ -13,9 +13,9 @@
       v-loading="loading"
     >
       <!-- 班级列：直接显示 formattedClassName -->
-      <el-table-column prop="formattedClassName" label="班级" width="100" fixed sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" />
+      <el-table-column prop="formattedClassName" label="班级" width="100" fixed sortable :sort-method="naturalCodeCompare" />
       
-      <el-table-column prop="studentNo" label="学号" width="100" fixed sortable :sort-method="(a, b) => Number(a.studentNo) - Number(b.studentNo)" />
+      <el-table-column prop="studentNo" label="学号" width="100" fixed sortable :sort-method="naturalCodeCompare" />
       <el-table-column prop="studentName" label="姓名" width="100" fixed />
       
       <!-- 新增：正确率列 -->
@@ -72,6 +72,11 @@ const props = defineProps({
     default: false
   }
 });
+
+// 学号、班级号在接口中是字符串，显式采用自然数值顺序。
+function naturalCodeCompare(a, b) {
+    return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' });
+}
 
 // 预处理数据：计算正确率（只统计表头显示的理论题）
 const matrixDataWithAccuracy = computed(() => {

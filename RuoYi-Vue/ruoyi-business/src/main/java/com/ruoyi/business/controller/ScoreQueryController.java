@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -20,10 +21,19 @@ import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizScoreAdjustmentMapper;
+import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.vo.LessonInfoVo;
+import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
+import com.ruoyi.business.service.GuideSheetAccessService;
+import com.ruoyi.business.util.AcademicYearUtils;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
+import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.common.core.domain.entity.SysDept;
 import com.ruoyi.system.mapper.SysDeptMapper;
 import javax.servlet.http.HttpServletResponse;
@@ -37,6 +47,7 @@ import java.io.IOException;
  */
 @RestController
 @RequestMapping("/business/score")
+@PreAuthorize("@ss.hasPermi('business:score:list')")
 public class ScoreQueryController extends BaseController {
     private static final String ADJUST_ACTION = "ADJUST";
     private static final String CANCEL_ACTION = "CANCEL";
@@ -62,37 +73,54 @@ public class ScoreQueryController extends BaseController {
     @Autowired
     private BizScoreAdjustmentMapper scoreAdjustmentMapper;
 
+    @Autowired
+    private GuideSheetAccessService guideSheetAccessService;
+
+    @Autowired
+    private BizTeacherClassMapper teacherClassMapper;
+
+    @Autowired
+    private BizLessonAssignmentMapper lessonAssignmentMapper;
+
+    @Autowired
+    private com.ruoyi.business.mapper.StudentToolMapper studentToolMapper;
+
     /**
      * 设置/取消某节课缺考请假
      */
     @PutMapping("/absent")
     public AjaxResult setAbsent(@RequestBody Map<String, Object> params) {
-        Long lessonId = ((Number) params.get("lessonId")).longValue();
-        Long studentId = ((Number) params.get("studentId")).longValue();
-        Boolean isAbsent = (Boolean) params.get("isAbsent");
+        // 前端可能传字符串或缺失字段，直接强转 Number 会 NPE/500，这里统一做类型校验
+        Object lessonIdValue = params == null ? null : params.get("lessonId");
+        Object studentIdValue = params == null ? null : params.get("studentId");
+        if (!(lessonIdValue instanceof Number) || !(studentIdValue instanceof Number)) {
+            return AjaxResult.error("参数不完整：lessonId 与 studentId 必须为数字");
+        }
+        Long lessonId = ((Number) lessonIdValue).longValue();
+        Long studentId = ((Number) studentIdValue).longValue();
+        Boolean isAbsent = params.get("isAbsent") instanceof Boolean ? (Boolean) params.get("isAbsent") : null;
+        if (isAbsent == null) {
+            return AjaxResult.error("参数不完整：isAbsent 必须为布尔值");
+        }
 
         Long deptId = SecurityUtils.getDeptId();
         Long teacherId = SecurityUtils.getUserId();
 
-        com.ruoyi.business.domain.BizClassroomPerformance performance = performanceMapper.selectByStudentAndLesson(studentId, lessonId);
-        if (performance == null) {
-            performance = new com.ruoyi.business.domain.BizClassroomPerformance();
-            performance.setStudentId(studentId);
-            performance.setLessonId(lessonId);
-            performance.setTeacherId(teacherId);
-            performance.setDeptId(deptId);
-            performance.setScore(0);
-            performance.setReason("请假/缺考");
-            performance.setIsAbsent(isAbsent ? 1 : 0);
-            performanceMapper.insert(performance);
-        } else {
-            performance.setIsAbsent(isAbsent ? 1 : 0);
-            if (isAbsent) {
-                performance.setScore(0); // 清空表现分
-                System.out.println("将之前的原因修改为缺考");
-            }
-            performanceMapper.update(performance);
+        String scopeError = validateManualScoreScope(studentId, lessonId);
+        if (scopeError != null) {
+            return AjaxResult.error(scopeError);
         }
+
+        // 原子 upsert：依赖 uk_student_lesson 唯一键，并发双击不再双插/500；
+        // 标记缺考时清零表现分，取消缺考保留原表现分
+        com.ruoyi.business.domain.BizClassroomPerformance performance =
+                new com.ruoyi.business.domain.BizClassroomPerformance();
+        performance.setStudentId(studentId);
+        performance.setLessonId(lessonId);
+        performance.setTeacherId(teacherId);
+        performance.setDeptId(deptId);
+        performance.setIsAbsent(isAbsent ? 1 : 0);
+        performanceMapper.upsertAbsent(performance);
         return AjaxResult.success();
     }
 
@@ -115,6 +143,13 @@ public class ScoreQueryController extends BaseController {
                 performanceMapper.selectByStudentAndLesson(request.getStudentId(), request.getLessonId());
         if (performance != null && performance.getIsAbsent() != null && performance.getIsAbsent() == 1) {
             return AjaxResult.error("该学生本节课已标记请假，请先取消请假后再改分");
+        }
+
+        // 幂等保护：同一 (student, lesson) 只允许一条生效的 ADJUST，重复提交/并发双击直接拒绝
+        BizScoreAdjustment latestAdjustment = scoreAdjustmentMapper.selectLatestByStudentAndLesson(
+                request.getStudentId(), request.getLessonId(), SecurityUtils.getDeptId());
+        if (isActiveHomeworkAdjustment(latestAdjustment)) {
+            return AjaxResult.error("该学生本节课已存在生效的人工修正，请先取消后再改分");
         }
 
         int originalScore = selectRawHomeworkScore(request.getStudentId(), request.getLessonId());
@@ -166,13 +201,155 @@ public class ScoreQueryController extends BaseController {
     }
 
     /**
+     * 读取某课程在某班级的题目开放开关状态。
+     * 粒度= 班级 x 当前课程（biz_lesson_assignment）；教师从成绩页按 年级+班级+课程 触发。
+     */
+    @GetMapping("/lesson-gate")
+    public AjaxResult getLessonGate(@RequestParam Long lessonId,
+                                    @RequestParam String entryYear,
+                                    @RequestParam String classCode)
+    {
+        Long deptId = SecurityUtils.getDeptId();
+        // 课程必须属于本校，否则拒绝访问。
+        com.ruoyi.business.domain.BizLesson lesson =
+                lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(deptId))
+        {
+            return AjaxResult.error("课程不存在或不属于当前学校");
+        }
+        // 历史课程也可查看开关状态：取该班与该课程最后一次指派的开关（无指派记录则视为默认关闭）。
+        // 仅列出 history 语义：若该班当前课程就是本课，normalized true；否则为历史课查看。
+        BizLessonAssignment assignment = findAssignmentByLesson(deptId, entryYear, classCode, lessonId);
+        boolean isCurrent = false;
+        BizLessonAssignment current = findAssignment(deptId, entryYear, classCode);
+        if (current != null && Long.valueOf(lessonId).equals(current.getLessonId())) {
+            isCurrent = true;
+        }
+        boolean theoryOpen = false;
+        boolean practicalOpen = false;
+        if (assignment != null) {
+            theoryOpen = Integer.valueOf(1).equals(assignment.getTheoryOpen());
+            practicalOpen = Integer.valueOf(1).equals(assignment.getPracticalOpen());
+        }
+        boolean hasTheory = false;
+        boolean hasPractical = false;
+        List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> lessonQuestions =
+                lessonQuestionMapper.selectDetailsByLessonId(lessonId);
+        for (com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo q : lessonQuestions)
+        {
+            if ("choice".equalsIgnoreCase(q.getQuestionType()) || "judgment".equalsIgnoreCase(q.getQuestionType()))
+            {
+                hasTheory = true;
+            }
+            else if ("practical".equalsIgnoreCase(q.getQuestionType()))
+            {
+                hasPractical = true;
+            }
+        }
+        return AjaxResult.success()
+                .put("theoryOpen", theoryOpen)
+                .put("practicalOpen", practicalOpen)
+                .put("hasTheory", hasTheory)
+                .put("hasPractical", hasPractical)
+                .put("lessonId", lessonId)
+                .put("isCurrent", isCurrent);
+    }
+
+    /**
+     * 设置某课程在某班级的题目开放开关（理论题 / 操作题）。
+     * 校验：班级当前课程必须等于所传课程，防止跨班/跨课误操作；推进课程时自动复位由推进 SQL 负责。
+     */
+    @PutMapping("/lesson-gate")
+    public AjaxResult setLessonGate(@RequestBody Map<String, Object> params)
+    {
+        Long lessonId = asLong(params.get("lessonId"));
+        String entryYear = params.get("entryYear") == null ? null : String.valueOf(params.get("entryYear"));
+        String classCode = params.get("classCode") == null ? null : String.valueOf(params.get("classCode"));
+        String kind = params.get("kind") == null ? null : String.valueOf(params.get("kind"));
+        Boolean open = params.get("open") instanceof Boolean ? (Boolean) params.get("open") : null;
+        if (lessonId == null || entryYear == null || classCode == null || kind == null || open == null)
+        {
+            return AjaxResult.error("参数不完整");
+        }
+        if (!"theory".equals(kind) && !"practical".equals(kind))
+        {
+            return AjaxResult.error("kind 只支持 theory / practical");
+        }
+        Long deptId = SecurityUtils.getDeptId();
+        BizLessonAssignment assignment = findAssignment(deptId, entryYear.trim(), classCode.trim());
+        if (assignment == null)
+        {
+            return AjaxResult.error("该班级当前没有指派课程");
+        }
+        if (!Long.valueOf(lessonId).equals(assignment.getLessonId()))
+        {
+            return AjaxResult.error("只能对当前课程开启/关闭题目，历史课程请回到当时的课堂上开启");
+        }
+        int updated = lessonAssignmentMapper.updateLessonGate(
+                assignment.getAssignmentId(), "theory".equals(kind) ? "theory" : "practical", open);
+        if (updated == 0)
+        {
+            return AjaxResult.error("更新失败，请重试");
+        }
+        BizLessonAssignment latest = lessonAssignmentMapper.selectBizLessonAssignmentByAssignmentId(assignment.getAssignmentId());
+        return AjaxResult.success()
+                .put("theoryOpen", latest == null ? null : Integer.valueOf(1).equals(latest.getTheoryOpen()))
+                .put("practicalOpen", latest == null ? null : Integer.valueOf(1).equals(latest.getPracticalOpen()));
+    }
+
+    /** 按 学校+年份+班级 取当前指派行 */
+    private BizLessonAssignment findAssignment(Long deptId, String entryYear, String classCode)
+    {
+        BizLessonAssignment query = new BizLessonAssignment();
+        query.setDeptId(deptId);
+        query.setEntryYear(entryYear);
+        query.setClassCode(classCode);
+        List<BizLessonAssignment> rows = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
+        return rows == null || rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** 查该班与该课程的最后一次指派行（用于历史课查看开关；无则返回 null） */
+    private BizLessonAssignment findAssignmentByLesson(Long deptId, String entryYear, String classCode, Long lessonId)
+    {
+        List<BizLessonAssignment> rows = lessonAssignmentMapper.selectAssignmentsByLessonId(lessonId);
+        if (rows == null) { return null; }
+        BizLessonAssignment matched = null;
+        for (BizLessonAssignment row : rows)
+        {
+            if (row.getDeptId() != null && row.getDeptId().equals(deptId)
+                    && entryYear.equals(row.getEntryYear())
+                    && classCode.equals(row.getClassCode()))
+            {
+                // 同班同课可能有多条历史指派，取最新一条
+                if (matched == null || (row.getAssignTime() != null
+                        && (matched.getAssignTime() == null
+                            || row.getAssignTime().after(matched.getAssignTime()))))
+                {
+                    matched = row;
+                }
+            }
+        }
+        return matched;
+    }
+
+    private Long asLong(Object v)
+    {
+        if (v instanceof Number) { return ((Number) v).longValue(); }
+        if (v != null) { try { return Long.valueOf(String.valueOf(v)); } catch (NumberFormatException ignored) { return null; } }
+        return null;
+    }
+
+    /**
      * 获取班级列表（用于筛选下拉框）
      */
     @GetMapping("/classes")
     public AjaxResult getClasses() {
         Long userId = SecurityUtils.getUserId();
         Long deptId = SecurityUtils.getDeptId();
-        return AjaxResult.success(studentMapper.selectDistinctYearAndClassByDeptId(deptId));
+        if (SecurityUtils.isAdmin(userId)) {
+            return AjaxResult.success(teacherClassMapper.selectAvailableClasses(deptId));
+        }
+        return AjaxResult.success(teacherClassMapper.selectTeacherClassListWithCount(userId, deptId));
     }
     
     /**
@@ -180,28 +357,33 @@ public class ScoreQueryController extends BaseController {
      */
     @GetMapping("/lessons")
     public AjaxResult getLessons(@RequestParam String entryYear) {
-        // 获取当前用户的学校类型
         Long deptId = SecurityUtils.getDeptId();
-        SysDept dept = deptMapper.selectDeptById(deptId);
-        String schoolType = dept != null ? dept.getSchoolType() : "1"; // 默认小学
-        
-        // 根据入学年份和学校类型计算年级
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
-        
         String creator = SecurityUtils.getUsername();
-        
-        System.out.println("[课程下拉DEBUG] entryYear: " + entryYear);
-        System.out.println("[课程下拉DEBUG] schoolType: " + schoolType + " (1=小学, 2=初中, 3=高中)");
-        System.out.println("[课程下拉DEBUG] 计算的年级 gradeNum: " + gradeNum);
-        System.out.println("[课程下拉DEBUG] creator: " + creator);
-        
-        List<?> lessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator, deptId);
-        System.out.println("[课程下拉DEBUG] 查询结果数量: " + (lessons != null ? lessons.size() : "null"));
-        if (lessons != null && !lessons.isEmpty()) {
-            System.out.println("[课程下拉DEBUG] 第一个课程: " + lessons.get(0));
-        }
-        
+        List<?> lessons = lessonMapper.selectScoreLessons(
+                entryYear, creator, SecurityUtils.getUserId(), deptId);
         return AjaxResult.success(lessons);
+    }
+
+    /**
+     * 返回成绩页已锁定课程和班级的导学单上下文。
+     */
+    @GetMapping("/guide-sheet-context")
+    public AjaxResult getGuideSheetContext(@RequestParam Long lessonId,
+                                           @RequestParam String entryYear,
+                                           @RequestParam String classCode) {
+        BizLessonGuideSheetBinding binding = guideSheetAccessService.requireLessonClassBindingContext(
+                lessonId, entryYear, classCode);
+        if (binding == null) {
+            return AjaxResult.success().put("enabled", false);
+        }
+        return AjaxResult.success()
+                .put("enabled", "Y".equals(binding.getEnabled()))
+                .put("bindingId", binding.getBindingId())
+                .put("lessonId", binding.getLessonId())
+                .put("sourceSheetId", binding.getSourceSheetId())
+                .put("title", binding.getSnapshotTitle())
+                .put("entryYear", entryYear)
+                .put("classCode", classCode);
     }
     
     /**
@@ -210,38 +392,16 @@ public class ScoreQueryController extends BaseController {
      * 初中: 入学对应7年级，到9年级
      * 高中: 入学对应10年级，到12年级
      */
-    private int calculateGrade(int entryYear, String schoolType) {
-        java.time.LocalDate now = java.time.LocalDate.now();
-        int currentYear = now.getYear();
-        int currentMonth = now.getMonthValue();
-        int currentDay = now.getDayOfMonth();
-        
-        // 判断是否已过8月15日（学年分界）
-        boolean afterAug15 = (currentMonth > 8) || (currentMonth == 8 && currentDay >= 15);
-        
-        // 计算在校年数（不含入学年）
-        int yearsInSchool = currentYear - entryYear;
-        if (afterAug15) {
-            yearsInSchool += 1;
+    private int calculateGrade(String entryYear, String schoolType) {
+        try {
+            return AcademicYearUtils.resolveDisplayGrade(
+                    Integer.parseInt(entryYear == null ? "" : entryYear.trim()),
+                    schoolType, java.time.LocalDate.now());
+        } catch (NumberFormatException e) {
+            throw new ServiceException("入学年份必须是四位数字");
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException(e.getMessage());
         }
-        
-        // 根据学校类型计算年级
-        int gradeOffset;
-        switch (schoolType) {
-            case "1": // 小学
-                gradeOffset = 0; // 1年级入学
-                break;
-            case "2": // 初中
-                gradeOffset = 6; // 7年级入学
-                break;
-            case "3": // 高中
-                gradeOffset = 9; // 10年级入学
-                break;
-            default:
-                gradeOffset = 0;
-        }
-        
-        return yearsInSchool + gradeOffset;
     }
 
     /**
@@ -263,9 +423,10 @@ public class ScoreQueryController extends BaseController {
         // 获取学校类型并计算年级
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        int gradeNum = calculateGrade(entryYear, schoolType);
         
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, lessonId);
+        selectedLessonIds = validateSelectedLessonIds(entryYear, selectedLessonIds);
 
         List<BizStudent> students;
         long total = 0;
@@ -288,22 +449,46 @@ public class ScoreQueryController extends BaseController {
     }
 
     private List<Long> parseLessonIds(String lessonIds, Long lessonId) {
-        List<Long> result = new ArrayList<>();
-        if (lessonIds != null && !lessonIds.trim().isEmpty()) {
-            for (String id : lessonIds.split(",")) {
-                if (id != null && !id.trim().isEmpty()) {
-                    result.add(Long.parseLong(id.trim()));
+        try {
+            LinkedHashSet<Long> result = new LinkedHashSet<>();
+            if (lessonIds != null && !lessonIds.trim().isEmpty()) {
+                for (String id : lessonIds.split(",")) {
+                    if (id != null && !id.trim().isEmpty()) {
+                        result.add(Long.parseLong(id.trim()));
+                    }
                 }
+            } else if (lessonId != null) {
+                result.add(lessonId);
             }
-        } else if (lessonId != null) {
-            result.add(lessonId);
+            return new ArrayList<>(result);
+        } catch (NumberFormatException e) {
+            throw new ServiceException("课程参数格式错误");
         }
-        return result;
+    }
+
+    /** 只允许查询成绩页已返回给当前教师的常规课，空选择等价于全部可见课程。 */
+    private List<Long> validateSelectedLessonIds(String entryYear, List<Long> selectedLessonIds) {
+        Long userId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getDeptId();
+        List<LessonInfoVo> visibleLessons = lessonMapper.selectScoreLessons(
+                entryYear, SecurityUtils.getUsername(), userId, deptId);
+        LinkedHashSet<Long> visibleIds = visibleLessons == null ? new LinkedHashSet<>()
+                : visibleLessons.stream()
+                .map(LessonInfoVo::getLessonId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (selectedLessonIds == null || selectedLessonIds.isEmpty()) {
+            return new ArrayList<>(visibleIds);
+        }
+        if (!visibleIds.containsAll(selectedLessonIds)) {
+            throw new ServiceException("包含无权查看或不计成绩的课程");
+        }
+        return selectedLessonIds;
     }
 
     private List<Map<String, Object>> buildScoreSummaryRows(List<BizStudent> students, List<Long> lessonIds,
                                                             Long deptId, int gradeNum) {
-        if (students == null || students.isEmpty()) {
+        if (students == null || students.isEmpty() || lessonIds == null || lessonIds.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -409,6 +594,14 @@ public class ScoreQueryController extends BaseController {
                 if (Boolean.TRUE.equals(score.get("isAbsent"))) {
                     continue;
                 }
+                // 考勤课不进入作业均分分母（selectScoreLessons 已排除；此处双保险）
+                Long scoreLessonId = score.get("lessonId") == null ? null : ((Number) score.get("lessonId")).longValue();
+                if (scoreLessonId != null) {
+                    BizLesson scoreLesson = lessonCache.computeIfAbsent(scoreLessonId, lessonMapper::selectBizLessonByLessonId);
+                    if (scoreLesson != null && "attendance".equalsIgnoreCase(scoreLesson.getLessonMode())) {
+                        continue;
+                    }
+                }
                 homeworkTotal += numberToInt(score.get("totalScore"));
                 performanceTotal += numberToInt(score.get("performanceScore"));
                 finalTotal += numberToInt(score.get("finalScore"));
@@ -501,6 +694,15 @@ public class ScoreQueryController extends BaseController {
         }
         if (lesson.getDeptId() != null && !deptId.equals(lesson.getDeptId())) {
             return "不能修改其他学校的课程成绩";
+        }
+        if ("attendance".equalsIgnoreCase(lesson.getLessonMode())) {
+            return "课堂考勤不计作业分，不能在成绩页改分";
+        }
+        try {
+            guideSheetAccessService.assertCanViewLessonClass(
+                    lessonId, student.getEntryYear(), student.getClassCode());
+        } catch (ServiceException e) {
+            return e.getMessage();
         }
         return null;
     }
@@ -604,6 +806,7 @@ public class ScoreQueryController extends BaseController {
         if (result.isEmpty()) {
             Collections.addAll(result,
                     "userName", "className", "studentNo", "studentName",
+                    "lessonDetails",
                     "remark", "avgTyping", "overallTypingSpeed", "overallAccuracy", "overallCompletion",
                     "avgTheory", "avgPractical", "filteredTotal", "totalPerformance", "finalTotal",
                     "filteredAverage", "gradeLevel", "scaledScore");
@@ -747,8 +950,9 @@ public class ScoreQueryController extends BaseController {
         Long userId = SecurityUtils.getUserId();
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        int gradeNum = calculateGrade(entryYear, schoolType);
         List<Long> selectedLessonIds = parseLessonIds(lessonIds, null);
+        selectedLessonIds = validateSelectedLessonIds(entryYear, selectedLessonIds);
         List<String> selectedColumns = parseExportColumns(columns);
         Set<String> selectedColumnSet = new HashSet<>(selectedColumns);
         List<BizStudent> studentList = studentMapper.selectScoreStudents(userId, deptId, entryYear, classCode, keyword);
@@ -756,7 +960,8 @@ public class ScoreQueryController extends BaseController {
         
         // 3. 获取所有课程信息（用于表头）
         String creator = SecurityUtils.getUsername();
-        List<LessonInfoVo> allLessons = lessonMapper.selectLessonsByGradeAndCreator((long) gradeNum, creator, deptId);
+        List<LessonInfoVo> allLessons = lessonMapper.selectScoreLessons(
+                entryYear, creator, userId, deptId);
         List<LessonInfoVo> targetLessons = new ArrayList<>();
         
         if (selectedLessonIds.isEmpty()) {
@@ -777,6 +982,7 @@ public class ScoreQueryController extends BaseController {
             return numA - numB;
         });
         boolean singleLessonMode = selectedLessonIds.size() == 1;
+        boolean includeLessonDetails = selectedColumnSet.contains("lessonDetails");
         Set<Long> targetLessonIdSet = targetLessons.stream()
                 .map(LessonInfoVo::getLessonId)
                 .collect(java.util.stream.Collectors.toSet());
@@ -806,14 +1012,16 @@ public class ScoreQueryController extends BaseController {
         colIdx = appendExportHeader(headerRow, colIdx, selectedColumnSet, "studentNo", "学号", headerStyle);
         colIdx = appendExportHeader(headerRow, colIdx, selectedColumnSet, "studentName", "姓名", headerStyle);
         
-        // 动态课程表头
-        for (LessonInfoVo lesson : targetLessons) {
-            String title = lesson.getLessonTitle();
-            String[] lessonHeaders = {title + "-作业分", title + "-课堂表现分", title + "-课程总分"};
-            for (String h : lessonHeaders) {
-                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(colIdx++);
-                cell.setCellValue(h);
-                cell.setCellStyle(headerStyle);
+        // 各课程三项明细由教师显式选择，避免“仅课堂表现”仍混入全部成绩。
+        if (includeLessonDetails) {
+            for (LessonInfoVo lesson : targetLessons) {
+                String title = lesson.getLessonTitle();
+                String[] lessonHeaders = {title + "-作业分", title + "-课堂表现分", title + "-课程总分"};
+                for (String h : lessonHeaders) {
+                    org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(colIdx++);
+                    cell.setCellValue(h);
+                    cell.setCellStyle(headerStyle);
+                }
             }
         }
         
@@ -889,13 +1097,17 @@ public class ScoreQueryController extends BaseController {
                 }
                 
                 if (targetScore == null) {
-                    row.createCell(colIdx++).setCellValue("");
-                    row.createCell(colIdx++).setCellValue("");
-                    row.createCell(colIdx++).setCellValue("");
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue("");
+                        row.createCell(colIdx++).setCellValue("");
+                        row.createCell(colIdx++).setCellValue("");
+                    }
                 } else if (Boolean.TRUE.equals(targetScore.get("isAbsent"))) {
-                    row.createCell(colIdx++).setCellValue("请假");
-                    row.createCell(colIdx++).setCellValue("请假");
-                    row.createCell(colIdx++).setCellValue("请假");
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue("请假");
+                        row.createCell(colIdx++).setCellValue("请假");
+                        row.createCell(colIdx++).setCellValue("请假");
+                    }
                 } else {
                     int scoreVal = numberToInt(targetScore.get("totalScore"));
                     int performanceScore = numberToInt(targetScore.get("performanceScore"));
@@ -917,9 +1129,11 @@ public class ScoreQueryController extends BaseController {
                         typingCount++;
                     }
 
-                    row.createCell(colIdx++).setCellValue(scoreVal);
-                    row.createCell(colIdx++).setCellValue(performanceScore);
-                    row.createCell(colIdx++).setCellValue(finalScore);
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue(scoreVal);
+                        row.createCell(colIdx++).setCellValue(performanceScore);
+                        row.createCell(colIdx++).setCellValue(finalScore);
+                    }
                 }
             }
             
@@ -983,7 +1197,10 @@ public class ScoreQueryController extends BaseController {
         // 输出
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
-        response.setHeader("Content-Disposition", "attachment; filename=scores.xlsx");
+        String classScope = org.apache.commons.lang3.StringUtils.isBlank(classCode)
+                ? "全部班级" : classCode.trim() + "班";
+        FileUtils.setAttachmentResponseHeader(response, DownloadFileNameUtils.withTimestamp(
+                "成绩汇总_" + entryYear.trim() + "级_" + classScope + ".xlsx"));
         wb.write(response.getOutputStream());
         wb.close();
     }
@@ -995,18 +1212,19 @@ public class ScoreQueryController extends BaseController {
     public AjaxResult getQuestionAnalysis(@PathVariable Long lessonId, 
                                         @RequestParam(required = false) String classCode,
                                         @RequestParam(required = false) String entryYear) {
+        if (org.apache.commons.lang3.StringUtils.isBlank(classCode)
+                || org.apache.commons.lang3.StringUtils.isBlank(entryYear)) {
+            throw new ServiceException("入学年份和班级编号必须同时提供");
+        }
+        guideSheetAccessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
         // 1. 查询课程的所有题目详情
         List<com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         
         Long deptId = SecurityUtils.getDeptId();
         
         // 2. 查询该课程的答题记录 (根据筛选条件)
-        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers;
-        if ((classCode != null && !classCode.isEmpty()) || (entryYear != null && !entryYear.isEmpty())) {
-            allAnswers = studentAnswerMapper.selectByLessonAndClass(lessonId, classCode, entryYear, deptId);
-        } else {
-            allAnswers = studentAnswerMapper.selectByLessonId(lessonId);
-        }
+        List<com.ruoyi.business.domain.BizStudentAnswer> allAnswers =
+                studentAnswerMapper.selectByLessonAndClass(lessonId, classCode.trim(), entryYear.trim(), deptId);
         
         // 3. 按题目ID分组答题记录
         Map<Long, List<com.ruoyi.business.domain.BizStudentAnswer>> answerMap = new HashMap<>();
@@ -1082,13 +1300,19 @@ public class ScoreQueryController extends BaseController {
      */
     @GetMapping("/studentAnswerMatrix")
     public List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> getStudentAnswerMatrix(Long lessonId, String classCode, String entryYear) {
+        if (lessonId == null || org.apache.commons.lang3.StringUtils.isBlank(classCode)
+                || org.apache.commons.lang3.StringUtils.isBlank(entryYear)) {
+            throw new ServiceException("课程、入学年份和班级编号必须同时提供");
+        }
+        guideSheetAccessService.assertCanViewLessonClass(lessonId, entryYear.trim(), classCode.trim());
         // 获取学校类型并计算年级
         Long deptId = SecurityUtils.getDeptId();
         SysDept dept = deptMapper.selectDeptById(deptId);
         String schoolType = dept != null ? dept.getSchoolType() : "1";
-        int gradeNum = calculateGrade(Integer.parseInt(entryYear), schoolType);
+        int gradeNum = calculateGrade(entryYear, schoolType);
         
-        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(lessonId, classCode, entryYear, deptId);
+        List<com.ruoyi.business.domain.vo.StudentAnswerMatrixVo> result = studentAnswerMapper.selectStudentAnswerMatrix(
+                lessonId, classCode.trim(), entryYear.trim(), deptId);
         
         // 格式化 className 为 年级+班级号 (如 "601")
         for (com.ruoyi.business.domain.vo.StudentAnswerMatrixVo vo : result) {

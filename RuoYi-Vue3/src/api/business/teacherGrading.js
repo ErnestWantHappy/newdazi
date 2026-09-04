@@ -34,10 +34,28 @@ export function retryFailedPreviews(data) {
   })
 }
 
+// 获取当前课程班级的操作题批改期限状态
+export function getPracticalDeadlineStatus(lessonId, entryYear, classCode) {
+  return request({
+    url: '/business/teacher/grading/deadline-status',
+    method: 'get',
+    params: { lessonId, entryYear, classCode }
+  })
+}
+
 // 批改打分
 export function gradeSubmission(data) {
   return request({
     url: '/business/teacher/grading/grade',
+    method: 'post',
+    data
+  })
+}
+
+// 将当前作品退回重交；历史作品与原成绩仍保留用于审计。
+export function returnClassroomTask(data) {
+  return request({
+    url: '/business/classroom-state/return',
     method: 'post',
     data
   })

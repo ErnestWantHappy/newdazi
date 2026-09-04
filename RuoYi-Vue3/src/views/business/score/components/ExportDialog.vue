@@ -8,6 +8,7 @@
     <div style="margin-bottom: 15px;">
       <el-button size="small" @click="selectAll">全选</el-button>
       <el-button size="small" @click="selectNone">全不选</el-button>
+      <el-button size="small" type="success" plain @click="selectPerformanceOnly">仅课堂表现</el-button>
       <span style="margin-left: 15px; color: #909399;">已选 {{ selectedColumns.length }} 列</span>
     </div>
     
@@ -78,6 +79,12 @@ function selectAll() {
 function selectNone() {
   // 保留必选列
   selectedColumns.value = props.columns.filter(c => c.required).map(c => c.key);
+}
+
+function selectPerformanceOnly() {
+  selectedColumns.value = props.columns
+    .filter(c => c.required || c.key === 'totalPerformance')
+    .map(c => c.key);
 }
 
 async function handleExport() {

@@ -1,0 +1,38 @@
+services:
+  cryptpad:
+    image: cryptpad/cryptpad:2026.5.1
+    container_name: cryptpad-2026-5-1
+    hostname: cryptpad
+    restart: unless-stopped
+    environment:
+      CPAD_MAIN_DOMAIN: http://office.xsedu.net.cn
+      CPAD_SANDBOX_DOMAIN: http://office-sandbox.xsedu.net.cn
+      CPAD_CONF: /cryptpad/config/config.js
+      CPAD_INSTALL_ONLYOFFICE: "yes"
+    volumes:
+      - ./data/blob:/cryptpad/blob
+      - ./data/block:/cryptpad/block
+      - ./data/data:/cryptpad/data
+      - ./data/files:/cryptpad/datastore
+      - ./customize:/cryptpad/customize
+      - ./data/onlyoffice:/cryptpad/www/common/onlyoffice/dist
+      - ./config/config.js:/cryptpad/config/config.js:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3003:3003"
+    networks:
+      - cryptpad_internal
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1000000
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "5"
+
+networks:
+  cryptpad_internal:
+    name: cryptpad_internal
+    driver: bridge

@@ -1,6 +1,7 @@
 package com.ruoyi.quartz.task;
 
 import com.ruoyi.business.service.CountyExamPreviewRetryService;
+import com.ruoyi.business.service.PracticalArtifactService;
 import com.ruoyi.business.service.PracticalPreviewRetryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -19,13 +20,20 @@ public class PracticalPreviewRetryTask {
     @Autowired
     private CountyExamPreviewRetryService countyExamPreviewRetryService;
 
+    @Autowired
+    private PracticalArtifactService practicalArtifactService;
+
     public String retryFailedStudentAnswerPreviews() {
         Map<String, Object> result = practicalPreviewRetryService.retryExpiredFailedPreviews();
         Map<String, Object> countyResult = countyExamPreviewRetryService.retryExpiredFailedPreviews();
-        return String.format("操作题自动重试完成：日常匹配 %s 条，触发 %s 条，跳过 %s 条；区域抽测匹配 %s 条，触发 %s 条，跳过 %s 条",
+        Map<String, Object> attachmentResult = practicalArtifactService.retryExpiredAttachments();
+        return String.format("操作题自动重试完成：旧答卷匹配 %s 条，触发 %s 条，跳过 %s 条；多附件匹配 %s 条，触发 %s 条，跳过 %s 条；区域抽测匹配 %s 条，触发 %s 条，跳过 %s 条",
                 result.get("matchedCount"),
                 result.get("triggeredCount"),
                 result.get("skippedCount"),
+                attachmentResult.get("matchedCount"),
+                attachmentResult.get("triggeredCount"),
+                attachmentResult.get("skippedCount"),
                 countyResult.get("matchedCount"),
                 countyResult.get("triggeredCount"),
                 countyResult.get("skippedCount"));

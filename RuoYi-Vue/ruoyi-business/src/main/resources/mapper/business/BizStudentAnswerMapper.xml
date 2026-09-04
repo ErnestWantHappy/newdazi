@@ -28,6 +28,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="previewRetryCount" column="preview_retry_count"/>
         <result property="previewLastRetryTime" column="preview_last_retry_time"/>
         <result property="previewErrorMessage" column="preview_error_message"/>
+        <result property="practicalArtifactId" column="practical_artifact_id"/>
+        <result property="practicalVersionId" column="practical_version_id"/>
     </resultMap>
 
     <resultMap type="com.ruoyi.business.domain.vo.LessonRankingVo" id="LessonRankingVoResult">
@@ -44,11 +46,47 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 新增单条答题记录 -->
     <insert id="insertAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer" useGeneratedKeys="true" keyProperty="answerId">
         INSERT INTO biz_student_answer
-        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message)
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count, preview_last_retry_time, preview_error_message, practical_artifact_id, practical_version_id)
         VALUES
         (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer},
          #{isCorrect}, #{score}, #{answerTime}, #{submitTime},
-         #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
+         #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage}, #{practicalArtifactId}, #{practicalVersionId})
+    </insert>
+
+    <!-- 唯一索引配合原子 upsert，避免并发首次提交先查后插产生重复键。 -->
+    <insert id="upsertAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer"
+            useGeneratedKeys="true" keyProperty="answerId">
+        INSERT INTO biz_student_answer
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time,
+         submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path,
+         preview_retry_count, preview_last_retry_time, preview_error_message, practical_artifact_id, practical_version_id)
+        VALUES
+        (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer}, #{isCorrect}, #{score},
+         #{answerTime}, #{submitTime}, #{typingSpeed}, #{accuracyRate}, #{completionRate},
+         #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime},
+         #{previewErrorMessage}, #{practicalArtifactId}, #{practicalVersionId})
+        ON DUPLICATE KEY UPDATE
+            answer_id = LAST_INSERT_ID(answer_id),
+            -- 同一操作题文件的重试不得把已成功/失败的转换状态重新覆盖为 pending。
+            preview_status = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_status, VALUES(preview_status)),
+            preview_path = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_path, VALUES(preview_path)),
+            preview_retry_count = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_retry_count, VALUES(preview_retry_count)),
+            preview_last_retry_time = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_last_retry_time, VALUES(preview_last_retry_time)),
+            preview_error_message = IF(student_answer &lt;=&gt; VALUES(student_answer), preview_error_message, VALUES(preview_error_message)),
+            <!-- 打字题(keepBestScore=true)整体择优：仅当新提交得分更高时，答案文本与成绩统计才整体采用新值；
+                 否则整体保留旧值，杜绝“文本是新的一次、分数是旧的一次”的错位。其余题型仍按最新提交覆盖。
+                 注意 score 必须放在本组最后赋值：MySQL 对 ON DUPLICATE KEY UPDATE 按顺序求值，
+                 后面的赋值会看到前面已更新的列，score 最后赋值可保证前面的比较读到的都是旧分。 -->
+            is_correct = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(is_correct), is_correct), VALUES(is_correct)),
+            answer_time = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(answer_time), answer_time), VALUES(answer_time)),
+            submit_time = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(submit_time), submit_time), VALUES(submit_time)),
+            typing_speed = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(typing_speed), typing_speed), VALUES(typing_speed)),
+            accuracy_rate = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(accuracy_rate), accuracy_rate), VALUES(accuracy_rate)),
+            completion_rate = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(completion_rate), completion_rate), VALUES(completion_rate)),
+            practical_artifact_id = COALESCE(VALUES(practical_artifact_id), practical_artifact_id),
+            practical_version_id = COALESCE(VALUES(practical_version_id), practical_version_id),
+            student_answer = IF(#{keepBestScore} = TRUE, IF(COALESCE(VALUES(score), -1) &gt; COALESCE(score, -1), VALUES(student_answer), student_answer), VALUES(student_answer)),
+            score = IF(#{keepBestScore} = TRUE, GREATEST(COALESCE(score, 0), COALESCE(VALUES(score), 0)), VALUES(score))
     </insert>
 
     <!-- 批量插入答题记录 -->
@@ -86,9 +124,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectByStudentAndLesson" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         WHERE a.student_id = #{studentId}
           AND a.lesson_id = #{lessonId}
         ORDER BY a.question_id ASC
@@ -102,6 +137,33 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND question_id = #{questionId}
         ORDER BY answer_id DESC
         LIMIT 1
+    </select>
+
+    <select id="countByLessonIds" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer
+        WHERE lesson_id IN
+        <foreach collection="lessonIds" item="lessonId" open="(" separator="," close=")">
+            #{lessonId}
+        </foreach>
+    </select>
+
+    <select id="countByStudentIds" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer
+        WHERE student_id IN
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+    </select>
+
+    <select id="countByQuestionIds" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer
+        WHERE question_id IN
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
     </select>
 
     <select id="selectByLessonId" resultMap="BizStudentAnswerResult">
@@ -119,7 +181,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
-        JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
+        JOIN biz_student s ON a.student_id = s.user_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
         AND u.dept_id = #{deptId}
@@ -152,7 +217,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
-        LEFT JOIN biz_student s ON a.student_id = s.student_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
+        LEFT JOIN biz_student s ON a.student_id = s.user_id
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE a.lesson_id = #{lessonId}
         GROUP BY a.student_id, u.nick_name, s.student_no, s.class_code
@@ -176,14 +244,78 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </delete>
 
-    <!-- 查询学生有答题记录的所有课程ID -->
-    <select id="selectDistinctLessonIdsByStudent" resultType="java.lang.Long">
-        SELECT a.lesson_id 
-        FROM biz_student_answer a
-        WHERE a.student_id = #{studentId}
-          AND YEAR(a.submit_time) = #{year}
-        GROUP BY a.lesson_id
-        ORDER BY MAX(a.submit_time) DESC
+    <!--
+        唯一索引保证每个学生/课程/题目只有一行，历史成绩无需再物化整张答案表取 MAX(answer_id)。
+        先选出本年度出现过提交的课程，再一次聚合课程总分、学生得分和题型得分。
+    -->
+    <select id="selectHistoryScores" resultType="java.util.LinkedHashMap">
+        WITH selected_lesson AS (
+            SELECT answer.lesson_id
+            FROM biz_student_answer answer
+            WHERE answer.student_id = #{studentId}
+              AND answer.submit_time &gt;= #{startTime}
+              AND answer.submit_time &lt; #{endTime}
+            GROUP BY answer.lesson_id
+        ),
+        answer_metric AS (
+            SELECT answer.lesson_id,
+                   SUM(IFNULL(answer.score, 0)) AS my_score,
+                   MAX(answer.submit_time) AS submit_time,
+                   SUM(CASE WHEN question.question_type = 'typing'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS typing_score,
+                   SUM(CASE WHEN question.question_type IN ('choice', 'judgment')
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS theory_score,
+                   SUM(CASE WHEN question.question_type = 'practical'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS practical_score,
+                   SUM(CASE WHEN question.question_type = 'practical' AND IFNULL(question.practical_mode, 'FILE') = 'FILE'
+                            THEN IFNULL(answer.score, 0) ELSE 0 END) AS file_practical_score,
+                   SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'PYTHON'
+                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS python_practical_score,
+                   SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'FLOWCHART'
+                             THEN IFNULL(answer.score, 0) ELSE 0 END) AS flowchart_practical_score,
+                   SUM(CASE WHEN question.question_type = 'typing'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS typing_total,
+                   SUM(CASE WHEN question.question_type IN ('choice', 'judgment')
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS theory_total,
+                   SUM(CASE WHEN question.question_type = 'practical'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS practical_total
+                   ,SUM(CASE WHEN question.question_type = 'practical' AND IFNULL(question.practical_mode, 'FILE') = 'FILE'
+                            THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS file_practical_total
+                   ,SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'PYTHON'
+                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS python_practical_total
+                   ,SUM(CASE WHEN question.question_type = 'practical' AND question.practical_mode = 'FLOWCHART'
+                             THEN IFNULL(lesson_question.question_score, 0) ELSE 0 END) AS flowchart_practical_total
+            FROM biz_student_answer answer
+            INNER JOIN selected_lesson selected ON selected.lesson_id = answer.lesson_id
+            INNER JOIN biz_lesson_question lesson_question
+                   ON lesson_question.lesson_id = answer.lesson_id
+                  AND lesson_question.question_id = answer.question_id
+            INNER JOIN biz_question question ON question.question_id = answer.question_id
+            WHERE answer.student_id = #{studentId}
+            GROUP BY answer.lesson_id
+        ),
+        lesson_total AS (
+            SELECT lesson_question.lesson_id,
+                   SUM(IFNULL(lesson_question.question_score, 0)) AS total_score
+            FROM biz_lesson_question lesson_question
+            INNER JOIN selected_lesson selected ON selected.lesson_id = lesson_question.lesson_id
+            GROUP BY lesson_question.lesson_id
+        )
+        SELECT lesson.lesson_id AS lessonId,
+               lesson.lesson_title AS lessonTitle,
+               IFNULL(lesson_total.total_score, 0) AS totalScore,
+               IFNULL(answer_metric.my_score, 0) AS myScore,
+               answer_metric.submit_time AS submitTime,
+               CONCAT(IFNULL(answer_metric.typing_score, 0), '/', IFNULL(answer_metric.typing_total, 0)) AS typingScore,
+               CONCAT(IFNULL(answer_metric.theory_score, 0), '/', IFNULL(answer_metric.theory_total, 0)) AS theoryScore,
+               CONCAT(IFNULL(answer_metric.practical_score, 0), '/', IFNULL(answer_metric.practical_total, 0)) AS practicalScore
+               ,CONCAT(IFNULL(answer_metric.file_practical_score, 0), '/', IFNULL(answer_metric.file_practical_total, 0)) AS filePracticalScore
+               ,CONCAT(IFNULL(answer_metric.python_practical_score, 0), '/', IFNULL(answer_metric.python_practical_total, 0)) AS pythonPracticalScore
+               ,CONCAT(IFNULL(answer_metric.flowchart_practical_score, 0), '/', IFNULL(answer_metric.flowchart_practical_total, 0)) AS flowchartPracticalScore
+        FROM answer_metric
+        INNER JOIN biz_lesson lesson ON lesson.lesson_id = answer_metric.lesson_id
+        LEFT JOIN lesson_total ON lesson_total.lesson_id = answer_metric.lesson_id
+        ORDER BY answer_metric.submit_time DESC
     </select>
 
     <select id="selectWrongQuestions" resultType="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
@@ -206,11 +338,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             q.file_path AS filePath,
             a.student_answer AS studentAnswer
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
-        LEFT JOIN biz_question q ON a.question_id = q.question_id
-        LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
+        INNER JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND a.lesson_id = lq.lesson_id
+        INNER JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id = #{studentId}
           AND a.is_correct = 0
           AND q.question_type IN ('choice', 'judgment')
@@ -231,16 +360,27 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             s.remark AS remark,
             #{questionId} AS questionId,
             q.question_content AS questionContent,
+            q.practical_mode AS practicalMode,
             a.student_answer AS studentAnswer,
             a.preview_status AS previewStatus,
             a.preview_path AS previewPath,
             a.preview_retry_count AS previewRetryCount,
             a.preview_last_retry_time AS previewLastRetryTime,
             a.preview_error_message AS previewErrorMessage,
+            a.practical_version_id AS practicalVersionId,
+            fs.submission_id AS flowchartSubmissionId,
+            fs.version_no AS versionNo,
             a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
-            CASE WHEN a.answer_id IS NOT NULL THEN 1 ELSE 0 END AS submitted
+            COALESCE(state.task_state,
+                CASE WHEN a.answer_id IS NULL THEN 'NOT_ENTERED'
+                     WHEN a.score IS NULL THEN 'SUBMITTED' ELSE 'GRADED' END) AS taskState,
+            COALESCE(state.state_version, 0) AS stateVersion,
+            state.changed_at AS stateChangedAt,
+            CASE WHEN a.answer_id IS NOT NULL
+                       AND a.student_answer IS NOT NULL
+                       AND TRIM(a.student_answer) &lt;&gt; '' THEN 1 ELSE 0 END AS submitted
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         LEFT JOIN (
@@ -249,13 +389,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN (
                 <include refid="latestAnswerIdSubquery"/>
             ) latest ON latest.answer_id = a1.answer_id
-        ) a ON s.student_id = a.student_id
+        ) a ON s.user_id = a.student_id
            AND a.lesson_id = #{lessonId}
            <if test="questionId != null">
                AND a.question_id = #{questionId}
            </if>
-        LEFT JOIN biz_question q ON q.question_id = #{questionId}
-        LEFT JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
+        LEFT JOIN biz_student_task_state state
+          ON state.student_id = s.student_id
+         AND state.lesson_id = #{lessonId}
+         AND state.question_id = #{questionId}
+        LEFT JOIN biz_flowchart_submission fs
+          ON fs.answer_id = a.answer_id
+         AND fs.lesson_id = #{lessonId}
+         AND fs.question_id = #{questionId}
+        INNER JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
+        INNER JOIN biz_question q ON q.question_id = lq.question_id
         WHERE s.class_code = #{classCode}
           AND s.entry_year = #{entryYear}
           AND u.dept_id = #{deptId}
@@ -279,6 +427,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
             SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
             SUM(IFNULL(a.score, 0)) AS totalScore,
             -- 打字统计（只取打字题的平均值）
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
@@ -289,7 +439,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
-        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        INNER JOIN biz_lesson_question lq
+            ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+        INNER JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id = #{studentId}
         <if test="lessonId != null">
             AND a.lesson_id = #{lessonId}
@@ -307,6 +459,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
             SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
+            SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
             SUM(IFNULL(a.score, 0)) AS totalScore,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
@@ -316,7 +470,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
-        LEFT JOIN biz_question q ON a.question_id = q.question_id
+        INNER JOIN biz_lesson_question lq
+            ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+        INNER JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.student_id IN
         <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
             #{studentId}
@@ -339,6 +495,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             preview_retry_count = #{previewRetryCount},
             preview_last_retry_time = #{previewLastRetryTime},
             preview_error_message = #{previewErrorMessage}
+        WHERE answer_id = #{answerId}
+    </update>
+
+    <update id="updatePreviewByPracticalVersion">
+        UPDATE biz_student_answer
+        SET preview_status = #{previewStatus},
+            preview_path = #{previewPath},
+            preview_error_message = #{previewErrorMessage}
+        WHERE practical_version_id = #{practicalVersionId}
+    </update>
+
+    <update id="clearPracticalAnswer">
+        UPDATE biz_student_answer
+        SET student_answer = '',
+            is_correct = 0,
+            score = NULL,
+            submit_time = #{submitTime},
+            preview_status = NULL,
+            preview_path = NULL,
+            preview_retry_count = 0,
+            preview_last_retry_time = NULL,
+            preview_error_message = NULL,
+            practical_artifact_id = #{practicalArtifactId},
+            practical_version_id = NULL
         WHERE answer_id = #{answerId}
     </update>
 
@@ -373,6 +553,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 根据ID查询答题记录 -->
     <select id="selectById" resultMap="BizStudentAnswerResult">
         SELECT * FROM biz_student_answer WHERE answer_id = #{answerId}
+    </select>
+
+    <!-- 批改事务先锁定答卷，后续提交时间和旧分数校验才具有并发意义。 -->
+    <select id="selectByIdForUpdate" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer WHERE answer_id = #{answerId} FOR UPDATE
     </select>
 
     <resultMap id="StudentAnswerMatrixResult" type="com.ruoyi.business.domain.vo.StudentAnswerMatrixVo">
@@ -410,7 +595,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN (
                 <include refid="latestAnswerIdSubquery"/>
             ) latest ON latest.answer_id = a1.answer_id
-        ) a ON s.student_id = a.student_id AND a.lesson_id = #{lessonId}
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a1.lesson_id
+               AND current_lq.question_id = a1.question_id
+        ) a ON s.user_id = a.student_id AND a.lesson_id = #{lessonId}
         LEFT JOIN biz_lesson_question lq ON a.question_id = lq.question_id AND lq.lesson_id = #{lessonId}
         LEFT JOIN biz_question q ON a.question_id = q.question_id
         WHERE s.class_code = #{classCode} 
@@ -431,7 +619,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
-        JOIN biz_student s ON a.student_id = s.student_id
+        JOIN biz_student s ON a.student_id = s.user_id
+        INNER JOIN biz_lesson_question lq
+            ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
         JOIN biz_question q ON a.question_id = q.question_id
         WHERE a.lesson_id = #{lessonId}
         GROUP BY s.class_code, s.entry_year
@@ -480,7 +670,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 WHERE lesson_id = #{lessonId}
                 GROUP BY student_id, lesson_id, question_id
             ) latest ON latest.answer_id = a.answer_id
-            INNER JOIN biz_student s ON a.student_id = s.student_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a.lesson_id
+               AND current_lq.question_id = a.question_id
+            INNER JOIN biz_student s ON a.student_id = s.user_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             INNER JOIN biz_teacher_class tc
                 ON s.entry_year = tc.entry_year
@@ -511,8 +704,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 WHERE lesson_id = #{lessonId}
                 GROUP BY student_id, lesson_id, question_id
             ) latest ON latest.answer_id = a1.answer_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a1.lesson_id
+               AND current_lq.question_id = a1.question_id
             WHERE a1.lesson_id = #{lessonId}
-        ) ans ON ans.student_id = s.student_id
+        ) ans ON ans.student_id = s.user_id
         LEFT JOIN biz_question q ON ans.question_id = q.question_id
         LEFT JOIN biz_classroom_performance p
             ON p.student_id = s.student_id
@@ -534,8 +730,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             INNER JOIN (
                 <include refid="latestAnswerIdSubquery"/>
             ) latest ON latest.answer_id = a.answer_id
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a.lesson_id
+               AND current_lq.question_id = a.question_id
             WHERE a.lesson_id = #{lessonId}
-        ) ans ON ans.student_id = s.student_id
+        ) ans ON ans.student_id = s.user_id
         LEFT JOIN biz_classroom_performance p
             ON p.student_id = s.student_id
             AND p.lesson_id = #{lessonId}
@@ -546,12 +745,32 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND (ans.student_id IS NOT NULL OR p.performance_id IS NOT NULL)
     </select>
 
+    <select id="existsLessonClassAnswer" resultType="int">
+        SELECT EXISTS(
+            SELECT 1
+            FROM biz_student_answer a
+            INNER JOIN biz_lesson_question current_lq
+                ON current_lq.lesson_id = a.lesson_id
+               AND current_lq.question_id = a.question_id
+            INNER JOIN biz_student s ON s.user_id = a.student_id
+            INNER JOIN sys_user u ON u.user_id = s.user_id
+            WHERE a.lesson_id = #{lessonId}
+              AND s.entry_year = #{entryYear}
+              AND s.class_code = #{classCode}
+              AND u.dept_id = #{deptId}
+            LIMIT 1
+        )
+    </select>
+
     <select id="selectRecoverablePracticalAnswersForRetry" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
         INNER JOIN biz_question q ON q.question_id = a.question_id
         WHERE q.question_type = 'practical'
           AND a.student_answer IS NOT NULL
@@ -575,8 +794,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
         ) latest ON latest.answer_id = a.answer_id
+        INNER JOIN biz_lesson_question current_lq
+            ON current_lq.lesson_id = a.lesson_id
+           AND current_lq.question_id = a.question_id
         INNER JOIN biz_question q ON q.question_id = a.question_id
-        INNER JOIN biz_student s ON s.student_id = a.student_id
+        INNER JOIN biz_student s ON s.user_id = a.student_id
         INNER JOIN sys_user u ON u.user_id = s.user_id
         WHERE q.question_type = 'practical'
           AND a.lesson_id = #{lessonId}
@@ -595,5 +817,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                  AND COALESCE(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
           )
         ORDER BY CAST(s.student_no AS UNSIGNED) ASC, a.submit_time ASC
+    </select>
+
+    <select id="countAnswersByLessonAndQuestion" resultType="int">
+        SELECT count(1)
+        FROM biz_student_answer
+        WHERE lesson_id = #{lessonId}
+          AND question_id = #{questionId}
+          AND submit_time IS NOT NULL
     </select>
 </mapper>

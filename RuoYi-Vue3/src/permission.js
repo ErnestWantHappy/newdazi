@@ -11,7 +11,8 @@ import usePermissionStore from "@/store/modules/permission";
 
 NProgress.configure({ showSpinner: false });
 
-const whiteList = ["/login", "/register", "/student/index"];
+// 学生首页必须登录；未登录访问 /student/index 应进入登录流程，不能免鉴权直入
+const whiteList = ["/login", "/register", "/public/research-notice/**"];
 
 const isWhiteList = (path) => {
   return whiteList.some((pattern) => isPathMatch(pattern, path));
@@ -19,6 +20,11 @@ const isWhiteList = (path) => {
 
 router.beforeEach((to, from, next) => {
   NProgress.start();
+  // 平台菜单实际路由为 /platform-update，兼容历史书签中的旧地址。
+  if (to.path === '/business/platform-update') {
+    next({ path: '/platform-update', replace: true });
+    return;
+  }
   if (getToken()) {
     to.meta.title && useSettingsStore().setTitle(to.meta.title);
     /* has token*/
@@ -37,7 +43,7 @@ router.beforeEach((to, from, next) => {
             const roles = userStore.roles;
 
             usePermissionStore()
-              .generateRoutes()
+              .generateRoutes(roles)
               .then((accessRoutes) => {
                 accessRoutes.forEach((route) => {
                   if (!isHttp(route.path)) {

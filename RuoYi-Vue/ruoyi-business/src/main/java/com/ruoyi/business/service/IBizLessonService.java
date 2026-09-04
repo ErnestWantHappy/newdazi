@@ -61,6 +61,9 @@ public interface IBizLessonService
      */
     public int deleteBizLessonByLessonId(Long lessonId);
 
+    /** 归档/恢复课程，课程ID和历史数据均保留。 */
+    int updateLessonStatus(Long lessonId, String status);
+
     /**
      * 获取教师首页的完整数据
      * @return 教师首页视图对象列表
@@ -75,4 +78,14 @@ public interface IBizLessonService
     public LessonDetailVo selectLessonDetailsByLessonId(Long lessonId);
 
     public LessonDetailVo saveLessonDetails(LessonDetailVo lessonDetailVo);
+
+    /**
+     * 读取教师统一课程推进策略（全校常规课共用一套）
+     */
+    public java.util.Map<String, Object> getTeacherAdvancePolicy();
+
+    /**
+     * 保存教师统一课程推进策略，并同步到该教师全部常规课
+     */
+    public java.util.Map<String, Object> updateTeacherAdvancePolicy(LessonDetailVo config);
 }

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.GuideSheetDraftMapper">
+
+    <resultMap id="GuideSheetDraftResult" type="BizGuideSheetDraft">
+        <id property="draftId" column="draft_id" />
+        <result property="ownerId" column="owner_id" />
+        <result property="clientDraftKey" column="client_draft_key" />
+        <result property="sheetId" column="sheet_id" />
+        <result property="contentJson" column="content_json" />
+        <result property="revision" column="revision" />
+        <result property="draftStatus" column="draft_status" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="completedTime" column="completed_time" />
+    </resultMap>
+
+    <sql id="selectGuideSheetDraftColumns">
+        draft_id, owner_id, client_draft_key, sheet_id, content_json, revision,
+        draft_status, create_by, create_time, update_by, update_time, completed_time
+    </sql>
+
+    <select id="selectByOwnerAndKey" resultMap="GuideSheetDraftResult">
+        SELECT <include refid="selectGuideSheetDraftColumns" />
+        FROM biz_guide_sheet_draft
+        WHERE owner_id = #{ownerId}
+          AND client_draft_key = #{clientDraftKey}
+        LIMIT 1
+    </select>
+
+    <insert id="insertDraft" parameterType="BizGuideSheetDraft"
+            useGeneratedKeys="true" keyProperty="draftId">
+        INSERT INTO biz_guide_sheet_draft (
+            owner_id, client_draft_key, sheet_id, content_json, revision, draft_status,
+            create_by, create_time, update_by, update_time, completed_time
+        ) VALUES (
+            #{ownerId}, #{clientDraftKey}, #{sheetId}, #{contentJson}, #{revision}, #{draftStatus},
+            #{createBy}, #{createTime}, #{updateBy}, #{updateTime}, #{completedTime}
+        )
+    </insert>
+
+    <update id="updateDraftCas">
+        UPDATE biz_guide_sheet_draft
+        SET sheet_id = #{sheetId},
+            content_json = #{contentJson},
+            revision = revision + 1,
+            update_by = #{updateBy},
+            update_time = #{updateTime}
+        WHERE owner_id = #{ownerId}
+          AND client_draft_key = #{clientDraftKey}
+          AND revision = #{expectedRevision}
+          AND draft_status = 'D'
+    </update>
+
+    <update id="completeDraftCas">
+        UPDATE biz_guide_sheet_draft
+        SET draft_status = 'C',
+            revision = revision + 1,
+            update_by = #{updateBy},
+            update_time = #{completedTime},
+            completed_time = #{completedTime}
+        WHERE owner_id = #{ownerId}
+          AND client_draft_key = #{clientDraftKey}
+          AND revision = #{expectedRevision}
+          AND draft_status = 'D'
+    </update>
+
+    <update id="reopenCompletedDraft">
+        UPDATE biz_guide_sheet_draft
+        SET sheet_id = #{sheetId},
+            content_json = #{contentJson},
+            revision = revision + 1,
+            draft_status = 'D',
+            update_by = #{updateBy},
+            update_time = #{updateTime},
+            completed_time = NULL
+        WHERE owner_id = #{ownerId}
+          AND client_draft_key = #{clientDraftKey}
+          AND draft_status = 'C'
+    </update>
+
+</mapper>

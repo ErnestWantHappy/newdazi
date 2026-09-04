@@ -1,6 +1,40 @@
 /.playwright-cli/
 /output/
 /uploadPath/
+/uploadPath-private/
+/RuoYi-Vue/uploadPath/upload/
+/RuoYi-Vue/uploadPath-private/
 /backend-dual-feature*.log
 /frontend-dual-feature*.log
+/sql/ry-vue260709.sql
+
+# 本机私密（密码/Token）；禁止提交
+**/secrets.local.md
+**/*.local.md
+contexts/secrets.local.md
+deploy/judge0/config/judge0.conf
+backups/
+
+# 2026-09-03 增补：本地临时产物与运行残留，禁止入库
+/tmp/
+/logs/
+/BOOT-INF/
+/NUL
+# 误粘贴产生的乱码文件名（根目录，按字节 1~3 长度覆盖）
+/?
+/???
+# 根目录 sql 目录名称恰好为三个字符，必须显式排除，避免新增迁移脚本被静默忽略。
+!/sql/
+!/sql/**
+# 前端构建/发布压缩包与本地构建产物
+/RuoYi-Vue3/dist-host-hw-v1.tar.gz
+/RuoYi-Vue3/dist*.tar.gz
+*.log
+tools/__pycache__/
+tools/tests/__pycache__/
+
+# 临时辅助脚本与草稿
+/.tmp-qoder-askpass.cmd
+/scratch/
+/RuoYi-Vue3/output/
 /sql/ry-vue260709.sql

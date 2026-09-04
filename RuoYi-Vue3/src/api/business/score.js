@@ -91,3 +91,30 @@ export function cancelManualHomeworkScore(data) {
     data
   })
 }
+
+// 读取某课程在某班级的题目开放开关（理论题/操作题）
+export function getLessonGate(lessonId, entryYear, classCode) {
+  return request({
+    url: '/business/score/lesson-gate',
+    method: 'get',
+    params: { lessonId, entryYear, classCode }
+  })
+}
+
+// 设置某课程在某班级的题目开放开关
+export function setLessonGate(lessonId, entryYear, classCode, kind, open) {
+  return request({
+    url: '/business/score/lesson-gate',
+    method: 'put',
+    data: { lessonId, entryYear, classCode, kind, open }
+  })
+}
+
+// 查询当前课程班级可访问的电子导学单成绩上下文
+export function getGuideSheetScoreContext(lessonId, entryYear, classCode) {
+  return request({
+    url: '/business/score/guide-sheet-context',
+    method: 'get',
+    params: { lessonId, entryYear, classCode }
+  })
+}
