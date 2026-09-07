@@ -44,6 +44,34 @@ function addIframe() {
   overflow: hidden;
 }
 
+/* 路由懒加载时阻止用户继续看到或操作已经离开的业务页面。 */
+:global(html.route-pending .app-main::before) {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2100;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+:global(html.route-pending .app-main::after) {
+  content: "页面加载中";
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: 2101;
+  transform: translate(-50%, -50%);
+  padding: 12px 18px 12px 44px;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
+  color: #606266;
+  font-size: 14px;
+}
+
+:global(html.route-pending .app-main) {
+  pointer-events: none;
+}
+
 .fixed-header + .app-main {
   padding-top: 50px;
 }

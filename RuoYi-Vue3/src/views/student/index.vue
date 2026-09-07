@@ -175,6 +175,7 @@
                 {{ courseMyScore !== null ? courseMyScore : "待完成" }}
               </div>
             </div>
+            <div class="score-rule-note" title="理论题锁定首次提交不可更改；打字题与编程题取历史最高分；文件作品按当前版本计分">计分规则：理论锁首次 · 打字编程取最高 · 文件计当前版本</div>
           </div>
         </div>
       </div>
@@ -215,10 +216,17 @@
         <el-alert v-else-if="!practicalOpen && hasPractical" type="info" :closable="false" show-icon class="gate-tip"
           title="本课操作题暂未开放，请等老师在课堂开启后作答" />
         <el-card v-if="collaborationRooms.length" shadow="never" class="collaboration-card">
-          <template #header><div class="card-header"><span>班级在线协作</span><el-tag type="success">同班共享</el-tag></div></template>
+          <template #header><div class="card-header"><span>在线协作</span><el-tag type="success">{{ collaborationRooms.length === 1 && collaborationRooms[0].groupRoom ? '本组房间' : '我的协作' }}</el-tag></div></template>
           <div v-for="room in collaborationRooms" :key="room.roomId" class="collaboration-room-row">
-            <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.fileName }} · 第 {{ room.version }} 版</span></div>
+            <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.fileName }} · 第 {{ room.version }} 版</span><el-tag v-if="room.groupRoom" size="small" type="info" style="margin-left: 6px">本组</el-tag><el-tag v-else size="small" type="success" style="margin-left: 6px">全班</el-tag></div>
             <el-button type="primary" @click="openCollaboration(room)">进入房间</el-button>
+          </div>
+        </el-card>
+        <el-card v-if="collaborationHistory.length" shadow="never" class="collaboration-card">
+          <template #header><div class="card-header"><span>协作历史作品（只读）</span><el-tag type="info">我参与过的小组</el-tag></div></template>
+          <div v-for="room in collaborationHistory" :key="room.roomId" class="collaboration-room-row">
+            <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.lessonTitle }} · {{ room.groupName }} · {{ room.fileName }}</span></div>
+            <el-button @click="openCollaborationHistory(room)">查看</el-button>
           </div>
         </el-card>
         <!-- 空状态提示 -->
@@ -1041,7 +1049,7 @@ import StudentFlowchartDialog from "@/components/FlowchartEditor/StudentFlowchar
 import { getStudentProgramming } from "@/api/business/programming";
 import { questionTypeLabel } from "@/utils/questionType";
 import Download from "@/plugins/download";
-import { getCurrentCollaborationRooms } from "@/api/business/collaboration";
+import { getCollaborationHistory, getCurrentCollaborationRooms } from "@/api/business/collaboration";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -1089,9 +1097,23 @@ const studentClassLabel = computed(() => {
   return `${gradeLabel}${classCode}班`
 })
 const collaborationRooms = ref([]);
+const collaborationHistory = ref([]);
 
 function openCollaboration(room) {
+  if (!room?.roomId) {
+    ElMessage.error('协作房间 ID 无效，无法进入');
+    return;
+  }
   router.push(`/student/collaboration/${room.roomId}`);
+}
+
+function openCollaborationHistory(room) {
+  const roomId = room?.roomId || room?.roomid;
+  if (!roomId) {
+    ElMessage.error('协作房间 ID 无效，无法进入');
+    return;
+  }
+  router.push(`/student/collaboration/${roomId}`);
 }
 
 const checkinTimeText = computed(() => {
@@ -1633,8 +1655,15 @@ async function fetchData(opts = {}) {
     try {
       const collaborationRes = await getCurrentCollaborationRooms();
       collaborationRooms.value = collaborationRes.data || collaborationRes || [];
+      // 移除自动跳转逻辑：学生应主动选择进入协作房间，而不是被强制跳转
     } catch (collaborationError) {
       collaborationRooms.value = [];
+    }
+    try {
+      const historyRes = await getCollaborationHistory();
+      collaborationHistory.value = historyRes.data || historyRes || [];
+    } catch (historyError) {
+      collaborationHistory.value = [];
     }
     if (res.blockedByCountyExam) {
       router.replace("/student/county-exam");

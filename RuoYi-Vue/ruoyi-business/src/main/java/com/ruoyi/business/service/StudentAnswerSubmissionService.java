@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+import com.ruoyi.common.exception.ServiceException;
 
 /**
  * 学生整单答案落库事务。
@@ -31,7 +32,15 @@ public class StudentAnswerSubmissionService
 
         List<Long> pendingConversionAnswerIds = new ArrayList<>();
         for (BizStudentAnswer answer : answers) {
-            studentAnswerMapper.upsertAnswer(answer);
+            if (Boolean.TRUE.equals(answer.getTerminalSubmission())) {
+                // 理论题一旦写入即为终态。INSERT IGNORE 利用唯一键处理并发重放，
+                // 不能依赖控制器的预查询，否则两个同时到达的请求仍可能相互覆盖。
+                if (studentAnswerMapper.insertAnswerIfAbsent(answer) == 0) {
+                    throw new ServiceException("理论题已提交，不能重复提交");
+                }
+            } else {
+                studentAnswerMapper.upsertAnswer(answer);
+            }
             if ("pending".equals(answer.getPreviewStatus())
                     && answer.getAnswerId() != null
                     && answer.getStudentAnswer() != null

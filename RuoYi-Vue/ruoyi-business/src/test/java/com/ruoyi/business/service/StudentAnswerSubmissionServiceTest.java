@@ -11,8 +11,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import com.ruoyi.common.exception.ServiceException;
 
 @ExtendWith(MockitoExtension.class)
 class StudentAnswerSubmissionServiceTest
@@ -39,6 +42,21 @@ class StudentAnswerSubmissionServiceTest
         verify(studentAnswerMapper).upsertAnswer(first);
         verify(studentAnswerMapper).upsertAnswer(second);
         assertEquals(Arrays.asList(107L), pendingIds);
+    }
+
+    @Test
+    void theorySubmissionUsesInsertOnlyAndRejectsDuplicate()
+    {
+        BizStudentAnswer answer = answer(7L, "A", null);
+        answer.setTerminalSubmission(true);
+        org.mockito.Mockito.when(studentAnswerMapper.insertAnswerIfAbsent(answer)).thenReturn(0);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.persistAnswers(30L, 5L, Arrays.asList(answer)));
+
+        assertEquals("理论题已提交，不能重复提交", error.getMessage());
+        verify(studentAnswerMapper).insertAnswerIfAbsent(answer);
+        verify(studentAnswerMapper, never()).upsertAnswer(answer);
     }
 
     private BizStudentAnswer answer(Long questionId, String value, String previewStatus)

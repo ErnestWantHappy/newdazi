@@ -12,6 +12,8 @@ let socket
 let heartbeatTimer
 let reconnectTimer
 let disposed = false
+let reconnectAttempts = 0
+const MAX_RECONNECT_DELAY = 60000
 
 function deviceId() {
   const key = 'classroom-presence-device-id'
@@ -32,11 +34,16 @@ function connectPresence() {
   socket = new WebSocket(`${protocol}//${window.location.host}/ws/presence/${deviceId()}`)
   socket.onopen = () => {
     if (disposed) { socket.close(); return }
+    reconnectAttempts = 0
     heartbeatTimer = window.setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send('{"type":"heartbeat"}') }, 30000)
   }
   socket.onclose = () => {
     window.clearInterval(heartbeatTimer)
-    if (!disposed) reconnectTimer = window.setTimeout(connectPresence, 5000)
+    if (!disposed) {
+      const delay = Math.min(5000 * Math.pow(2, reconnectAttempts++), MAX_RECONNECT_DELAY)
+      const jitter = Math.round(Math.random() * 1000)
+      reconnectTimer = window.setTimeout(connectPresence, delay + jitter)
+    }
   }
 }
 

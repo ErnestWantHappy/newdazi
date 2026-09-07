@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { getLoginClient } from '@/utils/loginClient'
 
 // 登录方法
 export function login(username, password, code, uuid) {
@@ -12,6 +13,7 @@ export function login(username, password, code, uuid) {
     url: '/login',
     headers: {
       isToken: false,
+      'X-Login-Client': getLoginClient(),
       repeatSubmit: false
     },
     method: 'post',

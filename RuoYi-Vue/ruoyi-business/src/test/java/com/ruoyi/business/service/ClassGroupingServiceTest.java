@@ -165,6 +165,47 @@ class ClassGroupingServiceTest
                 org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void shouldRejectAutoFreezeWithoutGroupCount()
+    {
+        BizLesson lesson = ownedLesson();
+        when(lessonMapper.selectBizLessonByLessonId(300L)).thenReturn(lesson);
+        when(mapper.countLessonAssignment(300L, 9L, "2025", "1")).thenReturn(1);
+        when(mapper.selectSnapshot(300L, 9L, "2025", "1")).thenReturn(null);
+
+        assertThrows(ServiceException.class,
+                () -> service.generateSnapshotAuto(200L, 300L, "2025", "1", new HashMap<String, Object>()));
+        verify(mapper, never()).insertSnapshot(anyMap());
+    }
+
+    @Test
+    void shouldReuseExistingSnapshotForAutoFreeze()
+    {
+        BizLesson lesson = ownedLesson();
+        when(lessonMapper.selectBizLessonByLessonId(300L)).thenReturn(lesson);
+        when(mapper.countLessonAssignment(300L, 9L, "2025", "1")).thenReturn(1);
+        Map<String, Object> existing = new HashMap<String, Object>();
+        existing.put("snapshotId", 500L);
+        when(mapper.selectSnapshot(300L, 9L, "2025", "1")).thenReturn(existing);
+        Map<String, Object> request = new HashMap<String, Object>();
+        request.put("groupCount", 3);
+
+        Map<String, Object> result = service.generateSnapshotAuto(200L, 300L, "2025", "1", request);
+
+        assertEquals(Boolean.TRUE, result.get("existed"));
+        verify(mapper, never()).insertScheme(anyMap());
+        verify(mapper, never()).insertSnapshot(anyMap());
+    }
+
+    private static BizLesson ownedLesson()
+    {
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(300L);
+        lesson.setDeptId(9L);
+        lesson.setCreatorId(200L);
+        return lesson;
+    }
+
     private static Map<String, Object> student(Long studentId)
     {
         Map<String, Object> student = new HashMap<String, Object>();

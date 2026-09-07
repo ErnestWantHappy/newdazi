@@ -43,6 +43,9 @@ public class SystemDiagnosisController
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private com.ruoyi.framework.web.service.OnlinePresenceService onlinePresenceService;
+
+    @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
     @Autowired(required = false)
@@ -778,7 +781,7 @@ public class SystemDiagnosisController
     {
         try
         {
-            return (long) redisTemplate.keys(CacheConstants.LOGIN_TOKEN_KEY + "*").size();
+            return onlinePresenceService.count();
         }
         catch (Exception e)
         {

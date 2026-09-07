@@ -277,8 +277,8 @@
         </div>
       </template>
       <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }" max-height="600" style="width: 100%">
-        <el-table-column prop="userName" label="账号" width="120" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
-        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
+        <el-table-column prop="userName" label="账号" width="115" align="center" sortable :sort-method="naturalCodeCompare" />
+        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="naturalCodeCompare" />
         <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => String(a || '').localeCompare(String(b || ''), 'zh-CN')" fixed="left">
           <template #default="scope">
@@ -287,7 +287,7 @@
         </el-table-column>
         
         <!-- 请假状态列 (仅在选中单门课程时显示，更直观) -->
-        <el-table-column v-if="selectedLessonIds.length === 1" label="请假" width="60" align="center" fixed="left">
+        <el-table-column v-if="selectedLessonIds.length === 1" label="请假" width="60" align="center">
           <template #default="scope">
             <el-button 
                 circle
@@ -303,7 +303,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column v-if="selectedLessonIds.length === 1" label="改分" width="60" align="center" fixed="left">
+        <el-table-column v-if="selectedLessonIds.length === 1" label="改分" width="60" align="center">
           <template #default="scope">
             <el-button
               circle
@@ -319,14 +319,14 @@
           </template>
         </el-table-column>
         
-        <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip fixed="left">
+        <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip>
           <template #default="scope">
             <span v-if="scope.row.remark" style="color: #E6A23C;">{{ scope.row.remark }}</span>
             <span v-else style="color: #C0C4CC;">-</span>
           </template>
         </el-table-column>
         
-        <!-- 动态课程列 (当选中课程数 <= 5 时显示) -->
+        <!-- 动态课程列：状态色相体系（请假天蓝Tag、未交灰色斜杠-、满分浅绿高亮、人工改分角标、正常深灰） -->
         <template v-if="selectedLessonIds.length > 1 && selectedLessonIds.length <= 5">
             <el-table-column 
                 v-for="lessonId in selectedLessonIds" 
@@ -335,12 +335,29 @@
                 align="center"
                 sortable
                 :sort-by="(row) => getLessonScore(row, lessonId)"
-                width="120"
+                width="125"
             >
                 <template #default="scope">
-                    <span class="score-num" :class="getScoreClass(getLessonScore(scope.row, lessonId))" :style="{ color: isLessonAbsent(scope.row, lessonId) ? '#909399' : '' }">
-                        {{ getLessonScoreDisplay(scope.row, lessonId) }}
-                    </span>
+                    <div class="lesson-score-cell">
+                      <!-- 请假状态：天蓝 Tag -->
+                      <el-tag v-if="isLessonAbsent(scope.row, lessonId)" size="small" type="primary" effect="plain" class="score-tag-absent">请假</el-tag>
+                      <!-- 缺考状态：橙色 Tag（有课表无记录，后端已显式标记） -->
+                      <el-tag v-else-if="isLessonMissing(scope.row, lessonId)" size="small" type="warning" effect="plain" class="score-tag-absent">缺考</el-tag>
+                      <!-- 未交状态：灰色斜杠 -（兼容无行旧数据） -->
+                      <span v-else-if="!hasLessonSubmission(scope.row, lessonId)" class="score-unsubmitted" title="未提交/未作答">-</span>
+                      <!-- 正常已提交打分状态 -->
+                      <div v-else class="score-content-box">
+                        <span class="score-final" :class="{ 'is-perfect': isLessonScorePerfect(scope.row, lessonId) }">
+                          {{ getLessonFinalScore(scope.row, lessonId) }}分
+                        </span>
+                        <el-tooltip v-if="getLessonScoreObj(scope.row, lessonId)?.manualAdjusted" content="人工修正过作业分" placement="top">
+                          <span class="manual-adjusted-badge">修</span>
+                        </el-tooltip>
+                        <small v-if="getLessonScoreObj(scope.row, lessonId)?.performanceScore" class="score-perf-hint">
+                          ({{ getLessonScoreObj(scope.row, lessonId).performanceScore > 0 ? '+' : '' }}{{ getLessonScoreObj(scope.row, lessonId).performanceScore }})
+                        </small>
+                      </div>
+                    </div>
                 </template>
             </el-table-column>
         </template>
@@ -363,12 +380,12 @@
                 <span class="lesson-name">{{ score.lessonTitle }}</span>
                 <el-popover placement="bottom" :width="240" trigger="hover">
                   <template #reference>
-                    <el-tag 
-                      :type="score.isAbsent ? 'info' : getScoreType(score.finalScore ?? score.totalScore)" 
+                    <el-tag
+                      :type="score.isAbsent ? 'info' : (score.isMissing ? 'warning' : getScoreType(score.finalScore ?? score.totalScore))"
                       size="small"
                       :class="{ 'selected-tag': selectedLessonIds.includes(score.lessonId) }"
                       class="score-num"
-                    >{{ score.isAbsent ? '请假' : (score.finalScore ?? score.totalScore) }}</el-tag>
+                    >{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.finalScore ?? score.totalScore)) }}</el-tag>
                   </template>
                   <div class="score-detail">
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
@@ -384,7 +401,7 @@
                     <p v-if="score.manualAdjusted"><b>原始作业分：</b><span class="score-num">{{ score.originalTotalScore || 0 }}</span> 分</p>
                     <p v-if="score.manualAdjusted"><b>修正原因：</b>{{ score.adjustmentReason || '-' }}</p>
                     <p><b>课堂表现：</b><span class="score-num">{{ (score.performanceScore || 0) > 0 ? '+' : '' }}{{ score.performanceScore || 0 }}</span> 分</p>
-                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.finalScore ?? score.totalScore) }}</span></p>
+                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.finalScore ?? score.totalScore)) }}</span></p>
                     <el-divider v-if="score.avgTypingSpeed" style="margin: 8px 0" />
                     <template v-if="score.avgTypingSpeed">
                       <p><b>打字速度：</b><span class="score-num">{{ score.avgTypingSpeed }}</span> <small>字/分</small></p>
@@ -1127,13 +1144,13 @@ function processData() {
     
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
     let sumPerformance = 0, sumFinal = 0; // 课堂表现分和课程总分
-    let validScoreCount = 0; // 有效（非请假）课次数
-    
+    let validScoreCount = 0; // 有效（非请假、非缺考）课次数
+
     // 打字统计：累加有效记录
     let typingSpeedSum = 0, accuracySum = 0, completionSum = 0, typingCount = 0;
-    
+
     filteredScores.forEach(s => {
-      if (s.isAbsent) return; // 缺考请假的课程不参与均分计算
+      if (s.isAbsent || s.isMissing) return; // 请假与缺考的课程不参与均分计算
       
       validScoreCount++;
       sumTyping += (s.typingScore || 0);
@@ -1562,11 +1579,38 @@ function getLessonScore(student, lessonId) {
     return s ? (s.finalScore ?? s.totalScore ?? 0) : 0;
 }
 
+// 取得学生的单课成绩对象
+function getLessonScoreObj(student, lessonId) {
+    if (!student?.scores) return null;
+    return student.scores.find(item => item.lessonId === lessonId) || null;
+}
+
+// 判断学生在该课是否有作答/提交（非请假、非缺考且有成绩记录）
+function hasLessonSubmission(student, lessonId) {
+    const s = getLessonScoreObj(student, lessonId);
+    if (!s) return false;
+    if (s.isAbsent || s.isMissing) return false;
+    return s.totalScore !== null && s.totalScore !== undefined;
+}
+
+// 获取单课最终得分
+function getLessonFinalScore(student, lessonId) {
+    const s = getLessonScoreObj(student, lessonId);
+    if (!s) return 0;
+    return s.finalScore ?? s.totalScore ?? 0;
+}
+
+// 判断单课是否达到满分（100分及以上）
+function isLessonScorePerfect(student, lessonId) {
+    const score = getLessonFinalScore(student, lessonId);
+    return Number(score) >= 100;
+}
+
 function getLessonScoreDisplay(student, lessonId) {
     if (!student.scores) return 0;
     const s = student.scores.find(item => item.lessonId === lessonId);
     if (s && s.isAbsent) return '请假';
-    if (!s) return 0;
+    if (s && s.isMissing) return '缺考';
     const performance = s.performanceScore || 0;
     const performanceText = performance > 0 ? `+${performance}` : String(performance);
     const manualText = s.manualAdjusted ? '修' : '';
@@ -1578,6 +1622,13 @@ function isLessonAbsent(student, lessonId) {
     const s = student.scores.find(item => item.lessonId === lessonId);
     return s ? !!s.isAbsent : false;
 }
+
+function isLessonMissing(student, lessonId) {
+    if (!student.scores) return false;
+    const s = student.scores.find(item => item.lessonId === lessonId);
+    return s ? !!s.isMissing : false;
+}
+
 
 const handleAbsent = async (studentId, lessonId, isAbsent) => {
   try {
@@ -2045,13 +2096,76 @@ async function handleExportWithColumns(selectedColumns) {
   align-items: center;
   gap: 10px;
 }
-</style>
+
+/* 课程列状态色相体系 */
+.lesson-score-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+}
+
+.score-tag-absent {
+  font-weight: 500;
+  border-radius: 4px;
+  background-color: #ecf5ff;
+  border-color: #d9ecff;
+  color: #409eff;
+}
+
+.score-unsubmitted {
+  color: #c0c4cc;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.score-content-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.score-final {
+  color: #303133;
+  font-weight: 600;
+  font-size: 13px;
+
+  &.is-perfect {
+    color: #52c41a;
+    background-color: #f6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 3px;
+    padding: 1px 4px;
+  }
+}
+
+.manual-adjusted-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background-color: #fef0f0;
+  color: #f56c6c;
+  border: 1px solid #fde2e2;
+  border-radius: 2px;
+  padding: 0 2px;
+  line-height: 14px;
+  transform: scale(0.9);
+  cursor: help;
+}
+
+.score-perf-hint {
+  font-size: 11px;
+  color: #909399;
+}
 
 .text-success {
   color: #67C23A;
   font-weight: bold;
 }
+
 .text-danger {
   color: #F56C6C;
   font-weight: bold;
 }
+</style>

@@ -40,6 +40,7 @@ import com.ruoyi.business.domain.dto.CollaborationSettingsRequest;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.CollaborationMapper;
@@ -67,6 +68,7 @@ public class CollaborationRoomService
     @Autowired private CollaborationMapper collaborationMapper;
     @Autowired private BizLessonMapper lessonMapper;
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
+    @Autowired private BizQuestionMapper questionMapper;
     @Autowired private BizLessonAssignmentMapper assignmentMapper;
     @Autowired private PracticalArtifactMapper artifactMapper;
     @Autowired private BizStudentMapper studentMapper;
@@ -152,12 +154,16 @@ public class CollaborationRoomService
         BizLesson lesson = requireTeacherLesson(lessonId);
         if (request == null || !Boolean.TRUE.equals(request.getEnabled()))
         {
-            collaborationMapper.updateRoomStatus(lessonId, lesson.getDeptId(), "CLOSED");
+            // 只关闭未绑定小组活动的旧全班房间；小组房间与历史作品不受课程开关影响，密钥也不轮换。
+            collaborationMapper.closeNonActivityRooms(lessonId, lesson.getDeptId());
             if (isCryptPadProvider())
             {
                 for (CollaborationRoom room : collaborationMapper.selectRoomsByLesson(lessonId, lesson.getDeptId()))
+                {
+                    if (collaborationMapper.countActivityRoom(room.getRoomId()) > 0) continue;
                     collaborationMapper.updateRoomProvider(room.getRoomId(), "CRYPTPAD",
                             secretService.encrypt(secretService.generateKey()));
+                }
             }
             return teacherSettings(lessonId);
         }
@@ -174,8 +180,8 @@ public class CollaborationRoomService
         {
             throw new ServiceException("课程尚未指派班级，无法创建独立协作房间");
         }
-        // 新配置先关闭该课程旧房间；本次选中的同一业务房间会在下面重新打开。
-        collaborationMapper.updateRoomStatus(lessonId, lesson.getDeptId(), "CLOSED");
+        // 新配置只关闭未绑定小组活动的旧全班房间；本次选中的同一业务房间会在下面重新打开。
+        collaborationMapper.closeNonActivityRooms(lessonId, lesson.getDeptId());
         for (BizLessonAssignment assignment : assignments)
         {
             if (!lesson.getDeptId().equals(assignment.getDeptId())) continue;
@@ -195,27 +201,67 @@ public class CollaborationRoomService
         Long lessonId = assignmentMapper.selectCurrentLessonByClass(
                 student.getEntryYear(), normalizeClass(student.getClassCode()), deptId);
         if (lessonId == null) return new ArrayList<Map<String, Object>>();
+        Map<String,Object> active = collaborationMapper.selectCurrentActivity(lessonId, deptId, student.getEntryYear(), normalizeClass(student.getClassCode()));
         List<CollaborationRoom> matches = new ArrayList<CollaborationRoom>();
         for (CollaborationRoom room : collaborationMapper.selectRoomsByLesson(lessonId, deptId))
         {
             if (student.getEntryYear().equals(room.getEntryYear())
                     && normalizeClass(student.getClassCode()).equals(normalizeClass(room.getClassCode()))
-                && "OPEN".equals(room.getStatus()))
+                    && "OPEN".equals(room.getStatus()))
             {
-                if (collaborationMapper.countActivityRoom(room.getRoomId()) == 0
+                if ((active == null && collaborationMapper.countActivityRoom(room.getRoomId()) == 0)
                         || collaborationMapper.countActivityRoomMembership(room.getRoomId(), student.getStudentId()) > 0)
                     matches.add(room);
             }
         }
-        return publicRooms(matches, false);
+        // 小组活动房间只对本组成员可见：打标供学生端正名展示（本组房间/全班共享）
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (CollaborationRoom room : matches)
+        {
+            Map<String, Object> item = publicRoom(room, false);
+            item.put("groupRoom", collaborationMapper.countActivityRoom(room.getRoomId()) > 0);
+            result.add(item);
+        }
+        return result;
     }
 
+    public List<Map<String,Object>> studentHistory()
+    {
+        BizStudent student = studentMapper.selectBizStudentByUserId(SecurityUtils.getUserId());
+        if (student == null) throw new ServiceException("当前账号不是学生");
+        return collaborationMapper.selectStudentHistory(student.getStudentId(), SecurityUtils.getDeptId());
+    }
+    /**
+     * 编辑器成员抽屉：本组学生花名册、各人最近进入时间与进入过的教师。
+     * 权限沿用房间访问规则，学生只能看到本人小组。
+     */
+    public Map<String, Object> roomRoster(Long roomId)
+    {
+        CollaborationRoom room = requireRoom(roomId);
+        requireRoomAccess(room, SecurityUtils.getUserId());
+        List<Map<String, Object>> roster = collaborationMapper.selectRoomRoster(roomId);
+        String groupName = roster.isEmpty() ? null : String.valueOf(roster.get(0).get("groupName"));
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("roomId", roomId);
+        result.put("roomTitle", room.getRoomTitle());
+        result.put("fileName", room.getCurrentFileName());
+        result.put("groupName", groupName);
+        result.put("members", roster);
+        result.put("teachers", collaborationMapper.selectRoomTeacherEnters(roomId));
+        return result;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> createSession(Long roomId)
     {
         CollaborationRoom room = requireRoom(roomId);
         if ("CLOSED".equals(room.getStatus())) throw new ServiceException("该班级协作房间已关闭");
         Long userId = SecurityUtils.getUserId();
         String scope = requireRoomAccess(room, userId);
+        collaborationMapper.lockLesson(room.getLessonId());
+        room = requireRoom(roomId);
+        if ("CLOSED".equals(room.getStatus())) throw new ServiceException("该班级协作房间已关闭");
+        scope = requireRoomAccess(room, userId);
         // 先完成班级权限判断，再阻断不可达配置，避免向无权用户暴露内部网络诊断。
         requireReady();
         collaborationMapper.markRoomOpened(roomId, new Date());
@@ -317,7 +363,8 @@ public class CollaborationRoomService
         Date now = new Date();
         CollaborationRoom room = new CollaborationRoom();
         room.setProvider(providerName()); room.setProviderSessionKey(isCryptPadProvider() ? secretService.encrypt(secretService.generateKey()) : null);
-        room.setPublicFileId(fileId); room.setLessonId(lesson.getLessonId()); room.setQuestionId(taskVersionId);
+        // 小组任务使用负值命名空间，避免与旧全班房间的真实题目编号碰撞。
+        room.setPublicFileId(fileId); room.setLessonId(lesson.getLessonId()); room.setQuestionId(-taskVersionId);
         room.setSourceMaterialId(material.getMaterialId()); room.setDeptId(lesson.getDeptId()); room.setEntryYear(entryYear); room.setClassCode(normalizeClass(classCode));
         room.setRoomTitle(truncate(StringUtils.defaultIfBlank(title, lesson.getLessonTitle()) + " - " + classCode + "组协作", 240)); room.setStatus("OPEN"); room.setCurrentVersion(1);
         room.setCurrentFileName(fileName); room.setCurrentFilePath(relativePath); room.setCurrentFileExtension(extension); room.setCurrentMimeType(material.getMimeType());
@@ -437,6 +484,10 @@ public class CollaborationRoomService
         BizStudent student = studentMapper.selectBizStudentByUserId(userId);
         if (student != null)
         {
+            if ("READ_ONLY".equals(room.getStatus()) && room.getDeptId().equals(SecurityUtils.getDeptId())
+                    && collaborationMapper.countActivityRoom(room.getRoomId()) > 0
+                    && collaborationMapper.countActivityRoomMembership(room.getRoomId(), student.getStudentId()) > 0)
+                return "STUDENT";
             Long current = assignmentMapper.selectCurrentLessonByClass(student.getEntryYear(),
                     normalizeClass(student.getClassCode()), SecurityUtils.getDeptId());
             if (!room.getDeptId().equals(SecurityUtils.getDeptId())
@@ -454,37 +505,115 @@ public class CollaborationRoomService
         return "TEACHER";
     }
 
-    private List<Map<String, Object>> materialCandidates(Long lessonId)
+    /**
+     * 协作起始文件只来源于题库（公开或本人创建的文件作品题），与课程是否选用操作题无关。
+     * 管理员不过滤可见范围，教师只看公开或本人题目。
+     */
+    public List<Map<String, Object>> bankMaterialCandidates()
     {
+        Long userId = SecurityUtils.getUserId();
+        Long creatorId = SecurityUtils.isAdmin(userId) ? null : userId;
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (BizLessonQuestionDetailVo question : lessonQuestionMapper.selectDetailsByLessonId(lessonId))
+        for (Map<String, Object> row : collaborationMapper.selectBankStarterCandidates(creatorId))
         {
-            if (!"practical".equalsIgnoreCase(question.getQuestionType())) continue;
-            for (PracticalQuestionMaterial material : artifactMapper.selectMaterialsByQuestion(question.getQuestionId()))
-            {
-                String extension = normalizeExtension(material.getFileExtension(), material.getOriginalFileName());
-                if (!"STARTER".equalsIgnoreCase(material.getMaterialType()) || !EDITABLE_EXTENSIONS.contains(extension))
-                    continue;
-                Map<String, Object> item = new LinkedHashMap<String, Object>();
-                item.put("questionId", question.getQuestionId());
-                item.put("questionContent", question.getQuestionContent());
-                item.put("materialId", material.getMaterialId());
-                item.put("fileName", material.getOriginalFileName());
-                item.put("fileExtension", extension);
-                item.put("fileSize", material.getFileSize());
-                item.put("withinTestLimit", material.getFileSize() == null
-                        || material.getFileSize() <= maxFileBytes());
-                result.add(item);
-            }
+            Map<String, Object> item = enrichCandidate(row);
+            if (item != null) result.add(item);
         }
         return result;
     }
 
+    /**
+     * 协作选题弹窗：按年级/学期/课次/关键词分页搜索，返回 {total, rows}。
+     */
+    public Map<String, Object> searchBankMaterials(Long grade, String semester, Integer lessonNum, String keyword, int pageNum, int pageSize)
+    {
+        Long userId = SecurityUtils.getUserId();
+        Long creatorId = SecurityUtils.isAdmin(userId) ? null : userId;
+        com.github.pagehelper.PageHelper.startPage(Math.max(pageNum, 1), Math.min(Math.max(pageSize, 1), 50));
+        List<Map<String, Object>> rows = collaborationMapper.selectBankStarterSearch(creatorId, grade, semester, lessonNum, keyword);
+        long total = new com.github.pagehelper.PageInfo<Map<String, Object>>(rows).getTotal();
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> row : rows)
+        {
+            Map<String, Object> item = enrichCandidate(row);
+            if (item != null) result.add(item);
+        }
+        Map<String, Object> page = new LinkedHashMap<String, Object>();
+        page.put("total", total);
+        page.put("rows", result);
+        return page;
+    }
+
+    /**
+     * 候选行装配：过滤不可编辑格式，file_size 缺失时按物理文件回填。
+     */
+    private Map<String, Object> enrichCandidate(Map<String, Object> row)
+    {
+        String extension = normalizeExtension(StringUtils.defaultString((String) row.get("fileExtension")), StringUtils.defaultString((String) row.get("fileName")));
+        if (!EDITABLE_EXTENSIONS.contains(extension)) return null;
+        Number fileSize = (Number) row.get("fileSize");
+        // 存量数据的 file_size 可能为空或 0，运行时按物理文件回填，保证前端不再显示 0B
+        if (fileSize == null || fileSize.longValue() <= 0)
+        {
+            Long physical = physicalStarterSize((String) row.get("resourcePath"));
+            if (physical != null && physical > 0) fileSize = physical;
+        }
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("questionId", row.get("questionId"));
+        item.put("questionContent", row.get("questionContent"));
+        item.put("grade", row.get("grade"));
+        item.put("semester", row.get("semester"));
+        item.put("lessonNum", row.get("lessonNum"));
+        item.put("materialId", row.get("materialId"));
+        item.put("previewPath", row.get("previewPath"));
+        item.put("fileName", row.get("fileName"));
+        item.put("fileExtension", extension);
+        item.put("fileSize", fileSize == null ? 0 : fileSize.longValue());
+        item.put("withinTestLimit", fileSize == null || fileSize.longValue() <= maxFileBytes());
+        return item;
+    }
+
+    /**
+     * 读取起始文件的物理大小；路径非法或文件缺失时返回 null，不抛错。
+     */
+    private Long physicalStarterSize(String resourcePath)
+    {
+        try
+        {
+            Path source = resolveMaterialPath(resourcePath);
+            if (!Files.isRegularFile(source)) return null;
+            return Files.size(source);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    private List<Map<String, Object>> materialCandidates(Long lessonId)
+    {
+        return bankMaterialCandidates();
+    }
+
+    /**
+     * 协作只能复用题库中的文件作品题（公开或本人创建），不能跨权限取他人私有题目。
+     */
+    private void requireBankPracticalQuestion(Long questionId)
+    {
+        com.ruoyi.business.domain.BizQuestion question = questionId == null ? null
+                : questionMapper.selectBizQuestionByQuestionId(questionId);
+        if (question == null || !"practical".equalsIgnoreCase(question.getQuestionType())
+                || !"FILE".equalsIgnoreCase(question.getPracticalMode()))
+            throw new ServiceException("所选操作题不是题库中的文件作品题");
+        Long userId = SecurityUtils.getUserId();
+        if (!SecurityUtils.isAdmin(userId) && !"Y".equalsIgnoreCase(question.getIsPublic())
+                && !"1".equals(question.getIsPublic()) && !userId.equals(question.getCreatorId()))
+            throw new ServiceException("无权使用该操作题作为协作起始文件");
+    }
+
     private void requirePracticalQuestion(Long lessonId, Long questionId)
     {
-        for (BizLessonQuestionDetailVo question : lessonQuestionMapper.selectDetailsByLessonId(lessonId))
-            if (questionId.equals(question.getQuestionId()) && "practical".equalsIgnoreCase(question.getQuestionType())) return;
-        throw new ServiceException("所选操作题不在当前课程中");
+        requireBankPracticalQuestion(questionId);
     }
 
     private PracticalQuestionMaterial requireStarterMaterial(Long questionId, Long materialId)

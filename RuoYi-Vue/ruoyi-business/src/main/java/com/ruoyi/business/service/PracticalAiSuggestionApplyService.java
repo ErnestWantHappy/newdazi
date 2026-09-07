@@ -65,11 +65,11 @@ public class PracticalAiSuggestionApplyService
         {
             if (!"SUCCESS".equals(result.getResultStatus())) continue;
             BizStudentAnswer answer = answerMapper.selectByIdForUpdate(result.getAnswerId());
-            boolean flowchart = "FLOWCHART".equals(job.getReferenceAnswerJson());
+            boolean flowchart = PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson());
             if (answer == null || !Objects.equals(job.getLessonId(), answer.getLessonId())
                     || !Objects.equals(job.getQuestionId(), answer.getQuestionId())
                     || (!flowchart && !Objects.equals(result.getPracticalVersionId(), answer.getPracticalVersionId()))
-                    || (flowchart && (!Objects.equals(result.getPracticalVersionId(), answer.getPracticalVersionId())
+                    || (flowchart && (result.getPracticalVersionId() == null
                     || !("FLOWCHART:" + result.getPracticalVersionId()).equals(answer.getStudentAnswer()))))
             {
                 skippedVersion++;

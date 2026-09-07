@@ -2,6 +2,7 @@ package com.ruoyi.business.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -155,6 +156,25 @@ class PracticalAiJobServiceTest
         price.setOutputPricePerThousand(new java.math.BigDecimal("0.009000"));
         price.setPriceStatus("TO_CONFIRM"); price.setPriceNote("待确认");
         return price;
+    }
+
+    @Test
+    void flowchartEligibleBySubmissionVersionWithoutFileFields()
+    {
+        // 流程图没有文件版本/评分快照/附件，以流程图提交版本为锚点（线上 362 课 34 份提交 ready=0 的回归）。
+        PracticalSubmissionVo submission = new PracticalSubmissionVo();
+        submission.setSubmitted(true); submission.setAnswerId(101L);
+        submission.setPracticalMode("FLOWCHART"); submission.setFlowchartSubmissionId(62L);
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(service, "eligible", submission, true));
+    }
+
+    @Test
+    void flowchartIneligibleWithoutSubmissionVersion()
+    {
+        PracticalSubmissionVo submission = new PracticalSubmissionVo();
+        submission.setSubmitted(true); submission.setAnswerId(101L);
+        submission.setPracticalMode("FLOWCHART");
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(service, "eligible", submission, true));
     }
 
     private PracticalSubmissionVo submission(boolean eligible)

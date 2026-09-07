@@ -1,34 +1,255 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 版本：v3.27
-
-> 更新：2026-09-04
+> 版本：v3.44
+> 更新：2026-09-07
 > 用途：新的 Codex、Claude、Gemini 或人工开发者的默认入口。只记录当前仍有效且已验证的事实；历史发布和排障证据见 `contexts/context.md`。
 
-## 2026-09-04 上线前探索测试纠偏（本机实现，未发布）
+## 2026-09-07 19:35 白卷修复正式发布 + 可重复发布执行器
+
+- 白卷/成绩口径候选已正式切换到 `releases/20260907_blankfix_v1`：后端 JAR SHA-256 `6B5409AC95AEF446919077E48F8997F3981CC6493A7622BED3B6CFE67A5FC756`，3010 前端 `index.html` SHA-256 `A432C44157F738867B547DBBFC3C1AE9AA8221A598500BEFF65C753D65E1FFDA`；NSSM 与 Nginx 均指向新 release，双服务 Running。
+- 本次包含 5 个后端预期差异（ScoreQueryController、QwenPracticalVisionGradingProvider、BizStudentAnswerMapper.xml）和完整前端中仅批改页内容差异：白卷有答题行可进入批改、徽章与页眉统一 TRIM 口径、导出恢复请假分支、流程图版本标签按题型取值、AI 分项非整数严格失败。无业务结构 SQL、无成绩/课程批量修改；蔡盛阳 answer 297459 的既有 0 分已在前一阶段按行备份核实。
+- 发布前后证据：整库备份 `D:\program\3009dazipingtai\backups\20260907_193506_deploy_20260907_blankfix_v1\ry-vue.sql`，139,576,208 bytes，SHA-256 `5A98890C3A435B980912B709C70227AE190E7C8A7FE924255390519D97C7341A`；Nginx 备份 SHA-256 `A994E65423DC29755CC01577AE213C83F36B73C90AD9DFD8893F6D0A70931AC4`。3009、3010、验证码、数据库鉴权、协作 health ready、3018/3019 和 80/3012 探活通过。
+- 真实角色只读冒烟：管理员在线用户/诊断/概览、教师批改/成绩/课程设计/协作工作台、学生首页/Python 练习均通过，无页面错误或非 401 HTTP 错误；学生未出现 `roomId=undefined`。线上 `laoda/123456` 当前返回账号不存在/密码错误，未继续尝试，教研员角色验收待有效正式账号。学生课堂状态 POST 被验收脚本阻断，属于保护真实数据的预期，不是线上失败。
+- 正式库已补写平台更新草稿 `1.30.9`（update_id=89）和 `1.30.10`（update_id=90），未改教师、学生、课程、成绩数据；按现有流程可由管理员审核后发布。
+- 一键发布：`scripts/deploy.py` + `scripts/release-engine.ps1` 已加入固定指纹、制品清单、远端 SYSTEM 任务、整库/Nginx/NSSM 备份、阶段状态、服务级停止等待、数据库/集成/前端健康检查和自动回滚；`python scripts/test_release.py` 本机 4/4 故障模拟通过。调用说明在 `AGENTS.md` 9.1，部署边界在 `docs/architecture/DEPLOYMENT_RUNBOOK.md`。
+- 剩余风险：单体后端切换仍有冷启动窗口，生产发布须安排低峰；线上教研员有效账号需补后再验收；概览存在约 1.2 秒历史慢 SQL，未达到本次修改引入的严重故障标准，后续可单独优化。回滚使用本轮备份目录和 `scripts/deploy.py rollback`，不需业务 SQL。
+
+## 2026-09-07 18:05 白卷口径修复（本地已修未发布）+ 蔡盛阳已手动 0 分
+
+- 林晓晓 287 课 9 班“里 41/41/0、外 1 人未批”已定因：35 号蔡盛阳 9/1 交白卷（answer 297459，内容空、版本 DELETED、分数空）。徽章按“有行即已交”报 1，页眉按“有内容行”报 0，白卷在名单里点不进，形成死循环。
+- 本地已修（未发布）：徽章口径加 TRIM 与页眉对齐；白卷行（有 answerId）允许点进批改并显示白卷标记，可打 0 分/退回；AI 分项小数改严格失败（Qwen 解析器，与总分同口径）；流程图版本标签按题型取值；导出恢复请假分支（缺考分支保留其后）。
+- 审查报告核实：问题 1 不成立——线上已有 `uk_student_lesson_question`（`typing_answer_dedup_fix.sql` 加的），重复组为 0，终态保护与最高分 upsert 均有效；问题 2 成立——导出请假分支确被缺考分支替换，已恢复。
+- 线上已执行：备份行到 `backups/20260907_manual_score_cai/answer_297459_before.sql` 后 `UPDATE score=0 WHERE answer_id=297459 AND score IS NULL`；复核未批回 0，外显刷新后归零。回滚：用备份文件单行恢复。
+- 下一步：本轮 5 处改动需打包新 release 并走维护窗口发布；发布前重跑全量单测与前端构建已通过（476 项 0 失败，build:prod 成功）。
+
+
+- 用户已重启服务器电脑并手动运行 `switch-release.ps1`；NSSM AppDirectory 已切 `releases/20260907_online_recovery_v1`，3010 root 已切新前端，双服务 Running，3009/3010 均 HTTP 200。
+- 线上 JAR `AF14241E…34457`、index.html `A4B7EAB6…91BBA51` 与本地 manifest 一致；16:00:32 重启窗口 502 后 16:01 起 Nginx error.log 新增 0；后端 quartz 心跳正常，LibreOffice healthy=true。
+- 隐藏问题：NSSM AppStdout/AppStderr 仍指向旧 `20260905_flowchart_create_fix_v1` 日志，新 release logs/ 为空，排障须看旧路径；`biz_platform_update` 因正式库凭据失效未写入，RELEASE_LOG 已登记 1.30.9 待补；Redis 无 CLI 未直读活动索引，以页面口径与用户观察为准。
+- 回滚：switch-release.ps1 -Rollback 切回旧前后端并重启；无业务 SQL 回滚。下一步做真实角色验收与登录速率/活跃人数/JVM 与 3010 重置观察；Qwen 分项小数截断与流程图版本标签另起小包，不混入本轮。
+
+## 2026-09-07 在线人数与重复登录修复（本地候选，等待用户重启服务器后部署）
+
+- 用户截图会话条数11414，已授权本地修复；服务器由用户先重启，必须收到其“重启完成”消息后再部署，当前不能提前发布。
+- 已实现：近5分钟活跃账号去重、部门含下级筛选、后端分页、诊断统一口径；Redis轻量活动摘要替代KEYS及完整登录对象全量读取。可见页心跳1分钟，完整登录对象临近过期才续期。
+- 登录修复：连续点击/回车防重入；getInfo/getRouters临时502不退出，重试保留Token；服务端按账号防并发认证与3秒间隔；密码验证后同浏览器同账号复用有效会话，不按IP限流、不互踢。学生默认首页与课堂表现原因可空已纳入候选。
+- 验证：后端clean package及490项测试、另加课堂表现3项测试（累计493项）、候选JAR实际类15项测试、本机Redis 11项Lua验证通过；本地浏览器模拟重复回车/502恢复/学生首页/在线部门分页通过。模拟API不是正式角色验收。
+- 制品：`output/online-recovery-20260907/`；后端按线上活动基线仅替换本轮类，避免混入其他未收口后端；完整Vue3前端构建及frontend.zip已完成，校验清单位于同目录manifest.json。无业务SQL，无当前服务器写入；发布需新release、复制外置config、备份并保留旧版，重新校验线上基线SHA。
+- 风险：首次5分钟活动索引预热；旧客户端需刷新加载修复；14:17前的3010连接重置和LibreOffice崩溃未证明全部消除。正式发布/回滚状态仍为未发布。需求、设计、任务与后续验证见 `online-recovery-20260907/`。
+
+## 2026-09-07 15时只读故障复核（优先于下方历史发布记录）
+
+- 当前实际后端 `20260907_flowchart_ai_fix_v1`，3010前端 `20260907_flowchart_ai_ui_v2/frontend`；1.30.8 quickfix已回滚，两个业务修复本轮仅核对本地代码，未打包发布。
+- 14:00–14:49共享Nginx日志88649行、502共2259条，其中2171条集中14:17–14:18；后端14:17:43停止、14:18:24开始启动、14:18:39完成启动。其余88条为3010上游连接重置，原因待查，不能将所有卡顿归为重启。
+- 当天截至15:00成功登录去重账号1905（未限学生角色），不是同时在线人数；14:14的60个成功账号产生596次成功登录，重复登录早于回滚。在线列表统计有效登录会话；真实活跃人数、历史GC/CPU与登录循环成因尚未确认。LibreOffice多次崩溃及自动拉起已核实。
+- 本轮服务器只读，无SQL迁移、配置变更、重启或发布；下一步查登录循环、3010连接重置并补齐JVM指标。详见 `2026-09-07-502-readonly-review.md`。下方协作“已发布/实施中断”等历史记录互相冲突，不能据此直接决定全量打包或迁移。
+
+## 2026-09-07 课堂表现原因可留空 + 学生登录协作跳转修复（1.30.8曾发布，已回滚；以下为历史过程）
+
+- **已上线**：线上后端为 `20260907_flowchart_ai_fix_v1`、前端为 `20260907_flowchart_ai_ui_v2`（09-07 画程 AI 修复），**上下文此前记录的最新版 1.30.5 落后于线上**。本轮新建 release `D:\program\3009dazipingtai\releases\20260907_kb_quickfix_v1`（含 backend/jar + frontend + config），NSSM AppDirectory 已切新目录、nginx root 已切 `20260907_kb_quickfix_v1/frontend`（无 BOM 写入，`nginx -t` 通过）。
+- **改动**：①课堂表现分加扣分允许不填原因——后端 `ClassroomPerformanceController` 删除 /save 与 /batch-save 两处"原因必填"校验（成绩查询页 `PerformanceSection` 走 /batch-save、课堂监控大屏走 /save，均已放开）；②修复学生登录后被自动跳转到在线协作页并出现 `roomId=undefined` 报错——移除"仅一个房间即自动进入"逻辑，`openCollaboration`/`openCollaborationHistory` 对 roomId 判空。
+- **证据**：打包后 JAR 内 `ClassroomPerformanceController.class` 已无两条原因必填字符串；前端 dist 已含"协作房间 ID 无效，无法进入"判空、无"请填写课堂表现原因"；线上 JAR SHA-256 `6CAC481F…CE7A770`、index.html `6B627FC5…34E39F` 两端一致；3009/3010/prod-api 均 HTTP 200。后端 XSS 修复（旧 jar `6CAC48…` 与运行中旧 jar 仅差课堂表现两处）。**全程无数据库结构变更、无增量 SQL**；备份 nginx.conf 于 `backups/20260907_kb_quickfix_v1_before/nginx.conf.before`，NSSM 原 AppDirectory 记录于 `nssm-appdir.txt`。
+- **浏览器缓存提醒**：线上 Nginx 3010 未设 Cache-Control/expires（也未加正则 js/css 长缓存，避免误伤 /cryptpad/、/weboffice/、/prod-api/ 代理路径）。因此**已加载过一次旧包的浏览器仍可能显示旧前端，直到强刷（Ctrl+Shift+R）或清缓存**——这正是用户此前看到 `reportAllChanges`（旧包函数）报错的原因。新包本身已无该函数、无 roomId=undefined 跳转。
+- **回滚**：NSSM AppDirectory 指回 `20260907_flowchart_ai_fix_v1`（其 config 保留）；nginx root 指回 `20260907_flowchart_ai_ui_v2/frontend`；重启后端与 `UnifiedNginx`。无需业务 SQL 回滚。
+- **平台更新**：`biz_platform_update` 已写 `1.30.8`（update_id=88，PUBLISHED）；`contexts/RELEASE_LOG.md` 已登记。
+
+## 2026-09-07 流程图 AI 批改独立排查（本地候选，未发布）
+
+- 用户要求将其他 AI 提示词仅作参考，独立定位并给出方案。确认前端版本匹配和任务恢复缺陷；空分项模型自拟项失败可用构造响应复现，尚未读取现场原始模型响应。
+- 实际入口已更正并正式只读核验：课程 362、2022 级 5 班、题目 2028、小学部 139；任务 15 共 32 份、28 成功、4 失败（均为无效评分项/分数）。28 份成功建议均未评分且流程图版本匹配；文件版本为空，batchAdoptAllowed/canGrade 均 true，确认按钮被前端版本匹配阻断。列表 45 人/45 行，未见历史重复。证据 `output/flowchart-ai-362-readonly.json`；未模型重试、写分或发布。下方课程 352 的访问失败仅为此前错误示例，不再阻断现场定位。
+- 否决将流程图提交 ID 通过 COALESCE 填入文件版本字段：附件补全服务会将其当文件版本查附件、满分及快照。该候选已撤销。另发现答案 ID 复用后列表可能关联多次流程图提交，待增加当前答案引用约束并验证。
+- 保留解析器、前端最小候选与回归测试；19/19 定向测试和 Vue3 生产构建通过。真实页面、模型批量及成绩入库未验；示例课程 352 在教师可选的两个校区均返回“课程不存在或不属于当前学校”。无 SQL、配置、正式写分或发布。
+- 下一步按独立方案确认真实课程、补齐按题型版本选择及当前提交关联，再做端到端验收；上线需后端打包重启及前端发布。详情见 `flowchart-tool/ai-grading-investigation-20260907.md`。其他模块既有修改保持原状。
+
+## 2026-09-06 在线协作工作台实施与发布（1.30.5 已上线，见下方剩余验证）
+
+- **本轮已上线**：release `D:\program\3009dazipingtai\releases\20260906_collab_workspace_v3`（JAR `6550c403…78759`、前端 index `a07e4202…2800532e3`，旧前端留 `frontend.prev`）；NSSM 已切新目录，会话地址为 `http://10.52.1.123:3018` 绝对地址；3010 root 已切新前端。正式库已执行 `sql/collaboration_workspace_v2.sql`（快照 1、活动 1、房间 42 OPEN/28 CLOSED 全部保留，旧协作方案 scheme 2 精确标 `COLLAB_LEGACY`）。平台更新 `1.30.5`（update_id=85，PUBLISHED，含 1.30.3 更正）。发布登记见 `contexts/RELEASE_LOG.md`。
+- **本轮交付**：同页协作工作台（选文档/选班级/均分/调人/组文档分配/保存进入/当前活动/新建轮次/历史/旧全班只读）；协作按文档数分组、固定组默认四人跨课共用、两者隔离；开始前调整替换未开始轮次、开始后新建轮次归档只读；旧全班设置不再关闭或轮换小组房间密钥；设计器只留入口；固定组先预览后保存。业务单测 471/471（含新增 10 个），前端构建通过。
+- **已验证**：迁移前后检一致；新旧接口存活（workspace/preview 返回业务语义）；health ready 全绿；管理员正式登录、新工作台与编辑器页渲染、越权房间干净拒绝（403 语义）；3018/3019 经 123 可达且类型正确。编译 200/iframe 出现不作可用结论。
+- **发布事故与恢复**：切换时 `nssm set AppEnvironmentExtra` 把 20 个环境变量压成单行，集成配置短暂失效（health 全 false）。已逐项重建为 20 项多行并重启验证 ready；旧 release、备份与可回滚路径完整。教训：NSSM 多行环境必须数组写入，切换后必须读 health，而不仅看 3009 监听。
+- **剩余验证（需教师真实班级）**：教师与两名同组学生的实际打开、互见编辑、保存刷新保留、跨组隔离、固定组不受影响、新轮次只读历史。隔离账号 `acc26_*` 无学籍行不可用；管理员跨校被隔离属预期。防火墙 3018/3019 仅 `LocalSubnet`，跨网段机房未验证。
+- **回滚**：NSSM AppDirectory 指回 `20260906_probe_fixes_v2`，环境变量用 `backups/20260906_collab_repair_f58730f/backend-parameters.reg` 的原始值整体恢复（逐项核对 20 项，禁止单行写入）并重启；Nginx root 指回旧前端并重启 `UnifiedNginx`；迁移无回滚 SQL（新列/索引兼容保留，旧代码不读写它们；`COLLAB_LEGACY` 改回 `FIXED` 即恢复大屏口径）。不整库还原。
+
+## 2026-09-06 在线协作故障专项交接（实施中断，尚未修复）
+
+- **交接实况优先于下方旧发布记录**：三轮已确认方案 A，先修复经 123 的完整编辑器访问，再实现独立课程协作；用户已要求生成交接提示词，本轮暂停业务实施。
+- **最新业务规则**：课堂固定组默认每组四人、按学号连续，可从任意课程大屏或班级管理学生桌面设置，按班持久保存并跨课程共用。协作按所选文档数决定组数，当前课当前班按学号连续均分，可手调成员及组到文档的分配；所有协作设置在同一个页面完成。四人一组不适用于在线协作。开始前可调整，学生开始后新建轮次；旧作品保留，教师看全部，学生只读本人历史组作品。
+- **正式配置已变更**：123 新建 3018 编辑器和 3019 沙箱完整反代入口，新增 `conf/collaboration-gateway.conf` 并在 Nginx http 块 include；新增防火墙规则 `NewDazi CryptPad gateway 3018-3019`，远端范围为 `LocalSubnet`（跨网段课堂可达性尚未验）。129 的配置、compose 主/沙箱地址和实际 Nginx CSP 已改为这两个 123 地址，仅重建 CryptPad 容器，数据卷和 OnlyOffice 姓名补丁挂载保持原样。
+- **链路还未接完**：交接时重新读取 NSSM，平台仍运行 `20260906_probe_fixes_v2`，`CRYPTPAD_BASE_URL=/cryptpad/`、`CRYPTPAD_API_URL=/cryptpad/cryptpad-api.js` 未切换。3018 `/api/config` 返回主/沙箱新地址，3019 RequireJS 返回 JavaScript，3010 首页 200；这些不是实际文档、多人与保存验收。新前后端尚未构建、测试或发布。
+- **数据库尚未迁移**：已新增 `sql/collaboration_workspace_v2.sql` 草稿，增加快照 `round_no`、活动 `request_id/request_hash`、固定组 `scheme_scope` 等；本机和正式库均未执行。当前源码 Mapper 已引用新列，不能直接对旧库运行或发布。
+- **局部代码已写但未验证**：新增 `CollaborationWorkspaceService` 和工作台 GET/PUT 接口；分组快照直接保存及历史只读、请求去重、活动归档相关 Mapper/服务有局部实现；编辑器已改显式主地址与等待初始化 Promise；课堂大屏默认值已改四人，并移除“冻结为协作快照”入口。协作主页面、设计器旧文件池、教师旧入口弹窗和学生历史入口尚未完成改造；文档保存事务、并发冻结、文件回滚清理等仍需复核。
+- **备份**：123 `D:\program\3009dazipingtai\backups\20260906_collab_repair_f58730f\ry-vue.sql`，131,756,513 bytes，SHA-256 `5A3CB143B5BE48EBD4228590A11CA15F3B1547DB479FF0E8688CE74E0C0C2C64`；同目录有 Nginx 与 NSSM 备份。129 `/srv/cryptpad/backups/20260906_collab_repair_f58730f/` 有 config.js、compose、实际 Nginx 配置备份。
+- **正式前检**：1 个课程快照、1 个协作活动，42 个 OPEN 房间、28 个 CLOSED 房间；仅 1 个通用方案（scheme_id=2、dept=139、2022级5班、2026-09-06 14:47:23 创建）来自旧协作自动分组。SQL 草稿对此采用多条件精确标记而非删除，执行前须重新核对。
+- 下一步：先复核和补齐局部代码，完成同页工作台；再按编译/单测、迁移前检与备份、接口、隔离双人真实编辑保存、发布与回归顺序推进。完整证据和方案见 `online-collaboration/repair-plan-20260906.md`，本轮辅助脚本位于 `output/collaboration-audit-20260906/`，不得盲目重复运行已执行的配置脚本。
+
+- 用户反馈正式平台 `10.52.1.123:3010` 协作文档打不开，周五下午同地址正常；本轮优先恢复在线协作，再检查其他新增工具的缺陷与重复说明。
+- GitHub 当前开发分支与本地 HEAD 均为 `f58730f`（2026-09-04 16:40 +0800），仅作为周五候选基线；尚未确认该提交与用户当时实际部署制品完全一致。当前工作区约 60 个跟踪文件已有修改，包含周末其他修复，不可整仓覆盖回退。
+- 第 1、2 轮业务确认：课程与班级维度独立协作分组，支持自动生成后手动调整；课堂监控大屏使用学年固定组，两者互不影响；协作各组独立作品，暂不计分、不批改；每组每轮一个文件任务，同模板也独立副本；开始前可改组，开始后新建轮次并保留旧作品。教师使用课程入口下的简洁工作台。术语见 `online-collaboration/CONTEXT.md`，修复候选方案及证据见 `online-collaboration/repair-plan-20260906.md`。
+- 修复前的代码冲突：`generateSnapshotAuto` 通过 `generateScheme` 写通用班级分组，而 `selectDesktopStudents` 自动读取班级最新通用方案，协作分组因此可能影响大屏；前端声称可随时重新分组，后端却拒绝已有活动引用的快照重建。本机已局部改写，正式应用仍未更新。
+- 运行证据边界：本轮读取正式 `/cryptpad/cryptpad-api.js` 返回 200、18018 字节，仅证明脚本可达；文档加载、双人编辑与保存尚未验证。历史记录中“编辑器秒开”不能作为本轮可用性结论。
+- 已确认代理故障：`/cryptpad/integration/` 的 HTML 请求根路径 `/customize/`、`/components/`，正式根路径返回平台 HTML，未返回所需 JavaScript。教师端更新日志 1.30.3 的“文档秒开”“分组仅保存在当前课”与当前证据不符。
+- 用户明确网络硬约束：129 上的协作服务只能经 123 对客户端提供访问。office 主/沙箱域名本机解析到 129，不能恢复浏览器直连；新 3018/3019 代理现状及应用未切换状态见本节顶部。
+
+## 2026-09-06 第三方探针核验与四项修复（已正式发布 1.30.4）
+
+- 核验结论（4 项）：①打字统计盲信为真（P1，对方与本机独立验证一致）；②流程图工作台标答泄露为真（P1，代码确证：`FlowchartService.studentWorkspace:159` 直返全量快照实体）；③无效提交假成功为真（P2，双方各 2/2）；④分母缺考隐身为真（P2，双方数据一致）。对方“已还原/历史成绩未破坏”为假：其粘贴的复现输出（totalScore 15、q1217 回显）与其落盘 `PROBE_RESULTS.json`（totalScore 0、q2007 单题课）自相矛盾；`44453.5` 无证据支撑。
+- 生产残留已清理（2026-09-06）：伪造满分行 answer_id 314495 已按备份删除，备份 `D:\dmwprogram\newdazipingtai\backups\20260906_typing_row_cleanup\biz_student_answer_314495.sql`（SHA-256 `7ec686e3e614060d4812e22a1dceca8173dd5e9c3343c3f985fb41d1c6db5bb0`），`submittedAnswers` 已回 `{}`；课程任务状态行（09-04 既有）保留，重交后自愈。
+- 验证：新增 `TypingSpeedStatsTest`（6）、`FlowchartStudentViewTest`（2）、`StudentHomeControllerTest`（3）、`ScoreQueryControllerTest`（3），业务模块全量 461/461 通过（含新增 14 个）；前端 `build:prod` 成功。
+
+## 2026-09-06 课程设计器调分解锁与协作极简重构（已正式发布 1.30.3）
+
+- 范围（用户已确认保守路线）：①课程仍最多一道操作题（前后端一课一道校验不动）；②协作快照后端复用、前端隐藏概念；③129 穿透经 123 `/cryptpad/` 统一反代，前端与服务均不再直连 129（密钥与既有房间未动）。
+- 模块 1 调分解锁：设计器移除顶部 `.score-dashboard-pill`（保留已选普通题目行内 `当前总分/100` 与达标提示），分值输入框彻底解锁（删 `isQuestionScoreLocked`/`Lock`）；后端 `BizLessonServiceImpl.saveLessonDetails` 删除“已有答题不能改分值”拦截，历史答题 `score` 与客观题对错不回溯重算，新提交按新分值与最新评分快照计分。单测 `P0P1GovernanceTest` P0-A 已改写为“允许调分且新分值落库、不再查询答题计数”。
+- 模块 2 设计器联动：在线协作行与物联网实验同样式（标题+气泡+右侧开关），删除“配置小组协作”链接；保存后且已开启时行下显示“进入小组协作”直达。开启开关自动限定资源库为 `practical`+`FILE` 并查询；协作文件改为多选池（对话框 checkbox），`≥2` 个显示【小组协作（非计分）】；后端班级协作仍按池首个文件建房，其余文件在协作页按组分配；资源库 FILE 行新增“协作”按钮。
+- 模块 3 协作页瘦身：删除文件副本二次选择（单选协作文件）、活动名称输入、快照选择器/冻结流程/班级管理依赖、成员长名单、步骤向导。新建即时分组工作台：自动读取本课已指派班级（单班自动选中），按组数或每组人数一键按学号连续切分预览，每组下拉选不同文件，`≥2` 个文件时头部标识；保存时后端静默复用快照/活动接口。后端新增快照 `regroup=true`：无活动引用时删旧快照按新组数重建，有引用时明确拒绝（避免历史房间失联）；新增 `CollaborationMapper.countActivitiesBySnapshot` 与快照删除 SQL，无新表。
+- 模块 4 穿透：`CryptPadAdapter.ready()` 接受 `/` 开头同源相对地址（经 123 `/cryptpad/` 转发到 129:80 时就绪）；`editor.vue` 脚本加载加 15 秒超时并显式报错（含 apiUrl 诊断，可复制），不再无限 Loading。123 配置片段见 `output/cryptpad-123-proxy.conf`（已按此上到 123 并经 `nginx -t` 与 200 实测验证）。
+- 正式发布（2026-09-06 约 10:44-10:57）：release `D:\program\3009dazipingtai\releases\20260906_collab_score_unlock_v1`，JAR SHA-256 `1de39e8e9fc20f089bbab0a4e600bdcb253b09ebf20883a4cd2f2e48fce98db3`、线上 `index.html` SHA-256 `c1599ed3f6ca279185d69012c6c9e22a07d5c8e3635c2db6219914b2c9e7dbbb4`（与本地一致）。123 新增 `location /cryptpad/` 反代 `http://10.52.1.129:80/`（WebSocket 升级，`nginx -t` 通过）；服务环境变量 `CRYPTPAD_BASE_URL=/cryptpad/`、`CRYPTPAD_API_URL=/cryptpad/cryptpad-api.js`（密钥与 65 个既有房间未动）。探活：后端 3009 `/captchaImage` 200（PID 28836）、前端 3010 `/` 200、`http://127.0.0.1:3010/cryptpad/cryptpad-api.js` 经 123 代回 129 实测 200（18,018 字节）；正式库 `1.30.3` 为 `PUBLISHED`（update_id=83）。发布前整库备份 `D:\program\3009dazipingtai\backups\20260906_collab_unlock_before\ry-vue_before.sql`（131,424,519 字节，SHA-256 `9c680c7f610317680c86bd1922c9a529f080ce51db92a05cd431f9350e37b5fe`，同目录保留 `nginx.conf.before` 与注册表参数备份）。回滚：NSSM 指回 `20260905_efficiency_v1`（带其 `config/`）并重启后端，Nginx root 指回旧前端并重启 `UnifiedNginx`（`nginx.conf.before` 恢复），环境变量从注册表备份恢复；无需业务 SQL 回滚。SSH 排障：本机 Windows 自带 OpenSSH 客户端 exec 会话不退出（输出已到但会话挂死），已改用 Git 自带 ssh（`C:\Program Files\Git\usr\bin\ssh.exe`）+ `-n -T` 秒级返回；PowerShell 远端加 `$ProgressPreference='SilentlyContinue'` 避免进度条炸通道。协作双人协同与重分组端到端仍待专项验收。
+
+## 2026-09-05 教师效率小包发布 1.30.2（已正式发布，真机验证通过）
+
+- 内容：①教师首页已毕业年级默认折叠（手动展开不被刷新覆盖，真机确认 2020 级折叠）；②学生协作卡正名（本组/全班标签，后端 `currentStudentRooms` 加 `groupRoom` 标记）；③协作编辑器在线成员可点击展开查看权限与状态。
+- 发布方式：首次由 `scripts/prod-deploy.ps1` 一键脚本独立完成（含配置复制/NSSM 切换/nginx 切换/前后端探活）；修脚本三处：检查失败即修复复查、配置源取线上后端目录、`nssm get` 宽字符清洗、nginx stderr 兼容。脚本纯 ASCII（服务器 GBK）。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_efficiency_v1`；JAR SHA-256 `462171c4b29d8c679676dd1f5c30edd7a9e8c4cbab4210ffa44eeccad0ff347b`，线上 `index.html` SHA-256 `08c2c0f1ecc74ec61b5bfc4fa28a47e27fe2fa3491888f44d2a962b03e090dcb`（与本地一致）。
+- 正式库 `1.30.2` 为 `PUBLISHED`（update_id=82）。回滚：NSSM 指回 `20260905_ux_p0_v1`（带其 `config/`）并重启后端，Nginx root 指回旧前端并重启 `UnifiedNginx`。
+
+
+- 内容（仅前端）：①平台概览趋势图纵轴 `10,000` 被截成 `0,000`，人次轴改用万单位（线上截图确认显示 `1万`）；②批改页数字/五星二选一切换（默认数字，偏好记 localStorage），去掉“五星辅助评分”文案，移除 title 悬浮（跳动源头）。
+- 验证：构建产物含新开关、无旧文案；线上 `index.html` SHA-256 `02a0c9942f8a6f0989ecc214fe1eaad70ac14f737a9e9b49a9fbba91c4e96ab8` 与本地一致；真机截图确认纵轴。
+- 正式库 `1.30.1` 为 `PUBLISHED`（update_id=81）。回滚：Nginx root 指回 `20260905_collab_overhaul_v1/frontend` 并重启 `UnifiedNginx`。
+- 待议 backlog（P1/P2，用户未选暂不动）：课程卡按钮收纳、协作页新老模式分区、学生协作卡置顶正名、设计器分区分组、毕业年级默认折叠、左侧菜单分组、概览今日作答口径核对。
+
+
+- 模型：一课最多一道操作题（FILE/PYTHON/FLOWCHART 共用名额，前后端双校验；316《1.计算机网络》存量 2 道保留冻结只可减不可加，368/373 已精简至 1 道）；协作开关独立，起始文件只来自题库（公开或本人创建的文件作品题），与课程操作题脱钩；协作不计分不批改。
+- 新能力：协作页按学号连续自动分组并冻结（`POST /business/class-group/lessons/{id}/snapshots/auto`，RANGE 口径，已有快照幂等沿用）；教师活动详情自带组名/人数/成员与进入房间按钮；学生仅一个可进房间时自动进入本组（每房间每会话一次，防返回弹回）。
+- 数据治理：备份 `D:\program\3009dazipingtai\backups\20250905_1300_onepractical_audit\lesson_question_368_373.sql`（2637 bytes，SHA-256 `54B45A1F9072A4AF50D29436E821DAE109282FAB7EBB5891D60E0CE416F6790C`）；368（郑老师测试课，0 作答）删 3332/3335 关联留 3245，373（回归课）删 PYTHON/FLOWCHART 关联留 FILE。
+- 本地验证：业务模块全量 453/453；`build:prod` 通过，6 处新文案/接口路径均在构建产物确认。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_collab_overhaul_v1`；JAR SHA-256 `cbfa7ab95664e7f8dbfa0b1723c614f6945d04fda2c795b95dfd5dc669e4a48f`（线上一致），线上 `index.html` SHA-256 `4db168dd31cdbefd70e70c5c328e037bdf40e0ac8f82bd7e7aa84416d6792d66`（与本地一致）；外置 `config/` 已复制。
+- 线上实测：368 加第二道操作题被拦（“一门课程最多只能添加一道操作题”）且原关联无损；`bank-materials` 接口 200 返回题库起始文件；自动冻结因 admin 跨校保护被拦符合预期（368 属郑老师学校，需本人登录后在 5/6 班实测 happy path）。
+- 回滚：NSSM 指回 `20260905_triage_fixes_v1`（带其 `config/`）并重启后端，Nginx root 指回旧前端并重启 `UnifiedNginx`；数据恢复用备份 SQL 重插关联行。
+
+
+- 内容：①批改页整课口径与当前操作题口径分离加注，未提交名单标“未进入”；②课堂未指派班级不再抛错，返回 `historical:true` 只读（线上 lesson=2 实测 `code:200,historical:true`）；③课程设计器缺失引用致空白已修复（`details/2` 接口 200）；④协作页三步向导（开协作/冻结分组/建活动）。
+- 本地验证：业务模块全量 448/448；`build:prod` 通过，批改/课堂只读/协作向导字符串均在新构建产物确认。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_triage_fixes_v1`；JAR SHA-256 `ef49d126879265d53b323e8d894e9e4bdd821a02115a4dea2935ac7127be1415`（与线上一致），线上 `index.html` SHA-256 `935671bc275070dda8cc43023e32f5eba19b2008c4a51db7ee920eeff71cb1bd`（与本地一致）；外置 `config/` 从 1.29.6 版复制。
+- 部署教训：新发布目录必须复制外置 `config/`（含生产库配置），否则后端用包内默认配置、3009 无监听；旧 Java 进程 linger 时需 `taskkill /f` 清理后再起；nginx 配置变更用 `nssm restart UnifiedNginx`（`nginx -s reload` 在该机报 Access denied）。
+- 探活：3009/3010/`/prod-api` 均为 200；正式库 `1.29.8` 为 `PUBLISHED`（update_id=79）。无增量 SQL。
+- 回滚：NSSM 指回 `20260905_flowchart_create_fix_v1`（需带其 `config/`）并重启后端，Nginx root 指回 `20260905_teacher_ux_enhancement_v1/frontend` 并重启 `UnifiedNginx`。
+
+
+- 范围与内容：纯前端体验优化，涵盖 5 项高频交互升级：
+  1. **教师首页课堂推进向导化**（`teacher/index.vue`）：重构推进黑盒弹窗为向导预览表格（班级、当前课程 ➔ 下一课程、达标门槛），并引入“我已确认当前班级课堂已结束”二次防误触确认开关。
+  2. **课堂监控大屏常驻发令闸**（`classroomDesktop/index.vue`）：大屏顶部工具栏常驻理论题/操作题快速开闭闸门，接入 `/business/score/lesson-gate`，支持现场自如掌控答题节奏。
+  3. **课程设计器分值仪表盘与锁定**（`lesson/designer.vue`）：题目列表卡片常驻总分与 100 分达标仪表盘，自动置灰锁定历史已作答题目的分值输入框并提示 Tooltip，杜绝后端拦截报错。
+  4. **批改工作台翻页快捷键与指引**（`teacher/grading.vue`）：支持 `Alt+↑/↓` 及 `J/K` 快速切换学生，`preventDefault()` 拦截网页大幅跳滚，右下角常驻半透明快捷键指引浮标。
+  5. **成绩查询页冻结列与状态色相**（`score/index.vue`）：仅冻结【学号】和【姓名】2列，释放视口；建立状态色相体系（请假天蓝 Tag、未交灰色 `-`、正常得分深灰、满分浅绿高亮、人工修正角标提示）。
+- 本地验证：`npm run build:prod` 构建通过（退出码 0）。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_teacher_ux_enhancement_v1\frontend`；前端压缩包 SHA-256 `C5B32E9EDFEB3B03E74F04C76BF0456499A7963D772D06048301D4498475D49E`，线上 `index.html` SHA-256 `5C1C1F1B353AE860FB1133937EA41143BAD70A802F7A774F18C6041CFEC848A0`（与本地完全一致）。
+- 部署配置与备份：备份 `nginx.conf` 至 `D:\program\3009dazipingtai\backups\20260905_teacher_ux_enhancement_v1\nginx.conf.before`（SHA-256 `BFE20CC8310931215D345595F57C0A91D6EB37A8B739091EEA9C8D4068DC2C45`）；Nginx 切换为纯 UTF-8 无 BOM candidate 配置测试通过后生效；受控重启 `UnifiedNginx` 成功。后端 `NewDaziBackend3009` 继续沿用 1.29.6，无需重启；无业务增量 SQL。
+- 探活与后检：3010 前端 HTTP 200，3009 后端 HTTP 200，`/prod-api/captchaImage` HTTP 200；正式库 `biz_platform_update` 成功插入 `1.29.7` 记录（update_id=78, status=PUBLISHED）。
+- 回滚：将 `D:\programsoftware\nginx\nginx-1.29.4\conf\nginx.conf` 中的 root 指回 `20260905_python_keepbest_v1/frontend` 并重启 `UnifiedNginx` 服务；数据库无结构变更，如需撤销仅将 update_id=78 置为 DRAFT。
+
+## 2026-09-05 修复发布 1.29.6（已正式发布，真实任务验证通过）
+
+- 背景：1.29.5 修复就绪数后，教师点击“确认生成建议”仍报 500（`数据处理失败`，即 DataAccessException）。
+- 根因：任务 `reference_answer_json` 列是 JSON 类型，流程图写入纯文本 `FLOWCHART` 非法（MySQL 3141），插入即炸。验证：`CAST('"FLOWCHART"' AS JSON)` 合法。
+- 修复：写入带引号的合法 JSON，读取经 `PracticalAiJobService.isFlowchartJob` 集中判断（任务创建、判题两处、批量采用三处同步替换）。无增量 SQL。
+- 本地验证：AI 相关单测 9/9，业务模块全量 448/448 通过。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_flowchart_create_fix_v1`；JAR SHA-256 `56b80285d4360f90df31df9537cf0caa4077ddfc2812be828f13445bd11b46cc`，前端沿用 1.29.4。发布前整库备份 131,115,725 bytes，SHA-256 `00dfc35e4fe91a7fe4207d8b147db70add8a3b9de9f23e044392584f23f4b1b7`。
+- 后检：362 课 5 班真实创建 AI 任务 13 号（32 份，约 4 秒/份），最终 30 成功、2 失败（模型返回无效评分项，可一键重试）；preflight 就绪 34/未批 32。正式库 `1.29.6` 为 `PUBLISHED`（update_id=77）。
+- 回滚：NSSM 指回 `20260905_flowchart_ai_v1` 并重启后端；无业务 SQL 回滚。
+
+## 2026-09-05 修复发布 1.29.5（已正式发布，preflight 验证通过）
+
+- 背景：教师反馈流程图课程 362 的“开始 AI 批改”对话框显示“可供 AI 识别 0 人”，确认按钮被禁用，功能完全不可用。
+- 根因：`PracticalAiJobService.eligible()` 对所有题型要求 `practicalVersionId` 非空，但流程图答案行该字段恒为空（锚点是 `flowchartSubmissionId`）。连带：任务创建、判题、采用三处版本比对同样按文件版本写，流程图走通后会空指针或误判版本变化。
+- 修复：流程图以提交版本为锚点（eligibility 用 `flowchartSubmissionId`；结果表 `practicalVersionId` 存提交版本；判题/采用两处比对改走答案文本 `FLOWCHART:<版本>`）；空队列报错按题型区分。无增量 SQL，不迁移既有数据。
+- 本地验证：新增单测 2 个，定向 6/6，业务模块全量 448/448 通过。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_flowchart_ai_v1`；JAR SHA-256 `b5e79a200dabc05c21a46fc3a9a526b28d4c8f0412694e9e6921865adaa326c5`，前端沿用 1.29.4（无前端改动）。发布前整库备份 130,994,000 bytes，SHA-256 `82cd6130a717a24f9e265a837f3a1c34b7b29ce0c887577af82862d5a3b2b893`。
+- 后检：后端重启新 JAR，preflight（362/2028/2022 级 5 班）返回已提交 34、已批 2、就绪 34、未批就绪 32；未实际发起 AI 任务（发起将产生模型费用，由教师自行点击）。正式库 `1.29.5` 为 `PUBLISHED`（update_id=76）。
+- 回滚：NSSM 指回 `20260905_python_keepbest_v1` 并重启后端；无业务 SQL 回滚。
+
+## 2026-09-05 修复发布 1.29.4（已正式发布，回归验证通过）
+
+- 范围：课程编程题与打字题一致保留历史最高分；批改页双口径加注；设计器指派切换确认；学生端计分说明；协作时间线显示编号+姓名。无增量 SQL，不迁移既有数据。
+- Python 取优实现：`ProgrammingSubmissionService.writeExistingAnswer` 置 `keepBestScore=true`，复用 `upsertAnswer` 已有择优分支；线上实测 WA→AC→WA 后答题表保持 20 分（AC 代码），判题历史 3 条完整。
+- 发布事故与修复：首版时间线 SQL 误用 `biz_student` 不存在的 `student_name` 列（姓名实际在 `sys_user.nick_name`），致时间线接口 500；已在同 release 内修正 SQL、重打 JAR（SHA-256 `d71f633c03f7cb6b87b0bc2a1603a90c50e32324f9b63a54b674ad48e5076863`）并重启验证，时间线返回“编号+姓名”（如“04 张智翔”）。教训：涉及少用表的列必须先 `DESCRIBE` 核对。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_python_keepbest_v1`；首版 JAR SHA-256 `a898b24d9b36ccdd8442b8bba66eb22d4d2f492298d6855ebd9cdbd4aa57b843`，前端 `index.html` SHA-256 `627adf58c249513879caeaffe531c7be260f0367abe37039119e8f829fd1b7ad`（三处新文案均在构建产物中确认，线上同哈希）。发布前整库备份 130,946,447 bytes，SHA-256 `1930d4b60d78d3d5961c7cf072702cb4c4100c0079f282390f7839fcda306d7d`。
+- 本地验证：定向测试 13/13、业务模块全量 446/446 通过；Vue3 `build:prod` 成功。回归测试课 372 及协作房间 75 的全部数据已精确清理并复核为 0，8 班当前课回到 286；新建常驻回归验收课 373（未指派，回归时临时指派）。
+- 后检：`NewDaziBackend3009` 运行中新 JAR（PID 已核对命令行），`UnifiedNginx` 运行中，3009/3010/`/prod-api` 连续三次 HTTP 200，线上 `index.html` 与新构建同哈希。正式库 `1.29.4` 为 `PUBLISHED`（update_id=75）。
+- 回滚：NSSM 指回 `20260905_034500_answer_integrity_v1` 并重启后端，Nginx root 指回旧前端并重启 `UnifiedNginx`；无业务 SQL 回滚。如需撤销发布记录，仅按版本 `1.29.4` 精确处理。
+- 未完成：学生首页防误关单次触发未复现（自动化伪影嫌疑），未改代码；流程图批改、协作双人保存仍待专用课补测。
+
+## 2026-09-05 正式发布后浏览器验收（只读，通过）
+
+- 使用正式教师账号 `19157727791` 完成登录、校区选择、退出、重新登录、首页/题库/成绩菜单跳转、年级成绩查询、刷新及跨模块进入；页面均正常加载，无白屏、持续加载或新的控制台异常证据。题库显示 626 条数据，成绩按 2022 级查询返回历史学生记录。
+- 使用正式学生账号 `2024720801` 完成登录、刷新、退出、重新登录、多标签页打开、历史成绩、错题本、学生实验工具查看；学生端仅显示学生导航，直接访问教师首页被拦截回学生首页。当前课程为“物联网小学”，打字练习未开始，实验工具提示暂无可用工具，均与课程配置一致。
+- 本轮仅执行只读操作，未创建、修改、删除或提交课程、题目、答案、成绩、作品及协作数据。未发现新的可复现 P0/P1/P2/P3 缺陷。
+- 六类题型的“作答→保存/刷新/重登→提交→教师批改→学生回显”生产闭环仍未覆盖：当前账号没有明确专用的全题型开放验收课程；本次不能据此宣称全链路通过。
+
+## 2026-09-05 只读探索复核 1.29.3（零写，新发现 P3×1）
+
+- 真实浏览器教师/学生只读探索（报告 `output/playwright/explore-20260905/REPORT.md`）：零写操作，正式数据零改动，会话已清理。
+- 1.29.3 的 P0 修复在生产真实数据上验证通过：课程 284 操作题 2026，7 班接口与批改页均为 45/48，2 班均为 26/47，进度与列表口径一致，上一轮 P2 表象消失。
+- 新发现 P3×1：批改页“已有答题”（全题型口径）与“已交”（本操作题口径）并列无标注，多题型课程（284 含打字+操作）差值可达 19 人；2 班、7 班 2/2 复现。建议前端加口径后缀，无需后端/SQL。
+- 学生 5 项越权 + 跨学生文件直链（403）与未认证探针（业务码 401）全部正确拦截；题库 626 vs 概览 2411 为“可见集 vs 全表”口径差，属设计。
+- 未覆盖（无专用验收课且未做备份故坚持零写）：P1 线上重放、六类全闭环、协作双人、移动端/弱网。不得据此宣称全链路通过；维持 1.29.3 已发布态，P3 不阻断。
+
+## 2026-09-05 学生答案归属与理论题幂等修复（1.29.3，已正式发布）
+
+- 正式探索测试确认：`biz_student_answer.student_id` 的数据契约是 `biz_student.student_id`，而非 `biz_student.user_id`。此前批改、学情、画像及课堂聚合等多处 Mapper JOIN 错误使用 `user_id`，会使答案错归属或在教师页消失；现已统一改为按 `student_id` JOIN。该修复不迁移或修改既有答案、成绩、课程、题目和作品数据。
+- 选择题、判断题的终态提交现以数据库唯一键 `INSERT IGNORE` 原子保护。并发或重放请求命中已有记录会明确拒绝，不能覆盖已判分成绩；打字、流程图、文件作品与 Python 的既有版本/最佳分业务不改变。
+- 前端路由守卫在懒加载期间添加 `route-pending`，主内容区域显示加载遮罩并禁用旧页操作，避免 URL 已变而仍可操作前页。
+- 本地验证：Vue3 `npm run build:prod` 成功；定向后端测试 3/3、业务模块全量测试 445/445 通过；`mvn -pl ruoyi-admin -am clean package -DskipTests` 成功。新增测试保持 Java 8 兼容。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260905_034500_answer_integrity_v1`；后端 JAR SHA-256 `2635A67B2A116B218345440B3879A287027E6096AAED90F8AD281B6138FDE980`，前端 `index.html` SHA-256 `0BF25EDD2BE33CCDF270518AB4247F0E7F5C58473DCBC96ECB2FB0F3FC5AAE19`。发布前整库备份在 `D:\program\3009dazipingtai\backups\20260905_034500_answer_integrity_v1_before`，SQL 为 130,817,132 bytes，SHA-256 `E1F046B26C7D567467C35B5E4943A250D35BD3C00445EA30619429BA31D8A261`，备份清单 SHA-256 `6FE4259BF708A7E25F65051F5033E91F0E8137F6DD783F90D26F8244ADC033DE`。
+- 后检：`NewDaziBackend3009` Running，NSSM 和 Nginx 均指向新 release，`nginx -t=0`，3009、3010、3010 `/prod-api` 连续三次均 HTTP 200，3010 实际返回的新构建脚本与 release 一致，80/3010/3012 均由重启后的 `UnifiedNginx` 进程承载；启动日志无启动失败/Bean/SQL 语法错误。直接 `nginx -s reload` 因服务账户权限不同被 Windows 拒绝，已改由 `UnifiedNginx` 服务受控重启加载配置。正式库更新 `1.29.3` 为 `PUBLISHED`（update_id=74）。
+- 回滚：先恢复备份内 `NewDaziBackend3009-before.reg` 与 `nginx.conf.before`，再按 stop → 等待 Stopped → start 的顺序重启后端并重载 `UnifiedNginx`；无业务 SQL 或数据回滚。若需撤销发布记录，仅按版本 `1.29.3` 精确改为草稿或删除，禁止改动历史成绩。
+- 未完成门禁：尚未在本轮发布后输入正式教师/学生凭据进行 UI 回归；因没有专用开放验收课程，六类题型的“作答→刷新/重登→提交→批改→学生回显”生产闭环仍不能宣称通过，须补测后再给全链路部署建议。
+
+## 2026-09-05 上线前独立探索测试：确认 2 个上线阻断缺陷（未修改代码，仅测试+数据清理）
+
+- 本轮为真实浏览器（教师 `19157727791`、学生 `2024720801`/`2024720101`）完整业务探索 + 正式库只读核对，报告见 `output/playwright/explore-20260904/REPORT.md`。**未改任何代码、未改 286 等真实课程**；新建的测试课程 370 及其全部关联数据（答案/作品/流程图/Python/评分快照/指派/scope）已按 20260904 基线备份精确清理，学生作品 2 个物理文件已删，286 的 8 班当前课指派已按原值（`assignment_id=2353`）恢复，浏览器复核 8 班学生当前课已回到 286。
+- **已确认 P0（上线阻断）**：提交 `f58730f`（当前 HEAD / 20260904_codex_perf_release）把 `BizStudentAnswerMapper.xml` 中"班级学生 ↔ 答案"的多处 JOIN 由 `a.student_id = s.student_id` 改成了 `a.student_id = s.user_id`。数据契约为 `biz_student_answer.student_id` 存 `biz_student.student_id`（全库抽样 100% 命中、按 user_id 仅 84% 命中），JOIN 方向改反导致：教师批改/学情/画像/区域统计"先列班级学生再 JOIN 答案"的视图，把学生提交记到**另一个学生**或**直接丢失**（吕辰逸实例：答案 `314470` 存 `student_id=9492`，线上按 `user_id` 关联指向 2020 级 2 班另一人，8 班显示"暂无提交"）。成绩查询"汇总表"走 `WHERE a.student_id IN(...)` 未受影响，故成绩仍正确、仅批改/学错配。修复方向：相关 JOIN 统一改回 `a.student_id = s.student_id`，并回归"提交在批改页可见且归属正确"。
+- **已确认 P1（上线阻断）**：`StudentHomeController.submitAnswers` 对 choice/judgment 无"已提交终态"保护，理论题提交后前端按钮虽 disabled，但直接调 API 可重复提交并**覆盖已判分成绩**（实测 3342 C/20分→A/0分、1223 T/10分→F/0分）。打字题 `keepBestScore`、文件作品版本递增、Python 独立历史均正常，仅理论题缺保护。
+- 正常项：六类题型学生作答/刷新/重登保留、打字 keepBest、Python 判题、文件/流程图版本、权限隔离（学生跨课 403/跨课拦截、教师跨班批改"该课程未指派给当前班级"）均通过。因 P0 阻断，文件/流程图/理论"教师批改→学生回显"闭环未能在批改页走通，**不得宣称全链路通过，不建议当前直接正式部署**。
+- 剩余/未覆盖：在线协作多人实时同步需两名同班学生同场；移动端 390px 与断网/接口 5xx 容错未专项回归。
+
+## 2026-09-04 上线前审查问题修复（已正式发布）
+
+- 针对审查报告中可由当前代码确认的性能与输入安全问题完成最小修复：Presence 汇总由逐学生 `KEYS` 改为一次 Redis `SCAN` 后按学生分组；课堂大屏答案聚合子查询提前按 `lesson_id` 过滤；协作操作轨迹读取限制最近 500 条；协作 HEARTBEAT 不再写入操作事件表；学生 Presence 重连采用指数退避和抖动；教师批改后台页面暂停实时刷新和 10 秒校准；物联课堂刷新增加 800ms 防抖与并发合并；课程设计器保存按钮增加 loading/disabled 防重复提交。
+- 流程图文字安全校验前后端统一为合法 HTML 标签形态，放行 `a<b && c>d` 等紧凑比较表达式，继续拦截完整 HTML 标签、注释和 `javascript:`；新增后端回归测试覆盖上述边界。
+- 新增 `sql/classroom_overview_perf_v1.sql`，已在正式库备份后幂等创建课堂大屏答案聚合索引；正式库同时执行 `class_grouping_v1.sql`、`group_collaboration_v1.sql`、`student_task_state_v1.sql` 和本索引脚本，均完成前检与后检。
+- 验证结果：`mvn -pl ruoyi-business -am test` 441/441 通过；流程图与 Presence 定向测试 6/6 通过；Vue3 `npm run build:prod` 2915 个模块构建成功；`git diff --check` 通过。构建仅有既有依赖的弃用、`eval` 和大包警告。
+- 审查报告中“流程图二次保存必然 500”“新 SQL 未被 Git 追踪”等结论与当前 HEAD/工作区不完全一致，不能直接作为已确认 P1/P0；流程图旧题、选课后二次保存、学生提交和批改闭环仍需浏览器及真实数据复核。
+- 复核发现课程权限存在真实边界缺陷：原逻辑要求创建者与当前部门同时匹配，调岗教师无法维护本人历史课程；现已调整为创建者可跨部门管理/查看本人课程，非创建者管理权限边界不变，并补充单元测试。
+- 正式 release：`D:\program\3009dazipingtai\releases\20260904_codex_perf_release`。后端 JAR SHA-256 为 `D3867BF956B06BB734FE675AFE6E0664DC5CC6894C95FF48F8EDED1AA1E88930`；前端压缩包 SHA-256 为 `39341D7DFE28920770CB720D60A6C787F316093353B44237ECEBB5BD81ECE523`。发布前正式库整库备份位于 `D:\program\3009dazipingtai\backups\20260904_175849_codex_perf_release\ry-vue_before.sql`，184,779,284 bytes，SHA-256 `0A2DFDF8C20388B1B76A6622CF8E6230F1B9F8ED1E9553E26CB2442360F3158A`。
+- 正式库后检：`biz_class_group_scheme`、`biz_collab_activity`、`biz_student_task_state` 均存在；任务状态回填 186,541 条，重复状态、非法状态、孤儿状态和部门错配均为 0；课堂大屏联合索引已存在。`NewDaziBackend3009` 与 `UnifiedNginx` 均为 Running，3009、3010、`/prod-api` 均 HTTP 200；Nginx 配置已按 UTF-8 无 BOM 修复并通过 `nginx -t`。
+- 浏览器验收：教师 `19157727791` 登录、校区选择、平台概览、题库管理及流程图题预览/修改入口正常；学生 `2020710701` 登录成功，学生首页、Python 练习、学生实验工具入口正常，控制台无错误。该学生当前课程明确提示理论题尚未开放且暂无练习题，属于课程配置状态，不是接口异常。
+- 回滚：保留旧 release `20260902_135546_full_restore_v1`；应用回滚时恢复 `nssm-before.reg`/NSSM 工作目录并重启 `NewDaziBackend3009`，恢复 `D:\program\3009dazipingtai\backups\20260904_175849_codex_perf_release\nginx.conf.before` 后重启 `UnifiedNginx`。新增表和索引原则上可兼容保留；若必须撤销，先回滚应用，再按对应 SQL 回滚脚本处理，禁止直接覆盖备份后的新业务数据。
+
+## 2026-09-04 上线前探索测试纠偏（已随正式 release 发布）
 
 - 课堂大屏会忽略 URL 中 `lessonId=undefined`、空值和非正整数，不再为这类历史链接持续请求作答进度接口；终端在线监控仍可独立降级。分组方案保存、自动生成、快照和座位保存的请求体缺少年级/班级时改为明确提示“请选择年级/班级”，不再把空值转成字符串 `null` 后误报没有管理权限；非法方案号同样给出明确提示。
 - 流程图题保存时，前后端一致拦截 HTML 标签、HTML 注释和 `javascript:` 文本；错误精确指出“学生基础图第 N 个节点”或“标准答案第 N 条连线”，普通比较表达式如 `a < b` 不会被误判。题库修改普通字段时，未改流程图配置不会重复写入并抢占配置修订号。
 - 流程图预览接口仍只返回学生基础图，但新增 `configReady` 布尔值；课程设计器据此禁止将缺基础图、缺标准答案或旧格式异常配置加入课程。课程快照建立时复核同一条件，历史半成品配置返回教师可理解的未完成提示，不再在选题页面抛出异常或泄露标准答案。
 - 流程图批改改按“课程创建者或负责当前班级的共享教师”校验；公共题的非创建教师不再错误显示修改、删除入口。教师主部门不再被猜作负责班级部门，找不到或跨学校同年级同班号有歧义时明确拒绝。
-- 学生离开页面后 Presence WebSocket 不再继续自动重连；课堂大屏的 `NOT_ENTERED` 使用合法展示类型。`sql/student_task_state_v1.sql` 已包含 `NOT_ENTERED`，但本轮未执行 SQL、未部署正式服务器。学生桌面“连接 IP”仍只能表示服务端观察到的地址；因 NAT 显示同一网关 IP 的客户端方案尚未开始。
-- 验证：`FlowchartDocumentServiceTest`、`FlowchartServicePreviewTest`、`ClassGroupingServiceTest` 共 13/13 通过；Vue3 `npm run build:prod` 通过（2915 模块，仅有既有 `vform3` `eval` 与大包警告）。尚未使用浏览器和真实多角色数据完成本轮流程图保存、选课、学生提交、批改闭环，正式发布前必须补做。
+- 学生离开页面后 Presence WebSocket 不再继续自动重连；课堂大屏的 `NOT_ENTERED` 使用合法展示类型。`sql/student_task_state_v1.sql` 已在正式库执行。学生桌面“连接 IP”仍只能表示服务端观察到的地址；因 NAT 显示同一网关 IP 的客户端方案尚未开始。
+- 验证：`FlowchartDocumentServiceTest`、`FlowchartServicePreviewTest`、`ClassGroupingServiceTest` 共 13/13 通过；Vue3 `npm run build:prod` 通过（2915 模块，仅有既有 `vform3` `eval` 与大包警告）。正式环境已完成教师/学生登录和核心入口验收；选定学生课程当前未开放理论题且无练习题，因此未对生产数据执行答题提交或成绩写入，完整“开放题目→作答→提交→批改”需在教师开启专用验收课程后补测。
 
-## 2026-09-04 课堂监控大屏聚合读取（本机实现，未发布）
+## 2026-09-04 课堂监控大屏聚合读取（已正式发布）
 
 - 新增 `GET /business/class-group/desktop/overview`，服务端按课程和教师管理班级校验后，一次返回学生基本信息、备注、分组/组长、Presence 在线状态、连接 IP、任务状态、打字/理论/操作题汇总、课堂表现和请假状态；以班级学生为主表，未作答学生仍显示。
 - 返回 `hasTyping`、`hasTheory`、`hasPractical`，前端仅渲染本节课实际布置的题型；没有理论题或操作题时不显示对应数据块。操作题存在 `score=0` 时按已批改结果显示 0 分；课堂表现保存要求原因，已请假学生由后端拒绝表现分修改。
 - 分组自动生成支持 `membersPerGroup`，默认按学号连续分组；保留旧 `groupCount` 请求兼容。空请求、空学生列表等边界不会进入非法 `IN ()` 查询。
-- 本地验证：`mvn -pl ruoyi-business -am test -q` 通过，`npm run build:prod` 通过；本轮未执行 SQL、未启动正式服务器、未部署正式环境。仍需本地浏览器验证无题型隐藏、0 分批改、表现分/请假交互和课程权限边界。
+- 本地验证：`mvn -pl ruoyi-business -am test -q` 通过，`npm run build:prod` 通过；正式库已执行课堂大屏性能索引并完成后检，正式 release 已切换。教师/学生核心入口浏览器验收通过；无题型隐藏、0 分批改、表现分/请假交互和课程权限边界的完整生产数据闭环仍需专用验收课程补测。
 
-## 2026-09-03 P2 通用分组、学生桌面与 P3 小组协作（本机迁移及代码验证完成，未发布）
+## 2026-09-03 P2 通用分组、学生桌面与 P3 小组协作（已正式发布并完成结构验收）
 
 - 新增 `sql/class_grouping_v1.sql`，建立通用班级分组方案、成员、课时分组快照、教师个人座位布局表；不复用物联网分组表。
 - 后端新增 `/business/class-group` 接口：方案查询/保存/自动生成/删除、课时快照生成、学生桌面查询和布局保存。服务端按教师管理班级校验范围，保存方案时校验当前班级学生不重不漏，默认学号最小者为视觉组长；组长不改变权限。
 - 学生端公共 `StudentLayout` 建立独立 `/ws/presence/{deviceId}` 认证连接，30 秒心跳、Redis 60 秒 TTL，教师桌面聚合多设备在线数和服务端观察到的连接 IP；不写签到考勤、不接受浏览器自报 IP。
 - Vue3 班级管理每行保留“学生桌面”入口；教师首页课程卡片新增“课堂”入口，经已指派班级选择后进入课堂监控大屏。大屏默认按学号网格和教师个人布局展示终端在线、多设备数、连接 IP 与真实课程作答进度，分组默认折叠为开关；教师协作页可创建小组活动、查看小组房间与操作轨迹，学生编辑器每 30 秒上报心跳并在离开时记录事件。
 - 新增独立非计分协作活动、任务版本、小组房间映射、操作轨迹和 revision 差异摘要。每个课时快照小组取得独立文档副本；学生只能进入本人小组房间，首名学生进入后冻结活动。保存触发者仅表示触发保存的会话，不能被当作版本内容的全部作者；协作全程不写 `biz_student_answer`，不改变成绩、课程总分或自动推进。
-- 本机迁移：已在 `xueyeceping_server_20260729` 完成 `sql/class_grouping_v1.sql` 与 `sql/group_collaboration_v1.sql`，后检新增分组、活动、任务映射、轨迹和差异表均存在。迁移前备份分别为 `backups/20260903_163318_before_class_grouping`（SHA-256：`8BCBC34D66A4A1ABCAF8E1C8D357D333BE37EC418AEC0AC0B213D66AE5BE2F3A`）和 `backups/20260903_164649_before_group_collaboration`（SHA-256：`9EF7C170335A0A9F56FB018C7D20F24A9C605813D9F5C6569C4B92086D5FCD20`）。正式服务器未迁移、未发布。
+- 本机迁移：已在 `xueyeceping_server_20260729` 完成分组与协作迁移；正式库已在 `20260904_175849_codex_perf_release` 备份后执行 `sql/class_grouping_v1.sql` 与 `sql/group_collaboration_v1.sql`，后检新增表存在。
 - 已验证：`CollaborationRoomServiceAccessTest`、`CollaborationRevisionDiffServiceTest`、`CryptPadDocumentServiceAuditFailureTest`、`WebSocketConfigTest` 共 9 项通过，0 失败、0 错误；`mvn -pl ruoyi-admin -am clean package -DskipTests`（8 模块）和 Vue3 `npm run build:prod`（2912 模块）均通过，`git diff --check` 无错误。未进行浏览器、真实多人、断线恢复、历史房间回归或容量验收。
 - 2026-09-03 上线前复审修复：冻结课时分组快照前，服务端同时校验课程所属学校、课程创建者（管理员除外）与该课程已指派目标班级；座位布局在删除旧布局前校验请求精确覆盖当前班全部学生，拒绝外班、重复和遗漏学生；同名分组方案自动递增版本。学生桌面移除尚未接通后端的作业状态切换，改为每 30 秒在可见页面静默刷新 Presence，并显示多终端数。内网 HTTP 缺少 `crypto.randomUUID` 时会生成兼容的本地设备 ID；Presence 仅在后端连接来自本机 Nginx 时采信代理转发 IP。`ClassGroupingServiceTest` 与 `WebSocketConfigTest` 定向 5/5、`mvn -pl ruoyi-business -am test` 430/430、Vue3 `npm run build:prod` 均通过；`sql/student_task_state_v1.sql` 已在本机开发库执行，正式服务器未迁移、未发布。
 - 课堂大屏本机验收：教师课程 `372` 的 2025 级 7 班显示 47 名学生，任务汇总为 46 人“未进入”、1 人“已提交”，无“状态同步中”或“作答进度暂不可用”降级提示；打开分组开关后显示 47 个分组标签，关闭后任务状态不变。后端已按新包重启并返回 HTTP 200。
@@ -70,7 +291,7 @@
 - 已确认通用分组方向：班级可保存多套方案，课程生成课时快照；教师端学生桌面是机房终端监控网格，主要显示姓名、在线/离线、IP、分组和视觉组长，并分离“调整座位”和“调整分组”。它不承担点名，不写考勤，现有签到考勤课仍是考勤入口。专题入口为 `contexts/class-grouping-and-desktop/`。
 - 学生桌面主入口确定放在现有“班级管理”页面每个已管理班级的操作列，教师首页增加携带当前课程/班级的快捷入口；不改造一级菜单结构，不归入教师工具或在线协作。在线由学生登录后的独立认证 WebSocket + Redis TTL 表达，30 秒心跳、60 秒离线；服务端展示可信代理链观察到的“连接 IP”，普通浏览器不能保证取得真实网卡 IP 或计算机名。
 - 已确认在线协作升级不计分、不写个人答案，并从操作题解耦为独立课堂协作活动：同一活动可有多个起始文件版本，按课时小组进入不同房间；历史全班房间保留为全班组。操作轨迹包含进出、心跳、保存和相邻版本变化摘要，但当前 Provider 只能确定保存触发者，不能直接证明版本内全部变化的实际作者；最后一项仍需 PoC 门禁。详见 `contexts/online-collaboration/` 与 ADR-006。
-- P0-P1 已完成任务状态 SQL 的本机迁移和课堂大屏验收，仍未发布；P2/P3 已完成本机代码与迁移，正式网络能否观察到每台学生机独立连接 IP，以及 CryptPad/OnlyOffice 能否提供比“小组版本差异”更精确的作者数据，仍必须通过后续 PoC/机房验收确认。
+- P0-P1 任务状态 SQL 已完成本机和正式库迁移，课堂大屏结构后检通过；正式网络能否观察到每台学生机独立连接 IP，以及 CryptPad/OnlyOffice 能否提供比“小组版本差异”更精确的作者数据，仍必须通过后续 PoC/机房验收确认。
 - 第二轮已确认：数字评分仍为默认，五星为辅助并支持整题/逐项切换；星级结果按题目或评分项满分的五等比例四舍五入为整数，零星显式清零。旧作品使用提交时评价标准快照，重新提交绑定最新快照，已有提交后禁止修改题目总分。学生提交采用认证 WebSocket 推送加周期性全量校准，并同步接入教师首页、成绩/提交列表、批改页和学生桌面；打开题目为“已进入”，首次保存为“作答中”，正式提交为“已提交待批”。决策见 `contexts/operation-artifact-ai-grading/ADR-007-integer-star-rating-and-rubric-snapshot.md`。
 
 ## 2026-09-02 画程流程图前端恢复（已正式发布 1.28.6）
@@ -163,7 +384,7 @@
 ## 5. 环境与发布
 
 - 本地：后端 `8080`，Vue3 Vite 默认 `80` 并代理后端。
-- 正式平台：内网主机 `10.52.1.123`，后端 `3009`、Vue3/Nginx `3010`；后端为 `releases/20260901_scheme2_score_numeric_v1/backend`，3010 前端为 `releases/20260902_student_entry_year_grade_v1/frontend`（v1.28.3，第 36 节）。
+- 正式平台：内网主机 `10.52.1.123`，后端 `3009`、Vue3/Nginx `3010`；当前后端和前端均已切换至 `releases/20260904_codex_perf_release`（1.29.2）。
 - 扩展服务：`10.52.1.129` 承载 Judge0、CryptPad、EMQX 等独立服务。
 - 2026-08-21 发布前综合验收：经全链路 4 角色权限、数据一致性、防重幂等、400 活跃并发阶梯压测（13,653 请求，100% 成功，0 丢单）、Python 判题与在线协作 8 房间并发测试，已全项通过并准予发布上线。
 
@@ -619,5 +840,5 @@
 - 删除失败根因：`biz_lesson` 被 `biz_iot_experiment.lesson_id` 外键引用，且物联网实验继续被配置、分组、组员、消息/事件等子表引用；课程删除服务此前未清理物联网链路，数据库返回外键约束错误，前端显示通用“数据处理失败，请稍后重试”。
 - 已在正式服务器先完成整库备份：`D:\program\3009dazipingtai\backups\20260904_125919_before_delete_primary_iot_lesson_285\ry-vue_before.sql`，大小 106,270,331 bytes，SHA-256 `9BE7FB0069A6219E0100348902A043764B0914FBE40996A31DBBA2FA22B44698`。
 - 已按外键顺序完成正式删除并复核：课程 285、实验、配置、小组、组员、课程题目和班级指派均为 0；未重启服务，其他课程未修改。
-- 本机代码已补充 `IotMapper` 按课程级联删除消息、事件、组员、设备、小组、班级配置和实验，并接入 `BizLessonServiceImpl` 单删/批删事务；`mvn -pl ruoyi-business -am test -DskipTests -q` 通过，尚未发布正式服务器。
-- 剩余风险：正式库仍缺少本机近期 `biz_student_task_state`、协作等迁移表，相关页面已有独立数据库错误；本轮未处理、未执行新增 SQL。课程删除的代码修复仅保留在本地工作区，用户已明确要求不得修改正式服务器；除非用户另行明确授权，禁止发布、执行 SQL、重启或再次远程写入。未来若获授权，需重新构建、备份并做课程删除回归。
+- 本机代码已补充 `IotMapper` 按课程级联删除消息、事件、组员、设备、小组、班级配置和实验，并接入 `BizLessonServiceImpl` 单删/批删事务；该修复已随 `20260904_codex_perf_release` 正式发布，后端重启后服务正常。
+- 本次正式发布已执行并后检 `biz_student_task_state`、通用分组、协作及课堂大屏性能索引迁移；相关页面不再因缺表直接报错。课程删除级联逻辑仍建议在专用验收课程上补做一次浏览器回归，生产数据未执行删除操作。

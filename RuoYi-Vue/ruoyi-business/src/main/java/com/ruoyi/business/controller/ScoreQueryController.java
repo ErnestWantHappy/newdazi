@@ -521,6 +521,23 @@ public class ScoreQueryController extends BaseController {
                     .computeIfAbsent(adjustment.getStudentId(), k -> new HashMap<>())
                     .put(adjustment.getLessonId(), adjustment);
         }
+        // 全班有记录的课程并集：缺考只标记“有人上过、你没上”的课，未开课/未指派一律不标。
+        Set<Long> lessonsWithClassRecords = new HashSet<>();
+        for (Map<String, Object> score : scoreRows) {
+            if (score.get("lessonId") instanceof Number) {
+                lessonsWithClassRecords.add(((Number) score.get("lessonId")).longValue());
+            }
+        }
+        for (com.ruoyi.business.domain.BizClassroomPerformance performance : performanceRows) {
+            if (performance.getLessonId() != null) {
+                lessonsWithClassRecords.add(performance.getLessonId());
+            }
+        }
+        for (BizScoreAdjustment adjustment : adjustmentRows) {
+            if (adjustment.getLessonId() != null) {
+                lessonsWithClassRecords.add(adjustment.getLessonId());
+            }
+        }
 
         Map<Long, BizLesson> lessonCache = new HashMap<>();
         List<Map<String, Object>> result = new ArrayList<>();
@@ -576,6 +593,18 @@ public class ScoreQueryController extends BaseController {
                 applyPerformanceToScore(extraScore, performanceMap.get(lid));
                 scores.add(extraScore);
             }
+            // 选定范围内无记录、无请假、且全班有人上过的课程补缺考行：显式标出但不计入分母。
+            Set<Long> studentKnownLessons = new HashSet<>(scoredLessonIds);
+            studentKnownLessons.addAll(extraLessonIds);
+            for (Long lid : lessonIds) {
+                if (!isMissingLesson(lid, studentKnownLessons, lessonsWithClassRecords)) {
+                    continue;
+                }
+                BizLesson missingLesson = lessonCache.computeIfAbsent(lid, lessonMapper::selectBizLessonByLessonId);
+                scores.add(missingScoreRow(studentId, lid,
+                        missingLesson == null ? null : missingLesson.getLessonTitle(),
+                        missingLesson == null ? null : missingLesson.getLessonNum()));
+            }
 
             scores.sort((a, b) -> {
                 Number numA = (Number) a.get("lessonNum");
@@ -591,7 +620,7 @@ public class ScoreQueryController extends BaseController {
             int finalTotal = 0;
             int validScoreCount = 0;
             for (Map<String, Object> score : scores) {
-                if (Boolean.TRUE.equals(score.get("isAbsent"))) {
+                if (isExcludedFromAverage(score)) {
                     continue;
                 }
                 // 考勤课不进入作业均分分母（selectScoreLessons 已排除；此处双保险）
@@ -619,6 +648,40 @@ public class ScoreQueryController extends BaseController {
         }
 
         return result;
+    }
+
+    /** 缺考标记键：有课表无记录、无请假，显式标出但不计入分母。 */
+    static final String SCORE_FLAG_MISSING = "isMissing";
+
+    /** 请假与缺考均不计入均分分母与排名。 */
+    static boolean isExcludedFromAverage(Map<String, Object> score) {
+        return score == null || Boolean.TRUE.equals(score.get("isAbsent")) || Boolean.TRUE.equals(score.get(SCORE_FLAG_MISSING));
+    }
+    /**
+     * 是否应标缺考：课程在选定范围、有全班记录、本人无记录。未开课/未指派（全班无记录）一律不标。
+     */
+    static boolean isMissingLesson(Long lessonId, Set<Long> studentKnown, Set<Long> classRecorded) {
+        return lessonId != null && classRecorded != null && classRecorded.contains(lessonId)
+                && (studentKnown == null || !studentKnown.contains(lessonId));
+    }
+
+    /** 为选定范围内无记录的课程补缺考行（分值全零、最终分空，仅做标记展示）。 */
+    static Map<String, Object> missingScoreRow(Long studentId, Long lessonId, String lessonTitle, Integer lessonNum) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("studentId", studentId);
+        row.put("lessonId", lessonId);
+        row.put("lessonTitle", lessonTitle);
+        row.put("lessonNum", lessonNum);
+        row.put("typingScore", 0);
+        row.put("theoryScore", 0);
+        row.put("practicalScore", 0);
+        row.put("totalScore", 0);
+        row.put("performanceScore", 0);
+        row.put("finalScore", null);
+        row.put("isAbsent", false);
+        row.put(SCORE_FLAG_MISSING, true);
+        row.put("manualAdjusted", false);
+        return row;
     }
 
     private void applyHomeworkAdjustment(Map<String, Object> score, BizScoreAdjustment adjustment) {
@@ -878,7 +941,7 @@ public class ScoreQueryController extends BaseController {
                 if (targetLessonIds != null && !targetLessonIds.isEmpty() && !targetLessonIds.contains(lessonId)) {
                     continue;
                 }
-                if (Boolean.TRUE.equals(score.get("isAbsent"))) {
+                if (isExcludedFromAverage(score)) {
                     continue;
                 }
                 finalTotal += numberToInt(score.get("finalScore"));
@@ -1103,10 +1166,17 @@ public class ScoreQueryController extends BaseController {
                         row.createCell(colIdx++).setCellValue("");
                     }
                 } else if (Boolean.TRUE.equals(targetScore.get("isAbsent"))) {
+                    // 请假行只写标记、不计入均分分母，与页面 isExcludedFromAverage 口径一致；缺考分支在其后。
                     if (includeLessonDetails) {
                         row.createCell(colIdx++).setCellValue("请假");
                         row.createCell(colIdx++).setCellValue("请假");
                         row.createCell(colIdx++).setCellValue("请假");
+                    }
+                } else if (Boolean.TRUE.equals(targetScore.get(SCORE_FLAG_MISSING))) {
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue("缺考");
+                        row.createCell(colIdx++).setCellValue("缺考");
+                        row.createCell(colIdx++).setCellValue("缺考");
                     }
                 } else {
                     int scoreVal = numberToInt(targetScore.get("totalScore"));

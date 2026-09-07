@@ -105,21 +105,30 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         if (!rubricResults.isArray()) throw new ServiceException("AI 评分 JSON 缺少 rubricResults");
 
         Map<Long, Integer> maxima = new HashMap<Long, Integer>();
-        for (PracticalScoringItemVo item : input.getScoringItems()) maxima.put(item.getItemId(), item.getMaxScore());
+        if (input.getScoringItems() != null)
+            for (PracticalScoringItemVo item : input.getScoringItems()) maxima.put(item.getItemId(), item.getMaxScore());
         Set<Long> seen = new HashSet<Long>();
         ArrayNode details = objectMapper.createArrayNode();
         int sum = 0;
         for (JsonNode item : rubricResults)
         {
+            // 无预设分项时仅采用合法总分，不让模型自拟分项导致整份作品失败。
+            if (maxima.isEmpty()) break;
             long itemId = item.path("rubricItemId").asLong(Long.MIN_VALUE);
-            int score = item.path("score").asInt(Integer.MIN_VALUE);
+            // 分项分数必须为整数：asInt 会把 3.5 静默截成 3，必须先拦，与总分的严格口径一致。
+            if (!item.path("score").isIntegralNumber() || !item.path("score").canConvertToInt())
+                throw new ServiceException("AI 返回了非整数的分项分数");
+            int score = item.path("score").intValue();
             Integer max = maxima.get(itemId);
             if (max == null || !seen.add(itemId) || score < 0 || score > max)
                 throw new ServiceException("AI 返回了无效的评分项或分数");
             sum += score;
             details.addObject().put("itemId", itemId).put("score", score);
         }
-        int total = result.path("totalScore").asInt(Integer.MIN_VALUE);
+        JsonNode totalNode = result.path("totalScore");
+        if (!totalNode.isIntegralNumber() || !totalNode.canConvertToInt())
+            throw new ServiceException("AI 返回的总分必须是有效整数");
+        int total = totalNode.intValue();
         int rubricMax = input.getRubric().getQuestionScore();
         if (seen.size() != maxima.size()) throw new ServiceException("AI 未完整返回全部评分项");
         if ((!maxima.isEmpty() && total != sum) || total < 0 || total > rubricMax)
@@ -162,7 +171,7 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
              + "证据中的 page 只填写学生作品页码，不填写空白材料或教师参考答案页码。"
              + "每项分数必须是0到maxScore之间的整数；总分必须等于逐项分数之和且不超过题目满分。\n"
              + "评分输入：" + objectMapper.writeValueAsString(contract) + "\n"
-             + "如果 rubric 为空，请按整体完成质量直接给总分并返回空 rubricResults。输出契约："
+             + "若未提供逐项评分标准（rubric 为空），请按整体完成质量直接给总分，rubricResults 必须严格输出为空数组 []，不得自拟评分项。输出契约："
              + "{\"rubricResults\":[{\"rubricItemId\":整数,\"score\":整数,\"maxScore\":整数,"
              + "\"evidence\":[{\"page\":从1开始的页码,\"description\":\"可核验事实\"}],"
              + "\"reason\":\"简短理由\",\"confidence\":0到1,\"riskFlags\":[]}],"
@@ -229,5 +238,6 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         return normalized.length() <= max ? normalized : normalized.substring(0, max) + "…";
     }
 
-    private Integer integerOrNull(JsonNode node) { return node == null || !node.isNumber() ? null : node.asInt(); }
+    // token 计数为整数：非整数不断言截断，直接记空，避免污染用量统计。
+    private Integer integerOrNull(JsonNode node) { return node == null || !node.isNumber() || !node.isIntegralNumber() ? null : node.asInt(); }
 }

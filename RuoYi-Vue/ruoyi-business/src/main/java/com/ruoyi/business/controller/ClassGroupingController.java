@@ -29,10 +29,17 @@ public class ClassGroupingController extends BaseController {
     @PreAuthorize("@ss.hasAnyPermi('business:teacherClass:edit,business:teacherClass:add')")
     @PostMapping("/schemes/generate")
     public AjaxResult generate(@RequestBody Map<String,Object> request) { return success(service.generateScheme(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), requiredText(request, "entryYear", "请选择年级"), requiredText(request, "classCode", "请选择班级"), request)); }
+    @PreAuthorize("@ss.hasAnyPermi('business:teacherClass:edit,business:teacherClass:add')")
+    @PostMapping("/schemes/preview")
+    public AjaxResult preview(@RequestBody Map<String,Object> request) { return success(service.previewScheme(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), requiredText(request, "entryYear", "请选择年级"), requiredText(request, "classCode", "请选择班级"), request)); }
 
     @PreAuthorize("@ss.hasPermi('business:lesson:edit')")
     @PostMapping("/lessons/{lessonId}/snapshots")
     public AjaxResult snapshot(@PathVariable Long lessonId, @RequestBody Map<String,Object> request) { Long schemeId = optionalLong(request, "schemeId"); return success(service.generateSnapshot(SecurityUtils.getUserId(), lessonId, requiredText(request, "entryYear", "请选择年级"), requiredText(request, "classCode", "请选择班级"), schemeId)); }
+
+    @PreAuthorize("@ss.hasPermi('business:lesson:edit')")
+    @PostMapping("/lessons/{lessonId}/snapshots/auto")
+    public AjaxResult snapshotAuto(@PathVariable Long lessonId, @RequestBody Map<String,Object> request) { return success(service.generateSnapshotAuto(SecurityUtils.getUserId(), lessonId, requiredText(request, "entryYear", "请选择年级"), requiredText(request, "classCode", "请选择班级"), request)); }
 
     @PreAuthorize("@ss.hasPermi('business:teacherClass:list')")
     @GetMapping("/desktop")

@@ -177,7 +177,7 @@ function renderTrendChart() {
     legend: { top: 4, right: 8, data: ['作答人次', '试卷均分'] },
     xAxis: { type: 'category', data: labels, axisTick: { show: false } },
     yAxis: [
-      { type: 'value', name: '人次', splitLine: { lineStyle: { color: '#e8edf2' } } },
+      { type: 'value', name: '人次', splitLine: { lineStyle: { color: '#e8edf2' } }, axisLabel: { formatter: value => value >= 10000 ? `${value / 10000}万` : value } },
       { type: 'value', name: '分数', min: 0, max: 100 }
     ],
     series: [

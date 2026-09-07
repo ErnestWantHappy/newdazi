@@ -22,6 +22,14 @@ flowchart TB
 5. 切换后执行构建/单测、服务探活、关键 API，UI/权限变更再做 Playwright 冒烟。
 6. 汇报必须注明当前 release、回滚路径、是否需回滚 SQL、未完成门禁；不得输出凭据。
 
+## 一键发布执行器（2026-09-07）
+
+统一入口为仓库 `scripts/deploy.py`，远端执行引擎为 `scripts/release-engine.ps1`。入口先用固定 SSH 指纹连接 10.52.1.123，再在服务器创建 SYSTEM 计划任务，因此本地 SSH 断开不会中断发布。任务状态写在 `D:/program/3009dazipingtai/deploy-jobs/<jobId>/state.json`，远端不会记录密码、Token 或原始异常。
+
+执行顺序固定为：inspect → check → deploy。deploy 会校验新 release 清单，复制外置 config，备份整库、Nginx 配置、NSSM 参数与 SHA-256，然后先切后端并通过数据库登录、协作健康、共享网关检查，再切 3010 前端并复核首页哈希。后端停止采用服务级 WaitForStatus，超时直接失败，不按名称强杀 Java；任一切换后的健康检查失败会自动恢复旧 AppDirectory、日志路径、Nginx 配置并再次探活。`rollback` 只接受备份目录位于正式 backups 下且当前 release 匹配的请求。
+
+调用示例和制品清单要求写在根目录 `AGENTS.md` 第 9.1 节；本机回归 `python scripts/test_release.py` 覆盖成功、哈希不匹配、备份失败和健康失败四条路径。该执行器不会主动执行业务 SQL；需要迁移时仍按本 runbook 的前检、备份、增量脚本和后检顺序单独操作。
+
 ## 当前正式基线（2026-09-02）
 
 - 版本：`1.28.3`，后端继续使用 `releases/20260901_scheme2_score_numeric_v1/backend`，3010 前端切换至 `releases/20260902_student_entry_year_grade_v1/frontend`；学生管理入学年份会按当前校区学部自动显示当前年级备注。
@@ -60,3 +68,9 @@ flowchart TB
 | `/tools/image-recognition/` | `127.0.0.1:3001` |
 
 3006 由 NSSM 服务 `TeacherToolIotData3006` 管理，自动启动并配置异常自动重启。教师工具数据库地址必须使用上述 80 端口路径，不应要求教师直接访问 3001/3002/3003/3006/3020。修改网关时先备份并在 D 盘 `conf` 目录生成候选文件做 `nginx -t`，切换后确认 80/3010/3012 均由 `UnifiedNginx` 同一进程树监听。
+
+## 2026-09-07 登录恢复候选（未发布）
+
+用户要求先修本地，再由用户重启服务器，收到完成消息后代理部署。候选和逐类差异位于 `output/online-recovery-20260907/`；后端基于活动JAR定向替换，前端完整构建。必须重新核对活动基线SHA，复制外置config并保留旧release；无业务SQL，不清空Redis。发布后真实角色验收，并登记RELEASE_LOG及平台更新记录。不要将冷重启后的恢复误认为14:17前的连接重置、LibreOffice故障已根治。
+
+2026-09-07本轮最新状态：候选已上传至20260907_online_recovery_v1，用户选择手动执行该目录switch-release.ps1（管理员PowerShell），可加-Rollback切回旧版。新旧Nginx候选及哈希已验，尚未切换。代理不得因上传完成宣称已发布，发布后再登记版本与正式验收。

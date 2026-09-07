@@ -4,8 +4,12 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.BoundSetOperations;
 import org.springframework.data.redis.core.HashOperations;
@@ -287,5 +291,29 @@ public class RedisCache
     public Collection<String> keys(final String pattern)
     {
         return redisTemplate.keys(pattern);
+    }
+
+    /**
+     * 使用 SCAN 分批枚举键，避免课堂等高频业务使用 KEYS 阻塞 Redis 单线程。
+     */
+    public Collection<String> scanKeys(final String pattern, final long count)
+    {
+        return (Collection<String>) redisTemplate.execute((RedisCallback<Collection<String>>) connection -> {
+            List<String> result = new ArrayList<>();
+            Cursor<byte[]> cursor = connection.scan(ScanOptions.scanOptions()
+                    .match(pattern).count(Math.max(1, count)).build());
+            try
+            {
+                while (cursor.hasNext())
+                {
+                    result.add(new String(cursor.next(), java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+            finally
+            {
+                cursor.close();
+            }
+            return result;
+        });
     }
 }

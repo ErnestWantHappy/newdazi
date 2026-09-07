@@ -45,5 +45,14 @@ public class FlowchartSubmission {
     public void setAnswerId(Long answerId) { this.answerId = answerId; }
     public Date getSubmitTime() { return submitTime; }
     public void setSubmitTime(Date submitTime) { this.submitTime = submitTime; }
+    /**
+     * 学生端视图：保留版本与建议分，屏蔽评分规则快照与检查证据（防按规则刷分）。
+     * 注意：MyBatis 无脏检查，就地置空不会回写数据库。
+     */
+    public FlowchartSubmission toStudentView() {
+        this.rulesSnapshotJson = null;
+        this.checkResultJson = null;
+        return this;
+    }
 }
 

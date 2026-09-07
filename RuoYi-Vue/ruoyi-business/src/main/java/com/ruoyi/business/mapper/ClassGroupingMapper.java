@@ -22,6 +22,10 @@ public interface ClassGroupingMapper {
     int deleteScheme(@Param("schemeId") Long schemeId);
     int insertSnapshot(Map<String,Object> row);
     Map<String,Object> selectSnapshot(@Param("lessonId") Long lessonId, @Param("deptId") Long deptId, @Param("entryYear") String entryYear, @Param("classCode") String classCode);
+    /** 重新分组时删除无活动引用的旧快照（先成员、再小组、最后快照行）。 */
+    int deleteSnapshotMembers(@Param("snapshotId") Long snapshotId);
+    int deleteSnapshotGroups(@Param("snapshotId") Long snapshotId);
+    int deleteSnapshot(@Param("snapshotId") Long snapshotId);
     int insertSnapshotGroup(Map<String,Object> row);
     int insertSnapshotMember(Map<String,Object> row);
     List<Map<String,Object>> selectDesktopStudents(@Param("deptId") Long deptId, @Param("entryYear") String entryYear, @Param("classCode") String classCode, @Param("layoutId") Long layoutId);

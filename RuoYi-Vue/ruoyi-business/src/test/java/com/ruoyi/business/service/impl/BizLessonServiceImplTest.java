@@ -11,6 +11,7 @@ import com.ruoyi.business.domain.vo.LessonInfoVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.CollaborationMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.service.AnswerDeletionGuardService;
@@ -60,6 +61,8 @@ class BizLessonServiceImplTest
     private BizLessonAssignmentMapper lessonAssignmentMapper;
     @Mock
     private CollaborationMapper collaborationMapper;
+    @Mock
+    private BizLessonQuestionMapper lessonQuestionMapper;
     @Mock
     private BizTeacherClassMapper teacherClassMapper;
     @Mock
@@ -131,15 +134,53 @@ class BizLessonServiceImplTest
 
         assertDoesNotThrow(() -> validate(detail));
     }
-
     @Test
-    void courseAllowsMultiplePythonQuestionsWhenTotalScoreIsOneHundred()
+    void courseRejectsSecondPracticalQuestion()
     {
+        // 一课一道操作题：新课一次提交两道操作题直接拦截
         LessonDetailVo detail = new LessonDetailVo();
         detail.setGuideSheetEnabled(false);
         detail.setQuestions(Arrays.asList(pythonQuestion(31L, 40), pythonQuestion(32L, 60)));
 
+        assertThrows(ServiceException.class, () -> validate(detail));
+    }
+
+    @Test
+    void courseAllowsSinglePracticalQuestion()
+    {
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setGuideSheetEnabled(false);
+        detail.setQuestions(Collections.singletonList(pythonQuestion(31L, 100)));
+
         assertDoesNotThrow(() -> validate(detail));
+    }
+
+    @Test
+    void grandfatheredLessonKeepsExistingPracticalCount()
+    {
+        // 存量多道课（如 316）保持现状保存不拦截
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setLessonId(316L);
+        detail.setGuideSheetEnabled(false);
+        detail.setQuestions(Arrays.asList(pythonQuestion(31L, 50), pythonQuestion(32L, 50)));
+        when(lessonQuestionMapper.selectDetailsByLessonId(316L))
+                .thenReturn(Arrays.asList(pythonQuestion(31L, 50), pythonQuestion(32L, 50)));
+
+        assertDoesNotThrow(() -> validate(detail));
+    }
+
+    @Test
+    void grandfatheredLessonCannotAddMorePracticalQuestions()
+    {
+        // 存量多道课也不允许继续新增：第 3 道直接拦截
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setLessonId(316L);
+        detail.setGuideSheetEnabled(false);
+        detail.setQuestions(Arrays.asList(pythonQuestion(31L, 30), pythonQuestion(32L, 30), pythonQuestion(33L, 40)));
+        when(lessonQuestionMapper.selectDetailsByLessonId(316L))
+                .thenReturn(Arrays.asList(pythonQuestion(31L, 50), pythonQuestion(32L, 50)));
+
+        assertThrows(ServiceException.class, () -> validate(detail));
     }
 
     @Test
@@ -322,6 +363,37 @@ class BizLessonServiceImplTest
         assertEquals("无权管理该课程", error.getMessage());
         verify(answerDeletionGuardService, never()).assertLessonsDeletable(
                 org.mockito.ArgumentMatchers.any(Long[].class));
+    }
+
+    @Test
+    void creatorCanManageLessonAfterChangingDepartments()
+    {
+        loginTeacher();
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(259L);
+        lesson.setDeptId(99L);
+        lesson.setCreatorId(8L);
+        lesson.setCreateBy("teacher");
+        when(bizLessonMapper.selectBizLessonByLessonId(259L)).thenReturn(lesson);
+
+        assertDoesNotThrow(() -> service.selectBizLessonByLessonId(259L));
+    }
+
+    @Test
+    void nonCreatorCannotManageLessonAcrossDepartments()
+    {
+        loginTeacher();
+        BizLesson lesson = new BizLesson();
+        lesson.setLessonId(259L);
+        lesson.setDeptId(99L);
+        lesson.setCreatorId(99L);
+        lesson.setCreateBy("other-teacher");
+        when(bizLessonMapper.selectBizLessonByLessonId(259L)).thenReturn(lesson);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.selectBizLessonByLessonId(259L));
+
+        assertEquals("无权管理该课程", error.getMessage());
     }
 
     @Test

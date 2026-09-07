@@ -55,6 +55,10 @@ public class CollaborationActivityService
         Long activityId = number(activity.get("activityId"));
         List<Map<String, Object>> versions = new ArrayList<Map<String, Object>>();
         Set<Long> mappedGroups = new HashSet<Long>();
+        // 建房中途失败时数据库随事务回滚，已复制到磁盘的起始文件必须同步删除，不能留下无记录的半成品。
+        List<CollaborationRoom> createdRooms = new ArrayList<CollaborationRoom>();
+        try
+        {
         for (int i = 0; i < mappings.size(); i++)
         {
             Map<String, Object> item = mappings.get(i);
@@ -69,9 +73,20 @@ public class CollaborationActivityService
             Long taskVersionId = number(version.get("taskVersionId"));
             CollaborationRoom room = roomService.createGroupActivityRoom(lesson, entryYear, classCode, material,
                     taskVersionId, StringUtils.defaultString((String) version.get("versionName")));
+            createdRooms.add(room);
             Map<String, Object> link = new LinkedHashMap<String, Object>();
             link.put("activityId", activityId); link.put("snapshotGroupId", groupId); link.put("taskVersionId", taskVersionId); link.put("roomId", room.getRoomId());
             mapper.insertGroupTask(link); versions.add(link);
+        }
+        }
+        catch (Exception e)
+        {
+            for (CollaborationRoom created : createdRooms)
+            {
+                try { java.nio.file.Files.deleteIfExists(roomService.resolveStoredFile(created.getCurrentFilePath())); }
+                catch (Exception ignored) { }
+            }
+            throw e;
         }
         return detail(activityId);
     }
@@ -100,6 +115,12 @@ public class CollaborationActivityService
         if (activity == null) throw new ServiceException("协作活动不存在");
         requireTeacherLesson(number(activity.get("lessonId")));
         activity.put("groupTasks", mapper.selectGroupTasks(activityId));
+        // 教师房间列表：组名、成员明细与进入房间共用同一快照口径
+        Long snapshotId = number(activity.get("snapshotId"));
+        activity.put("groups", snapshotId == null ? new ArrayList<Map<String, Object>>()
+                : mapper.selectSnapshotGroups(snapshotId));
+        activity.put("members", snapshotId == null ? new ArrayList<Map<String, Object>>()
+                : mapper.selectSnapshotGroupMembers(snapshotId));
         return activity;
     }
 
@@ -108,7 +129,7 @@ public class CollaborationActivityService
         CollaborationRoom room = roomService.requireRoom(roomId);
         String scope = roomService.assertRoomAccess(roomId);
         if (!"STUDENT".equals(scope)) throw new ServiceException("仅学生协作会话可发送心跳");
-        mapper.insertOperationEvent(roomId, SecurityUtils.getUserId(), mapper.selectStudentIdByUserId(SecurityUtils.getUserId()), "HEARTBEAT", null, new Date());
+        // 心跳只用于确认会话仍有效，不是可审计的学习操作；写入事件表会在整班协作时无界膨胀。
     }
 
     public void recordLeave(Long roomId)

@@ -33,6 +33,7 @@ public class ClassGroupingService {
     @Autowired private BizClassroomPerformanceMapper performanceMapper;
     @Autowired private ClassroomTaskStateService taskStateService;
     @Autowired private StudentPresenceService presenceService;
+    @Autowired private com.ruoyi.business.mapper.CollaborationMapper collaborationMapper;
 
     private void requireClass(Long userId, Long deptId, String entryYear, String classCode) {
         if (deptId == null || entryYear == null || classCode == null) {
@@ -116,7 +117,7 @@ public class ClassGroupingService {
             for (Long studentId : normalized) { Map<String,Object> member = new HashMap<>(); member.put("schemeId", schemeId); member.put("groupId", groupId); member.put("studentId", studentId); member.put("sortNo", sort++); mapper.insertMember(member); }
             groupNo++;
         }
-        if (seen.size() != valid.size()) throw new ServiceException("学生分组必须覆盖当前班级全部学生");
+        if (seen.size() != valid.size()) throw new ServiceException("学生分组必须覆盖当前班级全部学生；如班级名单刚发生变化，请关闭后重新打开再保存");
         return detail(schemeId);
     }
 
@@ -136,14 +137,20 @@ public class ClassGroupingService {
     }
 
     /**
-     * 按每组人数生成一份可继续编辑的方案。保留 groupCount 是为了让已发布前端仍能继续使用。
+     * 只预览不保存：自动生成先给教师看，取消不落库，保存走 saveScheme。保留 generateScheme 供已发布前端兼容。
      */
-    @Transactional(rollbackFor = Exception.class)
-    public Map<String,Object> generateScheme(Long userId, Long deptId, String entryYear, String classCode, Map<String,Object> request) {
+    public Map<String,Object> previewScheme(Long userId, Long deptId, String entryYear, String classCode, Map<String,Object> request) {
         deptId = resolveManagedClassDept(userId, deptId, entryYear, classCode);
         if (request == null) throw new ServiceException("分组参数不能为空");
         List<Map<String,Object>> students = mapper.selectClassStudents(deptId, entryYear, classCode);
         if (students.isEmpty()) throw new ServiceException("当前班级没有可分组的学生");
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("students", students);
+        result.put("groups", splitStudents(students, request));
+        return result;
+    }
+
+    private static List<Map<String,Object>> splitStudents(List<Map<String,Object>> students, Map<String,Object> request) {
         int membersPerGroup = intValue(request == null ? null : request.get("membersPerGroup"), 0);
         boolean legacyGroupCount = membersPerGroup < 1;
         if (legacyGroupCount) membersPerGroup = intValue(request == null ? null : request.get("groupCount"), 0);
@@ -161,7 +168,16 @@ public class ClassGroupingService {
             List<Long> studentIds = (List<Long>) groups.get(target).get("studentIds");
             studentIds.add(longValue(students.get(index).get("studentId")));
         }
-        Map<String,Object> payload = new LinkedHashMap<>(); payload.put("schemeName", request.get("schemeName")); payload.put("groups", groups);
+        return groups;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String,Object> generateScheme(Long userId, Long deptId, String entryYear, String classCode, Map<String,Object> request) {
+        deptId = resolveManagedClassDept(userId, deptId, entryYear, classCode);
+        if (request == null) throw new ServiceException("分组参数不能为空");
+        List<Map<String,Object>> students = mapper.selectClassStudents(deptId, entryYear, classCode);
+        if (students.isEmpty()) throw new ServiceException("当前班级没有可分组的学生");
+        Map<String,Object> payload = new LinkedHashMap<>(); payload.put("schemeName", request.get("schemeName")); payload.put("groups", splitStudents(students, request));
         return saveScheme(userId, deptId, entryYear, classCode, payload);
     }
 
@@ -187,6 +203,61 @@ public class ClassGroupingService {
         return mapper.selectSnapshot(lessonId, lesson.getDeptId(), entryYear, classCode);
     }
 
+    /**
+     * 协作自动分组：一课一班按学号连续切分 groupCount 组（RANGE 口径），直出分组快照。
+     * 无快照时创建；已有快照默认沿用（幂等）。在线协作页每次上课重新切分时传 regroup=true：
+     * 旧快照已有小组协作活动引用则拒绝（避免历史房间失联），否则删除旧快照后按新组数重建。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String,Object> generateSnapshotAuto(Long userId, Long lessonId, String entryYear, String classCode, Map<String,Object> request) {
+        BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        if (lesson == null || !lesson.getDeptId().equals(com.ruoyi.common.utils.SecurityUtils.getDeptId())) throw new ServiceException("课程不存在或不属于当前学校");
+        requireLessonOwner(userId, lesson);
+        requireClass(userId, lesson.getDeptId(), entryYear, classCode);
+        if (mapper.countLessonAssignment(lessonId, lesson.getDeptId(), entryYear, classCode) == 0)
+            throw new ServiceException("课程未指派给该班级，不能冻结分组快照");
+        Map<String,Object> existing = mapper.selectSnapshot(lessonId, lesson.getDeptId(), entryYear, classCode);
+        int groupCount = intValue(request == null ? null : request.get("groupCount"), 0);
+        if (groupCount < 1) throw new ServiceException("分组数量至少为1");
+        if (existing != null) {
+            Object regroupFlag = request == null ? null : request.get("regroup");
+            boolean regroup = Boolean.TRUE.equals(regroupFlag) || "true".equalsIgnoreCase(String.valueOf(regroupFlag));
+            if (!regroup) { existing.put("existed", true); return existing; }
+            Long existingSnapshotId = longValue(existing.get("snapshotId"));
+            if (existingSnapshotId != null && collaborationMapper.countActivitiesBySnapshot(existingSnapshotId) > 0)
+                throw new ServiceException("本班已有小组协作活动，重新分组会影响历史房间记录");
+            if (existingSnapshotId != null) {
+                mapper.deleteSnapshotMembers(existingSnapshotId);
+                mapper.deleteSnapshotGroups(existingSnapshotId);
+                mapper.deleteSnapshot(existingSnapshotId);
+            }
+        }
+        List<Map<String,Object>> students = mapper.selectClassStudents(lesson.getDeptId(), entryYear, classCode);
+        if (students.isEmpty() || groupCount > students.size()) throw new ServiceException("分组数量不能超过班级学生人数");
+        Map<String,Object> snapshot = new HashMap<>();
+        snapshot.put("lessonId", lessonId); snapshot.put("deptId", lesson.getDeptId());
+        snapshot.put("entryYear", entryYear); snapshot.put("classCode", classCode);
+        snapshot.put("roundNo", 1);
+        mapper.insertSnapshot(snapshot);
+        Long snapshotId = longValue(snapshot.get("snapshotId"));
+        int offset = 0;
+        for (int i = 0; i < groupCount; i++) {
+            Map<String,Object> group = new HashMap<>();
+            group.put("snapshotId", snapshotId); group.put("groupNo", i + 1);
+            group.put("groupName", "第" + (i + 1) + "组"); group.put("sortNo", i + 1);
+            mapper.insertSnapshotGroup(group);
+            int size = students.size() / groupCount + (i < students.size() % groupCount ? 1 : 0);
+            for (int j = 0; j < size; j++) {
+                Map<String,Object> member = new HashMap<>();
+                member.put("snapshotId", snapshotId); member.put("snapshotGroupId", group.get("snapshotGroupId"));
+                member.put("studentId", students.get(offset++).get("studentId")); member.put("sortNo", j);
+                mapper.insertSnapshotMember(member);
+            }
+        }
+        snapshot.put("existed", false);
+        return snapshot;
+    }
+
     public Map<String,Object> desktop(Long userId, Long deptId, String entryYear, String classCode) {
         deptId = resolveManagedClassDept(userId, deptId, entryYear, classCode);
         return desktopByResolvedDept(userId, deptId, entryYear, classCode);
@@ -202,11 +273,11 @@ public class ClassGroupingService {
         if (lesson == null || lesson.getDeptId() == null || !deptId.equals(lesson.getDeptId())) {
             throw new ServiceException("课程不存在或不属于当前学校");
         }
-        if (mapper.countLessonAssignment(lessonId, deptId, entryYear, classCode) == 0) {
-            throw new ServiceException("课程未指派给当前班级");
-        }
+        // 历史课只读：与成绩开关接口一致，未指派班级允许查看历史数据并标记，写操作由各自接口继续拦截。
+        boolean historical = mapper.countLessonAssignment(lessonId, deptId, entryYear, classCode) == 0;
 
         Map<String,Object> result = desktopByResolvedDept(userId, deptId, entryYear, classCode);
+        result.put("historical", historical);
         @SuppressWarnings("unchecked")
         List<Map<String,Object>> students = (List<Map<String,Object>>) result.get("students");
         List<Long> studentIds = new ArrayList<>();

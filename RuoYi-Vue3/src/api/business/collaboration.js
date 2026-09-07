@@ -1,5 +1,15 @@
 import request from '@/utils/request'
 
+export function getCollaborationWorkspace(lessonId) {
+  return request({ url: `/business/collaboration/lesson/${lessonId}/workspace`, method: 'get' })
+}
+export function saveCollaborationWorkspace(lessonId, data) {
+  return request({ url: `/business/collaboration/lesson/${lessonId}/workspace`, method: 'put', data, timeout: 120000 })
+}
+export function getCollaborationHistory() {
+  return request({ url: '/business/collaboration/student/history', method: 'get' })
+}
+
 export function getCollaborationHealth() {
   return request({ url: '/business/collaboration/health', method: 'get' })
 }
@@ -12,12 +22,22 @@ export function saveCollaborationLesson(lessonId, data) {
   return request({ url: `/business/collaboration/lesson/${lessonId}`, method: 'put', data })
 }
 
+export function getBankCollaborationMaterials() {
+  return request({ url: '/business/collaboration/bank-materials', method: 'get' })
+}
+export function searchBankCollaborationMaterials(params) {
+  return request({ url: '/business/collaboration/bank-materials/search', method: 'get', params })
+}
+
 export function getCurrentCollaborationRooms() {
   return request({ url: '/business/collaboration/student/current', method: 'get' })
 }
 
 export function getCollaborationSession(roomId) {
   return request({ url: `/business/collaboration/room/${roomId}/session`, method: 'get' })
+}
+export function getCollaborationRoster(roomId) {
+  return request({ url: `/business/collaboration/room/${roomId}/roster`, method: 'get' })
 }
 
 export function getCollaborationRevisions(roomId) {
@@ -34,6 +54,9 @@ export function getCollaborationActivities(lessonId) {
 
 export function createCollaborationActivity(lessonId, data) {
   return request({ url: `/business/collaboration/lesson/${lessonId}/activities`, method: 'post', data })
+}
+export function getCollaborationActivityDetail(activityId) {
+  return request({ url: `/business/collaboration/activity/${activityId}`, method: 'get' })
 }
 
 export function getCollaborationTimeline(roomId) {

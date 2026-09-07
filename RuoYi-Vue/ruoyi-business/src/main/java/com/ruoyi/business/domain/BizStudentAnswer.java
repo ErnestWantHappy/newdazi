@@ -78,8 +78,11 @@ public class BizStudentAnswer extends BaseEntity
     private String studentNo;
     private String classCode;
 
-    /** 打字题重交保留历史最高分标记；非数据库字段，仅打字题提交时置 true */
+    /** 重交保留历史最高分标记；非数据库字段，打字题与课程编程题提交时置 true */
     private Boolean keepBestScore;
+
+    /** 理论题终态提交标记；非数据库字段，防止重复请求覆盖已判分答案。 */
+    private Boolean terminalSubmission;
 
     // Getters and Setters
     public Long getAnswerId() { return answerId; }
@@ -148,6 +151,8 @@ public class BizStudentAnswer extends BaseEntity
 
     public Boolean getKeepBestScore() { return keepBestScore; }
     public void setKeepBestScore(Boolean keepBestScore) { this.keepBestScore = keepBestScore; }
+    public Boolean getTerminalSubmission() { return terminalSubmission; }
+    public void setTerminalSubmission(Boolean terminalSubmission) { this.terminalSubmission = terminalSubmission; }
     public Long getPracticalVersionId() { return practicalVersionId; }
     public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
 }

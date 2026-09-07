@@ -26,7 +26,7 @@
       </el-col>
       <el-col :xs="12" :lg="4">
         <section class="mini-card">
-          <span>在线用户</span>
+          <span title="最近5分钟有活动的去重账号，与在线用户列表口径一致">在线用户（近5分钟）</span>
           <strong>{{ data.onlineCount || 0 }}</strong>
         </section>
       </el-col>

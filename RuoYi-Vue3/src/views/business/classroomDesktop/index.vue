@@ -3,9 +3,42 @@
     <div class="desktop-toolbar">
       <div>
         <h2>{{ lessonTitle || `${entryYear}级${classCode}班` }} · 课堂监控大屏</h2>
+        <el-tag v-if="historical" type="warning" size="small" style="margin-left: 8px">历史数据（只读）</el-tag>
         <span class="muted">终端在线与作答进度分别统计，在线状态不等同于考勤</span>
       </div>
       <div class="toolbar-actions">
+        <!-- 课堂常驻发令闸：一键开启理论题与操作题 -->
+        <div v-if="lessonId && (hasTheory || hasPractical)" class="gate-launcher">
+          <span class="gate-launcher-label">🚩 题目发令：</span>
+          <div v-if="hasTheory" class="gate-switch-item" title="切换当前班级理论测试题的学生可见状态">
+            <span class="gate-item-title">理论题</span>
+            <el-switch
+              v-model="gateTheoryOpen"
+              :disabled="historical"
+              size="small"
+              :loading="gateSaving === 'theory'"
+              active-text="开"
+              inactive-text="关"
+              inline-prompt
+              @change="(val) => handleGateToggle('theory', val)"
+            />
+          </div>
+          <div v-if="hasPractical" class="gate-switch-item" title="切换当前班级操作题的学生可见状态">
+            <span class="gate-item-title">操作题</span>
+            <el-switch
+              v-model="gatePracticalOpen"
+              :disabled="historical"
+              size="small"
+              :loading="gateSaving === 'practical'"
+              active-text="开"
+              inactive-text="关"
+              inline-prompt
+              @change="(val) => handleGateToggle('practical', val)"
+            />
+          </div>
+        </div>
+
+        <el-divider v-if="lessonId && (hasTheory || hasPractical)" direction="vertical" style="height: 20px; margin: 0 4px;" />
         <el-switch v-model="showGroups" active-text="显示分组" />
         <el-button :icon="Setting" @click="openGroupDialog">设置分组</el-button>
         <el-button :type="layoutMode ? 'primary' : 'default'" :icon="Edit" @click="layoutMode = !layoutMode">调整座位</el-button>
@@ -40,7 +73,7 @@
     <div v-if="layoutMode" class="layout-footer"><span>拖动卡片调整座位，完成后保存个人布局</span><el-button type="primary" size="small" @click="saveLayout">保存布局</el-button></div>
 
     <el-dialog v-model="groupDialogVisible" title="设置班级分组" width="min(900px, 94vw)" destroy-on-close>
-      <el-alert title="同一组的学生将在课堂大屏中显示在同一行；每组可指定一名组长。保存会生成新的分组方案版本。" type="info" :closable="false" class="mb12" />
+      <el-alert title="本班固定分组保存后在所有课程和学生桌面中共用；默认每组4人，与在线协作分组独立。" type="info" :closable="false" class="mb12" />
       <div class="group-tools">
         <el-input v-model="groupForm.schemeName" placeholder="方案名称，例如：机房座位分组" style="width: 220px" maxlength="100" />
         <el-input-number v-model="groupForm.membersPerGroup" :min="1" :max="students.length || 1" controls-position="right" /><span class="muted">每组人数</span>
@@ -59,7 +92,10 @@
           <el-option v-for="studentId in group.studentIds" :key="studentId" :label="studentLabel(studentId)" :value="studentId" />
         </el-select>
       </div>
-      <template #footer><el-button @click="groupDialogVisible = false">取消</el-button><el-button type="primary" :loading="groupSaving" :disabled="!groupForm.groups.length" @click="saveGroups">保存分组</el-button></template>
+      <template #footer>
+        <el-button @click="groupDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="groupSaving" :disabled="!groupForm.groups.length" @click="saveGroups">保存分组</el-button>
+      </template>
     </el-dialog>
     <el-dialog v-model="performanceDialogVisible" title="课堂表现管理" width="420px" destroy-on-close>
       <div v-if="performanceStudent" class="performance-form"><div class="performance-student">{{ performanceStudent.studentNo }} {{ performanceStudent.studentName }}，当前 {{ performanceStudent.performance?.score || 0 }} 分</div><el-radio-group v-model="performanceForm.direction"><el-radio-button label="add">加分</el-radio-button><el-radio-button label="subtract">扣分</el-radio-button></el-radio-group><el-input-number v-model="performanceForm.points" :min="1" :max="10" controls-position="right" /><el-input v-model="performanceForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入原因" /></div>
@@ -73,9 +109,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Edit, Refresh, Setting } from '@element-plus/icons-vue'
-import { getClassroomDesktop, getClassroomDesktopOverview, saveClassroomLayout, getClassGroupSchemes, saveClassGroupScheme, generateClassGroupScheme } from '@/api/business/classGrouping'
+import { getClassroomDesktop, getClassroomDesktopOverview, saveClassroomLayout, getClassGroupSchemes, saveClassGroupScheme, previewClassGroupScheme } from '@/api/business/classGrouping'
 import { savePerformance } from '@/api/business/classroomPerformance'
-import { setStudentAbsent } from '@/api/business/score'
+import { setStudentAbsent, getLessonGate, setLessonGate } from '@/api/business/score'
 
 const route = useRoute()
 // URL 可能被浏览器历史或外部链接写成 lessonId=undefined；不应让该占位文本触发后端类型转换错误。
@@ -84,6 +120,7 @@ const lessonId = /^\d+$/.test(rawLessonId) && Number(rawLessonId) > 0 ? rawLesso
 const lessonTitle = String(route.query.lessonTitle || '')
 const entryYear = String(route.query.entryYear || '')
 const classCode = String(route.query.classCode || '')
+const historical = ref(false) // 未指派班级的历史课只读模式
 const loading = ref(false)
 const error = ref('')
 const students = ref([])
@@ -93,11 +130,45 @@ const showGroups = ref(false)
 const groupDialogVisible = ref(false)
 const groupLoading = ref(false)
 const groupSaving = ref(false)
-const groupForm = ref({ schemeName: '课堂分组', membersPerGroup: 8, mode: 'RANGE', groups: [] })
+const groupForm = ref({ schemeName: '课堂分组', membersPerGroup: 4, mode: 'RANGE', groups: [] })
 const dragging = ref(null)
 const hasTyping = ref(false)
 const hasTheory = ref(false)
 const hasPractical = ref(false)
+
+// 题目发令闸状态与加载控制
+const gateTheoryOpen = ref(false)
+const gatePracticalOpen = ref(false)
+const gateSaving = ref('')
+
+async function fetchLessonGateState() {
+  if (!lessonId || !entryYear || !classCode) return
+  try {
+    const res = await getLessonGate(lessonId, entryYear, classCode)
+    const data = res.data || {}
+    gateTheoryOpen.value = Boolean(data.theoryOpen)
+    gatePracticalOpen.value = Boolean(data.practicalOpen)
+  } catch (e) {
+    // 静默降级，不阻断大屏主渲染
+  }
+}
+
+async function handleGateToggle(kind, open) {
+  if (historical.value) { ElMessage.warning('历史数据只读，不能修改题目开放状态'); return }
+  if (!lessonId || !entryYear || !classCode) return
+  gateSaving.value = kind
+  try {
+    await setLessonGate(lessonId, entryYear, classCode, kind, open)
+    ElMessage.success(`${kind === 'theory' ? '理论测试题' : '操作题'}已${open ? '开启并向学生开放' : '关闭'}`)
+  } catch (e) {
+    if (kind === 'theory') gateTheoryOpen.value = !open
+    if (kind === 'practical') gatePracticalOpen.value = !open
+    ElMessage.error(e?.msg || '设置题目开放状态失败')
+  } finally {
+    gateSaving.value = ''
+  }
+}
+
 const performanceDialogVisible = ref(false)
 const performanceStudent = ref(null)
 const performanceSaving = ref(false)
@@ -123,11 +194,15 @@ function loadDesktop(silent = false) {
   error.value = ''
   const request = lessonId ? getClassroomDesktopOverview({ lessonId, entryYear, classCode }) : getClassroomDesktop({ entryYear, classCode })
   return request.then(res => {
+    historical.value = !!res.data?.historical
     students.value = res.data?.students || []
     layout.value = res.data?.layout || null
     hasTyping.value = !!res.data?.hasTyping
     hasTheory.value = !!res.data?.hasTheory
     hasPractical.value = !!res.data?.hasPractical
+    if (lessonId) {
+      fetchLessonGateState()
+    }
   }).catch(e => { error.value = e?.msg || '课堂大屏加载失败' }).finally(() => { loading.value = false })
 }
 
@@ -174,13 +249,19 @@ async function openGroupDialog() {
     const response = await getClassGroupSchemes({ entryYear, classCode })
     const data = response.data || {}
     const latest = (data.schemes || [])[0]
+    groupForm.value.membersPerGroup = Math.min(4, Math.max(1, students.value.length || 1))
     if (latest) {
       groupForm.value.schemeName = latest.schemeName || groupForm.value.schemeName
       groupForm.value.groups = normalizeGroups(latest.groups, latest.members)
+    } else if (students.value.length) {
+      // 没有保存过的固定组：直接给出默认四人连续预览，不落库，取消不保存。
+      const preview = await previewClassGroupScheme({ entryYear, classCode, membersPerGroup: groupForm.value.membersPerGroup, mode: 'RANGE' })
+      const previewData = preview.data || {}
+      groupForm.value.mode = 'RANGE'
+      groupForm.value.groups = normalizeGroups(previewData.groups, previewData.members)
     } else {
       groupForm.value.groups = []
     }
-    groupForm.value.membersPerGroup = Math.min(8, Math.max(1, students.value.length || 1))
   } catch (e) {
     groupForm.value.groups = []
     ElMessage.warning(e?.msg || '分组方案加载失败，请先确认当前班级参数')
@@ -189,11 +270,11 @@ async function openGroupDialog() {
   }
 }
 
+// 自动生成只预览不保存：确认无误后点“保存分组”才落库，取消不产生新方案。
 async function generateGroups() {
-  if (!groupForm.value.schemeName.trim()) { ElMessage.warning('请输入方案名称'); return }
   groupLoading.value = true
   try {
-    const response = await generateClassGroupScheme({ entryYear, classCode, schemeName: groupForm.value.schemeName.trim(), membersPerGroup: groupForm.value.membersPerGroup, mode: groupForm.value.mode })
+    const response = await previewClassGroupScheme({ entryYear, classCode, membersPerGroup: groupForm.value.membersPerGroup, mode: groupForm.value.mode })
     const data = response.data || {}
     groupForm.value.groups = normalizeGroups(data.groups, data.members)
   } catch (e) {
@@ -204,17 +285,18 @@ async function generateGroups() {
 }
 
 async function saveGroups() {
+  if (!groupForm.value.schemeName.trim()) { ElMessage.warning('请输入方案名称'); return }
   const groups = groupForm.value.groups.map(group => ({ ...group, studentIds: (group.studentIds || []).map(Number) }))
   const allIds = groups.flatMap(group => group.studentIds)
-  if (allIds.length !== students.value.length || new Set(allIds).size !== students.value.length) { ElMessage.warning('请确保每名学生只分配到一个组，且不能遗漏'); return }
-  if (groups.some(group => group.leaderStudentId != null && !group.studentIds.includes(Number(group.leaderStudentId)))) { ElMessage.warning('组长必须是本组学生'); return }
+  if (allIds.length !== students.value.length || new Set(allIds).size !== students.value.length) { ElMessage.warning('请确保每名学生只分配到一个组，且不能遗漏；如名单刚变化请关闭重进'); return }
   groupSaving.value = true
   try {
-    await saveClassGroupScheme({ entryYear, classCode, schemeName: groupForm.value.schemeName.trim(), groups })
+    const response = await saveClassGroupScheme({ entryYear, classCode, schemeName: groupForm.value.schemeName.trim(), groups })
     groupDialogVisible.value = false
     showGroups.value = true
     await loadDesktop()
     ElMessage.success('分组已保存')
+
   } catch (e) {
     ElMessage.error(e?.msg || '分组保存失败')
   } finally {
@@ -246,7 +328,7 @@ function openPerformance(student) {
   performanceDialogVisible.value = true
 }
 async function savePerformanceChange() {
-  if (!performanceStudent.value || !performanceForm.value.reason.trim()) { ElMessage.warning('请填写课堂表现原因'); return }
+  if (!performanceStudent.value) { return }
   const oldScore = Number(performanceStudent.value.performance?.score || 0)
   const delta = performanceForm.value.direction === 'add' ? performanceForm.value.points : -performanceForm.value.points
   const score = oldScore + delta
@@ -280,5 +362,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.gate-launcher{display:flex;align-items:center;gap:10px;background:#f0f9eb;border:1px solid #c2e7b0;padding:3px 10px;border-radius:6px}
+.gate-launcher-label{font-size:13px;font-weight:600;color:#67c23a;white-space:nowrap}
+.gate-switch-item{display:flex;align-items:center;gap:6px}
+.gate-item-title{font-size:12px;color:#529b2e;white-space:nowrap}
 .desktop-toolbar,.card-head,.layout-footer,.group-tools,.group-row-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.desktop-toolbar{margin-bottom:16px}.desktop-toolbar h2{margin:0 0 4px;font-size:20px}.muted,.student-no,.terminal-line,.task-line span{color:#909399;font-size:12px}.toolbar-actions{display:flex;gap:8px;align-items:center}.student-grid{display:grid;gap:12px}.group-row{border:1px solid #ebeef5;border-radius:6px;padding:12px;background:#fafafa}.group-row-title{justify-content:flex-start;margin-bottom:10px;font-weight:600}.group-student-grid{display:grid;gap:12px}.student-card{min-height:150px;border-top:3px solid #dcdfe6}.student-card.online{border-top-color:#67c23a}.student-card.leader{box-shadow:0 0 0 1px #e6a23c inset}.status-dot{width:8px;height:8px;border-radius:50%;background:#c0c4cc}.status-dot.is-online{background:#67c23a}.card-head{justify-content:flex-start}.card-head .el-tag{margin-left:auto}.task-line{margin:12px 0 8px;display:flex;align-items:center;gap:6px}.group-color{width:10px;height:10px;border-radius:2px}.layout-footer{position:sticky;bottom:0;background:#fff;border-top:1px solid #ebeef5;padding:12px 0;margin-top:16px}.group-tools{justify-content:flex-start;flex-wrap:wrap;margin-bottom:12px}.group-editor-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #ebeef5}.group-editor-title{width:56px;font-weight:600}.group-member-select{flex:1;min-width:220px}.mb12{margin-bottom:12px}.remark-line{margin-top:6px;color:#606266;font-size:12px;white-space:pre-wrap}.absent-line{margin-top:6px;color:#e6a23c;font-size:12px}.score-summary{margin-top:8px;color:#606266;font-size:12px;line-height:1.7}.card-actions{display:flex;gap:6px;margin-top:8px}.member-names{width:100%;font-size:12px;color:#606266;line-height:1.5}.performance-form{display:flex;flex-direction:column;gap:14px}.performance-student{font-weight:600}@media(max-width:900px){.desktop-toolbar{align-items:flex-start;flex-direction:column}.toolbar-actions{flex-wrap:wrap}.student-grid{grid-template-columns:repeat(2,minmax(140px,1fr))!important}.group-editor-row{align-items:stretch;flex-wrap:wrap}.group-member-select{min-width:100%}}
 </style>

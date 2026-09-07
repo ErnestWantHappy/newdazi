@@ -62,9 +62,7 @@ public class ClassroomPerformanceController extends BaseController {
         if (performance.getScore() < -10 || performance.getScore() > 10) {
             return AjaxResult.error("平时分范围为 -10 到 +10");
         }
-        if (org.apache.commons.lang3.StringUtils.isBlank(performance.getReason())) {
-            return AjaxResult.error("请填写课堂表现原因");
-        }
+        // 原因可以留空，教师可自行决定是否填写
 
         String scopeError = validateStudentLessonScope(performance.getStudentId(), performance.getLessonId());
         if (scopeError != null) {
@@ -113,9 +111,7 @@ public class ClassroomPerformanceController extends BaseController {
             performance.setTeacherId(teacherId);
             performance.setDeptId(deptId);
 
-            if (org.apache.commons.lang3.StringUtils.isBlank(performance.getReason())) {
-                return AjaxResult.error("请填写每条课堂表现的原因");
-            }
+            // 原因可以留空，教师可自行决定是否填写
             BizClassroomPerformance existing = performanceMapper.selectByStudentAndLesson(item.getStudentId(), request.getLessonId());
             if (existing != null && Integer.valueOf(1).equals(existing.getIsAbsent())) {
                 return AjaxResult.error("存在已请假的学生，请先取消请假后再记录课堂表现");

@@ -28,9 +28,11 @@
         您还没有导入任何学生，无法进行课程设置。请先前往【学生管理】导入学生。
       </div>
       <div v-for="group in gradeGroups" :key="group.entryYear" class="grade-group">
-        <div class="grade-header">
+        <div class="grade-header clickable" @click="toggleGradeGroup(group)">
           <span class="grade-title">{{ group.entryYear }}级（当前{{ group.gradeName }}）</span>
+          <span class="history-toggle-text">{{ isGradeGroupCollapsed(group) ? '展开' : '收起' }}</span>
         </div>
+        <div v-show="!isGradeGroupCollapsed(group)">
         <div
           v-for="section in getCourseGradeSections(group)"
           :key="getCourseSectionKey(group, section)"
@@ -168,7 +170,7 @@
                   size="small"
                   type="primary"
                   text
-                  @click.stop="openCollaborationRooms(lesson)"
+                  @click.stop="openCollaborationWorkspace(lesson)"
                 >
                   <el-icon><Connection /></el-icon>
                   <span>在线协作</span>
@@ -210,21 +212,13 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
     </el-card>
 
     <!-- 班级选择弹窗 -->
     <ClassSelectionDialog ref="classDialogRef" />
 
-    <el-dialog v-model="collaborationDialogVisible" :title="`${collaborationLesson?.lessonTitle || '课程'} · 选择协作班级`" width="560px" destroy-on-close>
-      <el-alert type="info" :closable="false" show-icon title="每个班级使用独立共享文档，学生只能进入自己班级的房间。" />
-      <el-table v-loading="collaborationRoomsLoading" :data="collaborationRooms" class="collaboration-room-table" empty-text="当前课程没有开放的协作班级">
-        <el-table-column label="班级" width="120"><template #default="{ row }">{{ row.classCode }}班</template></el-table-column>
-        <el-table-column prop="fileName" label="协作文档" min-width="220" show-overflow-tooltip />
-        <el-table-column label="版本" width="80" align="center"><template #default="{ row }">v{{ row.version || 1 }}</template></el-table-column>
-        <el-table-column label="操作" width="100" align="right"><template #default="{ row }"><el-button link type="primary" @click="enterCollaborationRoom(row)">进入</el-button></template></el-table-column>
-      </el-table>
-    </el-dialog>
 
     <el-dialog v-model="iotClassDialogVisible" :title="`${iotEntry.lesson?.lessonTitle || '课程'} · 选择物联班级`" width="460px" destroy-on-close>
       <p class="iot-class-tip">请选择本次要查看和配置的授课班级。进入后仍可在页面顶部切换班级。</p>
@@ -239,49 +233,84 @@
       </template>
     </el-dialog>
 
-    <!-- 手动一键课堂推进：年级 + 多选班级（默认全选当前为常规课的班级） -->
-    <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进" width="480px" destroy-on-close>
-      <p class="settings-intro">
-        默认已选中当前年级所有<strong>常规课班级</strong>，可取消部分班级；当前为考勤课的班级不会参与推进。需有成绩人数达到设置中的统一比例（默认 50%）。
-      </p>
-      <el-form label-width="80px">
-        <el-form-item label="年级">
-          <el-select v-model="advanceForm.entryYear" placeholder="请选择年级" style="width: 100%" @change="onAdvanceGradeChange">
-            <el-option
-              v-for="g in advanceGradeOptions"
-              :key="g.entryYear"
-              :label="`${g.entryYear}级（${g.gradeName}）`"
-              :value="g.entryYear"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="班级">
-          <div class="class-multi-tools">
-            <el-button link type="primary" :disabled="!advanceClassOptions.length" @click="selectAllAdvanceClasses">全选</el-button>
-            <el-button link :disabled="!advanceForm.classCodes.length" @click="advanceForm.classCodes = []">清空</el-button>
-            <span class="class-multi-count">已选 {{ advanceForm.classCodes.length }} / {{ advanceClassOptions.length }}</span>
-          </div>
-          <el-select
-            v-model="advanceForm.classCodes"
-            multiple
-            collapse-tags
-            collapse-tags-tooltip
-            placeholder="请选择班级（可多选）"
-            style="width: 100%"
-            :disabled="!advanceForm.entryYear"
-          >
-            <el-option
-              v-for="cls in advanceClassOptions"
-              :key="cls"
-              :label="formatClassLabel(cls)"
-              :value="normalizeClassCode(cls)"
-            />
-          </el-select>
-        </el-form-item>
+    <!-- 手动一键课堂推进向导：带课程前后对比预览与防误触确认开关 -->
+    <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进向导" width="620px" destroy-on-close @closed="advanceConfirmed = false">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="课堂推进机制说明"
+        description="推进后，所选班级的当前授课将切换到下一课。已完成作业的学生数据会自动归档，未达标班级会跳过并提示。"
+        style="margin-bottom: 16px;"
+      />
+      <el-form label-width="70px">
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="年级">
+              <el-select v-model="advanceForm.entryYear" placeholder="请选择年级" style="width: 100%" @change="onAdvanceGradeChange">
+                <el-option
+                  v-for="g in advanceGradeOptions"
+                  :key="g.entryYear"
+                  :label="`${g.entryYear}级（${g.gradeName}）`"
+                  :value="g.entryYear"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="班级">
+              <el-select
+                v-model="advanceForm.classCodes"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="请选择班级"
+                style="width: 100%"
+                :disabled="!advanceForm.entryYear"
+              >
+                <el-option
+                  v-for="cls in advanceClassOptions"
+                  :key="cls"
+                  :label="formatClassLabel(cls)"
+                  :value="normalizeClassCode(cls)"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
+
+      <div class="advance-preview-section" style="margin-top: 8px;">
+        <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #303133; display: flex; justify-content: space-between; align-items: center;">
+          <span>📋 推进前后对比预览（已选 {{ advancePreviewList.length }} 个班级）</span>
+          <span style="font-size: 12px; color: #909399; font-weight: normal;">需有成绩人数达到 {{ policyForm.autoAdvanceThresholdPct || 50 }}%</span>
+        </div>
+        <el-table :data="advancePreviewList" size="small" border stripe max-height="240" empty-text="请选择年级与班级查看对比">
+          <el-table-column prop="classLabel" label="班级" width="90" align="center" />
+          <el-table-column prop="currentLessonTitle" label="当前课程" min-width="160" show-overflow-tooltip />
+          <el-table-column label="➔" width="40" align="center">
+            <template #default><el-icon color="#409EFF"><Right /></el-icon></template>
+          </el-table-column>
+          <el-table-column prop="nextLessonTitle" label="推进后下一课" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span style="color: #67C23A; font-weight: 500;">{{ row.nextLessonTitle }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div style="margin-top: 16px; padding: 10px 12px; background: #fdf6ec; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 12px; color: #e6a23c;">
+          ⚠️ 推进操作将切换学生端当前课程，请先开启右侧确认开关
+        </span>
+        <el-switch v-model="advanceConfirmed" active-text="已知悉并确认" size="small" />
+      </div>
+
       <template #footer>
         <el-button @click="advanceDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="advanceLoading" @click="confirmOneClickAdvance">确认推进</el-button>
+        <el-button type="primary" :loading="advanceLoading" :disabled="!advanceConfirmed || !advancePreviewList.length" @click="confirmOneClickAdvance">
+          确认执行推进
+        </el-button>
       </template>
     </el-dialog>
 
@@ -478,7 +507,6 @@ import ResearchNotificationBar from '@/views/business/researchActivity/component
 import { computed, ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getDashboardData, getDashboardPracticalStatus } from '@/api/business/teacher';
-import { getCollaborationLesson } from '@/api/business/collaboration';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
 import {
   delLesson,
@@ -495,6 +523,8 @@ import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
 const route = useRoute();
+// 班级选择弹窗引用：课堂/批改/成绩入口共用
+const classDialogRef = ref(null);
 const loading = ref(true);
 const gradeGroups = ref([]);
 const deletingLessonIds = ref([]);
@@ -506,9 +536,20 @@ function hasUngradedPractical(lesson) {
 function goToExemption() {
   router.push('/teacher-exemption')
 }
-const classDialogRef = ref(null);
 const expandedLessonKeys = ref(new Set());
 const expandedHistoryKeys = ref(new Set());
+// 已毕业年级默认折叠，点击标题可展开
+const collapsedGrades = ref(new Set());
+function isGradeGroupCollapsed(group) {
+  return collapsedGrades.value.has(String(group.entryYear));
+}
+function toggleGradeGroup(group) {
+  const next = new Set(collapsedGrades.value);
+  const key = String(group.entryYear);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsedGrades.value = next;
+}
 const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
 const pendingCountyGradingCount = computed(() => countyGradingEntry.value.pendingTaskCount ?? countyGradingEntry.value.taskCount ?? 0);
 const checkinDialogVisible = ref(false);
@@ -564,10 +605,6 @@ const checkinMeta = ref({});
 const checkinView = ref('summary');
 const checkinLesson = ref(null);
 const checkinEntryYear = ref('');
-const collaborationDialogVisible = ref(false);
-const collaborationRoomsLoading = ref(false);
-const collaborationLesson = ref(null);
-const collaborationRooms = ref([]);
 const iotClassDialogVisible = ref(false);
 const iotEntry = ref({ lesson: null, entryYear: '', classes: [], classCode: '' });
 
@@ -584,6 +621,7 @@ const policyForm = ref({
 // 手动一键课堂推进（多选班级，默认全选当前为常规课的班级）
 const advanceDialogVisible = ref(false);
 const advanceLoading = ref(false);
+const advanceConfirmed = ref(false);
 const advanceForm = ref({ entryYear: '', classCodes: [] });
 
 function getAdvanceClassesForGroup(group) {
@@ -603,6 +641,43 @@ const advanceGradeOptions = computed(() =>
 const advanceClassOptions = computed(() => {
   const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
   return getAdvanceClassesForGroup(group);
+});
+
+/** 推进前后对比预览计算属性：清晰计算各选中班级当前课程与下一课 */
+const advancePreviewList = computed(() => {
+  const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
+  if (!group) return [];
+  const selectedCodes = new Set((advanceForm.value.classCodes || []).map(normalizeClassCode).filter(Boolean));
+  if (!selectedCodes.size) return [];
+
+  const gradeLessons = (group.lessons || []).filter(l => l.lessonMode !== 'attendance' && Number(l.grade) === Number(group.gradeId));
+
+  return [...selectedCodes].sort((a, b) => Number(a) - Number(b)).map(clsCode => {
+    // 找到该班级当前指派的课程（取 lessonNum 最大的常规课）
+    const assignedLessons = gradeLessons.filter(l => (l.assignedClasses || []).map(normalizeClassCode).includes(clsCode));
+    assignedLessons.sort((a, b) => (b.lessonNum || 0) - (a.lessonNum || 0));
+    const currentLesson = assignedLessons[0] || null;
+
+    let nextTip = '';
+    if (currentLesson) {
+      const nextNum = (currentLesson.lessonNum || 0) + 1;
+      const nextLesson = gradeLessons.find(l => Number(l.lessonNum) === nextNum) || null;
+      if (nextLesson) {
+        nextTip = `第${nextLesson.lessonNum}课 ${nextLesson.lessonTitle}`;
+      } else {
+        nextTip = `第${nextNum}课（待备课）`;
+      }
+    } else {
+      nextTip = '未开始第一课';
+    }
+
+    return {
+      classCode: clsCode,
+      classLabel: `${clsCode}班`,
+      currentLessonTitle: currentLesson ? `第${currentLesson.lessonNum}课 ${currentLesson.lessonTitle}` : '暂无课程',
+      nextLessonTitle: nextTip
+    };
+  });
 });
 
 function normalizeClassCode(cls) {
@@ -744,7 +819,6 @@ async function fetchPracticalStatuses(groups, requestSeq) {
     // 红点加载失败不影响已经显示的课程卡片。
   }
 }
-
 /** 先加载课程核心数据，批改红点和区域抽测入口不再阻塞首屏。 */
 async function fetchDashboardData() {
   const requestSeq = ++dashboardRequestSeq;
@@ -757,6 +831,10 @@ async function fetchDashboardData() {
       lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
     }));
     gradeGroups.value = groups;
+    // 已毕业年级默认折叠，保持手动展开状态不被刷新覆盖
+    const keepCollapsed = new Set([...collapsedGrades.value].filter(key => groups.some(g => String(g.entryYear) === key)));
+    groups.forEach(g => { if (String(g.gradeName || '').includes('毕业')) keepCollapsed.add(String(g.entryYear)); });
+    collapsedGrades.value = keepCollapsed;
     loading.value = false;
     fetchPracticalStatuses(groups, requestSeq);
   } catch (e) {
@@ -855,12 +933,14 @@ async function handleOneClickAdvance() {
     entryYear: first.entryYear || '',
     classCodes: []
   };
+  advanceConfirmed.value = false;
   // 等 options 就绪后默认全选当前年级的常规课班级
   advanceDialogVisible.value = true;
   selectAllAdvanceClasses();
 }
 
 function onAdvanceGradeChange() {
+  advanceConfirmed.value = false;
   // 切换年级后默认全选该年级当前为常规课的班级
   selectAllAdvanceClasses();
 }
@@ -970,23 +1050,10 @@ function enterIotExperiment() {
   });
 }
 
-async function openCollaborationRooms(lesson) {
-  collaborationLesson.value = lesson;
-  collaborationRooms.value = [];
-  collaborationDialogVisible.value = true;
-  collaborationRoomsLoading.value = true;
-  try {
-    const response = await getCollaborationLesson(lesson.lessonId);
-    const payload = response.data || response;
-    collaborationRooms.value = (payload.rooms || []).filter(room => room.status === 'OPEN');
-  } finally {
-    collaborationRoomsLoading.value = false;
-  }
-}
-
-function enterCollaborationRoom(room) {
-  collaborationDialogVisible.value = false;
-  router.push(`/business/collaboration/editor/${room.roomId}`);
+// 课程卡片直达同页协作工作台：选文档、选班级、均分、调人、分配任务都在同一页面完成。
+function openCollaborationWorkspace(lesson) {
+  if (!lesson) return;
+  router.push(`/business/collaboration/lesson/${lesson.lessonId}`);
 }
 
 function formatCheckinTime(value) {
@@ -1248,6 +1315,8 @@ onBeforeUnmount(stopDashboardStatusCalibration);
   padding-bottom: 10px;
   border-bottom: 1px solid #ebeef5;
 }
+.grade-header.clickable { cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.grade-header.clickable:hover .grade-title { color: #409eff; }
 
 .grade-title {
   color: #303133;
@@ -1408,9 +1477,6 @@ onBeforeUnmount(stopDashboardStatusCalibration);
   flex: 0 0 auto;
 }
 
-.collaboration-room-table {
-  margin-top: 16px;
-}
 
 .card-header {
   display: flex;

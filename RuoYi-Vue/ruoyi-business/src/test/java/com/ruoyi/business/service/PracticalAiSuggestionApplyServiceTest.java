@@ -145,6 +145,54 @@ class PracticalAiSuggestionApplyServiceTest
                 org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void shouldFillUngradedFlowchartByTotalScore()
+    {
+        assertFlowchartApply(null, PracticalAiSuggestionApplyService.FILL_UNGRADED);
+    }
+
+    @Test
+    void shouldOverwriteFlowchartByTotalScoreWithAudit()
+    {
+        assertFlowchartApply(18, PracticalAiSuggestionApplyService.OVERWRITE_ALL);
+    }
+
+    private void assertFlowchartApply(Integer oldScore, String mode)
+    {
+        com.ruoyi.business.mapper.FlowchartMapper flowcharts = org.mockito.Mockito.mock(
+                com.ruoyi.business.mapper.FlowchartMapper.class);
+        com.ruoyi.business.mapper.BizLessonQuestionMapper questions = org.mockito.Mockito.mock(
+                com.ruoyi.business.mapper.BizLessonQuestionMapper.class);
+        ReflectionTestUtils.setField(service, "flowchartMapper", flowcharts);
+        ReflectionTestUtils.setField(service, "lessonQuestionMapper", questions);
+        PracticalAiJob job = job();
+        job.setReferenceAnswerJson(PracticalAiJobService.FLOWCHART_MARKER);
+        job.setJobStatus("PARTIAL_FAILED");
+        PracticalAiResult result = result(); result.setScoringDetailsJson("[]");
+        BizStudentAnswer answer = answer();
+        answer.setPracticalVersionId(null); answer.setStudentAnswer("FLOWCHART:301"); answer.setScore(oldScore);
+        com.ruoyi.business.domain.FlowchartSubmission submission = new com.ruoyi.business.domain.FlowchartSubmission();
+        submission.setAnswerId(101L);
+        com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo question = new com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo();
+        question.setQuestionId(11L); question.setQuestionScore(30L);
+        when(aiMapper.selectJob(1L, 7L)).thenReturn(job);
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(result));
+        when(answerMapper.selectByIdForUpdate(101L)).thenReturn(answer);
+        when(flowcharts.selectSubmissionById(301L)).thenReturn(submission);
+        when(questions.selectDetailsByLessonId(10L)).thenReturn(Collections.singletonList(question));
+
+        Map<String, Object> summary = service.apply(1L, 7L, 9L, mode);
+        assertEquals(1, summary.get("appliedCount"));
+        assertEquals(oldScore == null ? 1 : 0, summary.get("filledUngradedCount"));
+        assertEquals(oldScore == null ? 0 : 1, summary.get("overwrittenCount"));
+        verify(answerMapper).updateScore(101L, 25);
+        ArgumentCaptor<PracticalAiApplyAudit> audit = ArgumentCaptor.forClass(PracticalAiApplyAudit.class);
+        verify(aiMapper).insertApplyAudit(audit.capture());
+        assertEquals(oldScore, audit.getValue().getOldScore());
+        assertEquals(25, audit.getValue().getNewScore());
+        assertEquals("[]", audit.getValue().getNewScoringDetailsJson());
+    }
+
     private PracticalAiJob job()
     {
         PracticalAiJob job = new PracticalAiJob();

@@ -375,8 +375,9 @@ public class ProgrammingSubmissionService {
         row.setStatusCode(STATUS_SERVICE_ERROR); row.setStatusMessage("判题服务异常，代码和提交已保留"); row.setErrorSummary(message); row.setPassedCaseCount(0); row.setTotalCaseCount(0); row.setJudgedAt(new Date()); programmingMapper.updateSubmissionResult(row);
     }
 
+    // 课程编程题与打字题一致保留历史最高分：多次提交只保留最优成绩，防止调优中的低分覆盖已通过的高分。
     private void writeExistingAnswer(ProgrammingSubmission submission, int score, boolean correct) {
-        BizStudentAnswer answer = new BizStudentAnswer(); answer.setStudentId(submission.getStudentId()); answer.setLessonId(submission.getLessonId()); answer.setQuestionId(submission.getQuestionId()); answer.setStudentAnswer(submission.getSourceCode()); answer.setScore(score); answer.setIsCorrect(correct); answer.setSubmitTime(new Date()); answer.setAnswerTime(submission.getTimeSeconds() == null ? 0 : (int) Math.ceil(submission.getTimeSeconds())); studentAnswerMapper.upsertAnswer(answer);
+        BizStudentAnswer answer = new BizStudentAnswer(); answer.setStudentId(submission.getStudentId()); answer.setLessonId(submission.getLessonId()); answer.setQuestionId(submission.getQuestionId()); answer.setStudentAnswer(submission.getSourceCode()); answer.setScore(score); answer.setIsCorrect(correct); answer.setSubmitTime(new Date()); answer.setAnswerTime(submission.getTimeSeconds() == null ? 0 : (int) Math.ceil(submission.getTimeSeconds())); answer.setKeepBestScore(true); studentAnswerMapper.upsertAnswer(answer);
     }
 
     private void assertStudentQuestionAccess(BizStudent student, Long deptId, Long lessonId, Long questionId) {

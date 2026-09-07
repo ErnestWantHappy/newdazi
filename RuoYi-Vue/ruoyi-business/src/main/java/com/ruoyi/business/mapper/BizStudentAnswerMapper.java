@@ -27,6 +27,11 @@ public interface BizStudentAnswerMapper
     int upsertAnswer(BizStudentAnswer answer);
 
     /**
+     * 理论题首次提交仅允许插入，唯一键冲突表示答案已进入终态。
+     */
+    int insertAnswerIfAbsent(BizStudentAnswer answer);
+
+    /**
      * 批量插入答题记录
      */
     void batchInsert(List<BizStudentAnswer> answers);

@@ -244,6 +244,33 @@ npm run dev
 npm run build:prod
 ```
 
+### 9.1 正式发布统一入口（2026-09-07 起）
+
+正式机发布不再临时拼接 SSH/PowerShell。统一从仓库根目录调用 `scripts/deploy.py`，脚本使用固定 SSH 主机指纹、远端 SYSTEM 计划任务和阶段状态文件；SSH 断开后用 `status` 查询，不重复启动发布。`check` 只做制品/线上基线/服务/数据库鉴权/Nginx/集成健康检查，`deploy` 才会创建新 release、整库备份、切换并在失败时自动回滚。
+
+```powershell
+# 先看服务器真实指向和服务状态（只读）
+python scripts/deploy.py inspect
+
+# 只读发布门禁；--baseline-index 必须填现场核对得到的线上 index.html SHA-256
+python scripts/deploy.py check --release 20260907_blankfix_v1 `
+  --artifacts output/deploy-20260907-1330 `
+  --baseline-index A4B7EAB6EA981E3D22901F28A6B5F54588C2182E6E2379E194F031C0F91BBA51 --wait 30
+
+# 正式发布：备份写入服务器 backups/<jobId>/，失败自动恢复旧前后端和服务日志配置
+python scripts/deploy.py deploy --release 20260907_blankfix_v1 `
+  --artifacts output/deploy-20260907-1330 `
+  --baseline-index A4B7EAB6EA981E3D22901F28A6B5F54588C2182E6E2379E194F031C0F91BBA51 --wait 180
+
+# SSH 中断或稍后接续
+python scripts/deploy.py status --job <jobId>
+
+# 仅对已记录备份且当前确实为该 release 的版本回滚
+python scripts/deploy.py rollback --release 20260907_blankfix_v1 --backup D:/program/3009dazipingtai/backups/<jobId> --wait 180
+```
+
+制品目录必须包含 `ruoyi-admin.jar`、`frontend.zip`、`manifest.json`；发布前不得把工作区其他未收口改动混入制品。脚本会拒绝基线漂移、清单不一致、环境变量数量变化、Nginx 候选语法错误和不完整数据库备份；数据库脚本仍须单独放在 `sql/`，没有明确迁移时不会执行任何业务 SQL。变更脚本本身可用 `python scripts/test_release.py` 做本机 4 条故障恢复模拟。
+
 增量 SQL 示例目录：`sql/`（如 `libreoffice_health_check_quartz_job.sql` 等）。  
 执行 SQL 前确认目标库是本机还是服务器。
 

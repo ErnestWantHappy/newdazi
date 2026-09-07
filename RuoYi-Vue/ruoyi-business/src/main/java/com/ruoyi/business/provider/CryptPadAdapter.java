@@ -72,6 +72,8 @@ public class CryptPadAdapter implements CollaborationProvider
         if (StringUtils.isBlank(properties.getBaseUrl()) || StringUtils.isBlank(properties.getApiUrl())
                 || StringUtils.isBlank(properties.getKeySecret()) || properties.getKeySecret().length() < 32)
             return false;
+        // 同源反向代理（如经 123 转发到 129 的 /cryptpad/ 路径）允许使用相对地址，避免浏览器跨网段直连。
+        if (properties.getBaseUrl().startsWith("/")) return properties.isRemoteEmbedding();
         try
         {
             URI base = URI.create(properties.getBaseUrl());

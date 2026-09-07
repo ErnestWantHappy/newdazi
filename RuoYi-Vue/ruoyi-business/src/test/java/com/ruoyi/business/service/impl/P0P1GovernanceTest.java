@@ -13,9 +13,12 @@ import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
+import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import com.ruoyi.business.service.FlowchartService;
 import com.ruoyi.business.service.PracticalRubricSnapshotService;
 import com.ruoyi.business.service.StudentToolService;
+import com.ruoyi.business.service.LessonGuideSheetBindingService;
+import com.ruoyi.business.service.StudentAnswerArchiveService;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.exception.ServiceException;
@@ -33,6 +36,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +57,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * P0-P1 核心功能业务治理单测：
- * 涵盖：题目分值防篡改、题库导入校验、共享课程班级边界和 WebSocket 广播格式化。
+ * 涵盖：题目调分放行与历史保留、题库导入校验、共享课程班级边界和 WebSocket 广播格式化。
  */
 @ExtendWith(MockitoExtension.class)
 class P0P1GovernanceTest
@@ -75,7 +79,13 @@ class P0P1GovernanceTest
     @Mock
     private FlowchartService flowchartService;
     @Mock
+    private StudentAnswerArchiveService studentAnswerArchiveService;
+    @Mock
     private StudentToolService studentToolService;
+    @Mock
+    private LessonClassScopeMapper lessonClassScopeMapper;
+    @Mock
+    private LessonGuideSheetBindingService lessonGuideSheetBindingService;
     @Mock
     private BizQuestionMapper bizQuestionMapper;
 
@@ -242,8 +252,8 @@ class P0P1GovernanceTest
     }
 
     @Test
-    @DisplayName("P0-A: 课程题目已有提交时禁止修改分值")
-    void saveLessonDetails_blocksQuestionScoreChangeIfAnswersExist()
+    @DisplayName("P0-A: 课程题目已有提交时仍允许修改分值，历史成绩保持原状")
+    void saveLessonDetails_allowsQuestionScoreChangeIfAnswersExist()
     {
         Long lessonId = 777L;
         BizLesson existing = new BizLesson();
@@ -255,26 +265,8 @@ class P0P1GovernanceTest
         existing.setEntryYear("2024");
         existing.setGrade(7L);
         when(bizLessonMapper.selectBizLessonByLessonId(lessonId)).thenReturn(existing);
-
-        // 原题目两道：题1 80分，题2 20分，总分 100分
-        BizLessonQuestionDetailVo prevQ1 = new BizLessonQuestionDetailVo();
-        prevQ1.setQuestionId(301L);
-        prevQ1.setQuestionScore(80L);
-        prevQ1.setQuestionContent("测试题目1");
-
-        BizLessonQuestionDetailVo prevQ2 = new BizLessonQuestionDetailVo();
-        prevQ2.setQuestionId(302L);
-        prevQ2.setQuestionScore(20L);
-        prevQ2.setQuestionContent("测试题目2");
-
-        List<BizLessonQuestionDetailVo> prevQuestions = new ArrayList<>();
-        prevQuestions.add(prevQ1);
-        prevQuestions.add(prevQ2);
-        when(lessonQuestionMapper.selectDetailsByLessonId(lessonId)).thenReturn(prevQuestions);
+        when(lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId)).thenReturn(Arrays.asList(301L, 302L));
         when(bizLessonMapper.updateBizLesson(any())).thenReturn(1);
-
-        // 模拟题 1 已有学生答题提交记录
-        when(studentAnswerMapper.countAnswersByLessonAndQuestion(lessonId, 301L)).thenReturn(5);
 
         LessonDetailVo requestVo = new LessonDetailVo();
         requestVo.setLessonId(lessonId);
@@ -283,7 +275,7 @@ class P0P1GovernanceTest
         requestVo.setGrade(7L);
         requestVo.setGuideSheetEnabled(false);
 
-        // 尝试将 题1 调为 70分，题2 调为 30分（总分仍然是 100分满足前置总分校验）
+        // 题 1 已有 5 条学生答题提交记录，仍允许将 80 分调为 70 分、题 2 由 20 分调为 30 分
         BizLessonQuestionDetailVo modifiedQ1 = new BizLessonQuestionDetailVo();
         modifiedQ1.setQuestionId(301L);
         modifiedQ1.setQuestionScore(70L);
@@ -296,10 +288,13 @@ class P0P1GovernanceTest
         newQuestions.add(modifiedQ2);
         requestVo.setQuestions(newQuestions);
 
-        ServiceException ex = assertThrows(ServiceException.class, () ->
-                lessonService.saveLessonDetails(requestVo));
+        // 新规则不再拦截：保存成功且新分值落库，历史答题行不作回溯重算
+        LessonDetailVo result = lessonService.saveLessonDetails(requestVo);
 
-        assertTrue(ex.getMessage().contains("已有学生答题提交记录，不能修改题目分值"), "实际异常信息为: " + ex.getMessage());
+        assertEquals(70L, result.getQuestions().get(0).getQuestionScore());
+        assertEquals(30L, result.getQuestions().get(1).getQuestionScore());
+        verify(lessonQuestionMapper).batchInsert(any());
+        verify(studentAnswerMapper, never()).countAnswersByLessonAndQuestion(anyLong(), anyLong());
     }
 
     @Test

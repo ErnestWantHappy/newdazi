@@ -1245,7 +1245,7 @@ function invalidFlowchartTextMessage(documentJson, documentName) {
   }
   const unsafeText = (value) => {
     const text = typeof value === 'object' && value ? String(value.value || '') : String(value || '')
-    return /<\/?[A-Za-z][^<>]*>/i.test(text)
+    return /<\/?[A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z_:][A-Za-z0-9:._-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>/i.test(text)
       || /<!--[\s\S]*?-->/.test(text)
       || /\bjavascript\s*:/i.test(text)
   }

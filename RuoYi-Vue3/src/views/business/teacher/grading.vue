@@ -85,11 +85,13 @@
       <div class="deadline-panel-head">
         <div class="deadline-summary">
           <strong>批改进度</strong>
+          <el-tag v-if="questions.length > 1" type="info" size="small">整课口径</el-tag>
           <el-tag :type="deadlineStatusMeta(deadlineStatus.statusCode).type">
             {{ deadlineStatusMeta(deadlineStatus.statusCode).label }}
           </el-tag>
-          <span>已有答题：{{ deadlineStatus.answeredStudentCount }}/{{ deadlineStatus.totalStudentCount }}</span>
-          <span>应批/已批/未批：{{ deadlineStatus.dueCount }}/{{ deadlineStatus.gradedCount }}/{{ deadlineStatus.ungradedCount }}</span>
+          <span title="含打字、理论等本课全部题型的作答人数；下方“本操作题已交”仅统计当前所选操作题">已有答题（本课全题型）：{{ deadlineStatus.answeredStudentCount }}/{{ deadlineStatus.totalStudentCount }}</span>
+          <span title="仅统计当前所选操作题的有内容作答；分母与“已有答题（本课全题型）”不同">本操作题应批/已批/未批：{{ deadlineStatus.dueCount }}/{{ deadlineStatus.gradedCount }}/{{ deadlineStatus.ungradedCount }}</span>
+          <span v-if="questions.length > 1" class="current-question-progress">当前题已批 {{ gradedCount }}/{{ submittedCount }}（仅统计所选操作题，多操作题课程请逐题切换批改）</span>
         </div>
         <strong>{{ formatDeadlineRemaining(deadlineStatus) }}</strong>
       </div>
@@ -122,7 +124,7 @@
          <div class="panel-title">
             <span>学生列表</span>
              <span class="grading-stats" v-if="selectedClassCode">
-               已交: <b class="score-num">{{ submittedCount }}</b> / <span class="score-num">{{ currentClassTotalStudents }}</span>
+               本操作题已交: <b class="score-num">{{ submittedCount }}</b> / <span class="score-num">{{ currentClassTotalStudents }}</span>
                <span style="margin: 0 6px; color: #dcdfe6">|</span>
                已批: <b class="score-num">{{ gradedCount }}</b> / <span class="score-num">{{ submittedCount }}</span>
             </span>
@@ -152,9 +154,9 @@
                    </div>
                </div>
                <div class="s-status task-state-returned" v-if="s.taskState === 'RETURNED'">已退回</div>
-               <div class="s-status" v-else-if="!s.submitted" :class="taskStateClass(s.taskState)">{{ taskStateLabel(s.taskState) }}</div>
+               <div class="s-status" v-else-if="!s.submitted && s.answerId != null" style="color: #E6A23C">白卷</div>
+               <div class="s-status" v-else-if="!s.submitted" :class="taskStateClass(s.taskState)">未提交</div>
                <div class="s-status score-num" v-else-if="s.score != null">{{ s.score }}分</div>
-               <div class="s-status ungrad" v-else>未批</div>
                <div v-if="aiResultFor(s)?.resultStatus === 'SUCCESS'" class="s-ai">AI {{ aiResultFor(s).suggestedScore }}分</div>
             </div>
             <el-empty v-if="submissions.length === 0" description="暂无学生" :image-size="60" />
@@ -281,25 +283,33 @@
               :closable="false"
             />
             
-            <!-- P6: 评分模式切换 -->
-            <div class="scoring-mode-switch" v-if="scoringItems.length > 0">
-               <el-switch 
-                  v-model="useItemScoring" 
+            <!-- 评分输入方式切换：键盘数字与鼠标五星二选一，不再同时出现 -->
+            <div class="scoring-mode-switch">
+               <el-switch
+                  v-model="starInputEnabled"
                   :disabled="submitting || !deadlineStatus?.canGrade"
-                  active-text="分项评分" 
+                  active-text="五星打分"
+                  inactive-text="数字打分"
+                  @change="onStarModeChange"
+               />
+               <el-switch
+                  v-if="scoringItems.length > 0"
+                  v-model="useItemScoring"
+                  :disabled="submitting || !deadlineStatus?.canGrade"
+                  active-text="分项评分"
                   inactive-text="直接打分"
                   @change="onScoringModeChange"
                />
             </div>
-
             <!-- 直接打分模式 -->
             <div class="score-input-area" v-if="!useItemScoring">
                 <div class="input-label">得分：</div>
-                <el-input-number 
-                   v-model="currentScore" 
+                <el-input-number
+                   v-if="!starInputEnabled"
+                   v-model="currentScore"
                    :disabled="submitting || !deadlineStatus?.canGrade"
-                   :min="0" 
-                   :max="currentStudent.maxScore" 
+                   :min="0"
+                   :max="currentStudent.maxScore"
                    :precision="0"
                    controls-position="right"
                    size="large"
@@ -307,7 +317,7 @@
                    @change="onOverallNumericChange"
                    @keyup.enter="submitScore"
                 />
-                <div class="star-rating-helper" :title="starScaleTitle(currentStudent.maxScore)">
+                <div class="star-rating-helper" v-else>
                    <el-rate
                       :model-value="overallStarCount"
                       :disabled="submitting || !deadlineStatus?.canGrade"
@@ -317,8 +327,8 @@
                       @change="onOverallRateChange"
                    />
                    <span class="star-hint">{{ starSelectionText(currentStudent.maxScore, overallStarCount) }}</span>
-                   <el-button link type="warning" :disabled="submitting || !deadlineStatus?.canGrade" @click="clearOverallScore">0 分/清零</el-button>
                 </div>
+                <el-button link type="warning" :disabled="submitting || !deadlineStatus?.canGrade" @click="clearOverallScore">0 分/清零</el-button>
             </div>
             
             <!-- P6: 分项评分模式 -->
@@ -327,6 +337,7 @@
                      <span class="item-name">{{ item.itemName }}</span>
                      <div class="item-input">
                          <el-rate
+                            v-if="starInputEnabled"
                             class="item-star-rate"
                             :model-value="itemStarCounts[item.itemId] || 0"
                             :disabled="submitting || !deadlineStatus?.canGrade"
@@ -334,13 +345,13 @@
                             show-text
                             :texts="starScoreTexts(item.maxScore)"
                             @change="val => onItemRateChange(item, val)"
-                            :title="starScaleTitle(item.maxScore)"
                          />
-                        <el-input-number 
+                        <el-input-number
+                           v-else
                            :ref="el => setItemInputRef(el, index)"
-                           v-model="itemScores[item.itemId]" 
+                           v-model="itemScores[item.itemId]"
                            :disabled="submitting || !deadlineStatus?.canGrade"
-                           :min="0" 
+                           :min="0"
                            :max="item.maxScore"
                            :precision="0"
                            size="small"
@@ -364,8 +375,8 @@
             </el-button>
             
             <div class="nav-actions">
-               <el-button @click="prevStudent" :disabled="submitting || currentIndex <= 0">上一位 (PgUp)</el-button>
-               <el-button @click="nextStudent" :disabled="submitting || currentIndex >= submissions.length - 1">下一位 (PgDn)</el-button>
+               <el-button @click="prevStudent" :disabled="submitting || currentIndex <= 0">上一位 (Alt+↑)</el-button>
+               <el-button @click="nextStudent" :disabled="submitting || currentIndex >= submissions.length - 1">下一位 (Alt+↓)</el-button>
             </div>
          </div>
       </div>
@@ -557,6 +568,12 @@
       </div>
       <p class="ai-detail-privacy">为保护数据安全，这里不会显示 API Key、完整提示词、模型原始输出或后台异常堆栈。</p>
     </el-drawer>
+
+    <!-- 键盘快捷键提示常驻浮标 -->
+    <div class="shortcut-tip-badge" title="批改快捷键：Alt+↑ 上一位，Alt+↓ 下一位，Enter 提交">
+      <el-icon><InfoFilled /></el-icon>
+      <span>快捷键：Alt+↑ 上一位 · Alt+↓ 下一位 · Enter 提交</span>
+    </div>
   </div>
 </template>
 
@@ -639,9 +656,11 @@ let scoringDetailsRequestId = 0;
 
 const isFullscreen = ref(false);
 const gradingPageRef = ref(null);
-const gradingMainRef = ref(null);
-const scoreInputRef = ref(null);
-
+// 数字/五星二选一：默认键盘数字（批量批改快），偏好记本地
+const starInputEnabled = ref(localStorage.getItem('grading-star-mode') === '1');
+function onStarModeChange(value) {
+  localStorage.setItem('grading-star-mode', value ? '1' : '0');
+}
 // P6: 分项评分相关状态
 const scoringItems = ref([]);      // 评分项列表
 const itemScores = ref({});        // 各评分项得分 { itemId: score }
@@ -657,10 +676,12 @@ function scoringModeKey(lessonId = selectedLessonId.value,
     return `${lessonId}:${classCode || ''}:${questionId}`;
 }
 
-// P0-A: 批改页标注“作品 vN · 评分依据 vM（提交时）”；历史未回填版本的数据不显示，避免误导
+// P0-A: 批改页标注“作品 vN · 评分依据 vM（提交时）”；流程图提交 ID 与文件版本分属不同字段，必须按题型取值，否则流程图下标签恒空。历史未回填版本的数据不显示，避免误导
 const rubricVersionLabel = computed(() => {
     const student = currentStudent.value;
-    if (!student?.submitted || !student?.practicalVersionId) return '';
+    const versionId = String(student?.practicalMode || '').toUpperCase() === 'FLOWCHART'
+        ? student?.flowchartSubmissionId : student?.practicalVersionId;
+    if (!student?.submitted || versionId == null || versionId === '') return '';
     const parts = [];
     if (student.versionNo != null) parts.push(`作品 v${student.versionNo}`);
     if (student.rubricSnapshotVersion != null) parts.push(`评分依据 v${student.rubricSnapshotVersion}（提交时）`);
@@ -817,14 +838,14 @@ function scheduleRealtimeRefresh() {
     if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
     realtimeRefreshTimer = setTimeout(() => {
         realtimeRefreshTimer = null;
-        loadSubmissions({ silent: true });
+        if (document.visibilityState === 'visible') loadSubmissions({ silent: true });
     }, 250);
 }
 
 function startClassroomStateCalibration() {
     if (classroomStateTimer) clearInterval(classroomStateTimer);
     classroomStateTimer = setInterval(() => {
-        if (selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value) loadSubmissions({ silent: true });
+        if (document.visibilityState === 'visible' && selectedLessonId.value && selectedQuestionId.value && selectedClassCode.value) loadSubmissions({ silent: true });
     }, 10000);
 }
 
@@ -865,13 +886,20 @@ onBeforeUnmount(() => {
 
 function handleGlobalKeydown(e) {
   if (submitting.value) return;
-  if (e.key === 'PageUp') {
+  const isInputTarget = ['INPUT', 'TEXTAREA'].includes(e.target?.tagName) || e.target?.isContentEditable;
+
+  // 1. Alt + ArrowUp 或 PageUp 或非输入框按 K：上一位
+  if ((e.altKey && e.key === 'ArrowUp') || e.key === 'PageUp' || (!isInputTarget && (e.key === 'k' || e.key === 'K'))) {
     e.preventDefault();
     prevStudent();
+    return;
   }
-  if (e.key === 'PageDown') {
+
+  // 2. Alt + ArrowDown 或 PageDown 或非输入框按 J：下一位
+  if ((e.altKey && e.key === 'ArrowDown') || e.key === 'PageDown' || (!isInputTarget && (e.key === 'j' || e.key === 'J'))) {
     e.preventDefault();
     nextStudent();
+    return;
   }
 }
 
@@ -1029,12 +1057,9 @@ function starScoreTexts(maxScore) {
     return [1, 2, 3, 4, 5].map(stars => `${stars}星 = ${calculateStarScore(maxScore, stars)}分`);
 }
 
-function starScaleTitle(maxScore) {
-    return starScoreTexts(maxScore).join('；');
-}
-
 function starSelectionText(maxScore, stars) {
-    return stars ? `${stars} 星 = ${calculateStarScore(maxScore, stars)} 分` : '五星辅助评分';
+  // 未选星时显示满分静态提示，不再出现“五星辅助评分”文案；悬浮 title 已移除，不再频繁跳动
+  return stars ? `${stars} 星 = ${calculateStarScore(maxScore, stars)} 分` : `满分 ${Number(maxScore || 0)} 分`;
 }
 
 function onOverallRateChange(stars) {
@@ -1076,6 +1101,8 @@ function onItemNumericChange(item) {
 
 // P6: 评分项输入框引用数组
 const itemInputRefs = ref([]);
+const scoreInputRef = ref(null);
+const gradingMainRef = ref(null);
 
 // P6: 设置评分项输入框引用
 function setItemInputRef(el, index) {
@@ -1157,7 +1184,7 @@ function loadSubmissions(options = {}) {
             return String(left.studentNo || '').localeCompare(String(right.studentNo || ''), 'zh-CN');
         });
         if (!silent) loading.value = false;
-        if (!isCurrentFlowchart.value) restoreLatestAiJob();
+        restoreLatestAiJob();
         syncClassroomSocket();
         const preservedStudent = previousStudentId != null
             ? submissions.value.find(s => s.studentId === previousStudentId && s.submitted)
@@ -1588,7 +1615,10 @@ function formatAiTime(value) {
 
 function aiResultFor(student) {
     const result = student?.answerId ? aiResultsByAnswer.value[student.answerId] : null;
-    return result && String(result.practicalVersionId) === String(student.practicalVersionId) ? result : null;
+    const studentVersionId = String(student?.practicalMode || '').toUpperCase() === 'FLOWCHART'
+        ? student?.flowchartSubmissionId : student?.practicalVersionId;
+    return result && studentVersionId != null && result.practicalVersionId != null
+        && String(result.practicalVersionId) === String(studentVersionId) ? result : null;
 }
 
 function formatConfidence(value) {
@@ -1600,6 +1630,7 @@ function applyAiSuggestion() {
     const suggestion = currentAiSuggestion.value;
     if (!suggestion) return;
     currentScore.value = suggestion.suggestedScore;
+    if (!scoringItems.value.length) useItemScoring.value = false;
     try {
         const details = JSON.parse(suggestion.scoringDetailsJson || '[]');
         if (Array.isArray(details) && details.length && scoringItems.value.length) {
@@ -1709,9 +1740,13 @@ function loadScoringDetailsForStudent(answerId) {
 }
 
 function handleStudentClick(student, index) {
-    if (!student?.submitted) {
+    // 白卷（有答题行但内容为空）允许进入批改打 0 分或退回；真正一行没有的才拦。
+    if (!student?.submitted && student?.answerId == null) {
         ElMessage.info(`${student?.studentName || '该学生'}尚未提交当前操作题，暂时不能批改`);
         return;
+    }
+    if (!student?.submitted) {
+        ElMessage.warning(`${student?.studentName || '该学生'}提交的是白卷，可打 0 分或退回重交`);
     }
     selectStudent(student, index);
 }
@@ -1922,7 +1957,7 @@ async function handleRetryFailedPreviews() {
 }
 
 // P6: 跳转到下一个已提交的学生 (P1: 优先跳转未批改)
-function nextSubmittedStudent() {
+async function nextSubmittedStudent() {
     // 1. 优先寻找尚未批改(分数为空)的已提交学生
     // 从当前位置向后找
     for (let i = currentIndex.value + 1; i < submissions.value.length; i++) {
@@ -1950,6 +1985,25 @@ function nextSubmittedStudent() {
         }
     }
     
+    // 3. 当前操作题已批完：多操作题课程按课程内顺序提示切换到下一道操作题，避免教师漏批其他题
+    if (questions.value.length > 1) {
+        const currentIdx = questions.value.findIndex(q => q.questionId === selectedQuestionId.value);
+        const nextQuestion = questions.value[(currentIdx + 1) % questions.value.length];
+        if (nextQuestion) {
+            try {
+                await ElMessageBox.confirm(
+                    '当前操作题已全部批改完成，课程还有其他操作题。是否切换到下一道操作题继续批改？',
+                    '切换操作题',
+                    { confirmButtonText: '切换下一题', cancelButtonText: '留在本题', type: 'info' }
+                );
+                selectedQuestionId.value = nextQuestion.questionId;
+                onQuestionChange(nextQuestion.questionId);
+                return;
+            } catch {
+                // 用户选择留在本题，不做切换
+            }
+        }
+    }
     ElMessage.info('已经是最后一位已提交学生了');
     // 如果是全屏状态，自动退出
     if (isFullscreen.value) {
@@ -2186,6 +2240,12 @@ function autoFocusItem() {
 .deadline-panel-head {
   justify-content: space-between;
   margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.current-question-progress {
+  color: #909399;
+  font-size: 12px;
 }
 
 .deadline-panel-grid {
@@ -2632,5 +2692,30 @@ function autoFocusItem() {
 
 .item-star-rate {
   margin-right: 6px;
+}
+
+.shortcut-tip-badge {
+  position: fixed;
+  bottom: 16px;
+  right: 24px;
+  background: rgba(48, 49, 51, 0.85);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(4px);
+  z-index: 99;
+  user-select: none;
+  transition: opacity 0.2s, transform 0.2s;
+  opacity: 0.85;
+
+  &:hover {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 </style>

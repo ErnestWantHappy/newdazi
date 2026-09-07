@@ -7,7 +7,7 @@ export const isRelogin = { show: false }
 
 export const SESSION_EXPIRED_MESSAGE = '登录状态已过期，请重新登录后重试。'
 
-const HEARTBEAT_INTERVAL = 5 * 60 * 1000
+const HEARTBEAT_INTERVAL = 60 * 1000
 const EXPIRE_REMIND_WINDOW = 10 * 60 * 1000
 const REMIND_COOLDOWN = 5 * 60 * 1000
 

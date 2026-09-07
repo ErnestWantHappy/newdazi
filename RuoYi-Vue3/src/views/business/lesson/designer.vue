@@ -82,11 +82,15 @@
                   <div class="feature-label">
                     <b>在线协作</b>
                     <span class="feature-status">{{ collaborationStatusText }}</span>
-                    <el-tooltip content="必须先选择带 Word、Excel 或 PPT 起始文件的“文件作品”操作题；Python 编程题不能作为协作文档。" placement="top">
+                    <el-tooltip content="协作起始文件来自题库（公开或本人创建的文件作品题）；开关独立，协作不计分、不批改，课程仍可保留一道操作题。" placement="top">
                       <span class="form-help-dot">?</span>
                     </el-tooltip>
                   </div>
                   <el-switch :model-value="collaborationForm.enabled" inline-prompt active-text="开" inactive-text="关" @change="handleCollaborationToggle" />
+                </div>
+                <div v-if="collaborationForm.enabled" class="feature-subrow">
+                  <span class="feature-subtext">小组协作（非计分）：文档、分组、任务分配在工作台统一设置</span>
+                  <el-button v-if="form.lessonId" link type="primary" @click="goCollaborationSettings">进入协作工作台</el-button>
                 </div>
               </div>
             </el-form-item>
@@ -301,9 +305,16 @@
                   <div v-if="scope.row.questionType === 'practical'" class="answer-mode-text">{{ practicalModeLabel(scope.row.practicalMode) }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="分值" align="center" width="105">
+            <el-table-column label="分值" align="center" width="120">
               <template #default="scope">
-                <el-input-number v-model="scope.row.questionScore" :min="0" :max="100" size="small" />
+                <div class="score-input-cell">
+                  <el-input-number
+                    v-model="scope.row.questionScore"
+                    :min="0"
+                    :max="100"
+                    size="small"
+                  />
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="操作" align="center" width="120" fixed="right">
@@ -418,7 +429,7 @@
              <el-table-column label="出题人" align="center" width="120" show-overflow-tooltip>
                <template #default="scope">{{ scope.row.nickName || scope.row.createBy || '-' }}</template>
              </el-table-column>
-             <el-table-column label="操作" align="center" width="100">
+             <el-table-column label="操作" align="center" width="150">
                <template #default="scope">
                   <el-button
                     v-if="scope.row.questionType === 'practical' && (scope.row.previewPath || scope.row.practicalMode === 'PYTHON' || scope.row.practicalMode === 'FLOWCHART')"
@@ -426,10 +437,10 @@
                     type="success"
                     @click="previewPracticalQuestion(scope.row)"
                  >预览</el-button>
-                 <el-button 
-                   link 
-                   type="primary" 
-                   @click="handleAddQuestion(scope.row)" 
+                 <el-button
+                   link
+                   type="primary"
+                   @click="handleAddQuestion(scope.row)"
                   :disabled="isQuestionSelected(scope.row.questionId) || addingQuestionIds.has(scope.row.questionId)"
                  >添加</el-button>
                </template>
@@ -448,7 +459,7 @@
     </el-row>
 
     <div class="footer-toolbar">
-      <el-button type="primary" @click="submitForm">保 存</el-button>
+      <el-button type="primary" :loading="saving" :disabled="saving" @click="submitForm">保 存</el-button>
       <el-button @click="router.push('/teacher-dashboard')">返回教师首页</el-button>
     </div>
 
@@ -467,18 +478,6 @@
       </template>
     </el-dialog>
     <flowchart-question-preview-dialog v-model="flowchartPreviewVisible" :question="flowchartPreviewQuestion" />
-    <el-dialog v-model="collaborationMaterialVisible" title="选择在线协作文件" width="520px" append-to-body>
-      <p class="collaboration-material-tip">请选择用于协作的文件作品及起始文件。每个授课班会获得一份独立副本。</p>
-      <el-radio-group v-model="collaborationForm.materialId" class="collaboration-material-list">
-        <el-radio v-for="item in collaborationCandidates" :key="item.materialId" :value="item.materialId">
-          {{ item.questionTitle ? `${item.questionTitle} · ` : '' }}{{ item.fileName }}
-        </el-radio>
-      </el-radio-group>
-      <template #footer>
-        <el-button @click="cancelCollaborationMaterial">取消</el-button>
-        <el-button type="primary" @click="confirmEnableCollaboration">确认开启</el-button>
-      </template>
-    </el-dialog>
 
   </div>
 </template>
@@ -486,9 +485,10 @@
 <script setup name="LessonDesigner">
 import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { getDashboardData } from "@/api/business/teacher";
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
-import { getCollaborationHealth, getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
-import { getQuestion, listQuestion } from "@/api/business/question";
+import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
+import { listQuestion } from "@/api/business/question";
 import { previewProgrammingQuestion } from "@/api/business/programming";
 import { getFlowchartQuestionPreview } from '@/api/business/flowchart';
 import FlowchartQuestionPreviewDialog from '@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue';
@@ -516,10 +516,10 @@ const pythonPreviewCases = ref([]);
 const flowchartPreviewVisible = ref(false);
 const flowchartPreviewQuestion = ref(null);
 const addingQuestionIds = ref(new Set());
-const collaborationForm = ref({ enabled: false, questionId: null, materialId: null });
-const collaborationCandidates = ref([]);
-const collaborationMaterialVisible = ref(false);
+// 在线协作开关只做状态展示与工作台入口；文档与分组只在协作工作台设置，不随课程保存联动。
+const collaborationForm = ref({ enabled: false });
 const lessonToolsExpanded = ref(false);
+const saving = ref(false);
 
 // 核心修复：将 assignedClassCodes 整合到 form 对象中
 const form = ref({
@@ -550,18 +550,15 @@ const form = ref({
 });
 const selectedQuestions = ref([]);
 const myManagedClasses = ref([]); // 教师管理的班级列表
+const initialAssignedClasses = ref([]); // 进入时已指派班级，用于识别本次新增指派
 const initialGuideSheetBinding = ref(null);
 
-const filePracticalQuestions = computed(() => selectedQuestions.value.filter(isFilePractical));
 const collaborationStatusText = computed(() => {
-  if (collaborationForm.value.enabled) return '已开启';
-  return filePracticalQuestions.value.length ? '未开启' : '需先添加文件作品题';
+  return collaborationForm.value.enabled ? '已开启' : '未开启';
 });
-
 const questionBankList = ref([]);
 const queryParams = ref({
   pageNum: 1,
-  pageSize: 10,
   questionContent: null,
   grade: null,
   semester: null,
@@ -684,8 +681,37 @@ function sortQuestions() {
   });
 }
 
+// 指派切换预检：新增指派的班级若当前课是别的课程，先列出告知，避免开学季误切正式班
+async function confirmAssignmentSwitch() {
+  const added = (form.value.assignedClasses || []).filter(c => !(initialAssignedClasses.value || []).includes(c));
+  if (!added.length) return true;
+  let groups = [];
+  try {
+    const res = await getDashboardData();
+    groups = res.data || res || [];
+  } catch (_) {
+    return true; // 首页聚合读不到就不拦截，避免阻塞正常保存
+  }
+  const entryYear = String(form.value.entryYear || '');
+  const group = (groups || []).find(g => String(g.entryYear) === entryYear) || {};
+  const moved = [];
+  for (const cls of added) {
+    const current = (group.lessons || []).find(l => Number(l.lessonId) !== Number(form.value.lessonId)
+      && (l.assignedClasses || []).includes(cls));
+    if (current) moved.push(`${cls}：当前《${current.lessonTitle}》→ 将切换到本课`);
+  }
+  if (!moved.length) return true;
+  try {
+    await proxy.$modal.confirm(`以下班级的当前课将被切换到本课：${moved.join('；')}，确认保存吗？`);
+    return true;
+  } catch (_) {
+    return false; // 用户点取消
+  }
+}
+
 // 提交表单
 function submitForm() {
+  if (saving.value) return;
   proxy.$refs["lessonRef"].validate(async valid => {
     if (valid) {
       if (form.value.guideSheetEnabled && !form.value.guideSheetSourceSheetId) {
@@ -704,28 +730,14 @@ function submitForm() {
         proxy.$modal.msgError(`当前总分为 ${totalScore.value} 分，必须凑满 100 分才能保存！`);
         return;
       }
+      // 新增指派若会切换别课的当前班，先经教师确认
+      if (!(await confirmAssignmentSwitch())) return;
+
 
       // 提交前确保排序
       sortQuestions();
 
-      // 在线协作与课程主体分开保存，先做健康检查，避免课程保存成功后协作同步才失败。
-      if (collaborationForm.value.enabled) {
-        try {
-          const healthResponse = await getCollaborationHealth();
-          const health = healthResponse.data || healthResponse;
-          if (!health.ready) {
-            const problems = Array.isArray(health.problems) ? health.problems.filter(Boolean) : [];
-            proxy.$modal.msgError(problems.length
-              ? `在线协作暂不可用：${problems.join('；')}`
-              : '在线协作功能当前未开启');
-            return;
-          }
-        } catch (error) {
-          proxy.$modal.msgError(error?.message || '无法检查在线协作配置，请联系管理员。');
-          return;
-        }
-      }
-      
+      // 在线协作与课程主体完全解耦：普通课程保存不再触碰协作房间或历史作品，分组与文档只在协作工作台设置。
       // 考勤课强制关闭自动推进，避免误开
       const isAttendanceSubmit = form.value.lessonMode === 'attendance'
       // 构造提交数据
@@ -743,38 +755,28 @@ function submitForm() {
         assignedClassCodes: form.value.assignedClasses 
       };
 
-      if (form.value.lessonId) {
-        // 修改模式使用 saveAll
-        saveAllLessonDetails(data).then(async response => {
-          try {
-            await synchronizeCollaboration(response.data?.lessonId || response.lessonId || form.value.lessonId);
-          } catch (error) {
-            proxy.$modal.msgError(error?.message || '课程已保存，但在线协作配置未保存。');
-            return;
-          }
+      saving.value = true;
+      try {
+        await saveAllLessonDetails(data);
+        if (form.value.lessonId) {
           proxy.$modal.msgSuccess("修改成功");
           // 修改成功后跳转回来源页面（通常是教师首页或列表页）
           if (route.query.redirect) {
-              router.push({
-                path: route.query.redirect,
-                query: { refresh: String(Date.now()) }
-              });
+            router.push({
+              path: route.query.redirect,
+              query: { refresh: String(Date.now()) }
+            });
           } else {
-              router.push({ path: '/teacher-dashboard/index', query: { refresh: String(Date.now()) } }); // 默认回教师首页
+            router.push({ path: '/teacher-dashboard/index', query: { refresh: String(Date.now()) } });
           }
-        });
-      } else {
-        // 新增模式
-        saveAllLessonDetails(data).then(async response => {
-          try {
-            await synchronizeCollaboration(response.data?.lessonId || response.lessonId);
-          } catch (error) {
-            proxy.$modal.msgError(error?.message || '课程已保存，但在线协作配置未保存。');
-            return;
-          }
+        } else {
           proxy.$modal.msgSuccess("新增成功");
           router.push({ path: '/teacher-dashboard/index', query: { refresh: String(Date.now()) } });
-        });
+        }
+      } catch (error) {
+        proxy.$modal.msgError(error?.message || '课程保存失败');
+      } finally {
+        saving.value = false;
       }
     }
   });
@@ -827,11 +829,13 @@ function initialize() {
         guideSheetSourceSheetId: detail.guideSheetSourceSheetId ?? detail.currentGuideSheetBinding?.sourceSheetId ?? null,
         guideSheetReplaceRequested: false,
       };
+      initialAssignedClasses.value = [...assignedClasses];
       initialGuideSheetBinding.value = detail.currentGuideSheetBinding || null;
       loadCollaborationSettings(detail.lessonId).catch(() => {
-        collaborationForm.value = { enabled: false, questionId: null, materialId: null };
+        resetCollaborationForm();
       });
-      selectedQuestions.value = (detail.questions || []).map((item, index) => ({
+      const loadedQuestions = detail.questions || [];
+      selectedQuestions.value = loadedQuestions.map((item, index) => ({
         ...item,
         questionScore: item.questionScore != null ? item.questionScore : 0,
         orderNum: item.orderNum != null ? item.orderNum : index + 1,
@@ -841,6 +845,7 @@ function initialize() {
     });
   } else {
     isAddMode.value = true;
+    resetCollaborationForm();
     const purpose = route.query.purpose || (route.query.lessonMode === 'attendance' ? 'attendance' : 'assessment');
     const initMode = purpose === 'attendance' || route.query.lessonMode === 'attendance' ? 'attendance' : 'assessment';
     const initialGrade = grade ? parseInt(grade, 10) : null;
@@ -988,6 +993,14 @@ async function handleAddQuestion(row) {
             return;
         }
     }
+    if (row.questionType === 'practical') {
+        // 一课一道操作题：FILE/PYTHON/FLOWCHART 共用一个名额，已有多道的存量课也不再新增
+        const hasPractical = selectedQuestions.value.some(q => q.questionType === 'practical');
+        if (hasPractical) {
+            proxy.$modal.msgError('一门课程最多只能添加一道操作题。');
+            return;
+        }
+    }
     if (row.questionType === 'practical' && row.practicalMode === 'FLOWCHART') {
         addingQuestionIds.value.add(row.questionId);
         try {
@@ -1031,16 +1044,9 @@ async function handleAddQuestion(row) {
 function handleRemoveQuestion(row) {
   const index = selectedQuestions.value.findIndex(q => q.questionId === row.questionId);
   if (index > -1) {
+    // 协作开关独立：删除课程题目不再关闭在线协作，协作文件只来源于题库
     selectedQuestions.value.splice(index, 1);
-    if (Number(collaborationForm.value.questionId) === Number(row.questionId)) {
-      collaborationForm.value = { enabled: false, questionId: null, materialId: null };
-      proxy.$modal.msgWarning('协作所用文件作品题已移除，在线协作已关闭。');
-    }
   }
-}
-
-function isFilePractical(row) {
-  return row.questionType === 'practical' && (row.practicalMode || 'FILE') === 'FILE';
 }
 
 function practicalModeLabel(mode) {
@@ -1049,182 +1055,53 @@ function practicalModeLabel(mode) {
   return '文件作品';
 }
 
-function isCollaborationQuestion(row) {
-  return Boolean(collaborationForm.value.enabled)
-    && Number(collaborationForm.value.questionId) === Number(row.questionId);
-}
-
-// 本节课工具：添加 / 删除行
-function addLessonTool() {
-  form.value.lessonTools = form.value.lessonTools || [];
-  form.value.lessonTools.push({ toolName: '', toolUrl: '' });
-  lessonToolsExpanded.value = true;
-}
-function removeLessonTool(index) {
-  form.value.lessonTools.splice(index, 1);
+function resetCollaborationForm() {
+  collaborationForm.value = { enabled: false };
 }
 
 async function loadCollaborationSettings(lessonId) {
   if (!lessonId) return;
   const response = await getCollaborationLesson(lessonId);
   const payload = response.data || response;
-  collaborationCandidates.value = payload.candidates || [];
-  collaborationForm.value = {
-    enabled: Boolean(payload.enabled),
-    questionId: payload.questionId || null,
-    materialId: payload.materialId || null
-  };
+  collaborationForm.value = { enabled: Boolean(payload.enabled) };
 }
 
+// 开关只做状态展示与入口：打开直接进入协作工作台，关闭需二次确认且只影响旧全班房间（小组历史由后端隔离保留）。
 async function handleCollaborationToggle(enabled) {
   if (!enabled) {
-    collaborationForm.value = { enabled: false, questionId: null, materialId: null };
-    collaborationCandidates.value = [];
+    try {
+      await proxy.$modal.confirm('关闭后旧全班协作入口停止，小组历史作品保留，是否继续？');
+    } catch (_) {
+      collaborationForm.value.enabled = true;
+      return;
+    }
+    try {
+      if (form.value.lessonId) await saveCollaborationLesson(form.value.lessonId, { enabled: false });
+      resetCollaborationForm();
+      proxy.$modal.msgSuccess('在线协作已关闭');
+    } catch (error) {
+      collaborationForm.value.enabled = true;
+      proxy.$modal.msgError(error?.message || '关闭失败');
+    }
     return;
   }
-  if (!filePracticalQuestions.value.length) {
-    proxy.$modal.msgWarning('请先添加一道“文件作品”操作题，再开启在线协作。');
-    return;
-  }
-
-  const candidates = [];
-  for (const row of filePracticalQuestions.value) {
-    candidates.push(...await loadQuestionCollaborationCandidates(row, false));
-  }
-  collaborationCandidates.value = candidates;
-  if (!candidates.length) {
-    proxy.$modal.msgError('已选文件作品题没有可用于在线协作的 Word、Excel 或 PPT 起始文件。');
-    return;
-  }
-  if (candidates.length === 1) {
-    collaborationForm.value = {
-      enabled: true,
-      questionId: candidates[0].questionId,
-      materialId: candidates[0].materialId
-    };
-    proxy.$modal.msgInfo('在线协作已加入本次保存，保存课程后即可使用。');
-    return;
-  }
-
-  collaborationForm.value = { enabled: true, questionId: null, materialId: null };
-  collaborationMaterialVisible.value = true;
-}
-
-async function toggleCollaboration(row) {
-  if (isCollaborationQuestion(row)) {
-    collaborationForm.value.enabled = false;
-    return;
-  }
-  collaborationForm.value = { enabled: true, questionId: row.questionId, materialId: null };
   if (!form.value.lessonId) {
-    const candidates = await loadQuestionCollaborationCandidates(row);
-    if (!candidates.length) {
-      collaborationForm.value.enabled = false;
-      proxy.$modal.msgError('该文件作品没有可用于在线协作的 Word、Excel 或 PPT 起始文件。');
-      return;
-    }
-    if (candidates.length === 1) {
-      collaborationForm.value.materialId = candidates[0].materialId;
-      proxy.$modal.msgInfo('保存课程后将按已指派班级自动创建协作房间。');
-      return;
-    }
-    collaborationMaterialVisible.value = true;
-    return;
-  }
-  const desired = { ...collaborationForm.value };
-  await loadCollaborationSettings(form.value.lessonId);
-  collaborationForm.value = desired;
-  const candidates = collaborationCandidates.value.filter(item => Number(item.questionId) === Number(row.questionId));
-  if (!candidates.length) {
     collaborationForm.value.enabled = false;
-    proxy.$modal.msgError('该文件作品没有可用于在线协作的 Word、Excel 或 PPT 起始文件。');
+    proxy.$modal.msgInfo('请先保存课程，再配置在线协作');
     return;
   }
-  if (candidates.length === 1) {
-    collaborationForm.value.materialId = candidates[0].materialId;
-    return;
-  }
-  collaborationCandidates.value = candidates;
-  collaborationMaterialVisible.value = true;
+  goCollaborationSettings();
 }
 
-async function loadQuestionCollaborationCandidates(row, updateStore = true) {
-  try {
-    const response = await getQuestion(row.questionId);
-    const detail = response.data || {};
-    const editableExtensions = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']);
-    const candidates = (detail.practicalMaterials || [])
-      .filter(item => String(item.materialType || '').toUpperCase() === 'STARTER')
-      .filter(item => {
-        const name = item.originalFileName || item.resourcePath || '';
-        return editableExtensions.has(name.split('.').pop()?.toLowerCase());
-      })
-      .map(item => ({
-        questionId: Number(row.questionId),
-        materialId: item.materialId,
-        fileName: item.originalFileName || String(item.resourcePath || '').split('/').pop(),
-        questionTitle: stripHtml(row.questionContent).trim().slice(0, 36) || `题目 ${row.questionId}`
-      }));
-    if (updateStore) collaborationCandidates.value = candidates;
-    return candidates;
-  } catch (error) {
-    if (updateStore) collaborationCandidates.value = [];
-    return [];
-  }
-}
-
-function confirmEnableCollaboration() {
-  if (!collaborationForm.value.materialId) {
-    proxy.$modal.msgWarning('请选择一份起始文件。');
+// 直达协作设置页：保存课程后可直达本课非计分小组协作管理页。
+function goCollaborationSettings() {
+  if (!form.value.lessonId) {
+    proxy.$modal.msgInfo('请先保存课程，再配置在线协作');
     return;
   }
-  const selected = collaborationCandidates.value.find(item => Number(item.materialId) === Number(collaborationForm.value.materialId));
-  if (!selected) {
-    proxy.$modal.msgWarning('所选起始文件已不可用，请重新选择。');
-    return;
-  }
-  collaborationForm.value = {
-    enabled: true,
-    questionId: selected.questionId,
-    materialId: selected.materialId
-  };
-  collaborationMaterialVisible.value = false;
+  router.push(`/business/collaboration/lesson/${form.value.lessonId}`);
 }
 
-function cancelCollaborationMaterial() {
-  collaborationMaterialVisible.value = false;
-  collaborationForm.value = { enabled: false, questionId: null, materialId: null };
-}
-
-async function synchronizeCollaboration(lessonId) {
-  if (!lessonId) return;
-  if (!collaborationForm.value.enabled) {
-    if (form.value.lessonId) await saveCollaborationLesson(lessonId, { enabled: false });
-    return;
-  }
-  // 课程主体和协作房间是两个接口；先检查全局 Provider，避免主体保存成功后才暴露笼统错误。
-  const healthResponse = await getCollaborationHealth();
-  const health = healthResponse.data || healthResponse;
-  if (!health.ready) {
-    collaborationForm.value = { enabled: false, questionId: null, materialId: null };
-    const problems = Array.isArray(health.problems) ? health.problems.filter(Boolean) : [];
-    throw new Error(problems.length ? `在线协作暂不可用：${problems.join('；')}` : '在线协作功能当前未开启');
-  }
-  const desired = { ...collaborationForm.value };
-  await loadCollaborationSettings(lessonId);
-  collaborationForm.value = desired;
-  const candidates = collaborationCandidates.value.filter(item => Number(item.questionId) === Number(collaborationForm.value.questionId));
-  if (!candidates.length) throw new Error('所选文件作品没有可用于在线协作的起始文件');
-  if (!collaborationForm.value.materialId) {
-    if (candidates.length > 1) throw new Error('该操作题有多份起始文件，请先选择用于在线协作的文件');
-    collaborationForm.value.materialId = candidates[0].materialId;
-  }
-  await saveCollaborationLesson(lessonId, {
-    enabled: true,
-    questionId: collaborationForm.value.questionId,
-    materialId: collaborationForm.value.materialId
-  });
-}
 
 function handlePreviewFile(row) {
   if (pdfPreviewRef.value && row.previewPath) {
@@ -1304,6 +1181,23 @@ onMounted(() => {
 
 
 <style scoped>
+.score-input-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.feature-subrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 4px 12px 8px;
+}
+.feature-subtext {
+  color: #909399;
+  font-size: 12px;
+}
 
 .resource-tabs :deep(.el-tabs__header) {
   margin-bottom: 18px;
@@ -1391,8 +1285,6 @@ onMounted(() => {
 .python-preview-title { margin: 0 0 8px; }
 .python-preview-meta { color: #909399; margin-bottom: 16px; }
 .python-preview-code { white-space: pre-wrap; background: #f6f8fa; padding: 10px; margin: 0; }
-.collaboration-material-tip { color: #606266; line-height: 1.6; }
-.collaboration-material-list { display: flex; flex-direction: column; gap: 12px; }
 .designer-grid > :deep(.el-col) { margin-bottom: 20px; }
 .form-help-dot {
   display: inline-grid;

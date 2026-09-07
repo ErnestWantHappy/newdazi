@@ -64,7 +64,7 @@ public class PracticalAiJobWorker
         {
             aiMapper.updateJobStatus(jobId, "RUNNING", new Date(), null, null);
             event(jobId, null, "INFO", "JOB_STARTED", "AI 批改任务开始或继续执行");
-            List<ComparisonPage> comparisonPages = "FLOWCHART".equals(job.getReferenceAnswerJson())
+            List<ComparisonPage> comparisonPages = PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson())
                     ? new ArrayList<ComparisonPage>() : prepareComparisonPages(job);
             TeacherAiConfig config = configService.status(job.getTeacherUserId());
             String apiKey = configService.apiKey(config);
@@ -105,15 +105,15 @@ public class PracticalAiJobWorker
         try
         {
             BizStudentAnswer answer = answerMapper.selectById(result.getAnswerId());
-            boolean flowchart = "FLOWCHART".equals(job.getReferenceAnswerJson());
-            boolean sameFlowchartSubmission = flowchart
-                    && result.getPracticalVersionId().equals(answer == null ? null : answer.getPracticalVersionId())
+            boolean flowchart = PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson());
+            // 流程图答案行没有文件版本号，以答案文本中的提交版本为绑定依据。
+            boolean sameFlowchartSubmission = flowchart && result.getPracticalVersionId() != null
                     && ("FLOWCHART:" + result.getPracticalVersionId()).equals(answer == null ? null : answer.getStudentAnswer());
             if (answer == null || (flowchart ? !sameFlowchartSubmission
                     : !result.getPracticalVersionId().equals(answer.getPracticalVersionId())))
                 throw new ServiceException("学生已补交，原 AI 任务版本失效");
             PracticalAiGradingInput input = new PracticalAiGradingInput();
-            if ("FLOWCHART".equals(job.getReferenceAnswerJson())) {
+            if (PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson())) {
                 prepareFlowchartInput(answer, result, input);
             } else {
                 PracticalRubricSnapshot rubric = snapshotMapper.selectByVersionId(result.getPracticalVersionId());
@@ -129,8 +129,7 @@ public class PracticalAiJobWorker
             PracticalAiGradingOutput output = provider.grade(config, apiKey, input);
             updateStage(job.getJobId(), result.getResultId(), "VALIDATING_RESULT", "模型已返回，正在校验分项分数并保存建议");
             BizStudentAnswer latest = answerMapper.selectById(result.getAnswerId());
-            boolean latestFlowchartSubmission = flowchart
-                    && result.getPracticalVersionId().equals(latest == null ? null : latest.getPracticalVersionId())
+            boolean latestFlowchartSubmission = flowchart && result.getPracticalVersionId() != null
                     && ("FLOWCHART:" + result.getPracticalVersionId()).equals(latest == null ? null : latest.getStudentAnswer());
             if (latest == null || (flowchart ? !latestFlowchartSubmission
                     : !result.getPracticalVersionId().equals(latest.getPracticalVersionId())))

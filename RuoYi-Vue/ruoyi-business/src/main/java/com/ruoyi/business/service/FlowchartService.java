@@ -156,9 +156,10 @@ public class FlowchartService {
         FlowchartSubmission latest = flowchartMapper.selectLatestSubmission(
                 student.getStudentId(), lessonId, questionId);
         Map<String, Object> result = new HashMap<String, Object>();
-        result.put("snapshot", snapshot);
+        // 学生端只下发脱敏快照（基础图+权限），标准答案与评分规则不出内网。
+        result.put("snapshot", snapshot == null ? null : snapshot.toStudentView());
         result.put("draft", draft);
-        result.put("latestSubmission", latest);
+        result.put("latestSubmission", latest == null ? null : latest.toStudentView());
         result.put("readOnly", latest != null && (draft.getBaseSubmissionVersion() == null
                 || draft.getBaseSubmissionVersion() < latest.getVersionNo()));
         return result;
@@ -199,7 +200,7 @@ public class FlowchartService {
         }
         FlowchartSubmission duplicate = flowchartMapper.selectSubmissionByDraftRevision(
                 student.getStudentId(), lessonId, questionId, draft.getRevision());
-        if (duplicate != null) return duplicate;
+        if (duplicate != null) return duplicate.toStudentView();
 
         FlowchartLessonSnapshot snapshot = resolveSnapshot(lessonId, questionId);
         int maxScore = lessonQuestionScore(lessonId, questionId);
@@ -233,7 +234,7 @@ public class FlowchartService {
         answerMapper.upsertAnswer(answer);
         flowchartMapper.updateSubmissionAnswerId(submission.getSubmissionId(), answer.getAnswerId());
         submission.setAnswerId(answer.getAnswerId());
-        return submission;
+        return submission.toStudentView();
     }
 
     @Transactional(rollbackFor = Exception.class)

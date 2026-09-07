@@ -59,6 +59,43 @@ class QwenPracticalVisionGradingProviderTest
     }
 
     @Test
+    void shouldIgnoreInventedItemsWithoutRubricAndPreserveOverallComment() throws Exception
+    {
+        PracticalAiGradingInput input = input();
+        input.setScoringItems(Collections.emptyList());
+        PracticalAiGradingOutput output = provider.parse(response(99, -1, 28), input);
+        assertEquals(28, output.getSuggestedScore());
+        assertEquals("[]", output.getScoringDetailsJson());
+        assertEquals("建议教师复核", mapper.readTree(output.getEvidenceJson()).path("overallComment").asText());
+        assertEquals(0.8D, output.getConfidence().doubleValue());
+        assertThrows(ServiceException.class, () -> provider.parse(response(8, 24, 41), input));
+        assertThrows(ServiceException.class, () -> provider.parse(response(8, 24, -1), input));
+        assertEquals(0, provider.parse(response(8, 24, 0), input).getSuggestedScore());
+        assertEquals(40, provider.parse(response(8, 24, 40), input).getSuggestedScore());
+    }
+
+    @Test
+    void shouldRejectFractionalMissingAndOverflowTotal() throws Exception
+    {
+        PracticalAiGradingInput input = input(); input.setScoringItems(Collections.emptyList());
+        for (String total : Arrays.asList("28.5", "null", "2147483648", "\"28\"")) {
+            ObjectNode root = (ObjectNode) mapper.readTree(response(8, 24, 28));
+            ObjectNode content = (ObjectNode) mapper.readTree(root.path("choices").get(0).path("message").path("content").asText());
+            content.set("totalScore", mapper.readTree(total));
+            ((ObjectNode) root.path("choices").get(0).path("message")).put("content", mapper.writeValueAsString(content));
+            assertThrows(ServiceException.class, () -> provider.parse(mapper.writeValueAsString(root), input));
+        }
+    }
+
+    @Test
+    void shouldRejectFractionalItemScoreInsteadOfTruncating()
+    {
+        // 3.5 + 24 = 27.5：旧 asInt 会静默截成 3 + 24 = 27 并通过整题校验；现在必须直接失败。
+        assertThrows(ServiceException.class, () -> provider.parse(responseDecimal(3.5D, 24, 27), input()));
+        assertThrows(ServiceException.class, () -> provider.parse(responseDecimal(8, 24.5D, 32), input()));
+    }
+
+    @Test
     void shouldMapProviderBillingKeyAndThrottleErrors()
     {
         assertEquals("阿里云账户可能余额不足或已欠费，请充值后重试",
@@ -107,6 +144,21 @@ class QwenPracticalVisionGradingProviderTest
         root.putObject("usage").put("prompt_tokens", 100).put("completion_tokens", 50);
         return mapper.writeValueAsString(root);
     }
+    private String responseDecimal(double first, double second, int total) throws Exception
+    {
+        ObjectNode content = mapper.createObjectNode();
+        ArrayNode results = content.putArray("rubricResults");
+        results.addObject().put("rubricItemId", 1).put("score", first).put("maxScore", 10);
+        results.addObject().put("rubricItemId", 2).put("score", second).put("maxScore", 30);
+        content.put("totalScore", total).put("maxScore", 40).put("confidence", 0.8D)
+                .put("overallComment", "建议教师复核").put("needsHumanReview", true);
+        ObjectNode root = mapper.createObjectNode();
+        root.put("id", "request-test");
+        root.putArray("choices").addObject().putObject("message").put("content", mapper.writeValueAsString(content));
+        root.putObject("usage").put("prompt_tokens", 100).put("completion_tokens", 50);
+        return mapper.writeValueAsString(root);
+    }
+
 
     private HttpClientErrorException error(String code, String message)
     {

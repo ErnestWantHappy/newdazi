@@ -35,5 +35,20 @@ public class FlowchartLessonSnapshot {
     public void setRulesJson(String rulesJson) { this.rulesJson = rulesJson; }
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }
+    /**
+     * 学生端视图：只带基础图与权限，不下发标准答案与评分规则（防标答泄露）。
+     */
+    public FlowchartLessonSnapshot toStudentView() {
+        FlowchartLessonSnapshot view = new FlowchartLessonSnapshot();
+        view.setSnapshotId(snapshotId);
+        view.setLessonId(lessonId);
+        view.setQuestionId(questionId);
+        view.setSourceRevision(sourceRevision);
+        view.setSchemaVersion(schemaVersion);
+        view.setStarterJson(starterJson);
+        view.setPermissionsJson(permissionsJson);
+        view.setCreateTime(createTime);
+        return view;
+    }
 }
 

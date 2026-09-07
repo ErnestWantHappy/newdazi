@@ -102,7 +102,7 @@ public class SysLoginService
         LoginUser loginUser = (LoginUser) authentication.getPrincipal();
         populateUserSchoolInfo(loginUser);
         recordLoginInfo(loginUser.getUserId());
-        String token = tokenService.createToken(loginUser);
+        String token = tokenService.createLoginToken(loginUser);
         LoginResult result = new LoginResult();
         result.setToken(token);
         List<SysDept> schools = loginUser.getManageDepts();

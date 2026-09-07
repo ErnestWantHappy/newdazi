@@ -52,6 +52,16 @@ class FlowchartDocumentServiceTest {
     }
 
     @Test
+    void shouldAllowCompactComparisonButRejectCompleteHtmlTag() throws Exception {
+        String normalized = service.normalizeDocument(
+                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"decision\",\"x\":1,\"y\":1,\"text\":\"a<b && c>d\"}],\"edges\":[]}");
+
+        assertEquals("a<b && c>d", objectMapper.readTree(normalized).path("nodes").get(0).path("text").asText());
+        assertThrows(ServiceException.class, () -> service.normalizeDocument(
+                "{\"nodes\":[{\"id\":\"n1\",\"type\":\"decision\",\"x\":1,\"y\":1,\"text\":\"<b>文字</b>\"}],\"edges\":[]}"));
+    }
+
+    @Test
     void shouldNormalizeChinesePunctuationAndWidth() {
         assertEquals("开始流程", service.normalizeText("  开始， 流程！"));
         assertEquals("abc123", service.normalizeText("ＡＢＣ-１２３"));

@@ -2,41 +2,62 @@
   <div class="cryptpad-editor-page">
     <div class="editor-toolbar">
       <span>{{ session.title || '在线协作文档' }}</span>
-      <el-tag size="small" type="info">v{{ session.version || 1 }}</el-tag>
-      <el-tag :type="saved ? 'success' : 'warning'">{{ saved ? '已保存' : '编辑中' }}</el-tag>
-      <el-popover placement="bottom-end" :width="260" trigger="click" popper-class="member-popover">
-        <template #reference>
-          <el-button size="small" :disabled="error">
-            <el-icon><User /></el-icon>
-            <span class="member-count">在线成员 {{ members.length }}</span>
-          </el-button>
-        </template>
-        <div class="member-panel">
-          <div class="member-panel-title">当前房间在线成员</div>
-          <div v-if="members.length" class="member-list">
-            <div v-for="member in members" :key="member.key" class="member-item">
-              <span class="member-dot" :class="{ online: !member.readOnly }"></span>
-              <span class="member-name">{{ member.name || '协作用户' }}</span>
-              <el-tag v-if="member.isSelf" size="small" type="success" effect="dark">我</el-tag>
-              <el-tag v-if="member.readOnly" size="small" type="info">只读</el-tag>
-            </div>
-          </div>
-          <div v-else class="member-empty">暂无其他成员，等待同学或老师进入…</div>
-        </div>
-      </el-popover>
+      <el-tag v-if="!error" size="small" type="info">v{{ session.version || 1 }}</el-tag>
+      <el-tag v-if="!error" :type="loading ? 'info' : saved ? 'success' : 'warning'">{{ loading ? '正在打开' : session.readOnly ? '历史作品 · 只读' : saved ? '已保存' : '编辑中' }}</el-tag>
+      <el-button size="small" :disabled="!!error" @click="openMemberDrawer">
+        <el-icon><User /></el-icon>
+        <span class="member-count">在线成员 ({{ members.length }}/{{ rosterTotal }})</span>
+      </el-button>
       <el-button size="small" @click="reload">重新加载</el-button>
     </div>
+    <el-drawer v-model="memberDrawerVisible" title="在线成员监控" direction="rtl" size="360px" destroy-on-close>
+      <div class="roster-head">
+        <div class="roster-title">{{ roster.groupName || session.room?.groupName || '本组' }} · {{ roster.fileName || session.room?.fileName || session.title }}</div>
+        <el-button size="small" :loading="rosterLoading" @click="loadRoster">刷新状态</el-button>
+      </div>
+      <div v-if="roster.teachers?.length" class="roster-section">
+        <div class="roster-section-title">教师</div>
+        <div v-for="t in roster.teachers" :key="'t-' + t.name" class="member-item">
+          <span class="member-dot teacher" />
+          <span class="member-name">{{ t.name }}</span>
+          <el-tag size="small" type="primary" effect="dark">教师</el-tag>
+        </div>
+      </div>
+      <div class="roster-section">
+        <div class="roster-section-title">组内应到（{{ rosterMembers.length }}人）</div>
+        <div v-if="rosterMembers.length" class="member-list">
+          <div v-for="m in rosterMembers" :key="m.studentId" class="member-item">
+            <span class="member-dot" :class="{ online: m.realtimeOnline }" />
+            <span class="member-name">{{ m.name }}</span>
+            <el-tag v-if="m.realtimeOnline" size="small" type="success" effect="dark">在线编辑中</el-tag>
+            <el-tag v-else size="small" type="info">{{ m.enterTime ? '来过，未在编辑' : '未进入' }}</el-tag>
+          </div>
+        </div>
+        <div v-else class="member-empty">{{ rosterLoading ? '正在加载花名册…' : '暂无本组花名册（旧全班房间只显示实时在线成员）' }}</div>
+      </div>
+      <div v-if="realtimeOnly.length" class="roster-section">
+        <div class="roster-section-title">实时在线（不在花名册）</div>
+        <div v-for="member in realtimeOnly" :key="member.key" class="member-item">
+          <span class="member-dot online" />
+          <span class="member-name">{{ member.name || '协作用户' }}</span>
+          <el-tag size="small" type="success">在线编辑中</el-tag>
+        </div>
+      </div>
+    </el-drawer>
     <div v-if="error" class="editor-error"><el-result icon="warning" title="协作暂时不可用" :sub-title="error"><template #extra><el-button type="primary" @click="reload">重新加载</el-button><el-button @click="copyDiagnostics">复制诊断信息</el-button></template></el-result></div>
-    <div v-else :key="editorContainerId" ref="container" :id="editorContainerId" class="editor-container"><el-skeleton v-if="loading" :rows="8" animated /></div>
+    <div v-else :key="editorContainerId" ref="container" class="editor-container">
+      <div :id="editorContainerId" class="editor-mount"></div>
+      <div v-if="loading" class="editor-loading"><el-skeleton :rows="8" animated /><p>正在打开协作文档，请稍候…</p></div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
-import { getCollaborationDocument, getCollaborationSession, heartbeatCollaborationRoom, leaveCollaborationRoom, saveCollaborationDocument } from '@/api/business/collaboration'
+import { getCollaborationDocument, getCollaborationRoster, getCollaborationSession, heartbeatCollaborationRoom, leaveCollaborationRoom, saveCollaborationDocument } from '@/api/business/collaboration'
 
 const route = useRoute()
 const container = ref(null)
@@ -58,7 +79,9 @@ let initializationId = 0
 let editorSequence = 0
 const editorContainerId = ref(nextEditorContainerId())
 
-const EDITOR_INIT_TIMEOUT = 20000
+const EDITOR_INIT_TIMEOUT = 90000
+// 跨网段直连 129 失败时脚本请求会挂起无回调；用超时把假死变成可诊断的错误。
+const SCRIPT_LOAD_TIMEOUT = 15000
 
 function nextEditorContainerId() {
   editorSequence += 1
@@ -87,6 +110,34 @@ function applyUserlist(list) {
   rows.sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || a.name.localeCompare(b.name, 'zh-CN'))
   members.value = rows
 }
+// 成员抽屉：花名册来自后端（应到+进入时间），实时在线来自 CryptPad 用户列表，两者按姓名合并。
+const memberDrawerVisible = ref(false)
+const roster = ref({ groupName: '', fileName: '', members: [], teachers: [] })
+const rosterLoading = ref(false)
+async function loadRoster() {
+  rosterLoading.value = true
+  try {
+    const response = await getCollaborationRoster(route.params.roomId)
+    roster.value = response.data || response || { groupName: '', fileName: '', members: [], teachers: [] }
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.msg || e?.message || '花名册加载失败')
+  } finally {
+    rosterLoading.value = false
+  }
+}
+function openMemberDrawer() {
+  memberDrawerVisible.value = true
+  loadRoster()
+}
+const rosterMembers = computed(() => {
+  const onlineNames = new Set(members.value.map(m => m.name))
+  return (roster.value.members || []).map(m => ({ ...m, realtimeOnline: onlineNames.has(m.name) }))
+})
+const rosterTotal = computed(() => rosterMembers.value.length || members.value.length)
+const realtimeOnly = computed(() => {
+  const rosterNames = new Set((roster.value.members || []).map(m => m.name))
+  return members.value.filter(m => !rosterNames.has(m.name))
+})
 
 function browserDiagnostics() {
   return {
@@ -130,6 +181,15 @@ function saveFileName(file) {
   return name.toLowerCase().endsWith(`.${extension.toLowerCase()}`) ? name : `${name}.${extension}`
 }
 
+function loadScriptWithTimeout(url) {
+  if (!url) return Promise.reject(new Error('协作服务地址未配置，请联系管理员检查协作代理配置'))
+  let timer = null
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`协作编辑器脚本加载超时（${url}），请检查机房网络或协作代理配置`)), SCRIPT_LOAD_TIMEOUT)
+  })
+  return Promise.race([loadScript(url), timeout]).finally(() => { if (timer) clearTimeout(timer) })
+}
+
 function loadScript(url) {
   return new Promise((resolve, reject) => {
     if (window.CryptPadAPI) return resolve()
@@ -157,37 +217,6 @@ function loadScript(url) {
     document.head.appendChild(apiScript)
   })
 }
-
-function waitForEditorFrame() {
-  return new Promise((resolve, reject) => {
-    rejectEditorFrame = reject
-    const target = container.value
-    if (!target) {
-      rejectEditorFrame = null
-      return reject(new Error('协作编辑器容器未找到'))
-    }
-    const existing = target.querySelector('iframe')
-    if (existing) {
-      rejectEditorFrame = null
-      return resolve()
-    }
-    const finish = (callback, value) => {
-      if (initTimer) clearTimeout(initTimer)
-      if (initObserver) initObserver.disconnect()
-      initTimer = null
-      initObserver = null
-      rejectEditorFrame = null
-      callback(value)
-    }
-    initObserver = new MutationObserver(() => {
-      if (target.querySelector('iframe')) finish(resolve)
-    })
-    initObserver.observe(target, { childList: true, subtree: true })
-    initTimer = setTimeout(() => finish(reject,
-      new Error('协作编辑器加载超时，请升级浏览器或检查 office.xsedu.net.cn 网络访问')), EDITOR_INIT_TIMEOUT)
-  })
-}
-
 function cleanupEditor() {
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   heartbeatTimer = null
@@ -232,7 +261,7 @@ async function open() {
   windowErrorHandler = event => {
     if (!isCurrentInitialization(currentInitializationId)) return
     const filename = String(event?.filename || '')
-    if (filename.includes('office.xsedu.net.cn') || filename.includes('common-coller.js')) {
+    if (filename.includes('common-coller.js')) {
       error.value = '协作编辑器脚本与当前浏览器不兼容，请升级 Chrome 或 Edge 后重试'
       loading.value = false
     }
@@ -246,9 +275,9 @@ async function open() {
     const blob = await getCollaborationDocument(route.params.roomId)
     if (!isCurrentInitialization(currentInitializationId)) return
     objectUrl = URL.createObjectURL(blob)
-    await loadScript(session.apiUrl)
+    await loadScriptWithTimeout(session.apiUrl)
     if (!isCurrentInitialization(currentInitializationId)) return
-    window.CryptPadAPI(editorContainerId.value, {
+    const editorReady = window.CryptPadAPI(new URL(session.baseUrl, window.location.origin).href, editorContainerId.value, {
       document: { url: objectUrl, fileType: session.fileType, title: session.title, key: session.documentKey },
       documentType: session.documentType,
       mode: session.mode,
@@ -297,11 +326,18 @@ async function open() {
         }
       }
     })
-    await waitForEditorFrame()
+    // iframe 出现只代表外壳创建；必须等待 CryptPad 完成文档初始化，才能提示已就绪。
+    await Promise.race([editorReady, new Promise((_, reject) => {
+      rejectEditorFrame = reject
+      initTimer = setTimeout(() => reject(new Error('协作文档打开超时，请重试；若仍失败，请联系教师检查协作服务')), EDITOR_INIT_TIMEOUT)
+    })])
+    clearTimeout(initTimer)
+    initTimer = null
+    rejectEditorFrame = null
     if (!isCurrentInitialization(currentInitializationId)) return
   } catch (e) {
     if (!isCurrentInitialization(currentInitializationId)) return
-    error.value = e?.message || '无法连接协作服务'
+    error.value = e?.message || (typeof e === 'string' ? e : '无法连接协作服务')
   } finally {
     if (isCurrentInitialization(currentInitializationId)) loading.value = false
     if (isCurrentInitialization(currentInitializationId) && windowErrorHandler) {
@@ -325,16 +361,20 @@ onBeforeUnmount(() => {
 .editor-toolbar { min-height: 48px; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: #fff; border-bottom: 1px solid #ebeef5; }
 .editor-toolbar span { flex: 1; font-weight: 600; }
 .editor-toolbar .member-count { margin-left: 4px; }
-.editor-container { flex: 1; min-height: 0; background: #fff; }
+.editor-container { flex: 1; min-height: 0; background: #fff; position: relative; }
+.editor-mount { height: 100%; }
+.editor-loading { position: absolute; inset: 0; background: #fff; padding: 32px; }
 .editor-error { flex: 1; display: flex; align-items: center; justify-content: center; }
+.member-empty { font-size: 12px; color: #909399; padding: 8px 0; }
+.roster-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.roster-title { font-size: 13px; font-weight: 600; color: #303133; }
+.roster-section { margin-bottom: 16px; }
+.roster-section-title { font-size: 12px; color: #909399; margin-bottom: 8px; }
+.member-list { display: flex; flex-direction: column; gap: 6px; }
+.member-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; background: #f7f9fb; }
+.member-dot { width: 8px; height: 8px; border-radius: 50%; background: #c0c4cc; flex: 0 0 auto; }
+.member-dot.online { background: #67c23a; }
+.member-dot.teacher { background: #409eff; }
+.member-name { flex: 1; font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 
-<style>
-.member-popover .member-panel-title { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 8px; }
-.member-popover .member-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
-.member-popover .member-item { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; background: #f7f9fb; }
-.member-popover .member-dot { width: 8px; height: 8px; border-radius: 50%; background: #c0c4cc; flex: 0 0 auto; }
-.member-popover .member-dot.online { background: #67c23a; }
-.member-popover .member-name { flex: 1; font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.member-popover .member-empty { font-size: 12px; color: #909399; padding: 8px 0; }
-</style>

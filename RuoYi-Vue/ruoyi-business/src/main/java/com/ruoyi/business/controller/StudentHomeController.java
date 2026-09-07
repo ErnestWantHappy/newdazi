@@ -554,6 +554,10 @@ public class StudentHomeController extends BaseController
         List<BizLessonQuestionDetailVo> questions = lessonQuestionMapper.selectDetailsByLessonId(lessonId);
         Map<Long, BizLessonQuestionDetailVo> questionMap = questions.stream()
                 .collect(java.util.stream.Collectors.toMap(BizLessonQuestionDetailVo::getQuestionId, q -> q));
+        // 请求题目无一属于当前课程时直接拒绝，避免空落库却误报“提交成功”。
+        if (!hasMatchedQuestion(answers, questionMap)) {
+            return AjaxResult.error("提交的题目与当前课程不匹配，未保存任何答案");
+        }
 
         Date now = new Date();
         int totalScore = 0;
@@ -578,12 +582,14 @@ public class StudentHomeController extends BaseController
             boolean isCorrect = false;
 
             if ("choice".equals(question.getQuestionType())) {
+                answer.setTerminalSubmission(true);
                 // 选择题：直接比较（忽略大小写）
                 isCorrect = studentAnswer != null && studentAnswer.equalsIgnoreCase(question.getAnswer());
                 if (isCorrect && question.getQuestionScore() != null) {
                     score = question.getQuestionScore().intValue();
                 }
             } else if ("judgment".equals(question.getQuestionType())) {
+                answer.setTerminalSubmission(true);
                 // 判断题：将中文答案转换为T/F后比较
                 String normalizedAnswer = normalizeJudgmentAnswer(studentAnswer);
                 isCorrect = normalizedAnswer != null && normalizedAnswer.equalsIgnoreCase(question.getAnswer());
@@ -595,15 +601,8 @@ public class StudentHomeController extends BaseController
                 if (original != null && !original.isEmpty() && studentAnswer != null) {
                     int completedCount = studentAnswer.length(); // 完成字数
                     int originalLength = original.length(); // 原文字数
-                    int correctCount = 0;
-                    
-                    // 逐字比对
-                    int compLen = Math.min(completedCount, originalLength);
-                    for (int i = 0; i < compLen; i++) {
-                        if (original.charAt(i) == studentAnswer.charAt(i)) {
-                            correctCount++;
-                        }
-                    }
+                    // 逐字比对（与服务端统计口径共用同一实现）
+                    int correctCount = com.ruoyi.business.util.TypingSpeedStats.countCorrectPrefix(original, studentAnswer);
                     
                     // 计算完成率和正确率
                     double completionRate = (double) correctCount / originalLength;  // 完成率 = 正确字数/原文字数（与前端progress一致）
@@ -649,15 +648,12 @@ public class StudentHomeController extends BaseController
                     // 打字题重复提交（含弱网重发）保留历史最高分，防止慢的一次覆盖快的一次
                     answer.setKeepBestScore(true);
 
-                    // 存储前端传来的打字统计数据
-                    if (request.getTypingStats() != null && request.getTypingStats().containsKey(questionId)) {
-                        TypingStatItem stat = request.getTypingStats().get(questionId);
-                        if (stat != null) {
-                            answer.setTypingSpeed(stat.getTypingSpeed());
-                            answer.setAccuracyRate(stat.getAccuracyRate());
-                            answer.setCompletionRate(stat.getCompletionRate());
-                        }
-                    }
+                    // 打字统计量由服务端按正文比重算并封顶落库，不采信客户端自报（防控制台伪造极端速度污染学情）。
+                    com.ruoyi.business.util.TypingSpeedStats resolvedStats =
+                            com.ruoyi.business.util.TypingSpeedStats.resolve(correctCount, completedCount, originalLength, timeSpent);
+                    answer.setTypingSpeed(resolvedStats.getTypingSpeed());
+                    answer.setAccuracyRate(resolvedStats.getAccuracyRate());
+                    answer.setCompletionRate(resolvedStats.getCompletionRate());
                 }
             }
             
@@ -823,6 +819,21 @@ public class StudentHomeController extends BaseController
     {
         Map<String, Object> current = countyExamService.checkCurrentStudentExam();
         return Boolean.TRUE.equals(current.get("hasExam")) && !Boolean.TRUE.equals(current.get("ended"));
+    }
+
+    /**
+     * 请求题目在当前课程命中至少一道才允许落库，避免无效提交误报“提交成功”。
+     */
+    static boolean hasMatchedQuestion(java.util.Map<Long, String> answers, java.util.Map<Long, ?> questionMap) {
+        if (answers == null || answers.isEmpty() || questionMap == null || questionMap.isEmpty()) {
+            return false;
+        }
+        for (Long questionId : answers.keySet()) {
+            if (questionId != null && questionMap.containsKey(questionId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String validateSubmissionAccess(BizStudent student, Long deptId, Long lessonId)

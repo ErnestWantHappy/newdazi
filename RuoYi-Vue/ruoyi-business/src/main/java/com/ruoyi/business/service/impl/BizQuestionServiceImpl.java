@@ -554,9 +554,29 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         material.setResourcePath(path);
         material.setOriginalFileName(path.substring(path.lastIndexOf('/') + 1));
         material.setFileExtension(extensionOf(path));
+        // 起始文件大小必须落库，否则协作候选列表只能显示 0B
+        material.setFileSize(physicalFileSize(path));
         material.setCreateBy(SecurityUtils.getUsername());
         material.setCreateTime(DateUtils.getNowDate());
         return material;
+    }
+
+    /**
+     * 按 profile 资源路径读取物理文件大小；文件缺失时返回 null，由调用方兜底。
+     */
+    private Long physicalFileSize(String path)
+    {
+        try
+        {
+            if (StringUtils.isEmpty(path)) return null;
+            String relative = path.replaceFirst(Constants.RESOURCE_PREFIX, "");
+            java.io.File file = new java.io.File(RuoYiConfig.getProfile() + relative);
+            return file.isFile() ? file.length() : null;
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
     }
 
     private String extensionOf(String path)

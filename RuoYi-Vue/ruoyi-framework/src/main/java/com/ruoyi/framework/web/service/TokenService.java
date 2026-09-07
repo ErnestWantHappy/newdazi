@@ -54,6 +54,9 @@ public class TokenService
     @Autowired
     private RedisCache redisCache;
 
+    @Autowired
+    private OnlinePresenceService onlinePresenceService;
+
     /**
      * 获取用户身份信息
      * 
@@ -109,7 +112,9 @@ public class TokenService
         if (StringUtils.isNotEmpty(token))
         {
             String userKey = getTokenKey(token);
+            LoginUser user = redisCache.getCacheObject(userKey);
             redisCache.deleteObject(userKey);
+            onlinePresenceService.forget(user);
         }
     }
 
@@ -122,6 +127,26 @@ public class TokenService
     public String createToken(LoginUser loginUser)
     {
         String token = IdUtils.fastUUID();
+        return saveToken(loginUser, token);
+    }
+
+    /** 密码已验证后，同浏览器同账号复用会话；切换学校等主动换令牌仍走createToken。 */
+    public String createLoginToken(LoginUser loginUser)
+    {
+        String client = ServletUtils.getRequest().getHeader("X-Login-Client");
+        if (client == null || !client.matches("[a-f0-9]{32}")) return createToken(loginUser);
+        String key = "login:client:" + loginUser.getUserId() + ":" + client;
+        String previous = redisCache.getCacheObject(key);
+        LoginUser existing = previous == null ? null : redisCache.getCacheObject(getTokenKey(previous));
+        String uuid = existing != null && loginUser.getUserId().equals(existing.getUserId())
+                ? previous : IdUtils.fastUUID();
+        String signed = saveToken(loginUser, uuid);
+        redisCache.setCacheObject(key, uuid, expireTime, TimeUnit.MINUTES);
+        return signed;
+    }
+
+    private String saveToken(LoginUser loginUser, String token)
+    {
         loginUser.setToken(token);
         setUserAgent(loginUser);
         refreshToken(loginUser);
@@ -140,6 +165,7 @@ public class TokenService
      */
     public void verifyToken(LoginUser loginUser)
     {
+        onlinePresenceService.touch(loginUser);
         long expireTime = loginUser.getExpireTime();
         long currentTime = System.currentTimeMillis();
         if (expireTime - currentTime <= MILLIS_MINUTE_TWENTY)

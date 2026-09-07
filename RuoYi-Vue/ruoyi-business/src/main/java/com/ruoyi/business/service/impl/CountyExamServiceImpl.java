@@ -1190,7 +1190,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
             score = calculateTypingScore(question, studentAnswer, request);
             correct = score >= scoreValue(question) * 0.6;
             answer.setScore(score);
-            applyTypingStats(answer, request, question.getQuestionId());
+            applyTypingStats(answer, question, studentAnswer);
         } else if ("practical".equals(questionType)) {
             applyPracticalPreview(answer, studentAnswer);
             answer.setFilePath(studentAnswer);
@@ -1201,14 +1201,17 @@ public class CountyExamServiceImpl implements ICountyExamService {
         return answer;
     }
 
-    private void applyTypingStats(CountyExamAnswer answer, CountyExamSubmitRequest request, Long questionId) {
-        if (request.getTypingStats() == null || request.getTypingStats().get(questionId) == null) {
-            return;
-        }
-        CountyExamSubmitRequest.TypingStatItem stat = request.getTypingStats().get(questionId);
-        answer.setTypingSpeed(stat.getTypingSpeed());
-        answer.setAccuracyRate(normalizePercentage(stat.getAccuracyRate()));
-        answer.setCompletionRate(normalizePercentage(stat.getCompletionRate()));
+    // 打字统计量由服务端按正文比重算并封顶落库，不采信客户端自报（防控制台伪造极端速度污染抽测画像）。
+    private void applyTypingStats(CountyExamAnswer answer, BizLessonQuestionDetailVo question, String studentAnswer) {
+        String original = question == null ? null : question.getQuestionContent();
+        int completed = studentAnswer == null ? 0 : studentAnswer.length();
+        int originalLength = original == null ? 0 : original.length();
+        int correct = com.ruoyi.business.util.TypingSpeedStats.countCorrectPrefix(original, studentAnswer);
+        com.ruoyi.business.util.TypingSpeedStats stats =
+                com.ruoyi.business.util.TypingSpeedStats.resolve(correct, completed, originalLength, answer.getAnswerTime());
+        answer.setTypingSpeed(stats.getTypingSpeed());
+        answer.setAccuracyRate(stats.getAccuracyRate());
+        answer.setCompletionRate(stats.getCompletionRate());
     }
 
     static Double normalizePercentage(Double value) {
@@ -1278,13 +1281,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
         if (StringUtils.isEmpty(original) || studentAnswer == null) {
             return 0;
         }
-        int correctCount = 0;
-        int compareLength = Math.min(studentAnswer.length(), original.length());
-        for (int i = 0; i < compareLength; i++) {
-            if (original.charAt(i) == studentAnswer.charAt(i)) {
-                correctCount++;
-            }
-        }
+        int correctCount = com.ruoyi.business.util.TypingSpeedStats.countCorrectPrefix(original, studentAnswer);
         double accuracyRate = studentAnswer.length() > 0 ? (double) correctCount / studentAnswer.length() : 0;
         int duration = question.getTypingDuration() == null || question.getTypingDuration() <= 0 ? 5 : question.getTypingDuration();
         int baseSpeed = 40;

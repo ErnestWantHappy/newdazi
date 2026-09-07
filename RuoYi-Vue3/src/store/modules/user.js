@@ -1,4 +1,5 @@
 import router from '@/router'
+import usePermissionStore from '@/store/modules/permission'
 import { ElMessageBox, } from 'element-plus'
 import { login, logout, getInfo, selectSchool as selectSchoolApi } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
@@ -32,6 +33,8 @@ const useUserStore = defineStore(
           login(username, password, code, uuid).then(res => {
             setToken(res.token)
             this.token = res.token
+            this.roles = []
+            usePermissionStore().routesReady = false
             const schools = Array.isArray(res.schools) ? res.schools : []
             this.schools = schools
             const fallbackDeptId = schools.length === 1 ? schools[0].deptId : null
@@ -91,7 +94,7 @@ const useUserStore = defineStore(
       // 退出系统
       logOut() {
         return new Promise((resolve, reject) => {
-          logout(this.token).then(() => {
+          logout(this.token).catch(() => {}).finally(() => {
             this.token = ''
             this.roles = []
             this.permissions = []
@@ -99,10 +102,9 @@ const useUserStore = defineStore(
             this.currentDeptId = null
             this.needsSchoolSelection = false
             this.needChangePwd = false
+            usePermissionStore().routesReady = false
             removeToken()
             resolve()
-          }).catch(error => {
-            reject(error)
           })
         })
       },

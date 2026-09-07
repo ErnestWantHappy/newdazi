@@ -28,8 +28,8 @@ public class FlowchartDocumentService {
     private static final int MAX_EDGES = 400;
     private static final int MAX_TEXT_LENGTH = 200;
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
-    /** 只拦截形态完整的 HTML 标签，避免把 a < b 这样的比较表达式误判为标签。 */
-    private static final Pattern HTML_TAG = Pattern.compile("(?is)<\\/?[A-Za-z][^<>]*>");
+    /** 只拦截形态完整的 HTML 标签，避免把 a<b && c>d 这样的判断表达式误判为标签。 */
+    private static final Pattern HTML_TAG = Pattern.compile("(?is)<\\/?[A-Za-z][A-Za-z0-9]*(?:\\s+[A-Za-z_:][A-Za-z0-9:._-]*(?:\\s*=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s\"'=<>`]+))?)*\\s*/?>");
     private static final Pattern HTML_COMMENT = Pattern.compile("(?is)<!--.*?-->");
     private static final Pattern SCRIPT_PROTOCOL = Pattern.compile("(?is).*\\bjavascript\\s*:.*");
     private static final Set<String> NODE_TYPES = new HashSet<String>();

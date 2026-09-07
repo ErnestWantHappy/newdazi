@@ -10,6 +10,7 @@ import com.ruoyi.business.judge.Judge0Properties;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
+import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.domain.vo.StudentProgrammingSubmissionVo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -253,5 +255,23 @@ class ProgrammingSubmissionServiceTest {
         ArgumentCaptor<ProgrammingQuestionConfig> captor = ArgumentCaptor.forClass(ProgrammingQuestionConfig.class);
         verify(programmingMapper).upsertConfig(captor.capture());
         assertEquals("PYV2-042", captor.getValue().getExternalId());
+    }
+
+    @Test
+    void courseAnswerKeepsBestScoreAcrossSubmissions() {
+        // 课程编程题与打字题一致取历史最高分：低分重交不得覆盖已落库的高分。
+        ProgrammingSubmission submission = new ProgrammingSubmission();
+        submission.setStudentId(9492L);
+        submission.setLessonId(371L);
+        submission.setQuestionId(3337L);
+        submission.setSourceCode("print(1)");
+        submission.setTimeSeconds(0.015D);
+
+        ReflectionTestUtils.invokeMethod(service, "writeExistingAnswer", submission, 0, false);
+
+        ArgumentCaptor<BizStudentAnswer> captor = ArgumentCaptor.forClass(BizStudentAnswer.class);
+        verify(studentAnswerMapper).upsertAnswer(captor.capture());
+        assertTrue(Boolean.TRUE.equals(captor.getValue().getKeepBestScore()));
+        assertEquals(Integer.valueOf(0), captor.getValue().getScore());
     }
 }

@@ -29,6 +29,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class PracticalAiJobService
 {
     public static final String PROMPT_VERSION = "operation-rubric-v2";
+    // 流程图任务标记：数据库 JSON 列只能存合法 JSON，故存带引号的 "FLOWCHART"；读取一律走 isFlowchartJob。
+    public static final String FLOWCHART_MARKER = "\"FLOWCHART\"";
+    public static boolean isFlowchartJob(String referenceAnswerJson)
+    {
+        return "FLOWCHART".equals(referenceAnswerJson) || FLOWCHART_MARKER.equals(referenceAnswerJson);
+    }
     @Autowired private PracticalAiGradingMapper mapper;
     @Autowired private TeacherAiConfigService configService;
     @Autowired private PracticalAiJobWorker worker;
@@ -64,7 +70,7 @@ public class PracticalAiJobService
             if (eligible(submission, flowchart) && selectedByScope(submission, normalizedScope)) eligible++;
             else if (Boolean.TRUE.equals(submission.getSubmitted())) skipped++;
         }
-        if (eligible == 0) throw new ServiceException("本班暂无已完成页图转换的操作题作品");
+        if (eligible == 0) throw new ServiceException(flowchart ? "本班暂无可供 AI 识别的流程图提交" : "本班暂无已完成页图转换的操作题作品");
 
         PracticalAiJob job = new PracticalAiJob();
         job.setTeacherUserId(teacherUserId); job.setDeptId(deptId); job.setLessonId(lessonId);
@@ -75,7 +81,7 @@ public class PracticalAiJobService
         job.setOutputPricePerThousand(price.getOutputPricePerThousand());
         job.setPriceStatus(price.getPriceStatus()); job.setPriceNote(price.getPriceNote());
         job.setPromptVersion(PROMPT_VERSION); job.setScopeMode(normalizedScope);
-        job.setReferenceAnswerJson(flowchart ? "FLOWCHART" : writeJson(referenceAnswers));
+        job.setReferenceAnswerJson(flowchart ? FLOWCHART_MARKER : writeJson(referenceAnswers));
         job.setStarterMaterialsJson(writeJson(materials(questionId, "STARTER")));
         job.setJobStatus("PENDING");
         job.setTotalCount(eligible); job.setSkippedCount(skipped);
@@ -85,7 +91,7 @@ public class PracticalAiJobService
             if (!eligible(submission, flowchart) || !selectedByScope(submission, normalizedScope)) continue;
             PracticalAiResult result = new PracticalAiResult();
             result.setJobId(job.getJobId()); result.setAnswerId(submission.getAnswerId());
-            result.setPracticalVersionId(submission.getPracticalVersionId());
+            result.setPracticalVersionId(flowchart ? submission.getFlowchartSubmissionId() : submission.getPracticalVersionId());
             // 流程图没有普通文档评分快照，但结果表要求非空；提交版本本身就是不可变评分锚点。
             result.setRubricSnapshotId(flowchart ? submission.getFlowchartSubmissionId()
                     : submission.getRubricSnapshotId());
@@ -273,13 +279,15 @@ public class PracticalAiJobService
         return job;
     }
 
+    // 流程图提交没有文件版本/评分快照，以流程图提交版本为唯一锚点；文件作品仍要求页图转换成功。
     private boolean eligible(PracticalSubmissionVo submission, boolean flowchart)
     {
         if (submission == null || !Boolean.TRUE.equals(submission.getSubmitted())
-                || submission.getAnswerId() == null || submission.getPracticalVersionId() == null
-                || (!flowchart && (submission.getRubricSnapshotId() == null || submission.getAttachments() == null
-                || submission.getAttachments().isEmpty()))) return false;
-        if (flowchart) return "FLOWCHART".equalsIgnoreCase(submission.getPracticalMode());
+                || submission.getAnswerId() == null) return false;
+        if (flowchart) return "FLOWCHART".equalsIgnoreCase(submission.getPracticalMode())
+                && submission.getFlowchartSubmissionId() != null;
+        if (submission.getPracticalVersionId() == null || submission.getRubricSnapshotId() == null
+                || submission.getAttachments() == null || submission.getAttachments().isEmpty()) return false;
         return submission.getAttachments().stream().allMatch(attachment ->
                 "success".equalsIgnoreCase(attachment.getNormalizedStatus())
                 && attachment.getNormalizedPages() != null && !attachment.getNormalizedPages().isEmpty());

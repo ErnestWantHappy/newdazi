@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import com.ruoyi.business.mapper.BizStudentAnswerMapper;
-
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.BizLessonQuestion;
@@ -120,9 +118,6 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private StudentAnswerArchiveService studentAnswerArchiveService;
-
-    @Autowired
-    private BizStudentAnswerMapper studentAnswerMapper;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -551,28 +546,9 @@ public class BizLessonServiceImpl implements IBizLessonService
         Long lessonId = lessonToSave.getLessonId();
         lessonDetailVo.setLessonId(lessonId);
 
-        List<BizLessonQuestionDetailVo> previousQuestions = lessonId == null
-                ? Collections.emptyList()
-                : lessonQuestionMapper.selectDetailsByLessonId(lessonId);
-        Map<Long, BizLessonQuestionDetailVo> previousQuestionMap = previousQuestions.stream()
-                .filter(q -> q != null && q.getQuestionId() != null)
-                .collect(Collectors.toMap(BizLessonQuestionDetailVo::getQuestionId, q -> q, (a, b) -> a));
-
+        // 调分不再拦截：历史答题的 score 与客观题对错保持落库原状，仅新提交按新分值与最新评分快照计分。
         List<Long> previousQuestionIds = lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId);
         List<BizLessonQuestionDetailVo> questions = lessonDetailVo.getQuestions();
-        if (lessonId != null && questions != null) {
-            for (BizLessonQuestionDetailVo q : questions) {
-                if (q == null || q.getQuestionId() == null) continue;
-                BizLessonQuestionDetailVo prev = previousQuestionMap.get(q.getQuestionId());
-                if (prev != null && prev.getQuestionScore() != null && !Objects.equals(q.getQuestionScore(), prev.getQuestionScore())) {
-                    if (studentAnswerMapper.countAnswersByLessonAndQuestion(lessonId, q.getQuestionId()) > 0) {
-                        String title = StringUtils.isNotEmpty(prev.getQuestionContent()) ? prev.getQuestionContent() : String.valueOf(q.getQuestionId());
-                        if (title.length() > 20) title = title.substring(0, 20) + "...";
-                        throw new ServiceException("题目“" + title + "”已有学生答题提交记录，不能修改题目分值");
-                    }
-                }
-            }
-        }
         LinkedHashSet<Long> newQuestionIds = questions == null
                 ? new LinkedHashSet<Long>()
                 : questions.stream().filter(Objects::nonNull)
@@ -746,6 +722,37 @@ public class BizLessonServiceImpl implements IBizLessonService
             if (totalScore != 100L)
             {
                 throw new ServiceException("普通题目总分必须为100分");
+            }
+            // 一课一道操作题：FILE/PYTHON/FLOWCHART 共用一个名额；已有多道的存量课允许保持现状，但不允许新增
+            long practicalCount = 0L;
+            for (BizLessonQuestionDetailVo question : questions)
+            {
+                if (question != null && "practical".equalsIgnoreCase(question.getQuestionType()))
+                {
+                    practicalCount++;
+                }
+            }
+            if (practicalCount > 1L)
+            {
+                long existingPractical = 0L;
+                if (detailVo.getLessonId() != null)
+                {
+                    List<BizLessonQuestionDetailVo> existing = lessonQuestionMapper.selectDetailsByLessonId(detailVo.getLessonId());
+                    if (existing != null)
+                    {
+                        for (BizLessonQuestionDetailVo q : existing)
+                        {
+                            if (q != null && "practical".equalsIgnoreCase(q.getQuestionType()))
+                            {
+                                existingPractical++;
+                            }
+                        }
+                    }
+                }
+                if (practicalCount > Math.max(1L, existingPractical))
+                {
+                    throw new ServiceException("一门课程最多只能添加一道操作题");
+                }
             }
         }
 
@@ -960,7 +967,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         boolean sameDept = lesson.getDeptId() != null && lesson.getDeptId().equals(SecurityUtils.getDeptId());
         boolean creator = userId.equals(lesson.getCreatorId())
                 || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
-        if (!sameDept || !creator)
+        // 课程创建者即使调岗后仍需维护本人课程；部门和班级范围只约束非创建者协作者。
+        if (!creator)
         {
             throw new ServiceException("无权管理该课程");
         }
@@ -981,7 +989,7 @@ public class BizLessonServiceImpl implements IBizLessonService
         boolean sameDept = lesson.getDeptId() != null && lesson.getDeptId().equals(deptId);
         boolean creator = userId.equals(lesson.getCreatorId())
                 || (lesson.getCreatorId() == null && SecurityUtils.getUsername().equals(lesson.getCreateBy()));
-        if (!sameDept || (!creator && !hasManagedAssignedClass(lesson, userId, deptId)))
+        if (!creator && (!sameDept || !hasManagedAssignedClass(lesson, userId, deptId)))
         {
             throw new ServiceException("无权查看该课程");
         }

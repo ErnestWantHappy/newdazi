@@ -520,6 +520,9 @@ const dashboard = ref(null)
 const groupSize = ref(4)
 const loading = ref(false)
 const saving = ref(false)
+let refreshTimer
+let classDataLoading = false
+let classDataRefreshPending = false
 const groupingLoading = ref(false)
 const rotating = ref(false)
 const syncingBroker = ref(false)
@@ -640,11 +643,17 @@ async function loadExperimentsAndClasses() {
 }
 
 async function loadClassData() {
+  if (classDataLoading) {
+    classDataRefreshPending = true
+    return
+  }
+  classDataLoading = true
   if (!experimentId.value) {
     dashboard.value = null
     classConfig.value = null
     currentGroups.value = []
     groupStats.value = []
+    classDataLoading = false
     return
   }
 
@@ -673,6 +682,12 @@ async function loadClassData() {
     errorMessage.value = ''
   } catch (error) {
     errorMessage.value = error?.message || '物联数据加载失败'
+  } finally {
+    classDataLoading = false
+    if (classDataRefreshPending) {
+      classDataRefreshPending = false
+      loadClassData()
+    }
   }
   // 若当前停留在小组详情页，主数据刷新时同步刷新明细
   if (detailMode.value && detailGroup.value) {
@@ -955,7 +970,8 @@ function connectRealtime() {
   socket.onmessage = event => {
     try {
       if (JSON.parse(event.data).type === 'iot_refresh') {
-        loadClassData()
+        window.clearTimeout(refreshTimer)
+        refreshTimer = window.setTimeout(() => loadClassData(), 800)
       }
     } catch (_error) { }
   }

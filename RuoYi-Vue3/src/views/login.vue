@@ -191,9 +191,11 @@ watch(route, (newRoute) => {
 }, { immediate: true })
 
 function handleLogin() {
+  if (loading.value) return
+  loading.value = true
   proxy.$refs.loginRef.validate(valid => {
+    if (!valid) { loading.value = false; return }
     if (valid) {
-      loading.value = true
       // 勾选了需要记住密码设置在 cookie 中设置记住用户名和密码
       if (loginForm.value.rememberMe) {
         Cookies.set("username", loginForm.value.username, { expires: 30 })
@@ -204,6 +206,13 @@ function handleLogin() {
         Cookies.remove("username")
         Cookies.remove("password")
         Cookies.remove("rememberMe")
+      }
+      if (userStore.token) {
+        continueAfterLogin().catch(() => {
+          loading.value = false
+          proxy.$modal.msgError('登录已成功，页面加载失败，请稍后再点登录重试')
+        })
+        return
       }
       // 调用action的登录方法
       userStore.login(loginForm.value).then(res => {
@@ -218,7 +227,7 @@ function handleLogin() {
           loading.value = false
           return
         }
-        continueAfterLogin()
+        return continueAfterLogin()
       }).catch((error) => {
         loading.value = false
         proxy.$modal.msgError(error?.message || "登录失败，请检查账号、密码和验证码")
@@ -231,7 +240,9 @@ function handleLogin() {
   })
 }
 
-function continueAfterLogin() {
+async function continueAfterLogin() {
+  // 登录已成功后获取角色失败时保留令牌，重试不会再创建登录会话。
+  await userStore.getInfo()
   const query = route.query
   const otherQueryParams = Object.keys(query).reduce((acc, cur) => {
     if (cur !== "redirect") {
@@ -239,19 +250,19 @@ function continueAfterLogin() {
     }
     return acc
   }, {})
-  loading.value = false
-  
   // 根据角色决定默认跳转路径
   let defaultPath = "/"
   const roles = userStore.roles || []
   if (roles.includes('student')) {
-    defaultPath = "/student"
+    defaultPath = "/student/index"
   } else if (roles.includes('teacher')) {
     defaultPath = "/teacher-dashboard"
   }
   // admin 或其他角色保持默认 "/" → "/index"
   
-  router.push({ path: redirect.value || defaultPath, query: otherQueryParams })
+  const target = roles.includes('student') ? '/student/index' : (redirect.value || defaultPath)
+  try { await router.push({ path: target, query: otherQueryParams }) }
+  finally { loading.value = false }
 }
 
 function confirmSchoolSelection() {
@@ -262,7 +273,7 @@ function confirmSchoolSelection() {
   loading.value = true
   userStore.selectSchool(selectedSchoolId.value).then(() => {
     schoolDialogVisible.value = false
-    continueAfterLogin()
+    return continueAfterLogin()
   }).catch(() => {
     loading.value = false
   })

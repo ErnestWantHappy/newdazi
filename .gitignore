@@ -38,3 +38,8 @@ tools/tests/__pycache__/
 /scratch/
 /RuoYi-Vue3/output/
 /sql/ry-vue260709.sql
+
+# jar解包临时验证目录，禁止入库
+/temp_jar_check/
+/temp_server_jar_check/
+/temp_verify_jar/

@@ -13,6 +13,11 @@ import com.ruoyi.common.core.domain.AjaxResult;
 public class CollaborationActivityController
 {
     @Autowired private CollaborationActivityService service;
+    @Autowired private com.ruoyi.business.service.CollaborationWorkspaceService workspace;
+    @GetMapping("/lesson/{lessonId}/workspace") @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
+    public AjaxResult workspace(@PathVariable Long lessonId) { return AjaxResult.success(workspace.load(lessonId)); }
+    @PutMapping("/lesson/{lessonId}/workspace") @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
+    public AjaxResult saveWorkspace(@PathVariable Long lessonId, @RequestBody Map<String,Object> request) throws Exception { return AjaxResult.success(workspace.save(lessonId, request)); }
     @PostMapping("/lesson/{lessonId}/activities") @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
     public AjaxResult create(@PathVariable Long lessonId, @RequestBody Map<String, Object> request) throws Exception { return AjaxResult.success(service.create(lessonId, request)); }
     @GetMapping("/lesson/{lessonId}/activities") @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
