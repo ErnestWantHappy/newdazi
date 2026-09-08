@@ -1,0 +1,47 @@
+# 测试截图
+screenshots/
+screenshots_phase*/
+*.png
+
+# 测试数据
+test_data/
+
+# 测试脚本
+*.ps1
+*.py
+
+# 临时 JS 脚本
+check_*.js
+_*.js
+*_eval.js
+find_*.js
+navigate_*.js
+login_*.js
+
+# 临时 JSON 文件
+batch.json
+auth.json
+submit_body.json
+login_body.json
+har-list.json
+
+# 临时文本文件
+form_json.txt
+temp_formJson.txt
+
+# 日志文件
+*.log
+
+# 环境依赖
+node_modules/
+package-lock.json
+yarn.lock
+
+# 测试上传文件
+uploadPath/
+
+# 开发上下文文档
+contexts/
+
+# 测试脚本
+RuoYi-Vue3/upload_test.cjs

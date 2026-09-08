@@ -341,11 +341,14 @@ const rawFormJson = ref(null)  // 保存原始 formJson 用于提取字段选项
 let pollingTimer = null
 /** 标记：新建导学单时是否已注入标签页组件（防止重复注入） */
 let tabInjected = false
+	/** 标记组件是否已完成首次挂载，防止 watch 与 onMounted 冲突 */
+	let isMounted = false
 
 // noCache 场景：组件每次重建时重置 tabInjected，确保 VForm3 的 onFormJsonChange 能正常注入标签页
-onBeforeMount(() => {
-  tabInjected = false
-})
+	onBeforeMount(() => {
+	  tabInjected = false
+	  isMounted = false
+	})
 
 /**
  * 重置为全新表单状态（仅含标签页组件）
@@ -370,13 +373,24 @@ function resetToNewForm() {
   aiModel.value = ''
   aiCustomUrl.value = ''
 
-  // 使用 setTimeout 确保 VForm3 已完全初始化
-  setTimeout(() => {
-    if (designerRef.value && !tabInjected) {
-      designerRef.value.setFormJson({ widgetList: [createTabWidget()] })
-      tabInjected = true
-    }
-  }, 200)
+  // 轮询等待 VForm3 初始化完成再注入标签页（替代不可靠的 setTimeout）
+	  let retries = 0
+	  const maxRetries = 30  // 30 * 100ms = 3秒
+	  const initTimer = setInterval(() => {
+	    retries++
+	    if (retries > maxRetries || tabInjected) {
+	      clearInterval(initTimer)
+	      return
+	    }
+	    try {
+	      if (!designerRef.value) return
+	      designerRef.value.setFormJson({ widgetList: [createTabWidget()] })
+	      tabInjected = true
+	      clearInterval(initTimer)
+	    } catch (e) {
+	      // VForm3 尚未完全初始化，继续轮询
+	    }
+	  }, 100)
 }
 
 /**
@@ -1560,11 +1574,17 @@ function loadSheet(sheetId) {
     classOptions.value = res.data.allClassesInGrade || []
     dirty.value = false
 
-    // 将 JSON 回填到设计器
-    nextTick(() => {
-      if (designerRef.value && form.formJson) {
-        try {
-          const parsed = JSON.parse(form.formJson)
+    // 将 JSON 回填到设计器（轮询等待 VForm3 就绪）
+	    let loadRetries = 0
+	    const loadTimer = setInterval(() => {
+	      loadRetries++
+	      if (loadRetries > 30) {
+	        clearInterval(loadTimer)
+	        return
+	      }
+	      try {
+	        if (!designerRef.value || !form.formJson) return
+	        const parsed = JSON.parse(form.formJson)
           // 修复图片上传组件的 uploadURL（兼容旧数据）
           fixUploadURLsInPlace(parsed)
           // 在 setFormJson 之前提取评分配置和 AI API Key
@@ -1588,11 +1608,12 @@ function loadSheet(sheetId) {
           if (hasScoring) scoringEnabled.value = true
           // 设置表单（会触发 onFormJsonChange → extractScoredFieldsPreserveConfig，此时 scoringConfig 已恢复）
           designerRef.value.setFormJson(parsed)
-        } catch (e) {
-          console.warn('表单JSON解析失败', e)
-        }
-      }
-    })
+	        clearInterval(loadTimer)
+	      } catch (e) {
+	        console.warn('表单JSON解析失败', e)
+	        clearInterval(loadTimer)
+	      }
+	    }, 100)
   })
 }
 
@@ -1617,22 +1638,30 @@ function loadSheetAsTemplate(copyFromId) {
     aiCustomUrl.value = ''
     dirty.value = false
 
-    nextTick(() => {
-      if (designerRef.value && form.formJson) {
-        try {
-          const parsed = JSON.parse(form.formJson)
-          // 修复图片上传组件的 uploadURL（兼容旧数据）
-          fixUploadURLsInPlace(parsed)
-          extractScoredFields(parsed)
-          const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
-            || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
-          if (hasScoring) scoringEnabled.value = true
-          designerRef.value.setFormJson(parsed)
-        } catch (e) {
-          console.warn('模板表单JSON解析失败', e)
-        }
-      }
-    })
+    // 将模板 JSON 回填到设计器（轮询等待 VForm3 就绪）
+	    let tmplRetries = 0
+	    const tmplTimer = setInterval(() => {
+	      tmplRetries++
+	      if (tmplRetries > 30) {
+	        clearInterval(tmplTimer)
+	        return
+	      }
+	      try {
+	        if (!designerRef.value || !form.formJson) return
+	        const parsed = JSON.parse(form.formJson)
+	          // 修复图片上传组件的 uploadURL（兼容旧数据）
+	          fixUploadURLsInPlace(parsed)
+	          extractScoredFields(parsed)
+	          const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
+	            || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
+	          if (hasScoring) scoringEnabled.value = true
+	          designerRef.value.setFormJson(parsed)
+	        clearInterval(tmplTimer)
+	      } catch (e) {
+	        console.warn('模板表单JSON解析失败', e)
+	        clearInterval(tmplTimer)
+	      }
+	    }, 100)
   })
 }
 
@@ -1689,8 +1718,8 @@ function startInjectPolling() {
         injectPollingTimer = null
       }
     } catch (e) {
-      // ignore, VForm3 not ready
-    }
+	      console.warn('startInjectPolling: VForm3 getFormJson 失败，继续轮询', e)
+	    }
   }, 300)
 }
 
@@ -1714,10 +1743,13 @@ onMounted(() => {
 
   // 轮询兜底：每 5 秒检测一次字段变化 + 确保标签页不被删除
   pollingTimer = setInterval(() => {
-    refreshScoredFields()
-    ensureTabWidget()
-  }, 5000)
-})
+	    refreshScoredFields()
+	    ensureTabWidget()
+	  }, 5000)
+
+	  // 标记组件已挂载完成，后续 watch 方可触发
+	  isMounted = true
+	})
 
 onBeforeUnmount(() => {
   if (pollingTimer) {
@@ -1730,15 +1762,15 @@ onBeforeUnmount(() => {
   }
   })
 
-// 监听路由变化：从其他页面跳转到新建表单时，重置为空白状态
-watch(
-  () => route.path,
-  (newPath, oldPath) => {
-    if (newPath === '/business/guide-sheet/designer' && oldPath && oldPath !== '/business/guide-sheet/designer') {
-      nextTick(() => resetToNewForm())
-    }
-  }
-)
+// 监听路由变化：仅在组件已挂载后，从其他页面跳转到新建表单时才重置
+	watch(
+	  () => route.path,
+	  (newPath, oldPath) => {
+	    if (isMounted && newPath === '/business/guide-sheet/designer' && oldPath && oldPath !== '/business/guide-sheet/designer') {
+	      nextTick(() => resetToNewForm())
+	    }
+	  }
+	)
 
 // keep-alive 缓存激活时：若为新建表单，重置为仅含 HomeTab 标签页的空白状态
 onActivated(() => {
