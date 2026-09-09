@@ -47,7 +47,6 @@
         ref="designerRef"
         :designer-config="designerConfig"
         :banned-widgets="bannedWidgets"
-        @form-json-change="onFormJsonChange"
       />
     </el-card>
 
@@ -314,7 +313,6 @@ import { getGuideSheet, updateGuideSheet, addGuideSheet, publishGuideSheet } fro
 import { listLesson } from '@/api/business/lesson'
 import { ElMessage } from 'element-plus'
 import { Plus, Minus } from '@element-plus/icons-vue'
-import { pinyin } from 'pinyin-pro'
 import useUserStore from '@/store/modules/user'
 
 const router = useRouter()
@@ -331,7 +329,8 @@ const designerRef = ref(null)
 const scoringEnabled = ref(false)
 const scoredFields = ref([])
 const scoringConfig = reactive({})
-const formJsonVersion = ref(0)
+/** 上次表单 JSON 快照，用于检测用户拖拽/编辑引起的变更 */
+let lastFormJsonStr = ''
 const aiApiKey = ref('')
 const aiProvider = ref('deepseek')
 const aiModel = ref('')
@@ -344,7 +343,7 @@ let tabInjected = false
 	/** 标记组件是否已完成首次挂载，防止 watch 与 onMounted 冲突 */
 	let isMounted = false
 
-// noCache 场景：组件每次重建时重置 tabInjected，确保 VForm3 的 onFormJsonChange 能正常注入标签页
+// noCache 场景：组件每次重建时重置 tabInjected，确保 VForm3 初始化时能正常注入标签页
 	onBeforeMount(() => {
 	  tabInjected = false
 	  isMounted = false
@@ -368,6 +367,7 @@ function resetToNewForm() {
   scoringEnabled.value = false
   tabInjected = false
   dirty.value = false
+  lastFormJsonStr = ''
   aiApiKey.value = userStore.aiApiKey || ''
   aiProvider.value = 'deepseek'
   aiModel.value = ''
@@ -485,25 +485,6 @@ function deepClone(obj) {
 }
 
 /**
- * 轮询兜底：确保 HomeTab 标签页约束不被破坏
- * 复用 enforceHomeTabConstraints 逻辑，避免重复代码
- */
-function ensureTabWidget() {
-  if (!designerRef.value) return
-  try {
-    const json = designerRef.value.getFormJson()
-    if (!json.widgetList) return
-
-    const fixedJson = enforceHomeTabConstraints(json)
-    if (fixedJson) {
-      designerRef.value.setFormJson(fixedJson)
-    }
-  } catch (e) {
-    // 忽略
-  }
-}
-
-/**
  * 强制执行 HomeTab 约束：
  * 1. HomeTab 必须存在且位于 widgetList 首位
  * 2. HomeTab 不可删除、不可移动
@@ -602,57 +583,6 @@ function enforceHomeTabConstraints(formJson) {
 }
 
 /**
- * 递归遍历 widgetList，修复 picture-upload 组件的 uploadURL
- * VForm3 默认 uploadURL 为空字符串，导致上传请求 404
- */
-function fixUploadURLs(formJson) {
-  let needFix = false
-  const uploadEndpoint = '/dev-api/common/upload'
-
-  function walk(widgetList) {
-    if (!Array.isArray(widgetList)) return
-    for (const w of widgetList) {
-      if (w.type === 'picture-upload' && w.options && (w.options.uploadURL === '' || w.options.uploadURL === undefined)) {
-        needFix = true
-      }
-      // 递归处理容器内的子组件
-      if (w.type === 'tab' && Array.isArray(w.tabs)) {
-        for (const pane of w.tabs) {
-          if (Array.isArray(pane.widgetList)) walk(pane.widgetList)
-        }
-      } else if (Array.isArray(w.widgetList)) {
-        walk(w.widgetList)
-      }
-    }
-  }
-
-  walk(formJson.widgetList)
-  if (!needFix) return null
-
-  // 克隆并修复
-  const cloned = deepClone(formJson)
-
-  function fixWalk(widgetList) {
-    if (!Array.isArray(widgetList)) return
-    for (const w of widgetList) {
-      if (w.type === 'picture-upload' && w.options && (w.options.uploadURL === '' || w.options.uploadURL === undefined)) {
-        w.options.uploadURL = uploadEndpoint
-      }
-      if (w.type === 'tab' && Array.isArray(w.tabs)) {
-        for (const pane of w.tabs) {
-          if (Array.isArray(pane.widgetList)) fixWalk(pane.widgetList)
-        }
-      } else if (Array.isArray(w.widgetList)) {
-        fixWalk(w.widgetList)
-      }
-    }
-  }
-
-  fixWalk(cloned.widgetList)
-  return cloned
-}
-
-/**
  * 原地修复 picture-upload 组件的 uploadURL（不克隆，直接修改对象）
  * 用于保存前确保 uploadURL 不会被遗漏
  */
@@ -693,9 +623,7 @@ const bannedWidgets = [
   'picture-upload'
 ]
 
-// pinyin 命名计数器，key=widgetType, value=当前编号
-const pinyinCounters = reactive({})
-
+// 设计器中隐藏的无评分价值字段
 const form = reactive({
   sheetId: undefined,
   sheetTitle: '',
@@ -718,116 +646,51 @@ const designerConfig = ref({
   importJsonButton: true,
   exportJsonButton: true,
   exportCodeButton: true,
-  language: 'zh-CN'
+  language: 'zh-CN',
+  // 关键修复：禁止 VForm3 初始化时从 localStorage 恢复上一次的表单内容。
+  // VForm3 默认 resetFormJson=false，会在组件 created 阶段调用 loadFormContentFromStorage()
+  // 恢复 widget__list__backup，与业务侧 setFormJson 的异步加载产生竞态，
+  // 导致重启项目后进入设计页经常出现空白。置为 true 后，内容完全由业务侧显式加载。
+  resetFormJson: true
 })
 
 /**
- * 设计器表单内容变化时，更新组件内部状态
+ * 统一表单状态处理器。
+ * 替代原本绑定在 @form-json-change 上的回调（VForm3 v3.0.10 不对外 emit 该事件，该绑定是死代码）。
+ * 通过定时轮询 getFormJson() 检测 VForm3 内部 widgetList 变化，执行以下逻辑：
+ *   1. 设置 dirty 标记（用于返回时自动保存提醒）
+ *   2. 强制执行 HomeTab 约束
+ *   3. 更新 maxPages
+ *   4. 同步评分配置字段列表
  */
-function onFormJsonChange(formJson) {
+function processFormState() {
+  if (!designerRef.value) return
   try {
-    if (formJson) {
-      // 标记表单已修改
-      dirty.value = true
-      // 新建导学单时，在 VForm3 初始化完成的首个事件中自动注入标签页
-      if (!tabInjected && !route.params.sheetId) {
-        tabInjected = true
-        const { hasTab } = extractTabPages(formJson)
-        if (!hasTab && formJson.widgetList) {
-          // 深度克隆后注入标签页，再 setFormJson 触发重渲染
-          const cloned = deepClone(formJson)
-          cloned.widgetList.unshift(createTabWidget())
-          nextTick(() => {
-            designerRef.value?.setFormJson(cloned)
-          })
-          return  // 本次跳过业务处理，等 setFormJson 触发下一次事件
-        }
-      }
+    const json = designerRef.value.getFormJson()
+    if (!json || !json.widgetList) return
 
-      // 强制执行 HomeTab 约束：不可删除、不可移动、所有组件嵌入其中
-      const fixedJson = enforceHomeTabConstraints(formJson)
+    // 检测 widgetList 是否发生变化（JSON 序列化比较）
+    const currentStr = JSON.stringify(json.widgetList)
+    if (currentStr !== lastFormJsonStr) {
+      // 首次加载不标记 dirty（lastFormJsonStr 为空时）
+      if (lastFormJsonStr !== '') {
+        dirty.value = true
+      }
+      lastFormJsonStr = currentStr
+
+      // 强制执行 HomeTab 约束
+      const fixedJson = enforceHomeTabConstraints(json)
       if (fixedJson) {
-        // 有违规需要修复，通过 setFormJson 触发重渲染
-        nextTick(() => {
-          designerRef.value?.setFormJson(fixedJson)
-        })
+        designerRef.value.setFormJson(fixedJson)
         return
       }
 
-      // 修复图片上传组件的 uploadURL（默认空字符串导致 404）
-      const urlFixedJson = fixUploadURLs(formJson)
-      if (urlFixedJson) {
-        nextTick(() => {
-          designerRef.value?.setFormJson(urlFixedJson)
-        })
-        return
-      }
-
-      form.maxPages = (formJson.widgetList && Array.isArray(formJson.widgetList))
-        ? formJson.widgetList.length || 1
-        : 1
-      // 为新增字段设置中文标签 + 拼音唯一名称
-      autoRenameWidgets(formJson)
-      // 同步评分配置字段列表 - 不覆盖已恢复的 scoringConfig（防止 setFormJson 触发后丢失已加载的参考答案）
-      extractScoredFieldsPreserveConfig(formJson)
-      formJsonVersion.value++
+      // 更新元数据
+      form.maxPages = json.widgetList.length || 1
+      extractScoredFieldsPreserveConfig(json)
     }
   } catch (e) {
-    console.warn('onFormJsonChange error:', e)
-  }
-}
-
-/**
- * 自动为新增字段设置中文标签和拼音+数字的唯一名称
- */
-function autoRenameWidgets(formJson) {
-  try {
-    const visited = new Set()
-    const widgetTypeLabels = {
-      text: '单行文本', textarea: '多行文本', number: '数字', input: '输入框',
-      radio: '单选', checkbox: '多选', select: '下拉选择', cascader: '级联选择',
-      date: '日期', 'date-range': '日期范围', daterange: '日期范围',
-      time: '时间', 'time-range': '时间范围',
-      rate: '评分', slider: '滑块', switch: '开关', color: '颜色选择',
-      'rich-editor': '富文本', 'file-upload': '文件上传', 'picture-upload': '图片上传',
-      'static-text': '静态文本', 'html-text': 'HTML文本'
-    }
-
-    function walk(value) {
-      if (value == null || typeof value !== 'object' || visited.has(value)) return
-      visited.add(value)
-      if (Array.isArray(value)) {
-        for (const item of value) walk(item)
-      } else {
-        const id = value.id || value.name
-        const type = value.type
-        // 如果有 options 对象，则标签/名称在 options 内（VForm3 结构）
-        const labelHolder = value.options || value
-        if (id && type) {
-          // 标签：空标签或全局默认名则改为中文
-          if (!labelHolder.label || labelHolder.label === type || /^[a-z]+\d*$/i.test(labelHolder.label)) {
-            const cnLabel = widgetTypeLabels[type] || type
-            if (!pinyinCounters[type]) pinyinCounters[type] = 1
-            else pinyinCounters[type]++
-            labelHolder.label = cnLabel + pinyinCounters[type]
-          }
-          // 名称：空名称或纯英文则改为拼音+数字
-          if (!labelHolder.name || /^[a-z]+\d*$/i.test(labelHolder.name)) {
-            const nameBase = pinyin(labelHolder.label || type, { toneType: 'none', type: 'array' }).join('')
-            labelHolder.name = nameBase + (pinyinCounters[type] || 1)
-          }
-        }
-        // 继续深入嵌套
-        for (const key of Object.keys(value)) {
-          const v = value[key]
-          if (v && typeof v === 'object') walk(v)
-        }
-      }
-    }
-
-    walk(formJson.widgetList)
-  } catch (e) {
-    console.warn('autoRenameWidgets error:', e)
+    // 忽略轮询中的异常
   }
 }
 
@@ -1588,7 +1451,7 @@ function loadSheet(sheetId) {
           // 修复图片上传组件的 uploadURL（兼容旧数据）
           fixUploadURLsInPlace(parsed)
           // 在 setFormJson 之前提取评分配置和 AI API Key
-          // （防止 setFormJson 触发 onFormJsonChange 时覆盖尚未恢复的 scoringConfig）
+          // （防止 setFormJson 触发 processFormState 时覆盖尚未恢复的 scoringConfig）
           if (parsed._aiApiKey) {
             aiApiKey.value = parsed._aiApiKey
           }
@@ -1606,9 +1469,11 @@ function loadSheet(sheetId) {
           const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
             || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
           if (hasScoring) scoringEnabled.value = true
-          // 设置表单（会触发 onFormJsonChange → extractScoredFieldsPreserveConfig，此时 scoringConfig 已恢复）
+          // 设置表单后，processFormState 会在下次轮询时同步 scoringConfig 和评分配置
           designerRef.value.setFormJson(parsed)
-	        clearInterval(loadTimer)
+          // 重置快照，避免 processFormState 误判为 dirty
+          lastFormJsonStr = ''
+          clearInterval(loadTimer)
 	      } catch (e) {
 	        console.warn('表单JSON解析失败', e)
 	        clearInterval(loadTimer)
@@ -1655,8 +1520,10 @@ function loadSheetAsTemplate(copyFromId) {
 	          const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
 	            || (parsed.widgetList || []).some(w => w.scoring && w.scoring.score > 0)
 	          if (hasScoring) scoringEnabled.value = true
-	          designerRef.value.setFormJson(parsed)
-	        clearInterval(tmplTimer)
+          designerRef.value.setFormJson(parsed)
+          // 重置快照，避免 processFormState 误判为 dirty
+          lastFormJsonStr = ''
+        clearInterval(tmplTimer)
 	      } catch (e) {
 	        console.warn('模板表单JSON解析失败', e)
 	        clearInterval(tmplTimer)
@@ -1676,15 +1543,8 @@ function fetchLessonOptions() {
   }).catch(() => {})
 }
 
-// 监听 formJsonVersion 变化，延迟刷新评分字段列表
-watch(formJsonVersion, () => {
-  if (!designerRef.value) return
-  nextTick(() => {
-    setTimeout(() => refreshScoredFields(), 300)
-  })
-})
-
-// 轮询兜底注入：新建导学单时等待 VForm3 初始化完成，直到标签页注入成功
+/**
+ * 轮询兜底注入：新建导学单时等待 VForm3 初始化完成，直到标签页注入成功
 let injectPollingTimer = null
 function startInjectPolling() {
   if (tabInjected) return
@@ -1723,8 +1583,193 @@ function startInjectPolling() {
   }, 300)
 }
 
+// DOM 观察器：比 VNode 树遍历更快地检测 FieldPanel 渲染，实现自定义组件零延迟注册
+let domObserverStarted = false
+let domObserver = null
+
+/**
+ * 启动 DOM 观察器，快速检测 FieldPanel（组件面板）渲染并注册自定义组件
+ */
+function startDomObserver() {
+  if (domObserverStarted) return
+  const container = document.querySelector('.designer-card')
+  if (!container) {
+    setTimeout(startDomObserver, 50)
+    return
+  }
+  domObserverStarted = true
+  domObserver = new MutationObserver(() => {
+    const panelEl = document.querySelector('.panel-container')
+    if (panelEl) {
+      registerCustomImageWidget()
+      // 注册成功后断开观察器，等待下次 keep-alive 激活时重新连接
+      if (domObserver) {
+        domObserver.disconnect()
+        domObserver = null
+        domObserverStarted = false
+      }
+    }
+  })
+  domObserver.observe(container, { childList: true, subtree: true })
+  // 安全兜底：10秒后断开观察器
+  setTimeout(() => {
+    if (domObserver) {
+      domObserver.disconnect()
+      domObserver = null
+      domObserverStarted = false
+    }
+  }, 10000)
+}
+
+/**
+ * VForm3 自定义扩展组件 schema —— 图片上传组件
+ * 参照 VForm3 源码中 widgetsConfig.js 的字段组件规范定义
+ * type 为 image-add，VForm3 内部通过 getWidgetName(type)=type+'-widget' 解析为 image-add-widget 组件
+ */
+const IMAGE_ADD_WIDGET_SCHEMA = {
+  type: 'image-add',
+  icon: 'picture-upload-field',
+  formItemFlag: true,
+  options: {
+    name: '',
+    label: '图片展示',
+    labelAlign: '',
+    defaultValue: null,
+    columnWidth: '200px',
+    size: '',
+    labelWidth: null,
+    labelHidden: false,
+    disabled: false,
+    hidden: false,
+    required: false,
+    requiredHint: '',
+    validation: '',
+    validationHint: '',
+    imageWidth: 200,
+    imageHeight: 200,
+    imageUrl: '',
+    customClass: '',
+    onCreated: '',
+    onMounted: '',
+    onChange: '',
+    onValidate: ''
+  }
+}
+
+/**
+ * 向 VForm3 设计器的"自定义扩展字段"面板注册图片上传组件
+ * 通过遍历 VForm3 设计器组件树，找到 widget-panel (FieldPanel) 组件实例，
+ * 将 widget schema 注入其 customFields 数据数组，使其在左侧面板中可见
+ */
+let imgWidgetCallCount = 0
+
+function findFieldPanelInstanceByDom() {
+  // FieldPanel 在 VForm3 预构建包中层级较深（VFormDesigner > ElContainer > ElAside > FieldPanel），
+  // 通过 VNode 树遍历（instance.$.subTree）不稳定易漏。这里借用 DOM 元素的 __vueParentComponent
+  // 指针向上回溯，稳定命中 name==='FieldPanel' 的组件实例。
+  // 关键：优先在当前可见的 VForm3 设计器根节点($el)内部查找，避免命中 keep-alive/HMR 遗留的陈旧实例。
+  const scopeRoot = (designerRef.value && designerRef.value.$el) || document
+  const el = scopeRoot.querySelector('.panel-container')
+    || scopeRoot.querySelector('.field-widget-item')
+    || scopeRoot.querySelector('.widget-panel')
+  if (!el) return null
+  let inst = el.__vueParentComponent
+  let depth = 0
+  const walked = []
+  while (inst && depth < 40) {
+    const name = inst.type && (inst.type.name || inst.type.__name)
+    walked.push(name || '(anon)')
+    if (name === 'FieldPanel' || name === 'WidgetPanel' || name === 'widget-panel') {
+      return inst
+    }
+    inst = inst.parent
+    depth++
+  }
+  if (imgWidgetCallCount < 3) console.warn('[imgWidget] walked', walked, 'rootClass=', el.className)
+  return null
+}
+
+function injectImageAddIntoArray(arr) {
+  if (!Array.isArray(arr)) return false
+  if (arr.some(f => f.type === 'image-add')) return false
+  arr.push({
+    key: 'image_add',
+    ...IMAGE_ADD_WIDGET_SCHEMA,
+    displayName: '图片展示'
+  })
+  return true
+}
+
+function registerCustomImageWidget() {
+  imgWidgetCallCount++
+  if (imgWidgetCallCount <= 3) console.warn('[imgWidget] registerCustomImageWidget called #' + imgWidgetCallCount)
+  try {
+    const fieldPanel = findFieldPanelInstanceByDom()
+    if (!fieldPanel) {
+      if (imgWidgetCallCount <= 3) console.warn('[imgWidget] FieldPanel NOT found')
+      return
+    }
+    const proxy = fieldPanel.proxy
+
+    // 1) 可见文字补丁：左侧面板每个 item 的文字由 i18n2t('designer.widgetLabel.${type}') 在渲染期生成，
+    //    image-add 不在内置 locale 中，必须覆盖 proxy.i18n2t（Vue3 render 通过 proxy 取方法）才会显示"图片展示"。
+    if (!fieldPanel._i18nPatched) {
+      fieldPanel._i18nPatched = true
+      const originalI18n2t = proxy.i18n2t
+      proxy.i18n2t = function(d, e) {
+        if (d === 'designer.widgetLabel.image-add') return '图片展示'
+        return originalI18n2t.call(this, d, e)
+      }
+    }
+
+    // 2) 属性面板补丁：让 image-add 能像原生字段一样被选中并渲染属性编辑器
+    const designer = fieldPanel.props.designer
+    if (designer && designer.getFieldWidgetByType && !designer._imageAddPatched) {
+      designer._imageAddPatched = true
+      const originalGetFieldWidgetByType = designer.getFieldWidgetByType
+      designer.getFieldWidgetByType = function(type) {
+        if (type === 'image-add') {
+          return { key: 'image_add', ...IMAGE_ADD_WIDGET_SCHEMA, displayName: '图片展示' }
+        }
+        return originalGetFieldWidgetByType.call(this, type)
+      }
+    }
+
+    // 3) 核心修复：FieldPanel 在 created() 时通过「模块级 customFields 闭包」一次性构建左侧面板列表，
+    //    该闭包在 install(loadExtension) 写入后即固定，addCustomWidgetSchema 未导出、外部无法再 push。
+    //    因此补丁 FieldPanel 实例的 loadWidgets：每次重建时在基础列表上追加 image-add，
+    //    使 this.customFields 变为新数组引用（与 VForm3 原生 .map() 行为一致），触发 vuedraggable 重渲染。
+    if (!fieldPanel._imageAddLoadPatched) {
+      fieldPanel._imageAddLoadPatched = true
+      const origLoadWidgets = proxy.loadWidgets
+      proxy.loadWidgets = function() {
+        if (typeof origLoadWidgets === 'function') origLoadWidgets()
+        injectImageAddIntoArray(this.customFields)
+      }
+    }
+
+    // 4) 若 image-add 尚未进入渲染列表，则立即触发一次重建（idempotent，避免每秒轮询重复刷新）
+    if (!Array.isArray(proxy.customFields) || !proxy.customFields.some(f => f.type === 'image-add')) {
+      if (typeof proxy.loadWidgets === 'function') {
+        proxy.loadWidgets()
+      } else {
+        injectImageAddIntoArray(proxy.customFields)
+      }
+      nextTick(() => {
+        if (typeof proxy.$forceUpdate === 'function') proxy.$forceUpdate()
+      })
+    }
+  } catch (e) {
+    if (imgWidgetCallCount <= 3) console.warn('[imgWidget] register failed', e)
+  }
+}
+
 onMounted(() => {
   fetchLessonOptions()
+
+  // 启动 DOM 观察器，快速检测 FieldPanel 并注册自定义组件
+  nextTick(startDomObserver)
+
   const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId
   if (copyFrom) {
@@ -1741,11 +1786,12 @@ onMounted(() => {
     nextTick(startInjectPolling)
   }
 
-  // 轮询兜底：每 5 秒检测一次字段变化 + 确保标签页不被删除
+  // 统一轮询：检测 VForm3 内部变更（拖拽/添加组件），替代已失效的 @form-json-change 事件
+  // 每 1 秒执行一次，同时处理 dirty 标记、HomeTab 约束、评分配置同步、自定义组件注册
   pollingTimer = setInterval(() => {
-	    refreshScoredFields()
-	    ensureTabWidget()
-	  }, 5000)
+    processFormState()
+    registerCustomImageWidget()
+  }, 1000)
 
 	  // 标记组件已挂载完成，后续 watch 方可触发
 	  isMounted = true
@@ -1759,6 +1805,11 @@ onBeforeUnmount(() => {
   if (injectPollingTimer) {
     clearInterval(injectPollingTimer)
     injectPollingTimer = null
+  }
+  if (domObserver) {
+    domObserver.disconnect()
+    domObserver = null
+    domObserverStarted = false
   }
   })
 
@@ -1777,6 +1828,8 @@ onActivated(() => {
   if (!route.params.sheetId) {
     nextTick(() => resetToNewForm())
   }
+  // keep-alive 重新激活后，customFields 可能被重置，需重新注册
+  nextTick(() => registerCustomImageWidget())
 })
 </script>
 

@@ -46,6 +46,8 @@ import ImagePreview from "@/components/ImagePreview"
 import DictTag from '@/components/DictTag'
 // 自定义图片展示组件
 import ImageDisplay from '@/components/ImageDisplay/index.vue'
+// VForm3 自定义"添加图片"组件（类原生，type: image-add → 组件名 image-add-widget）
+import ImageAddWidget from '@/components/ImageAddWidget/index.vue'
 
 // VForm3 表单设计器 - 导学单设计
 import VForm3 from 'vform3-builds'
@@ -71,6 +73,7 @@ app.component('FileUpload', FileUpload)
 app.component('ImageUpload', ImageUpload)
 app.component('ImagePreview', ImagePreview)
 app.component('ImageDisplay', ImageDisplay)
+app.component('image-add-widget', ImageAddWidget)
 app.component('RightToolbar', RightToolbar)
 app.component('Editor', Editor)
 
