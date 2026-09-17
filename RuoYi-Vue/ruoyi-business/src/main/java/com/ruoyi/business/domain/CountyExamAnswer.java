@@ -1,6 +1,8 @@
 package com.ruoyi.business.domain;
 
 import java.util.Date;
+import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * 县考答题记录表 biz_county_exam_answer
@@ -69,6 +71,21 @@ public class CountyExamAnswer {
 
     /** 预览错误信息 */
     private String previewErrorMessage;
+
+    /** 统一页图状态 */
+    private String normalizedStatus;
+
+    /** 数据库存储的有序页图 JSON */
+    @JsonIgnore
+    private String normalizedPagesJson;
+
+    /** 返回前端的有序页图 */
+    private List<String> normalizedPages;
+
+    private String rendererVersion;
+    private Integer normalizedRetryCount;
+    private Date normalizedLastRetryTime;
+    private String normalizedErrorMessage;
 
     public Long getAnswerId() {
         return answerId;
@@ -229,4 +246,19 @@ public class CountyExamAnswer {
     public void setPreviewErrorMessage(String previewErrorMessage) {
         this.previewErrorMessage = previewErrorMessage;
     }
+
+    public String getNormalizedStatus() { return normalizedStatus; }
+    public void setNormalizedStatus(String normalizedStatus) { this.normalizedStatus = normalizedStatus; }
+    public String getNormalizedPagesJson() { return normalizedPagesJson; }
+    public void setNormalizedPagesJson(String normalizedPagesJson) { this.normalizedPagesJson = normalizedPagesJson; }
+    public List<String> getNormalizedPages() { return normalizedPages; }
+    public void setNormalizedPages(List<String> normalizedPages) { this.normalizedPages = normalizedPages; }
+    public String getRendererVersion() { return rendererVersion; }
+    public void setRendererVersion(String rendererVersion) { this.rendererVersion = rendererVersion; }
+    public Integer getNormalizedRetryCount() { return normalizedRetryCount; }
+    public void setNormalizedRetryCount(Integer normalizedRetryCount) { this.normalizedRetryCount = normalizedRetryCount; }
+    public Date getNormalizedLastRetryTime() { return normalizedLastRetryTime; }
+    public void setNormalizedLastRetryTime(Date normalizedLastRetryTime) { this.normalizedLastRetryTime = normalizedLastRetryTime; }
+    public String getNormalizedErrorMessage() { return normalizedErrorMessage; }
+    public void setNormalizedErrorMessage(String normalizedErrorMessage) { this.normalizedErrorMessage = normalizedErrorMessage; }
 }

@@ -4,6 +4,7 @@ import { getRouters } from '@/api/menu'
 import Layout from '@/layout/index'
 import ParentView from '@/components/ParentView'
 import InnerLink from '@/layout/components/InnerLink'
+import { sortSidebarRoutes } from '@/utils/sidebarMenuOrder'
 
 // 匹配views里面所有的.vue文件
 const modules = import.meta.glob('./../../views/**/*.vue')
@@ -12,6 +13,7 @@ const usePermissionStore = defineStore(
   'permission',
   {
     state: () => ({
+      routesReady: false,
       routes: [],
       addRoutes: [],
       defaultRoutes: [],
@@ -33,7 +35,7 @@ const usePermissionStore = defineStore(
         this.sidebarRouters = routes
       },
       generateRoutes(roles) {
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => {
           // 向后端请求路由数据
           getRouters().then(res => {
             const sdata = JSON.parse(JSON.stringify(res.data))
@@ -45,11 +47,13 @@ const usePermissionStore = defineStore(
             const asyncRoutes = filterDynamicRoutes(dynamicRoutes)
             asyncRoutes.forEach(route => { router.addRoute(route) })
             this.setRoutes(rewriteRoutes)
-            this.setSidebarRouters(constantRoutes.concat(sidebarRoutes).concat(asyncRoutes.filter(route => !route.hidden)))
+            const visibleRoutes = constantRoutes.concat(sidebarRoutes).concat(asyncRoutes.filter(route => !route.hidden))
+            this.setSidebarRouters(sortSidebarRoutes(visibleRoutes, roles))
             this.setDefaultRoutes(sidebarRoutes)
             this.setTopbarRoutes(defaultRoutes)
+            this.routesReady = true
             resolve(rewriteRoutes)
-          })
+          }).catch(reject)
         })
       }
     }

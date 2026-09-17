@@ -10,15 +10,23 @@ import com.ruoyi.common.constant.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.Date;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * 异步文件转换服务
- * 用于在后台异步处理 DOCX 到 PDF 的转换，避免用户长时间等待
+ * 用于在后台异步处理 DOCX 到 PDF 的转换，避免用户长时间等待。
+ *
+ * 交卷路径约定：
+ * 1. 事务提交后只调用 schedule* 方法，立即返回；
+ * 2. 领取与投递在 conversionDispatchExecutor 上执行（短 SQL）；
+ * 3. LibreOffice 只在 conversionExecutor 上运行，绝不占用交卷 HTTP 线程。
  */
 @Service
 public class AsyncConversionService {
@@ -36,8 +44,57 @@ public class AsyncConversionService {
     @Autowired
     private AsyncConversionWorkerService conversionWorkerService;
 
+    @Autowired
+    @Qualifier("conversionDispatchExecutor")
+    private ThreadPoolTaskExecutor conversionDispatchExecutor;
+
     /**
-     * 提交后触发首次预览转换
+     * 交卷事务提交后调度首次预览转换（非阻塞）。
+     * 领取与 LibreOffice 均在后台线程执行，不拖慢交卷 HTTP。
+     */
+    public void scheduleSubmitPreviewConversion(Long answerId) {
+        if (answerId == null) {
+            return;
+        }
+        try {
+            conversionDispatchExecutor.execute(() -> {
+                try {
+                    triggerSubmitPreviewConversion(answerId);
+                } catch (Exception e) {
+                    log.error("【异步转换】调度领取异常 answerId={}, error={}", answerId, e.getMessage(), e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // 调度池也满时退化为同步领取一次，仍不跑 LibreOffice
+            log.warn("【异步转换】调度池满，同步领取 answerId={}", answerId);
+            triggerSubmitPreviewConversion(answerId);
+        }
+    }
+
+    /**
+     * 区域抽测交卷后调度预览转换（非阻塞）。
+     */
+    public void scheduleCountyExamPreviewConversion(Long answerId) {
+        if (answerId == null) {
+            return;
+        }
+        try {
+            conversionDispatchExecutor.execute(() -> {
+                try {
+                    triggerCountyExamPreviewConversion(answerId);
+                } catch (Exception e) {
+                    log.error("【区域抽测转换】调度领取异常 answerId={}, error={}", answerId, e.getMessage(), e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            log.warn("【区域抽测转换】调度池满，同步领取 answerId={}", answerId);
+            triggerCountyExamPreviewConversion(answerId);
+        }
+    }
+
+    /**
+     * 提交后触发首次预览转换（领取 + 投递转换线程池）。
+     * 应由调度线程调用；调用方勿在事务未提交时执行。
      */
     public boolean triggerSubmitPreviewConversion(Long answerId) {
         BizStudentAnswer answer = studentAnswerMapper.selectById(answerId);
@@ -57,7 +114,11 @@ public class AsyncConversionService {
             return false;
         }
 
-        conversionWorkerService.executeClaimedPreviewAsync(answerId, "submit");
+        if (!enqueueClaimedPreview(answerId, "submit")) {
+            // 转换池满：回退为 pending，交给定时重试，避免长期卡在 converting
+            releaseClaimToPending(answerId);
+            return false;
+        }
         log.info("【异步转换】首次转换领取成功，answerId={}", answerId);
         return true;
     }
@@ -71,8 +132,8 @@ public class AsyncConversionService {
             log.warn("【区域抽测转换】领取失败，未找到答题记录，answerId={}", answerId);
             return false;
         }
-        if (!isWordDocument(answer.getStudentAnswer())) {
-            log.info("【区域抽测转换】跳过非 Word 文件，answerId={}, file={}", answerId, answer.getStudentAnswer());
+        if (!isSupportedVisualDocument(answer.getStudentAnswer())) {
+            log.info("【区域抽测转换】跳过不支持的文件，answerId={}, file={}", answerId, answer.getStudentAnswer());
             return false;
         }
 
@@ -84,7 +145,10 @@ public class AsyncConversionService {
             return false;
         }
 
-        conversionWorkerService.executeCountyExamPreviewAsync(answerId, "county-submit");
+        if (!enqueueCountyExamPreview(answerId, "county-submit")) {
+            releaseCountyClaimToPending(answerId);
+            return false;
+        }
         log.info("【区域抽测转换】领取成功，answerId={}", answerId);
         return true;
     }
@@ -120,7 +184,10 @@ public class AsyncConversionService {
             return false;
         }
 
-        conversionWorkerService.executeClaimedPreviewAsync(answerSnapshot.getAnswerId(), triggerSource);
+        if (!enqueueClaimedPreview(answerSnapshot.getAnswerId(), triggerSource)) {
+            releaseClaimToPending(answerSnapshot.getAnswerId());
+            return false;
+        }
         log.info("【异步转换】重转领取成功，answerId={}, source={}, retryCount={}",
                 answerSnapshot.getAnswerId(), triggerSource, currentRetryCount + 1);
         return true;
@@ -134,7 +201,7 @@ public class AsyncConversionService {
             return false;
         }
 
-        Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getPreviewRetryCount());
+        Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getNormalizedRetryCount());
         if (!ignoreRetryLimit && currentRetryCount >= MAX_AUTO_RETRY_COUNT) {
             log.info("【区域抽测转换】达到自动重试上限，跳过 answerId={}, retryCount={}, source={}",
                     answerSnapshot.getAnswerId(), currentRetryCount, triggerSource);
@@ -144,23 +211,75 @@ public class AsyncConversionService {
         Date claimedAt = new Date();
         int updated = countyExamAnswerMapper.claimRetryPreviewConversion(
                 answerSnapshot.getAnswerId(),
-                answerSnapshot.getPreviewStatus(),
+                answerSnapshot.getNormalizedStatus(),
                 currentRetryCount,
-                answerSnapshot.getPreviewLastRetryTime(),
+                answerSnapshot.getNormalizedLastRetryTime(),
                 currentRetryCount + 1,
                 claimedAt
         );
         if (updated <= 0) {
             log.info("【区域抽测转换】重转领取被跳过，answerId={}, source={}, status={}, retryCount={}",
                     answerSnapshot.getAnswerId(), triggerSource,
-                    answerSnapshot.getPreviewStatus(), currentRetryCount);
+                    answerSnapshot.getNormalizedStatus(), currentRetryCount);
             return false;
         }
 
-        conversionWorkerService.executeCountyExamPreviewAsync(answerSnapshot.getAnswerId(), triggerSource);
+        if (!enqueueCountyExamPreview(answerSnapshot.getAnswerId(), triggerSource)) {
+            releaseCountyClaimToPending(answerSnapshot.getAnswerId());
+            return false;
+        }
         log.info("【区域抽测转换】重转领取成功，answerId={}, source={}, retryCount={}",
                 answerSnapshot.getAnswerId(), triggerSource, currentRetryCount + 1);
         return true;
+    }
+
+    /**
+     * 将已领取任务投递到 conversionExecutor；队列满时返回 false 由调用方回退状态。
+     */
+    private boolean enqueueClaimedPreview(Long answerId, String triggerSource) {
+        try {
+            conversionWorkerService.executeClaimedPreviewAsync(answerId, triggerSource);
+            return true;
+        } catch (RejectedExecutionException e) {
+            log.warn("【异步转换】转换线程池已满，暂缓执行 answerId={}, source={}", answerId, triggerSource);
+            return false;
+        }
+    }
+
+    private boolean enqueueCountyExamPreview(Long answerId, String triggerSource) {
+        try {
+            conversionWorkerService.executeCountyExamPreviewAsync(answerId, triggerSource);
+            return true;
+        } catch (RejectedExecutionException e) {
+            log.warn("【区域抽测转换】转换线程池已满，暂缓执行 answerId={}, source={}", answerId, triggerSource);
+            return false;
+        }
+    }
+
+    /**
+     * 转换池拒绝后把 converting 放回 pending，避免任务永久卡死且可被定时重试捞起。
+     */
+    private void releaseClaimToPending(Long answerId) {
+        BizStudentAnswer answer = studentAnswerMapper.selectById(answerId);
+        if (answer == null || !"converting".equals(answer.getPreviewStatus())) {
+            return;
+        }
+        answer.setPreviewStatus("pending");
+        answer.setPreviewPath(null);
+        answer.setPreviewErrorMessage("转换队列繁忙，等待重试");
+        studentAnswerMapper.updatePreviewStatus(answer);
+        log.info("【异步转换】已回退为 pending 等待重试，answerId={}", answerId);
+    }
+
+    private void releaseCountyClaimToPending(Long answerId) {
+        CountyExamAnswer answer = countyExamAnswerMapper.selectById(answerId);
+        if (answer == null || !"converting".equals(answer.getNormalizedStatus())) {
+            return;
+        }
+        answer.setNormalizedStatus("pending");
+        answer.setNormalizedErrorMessage("转换队列繁忙，等待重试");
+        countyExamAnswerMapper.updatePreviewStatus(answer);
+        log.info("【区域抽测转换】已回退为 pending 等待重试，answerId={}", answerId);
     }
 
     /**
@@ -373,6 +492,14 @@ public class AsyncConversionService {
         }
         String lowerCaseAnswer = answerFilePath.toLowerCase();
         return lowerCaseAnswer.endsWith(".docx") || lowerCaseAnswer.endsWith(".doc");
+    }
+
+    private boolean isSupportedVisualDocument(String answerFilePath) {
+        if (answerFilePath == null || answerFilePath.trim().isEmpty()) {
+            return false;
+        }
+        String lower = answerFilePath.toLowerCase();
+        return lower.matches(".*\\.(doc|docx|ppt|pptx|xls|xlsx|pdf|jpg|jpeg|png)$");
     }
 
     @Autowired

@@ -1,0 +1,6 @@
+[Unit]
+Description=CryptPad data backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cryptpad-backup

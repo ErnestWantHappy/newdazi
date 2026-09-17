@@ -14,6 +14,12 @@ public class SysPerfEvent
 
     private String severity;
 
+    /** 动态诊断分类，不落库，用于区分业务提示、性能关注和系统故障。 */
+    private String category;
+
+    /** 动态处置建议，不落库。 */
+    private String advice;
+
     private String title;
 
     private String description;
@@ -68,6 +74,26 @@ public class SysPerfEvent
     public void setSeverity(String severity)
     {
         this.severity = severity;
+    }
+
+    public String getCategory()
+    {
+        return category;
+    }
+
+    public void setCategory(String category)
+    {
+        this.category = category;
+    }
+
+    public String getAdvice()
+    {
+        return advice;
+    }
+
+    public void setAdvice(String advice)
+    {
+        this.advice = advice;
     }
 
     public String getTitle()

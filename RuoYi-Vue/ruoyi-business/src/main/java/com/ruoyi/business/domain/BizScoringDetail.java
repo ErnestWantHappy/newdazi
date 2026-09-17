@@ -32,6 +32,9 @@ public class BizScoringDetail extends BaseEntity
     @Excel(name = "得分")
     private Integer score;
 
+    /** 本次请求使用的整星数量，仅用于服务端重算，不写入评分明细表。 */
+    private Integer starCount;
+
     public void setDetailId(Long detailId) 
     {
         this.detailId = detailId;
@@ -70,6 +73,16 @@ public class BizScoringDetail extends BaseEntity
     public Integer getScore() 
     {
         return score;
+    }
+
+    public Integer getStarCount()
+    {
+        return starCount;
+    }
+
+    public void setStarCount(Integer starCount)
+    {
+        this.starCount = starCount;
     }
 
     @Override

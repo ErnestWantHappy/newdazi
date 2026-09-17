@@ -45,7 +45,8 @@ public class SysAuthController
         {
             return AjaxResult.error(HttpStatus.UNAUTHORIZED, "登录状态已过期，请重新登录后重试。");
         }
-        tokenService.refreshToken(loginUser);
+        // 普通心跳仅在临近过期时续期，避免每分钟重写完整权限对象。
+        tokenService.verifyToken(loginUser);
         long serverTime = System.currentTimeMillis();
         long expireTime = loginUser.getExpireTime();
         long remainSeconds = Math.max((expireTime - serverTime) / 1000, 0);

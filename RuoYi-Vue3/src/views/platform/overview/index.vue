@@ -135,6 +135,7 @@
 import * as echarts from 'echarts'
 import { Refresh } from '@element-plus/icons-vue'
 import { getPlatformOverview } from '@/api/business/platformOverview'
+import { questionTypeLabel } from '@/utils/questionType'
 
 const overview = ref({})
 const trendChartRef = ref(null)
@@ -176,7 +177,7 @@ function renderTrendChart() {
     legend: { top: 4, right: 8, data: ['作答人次', '试卷均分'] },
     xAxis: { type: 'category', data: labels, axisTick: { show: false } },
     yAxis: [
-      { type: 'value', name: '人次', splitLine: { lineStyle: { color: '#e8edf2' } } },
+      { type: 'value', name: '人次', splitLine: { lineStyle: { color: '#e8edf2' } }, axisLabel: { formatter: value => value >= 10000 ? `${value / 10000}万` : value } },
       { type: 'value', name: '分数', min: 0, max: 100 }
     ],
     series: [
@@ -248,8 +249,7 @@ function formatNumber(value) {
 }
 
 function formatQuestionType(type) {
-  const map = { choice: '选择题', judgment: '判断题', typing: '打字题', practical: '操作题' }
-  return map[type] || type || '未分类'
+  return questionTypeLabel(type)
 }
 
 function formatExamStatus(status) {

@@ -67,6 +67,12 @@ public interface SysUserMapper
      */
     public int updateUser(SysUser user);
 
+    /** 学生纠错时原地更新账号和姓名，userId 保持不变。 */
+    public int updateStudentAccountIdentity(@Param("userId") Long userId,
+                                            @Param("userName") String userName,
+                                            @Param("nickName") String nickName,
+                                            @Param("updateBy") String updateBy);
+
     /**
      * 修改用户头像
      * 
@@ -108,6 +114,22 @@ public interface SysUserMapper
      * @return 结果
      */
     public SysUser checkUserNameUnique(String userName);
+
+    /**
+     * 批量查询仍有效的账号，避免学生导入逐行扫描用户表。
+     *
+     * @param userNames 待查询账号
+     * @return 已存在的用户
+     */
+    public List<SysUser> selectActiveUsersByUserNames(@Param("userNames") List<String> userNames);
+
+    /**
+     * 批量新增用户；学生导入会在同一事务内回查生成的用户ID。
+     *
+     * @param users 用户列表
+     * @return 写入行数
+     */
+    public int batchInsertUsers(@Param("users") List<SysUser> users);
 
     /**
      * 校验手机号码是否唯一

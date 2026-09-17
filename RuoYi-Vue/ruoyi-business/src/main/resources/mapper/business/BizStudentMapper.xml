@@ -18,41 +18,67 @@
         <!-- 关联查询出的字段 -->
         <result property="studentName"  column="student_name"  />
         <result property="userName"     column="user_name"     />
+        <result property="status"       column="status"        />
         <result property="deptId"       column="dept_id"       />
     </resultMap>
 
     <sql id="selectBizStudentVo">
         select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
-               u.nick_name as student_name, u.user_name, u.dept_id
+               u.nick_name as student_name, u.user_name, u.status, u.dept_id
         from biz_student s
                  left join sys_user u on s.user_id = u.user_id
     </sql>
 
     <select id="selectBizStudentList" parameterType="BizStudent" resultMap="BizStudentResult">
         select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
-               u.nick_name as student_name, u.user_name, u.dept_id
+               u.nick_name as student_name, u.user_name, u.status, u.dept_id
         from biz_student s
         left join sys_user u on s.user_id = u.user_id
-        <!-- 关联教师班级表，只显示教师管理的班级中的学生 -->
-        <!-- 修复：必须同时匹配 dept_id + entry_year + class_code，避免跨学校数据混合 -->
-        inner join biz_teacher_class tc 
-            on s.entry_year = tc.entry_year 
-            and s.class_code = tc.class_code
-            and u.dept_id = tc.dept_id
+        <!-- 教师按管理班级过滤；管理员按学校直接查询，避免没有教师班级记录时空列表。 -->
+        <if test="teacherUserId != null">
+            inner join biz_teacher_class tc
+                on s.entry_year = tc.entry_year
+                and s.class_code = tc.class_code
+                and u.dept_id = tc.dept_id
+        </if>
         <where>
             <!-- 必须是当前教师管理的班级 -->
             <if test="teacherUserId != null"> and tc.user_id = #{teacherUserId}</if>
-            <if test="deptId != null and deptId != 0"> and tc.dept_id = #{deptId}</if>
+            <choose>
+                <when test="teacherUserId != null and deptId != null and deptId != 0"> and tc.dept_id = #{deptId}</when>
+                <when test="teacherUserId == null and deptId != null and deptId != 0"> and u.dept_id = #{deptId}</when>
+            </choose>
             <!-- 搜索条件 -->
             <if test="studentName != null  and studentName != ''"> and u.nick_name like concat('%', #{studentName}, '%')</if>
             <if test="entryYear != null and entryYear != ''"> and s.entry_year = #{entryYear}</if>
             <if test="classCode != null and classCode != ''"> and s.class_code = #{classCode}</if>
+            <if test="status != null and status != '' and status != 'all'"> and u.status = #{status}</if>
+            and u.del_flag = '0'
         </where>
+    </select>
+
+    <select id="selectBizStudentsByIds" resultMap="BizStudentResult">
+        select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
+               u.nick_name as student_name, u.user_name, u.status, u.dept_id
+        from biz_student s
+        inner join sys_user u on u.user_id = s.user_id and u.del_flag = '0'
+        <if test="teacherUserId != null">
+            inner join biz_teacher_class tc
+              on tc.user_id = #{teacherUserId}
+             and tc.dept_id = u.dept_id
+             and tc.entry_year = s.entry_year
+             and tc.class_code = s.class_code
+        </if>
+        where s.student_id in
+        <foreach collection="studentIds" item="studentId" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+        <if test="deptId != null">and u.dept_id = #{deptId}</if>
     </select>
 
     <select id="selectBizStudentByStudentId" parameterType="Long" resultMap="BizStudentResult">
         <include refid="selectBizStudentVo"/>
-        where s.student_id = #{studentId}
+        where s.student_id = #{studentId} and u.del_flag = '0'
     </select>
 
     <insert id="insertBizStudent" parameterType="BizStudent" useGeneratedKeys="true" keyProperty="studentId">
@@ -71,6 +97,14 @@
             <if test="classCode != null and classCode != ''">#{classCode},</if>
             <if test="remark != null">#{remark},</if>
         </trim>
+    </insert>
+
+    <insert id="batchInsertBizStudents">
+        insert into biz_student(user_id, student_no, entry_year, class_code, remark)
+        values
+        <foreach collection="students" item="student" separator=",">
+            (#{student.userId}, #{student.studentNo}, #{student.entryYear}, #{student.classCode}, #{student.remark})
+        </foreach>
     </insert>
 
     <update id="updateBizStudent" parameterType="BizStudent">
@@ -103,6 +137,8 @@
                 LEFT JOIN sys_user u ON s.user_id = u.user_id
         WHERE
             u.dept_id = #{deptId}
+            AND u.del_flag = '0'
+            AND u.status = '0'
     </select>
 
     <!-- 根据用户ID查询学生信息 -->
@@ -113,7 +149,7 @@
 
     <select id="selectScoreStudents" resultMap="BizStudentResult">
         select s.student_id, s.user_id, s.student_no, s.entry_year, s.class_code, s.remark,
-               u.nick_name as student_name, u.user_name, u.dept_id
+               u.nick_name as student_name, u.user_name, u.status, u.dept_id
         from biz_student s
         left join sys_user u on s.user_id = u.user_id
         inner join biz_teacher_class tc
@@ -146,6 +182,8 @@
         where u.dept_id = #{deptId}
           and s.entry_year = #{entryYear}
           and s.class_code = #{classCode}
+          and u.del_flag = '0'
+          and u.status = '0'
     </select>
 
     <select id="countManagedScoreStudent" resultType="int">

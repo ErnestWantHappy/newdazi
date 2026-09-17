@@ -83,6 +83,7 @@ import com.ruoyi.common.utils.DictUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.file.FileTypeUtils;
 import com.ruoyi.common.utils.file.FileUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
 import com.ruoyi.common.utils.file.ImageUtils;
 import com.ruoyi.common.utils.reflect.ReflectUtils;
 
@@ -641,6 +642,9 @@ public class ExcelUtil<T>
         try
         {
             writeSheet();
+            // 导出名称由后端统一生成，避免各页面继续出现英文名和毫秒时间戳。
+            FileUtils.setAttachmentResponseHeader(response,
+                    DownloadFileNameUtils.withTimestamp(sheetName + ".xlsx"));
             wb.write(response.getOutputStream());
         }
         catch (Exception e)

@@ -59,12 +59,24 @@ WHERE r.role_key IN ('admin', 'researcher')
   );
 
 -- 6. 教研员端隐藏不适合日常使用的原始后台菜单。
+-- 口径（2026-07-22）：诊断中心 + 缓存健康 + 在线用户；隐藏数据监控/原生服务监控/定时任务/缓存列表等。
 DELETE rm
 FROM sys_role_menu rm
 JOIN sys_role r ON rm.role_id = r.role_id
 JOIN sys_menu m ON rm.menu_id = m.menu_id
 WHERE r.role_key = 'researcher'
   AND (
-      m.menu_id IN (104, 106, 110, 114, 2042)
-      OR m.parent_id IN (104, 106, 110, 114, 2042)
+      m.menu_id IN (104, 106, 110, 111, 112, 114, 2042)
+      OR m.parent_id IN (104, 106, 110, 111, 112, 114, 2042)
+  );
+
+-- 7. 确保教研员仍有系统监控目录、在线用户、缓存健康、诊断中心（幂等）。
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT r.role_id, m.menu_id
+FROM sys_role r
+JOIN sys_menu m ON m.menu_id IN (2, 109, 113, 25010)
+WHERE r.role_key = 'researcher'
+  AND m.status = '0'
+  AND NOT EXISTS (
+      SELECT 1 FROM sys_role_menu rm WHERE rm.role_id = r.role_id AND rm.menu_id = m.menu_id
   );

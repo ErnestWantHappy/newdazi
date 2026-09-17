@@ -1,0 +1,60 @@
+package com.ruoyi.business.service;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+import com.ruoyi.business.mapper.StudentBusinessRecordMapper;
+import com.ruoyi.common.exception.ServiceException;
+
+/**
+ * 保护答题与成绩历史，避免硬删除父记录后产生孤儿答案。
+ */
+@Service
+public class AnswerDeletionGuardService
+{
+    @Autowired
+    private BizStudentAnswerMapper studentAnswerMapper;
+
+    @Autowired
+    private StudentBusinessRecordMapper studentBusinessRecordMapper;
+
+    public void assertLessonsDeletable(Long[] lessonIds)
+    {
+        List<Long> ids = normalizedIds(lessonIds);
+        if (!ids.isEmpty() && studentAnswerMapper.countByLessonIds(ids) > 0) {
+            throw new ServiceException("课程已有学生答题记录，为保留成绩历史不可删除");
+        }
+    }
+
+    public void assertStudentsDeletable(Long[] studentIds)
+    {
+        List<Long> ids = normalizedIds(studentIds);
+        if (!ids.isEmpty() && studentAnswerMapper.countByStudentIds(ids) > 0) {
+            throw new ServiceException("学生已有答题记录，为保留成绩历史不可删除");
+        }
+        if (!ids.isEmpty() && studentBusinessRecordMapper.countOtherBusinessRecords(ids) > 0) {
+            throw new ServiceException("学生已有签到、课堂表现、导学单、抽测或作品等业务记录，不能彻底删除，请改为停用账号");
+        }
+    }
+
+    public void assertQuestionsDeletable(Long[] questionIds)
+    {
+        List<Long> ids = normalizedIds(questionIds);
+        if (!ids.isEmpty() && studentAnswerMapper.countByQuestionIds(ids) > 0) {
+            throw new ServiceException("题目已有学生答题记录，为保留成绩历史不可删除");
+        }
+    }
+
+    private List<Long> normalizedIds(Long[] ids)
+    {
+        if (ids == null || ids.length == 0) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(ids).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+    }
+}

@@ -6,29 +6,26 @@ import org.apache.ibatis.annotations.Param;
 
 public interface GuideSheetAnswerMapper
 {
-    public List<BizGuideSheetAnswer> selectBizGuideSheetAnswerList(BizGuideSheetAnswer answer);
+    List<BizGuideSheetAnswer> selectBizGuideSheetAnswerList(BizGuideSheetAnswer answer);
 
-    public BizGuideSheetAnswer selectBizGuideSheetAnswerByAnswerId(Long answerId);
+    BizGuideSheetAnswer selectBizGuideSheetAnswerByAnswerId(Long answerId);
 
-    public BizGuideSheetAnswer selectByStudentAndSheet(@Param("studentId") Long studentId,
-                                                        @Param("sheetId") Long sheetId);
+    BizGuideSheetAnswer selectByStudentAndBinding(@Param("studentId") Long studentId,
+                                                  @Param("bindingId") Long bindingId);
 
-    public List<BizGuideSheetAnswer> selectBySheetIdByClassCode(@Param("sheetId") Long sheetId,
-                                                                       @Param("entryYear") String entryYear,
-                                                                       @Param("classCode") String classCode);
+    List<BizGuideSheetAnswer> selectByBindingAndClass(@Param("bindingId") Long bindingId,
+                                                      @Param("deptId") Long deptId,
+                                                      @Param("entryYear") String entryYear,
+                                                      @Param("classCode") String classCode);
 
-    public Double selectAvgScore(@Param("sheetId") Long sheetId,
-                                  @Param("entryYear") String entryYear,
-                                  @Param("classCode") String classCode);
+    Double selectAvgScore(@Param("bindingId") Long bindingId,
+                          @Param("deptId") Long deptId,
+                          @Param("entryYear") String entryYear,
+                          @Param("classCode") String classCode);
 
-    public int insertBizGuideSheetAnswer(BizGuideSheetAnswer answer);
+    int insertBizGuideSheetAnswer(BizGuideSheetAnswer answer);
 
-    public int updateBizGuideSheetAnswer(BizGuideSheetAnswer answer);
+    int updateBizGuideSheetAnswer(BizGuideSheetAnswer answer);
 
-    public int deleteBizGuideSheetAnswerByAnswerIds(Long[] answerIds);
-
-    /**
-     * 按导学单ID删除所有答案记录（级联删除）
-     */
-    public int deleteBySheetId(Long sheetId);
+    int updateGradingFields(BizGuideSheetAnswer answer);
 }

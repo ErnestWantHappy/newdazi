@@ -5,134 +5,149 @@
 <mapper namespace="com.ruoyi.business.mapper.GuideSheetMapper">
 
     <resultMap type="BizGuideSheet" id="BizGuideSheetResult">
-        <result property="sheetId"         column="sheet_id"         />
-        <result property="sheetTitle"      column="sheet_title"      />
-        <result property="lessonId"        column="lesson_id"        />
-        <result property="creatorId"       column="creator_id"       />
-        <result property="deptId"          column="dept_id"          />
-        <result property="formJson"      column="form_json"      />
-        <result property="status"          column="status"           />
-        <result property="maxPages"        column="max_pages"        />
+        <id property="sheetId" column="sheet_id" />
+        <result property="sheetTitle" column="sheet_title" />
+        <result property="grade" column="grade" />
+        <result property="semester" column="semester" />
+        <result property="lessonNum" column="lesson_num" />
+        <result property="creatorId" column="creator_id" />
+        <result property="creatorName" column="creator_name" />
+        <result property="deptId" column="dept_id" />
+        <result property="countyDeptId" column="county_dept_id" />
+        <result property="formJson" column="form_json" />
+        <result property="versionNo" column="version_no" />
+        <result property="delFlag" column="del_flag" />
+        <result property="maxPages" column="max_pages" />
         <result property="teacherMachineIp" column="teacher_machine_ip" />
-        <result property="isPublic"        column="is_public"         />
-        <result property="createBy"        column="create_by"        />
-        <result property="createTime"      column="create_time"      />
-        <result property="updateBy"        column="update_by"        />
-        <result property="updateTime"      column="update_time"      />
-        <result property="creatorName"     column="creator_name"     />
-        <result property="submittedCount"  column="submitted_count"  />
-        <result property="totalAssigned"   column="total_assigned"   />
-        <result property="avgScore"        column="avg_score"        />
+        <result property="isPublic" column="is_public" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
     </resultMap>
 
-    <sql id="selectBizGuideSheetVo">
-        select sheet_id, sheet_title, lesson_id, creator_id, dept_id, form_json, status, max_pages, teacher_machine_ip, is_public, create_by, create_time, update_by, update_time from biz_guide_sheet
+    <sql id="selectGuideSheetColumns">
+        s.sheet_id, s.sheet_title, s.grade, s.semester, s.lesson_num,
+        s.creator_id, u.nick_name AS creator_name, s.dept_id, s.county_dept_id,
+        s.form_json, s.version_no, s.del_flag, s.max_pages, s.teacher_machine_ip,
+        s.is_public, s.create_by, s.create_time, s.update_by, s.update_time
+    </sql>
+
+    <sql id="selectGuideSheetListColumns">
+        s.sheet_id, s.sheet_title, s.grade, s.semester, s.lesson_num,
+        s.creator_id, u.nick_name AS creator_name,
+        s.version_no, s.del_flag, s.max_pages, s.is_public,
+        s.create_by, s.create_time, s.update_by, s.update_time
     </sql>
 
     <select id="selectBizGuideSheetList" parameterType="BizGuideSheet" resultMap="BizGuideSheetResult">
-        select s.sheet_id, s.sheet_title, s.lesson_id, s.creator_id, s.dept_id,
-               s.status, s.max_pages, s.teacher_machine_ip, s.is_public,
-               s.create_by, s.create_time, s.update_by, s.update_time,
-               u.nick_name as creator_name,
-               COALESCE(
-                   (SELECT COUNT(DISTINCT a.student_id) FROM biz_guide_sheet_answer a
-                    WHERE a.sheet_id = s.sheet_id AND a.status = '2'), 0
-               ) as submitted_count,
-               COALESCE(
-                   (SELECT COUNT(DISTINCT st.student_id)
-                     FROM biz_guide_sheet_assignment sa
-                     INNER JOIN biz_student st ON sa.class_code = st.class_code
-                        AND sa.entry_year = st.entry_year
-                     INNER JOIN sys_user su ON st.user_id = su.user_id
-                        AND su.dept_id = sa.dept_id
-                     WHERE sa.sheet_id = s.sheet_id
-                       AND sa.dept_id = s.dept_id), 0
-               ) as total_assigned,
-               COALESCE(
-                   (SELECT ROUND(AVG(a.total_score), 1) FROM biz_guide_sheet_answer a
-                    WHERE a.sheet_id = s.sheet_id AND a.status = '2' AND a.total_score IS NOT NULL), 0
-               ) as avg_score
-        from biz_guide_sheet s
-        left join sys_user u on s.creator_id = u.user_id
+        SELECT <include refid="selectGuideSheetListColumns" />
+        FROM biz_guide_sheet s
+        LEFT JOIN sys_user u ON u.user_id = s.creator_id
         <where>
-            <if test="sheetTitle != null and sheetTitle != ''"> and s.sheet_title like concat('%', #{sheetTitle}, '%')</if>
-            <if test="lessonId != null"> and s.lesson_id = #{lessonId}</if>
-            <if test="deptId != null"> and s.dept_id = #{deptId}</if>
-            <if test="creatorId != null"> and s.creator_id = #{creatorId}</if>
-            <if test="status != null and status != ''"> and s.status = #{status}</if>
-            <if test="params.currentUserId != null"> and (s.is_public = 'Y' or s.creator_id = #{params.currentUserId})</if>
+            <choose>
+                <when test="delFlag != null and delFlag != ''">
+                    s.del_flag = #{delFlag}
+                </when>
+                <otherwise>
+                    s.del_flag = '0'
+                </otherwise>
+            </choose>
+            <if test="sheetTitle != null and sheetTitle != ''">
+                AND s.sheet_title LIKE CONCAT('%', #{sheetTitle}, '%')
+            </if>
+            <if test="grade != null">AND s.grade = #{grade}</if>
+            <if test="semester != null and semester != ''">AND s.semester = #{semester}</if>
+            <if test="lessonNum != null">AND s.lesson_num = #{lessonNum}</if>
+            <if test="isPublic != null and isPublic != ''">AND s.is_public = #{isPublic}</if>
+            <if test="creatorId != null">AND s.creator_id = #{creatorId}</if>
+            <choose>
+                <when test="params.bypassVisibility != null and params.bypassVisibility">
+                </when>
+                <when test="params.viewerId != null and params.countyDeptId != null">
+                    AND (
+                        s.creator_id = #{params.viewerId}
+                        OR (s.is_public = 'Y'
+                            AND s.county_dept_id = #{params.countyDeptId}
+                            AND s.del_flag = '0')
+                    )
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+            <!-- mine = 我的私有：本人创建且未公开；public = 同县公共导学单 -->
+            <if test="params.scope != null and params.scope == 'mine'">
+                AND s.creator_id = #{params.viewerId}
+                AND s.is_public = 'N'
+            </if>
+            <if test="params.scope != null and params.scope == 'public'">
+                AND s.is_public = 'Y'
+                AND s.county_dept_id = #{params.countyDeptId}
+                AND s.del_flag = '0'
+            </if>
         </where>
-        order by s.create_time desc
+        ORDER BY COALESCE(s.update_time, s.create_time) DESC, s.sheet_id DESC
     </select>
 
     <select id="selectBizGuideSheetBySheetId" parameterType="Long" resultMap="BizGuideSheetResult">
-        <include refid="selectBizGuideSheetVo"/>
-        where sheet_id = #{sheetId}
+        SELECT <include refid="selectGuideSheetColumns" />
+        FROM biz_guide_sheet s
+        LEFT JOIN sys_user u ON u.user_id = s.creator_id
+        WHERE s.sheet_id = #{sheetId}
     </select>
 
-    <insert id="insertBizGuideSheet" parameterType="BizGuideSheet" useGeneratedKeys="true" keyProperty="sheetId">
-        insert into biz_guide_sheet
-        <trim prefix="(" suffix=")" suffixOverrides=",">
-            <if test="sheetTitle != null and sheetTitle != ''">sheet_title,</if>
-            <if test="lessonId != null">lesson_id,</if>
-            <if test="creatorId != null">creator_id,</if>
-            <if test="deptId != null">dept_id,</if>
-            <if test="formJson != null">form_json,</if>
-            <if test="status != null">status,</if>
-            <if test="maxPages != null">max_pages,</if>
-            <if test="teacherMachineIp != null">teacher_machine_ip,</if>
-            <if test="isPublic != null and isPublic != ''">is_public,</if>
-            <if test="createBy != null and createBy != ''">create_by,</if>
-            <if test="createTime != null">create_time,</if>
-        </trim>
-        <trim prefix="values (" suffix=")" suffixOverrides=",">
-            <if test="sheetTitle != null and sheetTitle != ''">#{sheetTitle},</if>
-            <if test="lessonId != null">#{lessonId},</if>
-            <if test="creatorId != null">#{creatorId},</if>
-            <if test="deptId != null">#{deptId},</if>
-            <if test="formJson != null">#{formJson},</if>
-            <if test="status != null">#{status},</if>
-            <if test="maxPages != null">#{maxPages},</if>
-            <if test="teacherMachineIp != null">#{teacherMachineIp},</if>
-            <if test="isPublic != null and isPublic != ''">#{isPublic},</if>
-            <if test="createBy != null and createBy != ''">#{createBy},</if>
-            <if test="createTime != null">#{createTime},</if>
-        </trim>
+    <insert id="insertBizGuideSheet" parameterType="BizGuideSheet"
+            useGeneratedKeys="true" keyProperty="sheetId">
+        INSERT INTO biz_guide_sheet (
+            sheet_title, grade, semester, lesson_num, creator_id, dept_id,
+            county_dept_id, form_json, version_no, del_flag, max_pages,
+            teacher_machine_ip, is_public, create_by, create_time, update_by, update_time
+        ) VALUES (
+            #{sheetTitle}, #{grade}, #{semester}, #{lessonNum}, #{creatorId}, #{deptId},
+            #{countyDeptId}, #{formJson}, COALESCE(#{versionNo}, 1), COALESCE(#{delFlag}, '0'),
+            COALESCE(#{maxPages}, 0), #{teacherMachineIp}, #{isPublic},
+            #{createBy}, #{createTime}, #{updateBy}, #{updateTime}
+        )
     </insert>
 
     <update id="updateBizGuideSheet" parameterType="BizGuideSheet">
-        update biz_guide_sheet
-        <trim prefix="SET" suffixOverrides=",">
+        UPDATE biz_guide_sheet
+        <set>
             <if test="sheetTitle != null and sheetTitle != ''">sheet_title = #{sheetTitle},</if>
-            <if test="lessonId != null">lesson_id = #{lessonId},</if>
+            <if test="grade != null">grade = #{grade},</if>
+            <if test="semester != null and semester != ''">semester = #{semester},</if>
+            <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
             <if test="formJson != null">form_json = #{formJson},</if>
-            <if test="status != null">status = #{status},</if>
             <if test="maxPages != null">max_pages = #{maxPages},</if>
             <if test="teacherMachineIp != null">teacher_machine_ip = #{teacherMachineIp},</if>
             <if test="isPublic != null and isPublic != ''">is_public = #{isPublic},</if>
-            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
-            update_time = now()
-        </trim>
-        where sheet_id = #{sheetId}
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            update_time = COALESCE(#{updateTime}, NOW()),
+            version_no = version_no + 1
+        </set>
+        WHERE sheet_id = #{sheetId}
+          AND version_no = #{versionNo}
+          AND del_flag = '0'
     </update>
 
-    <delete id="deleteBizGuideSheetBySheetId" parameterType="Long">
-        delete from biz_guide_sheet where sheet_id = #{sheetId}
-    </delete>
-
-    <delete id="deleteBizGuideSheetBySheetIds" parameterType="String">
-        delete from biz_guide_sheet where sheet_id in
-        <foreach item="sheetId" collection="array" open="(" separator="," close=")">
-            #{sheetId}
-        </foreach>
-    </delete>
+    <update id="archiveBySheetId">
+        UPDATE biz_guide_sheet
+        SET del_flag = '2',
+            update_by = #{updateBy},
+            update_time = #{updateTime}
+        WHERE sheet_id = #{sheetId}
+          AND del_flag = '0'
+    </update>
 
     <select id="selectCreatorList" parameterType="Long" resultType="java.util.Map">
-        select distinct u.user_id as userId, u.nick_name as nickName
-        from biz_guide_sheet s
-        inner join sys_user u on s.creator_id = u.user_id
-        where s.dept_id = #{deptId}
-        order by u.nick_name
+        SELECT DISTINCT u.user_id AS creatorId, u.nick_name AS creatorName
+        FROM biz_guide_sheet s
+        INNER JOIN sys_user u ON u.user_id = s.creator_id
+        WHERE s.county_dept_id = #{countyDeptId}
+          AND s.is_public = 'Y'
+          AND s.del_flag = '0'
+        ORDER BY u.nick_name
     </select>
 
 </mapper>

@@ -52,6 +52,13 @@ public interface IBizLessonService
      * @return 结果
      */
     public int deleteBizLessonByLessonIds(Long[] lessonIds);
+    /**
+     * 彻底清除课程（含成绩与作品，不可恢复；用户已确认语义）。
+     *
+     * @param lessonIds 需要彻底清除的课程主键集合
+     * @return 结果
+     */
+    public int purgeBizLessonByLessonIds(Long[] lessonIds);
 
     /**
      * 删除课程/作业信息信息
@@ -60,6 +67,9 @@ public interface IBizLessonService
      * @return 结果
      */
     public int deleteBizLessonByLessonId(Long lessonId);
+
+    /** 归档/恢复课程，课程ID和历史数据均保留。 */
+    int updateLessonStatus(Long lessonId, String status);
 
     /**
      * 获取教师首页的完整数据
@@ -75,4 +85,14 @@ public interface IBizLessonService
     public LessonDetailVo selectLessonDetailsByLessonId(Long lessonId);
 
     public LessonDetailVo saveLessonDetails(LessonDetailVo lessonDetailVo);
+
+    /**
+     * 读取教师统一课程推进策略（全校常规课共用一套）
+     */
+    public java.util.Map<String, Object> getTeacherAdvancePolicy();
+
+    /**
+     * 保存教师统一课程推进策略，并同步到该教师全部常规课
+     */
+    public java.util.Map<String, Object> updateTeacherAdvancePolicy(LessonDetailVo config);
 }

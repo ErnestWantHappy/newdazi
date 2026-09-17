@@ -24,7 +24,7 @@
         max-height="450"
         :row-class-name="tableRowClassName"
       >
-        <el-table-column prop="studentNo" label="学号" width="80" align="center" />
+        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable :sort-method="naturalCodeCompare" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" />
         <el-table-column label="平时分" width="150" align="center" class-name="performance-score-column">
           <template #default="scope">
@@ -91,6 +91,11 @@ const visible = computed({
 const loading = ref(false)
 const saving = ref(false)
 const studentList = ref([])
+
+// 学号来自数据库字符串字段，表格排序必须显式使用自然数值顺序。
+function naturalCodeCompare(a, b) {
+  return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' })
+}
 
 function loadData() {
   if (!props.lessonId || !props.classCode || !props.entryYear) {

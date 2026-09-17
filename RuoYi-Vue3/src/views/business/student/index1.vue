@@ -77,7 +77,7 @@
         </el-form-item>
         <el-form-item label="班级编号" prop="classCode">
            <el-select v-model="form.classCode" placeholder="请选择班级编号" style="width:100%">
-             <el-option v-for="n in 15" :key="n" :label="`${n}班`" :value="String(n)" />
+             <el-option v-for="n in 99" :key="n" :label="`${String(n).padStart(2, '0')}班`" :value="String(n)" />
            </el-select>
         </el-form-item>
         <el-form-item label="学号" prop="studentNo">

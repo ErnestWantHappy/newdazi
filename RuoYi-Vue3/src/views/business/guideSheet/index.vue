@@ -1,178 +1,233 @@
 <template>
-  <div class="app-container">
-    <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
-      <el-form-item label="标题" prop="sheetTitle">
-        <el-input v-model="queryParams.sheetTitle" placeholder="请输入导学单标题" clearable style="width: 240px" @keyup.enter="handleQuery" />
-      </el-form-item>
-      <el-form-item label="状态" prop="status">
-        <el-select v-model="queryParams.status" placeholder="请选择状态" clearable style="width: 200px">
-          <el-option v-for="dict in statusOptions" :key="dict.value" :label="dict.label" :value="dict.value" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="创建人">
-        <el-select v-model="creatorFilter" placeholder="筛选创建人" clearable style="width: 140px" @change="onCreatorFilterChange">
-          <el-option label="所有人" value="all" />
-          <el-option label="自己" value="self" />
-        </el-select>
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-        <el-button icon="Refresh" @click="resetQuery">重置</el-button>
-      </el-form-item>
-    </el-form>
+  <div class="app-container guide-sheet-library">
+    <section class="library-hero">
+      <div>
+        <h2>导学单管理</h2>
+        <p class="hero-description">创建可复用的课堂导学单，在课程设计中选用后供学生填写。</p>
+      </div>
+      <el-button type="primary" size="large" icon="Plus" @click="handleAdd" v-hasPermi="['business:guideSheet:add']">
+        新建导学单
+      </el-button>
+    </section>
 
-    <el-row :gutter="10" class="mb8">
-      <el-col :span="1.5">
-        <el-button type="primary" plain icon="Plus" @click="handleAdd" v-hasPermi="['business:guideSheet:add']">新增</el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button type="danger" plain icon="Delete" :disabled="multiple" @click="handleDelete" v-hasPermi="['business:guideSheet:remove']">删除</el-button>
-      </el-col>
-      <right-toolbar v-model:showSearch="showSearch" @queryTable="getList" />
-    </el-row>
+    <el-card class="filter-card" shadow="never">
+      <el-form ref="queryRef" :model="queryParams" :inline="true" label-position="top">
+        <el-form-item label="模板标题" prop="sheetTitle">
+          <el-input
+            v-model="queryParams.sheetTitle"
+            placeholder="输入标题关键词"
+            clearable
+            style="width: 220px"
+            @keyup.enter="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="年级" prop="grade">
+          <el-select v-model="queryParams.grade" placeholder="全部年级" clearable style="width: 130px">
+            <el-option v-for="dict in biz_grade" :key="dict.value" :label="dict.label" :value="dict.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="学期" prop="semester">
+          <el-select v-model="queryParams.semester" placeholder="全部学期" clearable style="width: 130px">
+            <el-option v-for="dict in biz_semester" :key="dict.value" :label="dict.label" :value="dict.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="第几课" prop="lessonNum">
+          <el-select v-model="queryParams.lessonNum" placeholder="全部课次" clearable style="width: 130px">
+            <el-option v-for="num in 30" :key="num" :label="`第 ${num} 课`" :value="num" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="可见范围" prop="scope">
+          <el-select v-model="queryParams.scope" placeholder="全部" clearable style="width: 150px">
+            <el-option label="公共导学单" value="public" />
+            <el-option label="我的私有" value="mine" />
+          </el-select>
+        </el-form-item>
+        <el-form-item class="filter-actions" label=" ">
+          <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
+          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
 
-    <el-table v-loading="loading" :data="sheetList" @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="55" align="center" />
-      <el-table-column label="导学单标题" align="left" prop="sheetTitle" show-overflow-tooltip min-width="160" />
-      <el-table-column label="正确率" align="center" width="150">
-        <template #default="scope">
-          <el-progress
-            :percentage="scope.row.accuracyRate || 0"
-            :stroke-width="16"
-            :text-inside="true"
-            :color="accuracyColor(scope.row.accuracyRate)"
-          >
-            <span class="progress-text">{{ scope.row.accuracyRate || 0 }}%</span>
-          </el-progress>
-        </template>
-      </el-table-column>
-      <el-table-column label="完成率" align="center" width="150">
-        <template #default="scope">
-          <el-progress
-            :percentage="scope.row.completionRate || 0"
-            :stroke-width="16"
-            :text-inside="true"
-            :color="completionColor(scope.row.completionRate)"
-          >
-            <span class="progress-text">{{ scope.row.completionRate || 0 }}%</span>
-          </el-progress>
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" align="center" prop="status" width="100">
-        <template #default="scope">
-          <el-tag v-if="scope.row.status === '0'" type="info">草稿</el-tag>
-          <el-tag v-else-if="scope.row.status === '1'" type="success">已发布</el-tag>
-          <el-tag v-else-if="scope.row.status === '2'" type="warning">已关闭</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="创建人" align="center" width="120">
-        <template #default="scope">
-          {{ scope.row.creatorName || scope.row.createBy }}
-        </template>
-      </el-table-column>
-      <el-table-column label="创建时间" align="center" prop="createTime" width="180" />
-      <el-table-column label="操作" align="center" width="360" fixed="right">
-        <template #default="scope">
-          <!-- 关闭后仍需保留最终结果查看与导出入口。 -->
-          <template v-if="scope.row.status === '2'">
-            <el-button link type="primary" icon="View" @click="handlePreview(scope.row)">预览</el-button>
-            <el-button link type="primary" icon="DataAnalysis" @click="handleDashboard(scope.row)" v-hasPermi="['business:guideSheet:dashboard']">看板</el-button>
-            <el-button link type="primary" icon="CopyDocument" @click="handleCopy(scope.row)">引用</el-button>
-          </template>
-          <!-- 已发布状态 -->
-          <template v-else-if="scope.row.status === '1'">
-            <template v-if="String(scope.row.creatorId) === String(userId)">
-              <el-button link type="primary" icon="Edit" @click="handleDesign(scope.row)" v-hasPermi="['business:guideSheet:design']">设计</el-button>
-            </template>
-            <el-button link type="warning" icon="Close" @click="handleClose(scope.row)" v-hasPermi="['business:guideSheet:edit']">关闭</el-button>
-            <el-button link type="primary" icon="View" @click="handlePreview(scope.row)">预览</el-button>
-            <el-button link type="primary" icon="DataAnalysis" @click="handleDashboard(scope.row)" v-hasPermi="['business:guideSheet:dashboard']">看板</el-button>
-            <el-button link type="primary" icon="CopyDocument" @click="handleCopy(scope.row)">引用</el-button>
-          </template>
-          <!-- 草稿状态 -->
-          <template v-else>
-            <template v-if="String(scope.row.creatorId) === String(userId)">
-              <el-button link type="primary" icon="Edit" @click="handleDesign(scope.row)" v-hasPermi="['business:guideSheet:design']">设计</el-button>
-            </template>
-            <el-button link type="success" icon="Upload" @click="handlePublish(scope.row)" v-hasPermi="['business:guideSheet:edit']">发布</el-button>
-            <el-button link type="primary" icon="View" @click="handlePreview(scope.row)">预览</el-button>
-            <el-button link type="primary" icon="CopyDocument" @click="handleCopy(scope.row)">引用</el-button>
-          </template>
-        </template>
-      </el-table-column>
-    </el-table>
+    <el-card class="library-card" shadow="never">
+      <template #header>
+        <div class="card-heading">
+          <div>
+            <span class="card-title">我的导学单</span>
+            <span class="record-count">共 {{ total }} 份</span>
+          </div>
+        </div>
+      </template>
 
-    <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+      <el-table v-loading="loading" :data="sheetList" row-key="sheetId" class="template-table">
+        <el-table-column label="标题" prop="sheetTitle" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="template-title-cell">
+              <span class="template-mark">导</span>
+              <div>
+                <strong>{{ row.sheetTitle }}</strong>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="年级" prop="grade" width="110" align="center">
+          <template #default="{ row }">
+            <dict-tag :options="biz_grade" :value="row.grade" />
+          </template>
+        </el-table-column>
+        <el-table-column label="学期" prop="semester" width="110" align="center">
+          <template #default="{ row }">
+            <dict-tag :options="biz_semester" :value="row.semester" />
+          </template>
+        </el-table-column>
+        <el-table-column label="第几课" prop="lessonNum" width="90" align="center">
+          <template #default="{ row }">第 {{ row.lessonNum }} 课</template>
+        </el-table-column>
+        <el-table-column label="可见范围" prop="isPublic" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.isPublic === 'Y' ? 'success' : 'info'" effect="plain" round>
+              {{ row.isPublic === 'Y' ? '公共导学单' : '我的私有' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="创建人" width="120" align="center">
+          <template #default="{ row }">{{ row.creatorName || row.createBy || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="最近修改" prop="updateTime" width="180" align="center">
+          <template #default="{ row }">{{ row.updateTime || row.createTime || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="320" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" icon="View" @click="handlePreview(row)">预览</el-button>
+            <el-button
+              v-if="canManage(row)"
+              link
+              type="primary"
+              icon="Edit"
+              @click="handleDesign(row)"
+              v-hasPermi="['business:guideSheet:design']"
+            >设计</el-button>
+            <el-button link type="success" icon="CopyDocument" :loading="copyingId === row.sheetId" @click="handleCopy(row)">
+              复制
+            </el-button>
+            <el-button link type="warning" @click="goUseInLesson(row)">去课程用</el-button>
+            <el-button
+              v-if="canManage(row)"
+              link
+              type="danger"
+              icon="FolderDelete"
+              @click="handleArchive(row)"
+              v-hasPermi="['business:guideSheet:remove']"
+            >归档</el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="暂无导学单">
+            <el-button type="primary" @click="handleAdd" v-hasPermi="['business:guideSheet:add']">新建第一份导学单</el-button>
+          </el-empty>
+        </template>
+      </el-table>
+
+      <pagination
+        v-show="total > 0"
+        :total="total"
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
+        @pagination="getList"
+      />
+    </el-card>
+
+    <el-dialog v-model="onboardingVisible" title="第一次使用导学单" width="min(620px, 92vw)" append-to-body>
+      <div class="onboarding-intro">三步即可完成一份能用于课堂的导学单。</div>
+      <div class="onboarding-steps">
+        <div><span>1</span><strong>填写基本信息</strong><small>标题、年级、学期和第几课</small></div>
+        <div><span>2</span><strong>添加教学内容</strong><small>按需添加常用模块</small></div>
+        <div><span>3</span><strong>预览并保存</strong><small>确认后在课程中选用</small></div>
+      </div>
+      <el-alert type="info" :closable="false" show-icon title="设为公共后，同县教师可以复制使用，不会改动你的原模板。" />
+      <template #footer>
+        <el-button @click="skipOnboarding">跳过</el-button>
+        <el-button type="primary" @click="startFirstGuideSheet">开始创建</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="GuideSheet">
-import { ref, reactive, onMounted, onActivated } from 'vue'
+import { getCurrentInstance, onActivated, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { listGuideSheet, delGuideSheet, publishGuideSheet, closeGuideSheet } from '@/api/business/guideSheet'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import useUserStore from '@/store/modules/user'
+import {
+  archiveGuideSheet,
+  copyGuideSheet,
+  listGuideSheet
+} from '@/api/business/guideSheet'
 
+const { proxy } = getCurrentInstance()
 const router = useRouter()
 const userStore = useUserStore()
+const { biz_grade, biz_semester } = proxy.useDict('biz_grade', 'biz_semester')
 
-const userId = ref(userStore.id)
-
-const statusOptions = [
-  { label: '草稿', value: '0' },
-  { label: '已发布', value: '1' },
-  { label: '已关闭', value: '2' }
-]
-
-const showSearch = ref(true)
+const queryRef = ref(null)
 const loading = ref(false)
+const copyingId = ref(null)
 const total = ref(0)
 const sheetList = ref([])
-const ids = ref([])
-const single = ref(true)
-const multiple = ref(true)
-const creatorFilter = ref('')
+const onboardingVisible = ref(false)
+let listRequestId = 0
+let skipInitialActivationRefresh = true
 
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
   sheetTitle: undefined,
-  status: undefined,
-  creatorId: undefined
+  grade: undefined,
+  semester: undefined,
+  lessonNum: undefined,
+  scope: undefined
 })
 
-function accuracyColor(val) {
-  if (!val || val === 0) return '#C0C4CC'
-  if (val >= 60) return '#67C23A'
-  if (val >= 30) return '#E6A23C'
-  return '#F56C6C'
-}
+const ONBOARDING_KEY = `guide-sheet:onboarding-complete:${String(userStore.id || 'anonymous')}`
 
-function completionColor(val) {
-  if (!val || val === 0) return '#C0C4CC'
-  if (val >= 80) return '#67C23A'
-  if (val >= 40) return '#E6A23C'
-  return '#F56C6C'
+function buildListParams() {
+  const params = {
+    pageNum: queryParams.pageNum,
+    pageSize: queryParams.pageSize
+  }
+  if (queryParams.sheetTitle) params.sheetTitle = queryParams.sheetTitle
+  if (queryParams.grade !== undefined && queryParams.grade !== null && queryParams.grade !== '') {
+    params.grade = queryParams.grade
+  }
+  if (queryParams.semester !== undefined && queryParams.semester !== null && queryParams.semester !== '') {
+    params.semester = queryParams.semester
+  }
+  if (queryParams.lessonNum !== undefined && queryParams.lessonNum !== null && queryParams.lessonNum !== '') {
+    params.lessonNum = queryParams.lessonNum
+  }
+  if (queryParams.scope === 'public' || queryParams.scope === 'mine') {
+    params.scope = queryParams.scope
+  } else {
+    params.scope = 'all'
+  }
+  return params
 }
 
 function getList() {
+  const requestId = ++listRequestId
   loading.value = true
-  const params = { ...queryParams }
-  if (creatorFilter.value === 'self') {
-    params.creatorFilter = 'self'
-    params.creatorId = undefined
-  } else {
-    params.creatorFilter = undefined
-    params.creatorId = undefined
-  }
-  listGuideSheet(params).then(response => {
-    sheetList.value = response.rows
-    total.value = response.total
-    loading.value = false
-  }).catch(() => {
-    loading.value = false
-    ElMessage.error('获取导学单列表失败')
-  })
+  listGuideSheet(buildListParams())
+    .then(response => {
+      if (requestId !== listRequestId) return
+      sheetList.value = response.rows || response.data || []
+      total.value = Number(response.total || sheetList.value.length || 0)
+    })
+    .catch(() => {
+      if (requestId === listRequestId) ElMessage.error('获取导学单模板失败')
+    })
+    .finally(() => {
+      if (requestId === listRequestId) loading.value = false
+    })
 }
 
 function handleQuery() {
@@ -181,26 +236,33 @@ function handleQuery() {
 }
 
 function resetQuery() {
-  queryParams.sheetTitle = undefined
-  queryParams.status = undefined
-  queryParams.creatorId = undefined
-  creatorFilter.value = ''
+  queryRef.value?.resetFields()
+  queryParams.scope = undefined
   handleQuery()
-}
-
-function onCreatorFilterChange() {
-  queryParams.creatorId = undefined
-  handleQuery()
-}
-
-function handleSelectionChange(selection) {
-  ids.value = selection.map(item => item.sheetId)
-  single.value = selection.length !== 1
-  multiple.value = !selection.length
 }
 
 function handleAdd() {
-  router.push({ name: 'GuideSheetDesigner', params: { sheetId: undefined } })
+  localStorage.setItem(ONBOARDING_KEY, '1')
+  router.push({ name: 'GuideSheetDesigner' })
+}
+
+function skipOnboarding() {
+  localStorage.setItem(ONBOARDING_KEY, '1')
+  onboardingVisible.value = false
+}
+
+function startFirstGuideSheet() {
+  onboardingVisible.value = false
+  handleAdd()
+}
+
+function canManage(row) {
+  return Boolean(
+    row.canEdit ||
+    row.canArchive ||
+    String(row.creatorId) === String(userStore.id) ||
+    userStore.roles.includes('admin')
+  )
 }
 
 function handleDesign(row) {
@@ -211,60 +273,144 @@ function handlePreview(row) {
   router.push({ name: 'GuideSheetPreview', params: { sheetId: row.sheetId } })
 }
 
-function handleDashboard(row) {
-  router.push({ name: 'GuideSheetDashboard', params: { sheetId: row.sheetId } })
+/** 从导学单直达课程设计，新建课时可直接绑定该模板 */
+function goUseInLesson(row) {
+  router.push({
+    path: '/business/lesson-auth/designer',
+    query: {
+      guideSheetId: row.sheetId,
+      grade: row.grade != null ? String(row.grade) : undefined,
+      semester: row.semester != null ? String(row.semester) : undefined,
+      nextNum: row.lessonNum != null ? String(row.lessonNum) : undefined,
+      lessonMode: 'assessment'
+    }
+  })
 }
 
-function handleCopy(row) {
-  router.push({ name: 'GuideSheetDesigner', params: { sheetId: undefined }, query: { copyFrom: row.sheetId } })
+async function handleCopy(row) {
+  copyingId.value = row.sheetId
+  try {
+    const response = await copyGuideSheet(row.sheetId)
+    const copiedId = response?.data?.sheetId || response?.sheetId || response?.data
+    ElMessage.success('模板副本已创建')
+    if (copiedId) {
+      router.push({ name: 'GuideSheetDesigner', params: { sheetId: copiedId } })
+    } else {
+      getList()
+    }
+  } finally {
+    copyingId.value = null
+  }
 }
 
-function handlePublish(row) {
-  ElMessageBox.confirm('确认发布导学单「' + row.sheetTitle + '」？发布后学生即可查看。', '发布确认', { type: 'warning' })
-    .then(() => publishGuideSheet(row.sheetId)).then(() => { ElMessage.success('发布成功'); getList() })
-    .catch((err) => {
-      // 区分用户取消和 API 错误：ElMessageBox.confirm 取消/关闭返回字符串 'cancel'/'close'
-      if (err !== 'cancel' && err !== 'close') {
-        const msg = err?.response?.data?.msg || err?.msg || err?.message || '发布失败，请检查表单内容和班级指派'
-        ElMessage.error(typeof msg === 'string' ? msg : '发布失败')
-      }
-    })
-}
-
-function handleClose(row) {
-  ElMessageBox.confirm('确认关闭导学单「' + row.sheetTitle + '」？关闭后学生将无法查看。', '关闭确认', { type: 'warning' })
-    .then(() => closeGuideSheet(row.sheetId)).then(() => { ElMessage.success('已关闭'); getList() })
-    .catch((err) => {
-      if (err !== 'cancel' && err !== 'close') {
-        const msg = err?.response?.data?.msg || err?.msg || err?.message || '关闭失败'
-        ElMessage.error(typeof msg === 'string' ? msg : '关闭失败')
-      }
-    })
-}
-
-function handleDelete() {
-  const sheetIds = ids.value.join(',')
-  ElMessageBox.confirm('确认删除所选导学单？删除后不可恢复。', '删除确认', { type: 'warning' })
-    .then(() => delGuideSheet(sheetIds)).then(() => { ElMessage.success('删除成功'); getList() })
-    .catch((err) => {
-      if (err !== 'cancel' && err !== 'close') {
-        const msg = err?.response?.data?.msg || err?.msg || err?.message || '删除失败'
-        ElMessage.error(typeof msg === 'string' ? msg : '删除失败')
-      }
-    })
+function handleArchive(row) {
+  ElMessageBox.confirm(
+    `归档“${row.sheetTitle}”后，新课程将不能再选择它，已有课程快照和历史成绩不会受影响。`,
+    '归档模板',
+    { type: 'warning', confirmButtonText: '确认归档' }
+  ).then(async () => {
+    await archiveGuideSheet(row.sheetId)
+    ElMessage.success('模板已归档')
+    getList()
+  }).catch(() => {})
 }
 
 onMounted(() => {
   getList()
+  if (localStorage.getItem(ONBOARDING_KEY) !== '1') onboardingVisible.value = true
 })
-
 onActivated(() => {
+  if (skipInitialActivationRefresh) {
+    skipInitialActivationRefresh = false
+    return
+  }
   getList()
 })
 </script>
 
-<style scoped>
-.progress-text {
-  font-size: 11px;
+<style scoped lang="scss">
+.guide-sheet-library {
+  --library-ink: #17324d;
+  --library-accent: #1677a7;
+  --library-soft: #eef7f8;
+  background: #f2f5f5;
+  min-height: calc(100vh - 84px);
+}
+
+.library-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 30px;
+  margin-bottom: 16px;
+  color: #173b43;
+  border: 1px solid #dbe5e7;
+  border-left: 5px solid #287c75;
+  border-radius: 6px;
+  background: #fff;
+
+  h2 { margin: 2px 0 8px; font-size: 26px; letter-spacing: 1px; }
+  .hero-kicker { margin: 0; font-size: 11px; letter-spacing: 0; color: #5c8d88; }
+  .hero-description { margin: 0; color: #6f8187; }
+}
+
+.filter-card,
+.library-card {
+  border: 0;
+  border-radius: 6px;
+}
+
+.filter-card {
+  margin-bottom: 16px;
+  :deep(.el-card__body) { padding-bottom: 4px; }
+  :deep(.el-form-item) { margin-right: 14px; margin-bottom: 14px; }
+  :deep(.el-form-item__label) { color: #5b6b7a; font-size: 12px; line-height: 22px; }
+}
+
+.filter-actions { align-self: flex-end; }
+
+.card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  .card-title { color: var(--library-ink); font-size: 17px; font-weight: 700; }
+  .record-count { margin-left: 10px; color: #8492a6; font-size: 12px; }
+  .visibility-note { color: #7a8997; font-size: 12px; }
+}
+
+.template-title-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  .template-mark {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 34px;
+    height: 34px;
+    color: #fff;
+    border-radius: 10px 4px 10px 4px;
+    background: linear-gradient(145deg, #1681a8, #2f9c84);
+    font-family: STKaiti, KaiTi, serif;
+    font-size: 18px;
+  }
+  strong { display: block; color: #243b53; font-weight: 650; }
+  small { color: #9aa7b4; }
+}
+
+.onboarding-intro { margin-bottom: 18px; color: #526970; }
+.onboarding-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.onboarding-steps > div { padding: 14px; border: 1px solid #dce5e7; border-radius: 6px; background: #f8fafa; }
+.onboarding-steps span { display: grid; place-items: center; width: 28px; height: 28px; margin-bottom: 10px; color: #fff; border-radius: 4px; background: #287c75; font-family: Georgia, serif; }
+.onboarding-steps strong, .onboarding-steps small { display: block; }
+.onboarding-steps strong { color: #29434b; font-size: 13px; }
+.onboarding-steps small { margin-top: 4px; color: #75868c; font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .library-hero { align-items: flex-start; flex-direction: column; }
+  .card-heading { align-items: flex-start; flex-direction: column; }
+  .visibility-note { display: none; }
+  .onboarding-steps { grid-template-columns: 1fr; }
 }
 </style>

@@ -2,6 +2,7 @@ import router from "./router";
 import { ElMessage } from "element-plus";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
+import { isSessionExpiredError } from "@/utils/session";
 import { getToken } from "@/utils/auth";
 import { isHttp, isPathMatch } from "@/utils/validate";
 import { isRelogin } from "@/utils/request";
@@ -11,7 +12,8 @@ import usePermissionStore from "@/store/modules/permission";
 
 NProgress.configure({ showSpinner: false });
 
-const whiteList = ["/login", "/register", "/student/index"];
+// 学生首页必须登录；未登录访问 /student/index 应进入登录流程，不能免鉴权直入
+const whiteList = ["/login", "/register", "/public/research-notice/**"];
 
 const isWhiteList = (path) => {
   return whiteList.some((pattern) => isPathMatch(pattern, path));
@@ -19,6 +21,13 @@ const isWhiteList = (path) => {
 
 router.beforeEach((to, from, next) => {
   NProgress.start();
+  // 懒加载目标页和首屏数据期间遮住旧页面，避免地址已切换却仍操作上一页。
+  document.documentElement.classList.add('route-pending');
+  // 平台菜单实际路由为 /platform-update，兼容历史书签中的旧地址。
+  if (to.path === '/business/platform-update') {
+    next({ path: '/platform-update', replace: true });
+    return;
+  }
   if (getToken()) {
     to.meta.title && useSettingsStore().setTitle(to.meta.title);
     /* has token*/
@@ -27,7 +36,7 @@ router.beforeEach((to, from, next) => {
       NProgress.done();
     } else {
       const userStore = useUserStore();
-      if (userStore.roles.length === 0) {
+      if (userStore.roles.length === 0 || !usePermissionStore().routesReady) {
         isRelogin.show = true;
         // 判断当前用户是否已拉取完user_info信息
         userStore
@@ -36,8 +45,8 @@ router.beforeEach((to, from, next) => {
             isRelogin.show = false;
             const roles = userStore.roles;
 
-            usePermissionStore()
-              .generateRoutes()
+            return usePermissionStore()
+              .generateRoutes(roles)
               .then((accessRoutes) => {
                 accessRoutes.forEach((route) => {
                   if (!isHttp(route.path)) {
@@ -77,10 +86,16 @@ router.beforeEach((to, from, next) => {
               });
           })
           .catch((err) => {
-            userStore.logOut().then(() => {
-              ElMessage.error(err);
-              next({ path: "/" });
-            });
+            isRelogin.show = false;
+            // 短暂502或超时不代表身份失效，不能退出并诱发反复登录。
+            if (!isSessionExpiredError(err)) {
+              ElMessage.error('页面加载失败，请稍后刷新重试，登录状态已保留');
+              next(false);
+              NProgress.done();
+              document.documentElement.classList.remove('route-pending');
+              return;
+            }
+            userStore.logOut().finally(() => next({ path: '/login' }));
           });
       } else {
         // 已有roles信息，处理刷新或直接访问URL的情况
@@ -120,4 +135,5 @@ router.beforeEach((to, from, next) => {
 
 router.afterEach(() => {
   NProgress.done();
+  document.documentElement.classList.remove('route-pending');
 });

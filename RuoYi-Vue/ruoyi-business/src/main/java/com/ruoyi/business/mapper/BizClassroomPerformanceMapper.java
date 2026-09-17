@@ -36,6 +36,11 @@ public interface BizClassroomPerformanceMapper
     int insert(BizClassroomPerformance performance);
 
     /**
+     * 缺考/请假原子 upsert（依赖 uk_student_lesson 唯一键，并发安全）
+     */
+    int upsertAbsent(BizClassroomPerformance performance);
+
+    /**
      * 修改课堂表现记录
      */
     int update(BizClassroomPerformance performance);

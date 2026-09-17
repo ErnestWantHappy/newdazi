@@ -1,8 +1,9 @@
 -- 操作题预览失败自动重试定时任务
 -- 若已存在同名调用目标，则修正为每小时执行并启用。
 
+-- job_name 列最长 64 字节：中文过长在 utf8mb4 下可能超限，使用短名。
 UPDATE sys_job
-SET job_name = '操作题失败文件自动重试',
+SET job_name = '操作题预览自动重试',
     job_group = 'DEFAULT',
     cron_expression = '0 0 * * * ?',
     misfire_policy = '3',
@@ -16,7 +17,7 @@ WHERE invoke_target = 'practicalPreviewRetryTask.retryFailedStudentAnswerPreview
 INSERT INTO sys_job
     (job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status,
      create_by, create_time, remark)
-SELECT '操作题失败文件自动重试',
+SELECT '操作题预览自动重试',
        'DEFAULT',
        'practicalPreviewRetryTask.retryFailedStudentAnswerPreviews',
        '0 0 * * * ?',

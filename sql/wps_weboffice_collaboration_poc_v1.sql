@@ -1,0 +1,101 @@
+-- WPS WebOffice 在线协作 PoC v1
+-- 每个课程指派班级一份独立协作文档；可重复执行，不修改课程、题目、学生答案或成绩。
+
+CREATE TABLE IF NOT EXISTS biz_collab_room (
+    room_id                  BIGINT        NOT NULL AUTO_INCREMENT COMMENT '协作房间ID',
+    provider                 VARCHAR(20)   NOT NULL DEFAULT 'WPS' COMMENT '编辑器提供方',
+    public_file_id           VARCHAR(47)   NOT NULL COMMENT 'WPS唯一文件ID',
+    lesson_id                BIGINT        NOT NULL COMMENT '课程ID',
+    question_id              BIGINT        NOT NULL COMMENT '操作题ID',
+    source_material_id       BIGINT        NOT NULL COMMENT '起始文件材料ID',
+    dept_id                  BIGINT        NOT NULL COMMENT '学校ID',
+    entry_year               VARCHAR(4)    NOT NULL COMMENT '届别',
+    class_code               VARCHAR(30)   NOT NULL COMMENT '班号',
+    room_title               VARCHAR(240)  NOT NULL COMMENT '房间标题',
+    status                   VARCHAR(16)   NOT NULL DEFAULT 'OPEN' COMMENT 'OPEN/READ_ONLY/CLOSED',
+    current_version          INT           NOT NULL DEFAULT 1 COMMENT '当前文件版本',
+    current_file_name        VARCHAR(240)  NOT NULL COMMENT '当前文件名',
+    current_file_path        VARCHAR(500)  NOT NULL COMMENT '当前文件相对路径',
+    current_file_extension   VARCHAR(16)   NOT NULL COMMENT '当前扩展名',
+    current_mime_type        VARCHAR(120)  NULL COMMENT '当前MIME',
+    current_file_size        BIGINT        NOT NULL DEFAULT 0 COMMENT '当前文件字节数',
+    current_sha256           VARCHAR(64)   NULL COMMENT '当前SHA-256',
+    creator_user_id          BIGINT        NOT NULL COMMENT '创建教师用户ID',
+    modifier_user_id         BIGINT        NOT NULL COMMENT '最后保存用户ID',
+    last_open_time           DATETIME      NULL COMMENT '最近打开时间',
+    last_save_time           DATETIME      NULL COMMENT '最近保存时间',
+    last_callback_type       VARCHAR(40)   NULL COMMENT '最近WPS回调类型',
+    last_callback_status     VARCHAR(16)   NULL COMMENT 'SUCCESS/FAILED',
+    last_wps_request_id      VARCHAR(100)  NULL COMMENT '最近WPS请求ID',
+    last_error_message       VARCHAR(1000) NULL COMMENT '最近错误摘要',
+    create_time              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (room_id),
+    UNIQUE KEY uk_collab_room_file (public_file_id),
+    UNIQUE KEY uk_collab_room_class (lesson_id, question_id, dept_id, entry_year, class_code),
+    KEY idx_collab_room_lesson (lesson_id, dept_id, status),
+    KEY idx_collab_room_student (dept_id, entry_year, class_code, lesson_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='在线协作班级房间';
+
+CREATE TABLE IF NOT EXISTS biz_collab_revision (
+    revision_id              BIGINT        NOT NULL AUTO_INCREMENT COMMENT '版本ID',
+    room_id                  BIGINT        NOT NULL COMMENT '房间ID',
+    version_no               INT           NOT NULL COMMENT '递增版本号',
+    file_name                VARCHAR(240)  NOT NULL COMMENT '文件名',
+    file_path                VARCHAR(500)  NOT NULL COMMENT '文件相对路径',
+    file_size                BIGINT        NOT NULL COMMENT '文件字节数',
+    sha256                   VARCHAR(64)   NOT NULL COMMENT '文件SHA-256',
+    wps_digest_type          VARCHAR(16)   NULL COMMENT 'WPS摘要算法',
+    wps_digest               VARCHAR(128)  NULL COMMENT 'WPS摘要',
+    manual_save              TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '是否手动保存',
+    saved_by_user_id         BIGINT        NOT NULL COMMENT '保存用户ID',
+    create_time              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (revision_id),
+    UNIQUE KEY uk_collab_revision (room_id, version_no),
+    KEY idx_collab_revision_time (room_id, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='在线协作文档不可变版本';
+
+CREATE TABLE IF NOT EXISTS biz_collab_upload_ticket (
+    ticket_id                BIGINT        NOT NULL AUTO_INCREMENT COMMENT '上传票据ID',
+    ticket_token             VARCHAR(64)   NOT NULL COMMENT '一次性随机票据',
+    room_id                  BIGINT        NOT NULL COMMENT '房间ID',
+    expected_version         INT           NOT NULL COMMENT '申请上传时房间版本',
+    expected_file_name       VARCHAR(240)  NOT NULL COMMENT 'WPS声明文件名',
+    expected_file_size       BIGINT        NOT NULL COMMENT 'WPS声明文件大小',
+    expected_digest_type     VARCHAR(16)   NOT NULL COMMENT '摘要算法',
+    expected_digest          VARCHAR(128)  NOT NULL COMMENT '摘要',
+    manual_save              TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '是否手动保存',
+    temp_file_path           VARCHAR(500)  NOT NULL COMMENT '临时文件相对路径',
+    status                   VARCHAR(16)   NOT NULL DEFAULT 'PREPARED' COMMENT 'PREPARED/UPLOADED/COMPLETED/FAILED/EXPIRED',
+    uploaded_file_size       BIGINT        NULL COMMENT '实际上传字节数',
+    uploaded_sha256          VARCHAR(64)   NULL COMMENT '实际上传SHA-256',
+    requester_user_id        BIGINT        NOT NULL COMMENT '发起保存用户ID',
+    expires_time             DATETIME      NOT NULL COMMENT '过期时间',
+    completed_time           DATETIME      NULL COMMENT '完成时间',
+    error_message            VARCHAR(1000) NULL COMMENT '失败原因',
+    create_time              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (ticket_id),
+    UNIQUE KEY uk_collab_upload_token (ticket_token),
+    KEY idx_collab_upload_room (room_id, status, expires_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='WPS三阶段保存一次性上传票据';
+
+CREATE TABLE IF NOT EXISTS biz_collab_callback_event (
+    event_id                 BIGINT        NOT NULL AUTO_INCREMENT COMMENT '事件ID',
+    room_id                  BIGINT        NULL COMMENT '房间ID',
+    public_file_id           VARCHAR(47)   NULL COMMENT 'WPS文件ID',
+    callback_type            VARCHAR(40)   NOT NULL COMMENT '回调类型',
+    callback_status          VARCHAR(16)   NOT NULL COMMENT 'SUCCESS/FAILED',
+    wps_request_id           VARCHAR(100)  NULL COMMENT 'WPS请求ID',
+    user_id                  BIGINT        NULL COMMENT '平台用户ID',
+    remote_ip                VARCHAR(64)   NULL COMMENT '来源IP',
+    duration_ms              BIGINT        NULL COMMENT '处理耗时',
+    error_code               VARCHAR(40)   NULL COMMENT '错误编码',
+    error_message            VARCHAR(1000) NULL COMMENT '错误摘要',
+    create_time              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (event_id),
+    KEY idx_collab_event_room (room_id, create_time),
+    KEY idx_collab_event_request (wps_request_id),
+    KEY idx_collab_event_status (callback_status, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='WPS回调诊断事件';
+

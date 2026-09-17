@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.TeacherToolMapper">
+
+    <resultMap id="CategoryResult" type="com.ruoyi.business.domain.BizTeacherToolCategory">
+        <id property="categoryId" column="category_id"/>
+        <result property="categoryCode" column="category_code"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="description" column="description"/>
+        <result property="icon" column="icon"/>
+        <result property="sectionLevel" column="section_level"/>
+        <result property="defaultExpanded" column="default_expanded"/>
+        <result property="previewLimit" column="preview_limit"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="status" column="status"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="CatalogCategoryResult" type="com.ruoyi.business.domain.vo.TeacherToolCategoryVo" extends="CategoryResult"/>
+
+    <resultMap id="ToolResult" type="com.ruoyi.business.domain.BizTeacherTool">
+        <id property="toolId" column="tool_id"/>
+        <result property="title" column="title"/>
+        <result property="description" column="description"/>
+        <result property="url" column="url"/>
+        <result property="iconUrl" column="icon_url"/>
+        <result property="tags" column="tags"/>
+        <result property="accessType" column="access_type"/>
+        <result property="sourceType" column="source_type"/>
+        <result property="sourceRef" column="source_ref"/>
+        <result property="isRecommended" column="is_recommended"/>
+        <result property="recommendOrder" column="recommend_order"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="status" column="status"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="ToolVoResult" type="com.ruoyi.business.domain.vo.TeacherToolVo" extends="ToolResult">
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryNameText" column="category_name_text"/>
+    </resultMap>
+
+    <sql id="categoryColumns">
+        category_id, category_code, category_name, description, icon, section_level,
+        default_expanded, preview_limit, sort_order, status, del_flag,
+        create_by, create_time, update_by, update_time
+    </sql>
+
+    <sql id="toolColumns">
+        tool_id, title, description, url, icon_url, tags, access_type, source_type,
+        source_ref, is_recommended, recommend_order, sort_order, status, del_flag,
+        create_by, create_time, update_by, update_time
+    </sql>
+
+    <select id="selectCatalogCategories" resultMap="CatalogCategoryResult">
+        SELECT <include refid="categoryColumns"/>
+        FROM biz_teacher_tool_category
+        WHERE status='0' AND del_flag='0'
+        ORDER BY sort_order, category_id
+    </select>
+
+    <select id="selectCatalogTools" resultMap="ToolVoResult">
+        SELECT t.*, r.category_id
+        FROM biz_teacher_tool t
+        JOIN biz_teacher_tool_category_rel r ON r.tool_id=t.tool_id
+        JOIN biz_teacher_tool_category c ON c.category_id=r.category_id
+        WHERE t.status='0' AND t.del_flag='0' AND c.status='0' AND c.del_flag='0'
+        ORDER BY r.category_id, t.sort_order, t.tool_id
+    </select>
+
+    <select id="selectRecommendedTools" resultMap="ToolVoResult">
+        SELECT t.*
+        FROM biz_teacher_tool t
+        WHERE t.status='0' AND t.del_flag='0' AND t.is_recommended='Y'
+          AND EXISTS (
+            SELECT 1 FROM biz_teacher_tool_category_rel r
+            JOIN biz_teacher_tool_category c ON c.category_id=r.category_id
+            WHERE r.tool_id=t.tool_id AND c.status='0' AND c.del_flag='0'
+          )
+        ORDER BY t.recommend_order, t.sort_order, t.tool_id
+    </select>
+
+    <select id="selectCategoryList" resultMap="CategoryResult">
+        SELECT <include refid="categoryColumns"/>
+        FROM biz_teacher_tool_category
+        WHERE del_flag='0'
+        ORDER BY sort_order, category_id
+    </select>
+
+    <select id="selectCategoryById" resultMap="CategoryResult">
+        SELECT <include refid="categoryColumns"/>
+        FROM biz_teacher_tool_category
+        WHERE category_id=#{categoryId} AND del_flag='0'
+    </select>
+
+    <select id="countCategoryCode" resultType="int">
+        SELECT COUNT(*) FROM biz_teacher_tool_category
+        WHERE category_code=#{categoryCode} AND del_flag='0'
+        <if test="excludeId != null">AND category_id != #{excludeId}</if>
+    </select>
+
+    <insert id="insertCategory" parameterType="com.ruoyi.business.domain.BizTeacherToolCategory"
+            useGeneratedKeys="true" keyProperty="categoryId">
+        INSERT INTO biz_teacher_tool_category
+        (category_code, category_name, description, icon, section_level, default_expanded,
+         preview_limit, sort_order, status, del_flag, create_by, create_time)
+        VALUES
+        (#{categoryCode}, #{categoryName}, #{description}, #{icon}, #{sectionLevel}, #{defaultExpanded},
+         #{previewLimit}, #{sortOrder}, #{status}, '0', #{createBy}, NOW())
+    </insert>
+
+    <update id="updateCategory" parameterType="com.ruoyi.business.domain.BizTeacherToolCategory">
+        UPDATE biz_teacher_tool_category
+        SET category_code=#{categoryCode}, category_name=#{categoryName}, description=#{description},
+            icon=#{icon}, section_level=#{sectionLevel}, default_expanded=#{defaultExpanded},
+            preview_limit=#{previewLimit}, sort_order=#{sortOrder}, status=#{status},
+            update_by=#{updateBy}, update_time=NOW()
+        WHERE category_id=#{categoryId} AND del_flag='0'
+    </update>
+
+    <update id="updateCategoryStatus">
+        UPDATE biz_teacher_tool_category
+        SET status=#{status}, update_by=#{updateBy}, update_time=NOW()
+        WHERE category_id=#{categoryId} AND del_flag='0'
+    </update>
+
+    <select id="selectToolList" resultMap="ToolVoResult">
+        SELECT t.*, GROUP_CONCAT(DISTINCT c.category_name ORDER BY c.sort_order SEPARATOR '、') AS category_name_text
+        FROM biz_teacher_tool t
+        LEFT JOIN biz_teacher_tool_category_rel r ON r.tool_id=t.tool_id
+        LEFT JOIN biz_teacher_tool_category c ON c.category_id=r.category_id AND c.del_flag='0'
+        WHERE t.del_flag=#{delFlag}
+        <if test="keyword != null and keyword != ''">
+            AND (t.title LIKE CONCAT('%', #{keyword}, '%') OR t.description LIKE CONCAT('%', #{keyword}, '%')
+                 OR t.tags LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="categoryId != null">
+            AND EXISTS (SELECT 1 FROM biz_teacher_tool_category_rel fr WHERE fr.tool_id=t.tool_id AND fr.category_id=#{categoryId})
+        </if>
+        <if test="sourceType != null and sourceType != ''">AND t.source_type=#{sourceType}</if>
+        <if test="status != null and status != ''">AND t.status=#{status}</if>
+        GROUP BY t.tool_id
+        ORDER BY t.sort_order, t.tool_id
+    </select>
+
+    <select id="selectToolById" resultMap="ToolResult">
+        SELECT <include refid="toolColumns"/>
+        FROM biz_teacher_tool
+        WHERE tool_id=#{toolId}
+    </select>
+
+    <select id="selectCategoryIdsByToolId" resultType="long">
+        SELECT category_id FROM biz_teacher_tool_category_rel
+        WHERE tool_id=#{toolId}
+        ORDER BY category_id
+    </select>
+
+    <select id="countCategoriesByIds" resultType="int">
+        SELECT COUNT(DISTINCT category_id)
+        FROM biz_teacher_tool_category
+        WHERE del_flag='0' AND category_id IN
+        <foreach collection="categoryIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <insert id="insertTool" parameterType="com.ruoyi.business.domain.BizTeacherTool"
+            useGeneratedKeys="true" keyProperty="toolId">
+        INSERT INTO biz_teacher_tool
+        (title, description, url, icon_url, tags, access_type, source_type, source_ref,
+         is_recommended, recommend_order, sort_order, status, del_flag, create_by, create_time)
+        VALUES
+        (#{title}, #{description}, #{url}, #{iconUrl}, #{tags}, #{accessType}, #{sourceType}, #{sourceRef},
+         #{isRecommended}, #{recommendOrder}, #{sortOrder}, #{status}, '0', #{createBy}, NOW())
+    </insert>
+
+    <update id="updateTool" parameterType="com.ruoyi.business.domain.BizTeacherTool">
+        UPDATE biz_teacher_tool
+        SET title=#{title}, description=#{description}, url=#{url}, icon_url=#{iconUrl}, tags=#{tags},
+            access_type=#{accessType}, source_type=#{sourceType}, source_ref=#{sourceRef},
+            is_recommended=#{isRecommended}, recommend_order=#{recommendOrder}, sort_order=#{sortOrder},
+            status=#{status}, update_by=#{updateBy}, update_time=NOW()
+        WHERE tool_id=#{toolId} AND del_flag='0'
+    </update>
+
+    <update id="updateToolStatus">
+        UPDATE biz_teacher_tool
+        SET status=#{status}, update_by=#{updateBy}, update_time=NOW()
+        WHERE tool_id=#{toolId} AND del_flag='0'
+    </update>
+
+    <update id="updateToolDeleteFlag">
+        UPDATE biz_teacher_tool
+        SET del_flag=#{delFlag}, update_by=#{updateBy}, update_time=NOW()
+        WHERE tool_id=#{toolId}
+    </update>
+
+    <delete id="deleteToolCategoryRelations">
+        DELETE FROM biz_teacher_tool_category_rel WHERE tool_id=#{toolId}
+    </delete>
+
+    <insert id="insertToolCategoryRelations">
+        INSERT INTO biz_teacher_tool_category_rel (tool_id, category_id, create_time)
+        VALUES
+        <foreach collection="categoryIds" item="categoryId" separator=",">
+            (#{toolId}, #{categoryId}, NOW())
+        </foreach>
+    </insert>
+</mapper>

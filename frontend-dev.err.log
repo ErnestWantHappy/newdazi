@@ -1,4 +1,0 @@
-[2m17:16:47[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /auth/session-status[39m
-AggregateError [ECONNREFUSED]: 
-    at internalConnectMultiple (node:net:1139:18)
-    at afterConnectMultiple (node:net:1712:7)

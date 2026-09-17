@@ -9,6 +9,11 @@
         <result property="questionType"    column="question_type"    />
         <result property="questionContent"    column="question_content"    />
         <result property="grade"    column="grade"    />
+        <result property="difficulty" column="difficulty" />
+        <result property="programmingTitle" column="programming_title" />
+        <result property="knowledgePoints" column="knowledge_points" />
+        <result property="validationStatus" column="validation_status" />
+        <result property="testCaseCount" column="test_case_count" />
         <result property="semester"    column="semester"    />
         <result property="lessonNum"    column="lesson_num"    />
         <result property="optionA"    column="option_a"    />
@@ -19,6 +24,10 @@
         <result property="analysis"    column="analysis"    />
         <result property="filePath"    column="file_path"    />
         <result property="previewPath"    column="preview_path"    />
+        <result property="previewStatus" column="preview_status" />
+        <result property="practicalAllowedExtensions" column="practical_allowed_extensions" />
+        <result property="practicalMode" column="practical_mode" />
+        <result property="practicalImageMaxCount" column="practical_image_max_count" />
         <result property="isPublic"    column="is_public"    />
         <result property="typingDuration"    column="typing_duration"    />
         <result property="wordCount"    column="word_count"    />
@@ -31,16 +40,23 @@
     </resultMap>
 
     <sql id="selectBizQuestionVo">
-        select q.question_id, q.question_type, q.question_content, q.grade, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name 
+        select q.question_id, q.question_type, q.question_content, q.grade, q.difficulty, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name,
+               pc.title programming_title, pc.knowledge_points, pc.validation_status, COALESCE(tc.test_case_count,0) test_case_count
         from biz_question q
         left join sys_user u on q.creator_id = u.user_id
+        left join biz_programming_question_config pc on pc.question_id=q.question_id
+        left join (select question_id,count(*) test_case_count from biz_programming_test_case group by question_id) tc on tc.question_id=q.question_id
     </sql>
 
     <select id="selectBizQuestionList" parameterType="BizQuestion" resultMap="BizQuestionResult">
         <include refid="selectBizQuestionVo"/>
         <where>
             <if test="questionType != null  and questionType != ''"> and q.question_type = #{questionType}</if>
-            <if test="questionContent != null  and questionContent != ''"> and q.question_content like concat('%', #{questionContent}, '%')</if>
+            <if test="practicalMode != null and practicalMode != ''"> and q.practical_mode = #{practicalMode}</if>
+            <if test="difficulty != null and difficulty != ''"> and q.difficulty = #{difficulty}</if>
+            <if test="bankView != null and bankView == 'PYTHON'"> and q.question_type='practical' and q.practical_mode='PYTHON'</if>
+            <if test="bankView != null and bankView == 'COMMON'"> and not (q.question_type='practical' and q.practical_mode='PYTHON')</if>
+            <if test="questionContent != null  and questionContent != ''"> and (q.question_content like concat('%', #{questionContent}, '%') or pc.title like concat('%', #{questionContent}, '%'))</if>
             <if test="isPublic != null  and isPublic != ''"> and q.is_public = #{isPublic}</if>
             <if test="grade != null "> and q.grade = #{grade}</if>
             <if test="semester != null  and semester != ''"> and q.semester = #{semester}</if>
@@ -51,7 +67,7 @@
             </if>
             <!-- 权限过滤：私有题目仅创建人和管理员可见 -->
             <if test="creatorId != null">
-                and (q.is_public = 'Y' OR q.creator_id = #{creatorId})
+                and (q.is_public IN ('Y', '1') OR q.creator_id = #{creatorId})
             </if>
         </where>
         order by q.create_time desc
@@ -68,6 +84,7 @@
             <if test="questionType != null and questionType != ''">question_type,</if>
             <if test="questionContent != null and questionContent != ''">question_content,</if>
             <if test="grade != null">grade,</if>
+            <if test="difficulty != null and difficulty != ''">difficulty,</if>
             <if test="semester != null and semester != ''">semester,</if>
             <if test="lessonNum != null">lesson_num,</if>
             <if test="optionA != null">option_a,</if>
@@ -78,6 +95,10 @@
             <if test="analysis != null">analysis,</if>
             <if test="filePath != null">file_path,</if>
             <if test="previewPath != null">preview_path,</if>
+            <if test="previewStatus != null">preview_status,</if>
+            <if test="practicalAllowedExtensions != null">practical_allowed_extensions,</if>
+            <if test="practicalMode != null and practicalMode != ''">practical_mode,</if>
+            <if test="practicalImageMaxCount != null">practical_image_max_count,</if>
             <if test="isPublic != null and isPublic != ''">is_public,</if>
             <if test="typingDuration != null">typing_duration,</if>
             <if test="wordCount != null">word_count,</if>
@@ -91,6 +112,7 @@
             <if test="questionType != null and questionType != ''">#{questionType},</if>
             <if test="questionContent != null and questionContent != ''">#{questionContent},</if>
             <if test="grade != null">#{grade},</if>
+            <if test="difficulty != null and difficulty != ''">#{difficulty},</if>
             <if test="semester != null and semester != ''">#{semester},</if>
             <if test="lessonNum != null">#{lessonNum},</if>
             <if test="optionA != null">#{optionA},</if>
@@ -101,6 +123,10 @@
             <if test="analysis != null">#{analysis},</if>
             <if test="filePath != null">#{filePath},</if>
             <if test="previewPath != null">#{previewPath},</if>
+            <if test="previewStatus != null">#{previewStatus},</if>
+            <if test="practicalAllowedExtensions != null">#{practicalAllowedExtensions},</if>
+            <if test="practicalMode != null and practicalMode != ''">#{practicalMode},</if>
+            <if test="practicalImageMaxCount != null">#{practicalImageMaxCount},</if>
             <if test="isPublic != null and isPublic != ''">#{isPublic},</if>
             <if test="typingDuration != null">#{typingDuration},</if>
             <if test="wordCount != null">#{wordCount},</if>
@@ -117,9 +143,19 @@
         <trim prefix="SET" suffixOverrides=",">
             <if test="questionType != null and questionType != ''">question_type = #{questionType},</if>
             <if test="questionContent != null and questionContent != ''">question_content = #{questionContent},</if>
-            <if test="grade != null">grade = #{grade},</if>
-            <if test="semester != null and semester != ''">semester = #{semester},</if>
-            <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
+            <choose>
+                <when test="questionType == 'practical' and practicalMode == 'PYTHON'">
+                    grade = NULL,
+                    semester = NULL,
+                    lesson_num = NULL,
+                </when>
+                <otherwise>
+                    <if test="grade != null">grade = #{grade},</if>
+                    <if test="semester != null and semester != ''">semester = #{semester},</if>
+                    <if test="lessonNum != null">lesson_num = #{lessonNum},</if>
+                </otherwise>
+            </choose>
+            <if test="difficulty != null and difficulty != ''">difficulty = #{difficulty},</if>
             <if test="optionA != null">option_a = #{optionA},</if>
             <if test="optionB != null">option_b = #{optionB},</if>
             <if test="optionC != null">option_c = #{optionC},</if>
@@ -128,6 +164,16 @@
             <if test="analysis != null">analysis = #{analysis},</if>
             <if test="filePath != null">file_path = #{filePath},</if>
             <if test="previewPath != null">preview_path = #{previewPath},</if>
+            <if test="previewStatus != null">preview_status = #{previewStatus},</if>
+            <if test="practicalAllowedExtensions != null">practical_allowed_extensions = #{practicalAllowedExtensions},</if>
+            <if test="practicalMode != null and practicalMode != ''">practical_mode = #{practicalMode},</if>
+            <if test="questionType == 'practical' and (practicalMode == 'PYTHON' or practicalMode == 'FLOWCHART')">
+                file_path = NULL,
+                preview_path = NULL,
+                preview_status = NULL,
+                practical_allowed_extensions = NULL,
+            </if>
+            <if test="practicalImageMaxCount != null">practical_image_max_count = #{practicalImageMaxCount},</if>
             <if test="isPublic != null and isPublic != ''">is_public = #{isPublic},</if>
             <if test="typingDuration != null">typing_duration = #{typingDuration},</if>
             <if test="wordCount != null">word_count = #{wordCount},</if>

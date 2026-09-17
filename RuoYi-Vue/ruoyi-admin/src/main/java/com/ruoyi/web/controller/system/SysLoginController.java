@@ -37,6 +37,9 @@ public class SysLoginController
     private SysLoginService loginService;
 
     @Autowired
+    private com.ruoyi.framework.web.service.LoginAttemptGuard loginAttemptGuard;
+
+    @Autowired
     private ISysMenuService menuService;
 
     @Autowired
@@ -58,8 +61,8 @@ public class SysLoginController
     public AjaxResult login(@RequestBody LoginBody loginBody)
     {
         AjaxResult ajax = AjaxResult.success();
-        LoginResult loginResult = loginService.login(loginBody.getUsername(), loginBody.getPassword(), loginBody.getCode(),
-                loginBody.getUuid());
+        LoginResult loginResult = loginAttemptGuard.execute(loginBody.getUsername(), () ->
+                loginService.login(loginBody.getUsername(), loginBody.getPassword(), loginBody.getCode(), loginBody.getUuid()));
         ajax.put(Constants.TOKEN, loginResult.getToken());
         ajax.put("needsSchoolSelection", loginResult.isNeedsSchoolSelection());
         ajax.put("schools", loginResult.getSchools());

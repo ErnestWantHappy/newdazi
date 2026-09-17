@@ -86,6 +86,7 @@
 <script setup name="SchoolStats">
 import { listSchoolClassStats, getSchoolSummary } from '@/api/business/schoolStats'
 import { Search, School, Refresh } from '@element-plus/icons-vue'
+import { calculateYearsInSection } from '@/utils/academicYear'
 
 const loading = ref(false)
 const rawList = ref([]) // 原始数据
@@ -108,25 +109,18 @@ function getSchoolTypeName(type) {
 // 计算年级名称
 function getGradeName(entryYear, schoolType) {
   if (!entryYear) return '未知年级'
-  const currentYear = new Date().getFullYear()
-  const currentMonth = new Date().getMonth() + 1
-  // 9月份开学，9月前算上学期，9月后算下学期
-  const academicYear = currentMonth >= 9 ? currentYear : currentYear - 1
-  const years = academicYear - parseInt(entryYear)
+  const grade = calculateYearsInSection(entryYear)
   
   // 根据学校类型计算年级
   if (schoolType === '1') { // 小学
-    const grade = years + 1
     if (grade >= 1 && grade <= 6) {
       return `${grade}年级 (${entryYear}级)`
     }
   } else if (schoolType === '2') { // 初中
-    const grade = years + 1
     if (grade >= 1 && grade <= 3) {
       return `${grade}年级 (${entryYear}级)`
     }
   } else if (schoolType === '3') { // 高中
-    const grade = years + 1
     if (grade >= 1 && grade <= 3) {
       return `高${grade} (${entryYear}级)`
     }

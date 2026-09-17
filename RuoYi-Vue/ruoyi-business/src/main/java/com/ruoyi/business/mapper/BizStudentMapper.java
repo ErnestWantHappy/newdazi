@@ -27,6 +27,11 @@ public interface BizStudentMapper
      */
     public List<BizStudent> selectBizStudentList(BizStudent bizStudent);
 
+    /** 批量读取当前操作者有权管理的学生，用于纠错预览和确认。 */
+    public List<BizStudent> selectBizStudentsByIds(@Param("studentIds") List<Long> studentIds,
+                                                   @Param("teacherUserId") Long teacherUserId,
+                                                   @Param("deptId") Long deptId);
+
     /**
      * 新增学生管理
      * 
@@ -34,6 +39,11 @@ public interface BizStudentMapper
      * @return 结果
      */
     public int insertBizStudent(BizStudent bizStudent);
+
+    /**
+     * 批量新增学生档案。
+     */
+    public int batchInsertBizStudents(@Param("students") List<BizStudent> students);
 
     /**
      * 修改学生管理

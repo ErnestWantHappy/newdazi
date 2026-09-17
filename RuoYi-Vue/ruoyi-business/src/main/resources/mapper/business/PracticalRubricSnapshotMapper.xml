@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.PracticalRubricSnapshotMapper">
+    <resultMap id="SnapshotResult" type="com.ruoyi.business.domain.PracticalRubricSnapshot">
+        <id property="snapshotId" column="snapshot_id" />
+        <result property="lessonId" column="lesson_id" />
+        <result property="questionId" column="question_id" />
+        <result property="snapshotVersion" column="snapshot_version" />
+        <result property="questionContent" column="question_content" />
+        <result property="questionScore" column="question_score" />
+        <result property="scoringItemsJson" column="scoring_items_json" />
+        <result property="referenceMaterialsJson" column="reference_materials_json" />
+        <result property="createdByUserId" column="created_by_user_id" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <select id="selectLatest" resultMap="SnapshotResult">
+        SELECT * FROM biz_practical_rubric_snapshot
+        WHERE lesson_id = #{lessonId} AND question_id = #{questionId}
+        ORDER BY snapshot_version DESC LIMIT 1
+    </select>
+
+    <select id="selectByVersionId" resultMap="SnapshotResult">
+        SELECT snapshot.*
+        FROM biz_practical_submission_version version_row
+        INNER JOIN biz_practical_rubric_snapshot snapshot
+                ON snapshot.snapshot_id = version_row.rubric_snapshot_id
+        WHERE version_row.version_id = #{versionId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="snapshotId">
+        INSERT INTO biz_practical_rubric_snapshot
+            (lesson_id, question_id, snapshot_version, question_content, question_score,
+             scoring_items_json, reference_materials_json, created_by_user_id, create_time)
+        VALUES
+            (#{lessonId}, #{questionId}, #{snapshotVersion}, #{questionContent}, #{questionScore},
+             #{scoringItemsJson}, #{referenceMaterialsJson}, #{createdByUserId}, #{createTime})
+    </insert>
+</mapper>

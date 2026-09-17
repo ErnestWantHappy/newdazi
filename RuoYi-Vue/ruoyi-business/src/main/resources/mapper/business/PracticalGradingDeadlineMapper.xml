@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.PracticalGradingDeadlineMapper">
+
+    <resultMap id="DeadlineResult" type="com.ruoyi.business.domain.BizPracticalGradingDeadline">
+        <id property="deadlineId" column="deadline_id"/>
+        <result property="lessonId" column="lesson_id"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="entryYear" column="entry_year"/>
+        <result property="classCode" column="class_code"/>
+        <result property="triggerTime" column="trigger_time"/>
+        <result property="triggerAnsweredCount" column="trigger_answered_count"/>
+        <result property="triggerStudentCount" column="trigger_student_count"/>
+        <result property="deadlineDays" column="deadline_days"/>
+        <result property="originalDeadlineTime" column="original_deadline_time"/>
+        <result property="currentDeadlineTime" column="current_deadline_time"/>
+        <result property="initializationSource" column="initialization_source"/>
+        <result property="lastAdjustmentType" column="last_adjustment_type"/>
+        <result property="createBy" column="create_by"/>
+    </resultMap>
+
+    <select id="selectClassMetrics" resultType="java.util.HashMap">
+        WITH active_student AS (
+            SELECT student.student_id
+            FROM biz_student student
+            INNER JOIN sys_user user ON user.user_id = student.user_id
+            WHERE user.dept_id = #{deptId}
+              AND user.del_flag = '0'
+              AND user.status = '0'
+              AND student.entry_year = #{entryYear}
+              AND student.class_code = #{classCode}
+        ),
+        first_answer AS (
+            SELECT answer.student_id, MIN(answer.submit_time) AS first_answer_time
+            FROM biz_student_answer answer
+            INNER JOIN active_student active ON active.student_id = answer.student_id
+            WHERE answer.lesson_id = #{lessonId}
+            GROUP BY answer.student_id
+        ),
+        ranked_answer AS (
+            SELECT first_answer_time,
+                   ROW_NUMBER() OVER (ORDER BY first_answer_time, student_id) AS answer_rank
+            FROM first_answer
+        )
+        SELECT
+            EXISTS(
+                SELECT 1
+                FROM biz_lesson_question lesson_question
+                INNER JOIN biz_question question ON question.question_id = lesson_question.question_id
+                WHERE lesson_question.lesson_id = #{lessonId}
+                  AND question.question_type = 'practical'
+            ) AS hasPractical,
+            (SELECT COUNT(*) FROM active_student) AS totalStudentCount,
+            (SELECT COUNT(*) FROM first_answer) AS answeredStudentCount,
+            (SELECT first_answer_time
+             FROM ranked_answer
+             WHERE answer_rank = CEIL((SELECT COUNT(*) FROM active_student) / 2.0)
+             LIMIT 1) AS thresholdTime,
+            (SELECT COUNT(*)
+             FROM biz_student_answer answer
+             INNER JOIN active_student active ON active.student_id = answer.student_id
+             INNER JOIN biz_question question
+                     ON question.question_id = answer.question_id
+                    AND question.question_type = 'practical'
+             WHERE answer.lesson_id = #{lessonId}
+               AND answer.student_answer IS NOT NULL
+               AND TRIM(answer.student_answer) &lt;&gt; '') AS dueCount,
+            (SELECT COUNT(*)
+             FROM biz_student_answer answer
+             INNER JOIN active_student active ON active.student_id = answer.student_id
+             INNER JOIN biz_question question
+                     ON question.question_id = answer.question_id
+                    AND question.question_type = 'practical'
+             WHERE answer.lesson_id = #{lessonId}
+               AND answer.student_answer IS NOT NULL
+               AND TRIM(answer.student_answer) &lt;&gt; ''
+               AND answer.score IS NOT NULL) AS gradedCount
+    </select>
+
+    <select id="selectDeadline" resultMap="DeadlineResult">
+        SELECT *
+        FROM biz_practical_grading_deadline
+        WHERE lesson_id = #{lessonId}
+          AND dept_id = #{deptId}
+          AND entry_year = #{entryYear}
+          AND class_code = #{classCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectDeadlineById" resultMap="DeadlineResult">
+        SELECT *
+        FROM biz_practical_grading_deadline
+        WHERE deadline_id = #{deadlineId}
+    </select>
+
+    <insert id="insertDeadlineIgnore">
+        INSERT IGNORE INTO biz_practical_grading_deadline
+            (lesson_id, dept_id, entry_year, class_code, trigger_time,
+             trigger_answered_count, trigger_student_count, deadline_days,
+             original_deadline_time, current_deadline_time, initialization_source,
+             create_by, create_time)
+        VALUES
+            (#{lessonId}, #{deptId}, #{entryYear}, #{classCode}, #{triggerTime},
+             #{triggerAnsweredCount}, #{triggerStudentCount}, #{deadlineDays},
+             #{originalDeadlineTime}, #{currentDeadlineTime}, #{initializationSource},
+             #{createBy}, NOW())
+    </insert>
+
+    <update id="updateCurrentDeadline">
+        UPDATE biz_practical_grading_deadline
+        SET current_deadline_time = #{newDeadlineTime},
+            last_adjustment_type = #{adjustmentType},
+            update_by = #{updateBy},
+            update_time = NOW()
+        WHERE deadline_id = #{deadlineId}
+          AND current_deadline_time = #{oldDeadlineTime}
+    </update>
+
+    <insert id="insertDeadlineAudit">
+        INSERT INTO biz_practical_grading_deadline_audit
+            (deadline_id, lesson_id, dept_id, entry_year, class_code,
+             action_type, old_deadline_time, new_deadline_time, reason,
+             operator_id, operator_name, operate_time)
+        VALUES
+            (#{deadline.deadlineId}, #{deadline.lessonId}, #{deadline.deptId},
+             #{deadline.entryYear}, #{deadline.classCode},
+             #{actionType}, #{oldDeadlineTime}, #{newDeadlineTime}, #{reason},
+             #{operatorId}, #{operatorName}, NOW())
+    </insert>
+
+    <select id="selectDeadlineAudits" resultType="java.util.HashMap">
+        SELECT audit_id AS auditId,
+               action_type AS actionType,
+               old_deadline_time AS oldDeadlineTime,
+               new_deadline_time AS newDeadlineTime,
+               reason,
+               operator_id AS operatorId,
+               operator_name AS operatorName,
+               operate_time AS operateTime
+        FROM biz_practical_grading_deadline_audit
+        WHERE deadline_id = #{deadlineId}
+        ORDER BY operate_time DESC, audit_id DESC
+    </select>
+
+    <select id="selectClassKeyByAnswerId" resultType="java.util.HashMap">
+        SELECT answer.lesson_id AS lessonId,
+               lesson.dept_id AS deptId,
+               student.entry_year AS entryYear,
+               student.class_code AS classCode
+        FROM biz_student_answer answer
+        INNER JOIN biz_lesson lesson ON lesson.lesson_id = answer.lesson_id
+        INNER JOIN biz_student student ON student.student_id = answer.student_id
+        WHERE answer.answer_id = #{answerId}
+        LIMIT 1
+    </select>
+
+    <select id="selectUntriggeredPracticalClasses" resultType="java.util.HashMap">
+        SELECT scope.scope_id AS scopeId,
+               scope.lesson_id AS lessonId,
+               scope.dept_id AS deptId,
+               scope.entry_year AS entryYear,
+               scope.class_code AS classCode
+        FROM biz_lesson_class_scope scope
+        WHERE EXISTS (
+            SELECT 1
+            FROM biz_lesson_question lesson_question
+            INNER JOIN biz_question question ON question.question_id = lesson_question.question_id
+            WHERE lesson_question.lesson_id = scope.lesson_id
+              AND question.question_type = 'practical'
+        )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM biz_practical_grading_deadline deadline
+            WHERE deadline.lesson_id = scope.lesson_id
+              AND deadline.dept_id = scope.dept_id
+              AND deadline.entry_year = scope.entry_year
+              AND deadline.class_code = scope.class_code
+        )
+          AND scope.scope_id &gt; #{afterScopeId}
+        ORDER BY scope.scope_id
+        LIMIT #{pageSize}
+    </select>
+
+    <delete id="deleteAuditsByLessonId">
+        DELETE FROM biz_practical_grading_deadline_audit
+        WHERE lesson_id = #{lessonId}
+    </delete>
+
+    <delete id="deleteDeadlinesByLessonId">
+        DELETE FROM biz_practical_grading_deadline
+        WHERE lesson_id = #{lessonId}
+    </delete>
+</mapper>

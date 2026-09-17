@@ -8,12 +8,48 @@ export function getCurrentLesson() {
   })
 }
 
+/** 学生课堂签到（不计作业分） */
+export function studentCheckin(lessonId) {
+  return request({
+    url: '/business/student-home/checkin',
+    method: 'post',
+    data: { lessonId }
+  })
+}
+
 // 提交学生答案
 export function submitAnswers(data) {
   return request({
     url: '/business/student-home/submit-answers',
     method: 'post',
     data: data
+  })
+}
+
+// 将已暂存文件提交为一个新的操作题作品版本
+export function submitPracticalArtifact(data) {
+  return request({
+    url: '/business/student-home/practical-artifact/submit',
+    method: 'post',
+    data
+  })
+}
+
+// 删除当前操作题作品；服务器仍保留历史版本用于审计
+export function deletePracticalArtifact(data) {
+  return request({
+    url: '/business/student-home/practical-artifact/delete',
+    method: 'post',
+    data
+  })
+}
+
+// 上报进入题目或开始作答；提交/批改状态由服务端业务动作自动生成。
+export function markClassroomTaskState(data) {
+  return request({
+    url: '/business/classroom-state/student',
+    method: 'post',
+    data
   })
 }
 

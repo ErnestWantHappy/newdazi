@@ -1,39 +1,29 @@
 package com.ruoyi.business.service;
 
-import com.ruoyi.business.domain.BizGuideSheetAnswer;
 import java.util.List;
+import java.util.Map;
+
+import com.ruoyi.business.domain.BizGuideSheetAnswer;
 
 public interface IGuideSheetAnswerService
 {
-    public BizGuideSheetAnswer getByStudentAndSheet(Long studentId, Long sheetId);
+    BizGuideSheetAnswer getByStudentAndBinding(Long studentId, Long bindingId);
 
-    public BizGuideSheetAnswer getByAnswerId(Long answerId);
+    BizGuideSheetAnswer getByAnswerId(Long answerId);
 
-    public List<BizGuideSheetAnswer> getBySheetId(Long sheetId);
+    List<BizGuideSheetAnswer> getByBindingAndClass(Long bindingId, Long deptId,
+                                                   String entryYear, String classCode);
 
-    /**
-     * 按导学单ID和班级编号查询答案列表
-     *
-     * @param sheetId 导学单ID
-     * @param entryYear 入学年份
-     * @param classCode 班级编号
-     * @return 答案列表
-     */
-    public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String entryYear, String classCode);
+    Double getAvgScore(Long bindingId, Long deptId, String entryYear, String classCode);
 
-    /**
-     * 获取已提交答案的平均分
-     */
-    public Double getAvgScore(Long sheetId, String entryYear, String classCode);
+    BizGuideSheetAnswer saveManualGrades(Long bindingId, Long studentId,
+                                          List<Map<String, Object>> items);
 
-    public BizGuideSheetAnswer saveManualGrades(Long sheetId, Long studentId,
-                                                 List<java.util.Map<String, Object>> items);
+    int saveAnswer(BizGuideSheetAnswer answer);
 
-    public int saveAnswer(BizGuideSheetAnswer answer);
+    int submitAnswer(BizGuideSheetAnswer answer);
 
-    public int submitAnswer(BizGuideSheetAnswer answer);
+    int submitAnswer(BizGuideSheetAnswer answer, Integer tabIndex);
 
-    public int submitAnswer(BizGuideSheetAnswer answer, Integer tabIndex);
-
-    public int updateGrading(BizGuideSheetAnswer answer);
+    int updateGrading(BizGuideSheetAnswer answer);
 }

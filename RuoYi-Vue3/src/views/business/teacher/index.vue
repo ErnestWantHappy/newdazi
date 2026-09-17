@@ -1,5 +1,6 @@
 <template>
   <div class="app-container teacher-dashboard">
+    <ResearchNotificationBar />
     <div v-if="countyGradingEntry.hasTask" class="county-grading-entry" @click="goToCountyExamGrading">
       <div>
         <strong>区域抽测评卷</strong>
@@ -11,7 +12,15 @@
       <template #header>
         <div class="card-header">
           <span>课程设置</span>
-          <!-- 顶部批量入口保留，但在卡片中提供了更便捷的操作 -->
+          <div class="header-actions">
+            <el-button type="success" plain icon="Document" @click="goToExemption">
+              免抽测申请
+            </el-button>
+            <el-button type="primary" plain icon="DArrowRight" :loading="advanceLoading" @click="handleOneClickAdvance">
+              手动一键课堂推进
+            </el-button>
+            <el-button icon="Setting" @click="openCourseSettings">设置</el-button>
+          </div>
         </div>
       </template>
       <div v-if="loading" class="loading-state">正在加载教学数据...</div>
@@ -19,104 +28,671 @@
         您还没有导入任何学生，无法进行课程设置。请先前往【学生管理】导入学生。
       </div>
       <div v-for="group in gradeGroups" :key="group.entryYear" class="grade-group">
-        <div class="grade-header">
-          <span class="grade-title">{{ group.entryYear }}级 ({{ group.gradeName }})</span>
+        <div class="grade-header clickable" @click="toggleGradeGroup(group)">
+          <span class="grade-title">{{ group.entryYear }}级（当前{{ group.gradeName }}）</span>
+          <span class="history-toggle-text">{{ isGradeGroupCollapsed(group) ? '展开' : '收起' }}</span>
         </div>
-        <div class="lesson-container">
-          <!-- 课程卡片列表 -->
+        <div v-show="!isGradeGroupCollapsed(group)">
+        <div
+          v-for="section in getCourseGradeSections(group)"
+          :key="getCourseSectionKey(group, section)"
+          class="course-grade-section"
+          :class="{ 'is-history': section.isHistory }"
+        >
           <div
-            v-for="lesson in getVisibleLessons(group)"
-            :key="lesson.lessonId"
-            class="lesson-folder"
+            class="course-grade-header"
+            :class="{ clickable: section.isHistory }"
+            @click="section.isHistory && toggleHistorySection(group, section)"
           >
-            <!-- 删除按钮 -->
-            <div class="folder-delete" @click.stop="handleDeleteLesson(lesson.lessonId)">
-              <el-icon><Close /></el-icon>
+            <div class="course-grade-heading">
+              <strong>{{ section.isHistory ? `${section.gradeName}开设课程（历史）` : `${section.gradeName}课程` }}</strong>
+              <el-tag v-if="section.isCurrent" type="primary" size="small">当前年级</el-tag>
+              <el-tag v-else type="info" size="small">历史课程</el-tag>
+              <span>{{ section.lessons.length }} 门</span>
             </div>
-            
-            <!-- 左侧：课程核心信息 -->
-            <div class="folder-content">
-              <!-- 竖排课程标题 -->
-              <div class="folder-title-vertical" :title="lesson.lessonTitle">
-                {{ lesson.lessonTitle }}
-              </div>
-              
-              <!-- 右侧内容区 -->
-              <div class="folder-info">
-                <!-- 已指派班级竖向排列 -->
-                <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
-                  <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
-                </div>
-                <div class="lesson-count-tag">
-                  第{{ lesson.lessonNum }}课
-                </div>
-              </div>
-            </div>
-            
-            <!-- 右侧：竖排操作栏 (25%) -->
-            <div class="folder-actions">
-               <div class="action-btn design" @click.stop="handleEditLesson(lesson.lessonId)" title="设计课程">
-                  <el-icon><Edit /></el-icon>
-                  <span>设计</span>
-               </div>
-               <!-- 只有包含操作题时才显示批改 -->
-               <div 
-                 v-if="lesson.hasPractical" 
-                 class="action-btn grade" 
-                 @click.stop="goToGrading(lesson, group)"
-                 title="批改作业"
-               >
-                  <el-icon><Check /></el-icon>
-                  <span>批改</span>
-               </div>
-               <div class="action-btn score" @click.stop="goToScoreAnalysis(lesson, group)" title="查看成绩">
-                  <el-icon><DataLine /></el-icon>
-                  <span>成绩</span>
-               </div>
-            </div>
+            <span v-if="section.isHistory" class="history-toggle-text">
+              {{ isCourseSectionExpanded(group, section) ? '收起' : '点击显示' }}
+            </span>
           </div>
 
-          <div
-            v-if="hasHiddenLessons(group)"
-            class="expand-lessons-btn"
-            title="展开更早课程"
-            @click="expandLessons(group)"
-          >
-            <el-icon class="more-icon"><MoreFilled /></el-icon>
-            <div class="more-text">还有 {{ group.lessons.length - 5 }} 节</div>
+          <div v-show="isCourseSectionExpanded(group, section)" class="lesson-container">
+            <div
+              v-for="lesson in getVisibleLessons(group, section)"
+              :key="lesson.lessonId"
+              class="lesson-folder"
+            >
+              <div
+                v-if="lesson.canDelete"
+                class="folder-delete"
+                :class="{ 'is-deleting': isLessonDeleting(lesson.lessonId) }"
+                title="删除课程"
+                @click.stop="handleDeleteLesson(lesson)"
+              >
+                <el-icon><Close /></el-icon>
+              </div>
+              <el-tooltip
+                v-else-if="lesson.courseType !== 'shared'"
+                :content="lesson.deleteBlockReason || '当前课程不能删除'"
+                placement="top"
+              >
+                <div class="folder-delete is-disabled" @click.stop>
+                  <el-icon><Close /></el-icon>
+                </div>
+              </el-tooltip>
+
+              <div class="lesson-main">
+                <div class="folder-content">
+                  <div class="folder-title-vertical" :title="lesson.lessonTitle">
+                    {{ lesson.lessonTitle }}
+                  </div>
+                  <div class="folder-info">
+                    <div v-if="lesson.courseType === 'shared'" class="shared-course-meta">
+                      <span class="shared-tag">共享课程</span>
+                      <span class="shared-creator" :title="`创建教师：${lesson.creatorName || '本校教师'}`">
+                        {{ lesson.creatorName || '本校教师' }}
+                      </span>
+                    </div>
+                    <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
+                      <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
+                    </div>
+                    <div class="lesson-count-tag">
+                      第{{ lesson.lessonNum }}课
+                    </div>
+                    <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
+                  </div>
+                </div>
+
+                <div class="folder-actions">
+                  <div
+                    v-if="lesson.canDesign"
+                    class="action-btn design"
+                    @click.stop="handleEditLesson(lesson, group)"
+                    title="设计课程"
+                  >
+                    <el-icon><Edit /></el-icon>
+                    <span>设计</span>
+                  </div>
+                  <div
+                    v-if="!lesson.canDesign"
+                    class="action-btn preview"
+                    @click.stop="previewSharedLesson(lesson)"
+                    title="只读预览所有题目"
+                  >
+                    <el-icon><View /></el-icon>
+                    <span>预览</span>
+                  </div>
+                  <div
+                    v-if="lesson.lessonMode === 'attendance'"
+                    class="action-btn grade"
+                    @click.stop="openCheckinRoster(lesson, group)"
+                    title="签到名单"
+                  >
+                    <el-icon><Check /></el-icon>
+                    <span>签到</span>
+                  </div>
+                  <div
+                    v-if="lesson.hasPractical"
+                    class="action-btn grade"
+                    @click.stop="goToGrading(lesson, group)"
+                    title="批改作业"
+                  >
+                    <el-icon><Check /></el-icon>
+                    <span>批改</span>
+                    <span v-if="hasUngradedPractical(lesson)" class="grading-red-dot" aria-label="存在未批操作题"></span>
+                  </div>
+                  <div
+                    v-if="lesson.lessonMode !== 'attendance'"
+                    class="action-btn score"
+                    @click.stop="goToScoreAnalysis(lesson, group)"
+                    title="查看成绩"
+                  >
+                    <el-icon><DataLine /></el-icon>
+                    <span>成绩</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lesson-entry-footer">
+                <el-button
+                  class="lesson-entry-btn"
+                  size="small"
+                  type="primary"
+                  text
+                  @click.stop="goToClassroom(lesson, group)"
+                >
+                  <el-icon><Monitor /></el-icon>
+                  <span>课堂</span>
+                </el-button>
+                <span v-if="lesson.hasCollaboration || lesson.iotEnabled" class="entry-divider" />
+                <el-button
+                  v-if="lesson.hasCollaboration"
+                  class="lesson-entry-btn"
+                  size="small"
+                  type="primary"
+                  text
+                  @click.stop="openCollaborationWorkspace(lesson)"
+                >
+                  <el-icon><Connection /></el-icon>
+                  <span>在线协作</span>
+                </el-button>
+                <span v-if="lesson.hasCollaboration && lesson.iotEnabled" class="entry-divider" />
+                <el-button
+                  v-if="lesson.iotEnabled"
+                  class="lesson-entry-btn"
+                  size="small"
+                  type="primary"
+                  text
+                  @click.stop="goToIotExperiment(lesson, group)"
+                >
+                  <el-icon><Cpu /></el-icon>
+                  <span>物联</span>
+                </el-button>
+              </div>
+            </div>
+
+            <div
+              v-if="hasHiddenLessons(group, section)"
+              class="expand-lessons-btn"
+              title="展开更早课程"
+              @click="expandLessons(group, section)"
+            >
+              <el-icon class="more-icon"><MoreFilled /></el-icon>
+              <div class="more-text">还有 {{ section.lessons.length - 5 }} 节</div>
+            </div>
+
+            <div
+              v-if="section.canAdd"
+              class="add-lesson-btn"
+              @click="handleAddNewLesson(group, section)"
+            >
+              <el-icon class="add-icon"><Plus /></el-icon>
+              <div class="add-text">
+                添加{{ section.gradeName }}{{ section.isHistory ? '历史' : '' }}课程
+              </div>
+            </div>
           </div>
-           
-          <!-- 新增课程按钮 -->
-          <div class="add-lesson-btn" @click="handleAddNewLesson(group)">
-            <el-icon class="add-icon"><Plus /></el-icon>
-            <div class="add-text">添加课程</div>
-          </div>
+        </div>
         </div>
       </div>
     </el-card>
 
     <!-- 班级选择弹窗 -->
     <ClassSelectionDialog ref="classDialogRef" />
+
+
+    <el-dialog v-model="iotClassDialogVisible" :title="`${iotEntry.lesson?.lessonTitle || '课程'} · 选择物联班级`" width="460px" destroy-on-close>
+      <p class="iot-class-tip">请选择本次要查看和配置的授课班级。进入后仍可在页面顶部切换班级。</p>
+      <el-radio-group v-model="iotEntry.classCode" class="iot-class-options">
+        <el-radio-button v-for="cls in iotEntry.classes" :key="cls" :value="normalizeClassCode(cls)">
+          {{ formatClassLabel(cls) }}
+        </el-radio-button>
+      </el-radio-group>
+      <template #footer>
+        <el-button @click="iotClassDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!iotEntry.classCode" @click="enterIotExperiment">进入物联实验</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 手动一键课堂推进向导：带课程前后对比预览与防误触确认开关 -->
+    <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进向导" width="620px" destroy-on-close @closed="advanceConfirmed = false">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="课堂推进机制说明"
+        description="推进后，所选班级的当前授课将切换到下一课。已完成作业的学生数据会自动归档，未达标班级会跳过并提示。"
+        style="margin-bottom: 16px;"
+      />
+      <el-form label-width="70px">
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="年级">
+              <el-select v-model="advanceForm.entryYear" placeholder="请选择年级" style="width: 100%" @change="onAdvanceGradeChange">
+                <el-option
+                  v-for="g in advanceGradeOptions"
+                  :key="g.entryYear"
+                  :label="`${g.entryYear}级（${g.gradeName}）`"
+                  :value="g.entryYear"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="班级">
+              <el-select
+                v-model="advanceForm.classCodes"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="请选择班级"
+                style="width: 100%"
+                :disabled="!advanceForm.entryYear"
+              >
+                <el-option
+                  v-for="cls in advanceClassOptions"
+                  :key="cls"
+                  :label="formatClassLabel(cls)"
+                  :value="normalizeClassCode(cls)"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+
+      <div class="advance-preview-section" style="margin-top: 8px;">
+        <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #303133; display: flex; justify-content: space-between; align-items: center;">
+          <span>📋 推进前后对比预览（已选 {{ advancePreviewList.length }} 个班级）</span>
+          <span style="font-size: 12px; color: #909399; font-weight: normal;">需有成绩人数达到 {{ policyForm.autoAdvanceThresholdPct || 50 }}%</span>
+        </div>
+        <el-table :data="advancePreviewList" size="small" border stripe max-height="240" empty-text="请选择年级与班级查看对比">
+          <el-table-column prop="classLabel" label="班级" width="90" align="center" />
+          <el-table-column prop="currentLessonTitle" label="当前课程" min-width="160" show-overflow-tooltip />
+          <el-table-column label="➔" width="40" align="center">
+            <template #default><el-icon color="#409EFF"><Right /></el-icon></template>
+          </el-table-column>
+          <el-table-column prop="nextLessonTitle" label="推进后下一课" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span style="color: #67C23A; font-weight: 500;">{{ row.nextLessonTitle }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div style="margin-top: 16px; padding: 10px 12px; background: #fdf6ec; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 12px; color: #e6a23c;">
+          ⚠️ 推进操作将切换学生端当前课程，请先开启右侧确认开关
+        </span>
+        <el-switch v-model="advanceConfirmed" active-text="已知悉并确认" size="small" />
+      </div>
+
+      <template #footer>
+        <el-button @click="advanceDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="advanceLoading" :disabled="!advanceConfirmed || !advancePreviewList.length" @click="confirmOneClickAdvance">
+          确认执行推进
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 统一课程推进设置（全校常规课共用一套） -->
+    <el-dialog v-model="settingsVisible" title="课程推进设置" width="480px" destroy-on-close>
+      <p class="settings-intro">
+        以下设置对您的<strong>全部常规课</strong>统一生效。开启后，班级有成绩达到比例并等待指定时间，会自动切到下一课；也可随时用右上角「手动一键课堂推进」立即切换。
+      </p>
+      <el-form v-loading="policyLoading" label-width="120px" class="policy-form">
+        <el-form-item label="自动推进">
+          <el-switch v-model="policyForm.autoAdvanceEnabled" active-text="开启" inactive-text="关闭" />
+        </el-form-item>
+        <el-form-item label="有成绩达到">
+          <el-input-number
+            v-model="policyForm.autoAdvanceThresholdPct"
+            :min="30"
+            :max="100"
+            :step="5"
+            controls-position="right"
+            style="width: 140px"
+          />
+          <span class="settings-unit">%</span>
+        </el-form-item>
+        <el-form-item label="等待时间">
+          <el-input-number
+            v-model="policyForm.autoAdvanceDelayHours"
+            :min="0.5"
+            :max="24"
+            :step="0.5"
+            :precision="1"
+            controls-position="right"
+            style="width: 140px"
+            :disabled="!policyForm.autoAdvanceEnabled"
+          />
+          <span class="settings-unit">小时后自动推进</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="settingsVisible = false">取消</el-button>
+        <el-button type="primary" :loading="policySaving" @click="saveAdvancePolicy">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 考勤签到情况：先按班级总览，再进入学生明细 -->
+    <el-dialog v-model="checkinDialogVisible" :title="checkinDialogTitle" width="720px" destroy-on-close @closed="resetCheckinDialog">
+      <template #header>
+        <div class="checkin-dialog-header">
+          <el-button v-if="checkinView === 'roster'" link type="primary" @click="showCheckinSummary">返回班级汇总</el-button>
+          <span>{{ checkinDialogTitle }}</span>
+        </div>
+      </template>
+      <div v-if="checkinMeta.total != null" class="checkin-summary">
+        已签到 {{ checkinMeta.checkedInCount || 0 }} / {{ checkinMeta.total || 0 }} 人
+      </div>
+      <el-table v-if="checkinView === 'summary'" v-loading="checkinLoading" :data="checkinSummaryRows" size="small" max-height="420" :row-class-name="getCheckinSummaryRowClass" @row-click="openCheckinClassRoster">
+        <el-table-column label="班级" width="130">
+          <template #default="{ row }">{{ row.classCode }}班</template>
+        </el-table-column>
+        <el-table-column label="已签到" width="120" align="center">
+          <template #default="{ row }">{{ row.checkedInCount || 0 }} 人</template>
+        </el-table-column>
+        <el-table-column label="未签到" width="120" align="center">
+          <template #default="{ row }">{{ Math.max(0, Number(row.totalCount || 0) - Number(row.checkedInCount || 0)) }} 人</template>
+        </el-table-column>
+        <el-table-column label="班级总人数" width="130" align="center">
+          <template #default="{ row }">{{ row.totalCount || 0 }} 人</template>
+        </el-table-column>
+        <el-table-column label="查看名单" min-width="120" align="right">
+          <template #default="{ row }"><el-button link type="primary" @click.stop="openCheckinClassRoster(row)">查看</el-button></template>
+        </el-table-column>
+      </el-table>
+      <el-table v-else v-loading="checkinLoading" :data="checkinRows" size="small" max-height="420">
+        <el-table-column label="学号" prop="studentNo" width="120" />
+        <el-table-column label="姓名" prop="studentName" min-width="100" />
+        <el-table-column label="班级" prop="classCode" width="80">
+          <template #default="{ row }">{{ row.classCode }}班</template>
+        </el-table-column>
+        <el-table-column label="备注" prop="remark" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.checkinId ? 'success' : 'info'" size="small">
+              {{ row.checkinId ? '已签到' : '未签到' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="签到时间" min-width="160">
+          <template #default="{ row }">
+            {{ row.checkinTime ? formatCheckinTime(row.checkinTime) : '—' }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 共享课程只读预览抽屉 -->
+    <el-drawer
+      v-model="sharedPreviewVisible"
+      size="65%"
+      destroy-on-close
+      class="shared-lesson-drawer"
+    >
+      <template #header>
+        <div class="shared-drawer-header">
+          <div class="title-row">
+            <span class="lesson-name">{{ currentPreviewLesson?.lessonTitle }}</span>
+            <el-tag type="warning" effect="dark" size="small">共享预览·只读</el-tag>
+          </div>
+          <div class="meta-row">
+            <span>创建教师：{{ currentPreviewLesson?.creatorName || '本校教师' }}</span>
+            <span class="divider">|</span>
+            <span>共 {{ previewQuestions.length }} 道题目</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-loading="sharedPreviewLoading" class="shared-drawer-body">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="您正在只读预览他人共享课程。该界面不提供设计、删除、复制或修改操作。"
+          style="margin-bottom: 16px;"
+        />
+        <div v-if="!sharedPreviewLoading && previewQuestions.length === 0" class="empty-questions">
+          暂无题目数据
+        </div>
+        <div
+          v-for="(q, index) in previewQuestions"
+          :key="q.questionId || index"
+          class="preview-q-card"
+        >
+          <div class="q-header">
+            <div class="q-left">
+              <span class="q-idx">第 {{ index + 1 }} 题</span>
+              <el-tag size="small" :type="getQuestionTypeTag(q.questionType)">
+                {{ getQuestionTypeName(q.questionType, q.practicalMode) }}
+              </el-tag>
+              <span class="q-score">{{ q.questionScore || 0 }} 分</span>
+            </div>
+          </div>
+          <div class="q-content">{{ q.questionContent }}</div>
+
+          <!-- 选择题选项 -->
+          <div v-if="q.questionType === 'choice'" class="q-options">
+            <div v-if="q.optionA" class="option-item" :class="{ 'is-answer': q.answer === 'A' }">
+              <span class="opt-label">A.</span>
+              <span class="opt-text">{{ q.optionA }}</span>
+            </div>
+            <div v-if="q.optionB" class="option-item" :class="{ 'is-answer': q.answer === 'B' }">
+              <span class="opt-label">B.</span>
+              <span class="opt-text">{{ q.optionB }}</span>
+            </div>
+            <div v-if="q.optionC" class="option-item" :class="{ 'is-answer': q.answer === 'C' }">
+              <span class="opt-label">C.</span>
+              <span class="opt-text">{{ q.optionC }}</span>
+            </div>
+            <div v-if="q.optionD" class="option-item" :class="{ 'is-answer': q.answer === 'D' }">
+              <span class="opt-label">D.</span>
+              <span class="opt-text">{{ q.optionD }}</span>
+            </div>
+            <div class="q-answer-box">
+              参考答案：<span class="ans-text">{{ q.answer }}</span>
+            </div>
+          </div>
+
+          <!-- 判断题答案 -->
+          <div v-else-if="q.questionType === 'judgment'" class="q-answer-box">
+            参考答案：<span class="ans-text">{{ q.answer === 'T' ? '正确' : '错误' }}</span>
+          </div>
+
+          <!-- 打字题或操作题提示 -->
+          <div v-else-if="q.questionType === 'practical'" class="q-practical-meta">
+            <span>操作题类型：{{ q.practicalMode || '文件作品' }}</span>
+            <div v-if="q.answer" class="practical-ref">
+              <span>参考答案/提示：</span>
+              <pre>{{ q.answer }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="shared-drawer-footer">
+          <el-button @click="sharedPreviewVisible = false">关闭预览</el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup name="TeacherDashboard">
-import { computed, ref, onMounted, onActivated } from 'vue';
-import { useRouter } from 'vue-router';
-import { getDashboardData } from '@/api/business/teacher';
+import ResearchNotificationBar from '@/views/business/researchActivity/components/ResearchNotificationBar.vue'
+import { computed, ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { getDashboardData, getDashboardPracticalStatus } from '@/api/business/teacher';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
-import { delLesson } from '@/api/business/lesson';
+import {
+  delLesson,
+  getLessonDetails,
+  getLessonCheckinRoster,
+  getLessonCheckinSummary,
+  getAdvancePolicy,
+  updateAdvancePolicy,
+  manualAdvanceLesson
+} from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, MoreFilled } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, Monitor, MoreFilled, DArrowRight, Setting, View } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
 
 const router = useRouter();
+const route = useRoute();
+// 班级选择弹窗引用：课堂/批改/成绩入口共用
+const classDialogRef = ref(null);
 const loading = ref(true);
 const gradeGroups = ref([]);
-const classDialogRef = ref(null);
-const expandedGradeKeys = ref(new Set());
+const deletingLessonIds = ref([]);
+
+function hasUngradedPractical(lesson) {
+  return (lesson.practicalDeadlineClasses || []).some(item => Number(item.ungradedCount || 0) > 0);
+}
+
+function goToExemption() {
+  router.push('/teacher-exemption')
+}
+const expandedLessonKeys = ref(new Set());
+const expandedHistoryKeys = ref(new Set());
+// 已毕业年级默认折叠，点击标题可展开
+const collapsedGrades = ref(new Set());
+function isGradeGroupCollapsed(group) {
+  return collapsedGrades.value.has(String(group.entryYear));
+}
+function toggleGradeGroup(group) {
+  const next = new Set(collapsedGrades.value);
+  const key = String(group.entryYear);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  collapsedGrades.value = next;
+}
 const countyGradingEntry = ref({ hasTask: false, taskCount: 0 });
 const pendingCountyGradingCount = computed(() => countyGradingEntry.value.pendingTaskCount ?? countyGradingEntry.value.taskCount ?? 0);
+const checkinDialogVisible = ref(false);
+
+// P1-C: 共享课程只读预览
+const sharedPreviewVisible = ref(false);
+const sharedPreviewLoading = ref(false);
+const currentPreviewLesson = ref(null);
+const previewQuestions = ref([]);
+
+function getQuestionTypeTag(type) {
+  switch (type) {
+    case 'choice': return 'primary';
+    case 'judgment': return 'success';
+    case 'practical': return 'warning';
+    case 'typing': return 'info';
+    default: return '';
+  }
+}
+
+function getQuestionTypeName(type, practicalMode) {
+  if (type === 'choice') return '单选题';
+  if (type === 'judgment') return '判断题';
+  if (type === 'typing') return '打字题';
+  if (type === 'practical') {
+    if (practicalMode === 'PYTHON') return '操作题 (Python)';
+    if (practicalMode === 'FLOWCHART') return '操作题 (画程)';
+    return '操作题 (作品文件)';
+  }
+  return type || '题目';
+}
+
+async function previewSharedLesson(lesson) {
+  currentPreviewLesson.value = lesson;
+  sharedPreviewVisible.value = true;
+  sharedPreviewLoading.value = true;
+  previewQuestions.value = [];
+  try {
+    const res = await getLessonDetails(lesson.lessonId);
+    previewQuestions.value = res.data?.questions || [];
+  } catch (e) {
+    ElMessage.error('加载共享课程题目失败');
+  } finally {
+    sharedPreviewLoading.value = false;
+  }
+}
+
+const checkinDialogTitle = ref('签到名单');
+const checkinLoading = ref(false);
+const checkinRows = ref([]);
+const checkinSummaryRows = ref([]);
+const checkinMeta = ref({});
+const checkinView = ref('summary');
+const checkinLesson = ref(null);
+const checkinEntryYear = ref('');
+const iotClassDialogVisible = ref(false);
+const iotEntry = ref({ lesson: null, entryYear: '', classes: [], classCode: '' });
+
+// 统一推进设置
+const settingsVisible = ref(false);
+const policyLoading = ref(false);
+const policySaving = ref(false);
+const policyForm = ref({
+  autoAdvanceEnabled: false,
+  autoAdvanceThresholdPct: 50,
+  autoAdvanceDelayHours: 2
+});
+
+// 手动一键课堂推进（多选班级，默认全选当前为常规课的班级）
+const advanceDialogVisible = ref(false);
+const advanceLoading = ref(false);
+const advanceConfirmed = ref(false);
+const advanceForm = ref({ entryYear: '', classCodes: [] });
+
+function getAdvanceClassesForGroup(group) {
+  const managedClasses = new Set((group?.allClassesInGrade || []).map(normalizeClassCode).filter(Boolean));
+  const classCodes = (group?.lessons || [])
+    .filter(lesson => lesson.lessonMode !== 'attendance' && Number(lesson.grade) === Number(group.gradeId))
+    .flatMap(lesson => lesson.assignedClasses || [])
+    .map(normalizeClassCode)
+    .filter(classCode => classCode && managedClasses.has(classCode));
+  return [...new Set(classCodes)].sort((left, right) => Number(left) - Number(right));
+}
+
+const advanceGradeOptions = computed(() =>
+  (gradeGroups.value || []).filter(group => getAdvanceClassesForGroup(group).length > 0)
+);
+
+const advanceClassOptions = computed(() => {
+  const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
+  return getAdvanceClassesForGroup(group);
+});
+
+/** 推进前后对比预览计算属性：清晰计算各选中班级当前课程与下一课 */
+const advancePreviewList = computed(() => {
+  const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
+  if (!group) return [];
+  const selectedCodes = new Set((advanceForm.value.classCodes || []).map(normalizeClassCode).filter(Boolean));
+  if (!selectedCodes.size) return [];
+
+  const gradeLessons = (group.lessons || []).filter(l => l.lessonMode !== 'attendance' && Number(l.grade) === Number(group.gradeId));
+
+  return [...selectedCodes].sort((a, b) => Number(a) - Number(b)).map(clsCode => {
+    // 找到该班级当前指派的课程（取 lessonNum 最大的常规课）
+    const assignedLessons = gradeLessons.filter(l => (l.assignedClasses || []).map(normalizeClassCode).includes(clsCode));
+    assignedLessons.sort((a, b) => (b.lessonNum || 0) - (a.lessonNum || 0));
+    const currentLesson = assignedLessons[0] || null;
+
+    let nextTip = '';
+    if (currentLesson) {
+      const nextNum = (currentLesson.lessonNum || 0) + 1;
+      const nextLesson = gradeLessons.find(l => Number(l.lessonNum) === nextNum) || null;
+      if (nextLesson) {
+        nextTip = `第${nextLesson.lessonNum}课 ${nextLesson.lessonTitle}`;
+      } else {
+        nextTip = `第${nextNum}课（待备课）`;
+      }
+    } else {
+      nextTip = '未开始第一课';
+    }
+
+    return {
+      classCode: clsCode,
+      classLabel: `${clsCode}班`,
+      currentLessonTitle: currentLesson ? `第${currentLesson.lessonNum}课 ${currentLesson.lessonTitle}` : '暂无课程',
+      nextLessonTitle: nextTip
+    };
+  });
+});
+
+function normalizeClassCode(cls) {
+  return String(cls || '').replace('班', '').trim();
+}
+
+function formatClassLabel(cls) {
+  const code = normalizeClassCode(cls);
+  return code ? `${code}班` : String(cls || '');
+}
+
+/** 默认选中当前年级所有当前为常规课的班级，考勤班级不进入请求。 */
+function selectAllAdvanceClasses() {
+  advanceForm.value.classCodes = advanceClassOptions.value.map(normalizeClassCode).filter(Boolean);
+}
 
 function compareLessonsByLatest(a, b) {
   const timeA = a.createTime ? new Date(a.createTime).getTime() : 0;
@@ -127,73 +703,431 @@ function compareLessonsByLatest(a, b) {
   return (b.lessonId || 0) - (a.lessonId || 0);
 }
 
-function getGroupKey(group) {
-  return `${group.entryYear || ''}-${group.gradeId || group.gradeName || ''}`;
+function formatGradeName(gradeId, fallback = '') {
+  const grade = Number(gradeId);
+  const names = ['', '一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '七年级', '八年级', '九年级'];
+  if (grade >= 1 && grade <= 9) return names[grade];
+  if (grade === 10) return '高一';
+  if (grade === 11) return '高二';
+  if (grade === 12) return '高三';
+  return fallback || '年级待核对';
 }
 
-function isGroupExpanded(group) {
-  return expandedGradeKeys.value.has(getGroupKey(group));
-}
-
-function getVisibleLessons(group) {
-  const lessons = group.lessons || [];
-  return isGroupExpanded(group) ? lessons : lessons.slice(0, 5);
-}
-
-function hasHiddenLessons(group) {
-  return !isGroupExpanded(group) && (group.lessons?.length || 0) > 5;
-}
-
-function expandLessons(group) {
-  const next = new Set(expandedGradeKeys.value);
-  next.add(getGroupKey(group));
-  expandedGradeKeys.value = next;
-}
-
-/** 获取首页数据 */
-function fetchDashboardData() {
-  loading.value = true;
-  Promise.all([
-    getDashboardData(),
-    getCountyExamGradingEntry().catch(() => ({ data: { hasTask: false, taskCount: 0 } }))
-  ])
-    .then(([response, gradingResponse]) => {
-      gradeGroups.value = (response.data || []).map(group => ({
-        ...group,
-        lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
-      }));
-      countyGradingEntry.value = gradingResponse.data || { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
-      loading.value = false;
+function getCourseGradeSections(group) {
+  const currentGrade = Number(group.gradeId);
+  const lessonsByGrade = new Map();
+  (group.lessons || []).forEach(lesson => {
+    const grade = Number(lesson.grade);
+    const key = Number.isFinite(grade) && grade > 0 ? grade : 'unknown';
+    if (!lessonsByGrade.has(key)) lessonsByGrade.set(key, []);
+    lessonsByGrade.get(key).push(lesson);
+  });
+  if (currentGrade > 0 && !lessonsByGrade.has(currentGrade)) {
+    lessonsByGrade.set(currentGrade, []);
+  }
+  return [...lessonsByGrade.entries()]
+    .map(([gradeId, lessons]) => {
+      const numericGrade = Number(gradeId);
+      const isCurrent = currentGrade > 0 && numericGrade === currentGrade;
+      return {
+        gradeId: Number.isFinite(numericGrade) ? numericGrade : null,
+        gradeName: isCurrent ? group.gradeName : formatGradeName(numericGrade),
+        isCurrent,
+        isHistory: !isCurrent,
+        canAdd: Number.isFinite(numericGrade) && numericGrade > 0,
+        lessons: [...lessons].sort(compareLessonsByLatest)
+      };
     })
-    .catch(() => {
-      loading.value = false;
+    .sort((left, right) => {
+      if (left.isCurrent) return -1;
+      if (right.isCurrent) return 1;
+      return Number(right.gradeId || -1) - Number(left.gradeId || -1);
     });
+}
+
+function getCourseSectionKey(group, section) {
+  return `${group.entryYear || ''}-${section.gradeId ?? 'unknown'}`;
+}
+
+function isCourseSectionExpanded(group, section) {
+  return section.isCurrent || expandedHistoryKeys.value.has(getCourseSectionKey(group, section));
+}
+
+function toggleHistorySection(group, section) {
+  const key = getCourseSectionKey(group, section);
+  const next = new Set(expandedHistoryKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedHistoryKeys.value = next;
+}
+
+function getVisibleLessons(group, section) {
+  if (section.isHistory || expandedLessonKeys.value.has(getCourseSectionKey(group, section))) {
+    return section.lessons;
+  }
+  return section.lessons.slice(0, 5);
+}
+
+function hasHiddenLessons(group, section) {
+  return section.isCurrent
+    && !expandedLessonKeys.value.has(getCourseSectionKey(group, section))
+    && section.lessons.length > 5;
+}
+
+function expandLessons(group, section) {
+  const next = new Set(expandedLessonKeys.value);
+  next.add(getCourseSectionKey(group, section));
+  expandedLessonKeys.value = next;
+}
+
+let dashboardRequestSeq = 0;
+let countyRequestSeq = 0;
+
+async function fetchCountyGradingData() {
+  const requestSeq = ++countyRequestSeq;
+  try {
+    const response = await getCountyExamGradingEntry();
+    if (requestSeq === countyRequestSeq) {
+      countyGradingEntry.value = response.data || { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
+    }
+  } catch (e) {
+    if (requestSeq === countyRequestSeq) {
+      countyGradingEntry.value = { hasTask: false, pendingTaskCount: 0, taskCount: 0 };
+    }
+  }
+}
+
+async function fetchPracticalStatuses(groups, requestSeq) {
+  const lessonIds = (groups || [])
+    .flatMap(group => group.lessons || [])
+    .filter(lesson => lesson.hasPractical)
+    .map(lesson => lesson.lessonId)
+    .filter(Boolean);
+  if (!lessonIds.length) return;
+  try {
+    const response = await getDashboardPracticalStatus([...new Set(lessonIds)]);
+    if (requestSeq !== dashboardRequestSeq) return;
+    const statusByLesson = response.data || {};
+    gradeGroups.value = gradeGroups.value.map(group => ({
+      ...group,
+      lessons: (group.lessons || []).map(lesson => ({
+        ...lesson,
+        practicalDeadlineClasses: statusByLesson[String(lesson.lessonId)] || []
+      }))
+    }));
+  } catch (e) {
+    // 红点加载失败不影响已经显示的课程卡片。
+  }
+}
+/** 先加载课程核心数据，批改红点和区域抽测入口不再阻塞首屏。 */
+async function fetchDashboardData() {
+  const requestSeq = ++dashboardRequestSeq;
+  loading.value = true;
+  try {
+    const response = await getDashboardData();
+    if (requestSeq !== dashboardRequestSeq) return;
+    const groups = (response.data || []).map(group => ({
+      ...group,
+      lessons: [...(group.lessons || [])].sort(compareLessonsByLatest)
+    }));
+    gradeGroups.value = groups;
+    // 已毕业年级默认折叠，保持手动展开状态不被刷新覆盖
+    const keepCollapsed = new Set([...collapsedGrades.value].filter(key => groups.some(g => String(g.entryYear) === key)));
+    groups.forEach(g => { if (String(g.gradeName || '').includes('毕业')) keepCollapsed.add(String(g.entryYear)); });
+    collapsedGrades.value = keepCollapsed;
+    loading.value = false;
+    fetchPracticalStatuses(groups, requestSeq);
+  } catch (e) {
+    if (requestSeq === dashboardRequestSeq) {
+      loading.value = false;
+    }
+  }
 }
 
 function goToCountyExamGrading() {
   router.push('/business/county-exam-grading');
 }
 
-/** 处理新增课程 */
-function handleAddNewLesson(group) {
-  // 自动计算下一课序号
-  const maxLessonNum = group.lessons && group.lessons.length > 0
-    ? Math.max(...group.lessons.map(l => l.lessonNum || 0))
+/** 新建课按目标开设年级独立编号；历史入口必须再次说明目标年级。 */
+async function handleAddNewLesson(group, section) {
+  if (section.isHistory) {
+    try {
+      await ElMessageBox.confirm(
+        `将为${group.entryYear}级新增一门${section.gradeName}历史课程，课次会在该年级内继续计算。确认继续？`,
+        '添加历史课程',
+        { type: 'warning', confirmButtonText: '确认添加', cancelButtonText: '取消' }
+      );
+    } catch (e) {
+      return;
+    }
+  }
+  const maxLessonNum = section.lessons.length > 0
+    ? Math.max(...section.lessons.map(l => l.lessonNum || 0))
     : 0;
   router.push({
     path: '/business/lesson-auth/designer',
     query: {
-      grade: group.gradeId,
+      grade: section.gradeId,
+      entryYear: group.entryYear,
       gradeName: group.gradeName,
-      classes: JSON.stringify(group.allClassesInGrade),
       nextNum: maxLessonNum + 1
     }
   });
 }
 
+async function openCourseSettings() {
+  settingsVisible.value = true;
+  policyLoading.value = true;
+  try {
+    const res = await getAdvancePolicy();
+    const data = res.data || res || {};
+    policyForm.value = {
+      autoAdvanceEnabled: Boolean(data.autoAdvanceEnabled),
+      autoAdvanceThresholdPct: Number(data.autoAdvanceThresholdPct) || 50,
+      autoAdvanceDelayHours: Number(data.autoAdvanceDelayHours) || 2
+    };
+  } catch (e) {
+    policyForm.value = {
+      autoAdvanceEnabled: false,
+      autoAdvanceThresholdPct: 50,
+      autoAdvanceDelayHours: 2
+    };
+  } finally {
+    policyLoading.value = false;
+  }
+}
+
+async function saveAdvancePolicy() {
+  policySaving.value = true;
+  try {
+    await updateAdvancePolicy({
+      autoAdvanceEnabled: Boolean(policyForm.value.autoAdvanceEnabled),
+      autoAdvanceThresholdPct: Number(policyForm.value.autoAdvanceThresholdPct) || 50,
+      autoAdvanceDelayHours: Number(policyForm.value.autoAdvanceDelayHours) || 2
+    });
+    ElMessage.success('已保存，全部常规课已同步');
+    settingsVisible.value = false;
+  } catch (e) {
+    // 全局拦截器提示
+  } finally {
+    policySaving.value = false;
+  }
+}
+
+/** 右上角：手动一键课堂推进（默认多选当前年级全部常规课班级） */
+async function handleOneClickAdvance() {
+  if (!advanceGradeOptions.value.length) {
+    ElMessage.warning('暂无可推进的常规课班级');
+    return;
+  }
+  // 带出统一阈值，便于确认文案准确
+  try {
+    const res = await getAdvancePolicy();
+    const data = res.data || res || {};
+    policyForm.value.autoAdvanceThresholdPct = Number(data.autoAdvanceThresholdPct) || 50;
+  } catch (e) {
+    policyForm.value.autoAdvanceThresholdPct = 50;
+  }
+  const first = advanceGradeOptions.value[0];
+  advanceForm.value = {
+    entryYear: first.entryYear || '',
+    classCodes: []
+  };
+  advanceConfirmed.value = false;
+  // 等 options 就绪后默认全选当前年级的常规课班级
+  advanceDialogVisible.value = true;
+  selectAllAdvanceClasses();
+}
+
+function onAdvanceGradeChange() {
+  advanceConfirmed.value = false;
+  // 切换年级后默认全选该年级当前为常规课的班级
+  selectAllAdvanceClasses();
+}
+
+async function confirmOneClickAdvance() {
+  const entryYear = advanceForm.value.entryYear;
+  const classCodes = (advanceForm.value.classCodes || []).map(normalizeClassCode).filter(Boolean);
+  if (!entryYear) {
+    ElMessage.warning('请选择年级');
+    return;
+  }
+  if (!classCodes.length) {
+    ElMessage.warning('请至少选择一个班级');
+    return;
+  }
+  const threshold = Number(policyForm.value.autoAdvanceThresholdPct) || 50;
+  const classLabel = classCodes.length === advanceClassOptions.value.length
+    ? `全部 ${classCodes.length} 个班`
+    : `${classCodes.length} 个班（${classCodes.map(c => c + '班').join('、')}）`;
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${classLabel} 的当前课程推进到下一课？\n需各班有成绩人数达到 ${threshold}%。未达标的班级会跳过并提示。`,
+      '手动一键课堂推进',
+      { type: 'warning', confirmButtonText: '确认推进', cancelButtonText: '取消' }
+    );
+  } catch {
+    return;
+  }
+  advanceLoading.value = true;
+  try {
+    const res = await manualAdvanceLesson({
+      entryYear,
+      classCodes
+    });
+    const msg = res.msg || res.data?.message || '推进完成';
+    const failed = Number(res.data?.failed || 0);
+    if (failed > 0) {
+      ElMessage.warning(msg);
+    } else {
+      ElMessage.success(msg);
+    }
+    advanceDialogVisible.value = false;
+    fetchDashboardData();
+  } catch (e) {
+    // 全局拦截器已提示业务错误
+  } finally {
+    advanceLoading.value = false;
+  }
+}
+
 /** 处理修改课程 (设计) */
-function handleEditLesson(lessonId) {
-  router.push(`/business/lesson-auth/designer/${lessonId}`);
+function handleEditLesson(lesson, group) {
+  router.push({
+    path: `/business/lesson-auth/designer/${lesson.lessonId}`,
+    query: { entryYear: lesson.entryYear || group.entryYear }
+  });
+}
+
+/** 课堂入口按课程已指派班级选择，避免教师手工填课程或班级编号。 */
+async function goToClassroom(lesson, group) {
+  const classCode = await classDialogRef.value.open(null, lesson.lessonId, 'classroom');
+  if (!classCode) return;
+  const entryYear = String(lesson.entryYear || group.entryYear || '');
+  if (!entryYear) {
+    ElMessage.error('课程缺少入学年份，无法进入课堂');
+    return;
+  }
+  router.push({
+    path: '/business/classroom-desktop',
+    query: {
+      lessonId: lesson.lessonId,
+      lessonTitle: lesson.lessonTitle || '',
+      entryYear,
+      classCode
+    }
+  });
+}
+
+/** 物联网实验始终从课程入口进入，避免教师手工填写课程 ID。 */
+function goToIotExperiment(lesson, group) {
+  const classes = [...new Set((lesson.assignedClasses || []).map(normalizeClassCode).filter(Boolean))];
+  if (!classes.length) {
+    ElMessage.warning('该课程尚未指派班级，请先进入课程设计器设置授课班级');
+    return;
+  }
+  iotEntry.value = {
+    lesson,
+    entryYear: String(lesson.entryYear || group.entryYear || ''),
+    classes,
+    classCode: ''
+  };
+  iotClassDialogVisible.value = true;
+}
+
+function enterIotExperiment() {
+  const { lesson, entryYear, classCode } = iotEntry.value;
+  if (!lesson || !classCode) return;
+  iotClassDialogVisible.value = false;
+  router.push({
+    path: '/business/iot',
+    query: {
+      lessonId: lesson.lessonId,
+      lessonTitle: lesson.lessonTitle || '',
+      entryYear,
+      classCode
+    }
+  });
+}
+
+// 课程卡片直达同页协作工作台：选文档、选班级、均分、调人、分配任务都在同一页面完成。
+function openCollaborationWorkspace(lesson) {
+  if (!lesson) return;
+  router.push(`/business/collaboration/lesson/${lesson.lessonId}`);
+}
+
+function formatCheckinTime(value) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch (e) {
+    return String(value || '');
+  }
+}
+
+/** 打开考勤课各班签到情况。 */
+async function openCheckinRoster(lesson, group) {
+  checkinLesson.value = lesson;
+  checkinEntryYear.value = group.entryYear;
+  checkinDialogTitle.value = `${lesson.lessonTitle || '课程'} · 签到情况`;
+  checkinDialogVisible.value = true;
+  await showCheckinSummary();
+}
+
+/** 加载各班签到人数。 */
+async function showCheckinSummary() {
+  if (!checkinLesson.value || !checkinEntryYear.value) return;
+  checkinView.value = 'summary';
+  checkinLoading.value = true;
+  checkinRows.value = [];
+  checkinSummaryRows.value = [];
+  checkinMeta.value = {};
+  try {
+    const res = await getLessonCheckinSummary({
+      lessonId: checkinLesson.value.lessonId,
+      entryYear: checkinEntryYear.value
+    });
+    checkinSummaryRows.value = res.data || [];
+    checkinMeta.value = {
+      total: res.total,
+      checkedInCount: res.checkedInCount
+    };
+  } finally {
+    checkinLoading.value = false;
+  }
+}
+
+/** 从班级汇总进入该班学生的签到名单。 */
+async function openCheckinClassRoster(summary) {
+  if (!summary?.classCode || !checkinLesson.value) return;
+  checkinView.value = 'roster';
+  checkinDialogTitle.value = `${checkinLesson.value.lessonTitle || '课程'} · ${summary.classCode}班签到`;
+  checkinLoading.value = true;
+  checkinRows.value = [];
+  checkinMeta.value = {};
+  try {
+    const res = await getLessonCheckinRoster({
+      lessonId: checkinLesson.value.lessonId,
+      entryYear: checkinEntryYear.value,
+      classCode: summary.classCode
+    });
+    checkinRows.value = res.data || [];
+    checkinMeta.value = { total: res.total, checkedInCount: res.checkedInCount };
+  } finally {
+    checkinLoading.value = false;
+  }
+}
+
+function resetCheckinDialog() {
+  checkinView.value = 'summary';
+  checkinRows.value = [];
+  checkinSummaryRows.value = [];
+  checkinMeta.value = {};
+  checkinLesson.value = null;
+  checkinEntryYear.value = '';
+}
+
+function getCheckinSummaryRowClass() {
+  return 'checkin-summary-row';
 }
 
 /** 跳转批改 */
@@ -220,47 +1154,114 @@ async function goToScoreAnalysis(lesson, group) {
   if (!selectedClass) return; // 用户取消
 
   // 2. 跳转
+  const entryYear = lesson.entryYear || group.entryYear;
+  if (String(entryYear) !== String(group.entryYear)) {
+    ElMessage.error('课程所属入学年份与当前分组不一致，请刷新后重试');
+    return;
+  }
   router.push({
     path: '/business/score',
     query: {
       lessonId: lesson.lessonId,
-      entryYear: group.entryYear,
+      entryYear,
       classCode: selectedClass
     }
   });
 }
 
+function isLessonDeleting(lessonId) {
+  return deletingLessonIds.value.includes(Number(lessonId));
+}
+
+function removeLessonFromDashboard(lessonId) {
+  const targetId = Number(lessonId);
+  gradeGroups.value = gradeGroups.value.map(group => ({
+    ...group,
+    lessons: (group.lessons || []).filter(item => Number(item.lessonId) !== targetId)
+  }));
+}
+
 /** 删除课程 */
-function handleDeleteLesson(lessonId) {
-  ElMessageBox.confirm(
-    '是否确认删除该课程？此操作将同时删除所有关联的题目和班级指派，且不可恢复。',
-    '警告',
-    {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning'
+async function handleDeleteLesson(lesson) {
+  if (!lesson?.canDelete) {
+    ElMessage.warning(lesson?.deleteBlockReason || '当前课程不能删除');
+    return;
+  }
+  if (isLessonDeleting(lesson.lessonId)) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认删除课程“${lesson.lessonTitle || lesson.lessonId}”吗？该课程的成绩、答卷、作答记录和独占作品文件将一并删除，无法恢复。题库题目及其他课程仍引用的文件保留。`,
+      '警告',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+    deletingLessonIds.value = [...deletingLessonIds.value, Number(lesson.lessonId)];
+    await delLesson(lesson.lessonId);
+    // 接口成功即先移除卡片，后台刷新只负责校准，避免缓存或网络让老师误以为没删掉。
+    removeLessonFromDashboard(lesson.lessonId);
+    ElMessage.success('删除成功');
+    await fetchDashboardData();
+  } catch (e) {
+    // 用户取消和全局请求拦截器提示都不需要重复弹窗。
+  } finally {
+    deletingLessonIds.value = deletingLessonIds.value.filter(id => id !== Number(lesson.lessonId));
+  }
+}
+
+function refreshDashboard() {
+  fetchDashboardData();
+  fetchCountyGradingData();
+}
+
+let skipFirstActivatedRefresh = true;
+let lastDashboardRefreshToken = '';
+let dashboardStatusTimer = null;
+
+function startDashboardStatusCalibration() {
+  if (dashboardStatusTimer) clearInterval(dashboardStatusTimer);
+  dashboardStatusTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && gradeGroups.value.length) {
+      fetchPracticalStatuses(gradeGroups.value, dashboardRequestSeq);
     }
-  )
-    .then(() => {
-      delLesson(lessonId).then(() => {
-        ElMessage({
-          type: 'success',
-          message: '删除成功'
-        });
-        fetchDashboardData();
-      });
-    })
-    .catch(() => {});
+  }, 10000);
+}
+
+function stopDashboardStatusCalibration() {
+  if (dashboardStatusTimer) clearInterval(dashboardStatusTimer);
+  dashboardStatusTimer = null;
 }
 
 onMounted(() => {
-  fetchDashboardData();
+  refreshDashboard();
+  startDashboardStatusCalibration();
 });
+
+// 保存空课程后可能复用首页组件，监听保存标记确保新课程立即出现。
+watch(
+  () => route.query.refresh,
+  refreshToken => {
+    if (!refreshToken || String(refreshToken) === lastDashboardRefreshToken) return;
+    lastDashboardRefreshToken = String(refreshToken);
+    refreshDashboard();
+  }
+);
 
 // 从其他页面返回时（如课程设计页），重新加载数据
 onActivated(() => {
-  fetchDashboardData();
+  startDashboardStatusCalibration();
+  // KeepAlive 首次挂载会紧接着触发 activated，跳过这一次以免首页重复请求。
+  if (skipFirstActivatedRefresh) {
+    skipFirstActivatedRefresh = false;
+    return;
+  }
+  refreshDashboard();
 });
+
+onDeactivated(stopDashboardStatusCalibration);
+onBeforeUnmount(stopDashboardStatusCalibration);
 </script>
 
 <style scoped lang="scss">
@@ -268,6 +1269,11 @@ onActivated(() => {
   .box-card {
     min-height: calc(100vh - 84px);
   }
+}
+
+.folder-delete.is-deleting {
+  pointer-events: none;
+  opacity: 0.45;
 }
 
 .county-grading-entry {
@@ -298,6 +1304,72 @@ onActivated(() => {
   }
 }
 
+.grade-group {
+  & + & {
+    margin-top: 28px;
+  }
+}
+
+.grade-header {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+.grade-header.clickable { cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.grade-header.clickable:hover .grade-title { color: #409eff; }
+
+.grade-title {
+  color: #303133;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.course-grade-section {
+  margin-bottom: 16px;
+  padding: 12px 14px 14px;
+  border: 1px solid #d9ecff;
+  border-radius: 10px;
+  background: #f7fbff;
+
+  &.is-history {
+    border-color: #e4e7ed;
+    background: #fafafa;
+  }
+}
+
+.course-grade-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  margin-bottom: 12px;
+
+  &.clickable {
+    cursor: pointer;
+  }
+}
+
+.course-grade-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  strong {
+    color: #303133;
+    font-size: 15px;
+  }
+
+  > span:last-child {
+    color: #909399;
+    font-size: 12px;
+  }
+}
+
+.history-toggle-text {
+  color: #409eff;
+  font-size: 13px;
+}
+
 .lesson-container {
   display: flex;
   flex-wrap: wrap;
@@ -307,8 +1379,8 @@ onActivated(() => {
 
 .lesson-folder {
   position: relative;
-  width: 200px; /* 进一步减小宽度 (原220px) */
-  height: 140px; 
+  width: 200px;
+  height: 140px;
   border-radius: 8px;
   background-color: #fff;
   box-shadow: 0 2px 6px rgba(0,0,0,0.04);
@@ -316,7 +1388,13 @@ onActivated(() => {
   overflow: hidden;
   border: 1px solid #ebeef5;
   display: flex;
-  flex-direction: row; 
+  flex-direction: column;
+}
+
+.lesson-main {
+  min-height: 0;
+  flex: 1;
+  display: flex;
 }
 
 .lesson-folder:hover {
@@ -370,11 +1448,113 @@ onActivated(() => {
   overflow: hidden; /* 防止溢出 */
 }
 
+.lesson-entry-footer {
+  height: 32px;
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid #f0f2f5;
+  background: #fbfdff;
+}
+
+.lesson-entry-btn {
+  flex: 1;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  font-size: 12px;
+
+  :deep(.el-icon) {
+    margin-right: 4px;
+  }
+}
+
+.entry-divider {
+  width: 1px;
+  height: 16px;
+  background: #e4e7ed;
+  flex: 0 0 auto;
+}
+
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.attendance-mode-tag {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #e6a23c;
+  font-weight: 600;
+}
+.checkin-summary {
+  margin-bottom: 10px;
+  color: #606266;
+  font-size: 13px;
+}
+.checkin-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.checkin-summary-row {
+  cursor: pointer;
+}
+.settings-intro {
+  margin: 0 0 16px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.settings-unit {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 13px;
+}
+.policy-form {
+  padding-right: 8px;
+}
+.class-multi-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+.class-multi-count {
+  margin-left: auto;
+  color: #909399;
+  font-size: 12px;
+}
 .lesson-count-tag {
   font-size: 12px; 
   color: #909399;
   text-align: right; /* 页码右对齐好看些 */
   margin-top: 4px;
+}
+
+.grading-red-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #f56c6c;
+  box-sizing: content-box;
 }
 
 /* 已指派班级区域 */
@@ -414,6 +1594,7 @@ onActivated(() => {
 }
 
 .action-btn {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column; 
@@ -433,6 +1614,7 @@ onActivated(() => {
   &.design:hover { color: #409EFF; background-color: #ecf5ff; }
   &.grade:hover { color: #67C23A; background-color: #f0f9eb; }
   &.score:hover { color: #E6A23C; background-color: #fdf6ec; }
+  &.iot:hover { color: #258b84; background-color: #ecf8f6; }
   
   &:not(:last-child) {
      border-bottom: 1px solid #f0f2f5;
@@ -443,14 +1625,27 @@ onActivated(() => {
 .shared-tag {
   display: inline-block;
   padding: 2px 6px;
-  margin-left: 4px;
   font-size: 10px;
   color: #fff;
   background: linear-gradient(135deg, #67c23a, #529b2e);
   border-radius: 4px;
-  vertical-align: middle;
   font-weight: normal;
-  transform: translateY(-2px);
+}
+
+.shared-course-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.shared-creator {
+  overflow: hidden;
+  color: #909399;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 删除按钮 */
@@ -478,6 +1673,14 @@ onActivated(() => {
 .folder-delete:hover {
   background-color: #fef0f0;
   color: #f56c6c;
+}
+.folder-delete.is-disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+.folder-delete.is-disabled:hover {
+  color: #c0c4cc;
+  background-color: #f5f7fa;
 }
 
 .expand-lessons-btn {
@@ -531,5 +1734,133 @@ onActivated(() => {
 .add-icon {
     font-size: 28px; /* 加大图标 */
     margin-bottom: 8px;
+}
+.iot-class-tip {
+  margin: 0 0 16px;
+  color: #606266;
+  line-height: 1.6;
+}
+.iot-class-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.iot-class-options :deep(.el-radio-button__inner) {
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+/* 共享课程预览抽屉 */
+.shared-drawer-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    .lesson-name {
+      font-size: 18px;
+      font-weight: bold;
+      color: #303133;
+    }
+  }
+  .meta-row {
+    font-size: 13px;
+    color: #909399;
+    .divider {
+      margin: 0 8px;
+    }
+  }
+}
+.shared-drawer-body {
+  padding: 0 10px 20px;
+  .preview-q-card {
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #fafafa;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    .q-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      .q-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        .q-idx {
+          font-weight: bold;
+          color: #303133;
+        }
+        .q-score {
+          font-size: 13px;
+          color: #e6a23c;
+          font-weight: 500;
+        }
+      }
+    }
+    .q-content {
+      font-size: 14px;
+      color: #303133;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .q-options {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      .option-item {
+        padding: 6px 10px;
+        background: #fff;
+        border: 1px solid #ebeef5;
+        border-radius: 4px;
+        font-size: 13px;
+        &.is-answer {
+          border-color: #67c23a;
+          background: #f0f9eb;
+          color: #67c23a;
+          font-weight: 500;
+        }
+        .opt-label {
+          margin-right: 6px;
+          font-weight: bold;
+        }
+      }
+    }
+    .q-answer-box {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #ecf5ff;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #409eff;
+      .ans-text {
+        font-weight: bold;
+      }
+    }
+    .q-practical-meta {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #606266;
+      .practical-ref {
+        margin-top: 8px;
+        pre {
+          background: #f4f4f5;
+          padding: 8px;
+          border-radius: 4px;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
+      }
+    }
+  }
+}
+.shared-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

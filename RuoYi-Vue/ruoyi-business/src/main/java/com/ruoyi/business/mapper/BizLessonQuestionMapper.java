@@ -93,4 +93,9 @@ public interface BizLessonQuestionMapper
      * @return 课程题目关联列表
      */
     List<BizLessonQuestionDetailVo> selectDetailsByLessonId(Long lessonId);
+
+    /**
+     * 查询课程当前关联的题目ID，用于保存前识别被移除的题目。
+     */
+    List<Long> selectQuestionIdsByLessonId(Long lessonId);
 }

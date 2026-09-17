@@ -23,13 +23,21 @@
         <result property="previewRetryCount"    column="preview_retry_count"    />
         <result property="previewLastRetryTime" column="preview_last_retry_time"/>
         <result property="previewErrorMessage"  column="preview_error_message"  />
+        <result property="normalizedStatus"        column="normalized_status"          />
+        <result property="normalizedPagesJson"     column="normalized_pages_json"      />
+        <result property="rendererVersion"         column="renderer_version"           />
+        <result property="normalizedRetryCount"    column="normalized_retry_count"     />
+        <result property="normalizedLastRetryTime" column="normalized_last_retry_time" />
+        <result property="normalizedErrorMessage"  column="normalized_error_message"   />
     </resultMap>
 
     <sql id="selectCountyExamAnswerVo">
         select answer_id, exam_id, student_id, question_id, student_answer, score, is_correct,
                grader_id, grading_status, answer_time, file_path, submit_time, typing_speed,
                accuracy_rate, completion_rate, preview_status, preview_path, preview_retry_count,
-               preview_last_retry_time, preview_error_message
+               preview_last_retry_time, preview_error_message, normalized_status,
+               normalized_pages_json, renderer_version, normalized_retry_count,
+               normalized_last_retry_time, normalized_error_message
         from biz_county_exam_answer
     </sql>
 
@@ -161,7 +169,8 @@
                a.grading_status as gradingStatus,
                a.preview_status as previewStatus,
                a.preview_path as previewPath,
-               a.preview_error_message as previewErrorMessage
+               a.preview_error_message as previewErrorMessage,
+               a.normalized_status as normalizedStatus
         from biz_county_exam_answer a
         inner join biz_county_exam e on a.exam_id = e.exam_id
         inner join biz_county_exam_paper_question pq
@@ -191,7 +200,10 @@
                a.grading_status as gradingStatus,
                a.preview_status as previewStatus,
                a.preview_path as previewPath,
-               a.preview_error_message as previewErrorMessage
+               a.preview_error_message as previewErrorMessage,
+               a.normalized_status as normalizedStatus,
+               a.normalized_pages_json as normalizedPagesJson,
+               a.normalized_error_message as normalizedErrorMessage
         from biz_county_exam_answer a
         inner join biz_county_exam e on a.exam_id = e.exam_id
         inner join biz_county_exam_paper_question pq
@@ -225,11 +237,15 @@
         insert into biz_county_exam_answer
         (exam_id, student_id, question_id, student_answer, score, is_correct, grader_id, grading_status,
          answer_time, file_path, submit_time, typing_speed, accuracy_rate, completion_rate, preview_status,
-         preview_path, preview_retry_count, preview_last_retry_time, preview_error_message)
+         preview_path, preview_retry_count, preview_last_retry_time, preview_error_message,
+         normalized_status, normalized_pages_json, renderer_version, normalized_retry_count,
+         normalized_last_retry_time, normalized_error_message)
         values
         (#{examId}, #{studentId}, #{questionId}, #{studentAnswer}, #{score}, #{isCorrect}, #{graderId}, #{gradingStatus},
          #{answerTime}, #{filePath}, #{submitTime}, #{typingSpeed}, #{accuracyRate}, #{completionRate}, #{previewStatus},
-         #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage})
+         #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime}, #{previewErrorMessage},
+         #{normalizedStatus}, #{normalizedPagesJson}, #{rendererVersion}, #{normalizedRetryCount},
+         #{normalizedLastRetryTime}, #{normalizedErrorMessage})
     </insert>
 
     <update id="update" parameterType="CountyExamAnswer">
@@ -251,6 +267,12 @@
             <if test="previewRetryCount != null">preview_retry_count = #{previewRetryCount},</if>
             <if test="previewLastRetryTime != null">preview_last_retry_time = #{previewLastRetryTime},</if>
             <if test="previewErrorMessage != null">preview_error_message = #{previewErrorMessage},</if>
+            <if test="normalizedStatus != null">normalized_status = #{normalizedStatus},</if>
+            <if test="normalizedPagesJson != null">normalized_pages_json = #{normalizedPagesJson},</if>
+            <if test="rendererVersion != null">renderer_version = #{rendererVersion},</if>
+            <if test="normalizedRetryCount != null">normalized_retry_count = #{normalizedRetryCount},</if>
+            <if test="normalizedLastRetryTime != null">normalized_last_retry_time = #{normalizedLastRetryTime},</if>
+            <if test="normalizedErrorMessage != null">normalized_error_message = #{normalizedErrorMessage},</if>
         </trim>
         where answer_id = #{answerId}
     </update>
@@ -270,7 +292,13 @@
             preview_path = #{previewPath},
             preview_retry_count = #{previewRetryCount},
             preview_last_retry_time = #{previewLastRetryTime},
-            preview_error_message = #{previewErrorMessage}
+            preview_error_message = #{previewErrorMessage},
+            normalized_status = #{normalizedStatus},
+            normalized_pages_json = #{normalizedPagesJson},
+            renderer_version = #{rendererVersion},
+            normalized_retry_count = #{normalizedRetryCount},
+            normalized_last_retry_time = #{normalizedLastRetryTime},
+            normalized_error_message = #{normalizedErrorMessage}
             <if test="gradingStatus != null">
                 , grading_status = #{gradingStatus}
             </if>
@@ -278,11 +306,16 @@
     </update>
 
     <update id="updateGrade">
-        update biz_county_exam_answer
-        set score = #{score},
-            grading_status = '1',
-            grader_id = #{graderId}
-        where answer_id = #{answerId}
+        update biz_county_exam_answer a
+        inner join biz_county_exam e on e.exam_id = a.exam_id
+        set a.score = #{score},
+            a.grading_status = '1',
+            a.grader_id = #{graderId}
+        where a.answer_id = #{answerId}
+          and a.grader_id = #{graderId}
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+          and e.del_flag = '0'
     </update>
 
     <update id="batchUpdateGrader">
@@ -329,36 +362,46 @@
             preview_path = #{previewPath},
             preview_retry_count = #{previewRetryCount},
             preview_last_retry_time = #{previewLastRetryTime},
-            preview_error_message = #{previewErrorMessage}
+            preview_error_message = #{previewErrorMessage},
+            normalized_status = #{normalizedStatus},
+            normalized_pages_json = #{normalizedPagesJson},
+            renderer_version = #{rendererVersion},
+            normalized_retry_count = #{normalizedRetryCount},
+            normalized_last_retry_time = #{normalizedLastRetryTime},
+            normalized_error_message = #{normalizedErrorMessage}
         where answer_id = #{answerId}
     </update>
 
     <update id="claimSubmitPreviewConversion">
         update biz_county_exam_answer
-        set preview_status = 'converting',
-            preview_path = null,
-            preview_retry_count = ifnull(preview_retry_count, 0),
-            preview_last_retry_time = #{claimedAt},
+        set normalized_status = 'converting',
+            normalized_retry_count = ifnull(normalized_retry_count, 0),
+            normalized_last_retry_time = #{claimedAt},
+            normalized_error_message = null,
+            preview_status = case
+                when lower(student_answer) regexp '\\.(doc|docx|ppt|pptx|xls|xlsx)$' then 'converting'
+                else preview_status end,
+            preview_path = case
+                when lower(student_answer) regexp '\\.(doc|docx|ppt|pptx|xls|xlsx)$' then null
+                else preview_path end,
             preview_error_message = null
         where answer_id = #{answerId}
-          and preview_status = 'pending'
-          and preview_path is null
+          and normalized_status = 'pending'
     </update>
 
     <update id="claimRetryPreviewConversion">
         update biz_county_exam_answer
-        set preview_status = 'converting',
-            preview_path = null,
-            preview_retry_count = #{nextRetryCount},
-            preview_last_retry_time = #{claimedAt},
-            preview_error_message = null
+        set normalized_status = 'converting',
+            normalized_pages_json = null,
+            normalized_retry_count = #{nextRetryCount},
+            normalized_last_retry_time = #{claimedAt},
+            normalized_error_message = null
         where answer_id = #{answerId}
-          and preview_path is null
-          and preview_status = #{expectedStatus}
-          and ifnull(preview_retry_count, 0) = #{expectedRetryCount}
+          and normalized_status = #{expectedStatus}
+          and ifnull(normalized_retry_count, 0) = #{expectedRetryCount}
           and (
-                (#{expectedLastRetryTime} is null and preview_last_retry_time is null)
-             or preview_last_retry_time = #{expectedLastRetryTime}
+                (#{expectedLastRetryTime} is null and normalized_last_retry_time is null)
+             or normalized_last_retry_time = #{expectedLastRetryTime}
           )
     </update>
 
@@ -374,16 +417,15 @@
           and e.status in ('1', '2')
           and a.student_answer is not null
           and a.student_answer != ''
-          and (lower(a.student_answer) like '%.docx' or lower(a.student_answer) like '%.doc')
-          and a.preview_path is null
+          and lower(a.student_answer) regexp '\\.(doc|docx|ppt|pptx|xls|xlsx|pdf|jpg|jpeg|png)$'
           and (
-                (a.preview_status = 'failed'
-                 and (a.preview_last_retry_time is null or a.preview_last_retry_time &lt;= #{retryBefore}))
-             or (a.preview_status in ('pending', 'converting')
-                 and coalesce(a.preview_last_retry_time, a.submit_time) is not null
-                 and coalesce(a.preview_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
+                (a.normalized_status = 'failed'
+                 and (a.normalized_last_retry_time is null or a.normalized_last_retry_time &lt;= #{retryBefore}))
+             or (a.normalized_status in ('pending', 'converting')
+                 and coalesce(a.normalized_last_retry_time, a.submit_time) is not null
+                 and coalesce(a.normalized_last_retry_time, a.submit_time) &lt;= #{stuckBefore})
           )
-          and ifnull(a.preview_retry_count, 0) &lt; #{maxRetryCount}
+          and ifnull(a.normalized_retry_count, 0) &lt; #{maxRetryCount}
         order by a.submit_time asc
     </select>
 </mapper>

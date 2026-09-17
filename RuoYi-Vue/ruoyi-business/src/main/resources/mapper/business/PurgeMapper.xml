@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.PurgeMapper">
+
+    <!-- ============ 课程范围：文件候选 ============ -->
+    <select id="selectLessonAnswerFilePaths" resultType="java.lang.String">
+        SELECT student_answer FROM biz_student_answer
+        WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND student_answer LIKE '/profile/%'
+        UNION
+        SELECT preview_path FROM biz_student_answer
+        WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND preview_path IS NOT NULL AND preview_path != ''
+    </select>
+
+    <!-- 作品归属由课程上下文决定，不能只按题号收集，否则会误删他课同题草稿。 -->
+    <select id="selectDoomedArtifactIds" resultType="java.lang.Long">
+        SELECT a.artifact_id FROM biz_practical_artifact a
+        WHERE a.context_type = 'LESSON' AND a.context_id IN (
+            <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        )
+          AND NOT EXISTS (
+            SELECT 1 FROM biz_student_answer ans
+            WHERE ans.question_id = a.question_id
+              AND ans.student_id = a.student_id
+              AND ans.lesson_id NOT IN
+              <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          )
+    </select>
+
+    <select id="selectArtifactFilePaths" resultType="java.lang.String">
+        SELECT resource_path FROM biz_practical_attachment
+        WHERE version_id IN (
+            SELECT version_id FROM biz_practical_submission_version WHERE artifact_id IN
+            <foreach collection="artifactIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ) AND resource_path IS NOT NULL AND resource_path != ''
+        UNION
+        SELECT preview_path FROM biz_practical_attachment
+        WHERE version_id IN (
+            SELECT version_id FROM biz_practical_submission_version WHERE artifact_id IN
+            <foreach collection="artifactIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ) AND preview_path IS NOT NULL AND preview_path != ''
+    </select>
+
+    <select id="selectLessonReferenceFilePaths" resultType="java.lang.String">
+        SELECT resource_path FROM biz_teacher_practical_reference_answer
+        WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND resource_path IS NOT NULL AND resource_path != ''
+    </select>
+
+    <!-- ============ 课程范围：按依赖顺序删除 ============ -->
+    <delete id="deleteScoringDetailsByLessons">
+        DELETE d FROM biz_scoring_detail d
+        JOIN biz_student_answer a ON a.answer_id = d.answer_id
+        WHERE a.lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAiResultsByLessons">
+        DELETE r FROM biz_practical_ai_result r
+        JOIN biz_student_answer a ON a.answer_id = r.answer_id
+        WHERE a.lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAttachmentsByArtifacts">
+        DELETE FROM biz_practical_attachment WHERE version_id IN (
+            SELECT version_id FROM biz_practical_submission_version WHERE artifact_id IN
+            <foreach collection="artifactIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        )
+    </delete>
+
+    <delete id="deleteVersionsByArtifacts">
+        DELETE FROM biz_practical_submission_version WHERE artifact_id IN
+        <foreach collection="artifactIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteArtifactsByIds">
+        DELETE FROM biz_practical_artifact WHERE artifact_id IN
+        <foreach collection="artifactIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAnswersByLessons">
+        DELETE FROM biz_student_answer WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAnswerBackupTableByLessons">
+DELETE FROM biz_student_answer_backup_20260409 WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteAnswerOrphansByLessons">
+DELETE FROM biz_student_answer_orphan_archive WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteTaskStatesByLessons">
+        DELETE FROM biz_student_task_state WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deletePerformancesByLessons">
+        DELETE FROM biz_classroom_performance WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCheckinsByLessons">
+        DELETE FROM biz_lesson_checkin WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteProgrammingSubmissionsByLessons">
+DELETE FROM biz_programming_submission WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteProgrammingDraftsByLessons">
+DELETE FROM biz_programming_draft WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteFlowchartSubmissionsByLessons">
+DELETE FROM biz_flowchart_submission WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteFlowchartDraftsByLessons">
+DELETE FROM biz_flowchart_draft WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteFlowchartSnapshotsByLessons">
+DELETE FROM biz_flowchart_lesson_snapshot WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteGuideAnswersByLessons">
+DELETE FROM biz_guide_sheet_answer WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteGuideBindingsByLessons">
+DELETE FROM biz_lesson_guide_sheet_binding WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteLessonToolsByLessons">
+        DELETE FROM biz_lesson_tool WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCollabTicketsByRooms">
+        DELETE FROM biz_collab_upload_ticket WHERE room_id IN
+        <foreach collection="roomIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCollabRevisionsByRooms">
+        DELETE FROM biz_collab_revision WHERE room_id IN
+        <foreach collection="roomIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCollabRoomsByLessons">
+        DELETE FROM biz_collab_room WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCollabActivitiesByLessons">
+        DELETE FROM biz_collab_activity WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteGradingDeadlineAuditsByLessons">
+DELETE FROM biz_practical_grading_deadline_audit WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteGradingDeadlinesMainByLessons">
+DELETE FROM biz_practical_grading_deadline WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteRubricsByLessons">
+        DELETE FROM biz_practical_rubric_snapshot WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteReferenceAnswersByLessons">
+        DELETE FROM biz_teacher_practical_reference_answer WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAiJobsByLessons">
+        DELETE FROM biz_practical_ai_job WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteScoreAdjustmentsByLessons">
+        DELETE FROM biz_score_adjustment WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAssignmentHistoryRowsByLessons">
+DELETE FROM biz_lesson_assignment_history WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="clearAssignmentNextPointersByLessons">
+UPDATE biz_lesson_assignment_history SET next_lesson_id = NULL WHERE next_lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteGroupSnapshotsByLessons">
+        DELETE FROM biz_lesson_group_snapshot WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteClassScopesByLessons">
+        DELETE FROM biz_lesson_class_scope WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <select id="selectRoomIdsByLessons" resultType="java.lang.Long">
+        SELECT room_id FROM biz_collab_room WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+    <select id="selectCollabFilePathsByRooms" resultType="java.lang.String">
+        SELECT current_file_path FROM biz_collab_room WHERE room_id IN
+        <foreach collection="roomIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND current_file_path IS NOT NULL AND current_file_path != ''
+        UNION
+        SELECT file_path FROM biz_collab_revision WHERE room_id IN
+        <foreach collection="roomIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND file_path IS NOT NULL AND file_path != ''
+    </select>
+
+    <select id="selectQuestionIdsByLessons" resultType="java.lang.Long">
+        SELECT question_id FROM biz_lesson_question WHERE lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <!-- ============ 学生范围：文件候选 ============ -->
+    <select id="selectStudentAnswerFilePaths" resultType="java.lang.String">
+        SELECT student_answer FROM biz_student_answer
+        WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND student_answer LIKE '/profile/%'
+        UNION
+        SELECT preview_path FROM biz_student_answer
+        WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          AND preview_path IS NOT NULL AND preview_path != ''
+    </select>
+
+    <select id="selectArtifactIdsByStudents" resultType="java.lang.Long">
+        SELECT artifact_id FROM biz_practical_artifact WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <!-- ============ 学生范围：按依赖顺序删除 ============ -->
+    <delete id="deleteScoringDetailsByStudents">
+        DELETE d FROM biz_scoring_detail d
+        JOIN biz_student_answer a ON a.answer_id = d.answer_id
+        WHERE a.student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAiResultsByStudents">
+        DELETE r FROM biz_practical_ai_result r
+        JOIN biz_student_answer a ON a.answer_id = r.answer_id
+        WHERE a.student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAnswersByStudents">
+        DELETE FROM biz_student_answer WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteAnswerBackupTableByStudents">
+DELETE FROM biz_student_answer_backup_20260409 WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteAnswerOrphansByStudents">
+DELETE FROM biz_student_answer_orphan_archive WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteTaskStatesByStudents">
+        DELETE FROM biz_student_task_state WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deletePerformancesByStudents">
+        DELETE FROM biz_classroom_performance WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCheckinsByStudents">
+        DELETE FROM biz_lesson_checkin WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteProgrammingSubmissionsByStudents">
+DELETE FROM biz_programming_submission WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteProgrammingDraftsByStudents">
+DELETE FROM biz_programming_draft WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deletePythonPracticeCasesByStudents">
+DELETE c FROM biz_python_practice_submission_case c
+        JOIN biz_python_practice_submission s ON s.submission_id = c.submission_id
+        WHERE s.student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deletePythonPracticeSubmissionsByStudents">
+DELETE FROM biz_python_practice_submission WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deletePythonPracticeDraftsByStudents">
+DELETE FROM biz_python_practice_draft WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deletePythonPracticeProgressByStudents">
+DELETE FROM biz_python_practice_progress WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteFlowchartSubmissionsByStudents">
+DELETE FROM biz_flowchart_submission WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteFlowchartDraftsByStudents">
+DELETE FROM biz_flowchart_draft WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteGuideAnswersByStudents">
+        DELETE FROM biz_guide_sheet_answer WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCountyAnswersByStudents">
+DELETE FROM biz_county_exam_answer WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteCountyStudentsByStudents">
+DELETE FROM biz_county_exam_student WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteIotGroupStudents">
+        DELETE FROM biz_iot_group_student WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteScoreAdjustmentsByStudents">
+        DELETE FROM biz_score_adjustment WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteCollabTicketsByStudents">
+        DELETE FROM biz_collab_upload_ticket WHERE requester_user_id IN (
+            SELECT user_id FROM biz_student WHERE student_id IN
+            <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        )
+    </delete>
+
+    <!-- ============ 文件引用复核：任一存活引用即保留 ============ -->
+    <select id="countPathReferences" resultType="int">
+        SELECT
+          EXISTS(SELECT 1 FROM biz_practical_attachment WHERE resource_path = #{path} OR preview_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_question WHERE file_path = #{path} OR preview_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_student_answer WHERE student_answer = #{path} OR preview_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_student_answer_backup_20260409 WHERE student_answer = #{path} OR preview_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_student_answer_orphan_archive WHERE student_answer = #{path} OR preview_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_county_exam_answer WHERE file_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_guide_sheet_upload WHERE stored_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_research_resource WHERE stored_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_exemption_attachment WHERE resource_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_teacher_practical_reference_answer WHERE resource_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_collab_room WHERE current_file_path = #{path})
+        + EXISTS(SELECT 1 FROM biz_collab_revision WHERE file_path = #{path})
+    </select>
+</mapper>

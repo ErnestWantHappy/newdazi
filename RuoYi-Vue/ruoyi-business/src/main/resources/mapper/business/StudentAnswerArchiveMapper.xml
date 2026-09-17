@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.StudentAnswerArchiveMapper">
+
+    <sql id="removedQuestionFilter">
+        answer.lesson_id = #{lessonId}
+        AND answer.question_id IN
+        <foreach collection="questionIds" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
+    </sql>
+
+    <select id="countLiveAnswers" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer answer
+        WHERE <include refid="removedQuestionFilter"/>
+    </select>
+
+    <!-- 显式列清单避免归档表与在线表后续字段演进时发生 SELECT * 错位。 -->
+    <insert id="archiveAnswers">
+        INSERT IGNORE INTO biz_student_answer_orphan_archive
+        (answer_id, student_id, lesson_id, question_id, student_answer, is_correct, score,
+         answer_time, submit_time, typing_speed, accuracy_rate, completion_rate,
+         preview_status, preview_path, preview_retry_count, preview_last_retry_time,
+         preview_error_message, practical_artifact_id, practical_version_id)
+        SELECT answer.answer_id, answer.student_id, answer.lesson_id, answer.question_id,
+               answer.student_answer, answer.is_correct, answer.score, answer.answer_time,
+               answer.submit_time, answer.typing_speed, answer.accuracy_rate,
+               answer.completion_rate, answer.preview_status, answer.preview_path,
+               answer.preview_retry_count, answer.preview_last_retry_time,
+               answer.preview_error_message, answer.practical_artifact_id,
+               answer.practical_version_id
+        FROM biz_student_answer answer
+        WHERE <include refid="removedQuestionFilter"/>
+    </insert>
+
+    <select id="countArchivedAnswers" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer answer
+        INNER JOIN biz_student_answer_orphan_archive archive_row
+            ON archive_row.answer_id = answer.answer_id
+        WHERE <include refid="removedQuestionFilter"/>
+    </select>
+
+    <insert id="archiveMetadata">
+        INSERT IGNORE INTO biz_student_answer_orphan_archive_meta
+            (answer_id, orphan_reason, archived_at, archive_batch)
+        SELECT answer.answer_id, 'lesson_question_removed', NOW(), #{archiveBatch}
+        FROM biz_student_answer answer
+        INNER JOIN biz_student_answer_orphan_archive archive_row
+            ON archive_row.answer_id = answer.answer_id
+        WHERE <include refid="removedQuestionFilter"/>
+    </insert>
+
+    <select id="countArchivedMetadata" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_student_answer answer
+        INNER JOIN biz_student_answer_orphan_archive archive_row
+            ON archive_row.answer_id = answer.answer_id
+        INNER JOIN biz_student_answer_orphan_archive_meta archive_meta
+            ON archive_meta.answer_id = answer.answer_id
+        WHERE <include refid="removedQuestionFilter"/>
+    </select>
+
+    <delete id="deleteArchivedLiveAnswers">
+        DELETE answer
+        FROM biz_student_answer answer
+        INNER JOIN biz_student_answer_orphan_archive archive_row
+            ON archive_row.answer_id = answer.answer_id
+        INNER JOIN biz_student_answer_orphan_archive_meta archive_meta
+            ON archive_meta.answer_id = answer.answer_id
+        WHERE <include refid="removedQuestionFilter"/>
+    </delete>
+</mapper>

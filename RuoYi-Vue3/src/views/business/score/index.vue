@@ -23,12 +23,72 @@
         <el-input v-model="searchKeyword" placeholder="姓名、学号或账号" clearable style="width: 170px" @keyup.enter="handleQuery" />
         
         <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
+        <el-button
+          v-if="guideSheetContext?.enabled"
+          type="success"
+          plain
+          :loading="guideContextLoading"
+          @click="openGuideSheetScores"
+        >
+          电子导学单成绩
+        </el-button>
+        <!-- D1：导学单分独立说明常驻，避免教师误并入作业均分 -->
+        <el-tooltip
+          v-if="guideSheetContext?.enabled"
+          content="电子导学单成绩独立统计，不进入作业均分、排名与课程总分。"
+          placement="bottom"
+        >
+          <el-tag type="info" effect="plain" class="guide-score-hint-tag">导学单分不计入作业均分</el-tag>
+        </el-tooltip>
         
         <!-- 选中课程提示 -->
         <span v-if="selectedLessonIds.length > 0" class="selected-tip">
           已选中 {{ selectedLessonIds.length }} 门课程
           <el-button link type="primary" @click="clearSelection">清除选择</el-button>
         </span>
+      </div>
+    </el-card>
+
+    <!-- 当前班级当前课程的学生可见性总开关紧跟筛选区，避免老师找不到。 -->
+    <el-card
+      v-if="!isGradeMode && selectedLessonIds.length === 1 && gateContext && gateContext.isCurrent"
+      class="gate-card"
+      style="margin-bottom: 15px;"
+    >
+      <template #header>
+        <div class="card-header">
+          <span>🧭 题目开放</span>
+          <el-tooltip
+            content="自动或手动推进到下一课后，理论题和操作题默认开放；也可在此手动关闭。"
+            placement="bottom"
+          >
+            <el-icon class="gate-hint"><InfoFilled /></el-icon>
+          </el-tooltip>
+        </div>
+      </template>
+      <div class="gate-row">
+        <div v-if="gateContext.hasTheory" class="gate-item">
+          <div class="gate-copy">
+            <b>理论测试题</b>
+            <span>老师开启后，学生端才显示本课理论题；一班开二班关互不影响。</span>
+          </div>
+          <el-switch
+            :model-value="gateContext.theoryOpen"
+            :loading="gateSaving === 'theory'"
+            @change="(v) => toggleGate('theory', v)"
+          />
+        </div>
+        <div v-if="gateContext.hasPractical" class="gate-item">
+          <div class="gate-copy">
+            <b>操作题（含 Python 编程）</b>
+            <span>开放后学生端显示本课操作题；推进到下一课默认开放。</span>
+          </div>
+          <el-switch
+            :model-value="gateContext.practicalOpen"
+            :loading="gateSaving === 'practical'"
+            @change="(v) => toggleGate('practical', v)"
+          />
+        </div>
       </div>
     </el-card>
 
@@ -110,8 +170,9 @@
       <el-table :data="analysisData" border stripe>
         <el-table-column label="题目内容" prop="questionContent" min-width="250">
           <template #default="scope">
-            <span v-if="scope.row.questionType === 'choice'" class="question-type-tag choice">[选择]</span>
-            <span v-else class="question-type-tag judgment">[判断]</span>
+            <span class="question-type-tag" :class="scope.row.questionType">
+              [{{ questionTypeLabel(scope.row.questionType) }}]
+            </span>
             {{ scope.row.questionContent }}
           </template>
         </el-table-column>
@@ -216,17 +277,17 @@
         </div>
       </template>
       <el-table :data="displayDataWithGrade" v-loading="loading" border stripe :default-sort="{ prop: 'studentNo', order: 'ascending' }" max-height="600" style="width: 100%">
-        <el-table-column prop="userName" label="账号" width="120" align="center" sortable fixed="left" />
-        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="(a, b) => Number(a.className) - Number(b.className)" fixed="left" />
-        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable fixed="left" />
-        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => a.studentName.localeCompare(b.studentName, 'zh-CN')" fixed="left">
+        <el-table-column prop="userName" label="账号" width="115" align="center" sortable :sort-method="naturalCodeCompare" />
+        <el-table-column prop="className" label="班级" width="80" align="center" sortable :sort-method="naturalCodeCompare" />
+        <el-table-column prop="studentNo" label="学号" width="80" align="center" sortable :sort-method="naturalCodeCompare" fixed="left" />
+        <el-table-column prop="studentName" label="姓名" width="100" align="center" sortable :sort-method="(a, b) => String(a || '').localeCompare(String(b || ''), 'zh-CN')" fixed="left">
           <template #default="scope">
             <el-button link type="primary" @click="showStudentProfile(scope.row)">{{ scope.row.studentName }}</el-button>
           </template>
         </el-table-column>
         
         <!-- 请假状态列 (仅在选中单门课程时显示，更直观) -->
-        <el-table-column v-if="selectedLessonIds.length === 1" label="请假" width="60" align="center" fixed="left">
+        <el-table-column v-if="selectedLessonIds.length === 1" label="请假" width="60" align="center">
           <template #default="scope">
             <el-button 
                 circle
@@ -242,7 +303,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column v-if="selectedLessonIds.length === 1" label="改分" width="60" align="center" fixed="left">
+        <el-table-column v-if="selectedLessonIds.length === 1" label="改分" width="60" align="center">
           <template #default="scope">
             <el-button
               circle
@@ -258,14 +319,14 @@
           </template>
         </el-table-column>
         
-        <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip fixed="left">
+        <el-table-column v-if="visibleColumns.remark" prop="remark" label="备注" width="100" align="center" show-overflow-tooltip>
           <template #default="scope">
             <span v-if="scope.row.remark" style="color: #E6A23C;">{{ scope.row.remark }}</span>
             <span v-else style="color: #C0C4CC;">-</span>
           </template>
         </el-table-column>
         
-        <!-- 动态课程列 (当选中课程数 <= 5 时显示) -->
+        <!-- 动态课程列：状态色相体系（请假天蓝Tag、未交灰色斜杠-、满分浅绿高亮、人工改分角标、正常深灰） -->
         <template v-if="selectedLessonIds.length > 1 && selectedLessonIds.length <= 5">
             <el-table-column 
                 v-for="lessonId in selectedLessonIds" 
@@ -273,13 +334,30 @@
                 :label="getLessonName(lessonId)" 
                 align="center"
                 sortable
-                :sort-method="(a, b) => getLessonScore(a, lessonId) - getLessonScore(b, lessonId)"
-                width="120"
+                :sort-by="(row) => getLessonScore(row, lessonId)"
+                width="125"
             >
                 <template #default="scope">
-                    <span class="score-num" :class="getScoreClass(getLessonScore(scope.row, lessonId))" :style="{ color: isLessonAbsent(scope.row, lessonId) ? '#909399' : '' }">
-                        {{ getLessonScoreDisplay(scope.row, lessonId) }}
-                    </span>
+                    <div class="lesson-score-cell">
+                      <!-- 请假状态：天蓝 Tag -->
+                      <el-tag v-if="isLessonAbsent(scope.row, lessonId)" size="small" type="primary" effect="plain" class="score-tag-absent">请假</el-tag>
+                      <!-- 缺考状态：橙色 Tag（有课表无记录，后端已显式标记） -->
+                      <el-tag v-else-if="isLessonMissing(scope.row, lessonId)" size="small" type="warning" effect="plain" class="score-tag-absent">缺考</el-tag>
+                      <!-- 未交状态：灰色斜杠 -（兼容无行旧数据） -->
+                      <span v-else-if="!hasLessonSubmission(scope.row, lessonId)" class="score-unsubmitted" title="未提交/未作答">-</span>
+                      <!-- 正常已提交打分状态 -->
+                      <div v-else class="score-content-box">
+                        <span class="score-final" :class="{ 'is-perfect': isLessonScorePerfect(scope.row, lessonId) }">
+                          {{ getLessonFinalScore(scope.row, lessonId) }}分
+                        </span>
+                        <el-tooltip v-if="getLessonScoreObj(scope.row, lessonId)?.manualAdjusted" content="人工修正过作业分" placement="top">
+                          <span class="manual-adjusted-badge">修</span>
+                        </el-tooltip>
+                        <small v-if="getLessonScoreObj(scope.row, lessonId)?.performanceScore" class="score-perf-hint">
+                          ({{ getLessonScoreObj(scope.row, lessonId).performanceScore > 0 ? '+' : '' }}{{ getLessonScoreObj(scope.row, lessonId).performanceScore }})
+                        </small>
+                      </div>
+                    </div>
                 </template>
             </el-table-column>
         </template>
@@ -302,17 +380,20 @@
                 <span class="lesson-name">{{ score.lessonTitle }}</span>
                 <el-popover placement="bottom" :width="240" trigger="hover">
                   <template #reference>
-                    <el-tag 
-                      :type="score.isAbsent ? 'info' : getScoreType(score.finalScore ?? score.totalScore)" 
+                    <el-tag
+                      :type="score.isAbsent ? 'info' : (score.isMissing ? 'warning' : getScoreType(score.finalScore ?? score.totalScore))"
                       size="small"
                       :class="{ 'selected-tag': selectedLessonIds.includes(score.lessonId) }"
                       class="score-num"
-                    >{{ score.isAbsent ? '请假' : (score.finalScore ?? score.totalScore) }}</el-tag>
+                    >{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.finalScore ?? score.totalScore)) }}</el-tag>
                   </template>
                   <div class="score-detail">
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
                     <p><b>理论：</b><span class="score-num">{{ score.theoryScore }}</span> 分</p>
                     <p><b>操作：</b><span class="score-num">{{ score.practicalScore }}</span> 分</p>
+                    <p v-if="score.filePracticalScore !== undefined || score.pythonPracticalScore !== undefined" class="score-subdetail">
+                      <b>其中：</b>文件作品 <span class="score-num">{{ score.filePracticalScore || 0 }}</span> 分，Python 编程 <span class="score-num">{{ score.pythonPracticalScore || 0 }}</span> 分
+                    </p>
                     <p>
                       <b>作业分：</b><span class="score-num">{{ score.totalScore || 0 }}</span> 分
                       <el-tag v-if="score.manualAdjusted" size="small" type="danger" effect="plain" class="manual-score-mark">修</el-tag>
@@ -320,7 +401,7 @@
                     <p v-if="score.manualAdjusted"><b>原始作业分：</b><span class="score-num">{{ score.originalTotalScore || 0 }}</span> 分</p>
                     <p v-if="score.manualAdjusted"><b>修正原因：</b>{{ score.adjustmentReason || '-' }}</p>
                     <p><b>课堂表现：</b><span class="score-num">{{ (score.performanceScore || 0) > 0 ? '+' : '' }}{{ score.performanceScore || 0 }}</span> 分</p>
-                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.finalScore ?? score.totalScore) }}</span></p>
+                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.finalScore ?? score.totalScore)) }}</span></p>
                     <el-divider v-if="score.avgTypingSpeed" style="margin: 8px 0" />
                     <template v-if="score.avgTypingSpeed">
                       <p><b>打字速度：</b><span class="score-num">{{ score.avgTypingSpeed }}</span> <small>字/分</small></p>
@@ -511,11 +592,14 @@
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore } from '@/api/business/score';
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename';
+import { getScoreClasses, getScoreLessons, getScoreSummary, exportScoreExcel, getQuestionAnalysis, getStudentAnswerMatrix, setStudentAbsent, saveManualHomeworkScore, cancelManualHomeworkScore, getGuideSheetScoreContext, getLessonGate, setLessonGate } from '@/api/business/score';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import { FullScreen, Search, Download, Setting, Calendar, EditPen } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import { isSessionExpiredError } from '@/utils/session';
+import { calculateGradeNumber } from '@/utils/academicYear';
+import { questionTypeLabel } from '@/utils/questionType';
 
 import StudentRankList from './components/GradeOverview/StudentRankList.vue';
 import ClassScoreChart from './components/charts/ClassScoreChart.vue';
@@ -543,6 +627,9 @@ const rawData = ref([]);
 const tableData = ref([]);
 const selectedLessonIds = ref([]);
 const searchKeyword = ref('');
+const guideSheetContext = ref(null);
+const guideContextLoading = ref(false);
+let guideContextRequestId = 0;
 
 // 图表相关 - 仅保留答题分析图表
 const analysisChartRef = ref(null);
@@ -629,6 +716,7 @@ const exportColumnOptions = computed(() => [
   { key: 'className', label: '班级', required: true },
   { key: 'studentNo', label: '学号', required: true },
   { key: 'studentName', label: '姓名', required: true },
+  { key: 'lessonDetails', label: '各课程成绩明细', required: false },
   { key: 'remark', label: '备注', required: false },
   { key: 'avgTyping', label: '打字平均', required: false },
   { key: 'overallTypingSpeed', label: '打字速度', required: false },
@@ -732,6 +820,51 @@ const queryParams = ref({
   classCode: null
 });
 
+// 题目开放开关状态（成绩页，班级x当前课程）
+const gateContext = ref(null);
+const gateSaving = ref('');
+
+async function loadGateContext() {
+  gateContext.value = null;
+  if (isGradeMode.value || selectedLessonIds.value.length !== 1) return;
+  const lessonId = selectedLessonIds.value[0];
+  const entryYear = queryParams.value.entryYear;
+  const classCode = queryParams.value.classCode;
+  if (!lessonId || !entryYear || !classCode) return;
+  try {
+    const res = await getLessonGate(lessonId, entryYear, classCode);
+    // 后端 AjaxResult.put 为平铺结构（theoryOpen/isCurrent 在顶层），res.data 兜底两种形态
+    gateContext.value = res?.data || res || null;
+  } catch (e) {
+    // 失败静默，卡片不显示
+    gateContext.value = null;
+  }
+}
+
+async function toggleGate(kind, open) {
+  const lessonId = selectedLessonIds.value[0];
+  const entryYear = queryParams.value.entryYear;
+  const classCode = queryParams.value.classCode;
+  if (!lessonId || !entryYear || !classCode) return;
+  gateSaving.value = kind;
+  try {
+    const res = await setLessonGate(lessonId, entryYear, classCode, kind, open);
+    // PUT 只返回两个开关值（无 isCurrent/hasTheory），只能合并不能整体替换，否则卡片会消失
+    const d = res?.data || res || {};
+    gateContext.value = {
+      ...gateContext.value,
+      theoryOpen: Boolean(d.theoryOpen),
+      practicalOpen: Boolean(d.practicalOpen)
+    };
+    const label = kind === 'theory' ? '理论测试题' : '操作题';
+    proxy.$modal.msgSuccess(open ? ('已对当前班级开启' + label) : ('已关闭' + label + '（学生端不可见）'));
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    gateSaving.value = '';
+  }
+}
+
 // 计算属性：是否为年级概览模式（未选择特定班级）
 const isGradeMode = computed(() => !queryParams.value.classCode);
 
@@ -799,7 +932,8 @@ onMounted(async () => {
       classOptions.value = window._allClasses
         .filter(c => (c.entry_year || c.entryYear) === urlEntryYear)
         .map(c => ({ classCode: c.class_code || c.classCode }))
-        .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
+        // 班级号可能含字母，禁止 parseInt 产生 NaN 打乱排序
+        .sort((a, b) => naturalCodeCompare(a.classCode, b.classCode));
     }
     
     const lessonRes = await getScoreLessons(urlEntryYear);
@@ -828,6 +962,7 @@ function loadClasses() {
 }
 
 function onYearChange(val) {
+  guideSheetContext.value = null;
   queryParams.value.classCode = null;
   tableData.value = [];
   rawData.value = [];
@@ -839,7 +974,8 @@ function onYearChange(val) {
     classOptions.value = window._allClasses
       .filter(c => c && (c.entry_year || c.entryYear) === val && (c.class_code || c.classCode))
       .map(c => ({ classCode: c.class_code || c.classCode }))
-      .sort((a, b) => parseInt(a.classCode) - parseInt(b.classCode));
+      // 班级号可能含字母，禁止 parseInt 产生 NaN 打乱排序
+      .sort((a, b) => naturalCodeCompare(a.classCode, b.classCode));
   }
   
   if (val) {
@@ -856,8 +992,52 @@ function onYearChange(val) {
 }
 
 function onClassChange() {
+  guideSheetContext.value = null;
+  gateContext.value = null;
   tableData.value = [];
   rawData.value = [];
+}
+
+async function refreshGuideSheetContext() {
+  const requestId = ++guideContextRequestId;
+  guideSheetContext.value = null;
+  if (selectedLessonIds.value.length !== 1 || !queryParams.value.entryYear || !queryParams.value.classCode) {
+    guideContextLoading.value = false;
+    return;
+  }
+  guideContextLoading.value = true;
+  try {
+    const response = await getGuideSheetScoreContext(
+      selectedLessonIds.value[0],
+      queryParams.value.entryYear,
+      queryParams.value.classCode
+    );
+    if (requestId !== guideContextRequestId) return;
+    const context = response.data || response;
+    const bindingId = context?.bindingId ?? context?.currentBindingId;
+    const enabled = context?.enabled ?? context?.guideSheetEnabled;
+    guideSheetContext.value = enabled && bindingId ? { ...context, enabled: true, bindingId } : null;
+  } catch (_error) {
+    // 后端权限是最终边界，失败时不暴露成绩入口。
+    if (requestId === guideContextRequestId) guideSheetContext.value = null;
+  } finally {
+    if (requestId === guideContextRequestId) guideContextLoading.value = false;
+  }
+}
+
+function openGuideSheetScores() {
+  const context = guideSheetContext.value;
+  if (!context?.bindingId) return;
+  router.push({
+    name: 'GuideSheetDashboard',
+    params: { bindingId: context.bindingId },
+    query: {
+      from: 'score',
+      lessonId: selectedLessonIds.value[0],
+      entryYear: queryParams.value.entryYear,
+      classCode: queryParams.value.classCode
+    }
+  });
 }
 
 // 获取正确率颜色
@@ -880,6 +1060,7 @@ function handleQuery() {
   }
   
   loading.value = true;
+  refreshGuideSheetContext();
   
   getScoreSummary(
     queryParams.value.entryYear,
@@ -905,6 +1086,8 @@ function handleQuery() {
     })
     .finally(() => {
       loading.value = false;
+      // 题目开放开关随查询刷新（单选班级+单选课程时有效）
+      loadGateContext();
     });
 }
 
@@ -936,15 +1119,8 @@ function filterStudents() {
 }
 
 function calculateGrade(entryYear) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const currentDay = now.getDate();
-  
-  const afterAug15 = (currentMonth > 8) || (currentMonth === 8 && currentDay >= 15);
-  const schoolYear = afterAug15 ? currentYear : currentYear - 1;
-  
-  return schoolYear - entryYear + 7;
+  // 本页历史上按初中年级展示；日期边界统一使用平台的 7 月 20 日规则。
+  return calculateGradeNumber(entryYear, '2') || 0;
 }
 
 function processData() {
@@ -968,13 +1144,13 @@ function processData() {
     
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
     let sumPerformance = 0, sumFinal = 0; // 课堂表现分和课程总分
-    let validScoreCount = 0; // 有效（非请假）课次数
-    
+    let validScoreCount = 0; // 有效（非请假、非缺考）课次数
+
     // 打字统计：累加有效记录
     let typingSpeedSum = 0, accuracySum = 0, completionSum = 0, typingCount = 0;
-    
+
     filteredScores.forEach(s => {
-      if (s.isAbsent) return; // 缺考请假的课程不参与均分计算
+      if (s.isAbsent || s.isMissing) return; // 请假与缺考的课程不参与均分计算
       
       validScoreCount++;
       sumTyping += (s.typingScore || 0);
@@ -1007,8 +1183,10 @@ function processData() {
     
     return {
       ...student,
-      studentNo: parseInt(student.studentNo), // P0: 强制转化为数字，修复排序问题
-      className: Number(className),
+      // 学号保留原字符串：字母数字学号 parseInt 会变 NaN，展示与排序都坏
+      studentNo: student.studentNo == null ? '' : String(student.studentNo),
+      // 班级号同样可能非纯数字（如 9A），Number() 会 NaN
+      className: className == null || className === '' ? '' : String(className),
       filteredTotal: multiMode ? avgHomework : Math.round(sumTotal), // 多课模式展示均分，避免总分口径混乱
       filteredAverage: filteredAverage,
       avgTyping: avgTyping,
@@ -1020,7 +1198,14 @@ function processData() {
       totalPerformance: multiMode ? avgPerformance : sumPerformance,
       finalTotal: filteredAverage
     };
-  });
+  }).sort((a, b) => naturalCodeCompare(a.studentNo, b.studentNo));
+}
+
+/** 学号/班级号自然序：纯数字按数值，字母数字按数字段拆分比较，永不产生 NaN */
+function naturalCodeCompare(a, b) {
+  const sa = a == null ? '' : String(a);
+  const sb = b == null ? '' : String(b);
+  return sa.localeCompare(sb, 'zh-CN', { numeric: true, sensitivity: 'base' });
 }
 
 // 渲染图表
@@ -1062,8 +1247,6 @@ watch(() => selectedLessonIds.value, (newIds) => {
     if (newIds.length === 1) {
         if (!isGradeMode.value) {
             loadAnalysis(newIds[0]);
-        } else {
-             // console.log('[DEBUG] Single lesson but Grade Mode -> Skipping Analysis');
         }
     } else {
         analysisData.value = [];
@@ -1072,14 +1255,6 @@ watch(() => selectedLessonIds.value, (newIds) => {
     analysisData.value = [];
   }
 }, { deep: true });
-
-watch(() => queryParams.value.classCode, (cod) => {
-    // console.log('[DEBUG] Class Code Changed:', cod);
-});
-
-watch(analysisData, (val) => {
-    // console.log('[DEBUG] Analysis Data updated, length:', val?.length);
-});
 
 // 跳转到学生个人画像页面
 function showStudentProfile(row) {
@@ -1108,10 +1283,10 @@ function handleExport(selectedColumns) {
     searchKeyword.value.trim() || null,
     selectedColumns
   ).then(res => {
-    const blob = new Blob([res]);
+    const blob = res instanceof Blob ? res : new Blob([res]);
     const link = document.createElement('a');
     link.href = window.URL.createObjectURL(blob);
-    link.download = `成绩汇总_${queryParams.value.entryYear}级.xlsx`;
+    link.download = resolveBlobDownloadFilename(blob, `成绩汇总_${queryParams.value.entryYear}级.xlsx`);
     link.click();
     window.URL.revokeObjectURL(link.href);
     ElMessage.success('导出成功');
@@ -1159,18 +1334,8 @@ function loadMatrix(lessonId) {
     getStudentAnswerMatrix(lessonId, queryParams.value.classCode, queryParams.value.entryYear).then(res => {
         // 数据转换：将 results 数组转换为 component 需要的 answersMap 对象列表
         // 同时处理班级显示名称 "601"
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        // 计算年级：如果当前月份 >= 9，则年级 = 当前年份 - 入学年份 + 1; 否则 = 当前年份 - 入学年份
-        // 或者是：当前系统通常认定9月1日升级。
-        // FIXME: 简单按年计算，如果需要更精确的逻辑（比如考虑学期），这里可能需要调整。
-        // 这里假设 queryParams.value.entryYear 是准确的入学年份
         const entryYear = parseInt(queryParams.value.entryYear || 0);
-        let grade = 0;
-        if (entryYear > 0) {
-             grade = currentYear - entryYear + (currentMonth >= 9 ? 1 : 0);
-        }
+        const grade = calculateGradeNumber(entryYear, '2') || 0;
 
         const processedData = (res || []).map(student => {
             const answersMap = {};
@@ -1295,7 +1460,7 @@ function renderAnalysisChart() {
           
           // 核心指标
           html += `<div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                      <span>类型：<b>${item.questionType === 'choice' ? '选择题' : '判断题'}</b></span>
+                      <span>类型：<b>${questionTypeLabel(item.questionType)}</b></span>
                       <span>正确率：<b style="color:${getAccuracyColor(item.accuracy)}">${item.accuracy}%</b></span>
                       <span>错误率：<b style="color:#F56C6C">${Math.round((item.wrongRate || 0) * 100)}%</b></span>
                    </div>`;
@@ -1414,11 +1579,38 @@ function getLessonScore(student, lessonId) {
     return s ? (s.finalScore ?? s.totalScore ?? 0) : 0;
 }
 
+// 取得学生的单课成绩对象
+function getLessonScoreObj(student, lessonId) {
+    if (!student?.scores) return null;
+    return student.scores.find(item => item.lessonId === lessonId) || null;
+}
+
+// 判断学生在该课是否有作答/提交（非请假、非缺考且有成绩记录）
+function hasLessonSubmission(student, lessonId) {
+    const s = getLessonScoreObj(student, lessonId);
+    if (!s) return false;
+    if (s.isAbsent || s.isMissing) return false;
+    return s.totalScore !== null && s.totalScore !== undefined;
+}
+
+// 获取单课最终得分
+function getLessonFinalScore(student, lessonId) {
+    const s = getLessonScoreObj(student, lessonId);
+    if (!s) return 0;
+    return s.finalScore ?? s.totalScore ?? 0;
+}
+
+// 判断单课是否达到满分（100分及以上）
+function isLessonScorePerfect(student, lessonId) {
+    const score = getLessonFinalScore(student, lessonId);
+    return Number(score) >= 100;
+}
+
 function getLessonScoreDisplay(student, lessonId) {
     if (!student.scores) return 0;
     const s = student.scores.find(item => item.lessonId === lessonId);
     if (s && s.isAbsent) return '请假';
-    if (!s) return 0;
+    if (s && s.isMissing) return '缺考';
     const performance = s.performanceScore || 0;
     const performanceText = performance > 0 ? `+${performance}` : String(performance);
     const manualText = s.manualAdjusted ? '修' : '';
@@ -1430,6 +1622,13 @@ function isLessonAbsent(student, lessonId) {
     const s = student.scores.find(item => item.lessonId === lessonId);
     return s ? !!s.isAbsent : false;
 }
+
+function isLessonMissing(student, lessonId) {
+    if (!student.scores) return false;
+    const s = student.scores.find(item => item.lessonId === lessonId);
+    return s ? !!s.isMissing : false;
+}
+
 
 const handleAbsent = async (studentId, lessonId, isAbsent) => {
   try {
@@ -1578,6 +1777,37 @@ async function handleExportWithColumns(selectedColumns) {
 </script>
 
 <style lang="scss" scoped>
+.gate-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gate-hint {
+  color: #909399;
+}
+.gate-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.gate-item {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+}
+.gate-copy b {
+  display: block;
+  font-size: 14px;
+}
+.gate-copy span {
+  color: #909399;
+  font-size: 12px;
+}
 .filter-card {
   margin-bottom: 15px;
   
@@ -1593,6 +1823,10 @@ async function handleExportWithColumns(selectedColumns) {
     font-weight: bold;
   }
   
+  .guide-score-hint-tag {
+    margin-left: 4px;
+    vertical-align: middle;
+  }
   .selected-tip {
     margin-left: 15px;
     color: #67C23A;
@@ -1862,13 +2096,76 @@ async function handleExportWithColumns(selectedColumns) {
   align-items: center;
   gap: 10px;
 }
-</style>
+
+/* 课程列状态色相体系 */
+.lesson-score-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+}
+
+.score-tag-absent {
+  font-weight: 500;
+  border-radius: 4px;
+  background-color: #ecf5ff;
+  border-color: #d9ecff;
+  color: #409eff;
+}
+
+.score-unsubmitted {
+  color: #c0c4cc;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.score-content-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.score-final {
+  color: #303133;
+  font-weight: 600;
+  font-size: 13px;
+
+  &.is-perfect {
+    color: #52c41a;
+    background-color: #f6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 3px;
+    padding: 1px 4px;
+  }
+}
+
+.manual-adjusted-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background-color: #fef0f0;
+  color: #f56c6c;
+  border: 1px solid #fde2e2;
+  border-radius: 2px;
+  padding: 0 2px;
+  line-height: 14px;
+  transform: scale(0.9);
+  cursor: help;
+}
+
+.score-perf-hint {
+  font-size: 11px;
+  color: #909399;
+}
 
 .text-success {
   color: #67C23A;
   font-weight: bold;
 }
+
 .text-danger {
   color: #F56C6C;
   font-weight: bold;
 }
+</style>

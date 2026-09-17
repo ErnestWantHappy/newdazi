@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.ResourceAccessMapper">
+
+    <select id="selectStudentAnswerIdByResource" resultType="java.lang.Long">
+        select answer_id from (
+            select sa.answer_id
+            from biz_student_answer sa
+            where sa.student_answer = #{resource} or sa.preview_path = #{resource}
+            union all
+            select v.source_answer_id as answer_id
+            from biz_practical_attachment attachment
+            inner join biz_practical_submission_version v on v.version_id = attachment.version_id
+            where v.source_answer_id is not null
+              and (attachment.resource_path = #{resource}
+                   or attachment.preview_path = #{resource}
+                   or JSON_CONTAINS(attachment.normalized_pages_json, JSON_QUOTE(#{resource}), '$'))
+        ) resource_owner
+        where answer_id is not null
+        order by answer_id desc
+        limit 1
+    </select>
+
+    <select id="selectReferenceQuestionIdByResource" resultType="java.lang.Long">
+        select question_id
+        from biz_practical_question_material
+        where resource_path = #{resource} and material_type = 'REFERENCE'
+        order by question_id desc
+        limit 1
+    </select>
+
+    <select id="selectCountyAnswerIdByResource" resultType="java.lang.Long">
+        select answer_id
+        from biz_county_exam_answer
+        where student_answer = #{resource}
+           or file_path = #{resource}
+           or preview_path = #{resource}
+           or JSON_CONTAINS(normalized_pages_json, JSON_QUOTE(#{resource}), '$')
+        order by answer_id desc
+        limit 1
+    </select>
+
+    <select id="selectQuestionIdByResource" resultType="java.lang.Long">
+        select question_id from (
+            select question_id from biz_question
+            where file_path = #{resource} or preview_path = #{resource}
+            union all
+            select question_id from biz_practical_question_material
+            where resource_path = #{resource} and material_type != 'REFERENCE'
+        ) question_resource
+        order by question_id desc
+        limit 1
+    </select>
+
+    <select id="selectExemptionAttachmentOwner" resultType="java.util.LinkedHashMap">
+        select application.teacher_id as teacherId,
+               application.dept_id as deptId
+        from biz_exemption_attachment attachment
+        inner join biz_exemption_application application
+                on application.application_id = attachment.application_id
+        where attachment.resource_path = #{resource}
+        limit 1
+    </select>
+
+    <select id="countCurrentLessonQuestionForStudent" resultType="int">
+        select count(1)
+        from biz_student s
+        inner join sys_user u on u.user_id = s.user_id
+        inner join biz_lesson_assignment a
+            on a.entry_year = s.entry_year
+           and a.class_code = s.class_code
+           and a.dept_id = u.dept_id
+        inner join biz_lesson_question lq
+            on lq.lesson_id = a.lesson_id
+           and lq.question_id = #{questionId}
+        where s.student_id = #{studentId}
+    </select>
+
+    <select id="countCountyQuestionResource" resultType="int">
+        select count(1)
+        from biz_county_exam_paper_question pq
+        where pq.file_path = #{resource} or pq.preview_path = #{resource}
+    </select>
+
+    <select id="countCountyQuestionResourceForStudent" resultType="int">
+        select count(1)
+        from biz_county_exam_paper_question pq
+        where pq.student_id = #{studentId}
+          and (pq.file_path = #{resource} or pq.preview_path = #{resource})
+    </select>
+
+    <select id="countCountyQuestionResourceForGrader" resultType="int">
+        select count(1)
+        from biz_county_exam_paper_question pq
+        inner join biz_county_exam_answer a
+            on a.exam_id = pq.exam_id
+           and a.student_id = pq.student_id
+           and a.question_id = pq.question_id
+        inner join biz_county_exam e on e.exam_id = a.exam_id
+        where a.grader_id = #{graderId}
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+          and e.del_flag = '0'
+          and (pq.file_path = #{resource} or pq.preview_path = #{resource})
+    </select>
+
+    <select id="countCountyAnswerForActiveGrader" resultType="int">
+        select count(1)
+        from biz_county_exam_answer a
+        inner join biz_county_exam e on e.exam_id = a.exam_id
+        where a.answer_id = #{answerId}
+          and a.grader_id = #{graderId}
+          and e.status = '2'
+          and ifnull(e.grading_enabled, '0') = '1'
+          and e.del_flag = '0'
+    </select>
+</mapper>

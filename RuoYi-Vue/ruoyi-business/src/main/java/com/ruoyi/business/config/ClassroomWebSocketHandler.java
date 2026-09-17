@@ -48,9 +48,9 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
         String type = payload.getString("type");
         if ("heartbeat".equals(type)) return;
         boolean teacher = Boolean.TRUE.equals(session.getAttributes().get("teacher"));
-        if (("page_change".equals(type) || "refresh".equals(type) || "message".equals(type)) && !teacher)
+        if (!teacher)
         {
-            session.sendMessage(new TextMessage("{\"type\":\"error\",\"message\":\"无课堂控制权限\"}"));
+            session.sendMessage(new TextMessage("{\"type\":\"error\",\"message\":\"学生连接只允许心跳消息\"}"));
             return;
         }
 
@@ -61,13 +61,33 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status)
     {
-        String roomKey = String.valueOf(session.getAttributes().get("roomKey"));
-        Map<String, WebSocketSession> room = rooms.get(roomKey);
-        if (room != null)
+        removeSession(session);
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception)
+    {
+        removeSession(session);
+        if (session.isOpen())
         {
-            room.remove(session.getId());
-            if (room.isEmpty()) rooms.remove(roomKey);
+            try
+            {
+                session.close(CloseStatus.SERVER_ERROR);
+            }
+            catch (Exception e)
+            {
+                log.debug("课堂异常连接关闭失败 sessionId={}", session.getId());
+            }
         }
+    }
+
+    private void removeSession(WebSocketSession session)
+    {
+        String roomKey = String.valueOf(session.getAttributes().get("roomKey"));
+        rooms.computeIfPresent(roomKey, (key, room) -> {
+            room.remove(session.getId());
+            return room.isEmpty() ? null : room;
+        });
     }
 
     private void broadcast(String roomKey, String payload)
@@ -76,7 +96,11 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
         if (room == null) return;
         for (WebSocketSession target : room.values())
         {
-            if (!target.isOpen()) continue;
+            if (!target.isOpen())
+            {
+                removeSession(target);
+                continue;
+            }
             try
             {
                 target.sendMessage(new TextMessage(payload));
@@ -84,7 +108,19 @@ public class ClassroomWebSocketHandler extends TextWebSocketHandler
             catch (Exception e)
             {
                 log.warn("课堂消息发送失败 sessionId={}", target.getId());
+                removeSession(target);
             }
         }
+    }
+
+    /**
+     * 向指定学校、年级、班级和课程的课堂连接广播状态变更消息
+     */
+    public void broadcastToClassroom(Long deptId, String entryYear, String classCode, Long lessonId, String payload)
+    {
+        if (deptId == null || entryYear == null || classCode == null || lessonId == null) return;
+        String targetRoomKey = ClassroomRoomKey.of(deptId, entryYear, classCode, lessonId);
+        if (targetRoomKey == null) return;
+        broadcast(targetRoomKey, payload);
     }
 }

@@ -211,10 +211,25 @@ public class FileUtils
      */
     public static void setAttachmentResponseHeader(HttpServletResponse response, String realFileName) throws UnsupportedEncodingException
     {
-        String percentEncodedFileName = percentEncode(realFileName);
+        setContentDispositionResponseHeader(response, realFileName, "attachment");
+    }
+
+    /**
+     * 设置浏览器内联查看时的规范文件名。
+     */
+    public static void setInlineResponseHeader(HttpServletResponse response, String realFileName) throws UnsupportedEncodingException
+    {
+        setContentDispositionResponseHeader(response, realFileName, "inline");
+    }
+
+    private static void setContentDispositionResponseHeader(HttpServletResponse response, String realFileName,
+            String dispositionType) throws UnsupportedEncodingException
+    {
+        String normalizedFileName = DownloadFileNameUtils.sanitize(realFileName, "下载文件");
+        String percentEncodedFileName = percentEncode(normalizedFileName);
 
         StringBuilder contentDispositionValue = new StringBuilder();
-        contentDispositionValue.append("attachment; filename=")
+        contentDispositionValue.append(dispositionType).append("; filename=")
                 .append(percentEncodedFileName)
                 .append(";")
                 .append("filename*=")
@@ -222,7 +237,7 @@ public class FileUtils
                 .append(percentEncodedFileName);
 
         response.addHeader("Access-Control-Expose-Headers", "Content-Disposition,download-filename");
-        response.setHeader("Content-disposition", contentDispositionValue.toString());
+        response.setHeader("Content-Disposition", contentDispositionValue.toString());
         response.setHeader("download-filename", percentEncodedFileName);
     }
 

@@ -29,6 +29,8 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.core.text.Convert;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.file.DownloadFileNameUtils;
+import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.common.utils.sql.SqlUtil;
 import com.ruoyi.generator.config.GenConfig;
 import com.ruoyi.generator.domain.GenTable;
@@ -254,8 +256,8 @@ public class GenController extends BaseController
     {
         response.reset();
         response.addHeader("Access-Control-Allow-Origin", "*");
-        response.addHeader("Access-Control-Expose-Headers", "Content-Disposition");
-        response.setHeader("Content-Disposition", "attachment; filename=\"ruoyi.zip\"");
+        FileUtils.setAttachmentResponseHeader(response,
+                DownloadFileNameUtils.withTimestamp("系统代码生成.zip"));
         response.addHeader("Content-Length", "" + data.length);
         response.setContentType("application/octet-stream; charset=UTF-8");
         IOUtils.write(data, response.getOutputStream());

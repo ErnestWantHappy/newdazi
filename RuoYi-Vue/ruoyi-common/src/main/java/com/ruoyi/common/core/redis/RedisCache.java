@@ -4,8 +4,12 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.BoundSetOperations;
 import org.springframework.data.redis.core.HashOperations;
@@ -47,6 +51,29 @@ public class RedisCache
     public <T> void setCacheObject(final String key, final T value, final Integer timeout, final TimeUnit timeUnit)
     {
         redisTemplate.opsForValue().set(key, value, timeout, timeUnit);
+    }
+
+    /**
+     * 仅在键不存在时写入带有效期的值，用于业务防重锁。
+     */
+    public <T> Boolean setCacheObjectIfAbsent(final String key, final T value, final long timeout,
+            final TimeUnit timeUnit)
+    {
+        return redisTemplate.opsForValue().setIfAbsent(key, value, timeout, timeUnit);
+    }
+
+    /**
+     * 只有锁值仍属于当前调用方时才删除，避免超时后误删其他请求的新锁。
+     */
+    public boolean deleteObjectIfValueMatches(final String key, final Object expectedValue)
+    {
+        String script = "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                + "return redis.call('del', KEYS[1]) else return 0 end";
+        org.springframework.data.redis.core.script.DefaultRedisScript<Long> redisScript =
+                new org.springframework.data.redis.core.script.DefaultRedisScript<>(script, Long.class);
+        Long deleted = (Long) redisTemplate.execute(redisScript,
+                java.util.Collections.singletonList(key), expectedValue);
+        return deleted != null && deleted > 0;
     }
 
     /**
@@ -264,5 +291,29 @@ public class RedisCache
     public Collection<String> keys(final String pattern)
     {
         return redisTemplate.keys(pattern);
+    }
+
+    /**
+     * 使用 SCAN 分批枚举键，避免课堂等高频业务使用 KEYS 阻塞 Redis 单线程。
+     */
+    public Collection<String> scanKeys(final String pattern, final long count)
+    {
+        return (Collection<String>) redisTemplate.execute((RedisCallback<Collection<String>>) connection -> {
+            List<String> result = new ArrayList<>();
+            Cursor<byte[]> cursor = connection.scan(ScanOptions.scanOptions()
+                    .match(pattern).count(Math.max(1, count)).build());
+            try
+            {
+                while (cursor.hasNext())
+                {
+                    result.add(new String(cursor.next(), java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+            finally
+            {
+                cursor.close();
+            }
+            return result;
+        });
     }
 }

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.LessonClassScopeMapper">
+
+    <insert id="upsertCurrentAssignment">
+        INSERT INTO biz_lesson_class_scope
+            (lesson_id, dept_id, entry_year, class_code, current_assigned,
+             evidence_source, first_assigned_time, last_assigned_time)
+        VALUES
+            (#{lessonId}, #{deptId}, #{entryYear}, #{classCode}, 1,
+             'REALTIME', COALESCE(#{assignTime}, NOW()), COALESCE(#{assignTime}, NOW()))
+        ON DUPLICATE KEY UPDATE
+            current_assigned = 1,
+            evidence_source = 'REALTIME',
+            first_assigned_time = LEAST(
+                COALESCE(first_assigned_time, VALUES(first_assigned_time)),
+                VALUES(first_assigned_time)),
+            last_assigned_time = VALUES(last_assigned_time)
+    </insert>
+
+    <update id="markLessonAssignmentsInactive">
+        UPDATE biz_lesson_class_scope
+        SET current_assigned = 0
+        WHERE lesson_id = #{lessonId}
+          AND current_assigned = 1
+    </update>
+
+    <update id="markAssignmentInactive">
+        UPDATE biz_lesson_class_scope
+        SET current_assigned = 0
+        WHERE lesson_id = #{lessonId}
+          AND dept_id = #{deptId}
+          AND entry_year = #{entryYear}
+          AND class_code = #{classCode}
+    </update>
+
+    <update id="markOtherAssignmentsInactive">
+        UPDATE biz_lesson_class_scope
+        SET current_assigned = 0
+        WHERE dept_id = #{deptId}
+          AND entry_year = #{entryYear}
+          AND class_code = #{classCode}
+          AND lesson_id &lt;&gt; #{currentLessonId}
+          AND current_assigned = 1
+    </update>
+
+    <delete id="deleteByLessonId">
+        DELETE FROM biz_lesson_class_scope
+        WHERE lesson_id = #{lessonId}
+    </delete>
+</mapper>

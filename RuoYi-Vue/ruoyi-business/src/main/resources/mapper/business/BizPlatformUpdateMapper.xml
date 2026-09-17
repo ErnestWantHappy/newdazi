@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizPlatformUpdateMapper">
+    <resultMap id="PlatformUpdateResult" type="BizPlatformUpdate">
+        <id property="updateId" column="update_id" />
+        <result property="versionNo" column="version_no" />
+        <result property="title" column="title" />
+        <result property="content" column="content" />
+        <result property="publishedAt" column="published_at" />
+        <result property="status" column="status" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <sql id="selectColumns">
+        select update_id, version_no, title, content, published_at, status,
+               create_by, create_time, update_by, update_time
+        from biz_platform_update
+    </sql>
+
+    <select id="selectPublishedList" resultMap="PlatformUpdateResult">
+        <include refid="selectColumns" />
+        where status = 'PUBLISHED'
+        <if test="keyword != null and keyword != ''">
+            and (version_no like concat('%', #{keyword}, '%') or title like concat('%', #{keyword}, '%'))
+        </if>
+        order by published_at desc, update_id desc
+    </select>
+
+    <select id="selectManageList" parameterType="BizPlatformUpdate" resultMap="PlatformUpdateResult">
+        <include refid="selectColumns" />
+        <where>
+            <if test="versionNo != null and versionNo != ''">and version_no like concat('%', #{versionNo}, '%')</if>
+            <if test="title != null and title != ''">and title like concat('%', #{title}, '%')</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+        </where>
+        order by published_at desc, update_id desc
+    </select>
+
+    <select id="selectById" parameterType="Long" resultMap="PlatformUpdateResult">
+        <include refid="selectColumns" /> where update_id = #{updateId}
+    </select>
+
+    <insert id="insert" parameterType="BizPlatformUpdate" useGeneratedKeys="true" keyProperty="updateId">
+        insert into biz_platform_update (version_no, title, content, published_at, status, create_by, create_time)
+        values (#{versionNo}, #{title}, #{content}, #{publishedAt}, #{status}, #{createBy}, sysdate())
+    </insert>
+
+    <update id="update" parameterType="BizPlatformUpdate">
+        update biz_platform_update
+        set version_no = #{versionNo}, title = #{title}, content = #{content}, published_at = #{publishedAt},
+            update_by = #{updateBy}, update_time = sysdate()
+        where update_id = #{updateId}
+    </update>
+
+    <update id="updateStatus">
+        update biz_platform_update
+        set status = #{status}, update_by = #{updateBy}, update_time = sysdate()
+        where update_id = #{updateId}
+    </update>
+</mapper>

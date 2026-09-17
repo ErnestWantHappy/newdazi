@@ -1,5 +1,15 @@
 <template>
   <div class="app-container county-exam-page">
+    <!-- E2：状态流水线（默认展开，降低教研员迷路成本） -->
+    <el-alert
+      class="status-pipeline"
+      type="info"
+      :closable="false"
+      show-icon
+      title="状态流水线：草稿 → 开启 → 关闭 → 已发布"
+      description="草稿可配置组卷与参考班；开启后学生作答；关闭后评卷；发布后成绩对学校可见。评卷入口与「关闭/发布」独立控制。"
+    />
+
     <div class="toolbar-panel">
       <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="72px">
         <el-form-item label="抽测名称" prop="examName">
@@ -156,9 +166,10 @@
 
     <el-dialog title="配置匿名评卷" v-model="allocateDialog.open" width="920px" append-to-body>
       <el-alert
-        title="按操作题配置评卷教师和份数。不填份数表示该题剩余答卷自动均分；考试关闭后会生成匿名评卷任务。"
+        title="按操作题配置评卷教师和份数。可用「一键均分」预填份数；不填/0 表示关闭抽测生成任务时对该题剩余答卷自动均分。教师首页仅在有待评任务时显示「区域抽测评卷」入口（须先关闭抽测并生成任务）。搜索教师姓名/账号可跨校、跨学段命中（含小学部与初中部双账号）。"
         type="info"
         :closable="false"
+        show-icon
       />
       <div class="grading-progress-summary">
         <div class="progress-card">
@@ -185,12 +196,13 @@
       <div class="grader-toolbar">
         <el-input
           v-model="allocateDialog.keyword"
-          placeholder="搜索教师姓名、账号或学校"
+          placeholder="搜索教师姓名、账号或学校（如：郑东旭）"
           clearable
-          style="width: 260px"
+          style="width: 300px"
           @keyup.enter="loadAssignableGraders"
         />
         <el-button icon="Search" :loading="allocateDialog.teacherLoading" @click="loadAssignableGraders">搜索教师</el-button>
+        <el-button type="success" plain icon="Finished" @click="evenlyAllocateAllQuestions">一键均分全部操作题</el-button>
       </div>
       <div v-loading="allocateDialog.loading" class="allocate-question-list">
         <el-empty v-if="practicalAllocateQuestions.length === 0" description="本场区域抽测没有操作题" />
@@ -207,7 +219,10 @@
                 待评 {{ questionProgress(question.questionId).pendingCount || 0 }}
               </span>
             </div>
-            <el-button type="primary" link icon="Plus" @click="addGraderRow(question.questionId)">添加教师</el-button>
+            <div class="allocate-question-actions">
+              <el-button type="success" link @click="evenlyAllocateQuestion(question.questionId)">一键均分</el-button>
+              <el-button type="primary" link icon="Plus" @click="addGraderRow(question.questionId)">添加教师</el-button>
+            </div>
           </div>
           <el-table :data="allocateDialog.configs[question.questionId] || []" border size="small">
             <el-table-column label="评卷教师" min-width="260">
@@ -420,9 +435,11 @@
 import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { saveAs } from 'file-saver'
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
+import { questionTypeLabel } from '@/utils/questionType'
 import {
   addCountyExam,
   allocateCountyExamGraders,
@@ -448,6 +465,7 @@ const { proxy } = getCurrentInstance()
 const router = useRouter()
 const pdfPreviewRef = ref(null)
 
+// E3：状态文案与按钮边界保持「开启/关闭/评卷/发布」语义一致
 const statusOptions = [
   { label: '草稿', value: '0' },
   { label: '开启', value: '1' },
@@ -577,19 +595,43 @@ async function handleDelete(row) {
 }
 
 async function handleOpen(row) {
+  // E1：开启前核对清单（参考班、组卷、时长）
+  const detailResponse = await getCountyExam(row.examId).catch(() => ({ data: {} }))
+  const detail = detailResponse.data || {}
+  const questions = detail.questions || []
+  const classes = detail.classes || detail.assignedClasses || []
+  const classCount = Array.isArray(classes) ? classes.length : (detail.classCount || 0)
+  const questionCount = Array.isArray(questions) ? questions.length : (detail.questionCount || 0)
+  if (questionCount <= 0) {
+    ElMessage.warning('开启前请先完成组卷（至少 1 道题）')
+    return
+  }
+  if (classCount <= 0) {
+    ElMessage.warning('开启前请先选择参考班级（每校最多 1 个班）')
+    return
+  }
+  const checklist = [
+    `抽测名称：${row.examName || '-'}`,
+    `组卷题目：${questionCount} 道`,
+    `参考班级：${classCount} 个`,
+    '开启后将冻结组卷与参考班级，并为学生生成试卷',
+    '学生端优先阻断日常课程与导学单',
+    '请确认作答时长（默认 40 分钟）'
+  ].join('\n')
   const { value } = await ElMessageBox.prompt(
-    '开启后将冻结组卷和参考班级，并为参考学生生成个人试卷。请输入本场区域抽测作答时长。',
-    '开启区域抽测',
+    checklist + '\n\n请输入本场区域抽测作答时长（分钟）：',
+    '开启前核对',
     {
       type: 'warning',
-      inputValue: String(row.durationMinutes || 40),
+      inputValue: String(row.durationMinutes || detail.durationMinutes || 40),
       inputPlaceholder: '默认 40',
       inputValidator: value => {
         const duration = Number(value)
         return Number.isInteger(duration) && duration > 0 ? true : '作答时长必须是大于 0 的整数'
       },
-      confirmButtonText: '开启',
-      cancelButtonText: '取消'
+      confirmButtonText: '确认开启',
+      cancelButtonText: '取消',
+      customClass: 'county-open-checklist'
     }
   )
   const durationMinutes = Number(value)
@@ -686,9 +728,12 @@ function gradeToEntryYear(grade) {
   const now = new Date()
   const currentYear = now.getFullYear()
   const month = now.getMonth() + 1
+  const day = now.getDate()
   
-  // 当前学年起始年（9月开学）
-  const academicStartYear = month >= 9 ? currentYear : currentYear - 1
+  // 平台统一在 7 月 20 日切换新学年，避免暑期抽测选到上一届学生。
+  const academicStartYear = month > 7 || (month === 7 && day >= 20)
+    ? currentYear
+    : currentYear - 1
   
   let gradeInSection
   if (grade >= 1 && grade <= 6) {
@@ -870,9 +915,79 @@ function removeGraderRow(questionId, index) {
   allocateDialog.configs[questionId]?.splice(index, 1)
 }
 
+/**
+ * 可分配规模：有提交用该题提交数，否则用参考人数（关闭生成任务时仍以真实答卷为准）。
+ */
+function allocatePoolSize(questionId) {
+  const submitted = Number(questionProgress(questionId).submittedCount) || 0
+  if (submitted > 0) {
+    return submitted
+  }
+  return Number(allocateDialog.progress.participantCount) || 0
+}
+
+/**
+ * 将可分配份数均分写入该操作题下各评卷教师行（余数前几人 +1）。
+ * @param {boolean} silent 批量调用时不弹 toast
+ * @returns {{ ok: boolean, reason?: string, pool?: number, graders?: number }}
+ */
+function evenlyAllocateQuestion(questionId, silent = false) {
+  const rows = (allocateDialog.configs[questionId] || []).filter(row => row.graderId)
+  if (rows.length === 0) {
+    if (!silent) {
+      ElMessage.warning('请先为该操作题选择至少一位评卷教师，再一键均分')
+    }
+    return { ok: false, reason: 'no-grader' }
+  }
+  const pool = allocatePoolSize(questionId)
+  if (pool <= 0) {
+    if (!silent) {
+      ElMessage.warning('当前无可分配规模（参考人数与提交数均为 0），可先不填份数，关闭抽测时自动均分')
+    }
+    return { ok: false, reason: 'empty-pool' }
+  }
+  const base = Math.floor(pool / rows.length)
+  let remainder = pool % rows.length
+  for (const row of rows) {
+    row.targetCount = base + (remainder > 0 ? 1 : 0)
+    if (remainder > 0) {
+      remainder -= 1
+    }
+  }
+  if (!silent) {
+    ElMessage.success(`已按 ${pool} 份均分给 ${rows.length} 位教师`)
+  }
+  return { ok: true, pool, graders: rows.length }
+}
+
+function evenlyAllocateAllQuestions() {
+  if (practicalAllocateQuestions.value.length === 0) {
+    ElMessage.warning('本场没有操作题')
+    return
+  }
+  let successCount = 0
+  for (const question of practicalAllocateQuestions.value) {
+    const result = evenlyAllocateQuestion(question.questionId, true)
+    if (result.ok) {
+      successCount += 1
+    }
+  }
+  if (successCount === 0) {
+    ElMessage.warning('请先为操作题选择评卷教师（且参考人数或提交数大于 0），再一键均分')
+    return
+  }
+  ElMessage.success(`已对 ${successCount} 道操作题完成一键均分`)
+}
+
 function teacherLabel(teacher) {
   const name = teacher.nickName || teacher.userName || teacher.userId
-  const dept = teacher.deptName ? ` - ${teacher.deptName}` : ''
+  // 兼教多校时后端可能返回 deptNames；展示全部学校避免误以为「只有小学部账号」
+  let dept = ''
+  if (Array.isArray(teacher.deptNames) && teacher.deptNames.length > 0) {
+    dept = ` - ${teacher.deptNames.join(' / ')}`
+  } else if (teacher.deptName) {
+    dept = ` - ${teacher.deptName}`
+  }
   return `${name}（${teacher.userName || teacher.userId}）${dept}`
 }
 
@@ -973,7 +1088,7 @@ function loadStudents() {
 async function handleExport() {
   if (!detailDrawer.exam) return
   const blob = await exportCountyExamStudents(detailDrawer.exam.examId)
-  saveAs(new Blob([blob]), `${detailDrawer.exam.examName || '区域抽测'}-成绩.xlsx`)
+  saveAs(blob, resolveBlobDownloadFilename(blob, `${detailDrawer.exam.examName || '区域抽测'}_成绩.xlsx`))
 }
 
 function schoolTypeText(value) {
@@ -1001,7 +1116,7 @@ function shuffleModeText(value) {
 }
 
 function questionTypeText(value) {
-  return ({ choice: '选择题', judgment: '判断题', typing: '打字题', practical: '操作题' })[value] || value || '-'
+  return questionTypeLabel(value)
 }
 
 function questionOptions(row) {
@@ -1035,7 +1150,7 @@ function handlePreviewQuestionFile(row) {
     ElMessage.warning('该操作题暂无可预览文档')
     return
   }
-  pdfPreviewRef.value?.open(import.meta.env.VITE_APP_BASE_API + row.previewPath)
+  pdfPreviewRef.value?.open(import.meta.env.VITE_APP_BASE_API + '/common/resource/view?resource=' + encodeURIComponent(row.previewPath))
 }
 
 function questionProgress(questionId) {
@@ -1067,6 +1182,9 @@ getList()
     background: #fff;
   }
 
+  .status-pipeline {
+    margin-bottom: 12px;
+  }
   .toolbar-panel {
     padding: 16px 16px 0;
     margin-bottom: 12px;
@@ -1170,6 +1288,13 @@ getList()
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 10px;
+  }
+
+  .allocate-question-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
   }
 
   .question-progress {

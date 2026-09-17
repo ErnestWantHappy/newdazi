@@ -13,8 +13,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * 导学单自动评分引擎
- * 优先从 formJson._scoringConfig 快照读取评分配置（label 作 key，稳定），
- * 回退到 formJson.widgetList[].scoring（id 作 key，可能因 VForm3 重分配而变化）
+ * 优先读取表单组件的当前评分配置，旧模板没有组件配置时回退到根级快照。
  *
  * @author ruoyi
  */
@@ -40,10 +39,10 @@ public class GuideSheetGradingService {
     public static final String STATUS_MANUAL  = "manual";  // 全部需要人工
     public static final String STATUS_PENDING = "pending"; // 待评分
 
-    /** AI 评分频率限制：同一学生同一导学单，5分钟内最多3次 */
+    /** AI 评分频率限制：同一学生同一课程绑定，5分钟内最多3次 */
     private static final int RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
     private static final int RATE_LIMIT_MAX_CALLS = 3;
-    /** 频率限制记录：key = "studentId:sheetId", value = 调用时间戳队列 */
+    /** 频率限制记录：key = "studentId:bindingId", value = 调用时间戳队列 */
     private final ConcurrentHashMap<String, ConcurrentLinkedDeque<Long>> rateLimitMap = new ConcurrentHashMap<>();
 
     /** 评分配置对象（从 _scoringConfig 或 w.scoring 解析得到） */
@@ -74,11 +73,11 @@ public class GuideSheetGradingService {
      * @param formJson   导学单表单结构 JSON（含 _scoringConfig 快照和 widgetList[].scoring）
      * @param answerJson 学生答案 JSON（key 为 widget 的 name 字段）
      * @param studentId  学生ID（用于频率限制）
-     * @param sheetId    导学单ID（用于频率限制）
+     * @param bindingId  课程导学单绑定ID（用于频率限制）
      * @return 评分结果
      */
-    public GradingResult grade(String formJson, String answerJson, Long studentId, Long sheetId) {
-        return gradePage(formJson, answerJson, studentId, sheetId, null);
+    public GradingResult grade(String formJson, String answerJson, Long studentId, Long bindingId) {
+        return gradePage(formJson, answerJson, studentId, bindingId, null);
     }
 
     /**
@@ -87,7 +86,7 @@ public class GuideSheetGradingService {
      * @param targetTabIndex 目标标签页索引（0-based），null 表示评分全部页
      */
     @SuppressWarnings("unchecked")
-    public GradingResult gradePage(String formJson, String answerJson, Long studentId, Long sheetId,
+    public GradingResult gradePage(String formJson, String answerJson, Long studentId, Long bindingId,
                                     Integer targetTabIndex) {
         GradingResult result = new GradingResult();
         int totalScore = 0;
@@ -132,7 +131,7 @@ public class GuideSheetGradingService {
             List<Map<String, Object>> pageDetailList = new ArrayList<>();
             int pageScore = 0, pageMaxScore = 0;
             for (Map<String, Object> widget : flatWidgets) {
-                String fieldKey = (String) widget.getOrDefault("name", widget.get("id"));
+                String fieldKey = getWidgetFieldKey(widget);
                 if (fieldKey == null) continue;
 
                 // 分页评分模式：跳过不属于目标标签页的字段
@@ -146,9 +145,16 @@ public class GuideSheetGradingService {
                 String fieldLabel = getWidgetLabel(widget);
                 String fieldType = (String) widget.get("type");
 
-                // 获取评分配置：优先从 _scoringConfig 快照读取（label 匹配），回退到 w.scoring
+                // 组件配置是教师当前修改结果；根快照只为旧模板提供兼容兜底。
                 ScoringEntry scoringEntry = null;
-                if (hasSnapshot) {
+                Map<String, Object> scoring = (Map<String, Object>) widget.get("scoring");
+                if (scoring != null && scoring.containsKey("score")) {
+                    scoringEntry = new ScoringEntry();
+                    scoringEntry.score = toInt(scoring.get("score"), 0);
+                    scoringEntry.type = (String) scoring.getOrDefault("type", GRADING_TYPE_EXACT);
+                    scoringEntry.answer = scoringAnswerToString(scoring.get("answer"));
+                }
+                if (scoringEntry == null && hasSnapshot) {
                     Map<String, Object> snapCfg = scoringSnapshot.get(fieldLabel);
 
                     if (snapCfg != null) {
@@ -158,23 +164,13 @@ public class GuideSheetGradingService {
                         scoringEntry.answer = snapshotAnswerToString(snapCfg.get("answer"));
                     }
                 }
-                if (scoringEntry == null) {
-                    // 回退：从 w.scoring 读取
-                    Map<String, Object> scoring = (Map<String, Object>) widget.get("scoring");
-                    if (scoring != null) {
-                        scoringEntry = new ScoringEntry();
-                        scoringEntry.score = toInt(scoring.get("score"), 0);
-                        scoringEntry.type = (String) scoring.getOrDefault("type", GRADING_TYPE_EXACT);
-                        scoringEntry.answer = scoringAnswerToString(scoring.get("answer"));
-                    }
-                }
                 if (scoringEntry == null || scoringEntry.score == 0) {
                     continue; // 未配置评分，跳过
                 }
 
                 int maxScore = scoringEntry.score;
-                String answerType = scoringEntry.type;
                 String correctAnswer = scoringEntry.answer;
+                String answerType = resolveAnswerType(widget, scoringEntry.type, correctAnswer);
                 // 人工批改 → 不计分，标记待处理
                 if (GRADING_TYPE_MANUAL.equals(answerType)) {
                     manualCount++;
@@ -211,7 +207,7 @@ public class GuideSheetGradingService {
                     // 调用 AI 评分
                     try {
                         // 频率限制检查
-                        if (!checkRateLimit(studentId, sheetId)) {
+                        if (!checkRateLimit(studentId, bindingId)) {
                             manualCount++;
                             detailList.add(buildDetail(fieldKey, fieldLabel, 0, maxScore,
                                     "manual", "AI评分频率限制：5分钟内已调用" + RATE_LIMIT_MAX_CALLS + "次，请稍后再试", correctAnswer, null, tabIdxAi));
@@ -220,7 +216,7 @@ public class GuideSheetGradingService {
                         String prompt = buildAiPrompt(fieldLabel, correctAnswer,
                                 String.valueOf(studentAnswer).trim(), maxScore);
                         AiGradingService.AiGradeResult aiResult = aiGradingService.grade(prompt, maxScore);
-                        recordRateLimit(studentId, sheetId);
+                        recordRateLimit(studentId, bindingId);
                         totalScore += aiResult.score;
                         autoCount++;
                         detailList.add(buildDetail(fieldKey, fieldLabel, aiResult.score, maxScore,
@@ -435,11 +431,9 @@ public class GuideSheetGradingService {
                 }
                 return;
             }
-            Object id = map.get("id");
-            if (id == null) id = map.get("name");
+            String fieldKey = getWidgetFieldKey(map);
             Object type = map.get("type");
-            if (id != null && type != null && isRealWidget(map)) {
-                String fieldKey = String.valueOf(id);
+            if (fieldKey != null && type != null && isRealWidget(map)) {
                 if (addedKeys.add(fieldKey)) {
                     result.add(map);
                     fieldTabIndexMap.put(fieldKey, tabIndex);
@@ -458,8 +452,26 @@ public class GuideSheetGradingService {
      * VForm不同版本的内部标记不稳定，业务字段以 name/id 与 type 作为稳定边界。
      */
     private boolean isRealWidget(Map<String, Object> map) {
-        return (map.containsKey("name") || map.containsKey("id"))
-                && map.containsKey("type");
+        return getWidgetFieldKey(map) != null && map.containsKey("type");
+    }
+
+    /**
+     * VForm3 运行时以 options.name 作为答卷字段名，旧模板再回退到顶层字段。
+     */
+    @SuppressWarnings("unchecked")
+    private String getWidgetFieldKey(Map<String, Object> widget) {
+        Object fieldKey = null;
+        Object rawOptions = widget.get("options");
+        if (rawOptions instanceof Map) {
+            fieldKey = ((Map<String, Object>) rawOptions).get("name");
+        }
+        if (isBlank(fieldKey)) fieldKey = widget.get("name");
+        if (isBlank(fieldKey)) fieldKey = widget.get("id");
+        return isBlank(fieldKey) ? null : String.valueOf(fieldKey).trim();
+    }
+
+    private boolean isBlank(Object value) {
+        return value == null || String.valueOf(value).trim().isEmpty();
     }
 
     /**
@@ -544,53 +556,62 @@ public class GuideSheetGradingService {
         return String.valueOf(value).trim();
     }
 
+    @SuppressWarnings("unchecked")
+    private String resolveAnswerType(Map<String, Object> widget, String configuredType,
+                                     String correctAnswer) {
+        if (!GRADING_TYPE_EXACT.equals(configuredType)
+                || (correctAnswer != null && !correctAnswer.trim().isEmpty())) {
+            return configuredType;
+        }
+        Object rawOptions = widget.get("options");
+        if (!(rawOptions instanceof Map)) return configuredType;
+        Object moduleType = ((Map<String, Object>) rawOptions).get("beginnerModuleType");
+        if ("preClassCheck".equals(moduleType) || "shortAnswer".equals(moduleType)) {
+            // 早期新手模板错误保存为 exact，空参考答案不能把主观题判成错误。
+            return GRADING_TYPE_MANUAL;
+        }
+        return configuredType;
+    }
+
     /**
      * 多选框部分给分：计算学生答对的选项占比
      * 例如：正确答案 ABC，学生选了 AB → 2/3 得分
      */
-    @SuppressWarnings("unchecked")
     private int gradePartialCheckbox(Object studentAnswer, Object correctAnswer, int maxScore) {
-        List<String> studentList = new ArrayList<>();
-        List<String> correctList = new ArrayList<>();
-
-        // 解析学生答案
-        if (studentAnswer instanceof List) {
-            for (Object item : (List<?>) studentAnswer) {
-                studentList.add(String.valueOf(item).trim());
-            }
-        } else {
-            studentList.add(normalize(studentAnswer));
-        }
-
-        // 解析正确答案
-        if (correctAnswer instanceof List) {
-            for (Object item : (List<?>) correctAnswer) {
-                correctList.add(String.valueOf(item).trim());
-            }
-        } else {
-            // 修复：当正确答案为逗号分隔的字符串时，按逗号拆分为多个选项
-            // 上游 snapshotAnswerToString 会将 List 通过 normalize() join 为 "2,3" 格式
-            String normalized = normalize(correctAnswer);
-            if (normalized.contains(",")) {
-                for (String part : normalized.split(",")) {
-                    String trimmed = part.trim();
-                    if (!trimmed.isEmpty()) {
-                        correctList.add(trimmed);
-                    }
-                }
-            } else if (!normalized.isEmpty()) {
-                correctList.add(normalized);
-            }
-        }
-
-        if (correctList.isEmpty() || studentList.isEmpty()) {
+        Set<String> studentOptions = parseCheckboxOptions(studentAnswer);
+        Set<String> correctOptions = parseCheckboxOptions(correctAnswer);
+        if (correctOptions.isEmpty() || studentOptions.isEmpty()) {
             return 0;
         }
+        int correctSelections = 0;
+        int incorrectSelections = 0;
+        for (String option : studentOptions) {
+            if (correctOptions.contains(option)) correctSelections++;
+            else incorrectSelections++;
+        }
+        // 每个错选抵消一个正确选项，避免“全选”获得满分。
+        int effectiveSelections = Math.max(0, correctSelections - incorrectSelections);
+        return (int) Math.round((double) effectiveSelections / correctOptions.size() * maxScore);
+    }
 
-        // 计算答对的选项数
-        long correctCount = studentList.stream().filter(correctList::contains).count();
-        // 按比例给分
-        return (int) Math.round((double) correctCount / correctList.size() * maxScore);
+    private Set<String> parseCheckboxOptions(Object answer) {
+        Set<String> options = new LinkedHashSet<>();
+        if (answer instanceof List) {
+            for (Object item : (List<?>) answer) {
+                addCheckboxOption(options, item);
+            }
+        } else {
+            addCheckboxOption(options, answer);
+        }
+        return options;
+    }
+
+    private void addCheckboxOption(Set<String> options, Object value) {
+        String normalized = value == null ? "" : String.valueOf(value).trim();
+        for (String part : normalized.split(",")) {
+            String option = part.trim();
+            if (!option.isEmpty()) options.add(option);
+        }
     }
 
     private Map<String, Object> buildDetail(String fieldKey, String fieldTitle,
@@ -639,9 +660,9 @@ public class GuideSheetGradingService {
      * 检查 AI 评分频率限制
      * @return true=允许调用, false=频率超限
      */
-    private boolean checkRateLimit(Long studentId, Long sheetId) {
-        if (studentId == null || sheetId == null) return true;
-        String key = studentId + ":" + sheetId;
+    private boolean checkRateLimit(Long studentId, Long bindingId) {
+        if (studentId == null || bindingId == null) return true;
+        String key = studentId + ":" + bindingId;
         long now = System.currentTimeMillis();
         Deque<Long> timestamps = rateLimitMap.computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
         // 清理过期记录
@@ -656,9 +677,9 @@ public class GuideSheetGradingService {
     /**
      * 记录一次 AI 评分调用
      */
-    private void recordRateLimit(Long studentId, Long sheetId) {
-        if (studentId == null || sheetId == null) return;
-        String key = studentId + ":" + sheetId;
+    private void recordRateLimit(Long studentId, Long bindingId) {
+        if (studentId == null || bindingId == null) return;
+        String key = studentId + ":" + bindingId;
         Deque<Long> timestamps = rateLimitMap.computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
         timestamps.addLast(System.currentTimeMillis());
     }

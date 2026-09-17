@@ -58,6 +58,12 @@
         where exam_id = #{examId} and del_flag = '0'
     </select>
 
+    <select id="selectCountyExamByIdForUpdate" parameterType="Long" resultMap="CountyExamResult">
+        <include refid="selectCountyExamVo"/>
+        where exam_id = #{examId} and del_flag = '0'
+        for update
+    </select>
+
     <insert id="insertCountyExam" parameterType="CountyExam" useGeneratedKeys="true" keyProperty="examId">
         insert into biz_county_exam
         <trim prefix="(" suffix=")" suffixOverrides=",">
@@ -98,20 +104,32 @@
             <if test="examName != null and examName != ''">exam_name = #{examName},</if>
             <if test="schoolType != null">school_type = #{schoolType},</if>
             <if test="examGrade != null">exam_grade = #{examGrade},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="gradingEnabled != null">grading_enabled = #{gradingEnabled},</if>
             <if test="shuffleMode != null">shuffle_mode = #{shuffleMode},</if>
             <if test="randomChoiceCount != null">random_choice_count = #{randomChoiceCount},</if>
             <if test="randomJudgmentCount != null">random_judgment_count = #{randomJudgmentCount},</if>
             <if test="totalScore != null">total_score = #{totalScore},</if>
             <if test="durationMinutes != null">duration_minutes = #{durationMinutes},</if>
-            <if test="openTime != null">open_time = #{openTime},</if>
-            <if test="closeTime != null">close_time = #{closeTime},</if>
-            <if test="publishTime != null">publish_time = #{publishTime},</if>
             <if test="updateBy != null">update_by = #{updateBy},</if>
             update_time = sysdate()
         </trim>
         where exam_id = #{examId}
+          and del_flag = '0'
+    </update>
+
+    <update id="updateDraftFields" parameterType="CountyExam">
+        update biz_county_exam
+        set exam_name = #{examName},
+            school_type = #{schoolType},
+            exam_grade = #{examGrade},
+            shuffle_mode = #{shuffleMode},
+            random_choice_count = #{randomChoiceCount},
+            random_judgment_count = #{randomJudgmentCount},
+            duration_minutes = #{durationMinutes},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where exam_id = #{examId}
+          and status = '0'
+          and del_flag = '0'
     </update>
 
     <update id="updateStatus">
@@ -123,6 +141,7 @@
             grading_enabled = case when #{status} = '3' then '0' else grading_enabled end,
             update_time = sysdate()
         where exam_id = #{examId}
+          and status = #{expectedStatus}
           and del_flag = '0'
     </update>
 
@@ -132,6 +151,7 @@
             update_by = #{updateBy},
             update_time = sysdate()
         where exam_id = #{examId}
+          and status = '2'
           and del_flag = '0'
     </update>
 

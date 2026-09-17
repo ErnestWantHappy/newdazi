@@ -1,0 +1,494 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.ExemptionApplicationMapper">
+
+    <select id="selectTeacherIdentity" resultType="java.util.LinkedHashMap">
+        SELECT user.user_id AS teacherId,
+               user.user_name AS teacherUserName,
+               user.nick_name AS teacherName,
+               dept.dept_id AS deptId,
+               dept.dept_name AS deptName
+        FROM sys_user user
+        INNER JOIN sys_dept dept ON dept.dept_id = #{deptId}
+        WHERE user.user_id = #{teacherId}
+          AND user.status = '0'
+          AND user.del_flag = '0'
+          AND dept.status = '0'
+          AND dept.del_flag = '0'
+          AND (
+              user.dept_id = #{deptId}
+              OR EXISTS (
+                  SELECT 1
+                  FROM sys_user_dept user_dept
+                  WHERE user_dept.user_id = user.user_id
+                    AND user_dept.dept_id = #{deptId}
+              )
+          )
+    </select>
+
+    <select id="selectRequiredLessonCount" resultType="java.lang.Integer">
+        SELECT required_lesson_count
+        FROM biz_exemption_standard
+        WHERE academic_year = #{academicYear}
+          AND semester = #{semester}
+          AND grade = #{grade}
+        LIMIT 1
+    </select>
+
+    <select id="selectStandards" resultType="java.util.LinkedHashMap">
+        SELECT standard_id AS standardId,
+               academic_year AS academicYear,
+               semester,
+               grade,
+               required_lesson_count AS requiredLessonCount,
+               create_time AS createTime,
+               update_time AS updateTime
+        FROM biz_exemption_standard
+        WHERE academic_year = #{academicYear}
+          AND semester = #{semester}
+        ORDER BY grade
+    </select>
+
+    <insert id="upsertStandard">
+        INSERT INTO biz_exemption_standard
+            (academic_year, semester, grade, required_lesson_count, create_by, create_time)
+        VALUES
+            (#{academicYear}, #{semester}, #{grade}, #{requiredLessonCount}, #{operator}, NOW())
+        ON DUPLICATE KEY UPDATE
+            required_lesson_count = VALUES(required_lesson_count),
+            update_by = VALUES(create_by),
+            update_time = NOW()
+    </insert>
+
+    <!--
+      班级范围取多源证据并集。只允许增加真实证据命中的班级，
+      教师端不接受任何“排除班级”参数。
+    -->
+    <select id="selectTeacherClasses" resultType="java.util.LinkedHashMap">
+        WITH class_candidate AS (
+            SELECT dept_id, entry_year, class_code
+            FROM biz_teacher_class
+            WHERE user_id = #{teacherId}
+              AND dept_id = #{deptId}
+              AND entry_year = #{entryYear}
+            UNION
+            SELECT assignment.dept_id, assignment.entry_year, assignment.class_code
+            FROM biz_lesson_assignment assignment
+            WHERE assignment.assigner_id = #{teacherId}
+              AND assignment.dept_id = #{deptId}
+              AND assignment.entry_year = #{entryYear}
+            UNION
+            SELECT history.dept_id,
+                   history.entry_year COLLATE utf8mb4_general_ci AS entry_year,
+                   history.class_code COLLATE utf8mb4_general_ci AS class_code
+            FROM biz_lesson_assignment_history history
+            WHERE (history.assigner_id = #{teacherId} OR history.advanced_by = #{teacherId})
+              AND history.dept_id = #{deptId}
+              AND history.entry_year = #{entryYear}
+            UNION
+            SELECT scope.dept_id, scope.entry_year, scope.class_code
+            FROM biz_lesson_class_scope scope
+            INNER JOIN biz_lesson lesson
+                    ON lesson.lesson_id = scope.lesson_id
+                   AND lesson.dept_id = scope.dept_id
+            WHERE lesson.creator_id = #{teacherId}
+              AND scope.dept_id = #{deptId}
+              AND scope.entry_year = #{entryYear}
+        )
+        SELECT candidate.dept_id AS deptId,
+               candidate.entry_year AS entryYear,
+               candidate.class_code AS classCode,
+               COUNT(DISTINCT CASE
+                   WHEN user.user_id IS NOT NULL
+                    AND user.status = '0'
+                    AND user.del_flag = '0'
+                   THEN student.student_id END) AS validStudentCount
+        FROM class_candidate candidate
+        LEFT JOIN biz_student student
+               ON student.entry_year = candidate.entry_year
+              AND student.class_code = candidate.class_code
+        LEFT JOIN sys_user user
+               ON user.user_id = student.user_id
+              AND user.dept_id = candidate.dept_id
+        GROUP BY candidate.dept_id, candidate.entry_year, candidate.class_code
+        ORDER BY CAST(candidate.class_code AS UNSIGNED), candidate.class_code
+    </select>
+
+    <!--
+      先收窄为申请教师真实课程班级，再聚合三类课堂活动。
+      课程创建、修改和指派时间都不进入使用日期。
+    -->
+    <select id="selectTeacherCourseMetrics" resultType="java.util.LinkedHashMap">
+        WITH teacher_course_scope AS (
+            SELECT scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code
+            FROM biz_lesson_class_scope scope
+            INNER JOIN biz_lesson lesson
+                    ON lesson.lesson_id = scope.lesson_id
+                   AND lesson.dept_id = scope.dept_id
+            WHERE lesson.creator_id = #{teacherId}
+              AND scope.dept_id = #{deptId}
+              AND scope.entry_year = #{entryYear}
+            UNION
+            SELECT assignment.lesson_id, assignment.dept_id,
+                   assignment.entry_year, assignment.class_code
+            FROM biz_lesson_assignment assignment
+            WHERE assignment.assigner_id = #{teacherId}
+              AND assignment.dept_id = #{deptId}
+              AND assignment.entry_year = #{entryYear}
+            UNION
+            SELECT history.lesson_id, history.dept_id,
+                   history.entry_year COLLATE utf8mb4_general_ci AS entry_year,
+                   history.class_code COLLATE utf8mb4_general_ci AS class_code
+            FROM biz_lesson_assignment_history history
+            WHERE (history.assigner_id = #{teacherId} OR history.advanced_by = #{teacherId})
+              AND history.dept_id = #{deptId}
+              AND history.entry_year = #{entryYear}
+            UNION
+            SELECT history.next_lesson_id, history.dept_id,
+                   history.entry_year COLLATE utf8mb4_general_ci AS entry_year,
+                   history.class_code COLLATE utf8mb4_general_ci AS class_code
+            FROM biz_lesson_assignment_history history
+            WHERE history.next_lesson_id IS NOT NULL
+              AND (history.assigner_id = #{teacherId} OR history.advanced_by = #{teacherId})
+              AND history.dept_id = #{deptId}
+              AND history.entry_year = #{entryYear}
+        ),
+        valid_student AS (
+            SELECT student.student_id, user.dept_id, student.entry_year, student.class_code
+            FROM biz_student student
+            INNER JOIN sys_user user
+                    ON user.user_id = student.user_id
+                   AND user.status = '0'
+                   AND user.del_flag = '0'
+            WHERE user.dept_id = #{deptId}
+              AND student.entry_year = #{entryYear}
+        ),
+        activity AS (
+            SELECT answer.lesson_id, answer.student_id, answer.submit_time AS activity_time
+            FROM biz_student_answer answer
+            INNER JOIN teacher_course_scope scope
+                    ON scope.lesson_id = answer.lesson_id
+            INNER JOIN valid_student student
+                    ON student.student_id = answer.student_id
+                   AND student.dept_id = scope.dept_id
+                   AND student.entry_year = scope.entry_year
+                   AND student.class_code = scope.class_code
+            WHERE answer.submit_time &gt;= #{startTime}
+              AND answer.submit_time &lt; #{endTime}
+            UNION ALL
+            SELECT checkin.lesson_id, checkin.student_id, checkin.checkin_time
+            FROM biz_lesson_checkin checkin
+            INNER JOIN teacher_course_scope scope
+                    ON scope.lesson_id = checkin.lesson_id
+                   AND scope.dept_id = checkin.dept_id
+            INNER JOIN valid_student student
+                    ON student.student_id = checkin.student_id
+                   AND student.dept_id = scope.dept_id
+                   AND student.entry_year = scope.entry_year
+                   AND student.class_code = scope.class_code
+            WHERE checkin.checkin_time &gt;= #{startTime}
+              AND checkin.checkin_time &lt; #{endTime}
+            UNION ALL
+            SELECT performance.lesson_id, performance.student_id, performance.create_time
+            FROM biz_classroom_performance performance
+            INNER JOIN teacher_course_scope scope
+                    ON scope.lesson_id = performance.lesson_id
+                   AND scope.dept_id = performance.dept_id
+            INNER JOIN valid_student student
+                    ON student.student_id = performance.student_id
+                   AND student.dept_id = scope.dept_id
+                   AND student.entry_year = scope.entry_year
+                   AND student.class_code = scope.class_code
+            WHERE performance.create_time &gt;= #{startTime}
+              AND performance.create_time &lt; #{endTime}
+        ),
+        activity_metric AS (
+            SELECT scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code,
+                   MIN(activity.activity_time) AS usage_date,
+                   COUNT(DISTINCT activity.student_id) AS participant_count
+            FROM teacher_course_scope scope
+            INNER JOIN valid_student student
+                    ON student.dept_id = scope.dept_id
+                   AND student.entry_year = scope.entry_year
+                   AND student.class_code = scope.class_code
+            INNER JOIN activity
+                    ON activity.lesson_id = scope.lesson_id
+                   AND activity.student_id = student.student_id
+            GROUP BY scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code
+        ),
+        practical_metric AS (
+            SELECT scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code,
+                   COUNT(DISTINCT answer.answer_id) AS practical_due_count,
+                   COUNT(DISTINCT CASE WHEN answer.score IS NOT NULL THEN answer.answer_id END)
+                       AS practical_graded_count
+            FROM teacher_course_scope scope
+            INNER JOIN valid_student student
+                    ON student.dept_id = scope.dept_id
+                   AND student.entry_year = scope.entry_year
+                   AND student.class_code = scope.class_code
+            INNER JOIN biz_student_answer answer
+                    ON answer.lesson_id = scope.lesson_id
+                   AND answer.student_id = student.student_id
+            INNER JOIN biz_question question
+                    ON question.question_id = answer.question_id
+                   AND question.question_type = 'practical'
+            WHERE answer.submit_time &gt;= #{startTime}
+              AND answer.submit_time &lt; #{endTime}
+              AND answer.student_answer IS NOT NULL
+              AND TRIM(answer.student_answer) &lt;&gt; ''
+            GROUP BY scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code
+        )
+        SELECT scope.lesson_id AS lessonId,
+               lesson.lesson_title AS lessonTitle,
+               scope.dept_id AS deptId,
+               scope.entry_year AS entryYear,
+               scope.class_code AS classCode,
+               activity.usage_date AS usageDate,
+               COUNT(DISTINCT student.student_id) AS validStudentCount,
+               activity.participant_count AS participantCount,
+               IFNULL(practical.practical_due_count, 0) AS practicalDueCount,
+               IFNULL(practical.practical_graded_count, 0) AS practicalGradedCount
+        FROM teacher_course_scope scope
+        INNER JOIN biz_lesson lesson ON lesson.lesson_id = scope.lesson_id
+        INNER JOIN activity_metric activity
+                ON activity.lesson_id = scope.lesson_id
+               AND activity.dept_id = scope.dept_id
+               AND activity.entry_year = scope.entry_year
+               AND activity.class_code = scope.class_code
+        LEFT JOIN valid_student student
+               ON student.dept_id = scope.dept_id
+              AND student.entry_year = scope.entry_year
+              AND student.class_code = scope.class_code
+        LEFT JOIN practical_metric practical
+               ON practical.lesson_id = scope.lesson_id
+              AND practical.dept_id = scope.dept_id
+              AND practical.entry_year = scope.entry_year
+              AND practical.class_code = scope.class_code
+        GROUP BY scope.lesson_id, lesson.lesson_title, scope.dept_id,
+                 scope.entry_year, scope.class_code, activity.usage_date,
+                 activity.participant_count, practical.practical_due_count,
+                 practical.practical_graded_count
+        ORDER BY scope.class_code, activity.usage_date, scope.lesson_id
+    </select>
+
+    <select id="countApplication" resultType="int">
+        SELECT COUNT(*)
+        FROM biz_exemption_application
+        WHERE dept_id = #{deptId}
+          AND teacher_id = #{teacherId}
+          AND academic_year = #{academicYear}
+          AND semester = #{semester}
+          AND grade = #{grade}
+    </select>
+
+    <insert id="insertApplication" parameterType="java.util.Map"
+            useGeneratedKeys="true" keyProperty="applicationId">
+        INSERT INTO biz_exemption_application
+            (dept_id, dept_name_snapshot, teacher_id, teacher_name_snapshot,
+             academic_year, semester, grade, entry_year_snapshot,
+             required_lesson_count, usage_threshold_pct, participation_threshold_pct,
+             practical_threshold_pct, class_count, all_classes_qualified,
+             practical_due_count, practical_graded_count, practical_rate,
+             practical_qualified, teacher_remark, status, submit_time,
+             create_by, create_time)
+        VALUES
+            (#{deptId}, #{deptName}, #{teacherId}, #{teacherName},
+             #{academicYear}, #{semester}, #{grade}, #{entryYear},
+             #{requiredLessonCount}, 80.00, 50.00, 80.00,
+             #{classCount}, #{allClassesQualified},
+             #{practicalDueCount}, #{practicalGradedCount}, #{practicalRate},
+             #{practicalQualified}, #{teacherRemark}, 'PENDING', NOW(),
+             #{operator}, NOW())
+    </insert>
+
+    <insert id="insertClassSnapshot" parameterType="java.util.Map"
+            useGeneratedKeys="true" keyProperty="classSnapshotId">
+        INSERT INTO biz_exemption_class_snapshot
+            (application_id, dept_id, entry_year, class_code,
+             valid_student_count, required_lesson_count, used_lesson_count,
+             usage_rate, usage_qualified, practical_due_count,
+             practical_graded_count, practical_rate, create_time)
+        VALUES
+            (#{applicationId}, #{deptId}, #{entryYear}, #{classCode},
+             #{validStudentCount}, #{requiredLessonCount}, #{usedLessonCount},
+             #{usageRate}, #{usageQualified}, #{practicalDueCount},
+             #{practicalGradedCount}, #{practicalRate}, NOW())
+    </insert>
+
+    <insert id="insertCourseSnapshots">
+        INSERT INTO biz_exemption_course_snapshot
+            (application_id, class_snapshot_id, lesson_id, lesson_title_snapshot,
+             entry_year, class_code, usage_date, valid_student_count,
+             participant_count, participation_rate, counted_as_used,
+             practical_due_count, practical_graded_count, practical_rate, create_time)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{item.applicationId}, #{item.classSnapshotId}, #{item.lessonId},
+             #{item.lessonTitle}, #{item.entryYear}, #{item.classCode},
+             #{item.usageDate}, #{item.validStudentCount}, #{item.participantCount},
+             #{item.participationRate}, #{item.countedAsUsed},
+             #{item.practicalDueCount}, #{item.practicalGradedCount},
+             #{item.practicalRate}, NOW())
+        </foreach>
+    </insert>
+
+    <insert id="insertAttachment" parameterType="java.util.Map">
+        INSERT INTO biz_exemption_attachment
+            (application_id, original_file_name, resource_path,
+             file_size, mime_type, create_by, create_time)
+        VALUES
+            (#{applicationId}, #{originalFileName}, #{resourcePath},
+             #{fileSize}, #{mimeType}, #{operator}, NOW())
+    </insert>
+
+    <sql id="applicationColumns">
+        application.application_id AS applicationId,
+        application.dept_id AS deptId,
+        application.dept_name_snapshot AS deptName,
+        application.teacher_id AS teacherId,
+        application.teacher_name_snapshot AS teacherName,
+        application.academic_year AS academicYear,
+        application.semester,
+        application.grade,
+        application.entry_year_snapshot AS entryYear,
+        application.required_lesson_count AS requiredLessonCount,
+        application.usage_threshold_pct AS usageThresholdPct,
+        application.participation_threshold_pct AS participationThresholdPct,
+        application.practical_threshold_pct AS practicalThresholdPct,
+        application.class_count AS classCount,
+        application.all_classes_qualified AS allClassesQualified,
+        application.practical_due_count AS practicalDueCount,
+        application.practical_graded_count AS practicalGradedCount,
+        application.practical_rate AS practicalRate,
+        application.practical_qualified AS practicalQualified,
+        application.teacher_remark AS teacherRemark,
+        application.status,
+        application.submit_time AS submitTime,
+        application.reviewer_id AS reviewerId,
+        application.reviewer_name_snapshot AS reviewerName,
+        application.review_time AS reviewTime,
+        application.review_remark AS reviewRemark,
+        application.version
+    </sql>
+
+    <select id="selectMyApplications" resultType="java.util.LinkedHashMap">
+        SELECT <include refid="applicationColumns"/>
+        FROM biz_exemption_application application
+        WHERE application.teacher_id = #{teacherId}
+          AND application.dept_id = #{deptId}
+        ORDER BY application.submit_time DESC, application.application_id DESC
+    </select>
+
+    <select id="selectReviewApplications" resultType="java.util.LinkedHashMap">
+        SELECT <include refid="applicationColumns"/>,
+               GROUP_CONCAT(
+                   CONCAT(class_snapshot.class_code, '班 ',
+                          class_snapshot.used_lesson_count, '/',
+                          class_snapshot.required_lesson_count, ' ',
+                          class_snapshot.usage_rate, '%')
+                   ORDER BY CAST(class_snapshot.class_code AS UNSIGNED), class_snapshot.class_code
+                   SEPARATOR '；'
+               ) AS classUsageSummary
+        FROM biz_exemption_application application
+        LEFT JOIN biz_exemption_class_snapshot class_snapshot
+               ON class_snapshot.application_id = application.application_id
+        <where>
+            <if test="q.academicYear != null and q.academicYear != ''">
+                application.academic_year = #{q.academicYear}
+            </if>
+            <if test="q.semester != null and q.semester != ''">
+                AND application.semester = #{q.semester}
+            </if>
+            <if test="q.grade != null">
+                AND application.grade = #{q.grade}
+            </if>
+            <if test="q.status != null and q.status != ''">
+                AND application.status = #{q.status}
+            </if>
+            <if test="q.deptId != null">
+                AND application.dept_id = #{q.deptId}
+            </if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (application.teacher_name_snapshot LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR application.dept_name_snapshot LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+        </where>
+        GROUP BY application.application_id
+        ORDER BY application.submit_time DESC, application.application_id DESC
+    </select>
+
+    <select id="selectApplicationById" resultType="java.util.LinkedHashMap">
+        SELECT <include refid="applicationColumns"/>
+        FROM biz_exemption_application application
+        WHERE application.application_id = #{applicationId}
+    </select>
+
+    <select id="selectClassSnapshots" resultType="java.util.LinkedHashMap">
+        SELECT class_snapshot_id AS classSnapshotId,
+               application_id AS applicationId,
+               dept_id AS deptId,
+               entry_year AS entryYear,
+               class_code AS classCode,
+               valid_student_count AS validStudentCount,
+               required_lesson_count AS requiredLessonCount,
+               used_lesson_count AS usedLessonCount,
+               usage_rate AS usageRate,
+               usage_qualified AS usageQualified,
+               practical_due_count AS practicalDueCount,
+               practical_graded_count AS practicalGradedCount,
+               practical_rate AS practicalRate
+        FROM biz_exemption_class_snapshot
+        WHERE application_id = #{applicationId}
+        ORDER BY CAST(class_code AS UNSIGNED), class_code
+    </select>
+
+    <select id="selectCourseSnapshots" resultType="java.util.LinkedHashMap">
+        SELECT course_snapshot_id AS courseSnapshotId,
+               application_id AS applicationId,
+               class_snapshot_id AS classSnapshotId,
+               lesson_id AS lessonId,
+               lesson_title_snapshot AS lessonTitle,
+               entry_year AS entryYear,
+               class_code AS classCode,
+               usage_date AS usageDate,
+               valid_student_count AS validStudentCount,
+               participant_count AS participantCount,
+               participation_rate AS participationRate,
+               counted_as_used AS countedAsUsed,
+               practical_due_count AS practicalDueCount,
+               practical_graded_count AS practicalGradedCount,
+               practical_rate AS practicalRate
+        FROM biz_exemption_course_snapshot
+        WHERE application_id = #{applicationId}
+        ORDER BY CAST(class_code AS UNSIGNED), class_code, usage_date, lesson_id
+    </select>
+
+    <select id="selectAttachments" resultType="java.util.LinkedHashMap">
+        SELECT attachment_id AS attachmentId,
+               application_id AS applicationId,
+               original_file_name AS originalFileName,
+               resource_path AS resourcePath,
+               file_size AS fileSize,
+               mime_type AS mimeType
+        FROM biz_exemption_attachment
+        WHERE application_id = #{applicationId}
+        ORDER BY attachment_id
+    </select>
+
+    <update id="reviewApplication">
+        UPDATE biz_exemption_application
+        SET status = #{status},
+            reviewer_id = #{reviewerId},
+            reviewer_name_snapshot = #{reviewerName},
+            review_time = NOW(),
+            review_remark = #{reviewRemark},
+            update_by = #{operator},
+            update_time = NOW(),
+            version = version + 1
+        WHERE application_id = #{applicationId}
+          AND status = 'PENDING'
+          AND version = #{version}
+    </update>
+</mapper>

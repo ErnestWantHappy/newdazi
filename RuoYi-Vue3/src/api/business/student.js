@@ -42,6 +42,13 @@ export function delStudent(studentId) {
     method: 'delete'
   })
 }
+// 彻底清除学生（含成绩与作品，不可恢复，需 business:student:purge 权限）
+export function purgeStudent(studentId) {
+  return request({
+    url: '/business/student/purge/' + studentId,
+    method: 'delete'
+  })
+}
 
 // 按班级批量删除学生
 export function delStudentByClass(query) {
@@ -68,5 +75,39 @@ export function getLockStatus(userNames) {
     url: '/business/student/lockStatus',
     method: 'get',
     params: { userNames: userNames.join(',') }
+  })
+}
+
+// 上传 Excel 生成纠错预览，不修改数据库
+export function previewStudentCorrection(file) {
+  const data = new FormData()
+  data.append('file', file)
+  return request({
+    url: '/business/student/correction/preview',
+    method: 'post',
+    data,
+    // 全局默认按 JSON 发送，纠错表必须显式走 multipart 才能保留二进制文件内容。
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      repeatSubmit: false
+    }
+  })
+}
+
+// 确认纠错；后端会再次校验后原地更新
+export function applyStudentCorrection(rows) {
+  return request({
+    url: '/business/student/correction/apply',
+    method: 'post',
+    data: rows
+  })
+}
+
+// 正常 0，停用 1；只改账号状态，不删除学生和历史数据
+export function changeStudentStatus(studentIds, status) {
+  return request({
+    url: `/business/student/status/${status}`,
+    method: 'put',
+    data: studentIds
   })
 }

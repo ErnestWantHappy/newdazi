@@ -68,10 +68,6 @@
         </div>
       </el-form-item>
     </el-form>
-    <!--  底部  -->
-    <div class="el-register-footer">
-      <span>开发支持：象山县-郑东旭</span>
-    </div>
   </div>
 </template>
 

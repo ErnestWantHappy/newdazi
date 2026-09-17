@@ -15,6 +15,11 @@ public class Cpu
     private int cpuNum;
 
     /**
+     * CPU 型号（如 AMD Ryzen 5 5600 6-Core Processor）
+     */
+    private String model;
+
+    /**
      * CPU总的使用率
      */
     private double total;
@@ -49,9 +54,20 @@ public class Cpu
         this.cpuNum = cpuNum;
     }
 
+    public String getModel()
+    {
+        return model;
+    }
+
+    public void setModel(String model)
+    {
+        this.model = model;
+    }
+
     public double getTotal()
     {
-        return Arith.round(Arith.mul(total, 100), 2);
+        // 字段存的是 tick 原始差值：总使用率 = 忙碌 tick 占比 = (total - idle) / total
+        return safePercent(total - free, total);
     }
 
     public void setTotal(double total)
@@ -61,7 +77,7 @@ public class Cpu
 
     public double getSys()
     {
-        return Arith.round(Arith.mul(sys / total, 100), 2);
+        return safePercent(sys, total);
     }
 
     public void setSys(double sys)
@@ -71,7 +87,7 @@ public class Cpu
 
     public double getUsed()
     {
-        return Arith.round(Arith.mul(used / total, 100), 2);
+        return safePercent(used, total);
     }
 
     public void setUsed(double used)
@@ -81,7 +97,7 @@ public class Cpu
 
     public double getWait()
     {
-        return Arith.round(Arith.mul(wait / total, 100), 2);
+        return safePercent(wait, total);
     }
 
     public void setWait(double wait)
@@ -91,11 +107,26 @@ public class Cpu
 
     public double getFree()
     {
-        return Arith.round(Arith.mul(free / total, 100), 2);
+        return safePercent(free, total);
     }
 
     public void setFree(double free)
     {
         this.free = free;
+    }
+
+    /**
+     * OSHI 首次采样可能给出 0/NaN，sys/total 会产生 NaN，
+     * Arith.mul 解析 “NaN” 字符串会抛 NumberFormatException 炸掉整个诊断接口；统一兜底为 0。
+     */
+    private double safePercent(double value, double denominator)
+    {
+        if (Double.isNaN(value) || Double.isInfinite(value)
+                || Double.isNaN(denominator) || Double.isInfinite(denominator) || denominator <= 0)
+        {
+            return 0D;
+        }
+        double percent = Arith.round(Arith.mul(value / denominator, 100), 2);
+        return Double.isNaN(percent) || Double.isInfinite(percent) ? 0D : percent;
     }
 }

@@ -2,7 +2,7 @@
   <el-dialog 
     :title="dialogTitle" 
     v-model="visible" 
-    width="500px" 
+    width="900px"
     append-to-body 
     align-center
     @closed="handleClose"
@@ -27,9 +27,9 @@
             <span v-else class="badge-none">暂无成绩</span>
           </template>
           <template v-else>
-            <span v-if="cls.practicalUngraded > 0" class="badge-ungraded">{{ cls.practicalUngraded }}人未批</span>
-            <span v-else-if="cls.practicalSubmitted > 0" class="badge-graded">已批改</span>
-            <span v-else-if="cls.hasData" class="badge-none">暂无提交</span>
+            <span v-if="cls.hasData" class="grading-status-text" :class="gradingStatusClass(cls)">
+              {{ gradingStatusText(cls) }}
+            </span>
           </template>
         </el-button>
       </div>
@@ -131,6 +131,10 @@ function buildClassItems(list, hasData) {
         entryYear: item?.entryYear || item?.entry_year || null,
         practicalSubmitted: item?.practicalSubmitted || item?.practicalsubmitted || 0,
         practicalUngraded: item?.practicalUngraded || item?.practicalungraded || 0,
+        deadlineStatusCode: item?.deadlineStatusCode || item?.deadlinestatuscode || '',
+        currentDeadlineTime: item?.currentDeadlineTime || item?.currentdeadlinetime || null,
+        serverNow: item?.serverNow || item?.servernow || null,
+        canGrade: item?.canGrade ?? item?.cangrade ?? true,
         scoreReadyCount: item?.scoreReadyCount || item?.scorereadycount || 0,
         totalStudents: item?.totalStudents || item?.totalstudents || 0,
         hasData
@@ -193,6 +197,36 @@ function getBtnClass(cls) {
   return 'btn-no-data';
 }
 
+function gradingStatusText(cls) {
+  const submitted = Number(cls.practicalSubmitted || 0);
+  const ungraded = Number(cls.practicalUngraded || 0);
+  if (submitted === 0) return '暂无提交';
+  if (ungraded === 0) return '已批改';
+  if (cls.deadlineStatusCode === 'OVERDUE' || cls.canGrade === false) {
+    return `已逾期 · ${ungraded}人未批`;
+  }
+  if (cls.deadlineStatusCode === 'NOT_TRIGGERED' || !cls.currentDeadlineTime) {
+    return `未达到期限起算条件 · ${ungraded}人未批`;
+  }
+  const due = new Date(cls.currentDeadlineTime);
+  const now = cls.serverNow ? new Date(cls.serverNow) : new Date();
+  const remainingDays = Math.ceil((due.getTime() - now.getTime()) / 86400000);
+  const remainingText = remainingDays > 0 ? `还剩${remainingDays}天` : '不足1天';
+  return `截止 ${formatDate(due)} · ${remainingText} · ${ungraded}人未批`;
+}
+
+function gradingStatusClass(cls) {
+  if (Number(cls.practicalSubmitted || 0) === 0) return 'is-empty';
+  if (Number(cls.practicalUngraded || 0) === 0) return 'is-completed';
+  if (cls.deadlineStatusCode === 'OVERDUE' || cls.canGrade === false) return 'is-overdue';
+  return 'is-waiting';
+}
+
+function formatDate(date) {
+  if (Number.isNaN(date.getTime())) return '日期待确认';
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
 defineExpose({
   open
 });
@@ -201,21 +235,26 @@ defineExpose({
 <style scoped lang="scss">
 .class-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr); // 改为每行2个，留更多空间显示状态
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 15px;
   padding: 10px;
-  max-height: 400px;
+  min-height: 360px;
+  max-height: 56vh;
   overflow-y: auto;
+}
+
+.class-item {
+  min-width: 0;
 }
 
 .class-btn {
   width: 100%;
   margin: 0 !important;
-  height: 50px; // 增加高度
+  min-height: 76px;
   display: flex !important;
   justify-content: space-between;
   align-items: center;
-  padding: 0 15px;
+  padding: 10px 16px;
   position: relative;
   
   .class-name {
@@ -223,24 +262,16 @@ defineExpose({
     font-weight: bold;
   }
   
-  // 状态徽标样式
-  .badge-ungraded {
-    background-color: #F56C6C;
-    color: white;
+  .grading-status-text {
+    margin-left: 16px;
     font-size: 12px;
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-  
-  .badge-graded {
-    color: #67C23A;
-    font-weight: bold;
-    font-size: 12px;
-  }
-  
-  .badge-none {
-    color: #909399;
-    font-size: 12px;
+    text-align: right;
+    white-space: normal;
+
+    &.is-completed { color: #67c23a; font-weight: 600; }
+    &.is-overdue { color: #f56c6c; font-weight: 600; }
+    &.is-waiting { color: #e6a23c; }
+    &.is-empty { color: #909399; }
   }
 
   .badge-loading {

@@ -1,0 +1,727 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.TeachingSupervisionMapper">
+
+    <!-- 显式使用日期筛选只认真实课堂活动；默认学期视图兼容展示本学期新建但尚无活动的课程。 -->
+    <sql id="lessonPeriodFilter">
+        <choose>
+            <when test="q.usageDateFiltered != null and q.usageDateFiltered">
+                EXISTS (
+                    SELECT 1 FROM period_activity_lesson
+                    WHERE period_activity_lesson.lesson_id = l.lesson_id
+                )
+            </when>
+            <otherwise>
+                (
+                    EXISTS (
+                        SELECT 1 FROM period_activity_lesson
+                        WHERE period_activity_lesson.lesson_id = l.lesson_id
+                    )
+                    OR (l.create_time IS NOT NULL
+                        AND l.create_time &gt;= #{q.startTime}
+                        AND l.create_time &lt; #{q.endTime})
+                    OR (l.create_time IS NULL
+                        AND l.update_time IS NOT NULL
+                        AND l.update_time &gt;= #{q.startTime}
+                        AND l.update_time &lt; #{q.endTime})
+                    OR (l.create_time IS NULL
+                        AND l.update_time IS NULL
+                        AND EXISTS (
+                            SELECT 1
+                            FROM biz_lesson_class_scope period_scope
+                            WHERE period_scope.lesson_id = l.lesson_id
+                              AND COALESCE(period_scope.first_assigned_time, period_scope.last_assigned_time)
+                                  &gt;= #{q.startTime}
+                              AND COALESCE(period_scope.first_assigned_time, period_scope.last_assigned_time)
+                                  &lt; #{q.endTime}
+                        ))
+                )
+            </otherwise>
+        </choose>
+    </sql>
+
+    <sql id="baseLessonFilters">
+        l.dept_id IS NOT NULL
+        AND <include refid="lessonPeriodFilter"/>
+        <if test="q.deptId != null">AND l.dept_id = #{q.deptId}</if>
+        <if test="q.teacherId != null">AND l.creator_id = #{q.teacherId}</if>
+        <if test="q.lessonId != null">AND l.lesson_id = #{q.lessonId}</if>
+        <if test="q.keyword != null and q.keyword != ''">
+            AND (l.lesson_title LIKE CONCAT('%', #{q.keyword}, '%')
+                 OR l.create_by LIKE CONCAT('%', #{q.keyword}, '%')
+                 OR EXISTS (
+                     SELECT 1 FROM sys_user keyword_teacher
+                     WHERE keyword_teacher.user_id = l.creator_id
+                       AND (keyword_teacher.user_name LIKE CONCAT('%', #{q.keyword}, '%')
+                            OR keyword_teacher.nick_name LIKE CONCAT('%', #{q.keyword}, '%'))
+                 ))
+        </if>
+        <if test="q.lessonMode != null and q.lessonMode != ''">
+            AND l.lesson_mode = #{q.lessonMode}
+        </if>
+        <if test="q.entryYear != null and q.entryYear != ''">
+            AND l.entry_year = #{q.entryYear}
+        </if>
+        <if test="q.grade != null and q.grade != ''">
+            AND CAST(l.grade AS CHAR) = #{q.grade}
+        </if>
+        <if test="q.classCode != null and q.classCode != ''">
+            AND EXISTS (
+                SELECT 1
+                FROM biz_lesson_class_scope class_filter_scope
+                WHERE class_filter_scope.lesson_id = l.lesson_id
+                  AND class_filter_scope.dept_id = l.dept_id
+                  AND class_filter_scope.class_code = #{q.classCode}
+            )
+        </if>
+        <if test="q.hasPractical != null and q.hasPractical">
+            AND EXISTS (
+                SELECT 1 FROM biz_lesson_question flq
+                INNER JOIN biz_question fq ON fq.question_id = flq.question_id
+                WHERE flq.lesson_id = l.lesson_id AND fq.question_type = 'practical'
+            )
+        </if>
+        <if test="q.hasPractical != null and !q.hasPractical">
+            AND NOT EXISTS (
+                SELECT 1 FROM biz_lesson_question flq
+                INNER JOIN biz_question fq ON fq.question_id = flq.question_id
+                WHERE flq.lesson_id = l.lesson_id AND fq.question_type = 'practical'
+            )
+        </if>
+    </sql>
+
+    <sql id="filteredLessonCte">
+        period_activity AS (
+            SELECT answer.lesson_id, answer.student_id, answer.submit_time AS activity_time
+            FROM biz_student_answer answer
+            WHERE answer.submit_time &gt;= #{q.activityStartTime}
+              AND answer.submit_time &lt; #{q.activityEndTime}
+            UNION ALL
+            SELECT checkin.lesson_id, checkin.student_id, checkin.checkin_time
+            FROM biz_lesson_checkin checkin
+            WHERE checkin.checkin_time &gt;= #{q.activityStartTime}
+              AND checkin.checkin_time &lt; #{q.activityEndTime}
+            UNION ALL
+            SELECT performance.lesson_id, performance.student_id, performance.create_time
+            FROM biz_classroom_performance performance
+            WHERE performance.create_time &gt;= #{q.activityStartTime}
+              AND performance.create_time &lt; #{q.activityEndTime}
+        ),
+        period_activity_lesson AS (
+            SELECT DISTINCT lesson_id FROM period_activity
+        ),
+        base_filtered_lesson AS (
+            SELECT l.*
+            FROM biz_lesson l
+            WHERE <include refid="baseLessonFilters"/>
+        ),
+        practical_lesson AS (
+            SELECT DISTINCT lesson_question.lesson_id
+            FROM biz_lesson_question lesson_question
+            INNER JOIN biz_question question
+                    ON question.question_id = lesson_question.question_id
+                   AND question.question_type = 'practical'
+            INNER JOIN base_filtered_lesson lesson
+                    ON lesson.lesson_id = lesson_question.lesson_id
+        ),
+        practical_class_metric AS (
+            SELECT answer.lesson_id,
+                   user.dept_id,
+                   student.entry_year,
+                   student.class_code,
+                   COUNT(*) AS due_count,
+                   SUM(answer.score IS NOT NULL) AS graded_count
+            FROM biz_student_answer answer
+            INNER JOIN base_filtered_lesson lesson
+                    ON lesson.lesson_id = answer.lesson_id
+            INNER JOIN biz_question question
+                    ON question.question_id = answer.question_id
+                   AND question.question_type = 'practical'
+            INNER JOIN biz_student student
+                    ON student.student_id = answer.student_id
+            INNER JOIN sys_user user
+                    ON user.user_id = student.user_id
+                   AND user.dept_id = lesson.dept_id
+                   AND user.del_flag = '0'
+                   AND user.status = '0'
+            WHERE answer.student_answer IS NOT NULL
+              AND TRIM(answer.student_answer) &lt;&gt; ''
+              AND answer.submit_time &gt;= #{q.activityStartTime}
+              AND answer.submit_time &lt; #{q.activityEndTime}
+            GROUP BY answer.lesson_id, user.dept_id, student.entry_year, student.class_code
+        ),
+        class_status AS (
+            SELECT scope.lesson_id,
+                   scope.dept_id,
+                   scope.entry_year,
+                   scope.class_code,
+                    CASE
+                        WHEN practical_lesson.lesson_id IS NULL THEN 'NO_PRACTICAL'
+                        WHEN deadline.deadline_id IS NULL THEN 'NOT_TRIGGERED'
+                        WHEN IFNULL(practical_class_metric.due_count, 0) &gt; 0
+                         AND practical_class_metric.due_count = practical_class_metric.graded_count
+                            THEN 'COMPLETED'
+                        WHEN deadline.current_deadline_time &lt;= NOW() THEN 'OVERDUE'
+                        WHEN deadline.last_adjustment_type = 'REOPEN' THEN 'REOPENED'
+                        WHEN deadline.current_deadline_time &lt;= DATE_ADD(NOW(), INTERVAL 72 HOUR)
+                            THEN 'DUE_SOON'
+                        ELSE 'GRADING'
+                    END AS status_code,
+                    IFNULL(practical_class_metric.due_count, 0) AS due_count,
+                    IFNULL(practical_class_metric.graded_count, 0) AS graded_count
+            FROM biz_lesson_class_scope scope
+            INNER JOIN base_filtered_lesson lesson
+                    ON lesson.lesson_id = scope.lesson_id
+            LEFT JOIN practical_lesson
+                   ON practical_lesson.lesson_id = scope.lesson_id
+            LEFT JOIN biz_practical_grading_deadline deadline
+                   ON deadline.lesson_id = scope.lesson_id
+                  AND deadline.dept_id = scope.dept_id
+                  AND deadline.entry_year = scope.entry_year
+                  AND deadline.class_code = scope.class_code
+            LEFT JOIN practical_class_metric
+                   ON practical_class_metric.lesson_id = scope.lesson_id
+                  AND practical_class_metric.dept_id = scope.dept_id
+                  AND practical_class_metric.entry_year = scope.entry_year
+                  AND practical_class_metric.class_code = scope.class_code
+        ),
+        filtered_lesson AS (
+            SELECT lesson.*
+            FROM base_filtered_lesson lesson
+            <if test="q.statusCode != null and q.statusCode != ''">
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM class_status status
+                    WHERE status.lesson_id = lesson.lesson_id
+                    <choose>
+                        <when test="q.statusCode == 'WAITING'">
+                            AND status.due_count &gt; status.graded_count
+                            AND status.status_code IN ('NOT_TRIGGERED', 'GRADING', 'DUE_SOON', 'REOPENED')
+                        </when>
+                        <when test="q.statusCode == 'OVERDUE'">
+                            AND status.status_code = 'OVERDUE'
+                            AND status.due_count &gt; status.graded_count
+                        </when>
+                        <otherwise>
+                            AND status.status_code = #{q.statusCode}
+                        </otherwise>
+                    </choose>
+                )
+            </if>
+        ),
+        class_usage_metric AS (
+            SELECT activity.lesson_id,
+                   user.dept_id,
+                   student.entry_year,
+                   student.class_code,
+                   MIN(activity.activity_time) AS usage_date,
+                   COUNT(DISTINCT activity.student_id) AS participant_count
+            FROM period_activity activity
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = activity.lesson_id
+            INNER JOIN biz_student student ON student.student_id = activity.student_id
+            INNER JOIN sys_user user
+                    ON user.user_id = student.user_id
+                   AND user.dept_id = lesson.dept_id
+                   AND user.status = '0'
+                   AND user.del_flag = '0'
+            GROUP BY activity.lesson_id, user.dept_id, student.entry_year, student.class_code
+        )
+    </sql>
+
+    <sql id="lessonMetricCtes">
+        scope_metric AS (
+            SELECT scope.lesson_id, COUNT(*) AS class_count
+            FROM biz_lesson_class_scope scope
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = scope.lesson_id
+            GROUP BY scope.lesson_id
+        ),
+        participant_metric AS (
+            SELECT activity.lesson_id, COUNT(DISTINCT activity.student_id) AS participant_count
+            FROM period_activity activity
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = activity.lesson_id
+            GROUP BY activity.lesson_id
+        ),
+        usage_metric AS (
+            SELECT lesson_id, MIN(usage_date) AS usage_date
+            FROM class_usage_metric
+            GROUP BY lesson_id
+        ),
+        practical_metric AS (
+            SELECT answer.lesson_id,
+                   COUNT(*) AS practical_due_count,
+                   SUM(answer.score IS NOT NULL) AS practical_graded_count
+            FROM biz_student_answer answer
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = answer.lesson_id
+            INNER JOIN biz_question question
+                    ON question.question_id = answer.question_id
+                   AND question.question_type = 'practical'
+            WHERE answer.student_answer IS NOT NULL
+              AND TRIM(answer.student_answer) &lt;&gt; ''
+              AND answer.submit_time &gt;= #{q.activityStartTime}
+              AND answer.submit_time &lt; #{q.activityEndTime}
+            GROUP BY answer.lesson_id
+        ),
+        deadline_metric AS (
+            SELECT deadline.lesson_id,
+                   MIN(deadline.current_deadline_time) AS nearest_deadline_time,
+                   SUM(deadline.current_deadline_time &lt;= NOW()) AS overdue_class_count
+            FROM biz_practical_grading_deadline deadline
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = deadline.lesson_id
+            GROUP BY deadline.lesson_id
+        )
+    </sql>
+
+    <sql id="scoreCtes">
+        student_lesson_pair AS (
+            SELECT answer.student_id, answer.lesson_id
+            FROM biz_student_answer answer
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = answer.lesson_id
+            GROUP BY answer.student_id, answer.lesson_id
+            UNION
+            SELECT performance.student_id, performance.lesson_id
+            FROM biz_classroom_performance performance
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = performance.lesson_id
+            GROUP BY performance.student_id, performance.lesson_id
+        ),
+        raw_homework AS (
+            SELECT answer.student_id, answer.lesson_id, SUM(IFNULL(answer.score, 0)) AS homework_score
+            FROM biz_student_answer answer
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = answer.lesson_id
+            GROUP BY answer.student_id, answer.lesson_id
+        ),
+        latest_adjustment AS (
+            SELECT adjustment.student_id, adjustment.lesson_id,
+                   adjustment.adjusted_homework_score, adjustment.action_type
+            FROM biz_score_adjustment adjustment
+            INNER JOIN (
+                SELECT student_id, lesson_id, MAX(adjustment_id) AS adjustment_id
+                FROM biz_score_adjustment
+                GROUP BY student_id, lesson_id
+            ) latest ON latest.adjustment_id = adjustment.adjustment_id
+        ),
+        course_score AS (
+            SELECT pair.student_id, pair.lesson_id, lesson.dept_id, lesson.creator_id,
+                   CASE WHEN performance.is_absent = 1 OR lesson.lesson_mode = 'attendance' THEN NULL
+                        ELSE LEAST(100, GREATEST(0,
+                             CASE WHEN adjustment.action_type = 'UPDATE'
+                                  THEN IFNULL(adjustment.adjusted_homework_score, 0)
+                                  ELSE IFNULL(homework.homework_score, 0) END
+                             + IFNULL(performance.score, 0))) END AS final_score
+            FROM student_lesson_pair pair
+            INNER JOIN filtered_lesson lesson ON lesson.lesson_id = pair.lesson_id
+            LEFT JOIN raw_homework homework
+                   ON homework.student_id = pair.student_id AND homework.lesson_id = pair.lesson_id
+            LEFT JOIN latest_adjustment adjustment
+                   ON adjustment.student_id = pair.student_id AND adjustment.lesson_id = pair.lesson_id
+            LEFT JOIN biz_classroom_performance performance
+                   ON performance.student_id = pair.student_id AND performance.lesson_id = pair.lesson_id
+        ),
+        school_score_metric AS (
+            SELECT dept_id, ROUND(AVG(final_score), 1) AS avg_total_score
+            FROM course_score
+            GROUP BY dept_id
+        ),
+        teacher_score_metric AS (
+            SELECT dept_id, creator_id, ROUND(AVG(final_score), 1) AS avg_total_score
+            FROM course_score
+            GROUP BY dept_id, creator_id
+        )
+    </sql>
+
+    <select id="countSchoolSummaries" resultType="long">
+        WITH <include refid="filteredLessonCte"/>
+        SELECT COUNT(DISTINCT lesson.dept_id)
+        FROM filtered_lesson lesson
+        INNER JOIN sys_dept dept ON dept.dept_id = lesson.dept_id AND dept.del_flag = '0'
+    </select>
+
+    <select id="selectTimelineSummaries" resultType="java.util.LinkedHashMap">
+        WITH <include refid="filteredLessonCte"/>
+        SELECT scope.scope_id AS scopeId,
+               lesson.lesson_id AS lessonId,
+               lesson.lesson_title AS lessonTitle,
+               lesson.lesson_mode AS lessonMode,
+               lesson.lesson_num AS lessonNum,
+               lesson.grade,
+               scope.entry_year AS entryYear,
+               scope.class_code AS classCode,
+               scope.dept_id AS deptId,
+               dept.dept_name AS deptName,
+               lesson.creator_id AS teacherId,
+               COALESCE(teacher.nick_name, lesson.create_by, '待治理') AS teacherName,
+               class_usage.usage_date AS usageDate,
+               IFNULL(class_usage.participant_count, 0) AS participantCount,
+               (SELECT COUNT(*)
+                FROM biz_student timeline_student
+                INNER JOIN sys_user timeline_user
+                        ON timeline_user.user_id = timeline_student.user_id
+                       AND timeline_user.dept_id = scope.dept_id
+                       AND timeline_user.status = '0'
+                       AND timeline_user.del_flag = '0'
+                WHERE timeline_student.entry_year = scope.entry_year
+                  AND timeline_student.class_code = scope.class_code) AS totalStudentCount,
+               class_state.due_count AS practicalDueCount,
+               class_state.graded_count AS practicalGradedCount,
+               class_state.due_count - class_state.graded_count AS practicalUngradedCount,
+               class_state.status_code AS statusCode,
+               deadline.current_deadline_time AS currentDeadlineTime
+        FROM biz_lesson_class_scope scope
+        INNER JOIN filtered_lesson lesson ON lesson.lesson_id = scope.lesson_id
+        INNER JOIN class_status class_state
+                ON class_state.lesson_id = scope.lesson_id
+               AND class_state.dept_id = scope.dept_id
+               AND class_state.entry_year = scope.entry_year
+               AND class_state.class_code = scope.class_code
+        INNER JOIN sys_dept dept ON dept.dept_id = scope.dept_id
+        LEFT JOIN sys_user teacher ON teacher.user_id = lesson.creator_id
+        LEFT JOIN class_usage_metric class_usage
+               ON class_usage.lesson_id = scope.lesson_id
+              AND class_usage.dept_id = scope.dept_id
+              AND class_usage.entry_year = scope.entry_year
+              AND class_usage.class_code = scope.class_code
+        LEFT JOIN biz_practical_grading_deadline deadline
+               ON deadline.lesson_id = scope.lesson_id
+              AND deadline.dept_id = scope.dept_id
+              AND deadline.entry_year = scope.entry_year
+              AND deadline.class_code = scope.class_code
+        WHERE 1 = 1
+        <if test="q.classCode != null and q.classCode != ''">
+            AND scope.class_code = #{q.classCode}
+        </if>
+        <if test="q.statusCode != null and q.statusCode != ''">
+            <choose>
+                <when test="q.statusCode == 'WAITING'">
+                    AND class_state.due_count &gt; class_state.graded_count
+                    AND class_state.status_code IN ('NOT_TRIGGERED', 'GRADING', 'DUE_SOON', 'REOPENED')
+                </when>
+                <when test="q.statusCode == 'OVERDUE'">
+                    AND class_state.status_code = 'OVERDUE'
+                    AND class_state.due_count &gt; class_state.graded_count
+                </when>
+                <otherwise>
+                    AND class_state.status_code = #{q.statusCode}
+                </otherwise>
+            </choose>
+        </if>
+        <choose>
+            <when test="q.usageSort == 'asc'">
+                ORDER BY class_usage.usage_date IS NULL, class_usage.usage_date ASC,
+                         lesson.lesson_id ASC, CAST(scope.class_code AS UNSIGNED), scope.class_code
+            </when>
+            <otherwise>
+                ORDER BY class_usage.usage_date IS NULL, class_usage.usage_date DESC,
+                         lesson.lesson_id DESC, CAST(scope.class_code AS UNSIGNED), scope.class_code
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectSchoolSummaries" resultType="java.util.LinkedHashMap">
+        WITH <include refid="filteredLessonCte"/>,
+             <include refid="lessonMetricCtes"/>,
+             <include refid="scoreCtes"/>
+        SELECT dept.dept_id AS deptId,
+               dept.dept_name AS deptName,
+               dept.school_type AS schoolType,
+               COUNT(*) AS courseCount,
+               SUM(lesson.lesson_mode &lt;&gt; 'attendance') AS assessmentCourseCount,
+               SUM(lesson.lesson_mode = 'attendance') AS attendanceCourseCount,
+               COUNT(DISTINCT COALESCE(lesson.creator_id, lesson.create_by)) AS teacherCount,
+               SUM(IFNULL(scope_metric.class_count, 0)) AS classCount,
+               SUM(IFNULL(participant_metric.participant_count, 0)) AS participantCount,
+               SUM(IFNULL(practical_metric.practical_due_count, 0)) AS practicalDueCount,
+               SUM(IFNULL(practical_metric.practical_graded_count, 0)) AS practicalGradedCount,
+               SUM(IFNULL(practical_metric.practical_due_count, 0)
+                   - IFNULL(practical_metric.practical_graded_count, 0)) AS practicalUngradedCount,
+               ROUND(
+                   SUM(IFNULL(practical_metric.practical_graded_count, 0))
+                   * 100.0 / NULLIF(SUM(IFNULL(practical_metric.practical_due_count, 0)), 0), 1
+               ) AS gradingRate,
+               SUM(IFNULL(deadline_metric.overdue_class_count, 0)) AS overdueClassCount,
+               MAX(school_score_metric.avg_total_score) AS avgTotalScore
+        FROM filtered_lesson lesson
+        INNER JOIN sys_dept dept ON dept.dept_id = lesson.dept_id AND dept.del_flag = '0'
+        LEFT JOIN scope_metric ON scope_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN participant_metric ON participant_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN practical_metric ON practical_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN deadline_metric ON deadline_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN school_score_metric ON school_score_metric.dept_id = lesson.dept_id
+        GROUP BY dept.dept_id, dept.dept_name, dept.school_type
+        ORDER BY courseCount DESC, dept.dept_name
+    </select>
+
+    <select id="selectTeacherSummaries" resultType="java.util.LinkedHashMap">
+        WITH <include refid="filteredLessonCte"/>,
+             <include refid="lessonMetricCtes"/>,
+             <include refid="scoreCtes"/>
+        SELECT lesson.dept_id AS deptId,
+               dept.dept_name AS deptName,
+               lesson.creator_id AS teacherId,
+               COALESCE(teacher.nick_name, lesson.create_by, '待治理') AS teacherName,
+               COALESCE(teacher.user_name, lesson.create_by, '待治理') AS teacherUserName,
+               COUNT(*) AS courseCount,
+               SUM(lesson.lesson_mode &lt;&gt; 'attendance') AS assessmentCourseCount,
+               SUM(lesson.lesson_mode = 'attendance') AS attendanceCourseCount,
+               SUM(IFNULL(scope_metric.class_count, 0)) AS classCount,
+               SUM(IFNULL(participant_metric.participant_count, 0)) AS participantCount,
+               SUM(IFNULL(practical_metric.practical_due_count, 0)) AS practicalDueCount,
+               SUM(IFNULL(practical_metric.practical_graded_count, 0)) AS practicalGradedCount,
+               SUM(IFNULL(practical_metric.practical_due_count, 0)
+                   - IFNULL(practical_metric.practical_graded_count, 0)) AS practicalUngradedCount,
+               MAX(teacher_score_metric.avg_total_score) AS avgTotalScore
+        FROM filtered_lesson lesson
+        INNER JOIN sys_dept dept ON dept.dept_id = lesson.dept_id
+        LEFT JOIN sys_user teacher ON teacher.user_id = lesson.creator_id
+        LEFT JOIN scope_metric ON scope_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN participant_metric ON participant_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN practical_metric ON practical_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN teacher_score_metric
+               ON teacher_score_metric.dept_id = lesson.dept_id
+              AND teacher_score_metric.creator_id &lt;=&gt; lesson.creator_id
+        GROUP BY lesson.dept_id, dept.dept_name, lesson.creator_id,
+                 COALESCE(teacher.nick_name, lesson.create_by, '待治理'),
+                 COALESCE(teacher.user_name, lesson.create_by, '待治理')
+        ORDER BY courseCount DESC, teacherName
+    </select>
+
+    <select id="selectCourseSummaries" resultType="java.util.LinkedHashMap">
+        WITH <include refid="filteredLessonCte"/>,
+             <include refid="lessonMetricCtes"/>
+        SELECT lesson.lesson_id AS lessonId,
+               lesson.lesson_title AS lessonTitle,
+               lesson.lesson_mode AS lessonMode,
+               lesson.entry_year AS entryYear,
+               lesson.grade,
+               lesson.semester,
+               lesson.lesson_num AS lessonNum,
+               lesson.create_time AS createTime,
+               lesson.update_time AS updateTime,
+               usage_metric.usage_date AS usageDate,
+               lesson.dept_id AS deptId,
+               dept.dept_name AS deptName,
+               lesson.creator_id AS teacherId,
+               COALESCE(teacher.nick_name, lesson.create_by, '待治理') AS teacherName,
+               IFNULL(scope_metric.class_count, 0) AS classCount,
+               IFNULL(participant_metric.participant_count, 0) AS participantCount,
+               IFNULL(practical_metric.practical_due_count, 0) AS practicalDueCount,
+               IFNULL(practical_metric.practical_graded_count, 0) AS practicalGradedCount,
+               IFNULL(practical_metric.practical_due_count, 0)
+                 - IFNULL(practical_metric.practical_graded_count, 0) AS practicalUngradedCount,
+               EXISTS(SELECT 1 FROM biz_lesson_question lq
+                      INNER JOIN biz_question q ON q.question_id = lq.question_id
+                      WHERE lq.lesson_id = lesson.lesson_id AND q.question_type = 'practical') AS hasPractical,
+               (SELECT COUNT(*) FROM biz_lesson_question lq
+                WHERE lq.lesson_id = lesson.lesson_id) AS questionCount,
+               deadline_metric.nearest_deadline_time AS nearestDeadlineTime,
+               IFNULL(deadline_metric.overdue_class_count, 0) AS overdueClassCount
+        FROM filtered_lesson lesson
+        INNER JOIN sys_dept dept ON dept.dept_id = lesson.dept_id
+        LEFT JOIN sys_user teacher ON teacher.user_id = lesson.creator_id
+        LEFT JOIN scope_metric ON scope_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN participant_metric ON participant_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN usage_metric ON usage_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN practical_metric ON practical_metric.lesson_id = lesson.lesson_id
+        LEFT JOIN deadline_metric ON deadline_metric.lesson_id = lesson.lesson_id
+        <choose>
+            <when test="q.usageSort == 'asc'">
+                ORDER BY usage_metric.usage_date IS NULL, usage_metric.usage_date ASC, lesson.lesson_id ASC
+            </when>
+            <otherwise>
+                ORDER BY usage_metric.usage_date IS NULL, usage_metric.usage_date DESC, lesson.lesson_id DESC
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectClassSummaries" resultType="java.util.LinkedHashMap">
+        WITH <include refid="filteredLessonCte"/>
+        SELECT scope.scope_id AS scopeId,
+               scope.lesson_id AS lessonId,
+               scope.dept_id AS deptId,
+               scope.entry_year AS entryYear,
+               scope.class_code AS classCode,
+               scope.current_assigned AS currentAssigned,
+               class_usage.usage_date AS usageDate,
+               COUNT(DISTINCT CASE WHEN student_user.user_id IS NOT NULL THEN student.student_id END) AS totalStudentCount,
+               COUNT(DISTINCT CASE WHEN student_user.user_id IS NOT NULL THEN participant.student_id END) AS participantCount,
+               COUNT(DISTINCT CASE WHEN student_user.user_id IS NOT NULL THEN practical.answer_id END) AS practicalDueCount,
+               COUNT(DISTINCT CASE WHEN student_user.user_id IS NOT NULL AND practical.score IS NOT NULL
+                                   THEN practical.answer_id END) AS practicalGradedCount,
+               COUNT(DISTINCT CASE WHEN student_user.user_id IS NOT NULL THEN practical.answer_id END)
+                 - COUNT(DISTINCT CASE WHEN student_user.user_id IS NOT NULL AND practical.score IS NOT NULL
+                                       THEN practical.answer_id END) AS practicalUngradedCount,
+               deadline.deadline_id AS deadlineId,
+               deadline.trigger_time AS triggerTime,
+               deadline.current_deadline_time AS currentDeadlineTime,
+               deadline.last_adjustment_type AS lastAdjustmentType,
+               class_state.status_code AS statusCode
+        FROM biz_lesson_class_scope scope
+        INNER JOIN filtered_lesson l ON l.lesson_id = scope.lesson_id
+        INNER JOIN class_status class_state
+                ON class_state.lesson_id = scope.lesson_id
+               AND class_state.dept_id = scope.dept_id
+               AND class_state.entry_year = scope.entry_year
+               AND class_state.class_code = scope.class_code
+        LEFT JOIN biz_student student ON student.entry_year = scope.entry_year
+                                    AND student.class_code = scope.class_code
+        LEFT JOIN sys_user student_user ON student_user.user_id = student.user_id
+                                       AND student_user.dept_id = scope.dept_id
+                                       AND student_user.del_flag = '0'
+                                       AND student_user.status = '0'
+        LEFT JOIN (
+            SELECT DISTINCT lesson_id, student_id FROM period_activity
+        ) participant ON participant.lesson_id = scope.lesson_id
+                     AND participant.student_id = student.student_id
+        LEFT JOIN class_usage_metric class_usage
+               ON class_usage.lesson_id = scope.lesson_id
+              AND class_usage.dept_id = scope.dept_id
+              AND class_usage.entry_year = scope.entry_year
+              AND class_usage.class_code = scope.class_code
+        LEFT JOIN biz_student_answer practical
+              ON practical.lesson_id = scope.lesson_id
+              AND practical.student_id = student.student_id
+              AND practical.student_answer IS NOT NULL AND TRIM(practical.student_answer) &lt;&gt; ''
+              AND practical.submit_time &gt;= #{q.activityStartTime}
+              AND practical.submit_time &lt; #{q.activityEndTime}
+              AND EXISTS (SELECT 1 FROM biz_question pq
+                          WHERE pq.question_id = practical.question_id AND pq.question_type = 'practical')
+        LEFT JOIN biz_practical_grading_deadline deadline
+               ON deadline.lesson_id = scope.lesson_id
+              AND deadline.dept_id = scope.dept_id
+              AND deadline.entry_year = scope.entry_year
+              AND deadline.class_code = scope.class_code
+        WHERE 1 = 1
+        <if test="q.classCode != null and q.classCode != ''">
+            AND scope.class_code = #{q.classCode}
+        </if>
+        <if test="q.statusCode != null and q.statusCode != ''">
+            <choose>
+                <when test="q.statusCode == 'WAITING'">
+                    AND class_state.due_count &gt; class_state.graded_count
+                    AND class_state.status_code IN ('NOT_TRIGGERED', 'GRADING', 'DUE_SOON', 'REOPENED')
+                </when>
+                <when test="q.statusCode == 'OVERDUE'">
+                    AND class_state.status_code = 'OVERDUE'
+                    AND class_state.due_count &gt; class_state.graded_count
+                </when>
+                <otherwise>
+                    AND class_state.status_code = #{q.statusCode}
+                </otherwise>
+            </choose>
+        </if>
+        GROUP BY scope.scope_id, scope.lesson_id, scope.dept_id, scope.entry_year,
+                 scope.class_code, scope.current_assigned, class_usage.usage_date, deadline.deadline_id,
+                 deadline.trigger_time, deadline.current_deadline_time, deadline.last_adjustment_type,
+                 class_state.status_code
+        ORDER BY scope.entry_year DESC, CAST(scope.class_code AS UNSIGNED), scope.class_code
+    </select>
+
+    <select id="selectStudentDetails" resultType="java.util.LinkedHashMap">
+        SELECT student.student_id AS studentId,
+               user.nick_name AS studentName,
+               student.student_no AS studentNo,
+               student.entry_year AS entryYear,
+               student.class_code AS classCode,
+               EXISTS(SELECT 1 FROM biz_student_answer answer
+                      WHERE answer.lesson_id = #{q.lessonId}
+                        AND answer.student_id = student.student_id) AS submitted,
+               IFNULL((SELECT SUM(IFNULL(answer.score, 0))
+                       FROM biz_student_answer answer
+                       WHERE answer.lesson_id = #{q.lessonId}
+                         AND answer.student_id = student.student_id), 0) AS originalHomeworkScore,
+               COALESCE(
+                   (SELECT CASE WHEN adjustment.action_type = 'UPDATE'
+                                THEN adjustment.adjusted_homework_score ELSE NULL END
+                    FROM biz_score_adjustment adjustment
+                    WHERE adjustment.lesson_id = #{q.lessonId}
+                      AND adjustment.student_id = student.student_id
+                    ORDER BY adjustment.adjustment_id DESC LIMIT 1),
+                   IFNULL((SELECT SUM(IFNULL(answer.score, 0))
+                           FROM biz_student_answer answer
+                           WHERE answer.lesson_id = #{q.lessonId}
+                             AND answer.student_id = student.student_id), 0)
+               ) AS homeworkScore,
+               IFNULL(performance.score, 0) AS performanceScore,
+               performance.is_absent AS absent,
+               CASE WHEN performance.is_absent = 1 THEN NULL
+                    ELSE LEAST(100, GREATEST(0,
+                         COALESCE(
+                             (SELECT CASE WHEN adjustment.action_type = 'UPDATE'
+                                          THEN adjustment.adjusted_homework_score ELSE NULL END
+                              FROM biz_score_adjustment adjustment
+                              WHERE adjustment.lesson_id = #{q.lessonId}
+                                AND adjustment.student_id = student.student_id
+                              ORDER BY adjustment.adjustment_id DESC LIMIT 1),
+                             IFNULL((SELECT SUM(IFNULL(answer.score, 0))
+                                     FROM biz_student_answer answer
+                                     WHERE answer.lesson_id = #{q.lessonId}
+                                       AND answer.student_id = student.student_id), 0)
+                         ) + IFNULL(performance.score, 0))) END AS finalScore,
+               COUNT(DISTINCT practical.answer_id) AS practicalDueCount,
+               COUNT(DISTINCT CASE WHEN practical.score IS NOT NULL THEN practical.answer_id END) AS practicalGradedCount,
+               COUNT(DISTINCT practical.answer_id)
+                 - COUNT(DISTINCT CASE WHEN practical.score IS NOT NULL THEN practical.answer_id END) AS practicalUngradedCount,
+               CASE WHEN COUNT(DISTINCT practical.answer_id) = 0 THEN 'NOT_SUBMITTED'
+                    WHEN COUNT(DISTINCT practical.answer_id)
+                       = COUNT(DISTINCT CASE WHEN practical.score IS NOT NULL THEN practical.answer_id END)
+                    THEN 'GRADED' ELSE 'UNGRADED' END AS practicalStatus
+        FROM biz_student student
+        INNER JOIN sys_user user ON user.user_id = student.user_id
+                            AND user.dept_id = #{q.deptId}
+                            AND user.del_flag = '0'
+                            AND user.status = '0'
+        LEFT JOIN biz_classroom_performance performance
+               ON performance.student_id = student.student_id
+              AND performance.lesson_id = #{q.lessonId}
+        LEFT JOIN biz_student_answer practical
+               ON practical.student_id = student.student_id
+              AND practical.lesson_id = #{q.lessonId}
+              AND practical.student_answer IS NOT NULL AND TRIM(practical.student_answer) &lt;&gt; ''
+              AND EXISTS (SELECT 1 FROM biz_question pq
+                          WHERE pq.question_id = practical.question_id AND pq.question_type = 'practical')
+        WHERE student.entry_year = #{q.entryYear}
+          AND student.class_code = #{q.classCode}
+        <if test="q.keyword != null and q.keyword != ''">
+            AND (user.nick_name LIKE CONCAT('%', #{q.keyword}, '%')
+                 OR student.student_no LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+        GROUP BY student.student_id, user.nick_name, student.student_no,
+                 student.entry_year, student.class_code, performance.score, performance.is_absent
+        ORDER BY CAST(student.student_no AS UNSIGNED), student.student_no
+    </select>
+
+    <select id="selectQuestionDetails" resultType="java.util.LinkedHashMap">
+        SELECT question.question_id AS questionId,
+               question.question_type AS questionType,
+               question.question_content AS questionContent,
+               lesson_question.question_score AS maxScore,
+               lesson_question.order_num AS orderNum
+        FROM biz_lesson_question lesson_question
+        INNER JOIN biz_question question ON question.question_id = lesson_question.question_id
+        WHERE lesson_question.lesson_id = #{lessonId}
+        ORDER BY lesson_question.order_num, lesson_question.id
+    </select>
+
+    <select id="selectPracticalAnswerDetails" resultType="java.util.LinkedHashMap">
+        SELECT answer.answer_id AS answerId,
+               answer.question_id AS questionId,
+               answer.student_id AS studentId,
+               user.nick_name AS studentName,
+               student.student_no AS studentNo,
+               answer.student_answer AS studentAnswer,
+               answer.preview_path AS previewPath,
+               answer.preview_status AS previewStatus,
+               answer.score,
+               answer.submit_time AS submitTime
+        FROM biz_student_answer answer
+        INNER JOIN biz_student student ON student.student_id = answer.student_id
+        INNER JOIN sys_user user ON user.user_id = student.user_id
+        INNER JOIN biz_question question ON question.question_id = answer.question_id
+        WHERE answer.lesson_id = #{lessonId}
+          AND student.entry_year = #{entryYear}
+          AND student.class_code = #{classCode}
+          AND question.question_type = 'practical'
+        <if test="studentId != null">AND answer.student_id = #{studentId}</if>
+        ORDER BY CAST(student.student_no AS UNSIGNED), student.student_no, answer.question_id
+    </select>
+</mapper>

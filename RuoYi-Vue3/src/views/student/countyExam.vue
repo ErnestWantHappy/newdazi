@@ -38,6 +38,14 @@
         <section class="exam-banner">
           <div>
             <h1>{{ examName }}</h1>
+            <!-- C5：区域抽测与日常课边界说明 -->
+            <el-alert
+              type="warning"
+              :closable="false"
+              show-icon
+              class="exam-boundary-alert"
+              title="区域抽测进行中：不展示平时成绩与错题本；提交后不可重做打字题；作品仅限评卷查看。"
+            />
             <div class="student-tags">
               <el-tag type="info">{{ studentInfo.deptName || '-' }}</el-tag>
               <el-tag type="success">{{ studentInfo.gradeName || '' }}{{ studentInfo.classCode || '' }}班</el-tag>
@@ -308,6 +316,8 @@ import { getCurrentCountyExam, saveCountyExamDraft, submitCountyExam } from '@/a
 import { updateUserPwd } from '@/api/system/user'
 import PdfPreview from '@/components/PdfPreview/index.vue'
 import useUserStore from '@/store/modules/user'
+import { questionTypeLabel } from '@/utils/questionType'
+import Download from '@/plugins/download'
 
 const userStore = useUserStore()
 
@@ -845,7 +855,7 @@ function normalizeQuestionAnswer(questionType, answer) {
 }
 
 function questionTypeText(type) {
-  return ({ choice: '选择题', judgment: '判断题' })[type] || type
+  return questionTypeLabel(type)
 }
 
 function previewLabel(questionId) {
@@ -883,13 +893,7 @@ function getFileName(filePath) {
 
 function downloadMaterial(filePath) {
   if (!filePath) return
-  const link = document.createElement('a')
-  link.href = import.meta.env.VITE_APP_BASE_API + filePath
-  link.download = getFileName(filePath)
-  link.target = '_blank'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  Download.resource(filePath, `区域抽测_题目素材_${getFileName(filePath)}`)
 }
 
 function formatTime(seconds) {
@@ -987,8 +991,20 @@ function handleCommand(command) {
   }
 }
 
-onMounted(fetchData)
+// 防误关：考试进行中刷新/关闭页面前浏览器强制二次确认，防止机房学生误触丢答案
+const beforeUnloadHandler = (e) => {
+  if (examId.value && !isReadOnly.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnloadHandler)
+  fetchData()
+})
 onUnmounted(() => {
+  window.removeEventListener('beforeunload', beforeUnloadHandler)
   clearExamTimer()
   clearTypingIntervals()
   clearTypingDraftTimers()
@@ -1061,6 +1077,10 @@ onUnmounted(() => {
 }
 
 .ended-panel h1,
+.exam-boundary-alert {
+  margin: 8px 0 12px;
+  max-width: 720px;
+}
 .exam-banner h1 {
   margin: 0 0 12px;
   color: #1f2d3d;

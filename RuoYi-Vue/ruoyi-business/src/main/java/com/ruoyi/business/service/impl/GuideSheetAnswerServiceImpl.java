@@ -1,16 +1,19 @@
 package com.ruoyi.business.service.impl;
 
 import java.util.*;
+import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.business.domain.BizGuideSheetAnswer;
 import com.ruoyi.business.domain.BizGuideSheetProgress;
-import com.ruoyi.business.domain.BizGuideSheet;
+import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.GuideSheetAnswerMapper;
-import com.ruoyi.business.mapper.GuideSheetMapper;
+import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.GuideSheetProgressMapper;
 import com.ruoyi.business.service.IGuideSheetAnswerService;
 import com.ruoyi.business.service.GuideSheetGradingService;
@@ -29,9 +32,11 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     private static final Logger log = LoggerFactory.getLogger(GuideSheetAnswerServiceImpl.class);
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
-
-    // DevTools reload marker - v2
-    private static final String RELOAD_MARKER = "merge-v2";
+    private static final int MAX_ANSWER_JSON_BYTES = 2 * 1024 * 1024;
+    private static final Set<String> NON_ANSWER_WIDGET_TYPES = new HashSet<>(Arrays.asList(
+            "tab", "tab-pane", "grid", "grid-col", "card", "table", "table-cell",
+            "static-text", "html-text", "divider", "button"
+    ));
 
     @Autowired
     private GuideSheetAnswerMapper guideSheetAnswerMapper;
@@ -40,7 +45,7 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     private GuideSheetProgressMapper guideSheetProgressMapper;
 
     @Autowired
-    private GuideSheetMapper guideSheetMapper;
+    private GuideSheetBindingMapper bindingMapper;
 
     @Autowired
     private BizStudentMapper bizStudentMapper;
@@ -49,9 +54,9 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     private GuideSheetGradingService gradingService;
 
     @Override
-    public BizGuideSheetAnswer getByStudentAndSheet(Long studentId, Long sheetId)
+    public BizGuideSheetAnswer getByStudentAndBinding(Long studentId, Long bindingId)
     {
-        return guideSheetAnswerMapper.selectByStudentAndSheet(studentId, sheetId);
+        return guideSheetAnswerMapper.selectByStudentAndBinding(studentId, bindingId);
     }
 
     @Override
@@ -61,35 +66,28 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     }
 
     @Override
-    public List<BizGuideSheetAnswer> getBySheetId(Long sheetId)
+    public List<BizGuideSheetAnswer> getByBindingAndClass(Long bindingId, Long deptId,
+                                                          String entryYear, String classCode)
     {
-        return guideSheetAnswerMapper.selectBizGuideSheetAnswerList(new BizGuideSheetAnswer() {{
-            setSheetId(sheetId);
-        }});
+        return guideSheetAnswerMapper.selectByBindingAndClass(bindingId, deptId, entryYear, classCode);
     }
 
     @Override
-    public List<BizGuideSheetAnswer> getBySheetIdByClassCode(Long sheetId, String entryYear, String classCode)
+    public Double getAvgScore(Long bindingId, Long deptId, String entryYear, String classCode)
     {
-        return guideSheetAnswerMapper.selectBySheetIdByClassCode(sheetId, entryYear, classCode);
-    }
-
-    @Override
-    public Double getAvgScore(Long sheetId, String entryYear, String classCode)
-    {
-        return guideSheetAnswerMapper.selectAvgScore(sheetId, entryYear, classCode);
+        return guideSheetAnswerMapper.selectAvgScore(bindingId, deptId, entryYear, classCode);
     }
 
     @Override
     @Transactional
-    public BizGuideSheetAnswer saveManualGrades(Long sheetId, Long studentId,
+    public BizGuideSheetAnswer saveManualGrades(Long bindingId, Long studentId,
                                                  List<Map<String, Object>> items)
     {
         if (items == null || items.isEmpty())
         {
             throw new ServiceException("请填写人工评分");
         }
-        BizGuideSheetAnswer answer = guideSheetAnswerMapper.selectByStudentAndSheet(studentId, sheetId);
+        BizGuideSheetAnswer answer = guideSheetAnswerMapper.selectByStudentAndBinding(studentId, bindingId);
         if (answer == null || !"2".equals(answer.getStatus()))
         {
             throw new ServiceException("学生尚未提交导学单");
@@ -135,9 +133,15 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
             }
 
             answer.setGradingDetail(objectMapper.writeValueAsString(details));
-            answer.setTotalScore(calculateTotalScoreFromDetail(answer.getGradingDetail()));
+            int totalScore = calculateTotalScoreFromDetail(answer.getGradingDetail());
+            int autoScore = answer.getAutoScore() == null ? 0 : answer.getAutoScore();
+            answer.setManualAdjustment(totalScore - autoScore);
+            answer.setTotalScore(totalScore);
             answer.setGradingStatus(calculateGradingStatus(answer.getGradingDetail()));
-            guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+            if (guideSheetAnswerMapper.updateGradingFields(answer) != 1)
+            {
+                throw new ServiceException("答卷已重新提交，请刷新后再保存评分");
+            }
             return answer;
         }
         catch (ServiceException e)
@@ -146,7 +150,7 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
         }
         catch (Exception e)
         {
-            log.error("保存导学单人工评分失败 sheetId={} studentId={}", sheetId, studentId, e);
+            log.error("保存导学单人工评分失败 bindingId={} studentId={}", bindingId, studentId, e);
             throw new ServiceException("保存人工评分失败");
         }
     }
@@ -155,34 +159,24 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     @Transactional
     public int saveAnswer(BizGuideSheetAnswer answer)
     {
+        validateAnswerPayload(answer);
         try
         {
             Date now = new Date();
-            BizGuideSheetAnswer existing = guideSheetAnswerMapper.selectByStudentAndSheet(
-                    answer.getStudentId(), answer.getSheetId());
+            BizLessonGuideSheetBinding binding = bindingMapper.selectByBindingId(answer.getBindingId());
+            if (binding == null)
+            {
+                throw new ServiceException("课程导学单绑定不存在");
+            }
+            answer.setLessonId(binding.getLessonId());
+            answer.setSourceSheetId(binding.getSourceSheetId());
+            BizGuideSheetAnswer existing = guideSheetAnswerMapper.selectByStudentAndBinding(
+                    answer.getStudentId(), answer.getBindingId());
             if (existing != null)
             {
-                boolean draftSave = !"2".equals(answer.getStatus());
-                // 草稿接口不能覆盖最终答卷；显式重新提交会携带 status=2 并重新评分。
-                if ("2".equals(existing.getStatus()) && draftSave)
+                if (!updateExistingAnswer(answer, existing, now))
                 {
-                    throw new ServiceException("导学单已提交，请使用重新提交功能修改答案");
-                }
-                answer.setAnswerId(existing.getAnswerId());
-                answer.setUpdateTime(now);
-                if (answer.getStatus() == null)
-                {
-                    answer.setStatus(existing.getStatus() != null ? existing.getStatus() : "1");
-                }
-                if (draftSave)
-                {
-                    // SQL 条件负责兜住并发提交，避免状态检查后最终答卷被迟到的草稿覆盖。
-                    answer.getParams().put("onlyIfNotSubmitted", true);
-                }
-                int updated = guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
-                if (draftSave && updated == 0)
-                {
-                    throw new ServiceException("导学单已提交，请使用重新提交功能修改答案");
+                    return 1;
                 }
             }
             else
@@ -191,19 +185,42 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
                 {
                     answer.setStatus("1");
                 }
+                normalizeFirstRevision(answer);
                 answer.setCreateTime(now);
                 answer.setUpdateTime(now);
-                guideSheetAnswerMapper.insertBizGuideSheetAnswer(answer);
+                try
+                {
+                    guideSheetAnswerMapper.insertBizGuideSheetAnswer(answer);
+                }
+                catch (DuplicateKeyException e)
+                {
+                    // 同一学生首次自动保存并发时，唯一键胜出的答卷就是后续更新目标。
+                    BizGuideSheetAnswer concurrent = guideSheetAnswerMapper.selectByStudentAndBinding(
+                            answer.getStudentId(), answer.getBindingId());
+                    if (concurrent == null)
+                    {
+                        throw e;
+                    }
+                    if (!updateExistingAnswer(answer, concurrent, now))
+                    {
+                        return 1;
+                    }
+                }
             }
 
             BizGuideSheetProgress progress = new BizGuideSheetProgress();
-            progress.setSheetId(answer.getSheetId());
+            progress.setBindingId(answer.getBindingId());
             progress.setStudentId(answer.getStudentId());
 
             // 从学生信息中获取班级编号
             BizStudent student = bizStudentMapper.selectBizStudentByStudentId(answer.getStudentId());
-            String classCode = student != null && student.getClassCode() != null ? student.getClassCode() : "1";
-            progress.setClassCode(classCode);
+            if (student == null || student.getDeptId() == null)
+            {
+                throw new ServiceException("学生班级归属信息不完整");
+            }
+            progress.setDeptId(student.getDeptId());
+            progress.setEntryYear(student.getEntryYear());
+            progress.setClassCode(student.getClassCode());
 
             progress.setCurrentPage(answer.getCurrentPage() != null ? answer.getCurrentPage() : 0);
             progress.setIsSubmitted("2".equals(answer.getStatus()) ? "Y" : "N");
@@ -212,13 +229,12 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
             // 计算当前页进度详情（仅在保存草稿/填写中时计算）
             if (!"2".equals(answer.getStatus())) {
                 try {
-                    BizGuideSheet sheet = guideSheetMapper.selectBizGuideSheetBySheetId(answer.getSheetId());
-                    if (sheet != null && sheet.getFormJson() != null) {
-                        String detail = calculateProgressDetail(sheet.getFormJson(), answer.getAnswerJson(), answer.getCurrentPage());
+                    if (binding.getSnapshotFormJson() != null) {
+                        String detail = calculateProgressDetail(binding.getSnapshotFormJson(), answer.getAnswerJson(), answer.getCurrentPage());
                         progress.setProgressDetail(detail);
                     }
                 } catch (Exception e) {
-                    log.warn("计算进度详情失败 sheetId={} studentId={}", answer.getSheetId(), answer.getStudentId(), e);
+                    log.warn("计算进度详情失败 bindingId={} studentId={}", answer.getBindingId(), answer.getStudentId(), e);
                 }
             }
 
@@ -228,9 +244,123 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
         }
         catch (DuplicateKeyException e)
         {
-            log.warn("学生重复提交导学单 studentId={} sheetId={}", answer.getStudentId(), answer.getSheetId());
+            log.warn("学生重复提交导学单 studentId={} bindingId={}", answer.getStudentId(), answer.getBindingId());
             throw e;
         }
+    }
+
+    private void validateAnswerPayload(BizGuideSheetAnswer answer)
+    {
+        if (answer == null || answer.getAnswerJson() == null
+                || answer.getAnswerJson().trim().isEmpty())
+        {
+            throw new ServiceException("答卷内容不能为空，请刷新页面后重试");
+        }
+        String answerJson = answer.getAnswerJson();
+        if (answerJson.length() > MAX_ANSWER_JSON_BYTES
+                || answerJson.getBytes(StandardCharsets.UTF_8).length > MAX_ANSWER_JSON_BYTES)
+        {
+            throw new ServiceException("答卷内容不能超过 2MB，文件请通过上传题提交");
+        }
+        try
+        {
+            JsonNode root = objectMapper.reader()
+                    .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .readTree(answerJson);
+            if (root == null || !root.isObject())
+            {
+                throw new ServiceException("答卷内容格式无效，请刷新页面后重试");
+            }
+        }
+        catch (ServiceException e)
+        {
+            throw e;
+        }
+        catch (Exception e)
+        {
+            throw new ServiceException("答卷内容格式无效，请刷新页面后重试");
+        }
+    }
+
+    private boolean updateExistingAnswer(BizGuideSheetAnswer answer,
+                                         BizGuideSheetAnswer existing, Date now)
+    {
+        boolean draftSave = !"2".equals(answer.getStatus());
+        if ("2".equals(existing.getStatus()) && draftSave)
+        {
+            throw new ServiceException("导学单已提交，请使用重新提交功能修改答案");
+        }
+        long existingRevision = existing.getDraftRevision() == null ? 0L : existing.getDraftRevision();
+        if (draftSave)
+        {
+            long requestedRevision = answer.getDraftRevision() == null
+                    ? existingRevision + 1L : answer.getDraftRevision();
+            if (requestedRevision <= existingRevision)
+            {
+                copyPersistedIdentity(answer, existing);
+                return false;
+            }
+            answer.setDraftRevision(requestedRevision);
+            answer.getParams().put("onlyIfNotSubmitted", true);
+            answer.getParams().put("onlyIfNewerDraft", true);
+        }
+        else
+        {
+            if (answer.getDraftRevision() == null)
+            {
+                throw new ServiceException("缺少答卷版本，请刷新后重新提交");
+            }
+            if (answer.getDraftRevision() <= existingRevision)
+            {
+                throw new ServiceException("答卷版本已变化，请刷新后重新提交");
+            }
+            answer.getParams().put("onlyIfNewerSubmission", true);
+            // 新答案与旧评分必须在同一条 CAS 更新中切换，避免暴露短暂的不一致状态。
+            answer.getParams().put("clearGrading", true);
+        }
+
+        answer.setAnswerId(existing.getAnswerId());
+        answer.setUpdateTime(now);
+        if (answer.getStatus() == null)
+        {
+            answer.setStatus(existing.getStatus() != null ? existing.getStatus() : "1");
+        }
+        int updated = guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+        if (updated > 0)
+        {
+            return true;
+        }
+
+        if (!draftSave)
+        {
+            throw new ServiceException("答卷版本已变化，请刷新后重新提交");
+        }
+
+        BizGuideSheetAnswer latest = guideSheetAnswerMapper.selectByStudentAndBinding(
+                answer.getStudentId(), answer.getBindingId());
+        if (latest != null && !"2".equals(latest.getStatus())
+                && latest.getDraftRevision() != null
+                && latest.getDraftRevision() >= answer.getDraftRevision())
+        {
+            copyPersistedIdentity(answer, latest);
+            return false;
+        }
+        throw new ServiceException("导学单已提交或草稿版本已变化，请刷新后重试");
+    }
+
+    private void normalizeFirstRevision(BizGuideSheetAnswer answer)
+    {
+        if (answer.getDraftRevision() == null || answer.getDraftRevision() <= 0L)
+        {
+            answer.setDraftRevision(1L);
+        }
+    }
+
+    private void copyPersistedIdentity(BizGuideSheetAnswer target, BizGuideSheetAnswer persisted)
+    {
+        target.setAnswerId(persisted.getAnswerId());
+        target.setDraftRevision(persisted.getDraftRevision() == null ? 0L : persisted.getDraftRevision());
+        target.setStatus(persisted.getStatus());
     }
 
     @Override
@@ -249,14 +379,16 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
         // 分页批改：提交前先获取旧评分数据，用于后续合并
         String oldGradingDetail = null;
         if (tabIndex != null) {
-            BizGuideSheetAnswer existing = guideSheetAnswerMapper.selectByStudentAndSheet(
-                    answer.getStudentId(), answer.getSheetId());
+            BizGuideSheetAnswer existing = guideSheetAnswerMapper.selectByStudentAndBinding(
+                    answer.getStudentId(), answer.getBindingId());
             if (existing != null) {
                 oldGradingDetail = existing.getGradingDetail();
             }
         }
         // 清除旧评分，后续由 gradePage 重新计算
         answer.setTotalScore(null);
+        answer.setAutoScore(null);
+        answer.setManualAdjustment(null);
         answer.setGradingDetail(null);
         answer.setGradingStatus(null);
         int result = saveAnswer(answer);
@@ -264,12 +396,12 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
         // 自动评分
         try
         {
-            BizGuideSheet sheet = guideSheetMapper.selectBizGuideSheetBySheetId(answer.getSheetId());
-            if (sheet != null && sheet.getFormJson() != null)
+            BizLessonGuideSheetBinding binding = bindingMapper.selectByBindingId(answer.getBindingId());
+            if (binding != null && binding.getSnapshotFormJson() != null)
             {
                 GradingResult gradingResult = gradingService.gradePage(
-                        sheet.getFormJson(), answer.getAnswerJson(),
-                        answer.getStudentId(), answer.getSheetId(), tabIndex);
+                        binding.getSnapshotFormJson(), answer.getAnswerJson(),
+                        answer.getStudentId(), answer.getBindingId(), tabIndex);
 
                 if (tabIndex != null) {
                     // 分页批改：仅评分当前标签页，合并其他标签页旧数据
@@ -277,19 +409,27 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
                     int mergedTotalScore = calculateTotalScoreFromDetail(mergedDetail);
                     String mergedStatus = calculateGradingStatus(mergedDetail);
                     answer.setTotalScore(mergedTotalScore);
+                    answer.setAutoScore(mergedTotalScore);
+                    answer.setManualAdjustment(0);
                     answer.setGradingStatus(mergedStatus);
                     answer.setGradingDetail(mergedDetail);
                 } else {
                     answer.setTotalScore(gradingResult.totalScore);
+                    answer.setAutoScore(gradingResult.totalScore);
+                    answer.setManualAdjustment(0);
                     answer.setGradingStatus(gradingResult.gradingStatus);
                     answer.setGradingDetail(gradingResult.gradingDetail);
                 }
-                guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+                if (guideSheetAnswerMapper.updateGradingFields(answer) != 1)
+                {
+                    log.info("评分结果未写入，答卷已被更新 answerId={} revision={}",
+                            answer.getAnswerId(), answer.getDraftRevision());
+                }
             }
         }
         catch (Exception e)
         {
-            log.error("自动评分失败 sheetId={} studentId={}", answer.getSheetId(), answer.getStudentId(), e);
+            log.error("自动评分失败 bindingId={} studentId={}", answer.getBindingId(), answer.getStudentId(), e);
             // 评分失败不影响提交
         }
         return result;
@@ -299,8 +439,17 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
     @Transactional
     public int updateGrading(BizGuideSheetAnswer answer)
     {
+        if (answer == null || answer.getAnswerId() == null || answer.getDraftRevision() == null)
+        {
+            throw new ServiceException("答卷评分版本信息不完整");
+        }
         answer.setUpdateTime(new Date());
-        return guideSheetAnswerMapper.updateBizGuideSheetAnswer(answer);
+        int updated = guideSheetAnswerMapper.updateGradingFields(answer);
+        if (updated != 1)
+        {
+            throw new ServiceException("答卷已重新提交，请刷新后再评分");
+        }
+        return updated;
     }
 
     /**
@@ -322,7 +471,10 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
             List<String> fieldNames = new ArrayList<>();
             List<Map<String, Object>> widgetList = (List<Map<String, Object>>) formObj.get("widgetList");
             if (widgetList != null) {
-                extractPageFields(widgetList, pageIndex, fieldNames, new HashSet<>());
+                boolean hasTab = extractPageFields(widgetList, pageIndex, fieldNames, new HashSet<>());
+                if (!hasTab) {
+                    collectFieldNames(widgetList, fieldNames, new HashSet<>());
+                }
             }
 
             int total = fieldNames.size();
@@ -330,7 +482,7 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
             Map<String, Boolean> fields = new LinkedHashMap<>();
             for (String name : fieldNames) {
                 Object val = answerObj.get(name);
-                boolean isFilled = val != null && !String.valueOf(val).trim().isEmpty();
+                boolean isFilled = isAnswerFilled(val);
                 fields.put(name, isFilled);
                 if (isFilled) {
                     filled++;
@@ -352,79 +504,92 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
      * 递归遍历 widgetList，提取指定 tab-pane 页内的所有字段名（name 属性）
      */
     @SuppressWarnings("unchecked")
-    private void extractPageFields(List<Map<String, Object>> widgets, int targetPageIndex,
-                                    List<String> fieldNames, Set<Object> visited) {
-        if (widgets == null) return;
-        for (Map<String, Object> widget : widgets) {
-            if (widget == null || visited.contains(widget)) continue;
-            visited.add(widget);
+    private boolean extractPageFields(Object node, int targetPageIndex,
+                                      List<String> fieldNames, Set<Object> visited) {
+        if (node instanceof List) {
+            for (Object child : (List<?>) node) {
+                if (extractPageFields(child, targetPageIndex, fieldNames, visited)) return true;
+            }
+            return false;
+        }
+        if (!(node instanceof Map) || visited.contains(node)) return false;
 
-            String type = (String) widget.get("type");
-            if ("tab".equals(type)) {
-                // 找到 tab，获取对应 tab-pane
-                List<Map<String, Object>> tabs = (List<Map<String, Object>>) widget.get("tabs");
-                if (tabs != null && targetPageIndex >= 0 && targetPageIndex < tabs.size()) {
-                    Map<String, Object> targetPane = tabs.get(targetPageIndex);
-                    if (targetPane != null) {
-                        List<Map<String, Object>> paneWidgets = (List<Map<String, Object>>) targetPane.get("widgetList");
-                        if (paneWidgets != null) {
-                            collectFieldNames(paneWidgets, fieldNames, new HashSet<>());
-                        }
+        Map<String, Object> widget = (Map<String, Object>) node;
+        visited.add(node);
+        if ("tab".equals(widget.get("type"))) {
+            Object rawTabs = widget.get("tabs");
+            if (rawTabs instanceof List) {
+                List<?> tabs = (List<?>) rawTabs;
+                if (targetPageIndex >= 0 && targetPageIndex < tabs.size()) {
+                    Object targetPane = tabs.get(targetPageIndex);
+                    if (targetPane instanceof Map) {
+                        collectFieldNames(((Map<String, Object>) targetPane).get("widgetList"),
+                                fieldNames, new HashSet<>());
                     }
                 }
-                return; // 找到 tab 后不再继续深入
             }
+            return true;
+        }
+        for (Object value : widget.values()) {
+            if (extractPageFields(value, targetPageIndex, fieldNames, visited)) return true;
+        }
+        return false;
+    }
 
-            // 继续深入其他容器
-            for (Object value : widget.values()) {
-                if (value instanceof List) {
-                    extractPageFields((List<Map<String, Object>>) value, targetPageIndex, fieldNames, visited);
-                } else if (value instanceof Map) {
-                    List<Map<String, Object>> list = new ArrayList<>();
-                    list.add((Map<String, Object>) value);
-                    extractPageFields(list, targetPageIndex, fieldNames, visited);
-                }
+    /**
+     * 递归收集 widgetList 中的所有答卷字段名。
+     */
+    @SuppressWarnings("unchecked")
+    private void collectFieldNames(Object node, List<String> fieldNames, Set<Object> visited) {
+        if (node instanceof List) {
+            for (Object child : (List<?>) node) {
+                collectFieldNames(child, fieldNames, visited);
             }
+            return;
+        }
+        if (!(node instanceof Map) || visited.contains(node)) return;
+
+        Map<String, Object> widget = (Map<String, Object>) node;
+        visited.add(node);
+        String type = widget.get("type") == null ? null : String.valueOf(widget.get("type"));
+        if (!NON_ANSWER_WIDGET_TYPES.contains(type)) {
+            String name = getWidgetFieldKey(widget);
+            if (name != null && type != null && !fieldNames.contains(name)) {
+                fieldNames.add(name);
+            }
+        }
+        // 展示容器本身不计入进度，但其内部仍可能包含可填写组件。
+        for (Object value : widget.values()) {
+            collectFieldNames(value, fieldNames, visited);
         }
     }
 
     /**
-     * 递归收集 widgetList 中的所有字段名（name 属性）
+     * VForm3 运行时以 options.name 作为答卷字段名，旧模板再回退到顶层字段。
      */
     @SuppressWarnings("unchecked")
-    private void collectFieldNames(List<Map<String, Object>> widgets, List<String> fieldNames, Set<Object> visited) {
-        if (widgets == null) return;
-        for (Map<String, Object> widget : widgets) {
-            if (widget == null || visited.contains(widget)) continue;
-            visited.add(widget);
-
-            String type = (String) widget.get("type");
-            // 跳过纯容器类型，不收集为字段
-            if ("tab".equals(type) || "tab-pane".equals(type) || "grid".equals(type) || "grid-col".equals(type)
-                    || "card".equals(type) || "table".equals(type) || "table-cell".equals(type)) {
-                // 继续深入容器
-                for (Object value : widget.values()) {
-                    if (value instanceof List) {
-                        collectFieldNames((List<Map<String, Object>>) value, fieldNames, visited);
-                    }
-                }
-                continue;
-            }
-
-            // 收集字段名（name 属性优先，回退到 id）
-            String name = (String) widget.get("name");
-            if (name == null) name = (String) widget.get("id");
-            if (name != null && type != null) {
-                fieldNames.add(name);
-            }
-
-            // 继续深入子属性（有些字段可能嵌套）
-            for (Object value : widget.values()) {
-                if (value instanceof List) {
-                    collectFieldNames((List<Map<String, Object>>) value, fieldNames, visited);
-                }
-            }
+    private String getWidgetFieldKey(Map<String, Object> widget) {
+        Object fieldKey = null;
+        Object rawOptions = widget.get("options");
+        if (rawOptions instanceof Map) {
+            fieldKey = ((Map<String, Object>) rawOptions).get("name");
         }
+        if (isBlank(fieldKey)) fieldKey = widget.get("name");
+        if (isBlank(fieldKey)) fieldKey = widget.get("id");
+        return isBlank(fieldKey) ? null : String.valueOf(fieldKey).trim();
+    }
+
+    private boolean isBlank(Object value) {
+        return value == null || String.valueOf(value).trim().isEmpty();
+    }
+
+    private boolean isAnswerFilled(Object value) {
+        if (value == null) return false;
+        if (value instanceof CharSequence) return value.toString().trim().length() > 0;
+        if (value instanceof Collection) return !((Collection<?>) value).isEmpty();
+        if (value instanceof Map) return !((Map<?, ?>) value).isEmpty();
+        if (value.getClass().isArray()) return java.lang.reflect.Array.getLength(value) > 0;
+        return true;
     }
 
     /**

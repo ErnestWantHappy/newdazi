@@ -19,7 +19,7 @@
     <div v-if="viewMode === 'table'" v-loading="loading">
       <div class="tip-text">课堂表现分范围 -10 ~ +10，正数为加分，负数为扣分。总分 = min(作业分 + 课堂表现分, 100)</div>
       <el-table class="performance-table" :data="tableData" border stripe max-height="350" style="width: 100%">
-        <el-table-column prop="studentNo" label="学号" width="70" align="center" />
+        <el-table-column prop="studentNo" label="学号" width="70" align="center" sortable :sort-method="naturalCodeCompare" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" />
         <el-table-column label="课堂表现分" width="160" align="center" class-name="performance-score-column">
           <template #default="scope">
@@ -86,6 +86,11 @@ const originalData = ref({}) // 保存原始数据用于对比
 const chartRef = ref(null)
 let chartInstance = null
 const autoSaveTimers = new Map()
+
+// 学号可能以字符串保存；按自然数值顺序比较，避免 1、10、2 的字典序。
+function naturalCodeCompare(a, b) {
+  return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN', { numeric: true, sensitivity: 'base' })
+}
 
 // 判断是否有图表数据
 const hasChartData = computed(() => {

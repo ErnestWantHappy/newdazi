@@ -23,6 +23,18 @@ public class BizQuestion extends BaseEntity
     @Excel(name = "年级", readConverterExp = "1=一年级,2=二年级,3=三年级,4=四年级,5=五年级,6=六年级,7=七年级,8=八年级,9=九年级,一年级=1,二年级=2,三年级=3,四年级=4,五年级=5,六年级=6,七年级=7,八年级=8,九年级=9", combo = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "七年级", "八年级", "九年级"})
     private Long grade;
 
+    /** Python 题目难度：SIMPLE/MEDIUM/HARD；仅 Python 题使用。 */
+    private String difficulty;
+
+    /** 题库管理视图过滤：ALL/COMMON/PYTHON，不持久化。 */
+    private String bankView;
+
+    /** 以下字段来自 Python 配置联表，只用于题库列表展示。 */
+    private String programmingTitle;
+    private String knowledgePoints;
+    private String validationStatus;
+    private Integer testCaseCount;
+
     @Excel(name = "学期", readConverterExp = "0=上册,1=下册,上册=0,下册=1", combo = {"上册", "下册"})
     private String semester;
 
@@ -65,6 +77,18 @@ public class BizQuestion extends BaseEntity
 
     /** 预览状态：pending/converting/success/failed */
     private String previewStatus;
+
+    /** 操作题允许提交的扩展名CSV */
+    private String practicalAllowedExtensions;
+
+    /** 操作题作答方式：FILE 文件作品，PYTHON 在线 Python 编程 */
+    private String practicalMode;
+
+    /** 图片作品最多张数 */
+    private Integer practicalImageMaxCount;
+
+    /** 起始文件、补充资源和教师参考答案 */
+    private java.util.List<PracticalQuestionMaterial> practicalMaterials;
 
     /** P6: 评分项列表 */
     private java.util.List<BizScoringItem> scoringItems;
@@ -113,6 +137,19 @@ public class BizQuestion extends BaseEntity
     public void setGrade(Long grade) {
         this.grade = grade;
     }
+
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+    public String getBankView() { return bankView; }
+    public void setBankView(String bankView) { this.bankView = bankView; }
+    public String getProgrammingTitle() { return programmingTitle; }
+    public void setProgrammingTitle(String programmingTitle) { this.programmingTitle = programmingTitle; }
+    public String getKnowledgePoints() { return knowledgePoints; }
+    public void setKnowledgePoints(String knowledgePoints) { this.knowledgePoints = knowledgePoints; }
+    public String getValidationStatus() { return validationStatus; }
+    public void setValidationStatus(String validationStatus) { this.validationStatus = validationStatus; }
+    public Integer getTestCaseCount() { return testCaseCount; }
+    public void setTestCaseCount(Integer testCaseCount) { this.testCaseCount = testCaseCount; }
 
     public String getSemester() {
         return semester;
@@ -242,6 +279,18 @@ public class BizQuestion extends BaseEntity
         this.previewStatus = previewStatus;
     }
 
+    public String getPracticalAllowedExtensions() { return practicalAllowedExtensions; }
+    public void setPracticalAllowedExtensions(String practicalAllowedExtensions) { this.practicalAllowedExtensions = practicalAllowedExtensions; }
+
+    public String getPracticalMode() { return practicalMode; }
+    public void setPracticalMode(String practicalMode) { this.practicalMode = practicalMode; }
+
+    public Integer getPracticalImageMaxCount() { return practicalImageMaxCount; }
+    public void setPracticalImageMaxCount(Integer practicalImageMaxCount) { this.practicalImageMaxCount = practicalImageMaxCount; }
+
+    public java.util.List<PracticalQuestionMaterial> getPracticalMaterials() { return practicalMaterials; }
+    public void setPracticalMaterials(java.util.List<PracticalQuestionMaterial> practicalMaterials) { this.practicalMaterials = practicalMaterials; }
+
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
@@ -249,6 +298,7 @@ public class BizQuestion extends BaseEntity
                 .append("questionType", getQuestionType())
                 .append("questionContent", getQuestionContent())
                 .append("grade", getGrade())
+                .append("difficulty", getDifficulty())
                 .append("semester", getSemester())
                 .append("lessonNum", getLessonNum())
                 .append("optionA", getOptionA())
@@ -259,6 +309,9 @@ public class BizQuestion extends BaseEntity
                 .append("analysis", getAnalysis())
                 .append("filePath", getFilePath())
                 .append("previewPath", getPreviewPath())
+                .append("practicalAllowedExtensions", getPracticalAllowedExtensions())
+                .append("practicalMode", getPracticalMode())
+                .append("practicalImageMaxCount", getPracticalImageMaxCount())
                 .append("isPublic", getIsPublic())
                 .append("creatorId", getCreatorId())
                 .append("createBy", getCreateBy())

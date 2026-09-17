@@ -16,3 +16,7 @@ export function forceLogout(tokenId) {
     method: 'delete'
   })
 }
+
+export function deptTree() {
+  return request({ url: "/monitor/online/deptTree", method: "get" })
+}

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.AiModelPriceMapper">
+    <resultMap id="PriceResult" type="com.ruoyi.business.domain.AiModelPrice">
+        <id property="providerCode" column="provider_code"/>
+        <id property="modelName" column="model_name"/>
+        <result property="displayName" column="display_name"/>
+        <result property="inputPricePerThousand" column="input_price_per_1k"/>
+        <result property="outputPricePerThousand" column="output_price_per_1k"/>
+        <result property="priceStatus" column="price_status"/>
+        <result property="priceNote" column="price_note"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <select id="selectAll" resultMap="PriceResult">
+        SELECT * FROM biz_ai_model_price ORDER BY provider_code, model_name
+    </select>
+
+    <select id="selectByModel" resultMap="PriceResult">
+        SELECT * FROM biz_ai_model_price
+        WHERE provider_code = #{providerCode} AND model_name = #{modelName}
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO biz_ai_model_price
+            (provider_code, model_name, display_name, input_price_per_1k,
+             output_price_per_1k, price_status, price_note, update_by, create_time, update_time)
+        VALUES
+            (#{providerCode}, #{modelName}, #{displayName}, #{inputPricePerThousand},
+             #{outputPricePerThousand}, #{priceStatus}, #{priceNote}, #{updateBy}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            input_price_per_1k = VALUES(input_price_per_1k),
+            output_price_per_1k = VALUES(output_price_per_1k),
+            price_status = VALUES(price_status),
+            price_note = VALUES(price_note),
+            update_by = VALUES(update_by),
+            update_time = NOW()
+    </insert>
+
+    <select id="selectAverageUsageByModel" resultType="java.util.HashMap">
+        SELECT ROUND(AVG(result_row.prompt_tokens)) AS avgPromptTokens,
+               ROUND(AVG(result_row.completion_tokens)) AS avgCompletionTokens,
+               COUNT(*) AS sampleCount
+        FROM biz_practical_ai_result result_row
+        INNER JOIN biz_practical_ai_job job ON job.job_id = result_row.job_id
+        WHERE job.provider_code = #{providerCode}
+          AND job.model_name = #{modelName}
+          AND result_row.prompt_tokens IS NOT NULL
+          AND result_row.completion_tokens IS NOT NULL
+    </select>
+</mapper>

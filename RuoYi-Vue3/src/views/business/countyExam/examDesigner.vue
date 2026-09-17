@@ -89,8 +89,8 @@
               (已达标)
             </span>
           </h4>
-          <div v-if="hasInconsistentScores" style="color: #E6A23C; font-size: 12px; margin-bottom: 10px;">
-            ⚠️ 注意：检测到同类题目分值不一致。随机抽题模式下，建议保持同题型分值相同，否则学生试卷总分可能浮动。当前预览总分仅供参考。
+          <div v-if="hasInconsistentScores" style="color: #F56C6C; font-size: 12px; margin-bottom: 10px;">
+            随机抽题模式要求同一题型分值一致，否则不同学生的试卷总分会发生变化，当前配置不能保存。
           </div>
           
           <!-- 批量改分工具栏 -->
@@ -419,6 +419,10 @@ function submitForm() {
         proxy.$modal.msgError(`当前总分为 ${totalScore.value} 分，必须凑满 100 分才能保存！`);
         return;
       }
+      if (hasInconsistentScores.value) {
+        proxy.$modal.msgError('随机抽题模式下，同一题型的分值必须一致！');
+        return;
+      }
 
       sortQuestions();
       
@@ -586,7 +590,8 @@ function handleRemoveQuestion(row) {
 function handlePreviewFile(row) {
   if (pdfPreviewRef.value && row.previewPath) {
     const baseUrl = import.meta.env.VITE_APP_BASE_API;
-    const fullPdfUrl = baseUrl + row.previewPath;
+    // 区域抽测题目也复用资源层鉴权，不能直接访问受保护的 /profile/**。
+    const fullPdfUrl = `${baseUrl}/common/resource/view?resource=${encodeURIComponent(row.previewPath)}`;
     pdfPreviewRef.value.open(fullPdfUrl);
   } else {
     proxy.$modal.msgError("没有可预览的PDF文件。");

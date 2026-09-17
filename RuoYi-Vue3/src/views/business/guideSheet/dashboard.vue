@@ -2,14 +2,19 @@
   <div class="guide-sheet-dashboard-page">
   <div class="app-container guide-sheet-dashboard">
     <div class="dashboard-header">
-      <el-button icon="ArrowLeft" @click="goBack">返回列表</el-button>
-      <h2 style="margin:0 16px">{{ sheetTitle || '导学单数据看板' }}</h2>
-      <el-select v-model="classKey" placeholder="选择班级" style="width:180px" size="small" clearable @change="onClassChange">
-        <el-option label="全部班级" value="" />
-        <el-option v-for="c in assignedClasses" :key="c.key" :label="c.label" :value="c.key" />
-      </el-select>
-      <el-button icon="UploadFilled" size="small" @click="openUploads">上传记录</el-button>
-      <el-button icon="Download" type="primary" size="small" @click="handleExport">导出结果</el-button>
+      <el-button icon="ArrowLeft" @click="goBack">{{ lockedContext ? '返回成绩查询' : '返回模板库' }}</el-button>
+      <h2 class="dashboard-title">{{ sheetTitle || '导学单数据看板' }}</h2>
+      <div class="dashboard-header-actions">
+        <el-tag v-if="lockedContext" type="primary" effect="plain" size="large">
+          {{ entryYear }}级 {{ classCode }}班
+        </el-tag>
+        <el-select v-else v-model="classKey" placeholder="选择班级" style="width:180px" size="small" clearable @change="onClassChange">
+          <el-option label="全部班级" value="" />
+          <el-option v-for="c in assignedClasses" :key="c.key" :label="c.label" :value="c.key" />
+        </el-select>
+        <el-button icon="UploadFilled" size="small" :disabled="lockedContext && !classCode" @click="openUploads">上传记录</el-button>
+        <el-button icon="Download" type="primary" size="small" :disabled="lockedContext && !classCode" @click="handleExport">导出结果</el-button>
+      </div>
     </div>
 
     <!-- 第一行：填写进度（左）+ 统计概览（右） -->
@@ -82,6 +87,63 @@
           <el-button size="small" type="primary" @click="sendBroadcast">发送</el-button>
           <el-button size="small" @click="sendRefresh">刷新学生页面</el-button>
         </div>
+      </el-col>
+    </el-row>
+
+    <!-- D2：提交墙 — 3 秒扫一眼谁没交 -->
+    <el-row v-if="classCode" :gutter="16" style="margin-top:16px">
+      <el-col :span="24">
+        <el-card shadow="never" class="submit-wall-card">
+          <template #header>
+            <div class="submit-wall-header">
+              <span>提交墙</span>
+              <span class="submit-wall-meta">
+                已交 {{ computedActiveSubmitted }} · 填写中 {{ computedActiveInProgress }} · 未交 {{ computedActiveNotStarted }}
+              </span>
+            </div>
+          </template>
+          <div class="submit-wall">
+            <div class="wall-group">
+              <div class="wall-label done">已提交</div>
+              <div class="wall-chips">
+                <el-tag
+                  v-for="row in wallSubmitted"
+                  :key="'s-' + row.studentId"
+                  type="success"
+                  effect="plain"
+                  size="small"
+                >{{ row.studentName }}</el-tag>
+                <span v-if="!wallSubmitted.length" class="wall-empty">暂无</span>
+              </div>
+            </div>
+            <div class="wall-group">
+              <div class="wall-label progress">填写中</div>
+              <div class="wall-chips">
+                <el-tag
+                  v-for="row in wallInProgress"
+                  :key="'p-' + row.studentId"
+                  type="warning"
+                  effect="plain"
+                  size="small"
+                >{{ row.studentName }}</el-tag>
+                <span v-if="!wallInProgress.length" class="wall-empty">暂无</span>
+              </div>
+            </div>
+            <div class="wall-group">
+              <div class="wall-label todo">未开始</div>
+              <div class="wall-chips">
+                <el-tag
+                  v-for="row in wallNotStarted"
+                  :key="'n-' + row.studentId"
+                  type="info"
+                  effect="plain"
+                  size="small"
+                >{{ row.studentName }}</el-tag>
+                <span v-if="!wallNotStarted.length" class="wall-empty">暂无</span>
+              </div>
+            </div>
+          </div>
+        </el-card>
       </el-col>
     </el-row>
 
@@ -212,6 +274,9 @@
           <el-table v-else :data="sortedFilteredList" stripe size="small" max-height="calc(100vh - 420px)" v-loading="loading">
             <el-table-column label="班级" prop="classCode" width="80" v-if="!classCode" />
             <el-table-column label="姓名" prop="studentName" width="120" />
+            <el-table-column label="账号" width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.studentUserName || row.studentAccount || row.userName || '-' }}</template>
+            </el-table-column>
             <el-table-column label="学号" prop="studentNo" width="120" />
             <el-table-column label="所在页面" width="120" align="center">
               <template #default="scope">
@@ -233,6 +298,29 @@
               </template>
             </el-table-column>
             <el-table-column label="最后心跳" prop="lastHeartbeat" width="180" />
+            <el-table-column label="提交时间" prop="submitTime" width="180" />
+            <el-table-column label="自动评分" width="90" align="center">
+              <template #default="{ row }">{{ getScoreBreakdown(row).autoScore }}</template>
+            </el-table-column>
+            <el-table-column label="人工调整" width="90" align="center">
+              <template #default="{ row }">{{ getScoreBreakdown(row).manualScore }}</template>
+            </el-table-column>
+            <el-table-column label="最终得分" width="90" align="center">
+              <template #default="{ row }">{{ getScoreBreakdown(row).finalScore }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="250" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" :disabled="!row.answerId" @click="openStudentAnswer(row)">查看答卷</el-button>
+                <el-button link type="success" :disabled="!hasManualGradingItems(row)" @click="openManualGrading(row)">人工批改</el-button>
+                <el-button
+                  link
+                  type="warning"
+                  :disabled="!row.answerId"
+                  :loading="rescoringAnswerId === row.answerId"
+                  @click="handleRescore(row)"
+                >重新评分</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -303,6 +391,22 @@
     </template>
   </el-dialog>
 
+  <el-dialog v-model="answerDialogVisible" title="学生答卷" width="720px" append-to-body>
+    <el-descriptions :column="2" border size="small" class="answer-student-info">
+      <el-descriptions-item label="学生">{{ answerStudent.studentName || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="账号">{{ answerStudent.studentUserName || answerStudent.studentAccount || answerStudent.userName || '-' }}</el-descriptions-item>
+    </el-descriptions>
+    <el-table :data="answerDetailRows" stripe border max-height="480px" style="margin-top: 14px">
+      <el-table-column prop="label" label="题目/字段" min-width="190" show-overflow-tooltip />
+      <el-table-column label="学生答案" min-width="320">
+        <template #default="{ row }">{{ formatStudentAnswer(row.value) }}</template>
+      </el-table-column>
+    </el-table>
+    <template #footer>
+      <el-button @click="answerDialogVisible = false">关闭</el-button>
+    </template>
+  </el-dialog>
+
   <el-dialog v-model="uploadsVisible" title="上传记录" width="760px" append-to-body>
     <el-table :data="uploads" v-loading="uploadsLoading" stripe>
       <el-table-column prop="questionName" label="题目" min-width="150" show-overflow-tooltip />
@@ -311,29 +415,42 @@
         <template #default="{ row }">{{ formatFileSize(row.fileSize) }}</template>
       </el-table-column>
       <el-table-column prop="uploadTime" label="上传时间" width="180" />
+      <el-table-column label="操作" width="72" align="center" fixed="right">
+        <template #default="{ row }">
+          <el-tooltip content="下载学生作品" placement="top">
+            <el-button :icon="Download" circle text type="primary" @click="downloadUpload(row)" />
+          </el-tooltip>
+        </template>
+      </el-table-column>
     </el-table>
   </el-dialog>
   </div>
 </template>
 
 <script setup name="GuideSheetDashboard">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
+import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
 import {
   exportGuideSheet,
-  getGuideSheet,
+  downloadGuideSheetUpload,
+  getGuideSheetBindingSnapshot,
   getProgress,
+  getTeacherGuideSheetAnswer,
   getUploads,
-  saveGuideSheetManualGrades
+  saveGuideSheetManualGrades,
+  rescoreGuideSheetAnswer
 } from '@/api/business/guideSheet'
-import { Warning } from '@element-plus/icons-vue'
+import { Download, Warning } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { sortDashboardStudents } from './utils/dashboardStudentList.js'
 import websocketClient from '@/plugins/websocket'
 
 const router = useRouter()
 const route = useRoute()
+const lockedContext = computed(() => route.query.from === 'score')
 
 const sheetTitle = ref('')
 const classKey = ref('')
@@ -357,16 +474,37 @@ const manualSaving = ref(false)
 const uploadsVisible = ref(false)
 const uploadsLoading = ref(false)
 const uploads = ref([])
+const answerDialogVisible = ref(false)
+const answerStudent = ref({})
+const answerDetailRows = ref([])
+const rescoringAnswerId = ref(null)
 
 const hasManualItems = computed(() => currentGradingItems.value.some(item => item.matchType === 'manual'))
 
+async function loadStudentAnswer(row) {
+  if (row?.answerJson) return row.answerJson
+  if (!row?.answerId || !row?.studentId) return null
+  const response = await getTeacherGuideSheetAnswer(
+    route.params.bindingId,
+    row.studentId,
+    entryYear.value,
+    classCode.value
+  )
+  const data = response.data || response
+  if (!data.hasAnswer) return null
+  row.answerJson = data.answerJson || '{}'
+  return row.answerJson
+}
+
 /** 打开批改详情弹窗 */
-function openGradingDetail(items, row) {
+async function openGradingDetail(items, row) {
   let studentAnswers = {}
   try {
-    studentAnswers = row?.answerJson ? JSON.parse(row.answerJson) : {}
-  } catch (e) {
-    studentAnswers = {}
+    const answerJson = await loadStudentAnswer(row)
+    studentAnswers = answerJson ? JSON.parse(answerJson) : {}
+  } catch (_error) {
+    ElMessage.error('获取学生答卷失败')
+    return
   }
   currentGradingItems.value = (items || []).map(item => ({
     ...item,
@@ -375,6 +513,49 @@ function openGradingDetail(items, row) {
   }))
   currentDetailStudentId.value = row?.studentId || null
   gradingDetailVisible.value = true
+}
+
+async function openStudentAnswer(row) {
+  let answers = {}
+  try {
+    const answerJson = await loadStudentAnswer(row)
+    answers = answerJson ? JSON.parse(answerJson) : {}
+  } catch (_error) {
+    ElMessage.error('获取学生答卷失败或答卷格式无效')
+    return
+  }
+  answerStudent.value = row
+  answerDetailRows.value = Object.entries(answers).map(([key, value]) => ({
+    key,
+    label: getFieldLabel(key),
+    value
+  }))
+  answerDialogVisible.value = true
+}
+
+function openManualGrading(row) {
+  const grading = parseGradingDetail(row.progressDetail)
+  openGradingDetail(grading.details || [], row)
+}
+
+function hasManualGradingItems(row) {
+  return parseGradingDetail(row?.progressDetail).details.some(item => item.matchType === 'manual')
+}
+
+async function handleRescore(row) {
+  if (!row.answerId) return
+  rescoringAnswerId.value = row.answerId
+  try {
+    await rescoreGuideSheetAnswer(row.answerId, {
+      bindingId: route.params.bindingId,
+      entryYear: entryYear.value,
+      classCode: classCode.value
+    })
+    ElMessage.success('重新评分完成')
+    refresh()
+  } finally {
+    rescoringAnswerId.value = null
+  }
 }
 
 async function saveManualGrades() {
@@ -388,7 +569,11 @@ async function saveManualGrades() {
   if (!currentDetailStudentId.value || items.length === 0) return
   manualSaving.value = true
   try {
-    await saveGuideSheetManualGrades(route.params.sheetId, currentDetailStudentId.value, { items })
+    await saveGuideSheetManualGrades(route.params.bindingId, currentDetailStudentId.value, {
+      entryYear: entryYear.value,
+      classCode: classCode.value,
+      items
+    })
     ElMessage.success('人工评分已保存')
     gradingDetailVisible.value = false
     refresh()
@@ -399,7 +584,9 @@ async function saveManualGrades() {
 
 function formatStudentAnswer(value) {
   if (value === null || value === undefined || value === '') return '未作答'
-  return Array.isArray(value) ? value.join('、') : String(value)
+  if (Array.isArray(value)) return value.join('、')
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
 }
 
 function formatFileSize(value) {
@@ -413,21 +600,32 @@ async function openUploads() {
   uploadsVisible.value = true
   uploadsLoading.value = true
   try {
-    const response = await getUploads(route.params.sheetId, entryYear.value || undefined, classCode.value || undefined)
+    const response = await getUploads(route.params.bindingId, entryYear.value || undefined, classCode.value || undefined)
     uploads.value = response.data || []
   } finally {
     uploadsLoading.value = false
   }
 }
 
+async function downloadUpload(row) {
+  const response = await downloadGuideSheetUpload(
+    row.uploadId,
+    entryYear.value,
+    classCode.value
+  )
+  const blob = response instanceof Blob ? response : new Blob([response])
+  saveAs(blob, resolveBlobDownloadFilename(blob, `电子导学单_学生作品_${row.fileName || '附件'}`))
+}
+
 async function handleExport() {
   const response = await exportGuideSheet(
-    route.params.sheetId,
+    route.params.bindingId,
     entryYear.value || undefined,
     classCode.value || undefined
   )
   const suffix = selectedClass.value ? `-${selectedClass.value.label}` : '-全部班级'
-  saveAs(new Blob([response]), `${sheetTitle.value || '导学单'}${suffix}-结果.xlsx`)
+  const blob = response instanceof Blob ? response : new Blob([response])
+  saveAs(blob, resolveBlobDownloadFilename(blob, `${sheetTitle.value || '导学单'}${suffix}_结果.xlsx`))
 }
 
 /** 获取学生自评数据 */
@@ -550,6 +748,24 @@ function parseGradingDetail(detail) {
   }
 }
 
+function getScoreBreakdown(row) {
+  if (row?.isSubmitted !== 'Y') {
+    return { autoScore: '-', manualScore: '-', finalScore: '-' }
+  }
+  const details = parseGradingDetail(row.progressDetail).details
+  const derivedAutoScore = details
+    .filter(item => item.matchType !== 'manual')
+    .reduce((sum, item) => sum + Number(item.score || 0), 0)
+  const derivedManualScore = details
+    .filter(item => item.matchType === 'manual')
+    .reduce((sum, item) => sum + Number(item.score || 0), 0)
+  return {
+    autoScore: row.autoScore ?? derivedAutoScore,
+    manualScore: row.manualAdjustment ?? row.manualScore ?? derivedManualScore,
+    finalScore: row.finalScore ?? row.totalScore ?? (derivedAutoScore + derivedManualScore)
+  }
+}
+
 /**
  * 过滤评分详情，仅保留指定页面的字段
  */
@@ -580,33 +796,20 @@ function getFieldLabel(fieldName) {
   return fieldName
 }
 
-/**
- * 排序列表：
- * - 全部班级：仅显示"已提交"学生，按班级+学号排序
- * - 选择班级后：显示全部学生（含未开始），按状态降序 + 学号数字升序
- * 状态优先级：已提交(2) > 填写中(1) > 未开始(0)
- */
 const sortedFilteredList = computed(() => {
-  const list = progressData.value.list || []
-  if (!classCode.value) {
-    // 全部班级：仅显示已提交
-    return list
-      .filter(row => row.isSubmitted === 'Y')
-      .sort((a, b) => {
-        const clsA = parseInt(a.classCode) || 0
-        const clsB = parseInt(b.classCode) || 0
-        if (clsA !== clsB) return clsA - clsB
-        return (parseInt(a.studentNo) || 0) - (parseInt(b.studentNo) || 0)
-      })
-  }
-  // 选择班级后：显示全部学生，按状态降序 + 学号升序
-  return [...list].sort((a, b) => {
-    const statusA = a.isSubmitted === 'Y' ? 2 : (!a.currentPage || a.currentPage === 0) ? 0 : 1
-    const statusB = b.isSubmitted === 'Y' ? 2 : (!b.currentPage || b.currentPage === 0) ? 0 : 1
-    if (statusA !== statusB) return statusB - statusA
-    return (parseInt(a.studentNo) || 0) - (parseInt(b.studentNo) || 0)
-  })
+  return sortDashboardStudents(progressData.value.list)
 })
+
+/** 提交墙分组：已交 / 填写中 / 未开始 */
+const wallSubmitted = computed(() =>
+  activeList.value.filter(row => row.isSubmitted === 'Y')
+)
+const wallNotStarted = computed(() =>
+  activeList.value.filter(row => !row.currentPage || row.currentPage === 0)
+)
+const wallInProgress = computed(() =>
+  activeList.value.filter(row => row.isSubmitted !== 'Y' && row.currentPage > 0)
+)
 
 const barChartRef = ref(null)
 const completionPieRef = ref(null)
@@ -615,8 +818,23 @@ let barChart = null
 let completionPie = null
 let accuracyPie = null
 let pollTimer = null
+let refreshSequence = 0
+let refreshInFlight = false
+let refreshQueued = false
+let pageActive = true
 
 function goBack() {
+  if (lockedContext.value) {
+    router.push({
+      path: '/business/score',
+      query: {
+        lessonId: route.query.lessonId,
+        entryYear: route.query.entryYear,
+        classCode: route.query.classCode
+      }
+    })
+    return
+  }
   router.push({ name: 'GuideSheet' })
 }
 
@@ -703,16 +921,14 @@ function collectFieldInfo(widgets, result, visited) {
 
 function onClassChange() {
   disposeCharts()
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-  if (classCode.value) {
-    pollTimer = setInterval(refresh, 5000)
-  }
+  stopPolling()
   selectedPage.value = 0
   websocketClient.disconnect()
-  if (entryYear.value && classCode.value && deptId.value) {
+  if (pageActive && entryYear.value && classCode.value && deptId.value) {
     websocketClient.connectClassroom(deptId.value, entryYear.value, classCode.value)
   }
   refresh()
+  startPolling()
 }
 
 function onPageChange(page) {
@@ -736,20 +952,76 @@ function disposeCharts() {
 }
 
 function refresh() {
-  const sheetId = route.params.sheetId
-  if (!sheetId) return
+  const bindingId = route.params.bindingId
+  const requestContext = `${bindingId || ''}:${entryYear.value}:${classCode.value}`
+  if (!pageActive || !bindingId || !entryYear.value || !classCode.value) {
+    progressData.value = { total: 0, submitted: 0, avgScore: 0, list: [] }
+    loading.value = false
+    return
+  }
+  if (refreshInFlight) {
+    refreshQueued = true
+    return
+  }
+  refreshInFlight = true
+  refreshQueued = false
+  const requestId = ++refreshSequence
   loading.value = true
-  getProgress(sheetId, entryYear.value || undefined, classCode.value || undefined).then(res => {
-    progressData.value = res
-    selfAssessment.value = res.selfAssessment || { rateFields: [], studentScores: {} }
+  getProgress(bindingId, entryYear.value || undefined, classCode.value || undefined).then(res => {
+    const currentContext = `${route.params.bindingId || ''}:${entryYear.value}:${classCode.value}`
+    if (!pageActive || requestId !== refreshSequence || requestContext !== currentContext) return
+    const data = res.data || res
+    progressData.value = data
+    selfAssessment.value = data.selfAssessment || { rateFields: [], studentScores: {} }
+    const resolvedDeptId = data.list?.find(item => item?.deptId)?.deptId
+    if (!deptId.value && resolvedDeptId) {
+      deptId.value = resolvedDeptId
+      if (entryYear.value && classCode.value) {
+        websocketClient.connectClassroom(deptId.value, entryYear.value, classCode.value)
+      }
+    }
     nextTick(() => {
       updateBarChart()
       updateCompletionPie()
       updateAccuracyPie()
     })
   }).finally(() => {
-    loading.value = false
+    if (requestId === refreshSequence) loading.value = false
+    refreshInFlight = false
+    if (refreshQueued && pageActive) {
+      refreshQueued = false
+      nextTick(refresh)
+    }
   })
+}
+
+function startPolling() {
+  if (!pageActive || pollTimer || !entryYear.value || !classCode.value) return
+  pollTimer = setInterval(refresh, 5000)
+}
+
+function stopPolling() {
+  if (!pollTimer) return
+  clearInterval(pollTimer)
+  pollTimer = null
+}
+
+function activateDashboard() {
+  pageActive = true
+  if (entryYear.value && classCode.value && deptId.value) {
+    websocketClient.connectClassroom(deptId.value, entryYear.value, classCode.value)
+  }
+  refresh()
+  startPolling()
+}
+
+function deactivateDashboard() {
+  pageActive = false
+  refreshSequence++
+  refreshQueued = false
+  loading.value = false
+  stopPolling()
+  websocketClient.disconnect()
 }
 
 /**
@@ -898,12 +1170,16 @@ function updateAccuracyPie() {
 }
 
 onMounted(() => {
-  const sheetId = route.params.sheetId
-  if (sheetId) {
-    getGuideSheet(sheetId).then(res => {
-      sheetTitle.value = res.data.sheetTitle || ''
-      deptId.value = res.data.deptId
-      const classes = res.data.assignedClasses || []
+  pageActive = true
+  const bindingId = route.params.bindingId
+  if (bindingId) {
+    getGuideSheetBindingSnapshot(bindingId).then(res => {
+      const detail = res.data || res
+      sheetTitle.value = detail.snapshotTitle || detail.sheetTitle || ''
+      deptId.value = detail.deptId
+      const classes = lockedContext.value
+        ? [{ entryYear: route.query.entryYear, classCode: route.query.classCode }]
+        : (detail.assignedClasses || [])
       assignedClasses.value = classes
         .filter(item => item?.classCode)
         .map(item => ({
@@ -912,26 +1188,50 @@ onMounted(() => {
           classCode: item.classCode,
           label: item.label || `${item.entryYear}级 ${item.classCode}班`
         }))
-      const { pages, map, fields } = extractTabPages(res.data.formJson)
+      if (lockedContext.value && assignedClasses.value.length) {
+        classKey.value = assignedClasses.value[0].key
+      }
+      const { pages, map, fields } = extractTabPages(detail.snapshotFormJson || detail.formJson)
       tabPages.value = pages
       pageNameMap.value = map
       pageFields.value = fields
+      if (lockedContext.value) onClassChange()
     })
-    refresh()
   }
   window.addEventListener('resize', handleResize)
 })
 
+onActivated(activateDashboard)
+onDeactivated(deactivateDashboard)
+
 onBeforeUnmount(() => {
-  websocketClient.disconnect()
-  if (pollTimer) clearInterval(pollTimer)
+  deactivateDashboard()
   window.removeEventListener('resize', handleResize)
   disposeCharts()
 })
 </script>
 
 <style scoped>
-.dashboard-header { display: flex; align-items: center; }
+.dashboard-header { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dashboard-title {
+  flex: 1 1 280px;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.dashboard-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+@media (max-width: 1200px) {
+  .dashboard-header { flex-wrap: wrap; }
+  .dashboard-header-actions { flex: 1 0 100%; }
+}
 .chart-card {  }
 .chart-placeholder {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1192,5 +1492,45 @@ onBeforeUnmount(() => {
   font-size: 14px;
   color: #606266;
   min-width: 80px;
+}
+.submit-wall-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.submit-wall-meta {
+  color: #909399;
+  font-size: 12px;
+  font-weight: normal;
+}
+.submit-wall {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wall-group {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.wall-label {
+  flex: 0 0 64px;
+  font-size: 13px;
+  font-weight: 600;
+  padding-top: 2px;
+}
+.wall-label.done { color: #67c23a; }
+.wall-label.progress { color: #e6a23c; }
+.wall-label.todo { color: #909399; }
+.wall-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.wall-empty {
+  color: #c0c4cc;
+  font-size: 12px;
 }
 </style>

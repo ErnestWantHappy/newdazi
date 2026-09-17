@@ -57,7 +57,7 @@
 
       <el-dropdown @command="handleCommand" class="avatar-container right-menu-item hover-effect" trigger="hover">
         <div class="avatar-wrapper">
-          <img :src="userStore.avatar" class="user-avatar" />
+          <img :src="userStore.avatar" class="user-avatar" alt="用户头像" @error="handleAvatarError" />
           <span class="user-nickname"> {{ userStore.nickName }} </span>
         </div>
         <template #dropdown>
@@ -92,10 +92,18 @@ import RuoYiDoc from '@/components/RuoYi/Doc'
 import useAppStore from '@/store/modules/app'
 import useUserStore from '@/store/modules/user'
 import useSettingsStore from '@/store/modules/settings'
+import defAva from '@/assets/images/profile.jpg'
 
 const appStore = useAppStore()
 const userStore = useUserStore()
 const settingsStore = useSettingsStore()
+
+function handleAvatarError(event) {
+  // 历史头像文件可能已被清理，避免导航栏出现破图并阻止重复触发 error。
+  if (event?.target && event.target.src !== defAva) {
+    event.target.src = defAva
+  }
+}
 
 const currentSchoolName = computed(() => {
   const schools = userStore.schools || []
