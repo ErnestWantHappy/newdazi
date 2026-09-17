@@ -257,7 +257,7 @@ public class ScoreQueryController extends BaseController {
 
     /**
      * 设置某课程在某班级的题目开放开关（理论题 / 操作题）。
-     * 校验：班级当前课程必须等于所传课程，防止跨班/跨课误操作；推进课程时自动复位由推进 SQL 负责。
+     * 校验：班级当前课程必须等于所传课程，防止跨班/跨课误操作；推进课程时默认开放由推进 SQL 负责。
      */
     @PutMapping("/lesson-gate")
     public AjaxResult setLessonGate(@RequestBody Map<String, Object> params)

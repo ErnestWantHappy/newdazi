@@ -287,6 +287,21 @@ public class FileConversionUtils {
     }
 
     private static void killProcess(String processName) throws Exception {
+        if (!isWindows()) {
+            // Linux 仅清理当前服务账号、当前端口池的 JODConverter，不能误杀其他程序的 Office。
+            Process listing = new ProcessBuilder("ps", "-u", System.getProperty("user.name"),
+                    "-o", "pid=,comm=,args=").start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(listing.getInputStream(), Charset.defaultCharset()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!isManagedLinuxOfficeProcess(line, processName, buildPortNumbers())) continue;
+                    String pid = line.trim().split("\\s+", 3)[0];
+                    new ProcessBuilder("kill", "-KILL", pid).start().waitFor();
+                }
+            }
+            listing.waitFor();
+            return;
+        }
         ProcessBuilder processBuilder = new ProcessBuilder("taskkill", "/F", "/IM", processName);
         processBuilder.redirectErrorStream(true);
         Process process = processBuilder.start();
@@ -421,10 +436,17 @@ public class FileConversionUtils {
                 log.error("【隔离模式转换】无法清理旧 PDF: {}", pdfFile.getAbsolutePath());
                 return null;
             }
-            File consoleExecutable = new File(libreOfficeHome,
+            // 可执行文件按平台依次尝试：Windows 控制台版、Windows 图形版、Linux 无后缀版。
+            File executable = new File(libreOfficeHome,
                     "program" + File.separator + "soffice.com");
-            File executable = consoleExecutable.isFile() ? consoleExecutable : new File(libreOfficeHome,
+            if (!executable.isFile()) executable = new File(libreOfficeHome,
                     "program" + File.separator + "soffice.exe");
+            if (!executable.isFile()) executable = new File(libreOfficeHome,
+                    "program" + File.separator + "soffice");
+            if (!executable.isFile()) {
+                log.error("【隔离模式转换】找不到 LibreOffice 可执行文件: {}", libreOfficeHome);
+                return null;
+            }
             ProcessBuilder builder = new ProcessBuilder(
                     executable.getAbsolutePath(),
                     "-env:UserInstallation=" + libreOfficeUserProfileUri(profileDir),
@@ -893,14 +915,17 @@ public class FileConversionUtils {
 
     private static int countProcessByName(String processName) {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder("tasklist", "/FI", "IMAGENAME eq " + processName);
+            ProcessBuilder processBuilder = isWindows()
+                    ? new ProcessBuilder("tasklist", "/FI", "IMAGENAME eq " + processName)
+                    : new ProcessBuilder("ps", "-u", System.getProperty("user.name"), "-o", "comm=");
             processBuilder.redirectErrorStream(true);
             Process process = processBuilder.start();
             int count = 0;
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), Charset.defaultCharset()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (line.toLowerCase(Locale.ROOT).startsWith(processName.toLowerCase(Locale.ROOT))) {
+                    if (isWindows() ? line.toLowerCase(Locale.ROOT).startsWith(processName.toLowerCase(Locale.ROOT))
+                            : line.trim().equals(processName)) {
                         count++;
                     }
                 }
@@ -911,5 +936,18 @@ public class FileConversionUtils {
             log.debug("【LibreOffice服务】统计 {} 进程失败: {}", processName, e.getMessage());
             return 0;
         }
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    }
+
+    static boolean isManagedLinuxOfficeProcess(String line, String processName, int[] ports) {
+        String[] fields = line.trim().split("\\s+", 3);
+        if (fields.length != 3 || !fields[0].matches("[0-9]+") || !fields[1].equals(processName)) return false;
+        for (int port : ports) {
+            if (fields[2].contains(".jodconverter_socket_host-127.0.0.1_port-" + port + "_")) return true;
+        }
+        return false;
     }
 }

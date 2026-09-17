@@ -244,6 +244,27 @@ npm run dev
 npm run build:prod
 ```
 
+### 9.0 本机（Windows 开发机）执行环境坑（2026-09-16 实测）
+
+首次只改本地代码、不碰服务器时，按下面写法跑，能少踩四个坑：
+
+```powershell
+# 1) 本项目 PowerShell 前台调用常不回显 stdout，用后台执行再取输出：
+#    以 run_in_background 启动，随后用 TaskOutput 读取。
+# 2) 只跑指定测试类时必须加 -Dsurefire.failIfNoSpecifiedTests=false，
+#    否则其他模块“无匹配用例”会让整轮 build 失败。
+# 3) 本机 surefire fork JVM 会启动失败（forked VM terminated without properly
+#    saying goodbye / Error occurred in starting fork），必须加 -DforkCount=0
+#    在进程内跑；这是环境问题，不是用例失败。
+Set-Location "D:\...\RuoYi-Vue"
+mvn -pl ruoyi-business -am test "-Dtest=Iot*Test" `
+  "-Dsurefire.failIfNoSpecifiedTests=false" "-DforkCount=0"
+```
+
+- Bash 工具在本机不可用（报 `error launching git`），一律改用 PowerShell。
+- 修改 `application.yml` 等资源后要带上 `clean`：`mvn -pl ruoyi-admin -am clean package`。
+- 需要“默认不改动生产行为”的功能，用**默认关闭的配置开关**（如 `iot.mqtt.downlink-enabled=false`），并在 `tasks.md`/ADR 写明打开步骤。
+
 ### 9.1 正式发布统一入口（2026-09-07 起）
 
 正式机发布不再临时拼接 SSH/PowerShell。统一从仓库根目录调用 `scripts/deploy.py`，脚本使用固定 SSH 主机指纹、远端 SYSTEM 计划任务和阶段状态文件；SSH 断开后用 `status` 查询，不重复启动发布。`check` 只做制品/线上基线/服务/数据库鉴权/Nginx/集成健康检查，`deploy` 才会创建新 release、整库备份、切换并在失败时自动回滚。

@@ -77,7 +77,21 @@ class IotMqttReceiverTest
         IotMapper mapper = mock(IotMapper.class);
         IotMqttReceiver receiver = receiver(mapper, mock(IotWebSocketHandler.class), 10);
 
-        receiver.receive("county/unknown", new MqttMessage("9".getBytes(StandardCharsets.UTF_8)));
+        receiver.receive("county/unknown/data", new MqttMessage("9".getBytes(StandardCharsets.UTF_8)));
+
+        verify(mapper, never()).insertMessage(any());
+        verify(mapper).insertEvent(any());
+    }
+
+    @Test
+    void shouldRejectDownlinkControlTopicFromUplinkPath()
+    {
+        IotMapper mapper = mock(IotMapper.class);
+        IotMqttReceiver receiver = receiver(mapper, mock(IotWebSocketHandler.class), 10);
+
+        // 设备若把消息发到下行 control 主题，不能当成学生上报数据入库。
+        receiver.receive("county/10/20/2024-01/light/group01/control",
+                new MqttMessage("{\"ai\":\"ON\"}".getBytes(StandardCharsets.UTF_8)));
 
         verify(mapper, never()).insertMessage(any());
         verify(mapper).insertEvent(any());

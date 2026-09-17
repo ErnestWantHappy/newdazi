@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
@@ -26,8 +28,9 @@ import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.LessonClassScopeMapper;
-import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
+import com.ruoyi.business.mapper.PurgeMapper;
+import com.ruoyi.business.mapper.PracticalGradingDeadlineMapper;
 import com.ruoyi.business.domain.ProgrammingQuestionConfig;
 import com.ruoyi.business.service.LessonGuideSheetBindingService;
 import com.ruoyi.business.service.StudentToolService;
@@ -97,6 +100,10 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private AnswerDeletionGuardService answerDeletionGuardService;
+    @Autowired
+    private PurgeMapper purgeMapper;
+    @Autowired
+    private PurgeFileService purgeFileService;
 
     @Autowired
     private PracticalRubricSnapshotService practicalRubricSnapshotService;
@@ -189,65 +196,132 @@ public class BizLessonServiceImpl implements IBizLessonService
     @Transactional
     public int deleteBizLessonByLessonIds(Long[] lessonIds)
     {
-        LinkedHashSet<Long> existingLessonIds = new LinkedHashSet<>();
-        for (Long lessonId : lessonIds) {
-            if (lessonId == null)
-            {
-                continue;
-            }
-            BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
-            if (lesson == null)
-            {
-                // 删除请求可能因前端重试而重复到达；不存在的课程按已经删除处理。
-                continue;
-            }
-            assertCanManageLesson(lesson);
-            existingLessonIds.add(lessonId);
-        }
-        if (existingLessonIds.isEmpty())
-        {
-            return 0;
-        }
-        Long[] targetIds = existingLessonIds.toArray(new Long[0]);
-        // 先校验课程归属，避免把答题历史等内部状态暴露给无权管理课程的教师。
-        answerDeletionGuardService.assertLessonsDeletable(targetIds);
-        for (Long lessonId : targetIds) {
-            assertLessonHasNoGuideSheetHistory(lessonId);
-            // 级联删除关联数据
-            lessonQuestionMapper.deleteByLessonId(lessonId);
-            lessonAssignmentMapper.deleteByLessonId(lessonId);
-            deleteIotData(lessonId);
-            deleteSupervisionFacts(lessonId);
-        }
-        int affected = bizLessonMapper.deleteBizLessonByLessonIds(targetIds);
-        if (affected != targetIds.length)
-        {
-            throw new ServiceException("部分课程已发生变化，删除已取消，请刷新后重试");
-        }
-        return affected;
+        // 普通删除统一清理成绩与作品，权限仍由课程归属校验兜底。
+        return purgeBizLessonByLessonIds(lessonIds);
     }
 
     @Override
     @Transactional
     public int deleteBizLessonByLessonId(Long lessonId)
     {
-        BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
-        if (lesson == null)
+        return purgeBizLessonByLessonIds(new Long[] { lessonId });
+    }
+    /**
+     * 彻底清除课程：连成绩、作品、附件一起物理删除，不可恢复。
+     * 用户已确认彻底清除语义；仍保留跨校/归属校验与事务，批量失败整体回滚。
+     * 题库题目本身不删（跨课程复用）；129 协作存档与免抽测快照保留（审计）。
+     */
+    @Override
+    @Transactional
+    public int purgeBizLessonByLessonIds(Long[] lessonIds)
+    {
+        LinkedHashSet<Long> existingLessonIds = new LinkedHashSet<>();
+        if (lessonIds != null)
+        {
+            for (Long lessonId : lessonIds)
+            {
+                if (lessonId == null)
+                {
+                    continue;
+                }
+                BizLesson lesson = bizLessonMapper.selectBizLessonByLessonId(lessonId);
+                if (lesson == null)
+                {
+                    continue;
+                }
+                assertCanManageLesson(lesson);
+                existingLessonIds.add(lessonId);
+            }
+        }
+        if (existingLessonIds.isEmpty())
         {
             return 0;
         }
-        assertCanManageLesson(lesson);
-        answerDeletionGuardService.assertLessonsDeletable(new Long[] { lessonId });
-        assertLessonHasNoGuideSheetHistory(lessonId);
-        lessonQuestionMapper.deleteByLessonId(lessonId);
-        lessonAssignmentMapper.deleteByLessonId(lessonId);
-        deleteIotData(lessonId);
-        deleteSupervisionFacts(lessonId);
-        int affected = bizLessonMapper.deleteBizLessonByLessonId(lessonId);
-        if (affected != 1)
+        List<Long> ids = new ArrayList<>(existingLessonIds);
+        // 1) 先收文件候选（删行之前）
+        List<String> fileCandidates = new ArrayList<>(purgeMapper.selectLessonAnswerFilePaths(ids));
+        List<Long> doomedArtifacts = purgeMapper.selectDoomedArtifactIds(ids);
+        if (!doomedArtifacts.isEmpty())
         {
-            throw new ServiceException("课程已发生变化，删除已取消，请刷新后重试");
+            fileCandidates.addAll(purgeMapper.selectArtifactFilePaths(doomedArtifacts));
         }
+        fileCandidates.addAll(purgeMapper.selectLessonReferenceFilePaths(ids));
+        List<Long> roomIds = purgeMapper.selectRoomIdsByLessons(ids);
+        if (!roomIds.isEmpty())
+        {
+            fileCandidates.addAll(purgeMapper.selectCollabFilePathsByRooms(roomIds));
+        }
+        // 2) 按依赖顺序删行：评分与 AI 先于答案，版本附件先于答案，答案先于作品归属
+        purgeMapper.deleteScoringDetailsByLessons(ids);
+        purgeMapper.deleteAiResultsByLessons(ids);
+        if (!doomedArtifacts.isEmpty())
+        {
+            purgeMapper.deleteAttachmentsByArtifacts(doomedArtifacts);
+            purgeMapper.deleteVersionsByArtifacts(doomedArtifacts);
+        }
+        purgeMapper.deleteAnswersByLessons(ids);
+        if (!doomedArtifacts.isEmpty())
+        {
+            purgeMapper.deleteArtifactsByIds(doomedArtifacts);
+        }
+        purgeMapper.deleteAnswerBackupTableByLessons(ids);
+        purgeMapper.deleteAnswerOrphansByLessons(ids);
+        purgeMapper.deleteTaskStatesByLessons(ids);
+        purgeMapper.deletePerformancesByLessons(ids);
+        purgeMapper.deleteCheckinsByLessons(ids);
+        purgeMapper.deleteProgrammingSubmissionsByLessons(ids);
+        purgeMapper.deleteProgrammingDraftsByLessons(ids);
+        purgeMapper.deleteFlowchartSubmissionsByLessons(ids);
+        purgeMapper.deleteFlowchartDraftsByLessons(ids);
+        purgeMapper.deleteFlowchartSnapshotsByLessons(ids);
+        purgeMapper.deleteGuideAnswersByLessons(ids);
+        purgeMapper.deleteGuideBindingsByLessons(ids);
+        purgeMapper.deleteLessonToolsByLessons(ids);
+        if (!roomIds.isEmpty())
+        {
+            purgeMapper.deleteCollabTicketsByRooms(roomIds);
+            purgeMapper.deleteCollabRevisionsByRooms(roomIds);
+        }
+        purgeMapper.deleteCollabRoomsByLessons(ids);
+        purgeMapper.deleteCollabActivitiesByLessons(ids);
+        purgeMapper.deleteGradingDeadlineAuditsByLessons(ids);
+        purgeMapper.deleteGradingDeadlinesMainByLessons(ids);
+        purgeMapper.deleteRubricsByLessons(ids);
+        purgeMapper.deleteReferenceAnswersByLessons(ids);
+        purgeMapper.deleteAiJobsByLessons(ids);
+        purgeMapper.deleteScoreAdjustmentsByLessons(ids);
+        purgeMapper.deleteAssignmentHistoryRowsByLessons(ids);
+        purgeMapper.clearAssignmentNextPointersByLessons(ids);
+        purgeMapper.deleteGroupSnapshotsByLessons(ids);
+        purgeMapper.deleteClassScopesByLessons(ids);
+        // 3) 沿用既有级联（物联、监管事实、题目引用、指派）
+        for (Long lessonId : ids)
+        {
+            lessonQuestionMapper.deleteByLessonId(lessonId);
+            lessonAssignmentMapper.deleteByLessonId(lessonId);
+            deleteIotData(lessonId);
+            deleteSupervisionFacts(lessonId);
+        }
+        Long[] targetIds = ids.toArray(new Long[0]);
+        int affected = bizLessonMapper.deleteBizLessonByLessonIds(targetIds);
+        if (affected != targetIds.length)
+        {
+            throw new ServiceException("部分课程已发生变化，彻底清除已取消，请刷新后重试");
+        }
+        // 4) 文件收尾放在事务提交后：中途失败只留孤儿文件，不产生断裂引用
+        final List<String> pendingFiles = fileCandidates;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization()
+        {
+            @Override
+            public void afterCommit()
+            {
+                try {
+                    purgeFileService.deleteUnreferenced(pendingFiles);
+                } catch (Exception ex) {
+                    log.warn("课程删除已提交，独占文件清理待重试", ex);
+                }
+            }
+        });
         return affected;
     }
 
@@ -719,9 +793,15 @@ public class BizLessonServiceImpl implements IBizLessonService
                 }
                 totalScore += question.getQuestionScore();
             }
+            if (Integer.valueOf(2).equals(detailVo.getShuffleMode()))
+            {
+                // 候选题不等于学生试卷：仅扣除未抽中的理论题，打字和操作题仍全量计分。
+                totalScore -= unselectedQuestionScore(questions, "choice", detailVo.getRandomChoiceCount());
+                totalScore -= unselectedQuestionScore(questions, "judgment", detailVo.getRandomJudgmentCount());
+            }
             if (totalScore != 100L)
             {
-                throw new ServiceException("普通题目总分必须为100分");
+                throw new ServiceException("学生实际作答题目总分必须为100分，当前为" + totalScore + "分");
             }
             // 一课一道操作题：FILE/PYTHON/FLOWCHART 共用一个名额；已有多道的存量课允许保持现状，但不允许新增
             long practicalCount = 0L;
@@ -786,6 +866,28 @@ public class BizLessonServiceImpl implements IBizLessonService
                 throw new ServiceException("开启电子导学单时必须选择一份导学单");
             }
         }
+    }
+
+    /** 部分抽取必须同分，才能用未抽题量扣除候选池分值并保证每份试卷总分一致。 */
+    private long unselectedQuestionScore(List<BizLessonQuestionDetailVo> questions, String type, Integer count)
+    {
+        if (count != null && count < 0)
+        {
+            throw new ServiceException("随机抽题数量不能为负数");
+        }
+        List<BizLessonQuestionDetailVo> candidates = questions.stream()
+                .filter(q -> type.equals(q.getQuestionType())).collect(Collectors.toList());
+        // 与学生端保持一致：未设置、0 或超过题库数量时全部作答。
+        if (count == null || count == 0 || count >= candidates.size())
+        {
+            return 0L;
+        }
+        long score = candidates.get(0).getQuestionScore();
+        if (candidates.stream().anyMatch(q -> q.getQuestionScore() != score))
+        {
+            throw new ServiceException("随机抽题时，同一题型的候选题分值必须一致");
+        }
+        return (candidates.size() - count) * score;
     }
 
     /** 归一化课程用途；非法值回退为测评课，避免脏数据阻断保存 */

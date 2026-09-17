@@ -14,7 +14,9 @@
           <el-button link icon="MoreFilled" />
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item v-if="topic.owner" command="edit">编辑</el-dropdown-item>
+              <el-dropdown-item v-if="topic.owner || (manager && topic.topicType === 'NOTICE')" command="edit">
+                {{ topic.topicType === 'NOTICE' ? '修改通知' : '编辑' }}
+              </el-dropdown-item>
               <el-dropdown-item v-if="topic.owner || manager" command="delete">隐藏</el-dropdown-item>
               <el-dropdown-item v-if="manager" command="pin">{{ topic.isPinned === 'Y' ? '取消置顶' : '置顶' }}</el-dropdown-item>
               <el-dropdown-item v-if="manager && topic.topicType === 'NOTICE'" command="notify">再次通知</el-dropdown-item>

@@ -1,5 +1,8 @@
 # 初中物联网县级 SIoT PoC 设计
 
+> 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
+
+
 ## 1. 架构
 
 ```mermaid
@@ -102,3 +105,48 @@ P2 平台代码、幂等 SQL、模拟器、后端测试和 Vue3 构建已完成�
 - 首页只负责选课程与班级，工作台从路由参数初始化班级，但所有接口仍以服务端教师范围校验为准。
 - 总览数据由现有小组统计派生 `hasRecentActivity` 和“只看有数据”计算列表，不新增表或实时状态字段；实时窗口固定为最近 2 分钟。
 - 详情复用既有明细接口与分页，以 `el-dialog` 承载；设备编码只有不等于小组级哨兵 `data` 时才追加在格式列，避免恒值来源列制造噪音。
+
+## 8. 2026-09-16 AIoT 双向下行设计（本地已实现，未发布）
+
+> 决策依据与验证证据见 `ADR-003-iot-bidirectional-downlink.md`；根因见 `bidirectional-downlink-analysis.md`。
+
+### 8.1 实际使用的 Topic 形状
+
+实现中小组主题为 **6 段**（上文第 3 节的 7 段写法为早期草案，实际按下式落地）：
+
+```text
+上行  county/{学校ID}/{课程ID}/{班级ID}/{活动码}/{groupNN}/data
+下行  county/{学校ID}/{课程ID}/{班级ID}/{活动码}/{groupNN}/control
+```
+
+- 班级账号 ACL 只能约束到 `county/{学校ID}/{课程ID}/{班级ID}`，即 `…/+/+/data` 与 `…/+/+/control`。
+- 下行主题由该组**已入库的上行主题**换末段得到，保证与设备订阅严格配对。
+
+### 8.2 双向链路
+
+```mermaid
+sequenceDiagram
+    participant D as 掌控板
+    participant B as EMQX 129
+    participant P as 平台后端
+    participant AI as AI 网关
+    D->>B: publish …/group01/data
+    B->>P: 推送（订阅 county/#）
+    P->>P: 落库 biz_iot_message + 记 MESSAGE_RECEIVED
+    P->>P: 发 IotMessageReceivedEvent（异步，不阻塞页面刷新）
+    P->>AI: 判定 ON / OFF / HOLD
+    AI-->>P: 回答（不可解析则退回关键词规则）
+    P->>B: publish …/group01/control
+    B->>D: 订阅回调收到 {"ai":"ON",...}
+```
+
+### 8.3 安全与降级
+
+- `iot.mqtt.downlink-enabled` 默认 `false`：关闭时不判定、不发布，也不改平台账号 ACL，代码上到正在上课的服务器行为不变。
+- 教师手动下发走 `POST /business/iot/groups/{groupId}/downlink`，权限沿用实验管理边界（`canManageExperiment`），教研员只读、无关教师拒绝。
+- 上行只认 `/data`；设备若把消息发到 `/control`，记 `UPLINK_TOPIC_REJECTED` 并拒收，不污染学生数据。
+- 载荷为短 JSON（<200 字节）：`{"ai":"ON","reason":"...","text":"...","source":"platform","ts":...}`。
+
+### 8.4 已知限制
+
+班级账号为全班共用（`class_{学校}_{届别}_{班号}`），Broker 只能约束到班级前缀，**同班 A 组可订阅 B 组的 control 主题**；平台侧只校验教师权限，不校验设备身份。课堂场景可接受；若需强隔离，须改为「每组独立账号」，属另一次决策。

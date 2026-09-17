@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -17,9 +18,13 @@ public class ProgrammingSubmissionRecoveryService {
     @Autowired private ProgrammingJudgeMapper programmingMapper;
     @Autowired private ProgrammingSubmissionService programmingSubmissionService;
     @Autowired private Judge0Properties properties;
+    @Value("${ruoyi.migration.startup-recovery-enabled:true}")
+    private boolean startupRecoveryEnabled = true;
 
     @EventListener(ApplicationReadyEvent.class)
     public void recoverStuckSubmissions() {
+        // 迁入的进行中记录需要先对账，不能在验证启动时改成失败。
+        if (!startupRecoveryEnabled) return;
         long seconds = Math.max(30, properties.getRecoveryTimeoutSeconds());
         Date before = new Date(System.currentTimeMillis() - TimeUnit.SECONDS.toMillis(seconds));
         List<ProgrammingSubmission> submissions = programmingMapper.selectStuckSubmissions(before, 200);

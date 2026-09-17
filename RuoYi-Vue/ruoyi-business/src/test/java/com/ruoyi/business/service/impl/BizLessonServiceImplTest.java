@@ -522,6 +522,69 @@ class BizLessonServiceImplTest
         assertEquals(Integer.valueOf(1), captor.getValue().getLessonNum());
     }
 
+    @Test
+    void randomPoolUsesDrawnScoresAndKeepsTypingAndPracticalScores()
+    {
+        LessonDetailVo detail = randomLesson();
+        assertDoesNotThrow(() -> validate(detail));
+        detail.setRandomChoiceCount(2);
+        assertThrows(ServiceException.class, () -> validate(detail));
+    }
+
+    @Test
+    void randomSubsetRejectsDifferentScores()
+    {
+        LessonDetailVo detail = randomLesson();
+        detail.getQuestions().get(1).setQuestionScore(25L);
+        assertThrows(ServiceException.class, () -> validate(detail));
+    }
+
+    @Test
+    void zeroOrOversizedDrawCountIncludesAllCandidates()
+    {
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setShuffleMode(2);
+        detail.setQuestions(Arrays.asList(typedQuestion("choice", 40), typedQuestion("choice", 60)));
+        detail.setRandomChoiceCount(0);
+        assertDoesNotThrow(() -> validate(detail));
+        detail.setRandomChoiceCount(10);
+        assertDoesNotThrow(() -> validate(detail));
+        detail.setRandomChoiceCount(-1);
+        assertThrows(ServiceException.class, () -> validate(detail));
+        detail.setRandomChoiceCount(null);
+        assertDoesNotThrow(() -> validate(detail));
+    }
+
+    @Test
+    void fixedAndShuffledModesStillCountWholePool()
+    {
+        LessonDetailVo detail = randomLesson();
+        for (int mode : new int[] {0, 1})
+        {
+            detail.setShuffleMode(mode);
+            assertThrows(ServiceException.class, () -> validate(detail));
+        }
+    }
+
+    private LessonDetailVo randomLesson()
+    {
+        LessonDetailVo detail = new LessonDetailVo();
+        detail.setShuffleMode(2);
+        detail.setRandomChoiceCount(1);
+        detail.setRandomJudgmentCount(1);
+        detail.setQuestions(Arrays.asList(typedQuestion("choice", 20), typedQuestion("choice", 20),
+                typedQuestion("judgment", 10), typedQuestion("judgment", 10),
+                typedQuestion("typing", 30), typedQuestion("practical", 40)));
+        return detail;
+    }
+
+    private BizLessonQuestionDetailVo typedQuestion(String type, long score)
+    {
+        BizLessonQuestionDetailVo question = question(score);
+        question.setQuestionType(type);
+        return question;
+    }
+
     private BizLessonQuestionDetailVo question(long score)
     {
         BizLessonQuestionDetailVo question = new BizLessonQuestionDetailVo();

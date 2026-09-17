@@ -259,6 +259,19 @@ public class ResearchActivityController extends BaseController
                 .header("Referrer-Policy", "no-referrer")
                 .body(service.getPublicNotice(token));
     }
+    /** 匿名分享留言只读分页：仅未隐藏留言的展示字段，不开放发帖与内部附件。 */
+    @Anonymous
+    @GetMapping("/public/notices/{token}/posts")
+    public ResponseEntity<java.util.Map<String, Object>> publicNoticePosts(
+            @PathVariable String token,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize)
+    {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("Referrer-Policy", "no-referrer")
+                .body(service.getPublicPosts(token, pageNum, pageSize));
+    }
 
     @Anonymous
     @GetMapping("/public/notices/{token}/images")

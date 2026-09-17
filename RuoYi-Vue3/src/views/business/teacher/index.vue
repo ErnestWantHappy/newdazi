@@ -1190,7 +1190,7 @@ async function handleDeleteLesson(lesson) {
   if (isLessonDeleting(lesson.lessonId)) return;
   try {
     await ElMessageBox.confirm(
-      '是否确认删除该课程？此操作将同时删除所有关联的题目和班级指派，且不可恢复。',
+      `确认删除课程“${lesson.lessonTitle || lesson.lessonId}”吗？该课程的成绩、答卷、作答记录和独占作品文件将一并删除，无法恢复。题库题目及其他课程仍引用的文件保留。`,
       '警告',
       {
         confirmButtonText: '确认删除',

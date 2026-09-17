@@ -9,11 +9,13 @@
           <h1>{{ topic.title }}</h1>
         </div>
         <el-space>
-          <el-button v-if="topic.owner" link type="primary" @click="editingTopic = topic; topicDialog = true">编辑</el-button>
+          <el-button v-if="topic.owner || (manager && topic.topicType === 'NOTICE')" link type="primary" icon="Edit" @click="editingTopic = topic; topicDialog = true">
+            {{ topic.topicType === 'NOTICE' ? '修改通知' : '编辑' }}
+          </el-button>
           <el-button v-if="manager" link type="primary" @click="toggleTopicPin">{{ topic.isPinned === 'Y' ? '取消置顶' : '置顶' }}</el-button>
-          <el-button v-if="manager && topic.topicType === 'NOTICE'" link type="warning" @click="notifyDialog = true">再次通知</el-button>
-          <el-button v-if="manager && topic.topicType === 'NOTICE'" link type="success" @click="shareDialog = true">分享通知</el-button>
-          <el-button v-if="topic.owner || manager" link type="danger" @click="removeTopic">隐藏</el-button>
+          <el-button v-if="manager && topic.topicType === 'NOTICE'" link type="warning" icon="Bell" @click="notifyDialog = true">再次通知</el-button>
+          <el-button v-if="manager && topic.topicType === 'NOTICE'" link type="success" icon="Share" @click="shareDialog = true">分享通知</el-button>
+          <el-button v-if="topic.owner || manager" link type="danger" icon="Delete" @click="removeTopic">隐藏</el-button>
         </el-space>
       </div>
       <div class="meta">{{ topic.creatorName }} · {{ topic.deptName || '未标注学校' }} · {{ topic.createTime }}<template v-if="topic.activityTime"> · 活动时间 {{ topic.activityTime }}</template><template v-if="topic.edited"> · 已编辑</template> · 浏览 {{ topic.viewCount || 0 }}</div>

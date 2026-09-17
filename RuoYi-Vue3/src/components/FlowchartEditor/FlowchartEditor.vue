@@ -166,9 +166,10 @@ onMounted(async () => {
   ])
   lf.setTheme({
     baseNode: { fill: '#ffffff', stroke: '#3182ce', strokeWidth: 2 },
-    diamond: { fill: '#fff8e6', stroke: '#e6a23c' },
+    // 菱形/平行四边形必须尖角：LogicFlow 默认主题给两者 radius 8，覆盖为 0 才走直角多边形。
+    diamond: { fill: '#fff8e6', stroke: '#e6a23c', radius: 0 },
     ellipse: { fill: '#ecf8ff', stroke: '#1597bb' },
-    polygon: { fill: '#f0f9eb', stroke: '#4aa564' },
+    polygon: { fill: '#f0f9eb', stroke: '#4aa564', radius: 0 },
     polyline: { stroke: '#476582', strokeWidth: 2 },
     arrow: { fill: '#476582', stroke: '#476582' },
     // 小圆点保持画面清楚，悬浮圆承担更大的鼠标/触摸板命中区。

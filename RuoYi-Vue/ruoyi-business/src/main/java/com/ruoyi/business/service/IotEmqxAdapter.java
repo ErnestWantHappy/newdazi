@@ -92,7 +92,12 @@ public class IotEmqxAdapter
     }
 
     /**
-     * 设置班级 Topic 前缀发布 ACL（例如 county/169/270/2024-01/#）
+     * 设置班级账号 Topic 权限（AIoT 双向）：
+     * 1）发布：只允许本班各小组的上行数据主题 county/{学校}/{课程}/{班级}/{实验}/{小组}/data；
+     * 2）订阅：允许本班原有数据主题 …/data，并兼容已使用的 …/control。
+     *
+     * 班级账号为全班共用，Broker 只能约束到班级前缀，不能区分同班各组设备；
+     * 跨班、跨校发布与订阅仍被默认拒绝。
      */
     public boolean syncClassAcl(String username, String topicPrefix)
     {
@@ -101,42 +106,97 @@ public class IotEmqxAdapter
             return false;
         }
 
+        String base = normalizeTopicBase(topicPrefix);
+        if (base.isEmpty())
+        {
+            log.warn("班级 ACL 前缀为空，拒绝写入宽权限 username={}", username);
+            return false;
+        }
+        String segment = properties.getDownlinkSegment();
+
+        JSONArray rules = new JSONArray();
+        rules.add(buildRule("publish", "allow", base + "/+/+/data"));
+        rules.add(buildRule("subscribe", "allow", base + "/+/+/" + segment));
+        // Mind+ 原程序在同一个 data Topic 发布和订阅，不能仅授权新 control Topic。
+        if (!"data".equals(segment))
+        {
+            rules.add(buildRule("subscribe", "allow", base + "/+/+/data"));
+        }
+        return putUserRules(username, rules, "班级 Topic 权限");
+    }
+
+    /**
+     * 为平台订阅账号补齐下行发布权限。
+     * 该账号原本只有订阅权限；下发必须能向各组 control 主题发布。
+     * 用户规则是覆盖写，因此必须同时写回订阅规则，否则会丢掉整条接收链路。
+     */
+    public boolean syncDownlinkPublisherAcl(String username)
+    {
+        if (username == null || username.trim().isEmpty() || !isApiConfigured())
+        {
+            return false;
+        }
+
+        JSONArray rules = new JSONArray();
+        rules.add(buildRule("subscribe", "allow", "county/#"));
+        rules.add(buildRule("publish", "allow", "county/+/+/+/+/+/" + properties.getDownlinkSegment()));
+        return putUserRules(username, rules, "平台下行发布权限");
+    }
+
+    /** 去掉末尾的 /# 与 #，只保留可拼接的 Topic 前缀。 */
+    private String normalizeTopicBase(String topicPrefix)
+    {
+        String base = topicPrefix == null ? "" : topicPrefix.trim();
+        if (base.endsWith("/#"))
+        {
+            base = base.substring(0, base.length() - 2);
+        }
+        else if (base.endsWith("#"))
+        {
+            base = base.substring(0, base.length() - 1);
+        }
+        while (base.endsWith("/"))
+        {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base;
+    }
+
+    private JSONObject buildRule(String action, String permission, String topic)
+    {
+        JSONObject rule = new JSONObject();
+        rule.put("action", action);
+        rule.put("permission", permission);
+        rule.put("topic", topic);
+        return rule;
+    }
+
+    /**
+     * 覆盖写入某账号的用户级规则。EMQX v5 的用户规则 PUT 接口要求同时携带 username，缺少时会返回 400。
+     */
+    private boolean putUserRules(String username, JSONArray rules, String scene)
+    {
         String baseUrl = trimTrailingSlash(properties.getEmqxApiUrl());
-        // EMQX v5 内置数据库授权端点
         String aclUrl = baseUrl + "/authorization/sources/built_in_database/rules/users/" + urlEncode(username);
 
         try
         {
-            String pattern = topicPrefix.endsWith("/#") ? topicPrefix : (topicPrefix.endsWith("/") ? topicPrefix + "#" : topicPrefix + "/#");
-
-            JSONObject rule = new JSONObject();
-            rule.put("action", "publish");
-            rule.put("permission", "allow");
-            rule.put("topic", pattern);
-
-            JSONArray rules = new JSONArray();
-            rules.add(rule);
-
             JSONObject body = new JSONObject();
-            // EMQX v5 的用户规则 PUT 接口要求同时携带 username，缺少时会返回 400。
             body.put("username", username);
             body.put("rules", rules);
 
             HttpResult response = sendRequest(aclUrl, "PUT", body.toJSONString());
             if (response.statusCode == 200 || response.statusCode == 204)
             {
-                log.info("EMQX 班级 Topic ACL 设置成功 username={} prefix={}", username, pattern);
+                log.info("EMQX {} 设置成功 username={} rules={}", scene, username, rules.size());
                 return true;
             }
-            else
-            {
-                log.warn("EMQX 班级 ACL 设置响应非预期 status={} body={}", response.statusCode, response.body);
-                return false;
-            }
+            log.warn("EMQX {} 设置响应非预期 status={} body={}", scene, response.statusCode, response.body);
+            return false;
         }
         catch (Exception e)
         {
-            log.warn("EMQX 班级 ACL 设置异常 username={}, 原因: {}", username, e.getMessage());
+            log.warn("EMQX {} 设置异常 username={}, 原因: {}", scene, username, e.getMessage());
             return false;
         }
     }

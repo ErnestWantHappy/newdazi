@@ -42,6 +42,13 @@ export function delStudent(studentId) {
     method: 'delete'
   })
 }
+// 彻底清除学生（含成绩与作品，不可恢复，需 business:student:purge 权限）
+export function purgeStudent(studentId) {
+  return request({
+    url: '/business/student/purge/' + studentId,
+    method: 'delete'
+  })
+}
 
 // 按班级批量删除学生
 export function delStudentByClass(query) {

@@ -2,6 +2,7 @@ package com.ruoyi.business.service;
 
 import java.util.Date;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -15,10 +16,14 @@ public class PracticalAiJobRecoveryService
 {
     @Autowired private PracticalAiGradingMapper mapper;
     @Autowired private PracticalAiJobWorker worker;
+    @Value("${ruoyi.migration.startup-recovery-enabled:true}")
+    private boolean startupRecoveryEnabled = true;
 
     @EventListener(ApplicationReadyEvent.class)
     public void recoverIncompleteJobs()
     {
+        // 迁移验证不能重新调用复制库中的历史模型任务。
+        if (!startupRecoveryEnabled) return;
         for (PracticalAiJob job : mapper.selectRecoverableJobs())
         {
             if ("CANCEL_REQUESTED".equals(job.getJobStatus()))

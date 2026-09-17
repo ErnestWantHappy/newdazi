@@ -53,6 +53,13 @@ public interface IBizStudentService
      * @return 结果
      */
     public int deleteBizStudentByStudentIds(Long[] studentIds);
+    /**
+     * 彻底清除学生（含成绩与作品，不可恢复；用户已确认语义）。
+     *
+     * @param studentIds 需要彻底清除的学生主键集合
+     * @return 结果
+     */
+    public int purgeBizStudentByStudentIds(Long[] studentIds);
 
     /**
      * 删除学生管理信息

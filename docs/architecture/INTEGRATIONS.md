@@ -1,5 +1,8 @@
 # 外部协议与实时链路
 
+> 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
+
+
 ## Judge0
 
 - 调用方向：平台后端 → Judge0，浏览器不直接请求 Judge0。
@@ -12,7 +15,7 @@
 
 ## CryptPad
 
-- **2026-09-06 晚实施状态（1.30.5 已发布）**：服务仍位于 129，浏览器只访问 123。123 的 `http://10.52.1.123:3018` 主入口及 `http://10.52.1.123:3019` 沙箱入口保持不变，129 对外配置及实际 Nginx CSP 已对应调整，数据卷和成员姓名补丁保留。平台 NSSM 已切到新 release 并将会话地址指向 3018 绝对地址（`/cryptpad/` 子路径代理因编辑器内部根路径资源无法跟随而停用）。编辑器页等待初始化 Promise 并显式传入主服务地址；发布时曾因环境变量误压单行致集成短暂失效，已逐项重建并验证 ready。文档实际打开、双人编辑保存与真实机房网络仍待教师真实班级复验，不能声称完全恢复。
+- **2026-09-09 方案 A**：服务仍位于 129，浏览器只访问 **130**。主入口 `http://10.52.1.130:3018`，沙箱 `http://10.52.1.130:3019`（130 Nginx 反代 129:80，Host 分别为 office / office-sandbox）。`frame-ancestors` 允许 `http://10.52.1.130` 与 `http://xxkj.xsedu.net.cn`。123:3018/3019 仅留回滚，旧垫作废。`/cryptpad/` 子路径代理仍不可用。双人打开与全县教育网 ACL 待现场复验。
 
 - 调用方向：Vue3 编辑页加载 Integration API；平台后端签发受限会话并保存平台侧房间/版本。
 - 身份：平台生成稳定参与者 ID，显示名不暴露内部 ID；OnlyOffice 参与人列表由 `users[nId].name`（成员表名字）优先，本地 `integrationConfig.user.name` 仅作兜底——该修复通过服务器侧 `patches/inner.js` 只读挂载覆盖容器内 `/cryptpad/www/common/onlyoffice/inner.js` 完成，改镜像/重建容器时不得丢失挂载。
@@ -80,3 +83,9 @@ flowchart LR
 - CryptPad `/checkup/` 与基础 API 可达只证明服务探活；当前 HTTP/WS 明确是临时验收态，不代表正式传输安全，也不替代同班多人、刷新恢复和保存版本递增验收。
 - Judge0 根地址可达但接口受鉴权保护；没有可用隔离令牌时不得绕过鉴权开展并发压测。
 - EMQX：平台接收器已在正式环境启用并连上 broker（订阅 county/#）；内置数据库班级账号、精确 ACL、订阅账号和管理 API 密钥均已配置生效，跨班发布与订阅拒绝已验证。教师收集页、小组统计、双板 10 分钟到达率和断网恢复仍待真实课堂试点。
+
+
+2026-09-14：130 消息端口和 EMQX 管理 API 均正常，built_in_database 已启用。补齐当前 release 的 iot.mqtt.emqx-api-url/key/secret（凭据引用现有环境变量），尚未重启后端、未验证班级恢复。单有 IOT_EMQX_API_KEY/SECRET 环境变量不能替代 application.yml 的属性映射。本地已补映射，未来发布必须保留外置地址。
+
+
+2026-09-14 后续状态：用户授权后已仅重启 xueyeceping-130，PID168090，首页/API/代理均200，EMQX管理API及授权源正常。外置配置已随启动加载，取代此前待重启状态；失败班级重试同步与硬件收数仍待验证。未打包部署或Git推送。见 PROJECT_CORE.md v3.60。

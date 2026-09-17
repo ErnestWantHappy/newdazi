@@ -12,9 +12,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.business.domain.dto.IotClassGroupingRequest;
 import com.ruoyi.business.domain.dto.IotDeviceRequest;
+import com.ruoyi.business.domain.dto.IotDownlinkRequest;
 import com.ruoyi.business.domain.dto.IotExperimentRequest;
 import com.ruoyi.business.domain.dto.IotGroupRequest;
 import com.ruoyi.business.domain.dto.IotRotatePasscodeRequest;
+import com.ruoyi.business.service.IotDownlinkService;
 import com.ruoyi.business.service.IotExperimentService;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
@@ -27,6 +29,7 @@ import com.ruoyi.common.enums.BusinessType;
 public class IotExperimentController extends BaseController
 {
     @Autowired private IotExperimentService service;
+    @Autowired private IotDownlinkService downlinkService;
 
     @GetMapping("/experiments")
     @PreAuthorize("@ss.hasAnyRoles('admin,teacher,researcher')")
@@ -180,5 +183,21 @@ public class IotExperimentController extends BaseController
                                       @RequestParam(defaultValue = "20") Integer pageSize)
     {
         return success(service.listStudentMessages(lessonId, pageNum, pageSize));
+    }
+
+    /**
+     * 教师手动下行：把一句话（或直接指定 ON/OFF/HOLD）下发到本组 control 主题，供设备订阅控制灯。
+     * 只允许管理本人可管的实验小组，避免跨班下发。
+     */
+    @PostMapping("/groups/{groupId}/downlink")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
+    @Log(title = "物联网下行下发", businessType = BusinessType.OTHER, isSaveRequestData = false)
+    public AjaxResult downlink(@PathVariable Long groupId, @RequestBody IotDownlinkRequest request)
+    {
+        if (request == null)
+        {
+            return error("下发内容不能为空");
+        }
+        return success(downlinkService.manualSend(groupId, request.getText(), request.getCommand()));
     }
 }

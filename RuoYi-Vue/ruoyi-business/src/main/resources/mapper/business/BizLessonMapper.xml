@@ -254,18 +254,8 @@
             'self' as course_type,
             COALESCE(NULLIF((SELECT u.nick_name FROM sys_user u WHERE u.user_id = biz_lesson.creator_id LIMIT 1), ''), create_by) as creator_name,
             1 as can_design,
-            CASE
-                WHEN EXISTS (SELECT 1 FROM biz_student_answer a WHERE a.lesson_id = biz_lesson.lesson_id) THEN 0
-                WHEN EXISTS (SELECT 1 FROM biz_lesson_guide_sheet_binding b WHERE b.lesson_id = biz_lesson.lesson_id) THEN 0
-                ELSE 1
-            END as can_delete,
-            CASE
-                WHEN EXISTS (SELECT 1 FROM biz_student_answer a WHERE a.lesson_id = biz_lesson.lesson_id)
-                    THEN '课程已有学生答题记录，为保留成绩历史不可删除'
-                WHEN EXISTS (SELECT 1 FROM biz_lesson_guide_sheet_binding b WHERE b.lesson_id = biz_lesson.lesson_id)
-                    THEN '该课程存在电子导学单历史快照和答卷，不能物理删除'
-                ELSE NULL
-            END as delete_block_reason,
+            1 as can_delete,
+            NULL as delete_block_reason,
             (SELECT count(1) FROM biz_lesson_question lq 
              LEFT JOIN biz_question q ON lq.question_id = q.question_id 
              WHERE lq.lesson_id = biz_lesson.lesson_id AND q.question_type = 'practical') > 0 as has_practical,

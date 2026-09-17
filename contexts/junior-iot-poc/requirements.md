@@ -1,5 +1,8 @@
 # 初中物联网县级 SIoT PoC 需求
 
+> 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
+
+
 > 状态（2026-08-19）：SIoT P0/P1 已验证；P2 正式安全门禁因 SIoT 2618 无法创建可认证的独立强密码账号而阻断。用户已确认启动标准 MQTT Broker 与 Mind+ 的并行兼容验证；仍不重做 Mind+，不做考试和自动评分。
 
 > 2026-08-20：用户现场确认 Mind+ SIoT 模块连接 `10.52.1.129:1883` 的 EMQX 成功，标准 Broker 兼容门禁关闭。P2 正式架构改为 EMQX 管理的每设备账号与精确 Topic ACL；禁止把共享 SIoT 弱账号用于多校正式课堂。平台 IoT 5 张业务表已在正式 `ry-vue` 建立，MQTT 接收器尚未启用。

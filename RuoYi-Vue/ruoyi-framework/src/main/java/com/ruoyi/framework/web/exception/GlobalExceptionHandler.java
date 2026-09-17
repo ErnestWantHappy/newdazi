@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.dao.DataAccessException;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -114,6 +115,16 @@ public class GlobalExceptionHandler
     {
         log.warn("请求地址'{}',请求体反序列化失败:'{}'", request.getRequestURI(), e.getMessage());
         return AjaxResult.error(HttpStatus.BAD_REQUEST, "请求参数格式错误");
+    }
+
+    /**
+     * 上传超过 Spring 限制时给出业务口径，避免落入“系统繁忙”500 分支。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public AjaxResult handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e, HttpServletRequest request)
+    {
+        log.warn("请求地址'{}',上传大小超过限制", request.getRequestURI());
+        return AjaxResult.error("上传文件过大。课程资源压缩包请不超过50MB，也可改用云盘链接");
     }
 
     /**

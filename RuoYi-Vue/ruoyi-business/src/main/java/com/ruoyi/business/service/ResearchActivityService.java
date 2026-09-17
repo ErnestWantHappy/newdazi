@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -41,6 +42,7 @@ import com.ruoyi.business.domain.dto.ResearchTopicSaveRequest;
 import com.ruoyi.business.domain.vo.ResearchNotificationSummaryVo;
 import com.ruoyi.business.domain.vo.ResearchNotificationVo;
 import com.ruoyi.business.domain.vo.ResearchPostVo;
+import com.ruoyi.business.domain.vo.ResearchPublicPostVo;
 import com.ruoyi.business.domain.vo.ResearchPublicNoticeVo;
 import com.ruoyi.business.domain.vo.ResearchPublicShareVo;
 import com.ruoyi.business.domain.vo.ResearchResourceVo;
@@ -140,7 +142,7 @@ public class ResearchActivityService
     {
         accessService.requireReadableRole();
         BizResearchTopic existing = accessService.requireActiveTopic(topicId);
-        accessService.requireTopicAuthor(existing);
+        accessService.requireTopicEditable(existing);
         if (!existing.getTopicType().equals(request.getTopicType()))
             throw new ServiceException("主题发布后不能修改类型");
         SanitizedHtml clean = sanitizer.sanitize(request.getContentHtml());
@@ -159,7 +161,7 @@ public class ResearchActivityService
         mapper.updateTopic(existing);
         // 编辑正文绝不自动重发通知；只能走显式 notify 接口。
         ResearchTopicVo result = mapper.selectTopicById(topicId);
-        result.setOwner(Boolean.TRUE);
+        result.setOwner(SecurityUtils.getUserId().equals(existing.getCreatorId()));
         return result;
     }
 
@@ -512,11 +514,45 @@ public class ResearchActivityService
         return requirePublicNotice(token);
     }
 
+    public Map<String, Object> getPublicPosts(String token, int pageNum, int pageSize)
+    {
+        String tokenHash = validateAndHashPublicToken(token);
+        // 令牌即 authority：先确认分享有效（撤销/过期即 404），再读该主题下未隐藏留言。
+        if (mapper.selectPublicNoticeHtmlByTokenHash(tokenHash) == null)
+        {
+            throw new ServiceException("该通知不存在或已失效", 404);
+        }
+        int safePage = Math.max(pageNum, 1);
+        int safeSize = Math.min(Math.max(pageSize, 1), 20);
+        com.github.pagehelper.PageHelper.startPage(safePage, safeSize);
+        // 公开页只展示课堂反思/活动纪实，课程资源帖没有正文且不应出现空白卡片。
+        List<ResearchPublicPostVo> rows = mapper.selectPublicPostsByTokenHash(tokenHash);
+        com.github.pagehelper.PageInfo<ResearchPublicPostVo> page =
+                new com.github.pagehelper.PageInfo<ResearchPublicPostVo>(rows);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("rows", page.getList());
+        result.put("total", page.getTotal());
+        return result;
+    }
+
     public Path getPublicNoticeImage(String token, String imageUrl)
     {
         String tokenHash = validateAndHashPublicToken(token);
         String contentHtml = mapper.selectPublicNoticeHtmlByTokenHash(tokenHash);
-        if (StringUtils.isBlank(contentHtml) || !containsImageSource(contentHtml, imageUrl))
+        boolean allowed = contentHtml != null && containsImageSource(contentHtml, imageUrl);
+        if (!allowed)
+        {
+            // 留言区图片同样走令牌代理：仅放行同一分享主题下未隐藏留言正文引用过的图。
+            List<String> postHtmls = mapper.selectPublicPostHtmlsByTokenHash(tokenHash);
+            if (postHtmls != null)
+            {
+                for (String html : postHtmls)
+                {
+                    if (containsImageSource(html, imageUrl)) { allowed = true; break; }
+                }
+            }
+        }
+        if (!allowed)
         {
             throw new ServiceException("通知图片不存在或已失效", 404);
         }

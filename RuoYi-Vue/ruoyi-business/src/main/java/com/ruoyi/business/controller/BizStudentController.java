@@ -108,6 +108,17 @@ public class BizStudentController extends BaseController
     {
         return toAjax(bizStudentService.deleteBizStudentByStudentIds(studentIds));
     }
+    /**
+     * 彻底清除学生（含成绩与作品，不可恢复；用户已确认彻底清除语义）。
+     * 独立权限 business:student:purge，默认只给管理员，教师需单独授权。
+     */
+    @PreAuthorize("@ss.hasPermi('business:student:purge')")
+    @Log(title = "学生管理", businessType = BusinessType.DELETE)
+    @DeleteMapping("/purge/{studentIds}")
+    public AjaxResult purge(@PathVariable Long[] studentIds)
+    {
+        return toAjax(bizStudentService.purgeBizStudentByStudentIds(studentIds));
+    }
 
     /**
      * 按班级批量删除学生

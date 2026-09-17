@@ -1,6 +1,6 @@
 <template>
   <el-dialog v-model="visible" title="分享活动通知" width="520px" @open="loadStatus">
-    <el-alert type="info" :closable="false" show-icon title="链接无需登录即可查看，仅包含通知正文、活动时间和发布信息。" />
+    <el-alert type="info" :closable="false" show-icon title="链接无需登录即可公开查看，包含通知正文、活动时间及教师交流留言。" />
     <el-form label-width="100px" class="share-form">
       <el-form-item label="有效期">
         <el-select v-model="expireDays" :disabled="generating" style="width: 180px">

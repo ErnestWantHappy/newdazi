@@ -23,7 +23,7 @@ class StudentPresenceServiceTest
         RedisCache redis = mock(RedisCache.class);
         StudentPresenceService service = new StudentPresenceService();
         org.springframework.test.util.ReflectionTestUtils.setField(service, "redisCache", redis);
-        when(redis.scanKeys("classroom:presence:*", 200)).thenReturn(Arrays.asList(
+        when(redis.scanKeys("classroom:presence:*", 200L)).thenReturn(Arrays.asList(
                 "classroom:presence:10:device-a", "classroom:presence:10:device-b",
                 "classroom:presence:99:other"));
         Map<String, Object> first = new LinkedHashMap<>();
@@ -38,6 +38,6 @@ class StudentPresenceServiceTest
         assertEquals(2, result.get(10L).get("onlineDeviceCount"));
         assertEquals("10.0.0.2", result.get(10L).get("connectionIp"));
         assertEquals(false, result.get(11L).get("online"));
-        verify(redis).scanKeys("classroom:presence:*", 200);
+        verify(redis).scanKeys("classroom:presence:*", 200L);
     }
 }

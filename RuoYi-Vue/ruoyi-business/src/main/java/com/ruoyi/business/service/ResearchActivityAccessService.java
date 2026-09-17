@@ -45,6 +45,23 @@ public class ResearchActivityAccessService
         }
     }
 
+    /**
+     * 校验主题是否允许修改：本人可改；活动通知允许管理员或教研员统筹维护。
+     */
+    public void requireTopicEditable(BizResearchTopic topic)
+    {
+        if (topic == null) throw new ServiceException("主题不存在");
+        if (SecurityUtils.getUserId().equals(topic.getCreatorId()))
+        {
+            return;
+        }
+        if (ResearchActivityConstants.TOPIC_NOTICE.equals(topic.getTopicType()) && isManager())
+        {
+            return;
+        }
+        throw new ServiceException("只能修改本人发布的主题，或由教研员/管理员维护活动通知", 403);
+    }
+
     public void requirePostAuthor(BizResearchPost post)
     {
         if (post == null) throw new ServiceException("留言不存在");

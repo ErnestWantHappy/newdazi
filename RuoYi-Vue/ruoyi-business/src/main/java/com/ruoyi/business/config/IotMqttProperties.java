@@ -20,6 +20,15 @@ public class IotMqttProperties
     private int maxMessagesPerMinuteGlobal = 5000;
     private int maxTopicLength = 256;
 
+    // 平台→设备下行（AIoT 双向）。默认关闭：未验收前不改变现有课堂单向行为。
+    private boolean downlinkEnabled = false;
+    /** 下行主题末段；上行固定 data，下行使用 control，与 buildGroupTopic 同前缀。 */
+    private String downlinkSegment = "control";
+    /** 同一小组两次自动下发的最小间隔（毫秒），防止连续上报逐条触发刷屏。 */
+    private int downlinkMinIntervalMillis = 3000;
+    private int downlinkAiTimeoutMillis = 6000;
+    private int downlinkAiMaxTokens = 200;
+
     // EMQX v5 管理 API 配置
     private String emqxApiUrl = "http://127.0.0.1:18083/api/v5";
     private String emqxApiToken;
@@ -65,6 +74,21 @@ public class IotMqttProperties
 
     public int getMaxTopicLength() { return maxTopicLength; }
     public void setMaxTopicLength(int value) { maxTopicLength = value; }
+
+    public boolean isDownlinkEnabled() { return downlinkEnabled; }
+    public void setDownlinkEnabled(boolean value) { downlinkEnabled = value; }
+
+    public String getDownlinkSegment() { return downlinkSegment; }
+    public void setDownlinkSegment(String value) { downlinkSegment = value; }
+
+    public int getDownlinkMinIntervalMillis() { return downlinkMinIntervalMillis; }
+    public void setDownlinkMinIntervalMillis(int value) { downlinkMinIntervalMillis = value; }
+
+    public int getDownlinkAiTimeoutMillis() { return downlinkAiTimeoutMillis; }
+    public void setDownlinkAiTimeoutMillis(int value) { downlinkAiTimeoutMillis = value; }
+
+    public int getDownlinkAiMaxTokens() { return downlinkAiMaxTokens; }
+    public void setDownlinkAiMaxTokens(int value) { downlinkAiMaxTokens = value; }
 
     public String getEmqxApiUrl() { return emqxApiUrl; }
     public void setEmqxApiUrl(String emqxApiUrl) { this.emqxApiUrl = emqxApiUrl; }

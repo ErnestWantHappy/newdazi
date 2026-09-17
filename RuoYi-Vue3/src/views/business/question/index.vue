@@ -725,12 +725,13 @@
     </el-dialog>
 
     <el-dialog v-model="pythonImportOpen" title="导入 Python OJ 题目" width="760px" append-to-body>
-      <el-alert title="Excel 必须包含“题目”和“测试点”两个 Sheet。上传只做预检，不会立即写入题库。" type="info" :closable="false" />
+      <el-alert title="Excel 必须包含“题目”和“测试点”两个 Sheet。每道题的测试点权重合计必须为 100（可写 20% 或 20，空权重按 1 计）。上传只做预检，不会立即写入题库。" type="info" :closable="false" />
       <div class="python-import-actions">
         <el-upload :auto-upload="false" accept=".xlsx,.xls" :show-file-list="false" :on-change="handlePythonWorkbook">
           <el-button type="primary" :loading="pythonImportLoading">选择 Excel 并预检</el-button>
         </el-upload>
         <el-button link type="primary" @click="downloadPythonTemplate">下载双 Sheet 模板</el-button>
+        <el-button v-if="pythonImportReport && !pythonImportReport.ready" link type="success" @click="averageImportWeights">平均分配权重并重新预检</el-button>
       </div>
       <div v-if="pythonImportReport" class="import-report">
         <el-descriptions :column="3" border><el-descriptions-item label="题目数">{{ pythonImportReport.questionCount }}</el-descriptions-item><el-descriptions-item label="测试点数">{{ pythonImportReport.testCaseCount }}</el-descriptions-item><el-descriptions-item label="预检结果"><el-tag :type="pythonImportReport.ready ? 'success' : 'danger'">{{ pythonImportReport.ready ? '全部通过' : '需要修正' }}</el-tag></el-descriptions-item></el-descriptions>
@@ -834,6 +835,8 @@ const pythonImportOpen = ref(false);
 const pythonImportLoading = ref(false);
 const pythonImportConfirming = ref(false);
 const pythonImportReport = ref(null);
+// 最近一次解析出的导入载荷，用于“平均分配权重”后重新预检（用户主动点击才改权重）。
+const lastPythonPayload = ref(null);
 const flowchartPreviewVisible = ref(false);
 const flowchartPreviewQuestion = ref(null);
 const originalFlowchartConfig = ref(null);
@@ -965,6 +968,7 @@ function changeBankView(value) {
 
 function openPythonImport() {
   pythonImportReport.value = null;
+  lastPythonPayload.value = null;
   pythonImportOpen.value = true;
 }
 
@@ -972,9 +976,17 @@ function cell(row, ...names) {
   for (const name of names) if (row[name] !== undefined && row[name] !== null) return row[name];
   return "";
 }
-
 function parseNumber(value, fallback) {
   const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+// 权重列：允许 "20"、"20%"、"20％"、首尾空格；空值沿用兜底，不静默改写用户数字。
+function parseWeight(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const text = String(value).trim().replace(/[%％]$/, '').trim();
+  if (!text) return fallback;
+  const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
@@ -997,9 +1009,10 @@ async function handlePythonWorkbook(file) {
         timeLimitSeconds: parseNumber(cell(row, "时间限制(秒)", "时间限制", "timeLimitSeconds"), 2), memoryLimitKb: parseNumber(cell(row, "内存限制(KB)", "内存限制", "memoryLimitKb"), 131072),
       })),
       testCases: caseRows.map((row, index) => ({
-        externalId: String(cell(row, "外部题号", "externalId")), caseName: String(cell(row, "用例名称", "caseName")), inputText: String(cell(row, "输入", "inputText")), expectedOutput: String(cell(row, "期望输出", "expectedOutput")), isPublic: String(cell(row, "是否公开", "isPublic")), scoreWeight: parseNumber(cell(row, "权重", "scoreWeight"), 1), orderNum: parseNumber(cell(row, "顺序", "orderNum"), index + 1),
+        externalId: String(cell(row, "外部题号", "externalId")), caseName: String(cell(row, "用例名称", "caseName")), inputText: String(cell(row, "输入", "inputText")), expectedOutput: String(cell(row, "期望输出", "expectedOutput")), isPublic: String(cell(row, "是否公开", "isPublic")), scoreWeight: parseWeight(cell(row, "权重", "scoreWeight"), 1), orderNum: parseNumber(cell(row, "顺序", "orderNum"), index + 1),
       })),
     };
+    lastPythonPayload.value = payload;
     pythonImportReport.value = (await previewProgrammingImport(payload)).data || {};
     if (pythonImportReport.value.ready) ElMessage.success("预检通过，可以确认导入"); else ElMessage.warning(`预检发现 ${pythonImportReport.value.errors?.length || 0} 个问题`);
   } catch (error) {
@@ -1009,9 +1022,34 @@ async function handlePythonWorkbook(file) {
   }
 }
 
+// 用户主动平均分配：按外部题号分组，组内权重均分到合计 100（保留两位小数，余数归最后一项），再重新预检。
+async function averageImportWeights() {
+  const payload = lastPythonPayload.value;
+  if (!payload) return;
+  const groups = {};
+  payload.testCases.forEach(tc => { (groups[tc.externalId] = groups[tc.externalId] || []).push(tc); });
+  Object.values(groups).forEach(list => {
+    if (!list.length) return;
+    const base = Math.floor(10000 / list.length) / 100;
+    let assigned = 0;
+    list.forEach((tc, i) => {
+      tc.scoreWeight = i === list.length - 1 ? Math.round((100 - assigned) * 100) / 100 : base;
+      assigned += tc.scoreWeight;
+    });
+  });
+  pythonImportLoading.value = true;
+  try {
+    pythonImportReport.value = (await previewProgrammingImport(payload)).data || {};
+    if (pythonImportReport.value.ready) ElMessage.success("权重已平均分配，预检通过"); else ElMessage.warning(`已平均分配权重，但仍有 ${pythonImportReport.value.errors?.length || 0} 个问题待修正`);
+  } catch (error) {
+    ElMessage.error(error?.message || "Excel 解析或预检失败");
+  } finally {
+    pythonImportLoading.value = false;
+  }
+}
+
 function downloadPythonTemplate() {
-  const questions = [{ "外部题号": "PY001", "标题": "两个整数的和", "难度": "简单", "知识点": "输入输出,整数运算", "题目描述": "读入两个整数，输出它们的和。", "输入格式": "一行两个整数 a 和 b，用一个空格分隔。", "输出格式": "输出一个整数，表示 a+b。", "数据范围": "-10000 ≤ a,b ≤ 10000", "样例解释": "3+5=8。", "提示": "", "起始代码": "a, b = map(int, input().split())\n", "参考代码": "a, b = map(int, input().split())\nprint(a + b)\n", "无输入题": "否", "是否公开": "是", "时间限制(秒)": 2, "内存限制(KB)": 131072 }];
-  const cases = [{ "外部题号": "PY001", "用例名称": "样例1", "输入": "3 5\n", "期望输出": "8\n", "是否公开": "是", "权重": 1, "顺序": 1 }, { "外部题号": "PY001", "用例名称": "负数边界", "输入": "-10 4\n", "期望输出": "-6\n", "是否公开": "否", "权重": 1, "顺序": 2 }];
+  const cases = [{ "外部题号": "PY001", "用例名称": "样例1", "输入": "3 5\n", "期望输出": "8\n", "是否公开": "是", "权重": 50, "顺序": 1 }, { "外部题号": "PY001", "用例名称": "负数边界", "输入": "-10 4\n", "期望输出": "-6\n", "是否公开": "否", "权重": 50, "顺序": 2 }];
   const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(questions), "题目"); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(cases), "测试点"); XLSX.writeFile(workbook, "Python_OJ题目双Sheet导入模板.xlsx");
 }
 

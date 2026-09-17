@@ -16,6 +16,7 @@ import com.ruoyi.business.domain.IotDevice;
 import com.ruoyi.business.domain.IotEvent;
 import com.ruoyi.business.domain.IotGroup;
 import com.ruoyi.business.domain.IotMessage;
+import com.ruoyi.business.domain.event.IotMessageReceivedEvent;
 import com.ruoyi.business.mapper.IotMapper;
 import com.ruoyi.business.config.IotWebSocketHandler;
 import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
@@ -27,6 +28,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -44,6 +46,8 @@ public class IotMqttReceiver
     @Autowired private IotMqttProperties properties;
     @Autowired private IotMapper mapper;
     @Autowired private IotWebSocketHandler websocketHandler;
+    /** 单元测试直接 new 本类时不注入容器，事件发布前必须判空。 */
+    @Autowired(required = false) private ApplicationEventPublisher eventPublisher;
 
     /**
      * Broker 不可达时不能阻塞 Spring 主线程；连接失败仍由接收器记录诊断事件。
@@ -92,6 +96,37 @@ public class IotMqttReceiver
     {
         MqttClient mqtt = client.get();
         return mqtt != null && mqtt.isConnected();
+    }
+
+    /**
+     * 平台向设备下发消息（AIoT 下行）。
+     * 未连接、参数非法或发布失败都返回 false，由调用方记诊断事件；绝不向调用线程抛异常。
+     */
+    public boolean publish(String topic, String payload, int qos)
+    {
+        MqttClient mqtt = client.get();
+        if (mqtt == null || !mqtt.isConnected() || topic == null || payload == null)
+        {
+            return false;
+        }
+        byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length == 0 || bytes.length > properties.getMaxPayloadBytes())
+        {
+            return false;
+        }
+        try
+        {
+            MqttMessage message = new MqttMessage(bytes);
+            message.setQos(Math.max(0, Math.min(qos, 1)));
+            message.setRetained(false);
+            mqtt.publish(topic, message);
+            return true;
+        }
+        catch (Exception e)
+        {
+            log.warn("物联网下行发布失败 topic={} 原因={}", topic, e.getMessage());
+            return false;
+        }
     }
 
     private final class Callback implements MqttCallbackExtended
@@ -166,6 +201,13 @@ public class IotMqttReceiver
         if (!isValidTopic(topic, properties.getMaxTopicLength()))
         {
             record(null, null, null, "INVALID_TOPIC", "Topic", "Topic 格式不符合平台约束");
+            return;
+        }
+        // 上行只认 data 末段：设备若把消息发到下行 control 主题，不能当成学生数据入库。
+        if (!isUplinkTopic(topic))
+        {
+            record(null, null, null, "UPLINK_TOPIC_REJECTED", "Topic",
+                    "非上行数据主题已忽略（平台只接收 /data 结尾）: " + topic);
             return;
         }
         byte[] bytes = mqttMessage.getPayload();
@@ -246,6 +288,12 @@ public class IotMqttReceiver
         mapper.touchGroup(groupId, stored.getReceivedAt());
 
         record(experimentId, groupId, deviceId, "MESSAGE_RECEIVED", "平台接收", "消息已存档");
+        // 下行判定异步执行：这里只发事件，判定失败或超时都不影响落库与页面刷新。
+        if (eventPublisher != null)
+        {
+            eventPublisher.publishEvent(new IotMessageReceivedEvent(
+                    experimentId, groupId, deviceId, topic, payloadType, payload, stored.getReceivedAt()));
+        }
         websocketHandler.publishRefresh(experimentId);
     }
 
@@ -260,6 +308,12 @@ public class IotMqttReceiver
         if (count.incrementAndGet() > Math.max(1, properties.getMaxMessagesPerMinute())) return false;
         if (rate.size() > 2048) rate.entrySet().removeIf(entry -> !entry.getKey().startsWith(bucket + ":"));
         return true;
+    }
+
+    /** 上行只接受 data 末段；下行 control 主题上的设备消息不属于学生上报数据。 */
+    static boolean isUplinkTopic(String topic)
+    {
+        return topic != null && topic.endsWith("/data");
     }
 
     /** MQTT Broker 不会把通配符作为真实发布 Topic 传给订阅者，平台也拒绝控制字符和过长 Topic。 */

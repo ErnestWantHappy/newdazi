@@ -14,6 +14,7 @@ import com.ruoyi.business.domain.vo.ResearchResourceVo;
 import com.ruoyi.business.domain.vo.ResearchTeacherOptionVo;
 import com.ruoyi.business.domain.vo.ResearchTopicVo;
 import com.ruoyi.business.domain.vo.ResearchPublicNoticeVo;
+import com.ruoyi.business.domain.vo.ResearchPublicPostVo;
 
 /** 教研活动主题、留言、资源和通知的数据访问。 */
 public interface ResearchActivityMapper
@@ -39,6 +40,8 @@ public interface ResearchActivityMapper
     int revokePublicShare(@Param("topicId") Long topicId, @Param("updateBy") String updateBy);
     ResearchPublicNoticeVo selectPublicNoticeByTokenHash(String tokenHash);
     String selectPublicNoticeHtmlByTokenHash(String tokenHash);
+    List<ResearchPublicPostVo> selectPublicPostsByTokenHash(String tokenHash);
+    List<String> selectPublicPostHtmlsByTokenHash(String tokenHash);
 
     int insertPost(BizResearchPost post);
     int updatePost(BizResearchPost post);

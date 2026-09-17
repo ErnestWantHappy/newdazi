@@ -27,6 +27,8 @@ public class IotStudentOverviewVo
     private String groupName;
     private String groupCode;
     private String topic;
+    /** 平台→设备下行控制主题；学生用订阅积木订阅它接收 AI 判定结果。 */
+    private String controlTopic;
 
     private String brokerUrl;
     private Integer brokerPort;
@@ -119,6 +121,9 @@ public class IotStudentOverviewVo
 
     public String getTopic() { return topic; }
     public void setTopic(String topic) { this.topic = topic; }
+
+    public String getControlTopic() { return controlTopic; }
+    public void setControlTopic(String controlTopic) { this.controlTopic = controlTopic; }
 
     public String getBrokerUrl() { return brokerUrl; }
     public void setBrokerUrl(String brokerUrl) { this.brokerUrl = brokerUrl; }

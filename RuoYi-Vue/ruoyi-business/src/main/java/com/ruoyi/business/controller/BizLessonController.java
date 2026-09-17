@@ -328,6 +328,22 @@ public class BizLessonController extends BaseController
         }
         return rows > 0 ? toAjax(rows) : success("课程已删除或不存在");
     }
+    /**
+     * 彻底清除课程（含成绩与作品，不可恢复；用户已确认彻底清除语义）。
+     * 独立权限 business:lesson:purge，默认只给管理员，教师需单独授权。
+     */
+    @PreAuthorize("@ss.hasPermi('business:lesson:purge')")
+    @Log(title = "课程管理", businessType = BusinessType.DELETE)
+    @DeleteMapping("/purge/{lessonIds}")
+    public AjaxResult purge(@PathVariable Long[] lessonIds)
+    {
+        int rows = bizLessonService.purgeBizLessonByLessonIds(lessonIds);
+        if (rows > 0)
+        {
+            dashboardCacheService.evictDepartment(SecurityUtils.getDeptId());
+        }
+        return rows > 0 ? toAjax(rows) : success("课程已删除或不存在");
+    }
 
     /** 课程不用了先归档；答题、成绩、题目和历史指派全部保留。 */
     @PreAuthorize("@ss.hasPermi('business:lesson:edit')")

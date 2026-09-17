@@ -35,6 +35,8 @@ public class IotClassCardVo
         private String groupCode;
         private String groupName;
         private String topic;
+        /** 平台→设备下行控制主题；掌控板用订阅积木订阅它接收 AI 判定结果。 */
+        private String controlTopic;
         private String pythonClientId;
         private List<String> memberNames;
 
@@ -52,6 +54,9 @@ public class IotClassCardVo
 
         public String getTopic() { return topic; }
         public void setTopic(String topic) { this.topic = topic; }
+
+        public String getControlTopic() { return controlTopic; }
+        public void setControlTopic(String controlTopic) { this.controlTopic = controlTopic; }
 
         public String getPythonClientId() { return pythonClientId; }
         public void setPythonClientId(String pythonClientId) { this.pythonClientId = pythonClientId; }

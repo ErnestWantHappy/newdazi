@@ -152,6 +152,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="activityTime" column="activity_time"/>
         <result property="readTime" column="read_time"/>
         <result property="notifyTime" column="notify_time"/>
+        <result property="creatorId" column="creator_id"/>
         <result property="creatorName" column="creator_name"/>
     </resultMap>
 
@@ -293,6 +294,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE public_share_enabled='Y' AND public_share_token_hash=#{tokenHash}
           AND topic_type='NOTICE' AND del_flag='0'
           AND (public_share_expire_time IS NULL OR public_share_expire_time &gt; NOW())
+    </select>
+    <select id="selectPublicPostsByTokenHash" resultType="com.ruoyi.business.domain.vo.ResearchPublicPostVo">
+        SELECT p.content_html AS contentHtml, u.nick_name AS authorName, d.dept_name AS deptName,
+               p.create_time AS createTime, IF(p.update_time IS NOT NULL,1,0) AS edited
+        FROM biz_research_post p
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id
+        LEFT JOIN sys_user u ON u.user_id=p.author_id
+        LEFT JOIN sys_dept d ON d.dept_id=p.dept_id
+        WHERE t.public_share_enabled='Y' AND t.public_share_token_hash=#{tokenHash}
+          AND t.topic_type='NOTICE' AND t.del_flag='0'
+          AND (t.public_share_expire_time IS NULL OR t.public_share_expire_time &gt; NOW())
+          AND p.del_flag='0'
+          AND p.post_type IN ('COMMENT','MOMENT')
+        ORDER BY p.create_time ASC, p.post_id ASC
+    </select>
+    <select id="selectPublicPostHtmlsByTokenHash" resultType="java.lang.String">
+        SELECT p.content_html
+        FROM biz_research_post p
+        JOIN biz_research_topic t ON t.topic_id=p.topic_id
+        WHERE t.public_share_enabled='Y' AND t.public_share_token_hash=#{tokenHash}
+          AND t.topic_type='NOTICE' AND t.del_flag='0'
+          AND (t.public_share_expire_time IS NULL OR t.public_share_expire_time &gt; NOW())
+          AND p.del_flag='0'
+          AND p.post_type IN ('COMMENT','MOMENT')
     </select>
 
     <insert id="insertPost" parameterType="com.ruoyi.business.domain.BizResearchPost"
@@ -540,7 +565,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
     <select id="selectNotificationList" resultMap="NotificationResult">
         SELECT n.recipient_id,n.topic_id,t.title AS topic_title,n.notice_level,n.read_flag,
-               t.activity_time,n.read_time,n.notify_time,u.nick_name AS creator_name
+               t.activity_time,n.read_time,n.notify_time,t.creator_id,u.nick_name AS creator_name
         FROM biz_research_notice_recipient n
         JOIN biz_research_topic t ON t.topic_id=n.topic_id AND t.del_flag='0'
         LEFT JOIN sys_user u ON u.user_id=t.creator_id

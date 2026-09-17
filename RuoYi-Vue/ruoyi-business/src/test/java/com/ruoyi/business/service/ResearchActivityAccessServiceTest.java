@@ -97,6 +97,37 @@ class ResearchActivityAccessServiceTest
         assertThrows(ServiceException.class, () -> service.requireActiveResource(40L));
     }
 
+    @Test
+    void topicEditableAllowsAuthorAndManagerForNotice()
+    {
+        BizResearchTopic noticeTopic = new BizResearchTopic();
+        noticeTopic.setCreatorId(50L);
+        noticeTopic.setTopicType("NOTICE");
+
+        BizResearchTopic shareTopic = new BizResearchTopic();
+        shareTopic.setCreatorId(50L);
+        shareTopic.setTopicType("SHARE");
+
+        // 原作者本人无论是通知还是分享均可修改
+        login(50L, "teacher");
+        assertDoesNotThrow(() -> service.requireTopicEditable(noticeTopic));
+        assertDoesNotThrow(() -> service.requireTopicEditable(shareTopic));
+
+        // 教研员允许修改活动通知，但不能修改他人的交流分享
+        login(21L, "researcher");
+        assertDoesNotThrow(() -> service.requireTopicEditable(noticeTopic));
+        assertEquals(403, assertThrows(ServiceException.class, () -> service.requireTopicEditable(shareTopic)).getCode());
+
+        // 管理员同理
+        login(1L, "admin");
+        assertDoesNotThrow(() -> service.requireTopicEditable(noticeTopic));
+        assertEquals(403, assertThrows(ServiceException.class, () -> service.requireTopicEditable(shareTopic)).getCode());
+
+        // 其他普通教师不能修改别人的通知
+        login(55L, "teacher");
+        assertEquals(403, assertThrows(ServiceException.class, () -> service.requireTopicEditable(noticeTopic)).getCode());
+    }
+
     private void login(Long userId, String roleKey)
     {
         SysRole role = new SysRole();

@@ -9,6 +9,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 class GlobalExceptionHandlerTest
 {
@@ -54,5 +55,15 @@ class GlobalExceptionHandlerTest
                 new IllegalStateException("secret SQL /opt/application.jar"),
                 new MockHttpServletRequest("GET", "/business/test"));
         assertEquals("系统繁忙，请稍后重试", result.get(AjaxResult.MSG_TAG));
+    }
+
+    @Test
+    void oversizedUploadReturnsBusinessHintInsteadOfBusy()
+    {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+        AjaxResult result = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(10 * 1024 * 1024),
+                new MockHttpServletRequest("POST", "/business/research-activity/topics/12/resource-posts"));
+        assertEquals("上传文件过大。课程资源压缩包请不超过50MB，也可改用云盘链接", result.get(AjaxResult.MSG_TAG));
     }
 }

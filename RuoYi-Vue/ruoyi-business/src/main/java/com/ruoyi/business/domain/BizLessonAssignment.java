@@ -48,10 +48,10 @@ public class BizLessonAssignment extends BaseEntity
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date autoAdvanceReadyTime;
 
-    /** 理论测试题开放开关 1=开放（推进课程自动复位） */
+    /** 理论测试题开放开关 1=开放（推进课程默认开放） */
     private Integer theoryOpen;
 
-    /** 操作题开放开关 1=开放（推进课程自动复位） */
+    /** 操作题开放开关 1=开放（推进课程默认开放） */
     private Integer practicalOpen;
 
     public void setAssignmentId(Long assignmentId) 

@@ -102,9 +102,10 @@
           </div>
           <div class="tool-grid">
             <div v-for="tool in lessonTools" :key="'l' + tool.toolId" class="tool-item">
-              <el-link type="primary" :href="tool.toolUrl" target="_blank" rel="noopener noreferrer">
-                <el-icon><Link /></el-icon>{{ tool.toolName }}
+              <el-link type="primary" :href="lessonToolHref(tool.toolUrl)" :disabled="!lessonToolHref(tool.toolUrl)" target="_blank" rel="noopener noreferrer">
+                <el-icon><Link /></el-icon>{{ tool.toolName || '未命名工具' }}
               </el-link>
+              <span v-if="!lessonToolHref(tool.toolUrl)" style="color: var(--el-text-color-secondary); font-size: 12px">网址待完善，请联系老师</span>
             </div>
           </div>
         </div>
@@ -1042,6 +1043,7 @@ import { updateUserPwd } from "@/api/system/user";
 import useUserStore from "@/store/modules/user";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { lessonToolHref } from '@/utils/lessonToolUrl';
 import PdfPreview from "@/components/PdfPreview/index.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
 import StudentProgrammingQuestion from "@/components/StudentProgrammingQuestion/index.vue";
@@ -1535,6 +1537,8 @@ function markQuestionEntered(questionId) {
 }
 
 function markQuestionWorking(questionId) {
+  // 进页不再对每题打 ENTERED；学生真正开始作答时补记进入并上报作答中。
+  markQuestionEntered(questionId);
   if (workingTaskIds.has(questionId) || submittedAnswers.value[questionId]) return;
   workingTaskIds.add(questionId);
   reportTaskState(questionId, 'WORKING');
@@ -1652,18 +1656,20 @@ async function fetchData(opts = {}) {
       return;
     }
     const res = await getCurrentLesson();
-    try {
-      const collaborationRes = await getCurrentCollaborationRooms();
-      collaborationRooms.value = collaborationRes.data || collaborationRes || [];
-      // 移除自动跳转逻辑：学生应主动选择进入协作房间，而不是被强制跳转
-    } catch (collaborationError) {
-      collaborationRooms.value = [];
-    }
-    try {
-      const historyRes = await getCollaborationHistory();
-      collaborationHistory.value = historyRes.data || historyRes || [];
-    } catch (historyError) {
-      collaborationHistory.value = [];
+    // 静默轮询只刷新课程闸门，避免每分钟重复打协作当前/历史。
+    if (!silent) {
+      try {
+        const collaborationRes = await getCurrentCollaborationRooms();
+        collaborationRooms.value = collaborationRes.data || collaborationRes || [];
+      } catch (collaborationError) {
+        collaborationRooms.value = [];
+      }
+      try {
+        const historyRes = await getCollaborationHistory();
+        collaborationHistory.value = historyRes.data || historyRes || [];
+      } catch (historyError) {
+        collaborationHistory.value = [];
+      }
     }
     if (res.blockedByCountyExam) {
       router.replace("/student/county-exam");
@@ -1710,7 +1716,7 @@ async function fetchData(opts = {}) {
       
       studentInfo.value = res.studentInfo || {};
       submittedAnswers.value = res.submittedAnswers || {};
-      // 学生实验工具与题目开放开关（班级x当前课程，推进自动复位）
+      // 学生实验工具与题目开放开关（班级x当前课程，推进默认开放）
       lessonTools.value = res.studentTools?.lessonTools || [];
       residentTools.value = res.studentTools?.residentTools || [];
       theoryOpen.value = Boolean(res.theoryOpen);
@@ -1720,10 +1726,6 @@ async function fetchData(opts = {}) {
       initTypingStates();
       initPracticalStates(); // 初始化操作题状态
       initTheoryState(); // 初始化理论测试状态（检查是否已提交）
-      if (!silent) {
-        [...theoryQuestions.value, ...typingQuestions.value, ...practicalQuestions.value]
-          .forEach((question) => markQuestionEntered(question.questionId));
-      }
     }
   } catch (err) {
     // 静默轮询失败不清空现有状态，下个周期再试；避免一次网络抖动抹掉整页课程
@@ -2554,9 +2556,24 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .student-dashboard {
   background-color: #f5f7fa;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #64748b #e2e8f0;
   display: flex;
   flex-direction: column;
+
+  > * { flex-shrink: 0; }
+
+  &::-webkit-scrollbar { width: 16px; }
+  &::-webkit-scrollbar-track { background: #e2e8f0; }
+  &::-webkit-scrollbar-thumb {
+    background: #64748b;
+    border: 3px solid #e2e8f0;
+    border-radius: 8px;
+  }
+  &::-webkit-scrollbar-thumb:hover { background: #334155; }
 }
 
 .dashboard-header {
@@ -2866,7 +2883,7 @@ onUnmounted(() => {
   margin: 10px 0;
 }
 .action-buttons {
-  margin-top: auto;
+  margin-top: 12px;
   width: 100%;
   display: flex;
   flex-direction: column;

@@ -59,7 +59,7 @@
         <div class="card-header">
           <span>🧭 题目开放</span>
           <el-tooltip
-            content="课程“推进”到下一课后开关自动复位为关闭；也可在此手动开启/关闭。"
+            content="自动或手动推进到下一课后，理论题和操作题默认开放；也可在此手动关闭。"
             placement="bottom"
           >
             <el-icon class="gate-hint"><InfoFilled /></el-icon>
@@ -81,7 +81,7 @@
         <div v-if="gateContext.hasPractical" class="gate-item">
           <div class="gate-copy">
             <b>操作题（含 Python 编程）</b>
-            <span>老师开启后，学生端才显示本课操作题；推进课程自动复位。</span>
+            <span>开放后学生端显示本课操作题；推进到下一课默认开放。</span>
           </div>
           <el-switch
             :model-value="gateContext.practicalOpen"

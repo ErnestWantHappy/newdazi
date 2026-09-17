@@ -1,5 +1,3 @@
-const LAST_MENU_WEIGHT = 10000
-
 const teacherOrder = [
   ['教师首页', '/teacher-dashboard'],
   ['题库管理', '/question'],
@@ -51,7 +49,6 @@ function collectRouteKeys(route, keys = new Set()) {
 
 function routeWeight(route, weights, originalIndex) {
   const keys = collectRouteKeys(route)
-  if (keys.has('/help-center') || keys.has('help-center') || keys.has('帮助中心')) return LAST_MENU_WEIGHT
   const matchedWeights = [...keys].filter(key => weights.has(key)).map(key => weights.get(key))
   if (matchedWeights.length) return Math.min(...matchedWeights)
   // 未明确列出的既有菜单保留后台相对顺序，避免新增功能被意外隐藏或打乱。

@@ -1,17 +1,25 @@
 # 部署与回滚约定
 
+> 2026-09-16 19:10：130当前release为 `20260916_iot_subscribe_fix_v1`，基于线上JAR仅替换两个物联类、移除废弃Decision类。data订阅补齐、平台自动下发取消。service/nginx/env/整库备份在 `/data/backups/xueyeceping/20260916_iot_subscribe_fix_v1`；回滚命令见 `contexts/junior-iot-poc/ADR-004-original-data-subscription.md`。ACL独立回滚，不应因应用回滚再次取消data订阅。详见PROJECT_CORE.md v3.65。
+
+
 ## 拓扑
 
 ```mermaid
 flowchart TB
-    Client[校内浏览器 / 设备] --> P[平台主机 10.52.1.123]
-    P --> API[NSSM 后端 :3009]
-    P --> WEB[Nginx Vue3 :3010]
-    API --> Ext[扩展服务 10.52.1.129]
-    Ext --> Judge0[Judge0 :2358]
-    Ext --> CryptPad[CryptPad]
-    Ext --> Emqx[EMQX :1883]
+    Client[校内浏览器] --> Nav[123 Nginx :3010 导航页]
+    Nav -->|新开标签| WEB80[130 Nginx :80 Vue3]
+    Client --> WEB80
+    Client --> GW[130 Nginx :3018/:3019]
+    WEB80 --> API[xueyeceping-130 :3009]
+    API --> Judge0[129 Judge0 :2358]
+    API --> EmqxSub[129 EMQX :1883 订阅]
+    GW --> CryptPad[129 CryptPad :80]
+    Device[实验板] --> Emqx[129 EMQX :1883]
+    Client --> Tools[123 Nginx :80 教师工具导航]
 ```
+
+2026-09-09 21:05：学业测评入口是 `http://10.52.1.130/`。协作大门已改到 `10.52.1.130:3018/3019`（反代 129 CryptPad）。123 的 `NewDaziBackend3009` 已停止；3010 为导航页；123:3018/3019 暂留回滚。物联网接收器在 130，设备仍连 129:1883。`xxkj.xsedu.net.cn` 尚未切到 130。
 
 ## 发布不变量
 
@@ -74,3 +82,9 @@ flowchart TB
 用户要求先修本地，再由用户重启服务器，收到完成消息后代理部署。候选和逐类差异位于 `output/online-recovery-20260907/`；后端基于活动JAR定向替换，前端完整构建。必须重新核对活动基线SHA，复制外置config并保留旧release；无业务SQL，不清空Redis。发布后真实角色验收，并登记RELEASE_LOG及平台更新记录。不要将冷重启后的恢复误认为14:17前的连接重置、LibreOffice故障已根治。
 
 2026-09-07本轮最新状态：候选已上传至20260907_online_recovery_v1，用户选择手动执行该目录switch-release.ps1（管理员PowerShell），可加-Rollback切回旧版。新旧Nginx候选及哈希已验，尚未切换。代理不得因上传完成宣称已发布，发布后再登记版本与正式验收。
+
+
+2026-09-14：当前 full_local_v1/config/application.yml 已补 MQTT 管理配置，备份 /data/backups/xueyeceping/iot-config-20260914_105340/application.yml.before。未重启，PID/探活正常；用户允许空闲窗口后仅重启 xueyeceping-130，再重试班级同步。切 release 必须携带配置。回滚恢复该文件，无 SQL。
+
+
+2026-09-14 后续状态：用户授权后已仅重启 xueyeceping-130，PID168090，首页/API/代理均200，EMQX管理API及授权源正常。外置配置已随启动加载，取代此前待重启状态；失败班级重试同步与硬件收数仍待验证。未打包部署或Git推送。见 PROJECT_CORE.md v3.60。

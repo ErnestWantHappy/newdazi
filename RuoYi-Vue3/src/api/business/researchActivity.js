@@ -103,6 +103,9 @@ export function revokeResearchPublicShare(topicId) {
 export function getPublicResearchNotice(token) {
   return request({ url: `${BASE_URL}/public/notices/${encodeURIComponent(token)}`, method: 'get', headers: { isToken: false } })
 }
+export function getPublicNoticePosts(token, pageNum = 1, pageSize = 10) {
+  return request({ url: `${BASE_URL}/public/notices/${encodeURIComponent(token)}/posts`, method: 'get', headers: { isToken: false }, params: { pageNum, pageSize } })
+}
 
 export function getResearchNotificationSummary(limit = 5) {
   return request({ url: `${BASE_URL}/notifications/summary`, method: 'get', params: { limit } })

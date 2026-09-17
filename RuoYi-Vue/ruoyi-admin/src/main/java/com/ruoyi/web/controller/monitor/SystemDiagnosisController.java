@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import com.alibaba.druid.stat.DruidStatManagerFacade;
 import com.ruoyi.business.utils.FileConversionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -39,6 +40,10 @@ import com.ruoyi.system.service.ISysPerfEventService;
 @RequestMapping("/monitor/diagnosis")
 public class SystemDiagnosisController
 {
+    @Value("${ruoyi.migration.environment-label:}")
+    private String environmentLabel;
+    @Value("${ruoyi.migration.history-source:}")
+    private String historySource;
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
@@ -84,6 +89,8 @@ public class SystemDiagnosisController
     {
         int diagnosisHours = normalizeHours(hours);
         Map<String, Object> data = new LinkedHashMap<>();
+        data.put("environmentLabel", environmentLabel);
+        data.put("historySource", historySource);
 
         // 所有探针并行发射，主线程按各自 2 秒预算收割，任一慢任务只影响自己那一块数据。
         java.util.concurrent.Future<Server> serverF =

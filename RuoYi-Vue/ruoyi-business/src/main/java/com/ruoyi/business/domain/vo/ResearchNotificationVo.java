@@ -17,6 +17,7 @@ public class ResearchNotificationVo
     private Date readTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date notifyTime;
+    private Long creatorId;
     private String creatorName;
 
     public Long getRecipientId() { return recipientId; }
@@ -35,6 +36,8 @@ public class ResearchNotificationVo
     public void setReadTime(Date readTime) { this.readTime = readTime; }
     public Date getNotifyTime() { return notifyTime; }
     public void setNotifyTime(Date notifyTime) { this.notifyTime = notifyTime; }
+    public Long getCreatorId() { return creatorId; }
+    public void setCreatorId(Long creatorId) { this.creatorId = creatorId; }
     public String getCreatorName() { return creatorName; }
     public void setCreatorName(String creatorName) { this.creatorName = creatorName; }
 }

@@ -97,10 +97,10 @@ spring:
   # 文件上传
   servlet:
     multipart:
-      # 单个文件大小
+      # 单个文件大小。教研课程资源业务上限 50MB，这里略留余量。
       max-file-size: 55MB
-      # 设置总上传的文件大小
-    max-request-size: 60MB
+      # 必须缩进在 multipart 下。写成 servlet 同级会被忽略，Spring 仍按默认 10MB 拒收整包。
+      max-request-size: 60MB
 
   # 服务模块
   devtools:
@@ -243,6 +243,10 @@ iot:
   mqtt:
     enabled: ${IOT_MQTT_ENABLED:false}
     broker-url: ${IOT_MQTT_BROKER_URL:tcp://127.0.0.1:1883}
+    # 管理接口与消息连接独立配置，迁移时必须同时提供地址和管理凭据。
+    emqx-api-url: ${IOT_EMQX_API_URL:http://127.0.0.1:18083/api/v5}
+    emqx-api-key: ${IOT_EMQX_API_KEY:}
+    emqx-api-secret: ${IOT_EMQX_API_SECRET:}
     username: ${IOT_MQTT_USERNAME:}
     password: ${IOT_MQTT_PASSWORD:}
     subscription: ${IOT_MQTT_SUBSCRIPTION:county/#}
@@ -260,3 +264,9 @@ iot:
     # 账号密码只由服务器环境变量注入，禁止写入 Git、日志或上下文文档。
     device-username: ${IOT_DEVICE_USERNAME:}
     device-password: ${IOT_DEVICE_PASSWORD:}
+    # AIoT 下行：默认关闭，未显式开启时平台不会向设备发布任何 control 消息
+    downlink-enabled: ${IOT_DOWNLINK_ENABLED:false}
+    downlink-segment: ${IOT_DOWNLINK_SEGMENT:control}
+    downlink-min-interval-millis: ${IOT_DOWNLINK_MIN_INTERVAL_MILLIS:3000}
+    downlink-ai-timeout-millis: ${IOT_DOWNLINK_AI_TIMEOUT_MILLIS:6000}
+    downlink-ai-max-tokens: ${IOT_DOWNLINK_AI_MAX_TOKENS:200}

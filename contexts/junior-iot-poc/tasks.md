@@ -1,5 +1,8 @@
 # 初中物联网县级 SIoT / EMQX 方案 A 任务与进展
 
+> 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
+
+
 > **2026-08-20 最终路线结论**：用户明确选定“方案 A”，正式 MQTT Broker 使用标准 EMQX (`10.52.1.129:1883`)；原 SIoT (`10.52.1.123:1883`) 保留为回退。同班学生共享班级账号与 6 位易读课堂口令，学号升序自动分组生成持久快照，Topic 业务隔离，投屏配置卡与学生端物联看板已全部开发并通过测试。
 
 ## P0：县服务器软件链路（已完成）
@@ -70,3 +73,26 @@
 - [x] 总览增加只看有数据、接收数量排序、两分钟实时状态和离线文案。
 - [x] 小组明细改弹窗，统一 TEXT/NUMBER/JSON 展示，移除恒值来源列。
 - [x] Vue3 生产构建、正式教师 IoT 班级/实验接口和 3010 新静态资源均验收通过；真实有消息班级的弹窗视觉效果留待课堂抽查。
+
+## P7：AIoT 双向通信（本地代码完成，未发布；2026-09-16）
+
+- [x] 定位 `MQTTException: 128` 根因：EMQX 授权源 `built_in_database` 默认拒绝，班级账号只有 1 条 `publish allow`、无 subscribe 规则 → SUBACK `0x80`。只读报告 `bidirectional-downlink-analysis.md`。
+- [x] 主题约定：下行 = 上行主题换末段为 `control`；一律由该组**已入库上行主题**推导（`controlTopicOfTopic`/`controlTopicOfGroup`），不按字段重算，避免前缀漂移导致「平台发 A、设备订阅 B」。
+- [x] ACL 双规则：班级账号 `publish …/+/+/data` + `subscribe …/+/+/control`；平台账号 `subscribe county/#` + `publish county/+/+/+/+/+/control`（EMQX 用户规则是覆盖写，必须两条同写）。
+- [x] 下行服务 `IotDownlinkService`：接收事件 → AI 判定（`ON`/`OFF`/`HOLD`，失败自动退回关键词）→ `receiver.publish` → 记 `DOWNLINK_SENT/FAILED/SKIPPED`。用不可变 `Decision` 承载依据，避免多组并发串台。
+- [x] 接收链路加固：上行只认 `/data`；设备把消息发到 `/control` 记 `UPLINK_TOPIC_REJECTED` 并拒收，不再当成学生数据入库。
+- [x] 接口与前端：`POST /business/iot/groups/{groupId}/downlink`；教师总览「下发」按钮、详情「AI 判定并下发」、下发弹窗；学生页展示「我的专属订阅 Topic」；小学实验板 Python 模板有下行 Topic 时自动生成 `subscribe_control` + `check_msg` 轮询。
+- [x] **安全默认**：`iot.mqtt.downlink-enabled` 默认 `false`，关闭时不判定、不发布、也不改平台账号 ACL，因此发到正在上课的服务器行为不变。
+- [x] 验证：后端 `compile` BUILD SUCCESS；`-Dtest=Iot*Test` **33 项全通过**（本机 surefire fork 启动失败，须 `-DforkCount=0`）；`npm run build:prod` 退出码 0。
+- [ ] **上线前必做**：129 写入班级 subscribe 与平台 publish 规则（或打开开关后点「重试同步」）；真机验证订阅收指令与灯变色；确认 AI 网关可用（否则只走关键词）。
+- [ ] **已知限制**：班级账号全班共用，Broker 只约束到班级前缀，同班 A 组可订阅 B 组 control 主题；教师下发侧已按实验管理权限校验，设备侧无身份校验。强隔离需改「每组独立账号」，属另一次决策。
+- 决策与文件清单：`ADR-003-iot-bidirectional-downlink.md`。
+
+## P8：恢复原主题订阅（2026-09-16）
+
+- [x] 用真实班级账号和截图原 data Topic 复现128并修复为0，跨班/全局通配符仍拒绝。
+- [x] 14账号ACL增量补齐并备份，代码同步不再丢失data订阅。
+- [x] 移除自动AI/关键词下发及多余页面，28测试通过、前端构建成功。
+- [x] 新release发布、服务探活、整库备份、发布草稿92及回滚记录。
+- [ ] 原掌控板重连后订阅/接收回调实测；不得以协议探针代替。
+- [ ] 教师/学生登录后页面复验；当前浏览器停在登录页。

@@ -1,8 +1,196 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 版本：v3.44
-> 更新：2026-09-07
+> 版本：v3.65
+> 更新：2026-09-16
 > 用途：新的 Codex、Claude、Gemini 或人工开发者的默认入口。只记录当前仍有效且已验证的事实；历史发布和排障证据见 `contexts/context.md`。
+
+## 2026-09-16 19:10 原 data 主题订阅修复（130 已发布，真机待复验）
+
+- 用户明确只需掌控板能订阅原 Topic，不需要平台判定 ON/OFF/HOLD、关键词兜底或指定命令界面。此决定取代下节的自动下行方案，不能再要求用户改订阅 control 或重烧新模板。
+- 实际根因：Mind+ 订阅 `county/169/274/2024-02/guangzhao/group02/data`，前轮却只放行 `/control`。使用真实 `class_169_2024_02` 账号及原 Topic，现场修改前 SUBACK `[128]`、修改后 `[0]`；跨班及 `county/#` 仍 `[128]`。前轮临时账号/control 探针成功不能证明本问题已解决。
+- EMQX：14 个班级账号保留原全部规则，追加对应本班 `/+/+/data` 的 subscribe allow，14 次 PUT 204、回读一致；未改密码、未缩窄原发布权限。备份 `output/iot-subscribe-fix-20260916/acl-before-1789556631417231300.json`，SHA-256 `63d31900e37a8f4cc38889e0426368c37f75aac35017b0aa27cc6c18294049aa`。
+- 源码：`IotEmqxAdapter.syncClassAcl` 同步时保留 data 订阅，兼容 control 订阅；班级账号无法隔离同班不同小组。`IotDownlinkService` 已移除事件监听、AI、关键词与发布实现；旧接口仅校验小组权限并返回 published=false。教师/学生物联页和小学 Python 模板撤销本轮自动下行展示，恢复原数据界面；独立 `/aiot-lamp/` 未修改。
+- 发布：新 release `/data/apps/xueyeceping/releases/20260916_iot_subscribe_fix_v1`；以线上 jar 为底只替换 `IotEmqxAdapter.class`、`IotDownlinkService.class`，删除废弃 `$Decision.class`，其余归档内容逐项一致。JAR SHA-256 `f948e32f416f96eedbea9049706d5c0d4ba8f29cf5d06b50dea58ab8392a2985`。`IOT_DOWNLINK_ENABLED=false`；systemd 和 nginx 切新路径，保留旧 release 和静态资源。
+- 验证：28 项 Iot 测试零失败，Vue3 构建成功；三项服务 active，首页、验证码、课堂 context 路由和独立工具均 HTTP 200（context 无登录仅证明路由可达）；新 index SHA-256 `28c82488ec457ad9c1a3415a4c374d4c1d2c6409cd36974cbcee1f4687eae114`，入口资源 200，新前端不含 AI 判定及指定命令文案。浏览器仅到登录页，未完成登录后教师/学生页面验收。
+- 备份：`/data/backups/xueyeceping/20260916_iot_subscribe_fix_v1` 保存旧 jar、service.before、nginx.before、env.before、完整 database.sql；数据库 SHA-256 `7c14caf19583c948629d3e8c1e68a538597475c1e8ab0b300122b66f9e70cd04`。只执行发布登记 SQL `sql/iot_subscribe_fix_release_note_20260916.sql`，版本 1.30.12 / update_id=92 / DRAFT；无业务表迁移。
+- 回滚：恢复上述 service.before、nginx.before、env.before 到原路径，daemon-reload、重启后端、nginx -t 后 reload；旧路径 `20260914_lesson_fixes_v1` 未改。这会恢复用户不需要的自动下行行为，必要时仍保持开关 false。ACL 可按备份逐账号恢复，但会再次拒绝 data 订阅，不应随代码回滚自动撤销。本次无业务 SQL 回滚，登记草稿可保留审计。
+- 下一步唯一硬件步骤：原 Mind+ 程序重新连接 MQTT，再订阅原 data Topic，回传串口结果。尚未验证实际掌控板回调和灯动作；另一个 `mpython.get_x` 的 ETIMEDOUT 来自不同调用栈，未排查，不能宣称同步修好。证据 `output/iot-subscribe-fix-20260916/{acl-result,manifest,deploy-result,verify-result}.json`、maven.log、frontend-build.log。
+
+## 2026-09-16 18:22 自动下行历史方案（已由上节取消，原 data 订阅当时未解决）
+
+- 背景：教师反馈掌控板在 Mind+ MicroPython/SIoT 下 publish `…/data` 成功、平台能收库，但 `mqtt.getsubscribe(...)` 报 `MQTTException: 128`。只读核查确认 128 = EMQX 授权拒绝订阅（SUBACK `0x80`）：班级账号只有 1 条 `publish allow`，无 subscribe 规则；且当时全后端无任何 MQTT `publish`，即**不存在下行**。报告 `contexts/junior-iot-poc/bidirectional-downlink-analysis.md`。
+- 已实现：下行主题 = 上行主题换末段为 `control`，且**一律由该组已入库上行主题推导**（`controlTopicOfTopic`/`controlTopicOfGroup`），不按字段重算，避免「平台发 A、设备订阅 B」静默失效。班级账号 ACL 改双规则（`publish …/+/+/data` + `subscribe …/+/+/control`）；平台账号 ACL 收发配对（`subscribe county/#` + `publish county/+/+/+/+/+/control`），因 EMQX 用户规则是覆盖写，必须两条同写。
+- 新增 `IotDownlinkService`：接收事件 → AI 判定 `ON/OFF/HOLD`（不可解析自动退回关键词，先判否定词方向：`不要关灯→ON`）→ 发布 → 记 `DOWNLINK_SENT/FAILED/SKIPPED`。用不可变 `Decision` 承载依据，避免多组并发串台。接收与下发用 Spring 事件 + `@Async` 解耦，规避循环依赖；`ApplicationEventPublisher` 用 `@Autowired(required=false)` 以便单测直接 new。
+- 接口与前端：新增 `POST /business/iot/groups/{groupId}/downlink`（教师手动下发）；教师端操作列「下发」+ 详情「AI 判定并下发」+ 下发弹窗；学生端展示「我的专属订阅 Topic」；小学实验板 Python 模板在有下行 Topic 时生成 `subscribe_control` + `check_msg` 轮询。上行链路加固：只认 `/data`，设备发到 `/control` 记 `UPLINK_TOPIC_REJECTED` 并拒收。
+- 配置：`IOT_DOWNLINK_ENABLED/SEGMENT/MIN_INTERVAL_MILLIS/AI_TIMEOUT_MILLIS/AI_MAX_TOKENS` 已映射进 `application.yml`，**默认 `false`**；关闭时不判定、不发布、也不改平台账号 ACL。130 已显式置 `IOT_DOWNLINK_ENABLED=true`。
+- **发布前发现的关键前情**：130 当天 17:06 起所跑 jar（`b5efdf26…25d9eb`）不是 09-14 原版，而是**另一位 AI** 以 09-14 制品为 base、只注入 2 个类的**最小补丁包**（修 `/prod-api/aiot-classroom/teacher|student/context` 404）。她 13:45 还改过一次 `AiotClassroomService.java`（含 3 处授权加固：补 `schoolId`、小组归属校验、教师授课范围校验），而平台工作区那份停在 12:19。**本次已把她的 13:45 版同步进工作区再全量重编译**，未覆盖她的改动；旧版备份在 `output/iot-downlink-20260916/backup-src/`。
+- 制品一致性（以线上她的补丁包为基准逐类比对 `ruoyi-business`）：**REMOVED = 0**；ADDED = `IotDownlinkService`/`$Decision`、`IotDownlinkRequest`、`IotMessageReceivedEvent`；关键类差异仅为 `MethodParameters` 与调试表等编译元数据。硬校验：新制品 `AiotClassroomService.class` 常量池含她那 4 项加固标记，全部命中。
+- EMQX 两步（本轮用户明确授权的"两步"）：① 14 个班级账号补 `subscribe allow …/{class}/+/+/control`，预检 `GET=200`、14 次 `PUT` 全 **204**、回读确认；② `platform_iot_subscriber` 原先在 `built_in_database` **无任何规则**（订阅权来自 file 源），新建用户规则 `subscribe county/#` + `publish county/+/+/+/+/+/control`，`PUT` **204**，回读语义一致。
+- **ACL 采用"加法"而非"窄化"**：班级账号原 `publish …/{class}/#` 原样保留、只追加 subscribe。因为覆盖性校验发现 **102 个 `biz_iot_group.topic` 中 24 个的 base 不在现有 ACL 集合内**（如存在 `county/169/274/2024-01/…` 而 ACL 只有 `county/169/274/2024-02`），若按新代码窄化 publish 会拒掉这 24 条上行。窄化应交给平台在教师「重试同步」时按当前课程执行。
+- 真链路端到端探针（纯标准库手写 MQTT，临时 `acl_probe_class` 账号、前缀 `county/999/999/probe-01`，验证后已删）：订阅 control 的 SUBACK `[0]`（**128 消失**）；越权订阅 `[128]`（**规则仍有约束力**）；平台账号发布 → 探针**收到同一 topic 与 payload**（下行贯通）；平台越权发布 → 探针未收到。
+- 发布动作：`mvn -pl ruoyi-admin -am clean package -DskipTests` BUILD SUCCESS → jar `38a78fbf…869f1b`（107,842,402 B）；前端本地 `RuoYi-Vue3/dist` 已构建。**就地在位替换**当前 release 的 backend 与 frontend（未新建 release、未改 systemd/nginx 指向）；前端用**叠加解包**避免 404 窗口。重启 `xueyeceping-130`，探活 4 次 000 → **第 5 次 200**。
+- 发布后核验：线上 jar SHA = `38a78fbf…`；`/proc/<pid>/environ` 可见 `IOT_DOWNLINK_ENABLED=true`；`xueyeceping-130`/`nginx`/`aiot-lamp` 均 active；`/`、`/prod-api/captchaImage`、`/prod-api/aiot-classroom/teacher/context`、`/aiot-lamp/` **均 200**（她的功能与工具未受影响）；线上 `frontend/index.html` SHA `1c44fc04…` 与本地 dist 一致，入口 JS 切到 `index-B5OhbLwc.js` 且 200。单测 `-Dtest=Iot*Test -DforkCount=0` → **33 项 0 失败**（本机 surefire fork 启动失败是环境问题，须 `-DforkCount=0`）。
+- 备份与回滚：`/data/backups/xueyeceping/20260916_182118_aiot_downlink/{ruoyi-admin.jar.bak(b5efdf26…),frontend-before.tar.gz(2e665f1c…),xueyeceping-130.env.bak(1ef172d3…)}`。精确回滚命令见 ADR-003 第 6 节。无 SQL、无表结构变更。
+- **仍未验证 / 遗留**：① 真机端到端未跑，设备必须重烧带 `subscribe_control`+`check_msg` 的模板（`output/iot-downlink-20260916/experiment-board-code-with-control.py`），已烧旧固件的设备不订阅 control（平台下发无人接收，无害）；② 130 无 `GUIDE_SHEET_AI_API_KEY`，当前判定走**关键词兜底**而非 AI；③ 14 个班级账号 ACL 的 publish 仍宽（见上），待「重试同步」自然收敛；④ 同班跨组订阅限制仍在（班级账号全班共用），强隔离需改「每组独立账号」，属另一次决策。
+- 决策与文件清单见 `contexts/junior-iot-poc/ADR-003-iot-bidirectional-downlink.md`（含第 7 节完整发布记录），专题同步 `design.md` 第 8 节与 `tasks.md` P7。
+
+## 2026-09-16 AIoT 语音控制灯课堂工具首次部署（130，已完成）
+
+- 独立服务 `/data/apps/aiot-lamp`（`releases/20260916_aiot_lamp_v1` + `shared/{venv,data,aiot-lamp.env}`），systemd `aiot-lamp.service`，uvicorn 仅监听 `127.0.0.1:3014`，运行用户 admin2；Python 3.12 venv 按 `backend/requirements.lock` 安装（fastapi 0.141.1 / uvicorn 0.53.0 / paho-mqtt 2.1.0 / scikit-learn 1.7.2 / numpy 2.2.6）。130 原先无 pip 与 ensurepip，首次需 `apt install python3.12-venv`。
+- 同源入口：130 nginx 80 站点新增 `location = /aiot-lamp`（301）与 `location /aiot-lamp/`（`proxy_pass http://127.0.0.1:3014`），并入 `/etc/nginx/sites-available/xueyeceping-130`；`nginx -t` 通过后 reload。探活 `http://10.52.1.130/aiot-lamp/` 200、静态资源 200、前端 API 前缀 `/aiot-lamp/api/*` 返回 401（业务鉴权，非 404）。
+- 平台课堂接口补丁：把 `com.ruoyi.business.controller.AiotClassroomController` 与 `com.ruoyi.business.service.AiotClassroomService` 两个类补回当前 release 的 `ruoyi-admin.jar`（就地在 `releases/20260914_lesson_fixes_v1/backend/` 替换，未新建 release、未改 systemd/nginx 指向），修复 `/prod-api/aiot-classroom/teacher|student/context` 长期 404。补丁 base `f42701b8…fed8eb` 与线上一致，新 JAR `b5efdf26…25d9eb`；重启 `xueyeceping-130` 后 502→200，`/prod-api/captchaImage` 200，课堂接口可解析（无 token 返回业务 code 401）。
+- 备份与回滚：`/data/backups/xueyeceping/20260916_aiot_context/ruoyi-admin.jar.bak`、`/data/backups/nginx/20260916_aiot_lamp/xueyeceping-130.conf.bak`。回滚＝拷回 jar 并重启 `xueyeceping-130` ＋ 拷回 nginx conf 后 reload；AIoT 独立服务可 `systemctl stop aiot-lamp` 单独下线，不触碰平台。
+- 仍未验证：掌控板当前离线（129 在线清单只有 `dazi-platform-iot`），真机双向控灯、双组/双班/跨校与清空竞态未跑；AIoT 服务未写平台更新弹窗。部署细节见 `D:/dmwprogram/xinxikeji/grade7xia/lesson5new/DEPLOYMENT_20260916.md`。
+
+## 2026-09-15 四所撤销学校数据清理（130 正式库，已完成）
+
+- 用户明确授权清理账号并删除泗洲头中学165、丹城二中146、外国语(小学部)117、延昌小学122。正式删除日志实际提示“部门存在用户”，并非成绩守卫；残留62个未删除账号。61条用户角色关联指向已不存在的角色4，另一账号无角色，不能误记为完全没有角色关联。
+- 执行 `sql/retired_schools_cleanup_20260915.sql`，同一事务清理61条学生资料、2条教师班级关联、61条失效角色关联；62个账号和4所学校沿用系统 `del_flag=2` 逻辑删除。既有已删除账号、历史答卷归档和操作日志保留，未改代码、未重启或发布。
+- 写前整库备份：130 `/data/backups/xueyeceping/20260915_retired_schools/before.sql`，174423834 bytes，SHA-256 `99a30a376bee9cc75b016ea6a9cd24450061aeb00f7dae4455df99580eec6936`。首轮行数断言因失效角色关联回滚，核对后最终事务提交；报告 `output/retired_schools_cleanup_20260915_result.json`。
+- 已复核四校均逻辑删除，剩余有效账号、学生资料和教师班级关联均0；当前业务关联前检为0，首页/API均200。无需配置或重启；恢复须从备份精确取回本轮相关记录，不能直接覆盖正式整库。下一步：管理员刷新学校列表确认展示。平台功能焦点仍为下节1.30.11。
+
+## 2026-09-14 随机抽题、推进开放与学生布局（1.30.11，已发布）
+
+- 本轮焦点：修复普通课程随机抽题保存、自动/手动课堂推进后默认开放理论/操作题、学生首页滚动条及打字按钮位置。正式版本 `releases/20260914_lesson_fixes_v1` 已切换到 130。
+- 根因与修复：设计器按实际抽题量显示 100 分，后端却累加全部候选题。现后端按抽出的选择/判断题加全部打字/操作题校验；0/未设/超出候选数仍全选，负数拒绝。部分抽取的同类候选题要求同分，前端明确提示并拦截不一致配置；固定顺序和随机排序仍计全部题目。区域抽测不变。
+- 自动和手动推进共用的 `advanceCurrentAssignment` 在切换课程时将双开关置 1；未推进班级不变，旧课条件继续防重复推进。教师仍可手动关闭，编辑课程仍保留已有班级当前开关。成绩页提示已同步。本节取代历史“推进后自动关闭”规则。
+- 学生首页采用视口内独立滚动容器，右侧 16px 高对比滚动条；开始练习、重新打字及提交按钮紧跟统计区，移除撑到底部的自动上边距。
+- 已验证：课程保存/课堂推进相关 Java 测试 34 项全部通过；实际 Mapper 更新语句在 SQLite 夹具中验证双开关开启、其他班不变、旧课重复推进不生效（不是 MySQL 全链路）。最终 Vue3 构建 2917 模块通过，保留已有 eval/大包警告。模拟接口浏览器验证候选130分/实际100分保存请求、两种打字按钮位置、上下滚动通过，页面异常0；截图已目视确认。证据：`output/lesson-fixes-20260914-maven.log`、`output/lesson-fixes-20260914-build-final.log`、`output/lesson-fixes-20260914-mapper.json`、`output/playwright/lesson-fixes-20260914/`。
+- 发布与限制：后端已重启并运行 PID 174367，API 与首页均 200，Nginx 配置检查通过；前端资源已切换并检索到本轮滚动条样式。整库备份位于服务器 `backups/20260914_lesson_fixes_v1`，SHA-256 `886a417b46291a6c402ee0b65a1b948d32579ad93aea2d649a14178802d4d0f4`；无业务 SQL，平台更新 `1.30.11` 已登记 PUBLISHED。尚未使用真实学生账号完成按钮浏览器验收；请教师/学生强刷页面。当前已关闭班级不批量开启，新规则只在后续推进生效；代码回退不自动撤销已推进班级开放状态。
+- 专题规则与决策：`contexts/student-experiment-tools/requirements.md`、`design.md`、`tasks.md`、`ADR-003-advance-default-open.md`；数据与业务边界已同步。此前 MQTT 重启和待班级重试状态继续保留如下。
+
+## 2026-09-14 用户授权后端重启完成（配置已加载，班级重试待验）
+
+- 用户随后明确允许重启后端。核对当前进程配置路径与外置 YAML SHA-256 未漂移后，仅执行 `systemctl restart xueyeceping-130`，退出码0，active；PID 从115325变为168090。未重启整机/Nginx/EMQX，无重新打包、制品发布、Git推送或SQL。
+- 重启后首页80、3009 captchaImage、80 prod-api/captchaImage均200；现有密钥请求129管理API返回200，built_in_database启用。日志尾部存在MQTT已连接记录，但未单独核对该行时间，不作为本次重启连接的独立证据。证据：output/iot-restart-20260914-result.json。
+- 外置配置在本次启动加载。尚未调用失败班级的重试同步接口，也未做硬件收数；不能宣布班级已恢复SYNCED。下一步：教师刷新页面，点击“重试同步”，确认告警消除和收数。原配置备份仍保留，回滚见下节。此前“禁止重启/待生效”是上课期间的历史状态，已由本节取代。
+
+## 2026-09-14 MQTT 管理配置补齐（130，未重启、待生效）
+
+- 现场只读：130 到 129:1883/18083 均可达；用进程现有管理密钥请求 129 管理 API 返回 200，built_in_database 授权源 enable=true。故障是当前 release 外置配置缺管理接口绑定，本地 application.yml 同样缺映射；IOT_EMQX_API_KEY/SECRET 已存在于进程环境，但不能代替 iot.mqtt 下属性绑定。
+- 用户明确正在上课，禁止重启。仅在 `/data/apps/xueyeceping/releases/20260910_full_local_v1/config/application.yml` 追加 iot.mqtt.emqx-api-url（129:18083/api/v5）和现有密钥环境变量引用；本地 application.yml 补 URL/KEY/SECRET 映射，未构建发布。未修改 EMQX、数据库或其他服务。
+- 已验证远端与本地 YAML 可解析、映射正确；后端 PID 115325 未变，80 首页和3009 captchaImage均200。配置尚未加载，不能宣称班级权限同步恢复。
+- 备份：`/data/backups/xueyeceping/iot-config-20260914_105340/application.yml.before`，SHA-256 `3a0213c30268dccfed07d37abb29c3d512aa0d4e7deb9f06024ff140b1e6328b`；修改后 `afa3699648b8dde0af70822fe8e65ec1cb550266620fe8e1260d47a23686c9e6`。本机证据 output/iot-config-20260914-result.json。
+- 下一步：用户允许的空闲窗口仅重启 xueyeceping-130 后端（无需整机重启），再对失败班级重试同步并核验 SYNCED、口令与实际收数。若期间切换 release，必须携带这三项外置配置。回滚只恢复备份配置；无 SQL。不要在上课期间擅自重启。
+
+## 2026-09-10 教师工具子菜单改名并并入帮助中心
+
+- 用户指出一级、二级都叫「教师工具」；此前其他 AI 只在优化审查里写了方案，本地代码并未改。130 现场菜单：父 26014、子 26031 path=index。
+- 已执行 `sql/teacher_tools_help_menu_v1.sql`：26031 改为「教师教学优质资源」；新增 26034「帮助中心」挂在 26014 下（order 5）。角色 1/100/102 共 3 条。备份 `/tmp/teacher_help_menu_before.sql`，回滚脚本 `sql/teacher_tools_help_menu_v1_rollback.sql`。
+- 前端隐藏静态顶级 `/help-center`（旧书签仍可用），侧栏不再把帮助中心置底。Nginx 已切 `releases/20260910_teacher_help_menu_v1` 前端，后端 JAR 仍为 `full_local_v1`，未重启 Java。探活 80/`prod-api` 200。教师需退出重新登录后才会刷新菜单。
+
+## 2026-09-10 本机工作区全量发 130
+
+- 用户明确要求把本地前后端全部打包更新（含今天其他 AI 的未提交改动），不再做聚焦裁剪。制品来自当前工作区 `mvn clean package` + `npm run build:prod`（2917 模块）。
+- 130 已切 `releases/20260910_full_local_v1`。JAR SHA-256 `f79e39174cf04dd12c8e0b8be213fbddce5688e02a5cbcf283095bf92f97310f`。外置 config 与 isolation env 从上一版 `20260910_research_class_v1` 原样复制。无业务 SQL。
+- 探活：3009 `/captchaImage`、80 首页、`/prod-api/captchaImage` 均为 200。备份 `/data/backups/xueyeceping/20260910_full_local_v1/`。回滚：恢复该备份的 systemd/nginx 后重启，回到 `20260910_research_class_v1`。
+- **现已上线、此前仅本地的能力**：统一删除（有成绩课程/学生可删且不可用代码回滚恢复数据）、课程工具网址放宽保存、教研修改通知与公开留言、班级管理年级标注、课堂表现分正负分、上传 50MB。教师须强刷。
+
+## 2026-09-10 教研/班级/上传/课堂表现分发 130
+
+- 用户要求发布到服务器。未把工作区统一删除、课程工具保存等未收口改动打进制品。隔离工作树 `output/release-worktrees/20260910_research_class_v1` 基于 `c3d4b22`，只叠教研活动、公开通知留言、班级管理、课堂监控表现分、上传 50MB 配置与超限提示。
+- 130 已切 `releases/20260910_research_class_v1`。JAR SHA-256 `537eee58bd0126fe4df3b7b90764901799164d378aa0f8b5f981f70283d07681`。外置 config 与 `migration-isolation.env` 从 v2 原样复制（quartz 仍关）。无业务 SQL。
+- 探活：本机 3009 `/captchaImage`、80 首页、`/prod-api/captchaImage` 均为 200。备份 `/data/backups/xueyeceping/20260910_research_class_v1/`（systemd+nginx）。回滚：拷回该备份的 unit/nginx 后 `daemon-reload`、重启 `xueyeceping-130`、reload nginx，即回到 `20260909_migration_resume_v2`。
+- 本轮同时：129 Judge0 `ALLOW_IP` 已含 `10.52.1.123 10.52.1.130`，UFW 2358 已放行 130；Python 判题已在 130 实测 Accepted。
+- 未发：统一删除、课程工具网址放宽、流程图等其它工作区改动。教师需强刷浏览器。
+
+## 2026-09-10 统一删除入口（仅本地，未发布）
+
+- 用户明确选择统一“删除”：允许删除有成绩课程和学生，保留原remove权限、课程创建者/管理员与学生学校/管理班级限制。普通删除服务统一调用已有purge关联清理；教师首页自建课程can_delete不再因答案/导学单历史变为0，共享课程仍不可删。旧purge接口保留兼容，页面重复按钮已移除。
+- 教师首页、课程列表、学生单删、勾选批删及整班删除确认框均说明成绩/答卷/作品及不可恢复后果；整班删除先按学校与教师班级筛候选，再统一校验。学生删除行数异常抛错；提交后分批扫描清理旧登录会话。题库题目、他课仍引用文件、学生的多人共享协作文档与原审计保留边界不变。
+- 作品清理候选按LESSON和context_id课程归属筛选，避免仅凭题号选中他课同题草稿；数据库提交后文件清理失败只告警，避免数据已删但页面报失败。
+- 验证：相关后端41项测试0失败；实际作品候选查询在内存SQLite夹具执行通过（不是MySQL全链路）；Vue3构建2917模块通过；后端clean package -DskipTests通过（此前相关测试完成），JAR内两份变更Mapper资源已核对。五入口本地模拟浏览器通过，取消不发请求，确认调用普通删除接口，页面异常为空。证据：output/unified-delete-local-20260910/。
+- 无SQL、未连接或修改服务器、未删除真实数据。未来需配套前端发布与后端重启；完整本地制品包含未收口改动，禁止直接发130。代码回滚不能恢复已删数据，未来发布需数据库和文件备份。
+- 下一步：隔离MySQL副本验证完整关联删除、事务回滚及在途判题/转换交错；未经允许不得发布。专题：contexts/unified-deletion-20260910/。此前“日常守卫保留”结论被本轮本地实现覆盖。
+
+## 2026-09-10 本课工具保存修复（仅本地，未发布）
+
+- 用户要求正式平台正在上课，禁止修改服务器。本轮未连接服务器、未执行SQL或真实账号写入；130当前运行拓扑仍以其下09-09已实施记录为准。
+- 用户后续明确确认“网址不报错、提示即可”。设计器补齐展开状态；已存工具默认展开；网址不完整、特殊协议、半填行都可随课程保存，只显示行内提示。未改工具省略字段，后端缺省/null保留，[]明确清空。完全空白新行不提交；20项限制和课程权限保留。不探测网站可达性、不猜测补协议。
+- 学生首页仅为明确无内嵌账号信息的HTTP(S)网址生成href，其余保留工具名称并显示“网址待完善，请联系老师”；错误网址不会因允许保存而自动变得可用。课程284已由用户提供编辑页地址，但具体工具内容未知。
+- 6项 `StudentLessonToolSaveTest`、2项前端网址测试通过；Vue3生产构建2917模块通过（既有eval/大包警告）。本地模拟浏览器验证展开收起、旧工具不提交、特殊协议/缺协议/空网址可保存、合法参数完整提交、学生端无危险href和正常链接展示通过；报告 `output/lesson-tools-local-20260910/warning-smoke-result.json`，截图同目录。未验证正式账号、真实数据库往返和目标网站。
+- 无SQL。本轮不发布。未来学生端点击防护须先就绪，再配套上线后端保存放宽与教师提示；新设计器也不能接旧后端（缺省工具字段会被清空）。回退仍保留学生点击防护，避免已存待完善链接变为可执行链接。详见ADR-002；本轮完整构建含工作区其他改动，不能直接作为130制品。菜单与协作引导方案仍未实施。
+- 下一步：用户允许后在本机真实课程数据副本补做保存/回显验证；正式环境保持不动。接口决策见 `contexts/student-experiment-tools/ADR-002-preserve-omitted-lesson-tools.md`。
+
+## 2026-09-09 21:05 方案 A 已落地：协作大门在 130:3018/3019
+
+- 用户确认 123 旧协作文档可废弃。已实施：130 Nginx 监听 3018/3019 反代 129:80（Host 仍为 office / office-sandbox）；129 CryptPad `httpUnsafeOrigin=http://10.52.1.130:3018`、`httpSafeOrigin=:3019`；CSP `frame-ancestors` 含 `http://10.52.1.130` 与 `http://xxkj.xsedu.net.cn`；130 环境变量 `CRYPTPAD_BASE_URL/API_URL` 指向 130:3018；容器 `cryptpad-2026-5-1` healthy。顺带把 130 `worker_rlimit_nofile` 从 `events{}` 挪到主段，否则 `nginx -t` 失败无法加载新站点。
+- 探活：本机与 123 访问 130:3018 `/api/config` 主/沙箱 origin 已是 130 且无 123；脚本 18018 字节；教师登录 health `ready:true, problems:[]`；站点根 200。UFW 3018/3019 与 80 一样对 Anywhere（教科研 ACL 仍须放行全县到 130 的 80/3018/3019）。
+- **物联网**：123 后端已停，平台 MQTT 接收器只在 130，日志 `已连接 broker=tcp://10.52.1.129:1883 subscription=county/#`（21:00:39 重启后再次连上）。实验板仍直连 **129:1883**，没有迁到 130，也不该迁。Python 仍是 130 后端 → 129:2358。
+- **和 123 的关系**：学业测评运行时前后端、库、文件、协作大门都不再依赖 123。123 的 3018/3019 进程暂留作回滚，CryptPad 已改口令到 130，旧垫作废。教师工具导航/个人主页/图像识别等仍在 123，不是测评平台。`xxkj.xsedu.net.cn` 仍解析到 123，须教科研改 DNS。
+- 备份：130 `/data/backups/20260909_collab_gateway_130/`（含 nginx.conf.before、env、站点）；129 `/srv/cryptpad/backups/20260909_collab_gateway_130/`（config.js SHA-256 `86bcc5bc…`、cryptpad.conf `1c142a89…`、compose `6501f59e…`）。回滚：拷回这些文件，129 `docker compose up -d --force-recreate cryptpad`，130 改回 env 并重启，reload 两边 Nginx。
+- 未做：真实双人打开一份新文档（请用 `http://10.52.1.130/` 强刷后再试）；教科研教育网 ACL；停 123:3018；切域名。
+
+## 2026-09-09 21:10 协作改走 130 网关：方案已写，未实施
+
+## 2026-09-09 20:45 协作仍走 123:3018；从 130 IP 打开会被 CSP 拦住
+
+- **为什么不把协作整机迁到 130**：真正的 CryptPad 在 129（Docker `cryptpad-2026-5-1`，只绑 `127.0.0.1:3000/3003`，对外由 129:80 Nginx）。浏览器按规定不能直连 129 编文档，必须经 123 的 `3018`（主站）和 `3019`（沙箱）反代。CryptPad 配置已写死 `httpUnsafeOrigin=http://10.52.1.123:3018`、`httpSafeOrigin=http://10.52.1.123:3019`，历史房间密钥、CSP、双 origin 都绑在这两个地址。130 只跑学业测评前后端；Judge0/EMQX/CryptPad 仍在 129。把网关或数据卷迁到 130 要改 129 源站、教育网放行新端口、重建容器，不能当迁移附带项。
+- **130 后端协作开关是开的**（教师登录 health `ready:true, problems:[]`，`CRYPTPAD_BASE_URL=http://10.52.1.123:3018`）。「协作暂时不可用 / 协作文档打开超时」是浏览器嵌 iframe 失败：129 Nginx CSP `frame-ancestors` 目前只有 `http://10.52.1.123:3018`、`http://xxkj.xsedu.net.cn`、`http://10.52.1.123:3010`，**没有** `http://10.52.1.130`。从 130 IP 进平台时，脚本能加载（故不是 15 秒脚本超时），编辑器初始化 90 秒后报超时。域名切到 130 后 `xxkj.xsedu.net.cn` 已在白名单，IP 入口仍会失败，除非补 CSP。尚未改 129（共享 CryptPad，需确认后再动）。
+- **123 防火墙**：`NewDazi CryptPad gateway 3018-3019` 已开，但 RemoteIP=`LocalSubnet`（通常只本网段 `10.52.1.0/24`）。跨网段机房可能根本连不上 3018/3019。
+- **教育网相关端口（2026-09-09 现场只读）**：123 对外监听含 80/443/1883/1888/3001/3003/3010/3012/3018/3019/3020/18080（3009 已停）；130 对外实质只有 80（UFW 另放行 22/443，443 未监听，3009 仅本机反代）；129 对外 80（CryptPad Nginx）、1883（EMQX）、2358（Judge0，本应仅后端）、18083（EMQX 管理）。130 **没有** 3018/3019，这是设计如此，不是漏开导致 Python/物联不可用。Python 走 130 后端→129:2358，物联设备走 129:1883，均已从 130 探通。
+
+## 2026-09-09 20:30 130 已就绪等切域名（协作修好，全功能对齐123）
+
+- 域名 `xxkj.xsedu.net.cn` 当前解析到 `10.52.1.123`；改解析必须由管内网 DNS 的教科研动手，代理动不了 DNS。130 侧已全部备好（`server_name` 已加，切过去即用）。
+- 130 Nginx（1.24.0 Ubuntu）：`worker_processes auto`（16 核）× `worker_connections 4096` + `worker_rlimit_nofile/LimitNOFILE 65535`；Linux epoll 无 Windows 版 `FD_SETSIZE=1024` 硬顶。另对齐 123：包体 60m、`/prod-api/` `/ws/` 3600s 超时。
+- 协作不可用已修好：根因是 130 隔离 env 把 `COLLABORATION_ENABLED=false` 且缺 CryptPad/Judge0/IOT 全套变量。已从 123 现场原样抄 20 个变量到 130（CryptPad 沿用 `123:3018` 并复用同一密钥，129:2358 判题、129:1883 MQTT 已连上 `county/#`）。健康接口 `ready:true,problems:[]`，站点/API 200。备份在 130 `/data/backups/pre-domain-ready-*/`。
+- 未做：课堂表现分前端修复还在本机（工作区另有未收口改动，按规不能混入制品），随下次前端制品发 130；quartz 副作用任务仍关，等切域名后观察再开；123:3018 协作进程仍需保留（130 复用它）。
+
+
+- 用户已确认 130 正式库验收通过后，要求停掉 `10.52.1.123:3010` 的学业测评前后端，改成单按钮导航页。
+- `NewDaziBackend3009` 已停止，启动类型改为手动，3009 不再监听。旧 release `20260907_blankfix_v1` 文件保留，未删除。
+- `UnifiedNginx` 仍 Running，继续提供 80 教师工具导航、3012 个人主页、3018/3019 协作网关。3010 改为静态页 `D:/program/3009dazipingtai/nav-3010-20260909/index.html`：按钮「点击跳转到信息科技学业测评平台」，下方小字「0909日更新最新版」，点击（按钮或小字）新开标签页到 `http://10.52.1.130`。
+- 探活：本机访问 `http://10.52.1.123:3010/` HTTP 200，含按钮、小字、`target=_blank`、无旧 Vue；3009 连接失败；`http://10.52.1.130/` 200。Playwright 点击按钮和小字均打开 `http://10.52.1.130/`。截图 `output/playwright/nav-3010-20260909/`。
+- Nginx 备份 `D:/program/3009dazipingtai/backups/20260909_3010_nav_cutover/nginx.conf.before`，SHA-256 `009BE1E1D771A74AA9C347138061BF07C2AA989CDE1932A1D7DB5E42CF0F174B`；当前 conf SHA-256 `E030180F73FACA7F5BB7366414E66B536D99CFEEEA275E0E8A3CD852F66D612F`。导航页 SHA-256 `DD546F0BC982526595C3062A688132C936457AD11B2555ABA83239FA0EBB3EBA`。
+- **未改** `xxkj.xsedu.net.cn:80`（仍指向旧前端静态，但 3009 已停，域名登录会失败）。80 IP / `aitool.xsedu.net.cn` 教师工具导航未改。129 未动。无业务 SQL。
+- 回滚：把上述 `nginx.conf.before` 拷回 `D:/programsoftware/nginx/nginx-1.29.4/conf/nginx.conf`，`Restart-Service UnifiedNginx`；`nssm set NewDaziBackend3009 Start SERVICE_AUTO_START` 后 `nssm start NewDaziBackend3009`。无需 SQL。
+- 平台更新记录未写：123 后端已停，本轮只是入口切换，不是功能版本。
+
+## 2026-09-09 130 隔离部署跑通（测试库，无生产数据）
+
+### 2026-09-09 19:40 文件迁移完成（正式库切换与业务验收待做）
+
+- 本轮在不改123/129运行服务的前提下，已将123业务库备份恢复到130 `ry-vue`；130正式库143张表已创建，关键业务行数与快照一致，`sys_job_log` 因源端继续写入存在24条时间差。菜单分组和彻底清除按钮SQL已在130正式库执行并复核。
+- 8.44GB教学文件归档已全量落正式目录：staging 流式解包 47,518 个 SHA 全对，2 个超长历史文件名哈希映射后写入并验 SHA，`/data/upload` 47,517 个 + `/data/upload-private` 3 个，20 个抽样全对；旧超长路径的数据库引用已清零（附件 4458、答案 29630，各影响 1 行，显示名保留），映射表与行备份在 130 迁移目录和本机 output/。归档 SHA-256 `92067b4cc75b35513228ca2b0488951e98419b930a2b4244098f34f86bdf4a14` 不变。
+- 130当前服务已切到 `20260909_migration_resume_v2`（JAR/前端与本机最新构建同哈希）并连接正式库 `ry-vue`（数据库连接列表实证）；Nginx root 已切 v2 并通过 `nginx -t`；130 80和`/prod-api/captchaImage`为200；123双服务仍Running，未改123/129。切换前已备份130服务单元/Nginx/v1/v2配置与正式库全量备份（151,069,685字节，SHA-256 `fe1756e6d779e1d9a5f1aa293117b2e757b0015d0d7225b761ca77f601f3a972`）；重启前后业务表行数零变化，后台副作用任务保持关闭。
+- 后端重新构建通过，497项测试0失败0错误；前端生产构建通过。Linux LibreOffice进程诊断已加跨平台处理，但正式库切换后仍需复核诊断页和中文Word真实转换。
+- 2026-09-09 19:50 郑东旭正式库验收通过：登录/getInfo/getRouters/诊断 200，教师首页真实数据（83 校/22,439 生/今日作答 6,134），成绩查询二级展开正常，诊断确认 `ry-vue` + ubuntuserver + LibreOffice 健康，页面零错误零 500。截图见 `output/playwright/migration-130-formal/`。
+- 交接文件：`contexts/migration-130-and-fixes-20260909/resume-handoff-20260909.md`。下一步是真实业务验收（登录/菜单、Word 转换、流程图、Python、课程工具、教研分享、成绩、诊断中心），不能宣布G1/G2完成。
+
+- 130 系统层全部现场验证通过：时区、`/data`（fstab UUID，重启验证）、五软件、
+  自启、目录、129 四端口可达。数据口令已对齐、中文字体已装并通过中文转换验收
+  （3 页完整、无方框）、运行环境完善（日志轮转、UFW 80/443、
+  `http://10.52.1.130/` 经 123 实测 200）。
+- F03 彻底清除（用户 09-09 已选彻底清除）已实现并在 130 测试库验证：课程/学生成绩作品物理删除，
+  跨课复用题目与他课答案保留，独占文件删除；日常删除守卫保留，清除走独立权限+二次确认。
+  Redis 持久目录迁 `/data/redis` 回退（systemd 沙箱只写 vendor 路径），改回默认。
+  “本机→123 隔离中转→130”逐段验哈希一致；测试库 `ryvue_test`（结构+系统种子，
+  无生产业务数据与作品）；菜单分组 SQL 在测试库验证 `9/2+4`；后台副作用任务全关。
+- 实测通过：登录、教师菜单新分组、工具保存校验与回显、分享留言坏令牌 404、
+  Nginx 直访与 `/prod-api/` 反代。待补：生产库恢复、文件复制、协作双人、Judge0 单发、
+  诊断页核对、浏览器目视（尖角/大屏/导入/留言）。
+- 教训：`secrets.local.md` 无版本历史，误覆盖后靠重置 130 口令恢复；已补备份习惯。
+  130 Redis `restart` 易卡在 stop（deactivating），用 kill+start 恢复；原因待查，不影响运行。
+- 123 本轮仅只读+新建隔离中转目录，未改动生产服务、配置与业务库。129 未动。
+
+## 2026-09-09 当前规划：130已切正式库，123:3010 已改为导航
+
+- 学业测评运行入口现在是 `http://10.52.1.130/`。`10.52.1.123:3010` 只保留跳转导航；123 的 3009 后端已停。
+- `xxkj.xsedu.net.cn` 域名尚未切换，仍指向 123:80 旧静态前端；因 3009 已停，走域名会打不开登录。是否改域名解析或把 80 的 xxkj 站点改成同样导航，等用户明确说再做。
+- 删除有成绩课程/学生的历史保留语义尚待确认（推荐逻辑删除保留历史），不能直接移除守卫或清成绩。教研“修改通知”待确认所指（主题编辑链路自 07-23 完好）。
+- 进展见本文件顶部隔离部署记录与 `migration-130-and-fixes-20260909/tasks.md`；下方历史发布记录不授权改123。
+
+## 2026-09-08 14:30 Nginx 去套娃止血（方案 A 已上线，前端减负仅本地）
+
+- 根因已核验：Windows Nginx `1.29.4` 编译参数 `--with-cc-opt=-DFD_SETSIZE=1024`，`worker_processes 1` + `worker_connections 1024` 是硬上限；不能靠加 worker 或把额度改到 8192 突破。13:13/13:16/14:08 出现 `1024 worker_connections are not enough`，502 对应 10054/10053，静态资源上游为 `127.0.0.1:3010`。域名 `xxkj.xsedu.net.cn:80` 曾把整站反代到本机 3010，同一进程套娃占用连接槽。
+- 已发布配置：去掉 80→3010 套娃，域名静态直出 `20260907_blankfix_v1/frontend`，`/prod-api/` 与 `/ws/` 直连 `upstream backend_3009`（keepalive 64）；`/ws/` 仍 `Connection upgrade`，普通 API `Connection ""`。`worker_connections` 保持 1024。客户端 `keepalive_timeout` 改为 15 秒。未改 JVM、未改后端 JAR、无业务 SQL。
+- 备份：`D:\program\3009dazipingtai\backups\20260908_nginx_unnest_20260908_143025\nginx.conf.before`，SHA-256 `CCB948BC8495A8E7A871ADBE3F0B54E2299F2A07D869F1484CCFA7E9A056F828`。新 conf SHA-256 `009BE1E1D771A74AA9C347138061BF07C2AA989CDE1932A1D7DB5E42CF0F174B`。`nginx -t` 通过；`nginx -s reload` 因服务账户拒绝（Access denied）后 `Restart-Service UnifiedNginx` 成功。
+- 探活：3010 `/`、3010 `/prod-api/captchaImage`、3009 `/captchaImage`、Host `xxkj.xsedu.net.cn` 的 80 `/` 与 `/prod-api/captchaImage`、Host `10.52.1.123` 的 80 导航页、3012 均为 HTTP 200；80/3010/3012/3018/3019 仍在监听。配置已无 `proxy_pass http://127.0.0.1:3010`。
+- 切换后约 2 分钟：error.log 无新的 worker_connections 告警；3009 已建立连接由切换前 816 降至 302，全机 TimeWait 由约 4194 降至 749。
+- 本地代码已改、尚未发前端：学生首页取消进页对每题 `markQuestionEntered` 风暴；静默 60 秒轮询不再打协作当前/历史；作答交互时才补记进入。旧前端仍会每题上报，需另打前端包发布后才全员生效。
+- 回滚：将上述 `nginx.conf.before` 拷回 `D:\programsoftware\nginx\nginx-1.29.4\conf\nginx.conf` 后 `Restart-Service UnifiedNginx`；无需 SQL。不要把 worker_connections 改到超过 1024。
+- 剩余风险：Windows Nginx 1024 硬顶仍在，约 400+ 人直连 3010 且人人 WebSocket 时仍可能贴近上限；1000 人需 Linux 专用网关并做 300→1000 阶梯压测后才能承诺。LibreOffice 崩溃与教师班级唯一键冲突未纳入本轮。未升 CPU/内存/JVM。
 
 ## 2026-09-07 19:35 白卷修复正式发布 + 可重复发布执行器
 

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.ruoyi.business.config.IotMqttProperties;
 import com.sun.net.httpserver.HttpExchange;
@@ -26,6 +27,7 @@ class IotEmqxAdapterTest
     private HttpServer server;
     private IotEmqxAdapter adapter;
     private final AtomicReference<String> aclBody = new AtomicReference<>();
+    private final AtomicReference<String> platformAclBody = new AtomicReference<>();
 
     @BeforeEach
     void setUp() throws Exception
@@ -36,6 +38,11 @@ class IotEmqxAdapterTest
         server.createContext("/api/v5/authorization/sources/built_in_database/rules/users/class_139_2020_01", exchange ->
         {
             aclBody.set(readBody(exchange));
+            respond(exchange, 204, "");
+        });
+        server.createContext("/api/v5/authorization/sources/built_in_database/rules/users/dazi-platform-iot", exchange ->
+        {
+            platformAclBody.set(readBody(exchange));
             respond(exchange, 204, "");
         });
         server.createContext("/api/v5/clients", exchange ->
@@ -68,8 +75,42 @@ class IotEmqxAdapterTest
 
         JSONObject body = JSON.parseObject(aclBody.get());
         assertEquals("class_139_2020_01", body.getString("username"));
-        assertEquals("county/139/252/2020-01/#", body.getJSONArray("rules").getJSONObject(0).getString("topic"));
-        assertEquals("publish", body.getJSONArray("rules").getJSONObject(0).getString("action"));
+
+        JSONArray rules = body.getJSONArray("rules");
+        // 上行发布 + 下行订阅必须同时存在：只发不收会让设备订阅 SUBACK 返回 0x80。
+        assertEquals(3, rules.size());
+        assertEquals("publish", rules.getJSONObject(0).getString("action"));
+        assertEquals("county/139/252/2020-01/+/+/data", rules.getJSONObject(0).getString("topic"));
+        assertEquals("allow", rules.getJSONObject(0).getString("permission"));
+        assertEquals("subscribe", rules.getJSONObject(1).getString("action"));
+        assertEquals("county/139/252/2020-01/+/+/control", rules.getJSONObject(1).getString("topic"));
+        assertEquals("allow", rules.getJSONObject(1).getString("permission"));
+        assertEquals("subscribe", rules.getJSONObject(2).getString("action"));
+        assertEquals("county/139/252/2020-01/+/+/data", rules.getJSONObject(2).getString("topic"));
+        assertEquals("allow", rules.getJSONObject(2).getString("permission"));
+    }
+
+    @Test
+    void shouldRefuseBlankClassAclPrefix()
+    {
+        assertTrue(!adapter.syncClassAcl("class_139_2020_01", "  "));
+    }
+
+    @Test
+    void shouldKeepSubscribeRuleWhenGrantingPlatformDownlinkPublish()
+    {
+        assertTrue(adapter.syncDownlinkPublisherAcl("dazi-platform-iot"));
+
+        JSONObject body = JSON.parseObject(platformAclBody.get());
+        assertEquals("dazi-platform-iot", body.getString("username"));
+
+        JSONArray rules = body.getJSONArray("rules");
+        // 用户规则是覆盖写，新增 publish 时若丢掉 subscribe，平台会立刻收不到任何上报。
+        assertEquals(2, rules.size());
+        assertEquals("subscribe", rules.getJSONObject(0).getString("action"));
+        assertEquals("county/#", rules.getJSONObject(0).getString("topic"));
+        assertEquals("publish", rules.getJSONObject(1).getString("action"));
+        assertEquals("county/+/+/+/+/+/control", rules.getJSONObject(1).getString("topic"));
     }
 
     @Test
@@ -99,4 +140,3 @@ class IotEmqxAdapterTest
         }
     }
 }
-

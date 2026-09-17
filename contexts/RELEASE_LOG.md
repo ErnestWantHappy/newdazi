@@ -5,6 +5,10 @@
 
 | 日期 | 版本号 | release 目录 / 描述 | 本次改动摘要 | 平台更新已写入 |
 | --- | --- | --- | --- | --- |
+| 2026-09-10 | 菜单 | 130 前端 `20260910_teacher_help_menu_v1` + SQL `teacher_tools_help_menu_v1.sql` | 教师工具二级改名为「教师教学优质资源」；帮助中心并入教师工具分组。旧 `/help-center` 仍可用。需重新登录。未重启后端 | 否 |
+| 2026-09-10 | 130 全量 | `releases/20260910_full_local_v1`（130） | 本机工作区前后端全量（含今日其他 AI 未提交改动）：统一删除、课程工具、教研通知/公开留言、班级管理、课堂表现分、上传 50MB 等。无 SQL。回滚 `20260910_research_class_v1`。JAR `f79e3917…310f` | 否（未写平台更新弹窗） |
+| 2026-09-10 | 130 热修 | `releases/20260910_research_class_v1`（130） | 教研活动修改通知+公开分享留言；班级管理年级括号标注；课堂监控表现分正负分；课件上传按 50MB 生效并给出超限提示。未混入统一删除。无 SQL。回滚 v2。JAR `537eee58…7681` | 否（未写平台更新弹窗） |
+| 2026-09-09 | 入口切换 | `nav-3010-20260909`（123 Nginx 3010 静态页） | 停止 123 学业测评后端 3009；3010 改为单按钮导航，点击新开标签到 `http://10.52.1.130`，小字「0909日更新最新版」。旧 release 与 Nginx 备份保留可回滚。未切 `xxkj` 域名 | 否（123 后端已停，非功能版本） |
 |（示例）2026-08-22 | 1.25.0 | releases/20260822_xxx_v1 | 学生实验工具上线 | 是 |
 | 2026-08-23 | 1.25.0 | releases/20260823_student_tool_v1 | 学生实验工具、题目开放开关、129监控增强、帮助中心推荐环境、版权精简、Agent词典（正式发布+SQL执行） | 是（正式库 PUBLISHED） |
 | 2026-08-23 | 1.25.1 | releases/20260823_student_tool_hotfix_v1 | 热修 4 个线上缺陷：课程设计器保存失败（iot_enabled 插入列值不匹配）、成绩查询点课报错（历史课优雅降级）、教师成绩页题目开放开关卡片、学生端静默轮询不打断打字（正式发布，前端+后端） | 是（正式库 PUBLISHED，update_id=48） |
@@ -50,3 +54,7 @@
 | 2026-09-07 | 1.30.8 | releases/20260907_kb_quickfix_v1（后端+前端） | 课堂表现分加扣分允许不填原因（成绩查询页+课堂监控大屏，后端去掉 /save 与 /batch-save 两处"原因必填"校验）；修复学生登录后被自动跳转到在线协作页、出现 roomId=undefined 接口报错（移除"仅一个房间即自动进入"逻辑，进入房间前对 roomId 判空）。发布前备份 nginx.conf（backups/20260907_kb_quickfix_v1_before/nginx.conf.before），NSSM AppDirectory 原值记录于 nssm-appdir.txt；JAR SHA-256 6CAC481F…A770、index.html 6B627FC5…4E39F 两端一致；3009/3010 探活通过，nginx root 已切新目录；无增量 SQL；旧 release 20260907_flowchart_ai_fix_v1 / 20260907_flowchart_ai_ui_v2 保留可回滚 | 是（正式库PUBLISHED，update_id=88） |
 | 2026-09-07 | 1.30.9 | releases/20260907_online_recovery_v1（后端候选+完整前端） | 在线恢复上线：近5分钟活跃账号去重、部门含下级筛选、后端分页、诊断统一口径；登录防重入、502不退出、同浏览器同账号复用会话；保留课堂表现空原因与学生默认首页。JAR `af14241e…34457`、index.html `a4b7eab6…91bba51` 两端一致；NSSM 已切新目录、3010 root 已切新前端，双服务 Running，3009/3010 均 200；16:00:32 重启窗口 502 后 16:01 起 error.log 新增 0；无增量 SQL；旧 release 保留可回滚 | 是（正式库 DRAFT，update_id=89，待管理员审核） |
 | 2026-09-07 | 1.30.10 | releases/20260907_blankfix_v1（后端+前端） | 白卷批改与评分展示修复：有答题行的白卷可进入批改；徽章与页眉统一 TRIM 口径；导出恢复请假分支；流程图版本标签按题型；AI 分项非整数严格失败。前后端均已完成制品范围校验、正式整库/Nginx/NSSM 备份、切换与健康检查；JAR `6b5409ac…c756`、index `a432c441…ba51`；无业务结构 SQL；旧 release 保留可回滚 | 是（正式库 DRAFT，update_id=90，待管理员审核） |
+| 2026-09-14 | 1.30.11 | releases/20260914_lesson_fixes_v1（后端+前端） | 修复普通课程随机抽题按实际题量校验100分；自动/手动推进下一课默认开放理论题与操作题；学生端滚动条和打字按钮布局调整。后端 PID 174367，前端与后端均已切换；无业务 SQL；整库备份见 `backups/20260914_lesson_fixes_v1`，平台更新已登记 PUBLISHED。 | 是（正式库 PUBLISHED） |
+| 2026-09-16 | 1.30.12 | `releases/20260914_lesson_fixes_v1` 就地换后端 JAR（仅新增 2 类）+ 130 nginx 新增 `/aiot-lamp/`；另部署独立服务 `releases/20260916_aiot_lamp_v1`（不属本平台制品） | AIoT 语音控制灯课堂工具接入与课堂接口补丁：① 把 `AiotClassroomController`/`AiotClassroomService` 两个类补回线上 JAR，修复 `/prod-api/aiot-classroom/*` 长期 404（补丁 base f42701b8…fed8eb 与线上一致，新 JAR b5efdf26…25d9eb）；② nginx 80 站点新增 `/aiot-lamp/` 反代到独立 systemd 服务 `aiot-lamp`（127.0.0.1:3014，用户 admin2，数据在 `/data/apps/aiot-lamp/shared`）。无业务 SQL、无表结构变更。备份 `backups/xueyeceping/20260916_aiot_context/ruoyi-admin.jar.bak`、`backups/nginx/20260916_aiot_lamp/xueyeceping-130.conf.bak`；重启 `xueyeceping-130` 后 502→200，`/prod-api/captchaImage` 200、平台首页 200、`/aiot-lamp/` 200。回滚：拷回 jar 重启后端 + 拷回 nginx conf reload。 | 否（未写平台更新弹窗） |
+
+| 2026-09-16 | 1.30.12 | 130 releases/20260916_iot_subscribe_fix_v1 | 原data主题订阅权限修复，移除平台自动判定/关键词兜底及指定命令界面；真实班级账号128→0，跨班仍拒绝；真机待复验 | 是（DRAFT，update_id=92） |

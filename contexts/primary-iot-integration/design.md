@@ -1,5 +1,8 @@
 # 小学信息科技实验板正式接入平台设计
 
+> 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
+
+
 > 对应需求：`requirements.md`  
 > 设计原则：复用现有链路、先收紧权限、最小新增数据、不给学生增加MQTT理解负担。
 
@@ -250,3 +253,9 @@ MQTT_TOPIC = b"平台生成的小组Topic"
 - 保持现有全局5000条/分钟和单Topic限流边界，试点后再决定是否调整。
 - 不新增常驻服务和新端口，不改变Judge0、CryptPad资源配额。
 
+
+
+2026-09-14 配置绑定说明：iot.mqtt.emqx-api-url/key/secret 必须显式映射管理地址与环境变量，MQTT broker-url 不能替代管理地址。130 外置配置已补，需后端下次启动加载；尚未完成故障班级恢复验收。
+
+
+2026-09-14 后续状态：用户授权后已仅重启 xueyeceping-130，PID168090，首页/API/代理均200，EMQX管理API及授权源正常。外置配置已随启动加载，取代此前待重启状态；失败班级重试同步与硬件收数仍待验证。未打包部署或Git推送。见 PROJECT_CORE.md v3.60。

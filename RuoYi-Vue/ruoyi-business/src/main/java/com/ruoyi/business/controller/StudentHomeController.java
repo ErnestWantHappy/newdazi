@@ -238,7 +238,7 @@ public class StudentHomeController extends BaseController
         java.util.Map<String, Object> studentTools = studentToolService.getToolsForStudent(
                 deptId, entryYear, classCode, lessonId);
 
-        // 题目开放开关：当前指派行的 班级 x 课程 双开关；推进课程会自动复位
+        // 题目开放开关：当前指派行的 班级 x 课程 双开关；推进课程会默认开放
         BizLessonAssignment assignmentQuery = new BizLessonAssignment();
         assignmentQuery.setEntryYear(student.getEntryYear());
         assignmentQuery.setClassCode(student.getClassCode());

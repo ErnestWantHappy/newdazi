@@ -24,6 +24,13 @@ export function delLesson(lessonId) {
     method: 'delete'
   })
 }
+// 彻底清除课程（含成绩与作品，不可恢复，需 business:lesson:purge 权限）
+export function purgeLesson(lessonId) {
+  return request({
+    url: '/business/lesson/purge/' + lessonId,
+    method: 'delete'
+  })
+}
 /**
  * 获取课程完整详情（包括题目和已指派班级）
  * @param {number} lessonId 课程ID

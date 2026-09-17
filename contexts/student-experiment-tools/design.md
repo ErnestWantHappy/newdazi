@@ -63,7 +63,7 @@ ALTER TABLE biz_lesson_assignment
 ```
 
 - 语义：当前这门课、这个班的理论/操作题是否对学生可见可做。
-- **推进课程自动复位**：`advanceCurrentAssignment`（BizLessonAssignmentMapper.xml L150）换 lesson_id 时同时置 theory_open=0、practical_open=0。
+- **推进课程默认开放**（2026-09-14）：自动和手动推进共用 `advanceCurrentAssignment`，换 lesson_id 时同时置 theory_open=1、practical_open=1。保留 assignment_id/currentLessonId 条件，未推进班级不变。
 - 手动开关：成绩页接口直接置 1/0。
 
 ## 2. 后端接口
@@ -157,3 +157,7 @@ AjaxResult 追加：
 - “本节课工具”在主流程只展示名称、数量和“配置”入口；展开编辑仍复用 `form.tools`，因此不改变接口或持久化。
 - 学生开放、物联网和协作说明通过 `el-tooltip` 按需呈现；电子导学单使用单行状态与小尺寸按钮，继续复用既有组件事件。
 - 已选题表格的操作列使用 `fixed=right`，列宽压缩并保持题目预览、排序、移除功能不变。
+
+## 2026-09-10 本课工具保存修复（仅本地）
+
+用户后续确认网址只提示、不阻断保存。工具未修改时保留，空数组清空；网址不完整或半填也可保存，完全空白新行不提交。学生端仅为安全HTTP(S)地址生成href，其他显示联系老师完善。6项后端测试、2项前端网址测试、2917模块构建、本地模拟浏览器教师保存及学生链接验证通过。无SQL，未发布；真实数据库往返与正式具体网址未验。发布及回退必须保留学生点击防护，详见ADR-002-preserve-omitted-lesson-tools.md与PROJECT_CORE.md v3.54。

@@ -4,6 +4,8 @@
       <div>
         <div class="eyebrow">系统监控</div>
         <h1>系统诊断中心</h1>
+        <p v-if="data.environmentLabel">当前运行环境：{{ data.environmentLabel }}</p>
+        <p v-if="data.historySource">历史日志来源：{{ data.historySource }}。主机、缓存和转换服务状态实时采集自当前环境。</p>
         <p>把服务状态、缓存健康、慢 SQL、异常日志和最近操作整理成可复制的排障证据。</p>
       </div>
       <div class="hero-actions">

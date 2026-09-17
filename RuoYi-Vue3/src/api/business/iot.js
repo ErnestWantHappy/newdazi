@@ -64,3 +64,8 @@ export function getIotStudentOverview(lessonId) {
 export function listIotStudentMessages(params) {
   return request({ url: '/business/iot/student/messages', method: 'get', params })
 }
+
+// 教师手动下行：text 走判定（AI 失败自动退回关键词），command 传 ON/OFF/HOLD 时直接指定
+export function sendIotDownlink(groupId, data) {
+  return request({ url: `/business/iot/groups/${groupId}/downlink`, method: 'post', data })
+}

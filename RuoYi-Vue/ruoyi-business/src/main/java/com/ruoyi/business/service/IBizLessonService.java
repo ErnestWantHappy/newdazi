@@ -52,6 +52,13 @@ public interface IBizLessonService
      * @return 结果
      */
     public int deleteBizLessonByLessonIds(Long[] lessonIds);
+    /**
+     * 彻底清除课程（含成绩与作品，不可恢复；用户已确认语义）。
+     *
+     * @param lessonIds 需要彻底清除的课程主键集合
+     * @return 结果
+     */
+    public int purgeBizLessonByLessonIds(Long[] lessonIds);
 
     /**
      * 删除课程/作业信息信息

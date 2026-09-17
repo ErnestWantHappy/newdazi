@@ -1,12 +1,23 @@
 # 架构资料索引
 
+> 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
+
+
+> 2026-09-14 本地修复：普通课程随机抽题按实际题量校验100分；自动/手动推进默认开放理论和操作题；学生滚动条与打字按钮布局更新。34项相关测试、前端构建及模拟浏览器验证通过，未发布、真实账号/MySQL联调待验。见 PROJECT_CORE.md v3.61、BUSINESS_BOUNDARIES.md、DATA_MODEL.md 与 `contexts/student-experiment-tools/ADR-003-advance-default-open.md`。
+
+> 2026-09-10 统一删除入口本地完成：普通remove允许删除有成绩课程和学生，保留所有权、学校与管理班级校验；五入口提示统一，作品按课程归属清理。尚未发布、未删除真实数据。边界见 `BUSINESS_BOUNDARIES.md`，需求/设计/验收/ADR见 `contexts/unified-deletion-20260910/`；当前状态以 PROJECT_CORE.md v3.55 为准。
+
+> 2026-09-10 本课工具本地修复：网址仅提示、不阻断保存；学生点击仅允许安全HTTP(S)链接。尚未发布，前后端配套与回退约束见 `BUSINESS_BOUNDARIES.md`、`contexts/student-experiment-tools/ADR-002-preserve-omitted-lesson-tools.md` 和 PROJECT_CORE.md v3.54。
+
+> **2026-09-09 当前入口**：学业测评平台运行在 `http://10.52.1.130/`。协作大门为 `http://10.52.1.130:3018` 与 `:3019`（反代 129 CryptPad）。`10.52.1.123:3010` 为导航页，123 后端已停。`xxkj.xsedu.net.cn` 尚未切域名。方案与回滚见 `contexts/PROJECT_CORE.md` 与 `contexts/migration-130-and-fixes-20260909/collab-gateway-130-plan.md`。
+
 > 2026-09-07 当前排查：流程图 AI 建议匹配与恢复存在本地候选修复，未发布；文件版本与流程图提交 ID 必须区分，不能直接 COALESCE。独立证据、待补交关联验证和示例课程访问限制见 `contexts/flowchart-tool/ai-grading-investigation-20260907.md`。
 
-> 2026-09-07 19:35 最新线上事实：后端 `releases/20260907_blankfix_v1`、3010 前端同 release 已完成白卷批改修复发布；备份、健康检查和四角色可用页面证据见 `contexts/PROJECT_CORE.md` 顶部。在线恢复候选已在此前 1.30.9 上线。发布统一走 `scripts/deploy.py`，禁止依据历史 release 名称直接切换。
+> 2026-09-08 14:30 的 123 Nginx 去套娃事实已被 09-09 入口切换取代：3010 不再提供 Vue3 平台。历史排障仍可参考当天 worker_connections 记录。
 
 > 默认先读 `contexts/PROJECT_CORE.md`。本目录只维护会影响开发决策的当前架构，不复制完整代码、全表字段或历史聊天。
 
-> 当前焦点（2026-09-06 交接）：在线协作实施中断，尚未修复。123 的 3018/3019 主/沙箱代理已建立，129 外部地址已调整，但平台 NSSM 仍指向旧 `/cryptpad/`；源码部分改造、SQL 未执行、构建/多人验收/新应用发布均未完成。课堂固定组默认四人并按班跨课持久保存，协作按所选文档数均分且同页设置。先读 `PROJECT_CORE.md` 顶部交接状态、`contexts/online-collaboration/CONTEXT.md` 和 `repair-plan-20260906.md`，不要重复部署脚本或误报修复完成。
+> 协作专题历史（2026-09-06）：当时 123 的 3018/3019 代理刚建立、源码未发完。后续 1.30.5 已在 123 发布；现平台入口已迁 130。不要把这段当当前部署状态。
 
 | 任务类型 | 必读资料 | 需要时继续读 |
 | --- | --- | --- |
@@ -39,3 +50,9 @@
 ## 2026-09-07 在线统计与登录恢复候选
 
 近5分钟活跃账号、部门筛选、登录防重复与发布边界见 `contexts/online-recovery-20260907/requirements.md`、`design.md`、`tasks.md`。本地已验证，等待用户重启服务器后部署；不得视为已上线。
+
+
+2026-09-14：130 MQTT 管理配置已补齐，用户禁止上课期间重启，当前仍待生效；现场 API 与授权源正常。最新事实见 PROJECT_CORE.md v3.59。
+
+
+2026-09-14 后续状态：用户授权后已仅重启 xueyeceping-130，PID168090，首页/API/代理均200，EMQX管理API及授权源正常。外置配置已随启动加载，取代此前待重启状态；失败班级重试同步与硬件收数仍待验证。未打包部署或Git推送。见 PROJECT_CORE.md v3.60。

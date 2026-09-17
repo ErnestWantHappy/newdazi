@@ -228,6 +228,8 @@ export const dynamicRoutes = [
     path: '/help-center',
     component: Layout,
     roles: ['admin', 'teacher', 'researcher'],
+    // 侧边栏入口改挂教师工具分组；保留此静态路由兼容旧书签 /help-center。
+    hidden: true,
     children: [
       {
         path: '',

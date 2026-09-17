@@ -10,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,8 @@ import com.ruoyi.common.utils.StringUtils;
 @Service
 public class IotExperimentService
 {
+    private static final Logger log = LoggerFactory.getLogger(IotExperimentService.class);
+
     public static final String BROKER_SYNC_PENDING = "PENDING";
     public static final String BROKER_SYNC_SYNCED = "SYNCED";
     public static final String BROKER_SYNC_FAILED = "FAILED";
@@ -377,6 +381,14 @@ public class IotExperimentService
             item.setGroupCode(g.getGroupCode());
             item.setGroupName(g.getGroupName());
             item.setTopic(g.getTopic());
+            // 下行主题从该组实际使用的上行主题换末段得到，保证与设备订阅的主题严格配对。
+            String controlTopic = controlTopicOfTopic(g.getTopic());
+            if (controlTopic == null)
+            {
+                controlTopic = buildGroupControlTopic(experiment, ey, cc,
+                        g.getGroupNo() != null ? g.getGroupNo() : 1);
+            }
+            item.setControlTopic(controlTopic);
             item.setPythonClientId(buildPrimaryClientId(g.getGroupId()));
             item.setMemberNames(memberMap.getOrDefault(g.getGroupId(), Collections.emptyList()));
             groupItems.add(item);
@@ -469,6 +481,7 @@ public class IotExperimentService
                 vo.setGroupName(group.getGroupName());
                 vo.setGroupCode(group.getGroupCode());
                 vo.setTopic(group.getTopic());
+                vo.setControlTopic(controlTopicOf(group));
                 vo.setPythonClientId(buildPrimaryClientId(group.getGroupId()));
                 vo.setLastSeenAt(group.getLastSeenAt());
                 vo.setIsOnline(group.getLastSeenAt() != null && System.currentTimeMillis() - group.getLastSeenAt().getTime() < 120000);
@@ -802,6 +815,13 @@ public class IotExperimentService
             markBrokerSyncFailed(config, "EMQX 班级 Topic 权限同步失败");
             return;
         }
+        // 下行是增强能力：平台账号发布权限同步失败时只记日志，不阻断班级参数下发。
+        if (mqttProperties.isDownlinkEnabled() && StringUtils.isNotEmpty(mqttProperties.getUsername())
+                && !emqxAdapter.syncDownlinkPublisherAcl(mqttProperties.getUsername()))
+        {
+            log.warn("EMQX 平台下行发布权限同步失败，下行不可用，上行不受影响 username={}",
+                    mqttProperties.getUsername());
+        }
         if (disconnectOldClients && !emqxAdapter.disconnectClientsByUsername(config.getMqttUsername()))
         {
             markBrokerSyncFailed(config, "新权限已写入，但旧 MQTT 连接清理失败，请重试");
@@ -836,11 +856,80 @@ public class IotExperimentService
 
     public String buildGroupTopic(IotExperiment experiment, String entryYear, String classCode, int groupNo)
     {
+        return buildGroupTopic(experiment, entryYear, classCode, groupNo, "data");
+    }
+
+    /**
+     * 平台→设备下行控制主题；与上行 data 主题同前缀，仅末段不同。
+     * 设备侧用订阅积木订阅它，平台在下行开关打开后向它发布 AI 判定结果。
+     */
+    public String buildGroupControlTopic(IotExperiment experiment, String entryYear, String classCode, int groupNo)
+    {
+        return buildGroupTopic(experiment, entryYear, classCode, groupNo, mqttProperties.getDownlinkSegment());
+    }
+
+    /**
+     * 由小组已入库的上行主题推导下行主题：只替换末段。
+     * 小组 topic 是设备真正在用的主题，若下行另按字段重算，一旦两者前缀不一致，
+     * 会出现“平台发到 A、设备订阅 B”的静默失效，因此优先基于存量主题推导。
+     */
+    public String controlTopicOfGroup(IotGroup group)
+    {
+        if (group == null) return null;
+        String stored = group.getTopic();
+        String segment = mqttProperties.getDownlinkSegment();
+        if (StringUtils.isNotEmpty(stored))
+        {
+            int index = stored.lastIndexOf('/');
+            if (index > 0 && index < stored.length() - 1)
+            {
+                return stored.substring(0, index + 1) + segment;
+            }
+        }
+        IotExperiment experiment = mapper.selectExperimentById(group.getExperimentId());
+        if (experiment == null) return null;
+        return buildGroupControlTopic(experiment,
+                StringUtils.isNotEmpty(group.getEntryYear()) ? group.getEntryYear() : "2024",
+                StringUtils.isNotEmpty(group.getClassCode()) ? group.getClassCode() : "01",
+                group.getGroupNo() != null ? group.getGroupNo() : 1);
+    }
+
+    /** 由上行主题字符串推导下行主题；无法识别时返回 null。 */
+    public String controlTopicOfTopic(String dataTopic)
+    {
+        if (StringUtils.isEmpty(dataTopic)) return null;
+        int index = dataTopic.lastIndexOf('/');
+        if (index <= 0 || index >= dataTopic.length() - 1) return null;
+        return dataTopic.substring(0, index + 1) + mqttProperties.getDownlinkSegment();
+    }
+
+    private String buildGroupTopic(IotExperiment experiment, String entryYear, String classCode, int groupNo, String suffix)
+    {
         String classSegment = (classCode.matches("\\d") ? "0" + classCode : classCode);
         String classId = entryYear + "-" + classSegment;
         String actCode = StringUtils.isNotEmpty(experiment.getActivityCode()) ? safe(experiment.getActivityCode()) : "exp" + experiment.getExperimentId();
         String groupCode = String.format("group%02d", groupNo);
-        return "county/" + safe(experiment.getDeptId()) + "/" + safe(experiment.getLessonId()) + "/" + safe(classId) + "/" + actCode + "/" + groupCode + "/data";
+        return "county/" + safe(experiment.getDeptId()) + "/" + safe(experiment.getLessonId()) + "/" + safe(classId) + "/" + actCode + "/" + groupCode + "/" + suffix;
+    }
+
+    /** 按小组反查下行主题；实验缺失时返回 null，由调用方决定降级方式。 */
+    public String controlTopicOf(IotGroup group)
+    {
+        return controlTopicOfGroup(group);
+    }
+
+    /**
+     * 校验当前登录用户能否对该小组下发控制指令。
+     * 沿用实验管理权限：教研员只读、无关教师一律拒绝，避免跨班下发。
+     */
+    public IotGroup requireManageableGroup(Long groupId)
+    {
+        if (groupId == null) throw new ServiceException("小组不能为空");
+        IotGroup group = mapper.selectGroupById(groupId);
+        if (group == null) throw new ServiceException("小组不存在");
+        IotExperiment experiment = requireExperiment(group.getExperimentId());
+        if (!canManageExperiment(experiment)) throw new ServiceException("无权对该小组下发控制指令");
+        return group;
     }
 
     private String topicOf(IotExperiment experiment, IotDevice device)

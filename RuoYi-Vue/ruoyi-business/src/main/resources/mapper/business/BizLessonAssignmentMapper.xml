@@ -168,8 +168,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             assigner_id = #{assignerId},
             assign_time = #{assignTime},
             auto_advance_ready_time = null,
-            theory_open = 0,
-            practical_open = 0
+            theory_open = 1,
+            practical_open = 1
         where assignment_id = #{assignmentId}
           and lesson_id = #{currentLessonId}
     </update>

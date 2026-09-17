@@ -1,5 +1,6 @@
 package com.ruoyi.business.service;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -13,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.config.IotMqttProperties;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.IotGroup;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
@@ -103,5 +105,34 @@ class IotExperimentServiceAccessTest
                 "parseBrokerHost", "ssl://[2001:db8::1]:8883"));
         assertEquals(Integer.valueOf(8883), (Integer) ReflectionTestUtils.invokeMethod(service,
                 "parseBrokerPort", "ssl://[2001:db8::1]:8883"));
+    }
+
+    @Test
+    void derivesControlTopicBySwappingLastSegmentOfDataTopic()
+    {
+        assertEquals("county/169/268/2025-01/light/group01/control",
+                service.controlTopicOfTopic("county/169/268/2025-01/light/group01/data"));
+    }
+
+    @Test
+    void returnsNullWhenDataTopicCannotBeSplit()
+    {
+        assertNull(service.controlTopicOfTopic(null));
+        assertNull(service.controlTopicOfTopic(""));
+        assertNull(service.controlTopicOfTopic("nodata"));
+        assertNull(service.controlTopicOfTopic("county/169/"));
+    }
+
+    @Test
+    void followsStoredGroupTopicSoDeviceSubscriptionStaysPaired()
+    {
+        // 存量小组主题可能与按字段重算的结果不一致；下行必须跟随存量主题，
+        // 否则会出现“平台发到 A、设备订阅 B”的静默失效。
+        IotGroup group = new IotGroup();
+        group.setGroupId(1L);
+        group.setExperimentId(9L);
+        group.setTopic("county/169/268/2025-01/legacy/group03/data");
+
+        assertEquals("county/169/268/2025-01/legacy/group03/control", service.controlTopicOf(group));
     }
 }

@@ -138,19 +138,25 @@ public class StudentToolServiceImpl implements StudentToolService
     public void replaceLessonTools(Long lessonId, List<BizLessonTool> tools)
     {
         if (lessonId == null) { throw new ServiceException("缺少课程ID"); }
-        mapper.deleteLessonToolsByLessonId(lessonId);
+        // 未提交工具字段表示只修改课程；空列表才表示明确清空，避免旧网址阻断课程保存。
         if (tools == null) { return; }
-        int order = 0;
-        Set<String> seen = new HashSet<>();
+        // 先校验完整列表再替换，防止校验失败前触碰已保存配置。
+        if (tools.size() > 20) { throw new ServiceException("每节课最多配置 20 个工具"); }
         for (BizLessonTool tool : tools)
         {
-            if (tool == null || StringUtils.isBlank(tool.getToolName()) || StringUtils.isBlank(tool.getToolUrl()))
+            if (tool == null)
             {
-                continue;
+                throw new ServiceException("工具数据不能为空");
             }
-            String key = tool.getToolName().trim() + "|" + tool.getToolUrl().trim();
-            if (!seen.add(key)) { continue; } // 防重复行
+        }
+        mapper.deleteLessonToolsByLessonId(lessonId);
+        int order = 0;
+        for (BizLessonTool tool : tools)
+        {
             tool.setToolId(null);
+            // 配置可先保存为待完善状态；学生端仅为安全的网页地址生成可点击链接。
+            tool.setToolName(StringUtils.trimToEmpty(tool.getToolName()));
+            tool.setToolUrl(StringUtils.trimToEmpty(tool.getToolUrl()));
             tool.setLessonId(lessonId);
             tool.setSortOrder(order++);
             mapper.insertLessonTool(tool);
@@ -202,4 +208,5 @@ public class StudentToolServiceImpl implements StudentToolService
         if (tool.getDeptId() == null) { return false; } // 平台级工具不允许教师在本校列表直接修改
         return tool.getDeptId().equals(deptId);
     }
+
 }

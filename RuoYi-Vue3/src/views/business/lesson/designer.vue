@@ -107,9 +107,13 @@
                   </div>
                 </div>
                 <div v-show="lessonToolsExpanded">
+                  <p class="feature-subtext">工具随课程保存。网址尚未完善也可以先保存，不会丢失已填写的内容。</p>
                   <div v-for="(t, ti) in form.lessonTools" :key="ti" class="lesson-tool-row">
                   <el-input v-model="t.toolName" placeholder="工具名称，如：实验一" size="small" style="width: 150px" />
-                  <el-input v-model="t.toolUrl" placeholder="http:// 或 https:// 网址" size="small" style="flex: 1" />
+                  <div style="flex: 1; min-width: 0">
+                    <el-input v-model="t.toolUrl" placeholder="http:// 或 https:// 网址" size="small" />
+                    <div v-if="lessonToolUrlHint(t.toolUrl)" role="status" class="feature-subtext">{{ lessonToolUrlHint(t.toolUrl) }}</div>
+                  </div>
                   <el-button type="danger" link icon="Delete" @click="removeLessonTool(ti)" />
                   </div>
                   <el-button size="small" type="primary" plain icon="Plus" @click="addLessonTool">添加工具</el-button>
@@ -233,7 +237,7 @@
             </span>
           </h4>
           <div v-if="hasInconsistentScores" style="color: #E6A23C; font-size: 12px; margin-bottom: 10px;">
-            ⚠️ 注意：检测到同类题目分值不一致。随机抽题模式下，建议保持同题型分值相同，否则学生试卷总分可能浮动。当前预览总分仅供参考。
+            同一题型的随机候选题分值必须一致，才能保证每位学生抽到的试卷都是 100 分。请先统一分值再保存。
           </div>
           
           <div v-if="choiceCount || judgmentCount" class="selected-question-tools">
@@ -498,6 +502,7 @@ import { listScoringItems } from "@/api/business/scoringItem";
 import PdfPreview from '@/components/PdfPreview/index.vue';
 import LessonGuideSheetPanel from './components/LessonGuideSheetPanel.vue';
 import { calculateEntryYearFromGrade } from '@/utils/academicYear';
+import { lessonToolUrlHint } from '@/utils/lessonToolUrl';
 
 const { proxy } = getCurrentInstance();
 const route = useRoute();
@@ -519,6 +524,20 @@ const addingQuestionIds = ref(new Set());
 // 在线协作开关只做状态展示与工作台入口；文档与分组只在协作工作台设置，不随课程保存联动。
 const collaborationForm = ref({ enabled: false });
 const lessonToolsExpanded = ref(false);
+const initialLessonTools = ref('[]');
+// 本节课工具：新增一行空工具（模板此前绑定了不存在的函数导致按钮无反应）
+function addLessonTool() {
+  if ((form.value.lessonTools || []).length >= 20) {
+    proxy.$modal.msgError('每节课最多配置 20 个工具。');
+    return;
+  }
+  form.value.lessonTools.push({ toolName: '', toolUrl: '' });
+  lessonToolsExpanded.value = true;
+}
+// 删除指定行工具
+function removeLessonTool(index) {
+  form.value.lessonTools.splice(index, 1);
+}
 const saving = ref(false);
 
 // 核心修复：将 assignedClassCodes 整合到 form 对象中
@@ -622,8 +641,8 @@ const hasInconsistentScores = computed(() => {
   };
   
   // 只有当启用了随机抽题（count > 0）且题目列表不为空时才检查
-  if (form.value.randomChoiceCount > 0 && choices.length > 0 && !isConsistent(choices)) return true;
-  if (form.value.randomJudgmentCount > 0 && judgments.length > 0 && !isConsistent(judgments)) return true;
+  if (form.value.randomChoiceCount > 0 && form.value.randomChoiceCount < choices.length && !isConsistent(choices)) return true;
+  if (form.value.randomJudgmentCount > 0 && form.value.randomJudgmentCount < judgments.length && !isConsistent(judgments)) return true;
   
   return false;
 });
@@ -725,6 +744,10 @@ function submitForm() {
         proxy.$modal.msgError('请至少选择普通题目或开启电子导学单；若仅考勤请将课程用途设为「课堂考勤」。');
         return;
       }
+      if (hasInconsistentScores.value) {
+        proxy.$modal.msgError('请统一同一题型的随机候选题分值后再保存');
+        return;
+      }
       // 电子导学单独立计分，仅普通题存在时校验 100 分。
       if (selectedQuestions.value.length > 0 && totalScore.value !== 100) {
         proxy.$modal.msgError(`当前总分为 ${totalScore.value} 分，必须凑满 100 分才能保存！`);
@@ -736,6 +759,16 @@ function submitForm() {
 
       // 提交前确保排序
       sortQuestions();
+      // 待完善工具也随课程保存，网址提示不再阻断课程；完全空白的新行不落库。
+      const checkedTools = [];
+      const toolsChanged = JSON.stringify(form.value.lessonTools || []) !== initialLessonTools.value;
+      for (let ti = 0; toolsChanged && ti < (form.value.lessonTools || []).length; ti++) {
+        const t = form.value.lessonTools[ti];
+        const name = (t.toolName || '').trim();
+        const url = (t.toolUrl || '').trim();
+        if (!name && !url) continue;
+        checkedTools.push({ toolName: name, toolUrl: url });
+      }
 
       // 在线协作与课程主体完全解耦：普通课程保存不再触碰协作房间或历史作品，分组与文档只在协作工作台设置。
       // 考勤课强制关闭自动推进，避免误开
@@ -749,7 +782,7 @@ function submitForm() {
         // 物联网开关：考勤课强制关闭
         iotEnabled: isAttendanceSubmit ? false : Boolean(form.value.iotEnabled),
         // 本节课工具：随课程保存，学生端面板先展示
-        lessonTools: (form.value.lessonTools || []).filter(t => t && t.toolName && t.toolUrl),
+        lessonTools: toolsChanged ? checkedTools : undefined,
         questions: selectedQuestions.value,
         // 入学年份随表单显式提交，避免跨学年时再由年级反推错届。
         assignedClassCodes: form.value.assignedClasses 
@@ -785,6 +818,8 @@ function submitForm() {
 // ... 
 
 function initialize() {
+  lessonToolsExpanded.value = false;
+  initialLessonTools.value = '[]';
   const { lessonId } = route.params;
   const { grade, entryYear, classes, semester, guideSheetId } = route.query;
   const presetGuideSheetId = Number.parseInt(guideSheetId, 10);
@@ -830,6 +865,8 @@ function initialize() {
         guideSheetReplaceRequested: false,
       };
       initialAssignedClasses.value = [...assignedClasses];
+      initialLessonTools.value = JSON.stringify(form.value.lessonTools);
+      lessonToolsExpanded.value = form.value.lessonTools.length > 0;
       initialGuideSheetBinding.value = detail.currentGuideSheetBinding || null;
       loadCollaborationSettings(detail.lessonId).catch(() => {
         resetCollaborationForm();

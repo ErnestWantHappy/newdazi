@@ -199,7 +199,7 @@ function handleUpdate(row) {
 /** 删除按钮操作 */
 function handleDelete(row) {
   const _lessonIds = row.lessonId || ids.value
-  proxy.$modal.confirm('是否确认删除课程/作业信息编号为"' + _lessonIds + '"的数据项？').then(function() {
+  proxy.$modal.confirm('确认删除课程编号 ' + _lessonIds + ' 吗？课程的成绩、答卷、作答记录和独占作品文件将一并删除，无法恢复。题库题目及其他课程仍引用的文件保留。').then(function() {
     return delLesson(_lessonIds)
   }).then(() => {
     getList()

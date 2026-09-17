@@ -77,6 +77,10 @@ public class BizStudentServiceImpl implements IBizStudentService
 
     @Autowired
     private AnswerDeletionGuardService answerDeletionGuardService;
+    @Autowired
+    private com.ruoyi.business.mapper.PurgeMapper purgeMapper;
+    @Autowired
+    private PurgeFileService purgeFileService;
 
     @Override
     public BizStudent selectBizStudentByStudentId(Long studentId)
@@ -177,73 +181,141 @@ public class BizStudentServiceImpl implements IBizStudentService
     @Override
     @Transactional
     public int deleteBizStudentByClass(String entryYear, String classCode, Long deptId) {
+        LoginUser operator = requireOperator();
+        if (StringUtils.isBlank(entryYear) || StringUtils.isBlank(classCode))
+        {
+            throw new ServiceException("入学年份和班级不能为空");
+        }
+        Long targetDeptId = deptId == null ? operator.getUser().getDeptId() : deptId;
+        if (targetDeptId == null || targetDeptId <= 0)
+        {
+            throw new ServiceException("请选择要删除学生的学校");
+        }
         BizStudent query = new BizStudent();
         query.setEntryYear(entryYear);
         query.setClassCode(classCode);
-        query.setDeptId(deptId);
-        
-        // 为了安全起见，非管理员只能删除自己校区的
-        LoginUser loginUser = SecurityUtils.getLoginUser();
-        if (loginUser != null && !loginUser.getUser().isAdmin()) {
-            query.setDeptId(loginUser.getUser().getDeptId());
-        }
-
-        Long targetDeptId = query.getDeptId();
-
-        List<BizStudent> students = bizStudentMapper.selectBizStudentList(query);
-        if (students == null || students.isEmpty()) {
-            recycleEmptyClass(targetDeptId, entryYear, classCode);
-            return 0;
-        }
-
-        Long[] studentIds = new Long[students.size()];
-        int i = 0;
-        for (BizStudent student : students) {
-            studentIds[i++] = student.getStudentId();
-        }
-        answerDeletionGuardService.assertStudentsDeletable(studentIds);
-        for (BizStudent student : students) {
-            if (student.getUserId() != null) {
-                userMapper.deleteUserById(student.getUserId());
-                userRoleMapper.deleteUserRoleByUserId(student.getUserId());
+        query.setDeptId(targetDeptId);
+        if (!operator.getUser().isAdmin())
+        {
+            if (!targetDeptId.equals(operator.getUser().getDeptId()))
+            {
+                throw new ServiceException("不能删除其他学校的学生");
             }
+            query.setTeacherUserId(operator.getUserId());
         }
-        int rows = bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
-        recycleEmptyClass(targetDeptId, entryYear, classCode);
-        return rows;
+        // 整班候选与逐个删除使用同一教师班级范围；无可见学生时不清理班级关系。
+        List<BizStudent> students = bizStudentMapper.selectBizStudentList(query);
+        if (students == null || students.isEmpty()) return 0;
+        Long[] studentIds = students.stream().map(BizStudent::getStudentId).toArray(Long[]::new);
+        return purgeBizStudentByStudentIds(studentIds);
     }
 
     @Override
     @Transactional
     public int deleteBizStudentByStudentIds(Long[] studentIds)
     {
-        List<BizStudent> students = selectAuthorizedStudents(studentIds);
-        answerDeletionGuardService.assertStudentsDeletable(studentIds);
-        Set<String> affectedClasses = new LinkedHashSet<>();
-        for (BizStudent student : students) {
-            markAffectedClass(affectedClasses, student.getDeptId(), student.getEntryYear(), student.getClassCode());
-            if (student.getUserId() != null) {
-                userMapper.deleteUserById(student.getUserId());
-                userRoleMapper.deleteUserRoleByUserId(student.getUserId());
-            }
-        }
-        int rows = bizStudentMapper.deleteBizStudentByStudentIds(studentIds);
-        recycleEmptyClasses(affectedClasses);
-        return rows;
+        return purgeBizStudentByStudentIds(studentIds);
     }
 
     @Override
     @Transactional
     public int deleteBizStudentByStudentId(Long studentId)
     {
-        BizStudent student = selectAuthorizedStudents(new Long[] { studentId }).get(0);
-        answerDeletionGuardService.assertStudentsDeletable(new Long[] { studentId });
-        if (student.getUserId() != null) {
-            userMapper.deleteUserById(student.getUserId());
-            userRoleMapper.deleteUserRoleByUserId(student.getUserId());
+        return purgeBizStudentByStudentIds(new Long[] { studentId });
+    }
+    /**
+     * 彻底清除学生：连成绩、作品、附件一起物理删除，不可恢复。
+     * 用户已确认彻底清除语义；仍保留跨校/归属校验与事务，批量失败整体回滚。
+     * 协作房间与修订为多人共享，不删（只清个人上传票据）；129 外部数据不动。
+     */
+    @Override
+    @Transactional
+    public int purgeBizStudentByStudentIds(Long[] studentIds)
+    {
+        List<BizStudent> students = selectAuthorizedStudents(studentIds);
+        if (students.isEmpty())
+        {
+            return 0;
         }
-        int rows = bizStudentMapper.deleteBizStudentByStudentId(studentId);
-        recycleEmptyClass(student.getDeptId(), student.getEntryYear(), student.getClassCode());
+        List<Long> ids = new ArrayList<>();
+        Set<String> affectedClasses = new LinkedHashSet<>();
+        for (BizStudent student : students)
+        {
+            ids.add(student.getStudentId());
+            markAffectedClass(affectedClasses, student.getDeptId(), student.getEntryYear(), student.getClassCode());
+        }
+        // 1) 先收文件候选（删行之前）：答案文件 + 该生全部作品附件
+        List<String> fileCandidates = new ArrayList<>(purgeMapper.selectStudentAnswerFilePaths(ids));
+        List<Long> artifactIds = purgeMapper.selectArtifactIdsByStudents(ids);
+        if (!artifactIds.isEmpty())
+        {
+            fileCandidates.addAll(purgeMapper.selectArtifactFilePaths(artifactIds));
+        }
+        // 2) 按依赖顺序删行
+        purgeMapper.deleteScoringDetailsByStudents(ids);
+        purgeMapper.deleteAiResultsByStudents(ids);
+        if (!artifactIds.isEmpty())
+        {
+            purgeMapper.deleteAttachmentsByArtifacts(artifactIds);
+            purgeMapper.deleteVersionsByArtifacts(artifactIds);
+        }
+        purgeMapper.deleteAnswersByStudents(ids);
+        if (!artifactIds.isEmpty())
+        {
+            purgeMapper.deleteArtifactsByIds(artifactIds);
+        }
+        purgeMapper.deleteAnswerBackupTableByStudents(ids);
+        purgeMapper.deleteAnswerOrphansByStudents(ids);
+        purgeMapper.deleteTaskStatesByStudents(ids);
+        purgeMapper.deletePerformancesByStudents(ids);
+        purgeMapper.deleteCheckinsByStudents(ids);
+        purgeMapper.deleteProgrammingSubmissionsByStudents(ids);
+        purgeMapper.deleteProgrammingDraftsByStudents(ids);
+        purgeMapper.deletePythonPracticeCasesByStudents(ids);
+        purgeMapper.deletePythonPracticeSubmissionsByStudents(ids);
+        purgeMapper.deletePythonPracticeDraftsByStudents(ids);
+        purgeMapper.deletePythonPracticeProgressByStudents(ids);
+        purgeMapper.deleteFlowchartSubmissionsByStudents(ids);
+        purgeMapper.deleteFlowchartDraftsByStudents(ids);
+        purgeMapper.deleteGuideAnswersByStudents(ids);
+        purgeMapper.deleteCountyAnswersByStudents(ids);
+        purgeMapper.deleteCountyStudentsByStudents(ids);
+        purgeMapper.deleteIotGroupStudents(ids);
+        purgeMapper.deleteScoreAdjustmentsByStudents(ids);
+        purgeMapper.deleteCollabTicketsByStudents(ids);
+        for (BizStudent student : students)
+        {
+            if (student.getUserId() != null)
+            {
+                userMapper.deleteUserById(student.getUserId());
+                userRoleMapper.deleteUserRoleByUserId(student.getUserId());
+            }
+        }
+        int rows = bizStudentMapper.deleteBizStudentByStudentIds(
+                ids.toArray(new Long[0]));
+        if (rows != ids.size())
+        {
+            throw new ServiceException("部分学生已发生变化，删除已取消，请刷新后重试");
+        }
+        // 删除已提交后清理旧会话，避免已删除账号继续使用缓存身份。
+        Set<Long> deletedUserIds = students.stream().map(BizStudent::getUserId)
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        evictStudentSessionsAfterCommit(deletedUserIds);
+        recycleEmptyClasses(affectedClasses);
+        // 3) 文件收尾放在事务提交后
+        final List<String> pendingFiles = fileCandidates;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization()
+        {
+            @Override
+            public void afterCommit()
+            {
+                try {
+                    purgeFileService.deleteUnreferenced(pendingFiles);
+                } catch (Exception ex) {
+                    log.warn("学生删除已提交，独占文件清理待重试", ex);
+                }
+            }
+        });
         return rows;
     }
 
@@ -1084,7 +1156,7 @@ public class BizStudentServiceImpl implements IBizStudentService
         Runnable evict = () -> {
             try
             {
-                Collection<String> keys = redisCache.keys(CacheConstants.LOGIN_TOKEN_KEY + "*");
+                Collection<String> keys = redisCache.scanKeys(CacheConstants.LOGIN_TOKEN_KEY + "*", 200L);
                 for (String key : keys)
                 {
                     LoginUser cached = redisCache.getCacheObject(key);

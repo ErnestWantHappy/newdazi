@@ -152,7 +152,7 @@
           <el-button link :type="scope.row.status === '1' ? 'success' : 'warning'" @click="handleRowStatus(scope.row)">
             {{ scope.row.status === '1' ? '恢复' : '停用' }}
           </el-button>
-          <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)">删除</el-button>
+          <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['business:student:remove']">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -320,7 +320,7 @@
               </el-form>
               <div style="color: #F56C6C; font-size: 13px; margin-top: 10px; line-height: 1.5;">
                 <el-icon style="vertical-align: middle; margin-right: 4px;"><warning /></el-icon>
-                <span style="vertical-align: middle;">只会彻底删除<b>没有任何业务记录</b>的学生；有答题、成绩或其他记录的学生会被系统拦住，请改用“停用”。</span>
+                <span style="vertical-align: middle;">支持删除有成绩的学生。学生账号、成绩、答卷和个人作品将一并删除，无法恢复；多人共享协作文档保留。只删除当前学校可管理班级的学生。</span>
               </div>
             </div>
           </el-radio>
@@ -583,7 +583,7 @@ function submitForm() {
 function handleDelete(row) {
   const studentIds = row.studentId || ids.value;
   const studentNames = row.studentName || studentList.value.filter(item => ids.value.includes(item.studentId)).map(item => item.studentName).join(',');
-  proxy.$modal.confirm('是否确认删除学生姓名为"' + studentNames + '"的数据项？').then(function() {
+  proxy.$modal.confirm('确认删除学生“' + studentNames + '”吗？账号、成绩、答卷和个人作品将一并删除，无法恢复；多人共享协作文档保留。').then(function() {
     return delStudent(studentIds);
   }).then(() => {
   getList();
@@ -603,13 +603,14 @@ function openBatchDelete() {
 function submitBatchDelete() {
   if (deleteDialog.mode === 'selected') {
     if (!ids.value.length) return;
+    const selectedIds = [...ids.value];
     const studentNames = studentList.value.filter(item => ids.value.includes(item.studentId)).map(item => item.studentName).join(',');
     const confirmMsg = studentNames 
       ? '确认删除已选学生（如：' + studentNames.split(',').slice(0,3).join(',') + ' 等）吗？' 
       : '确认删除已选名学生吗？';
     
-    proxy.$modal.confirm(confirmMsg).then(function() {
-      return delStudent(ids.value);
+    proxy.$modal.confirm(confirmMsg + ' 账号、成绩、答卷和个人作品将一并删除，无法恢复；多人共享协作文档保留。').then(function() {
+      return delStudent(selectedIds);
     }).then(() => {
       deleteDialog.open = false;
       getList();
@@ -620,12 +621,9 @@ function submitBatchDelete() {
       proxy.$modal.msgError("请选择要删除的入学年份和班级！");
       return;
     }
-    proxy.$modal.confirm('此严重警告操作！确定要彻底清空 ' + deleteDialog.entryYear + '级 ' + deleteDialog.classCode + '班 的所有学生吗？').then(function() {
-      return delStudentByClass({
-        entryYear: deleteDialog.entryYear,
-        classCode: deleteDialog.classCode,
-        deptId: userStore.currentDeptId
-      });
+    const targetClass = { entryYear: deleteDialog.entryYear, classCode: deleteDialog.classCode, deptId: userStore.currentDeptId };
+    proxy.$modal.confirm('确认删除当前学校 ' + targetClass.entryYear + '级 ' + targetClass.classCode + '班 的全部学生吗？包含跨页学生及其账号、成绩、答卷和个人作品，无法恢复；多人共享协作文档保留。').then(function() {
+      return delStudentByClass(targetClass);
     }).then((res) => {
       deleteDialog.open = false;
       getList();

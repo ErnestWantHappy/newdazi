@@ -1,5 +1,11 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="topic?.topicId ? '编辑主题' : '发布主题'" width="760px" destroy-on-close @close="close">
+  <el-dialog
+    :model-value="modelValue"
+    :title="topic?.topicId ? (form.topicType === 'NOTICE' ? '修改活动通知' : '编辑主题') : (form.topicType === 'NOTICE' ? '发布活动通知' : '发布主题')"
+    width="760px"
+    destroy-on-close
+    @close="close"
+  >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
       <el-form-item label="主题类型" prop="topicType">
         <el-radio-group v-model="form.topicType" :disabled="!!topic?.topicId">
@@ -29,9 +35,9 @@
           </el-form-item>
         </template>
       </template>
-      <el-alert v-if="topic?.topicId && topic.topicType === 'NOTICE'" type="info" :closable="false" title="编辑主题不会再次发送通知；如需提醒，请使用“再次通知”。" />
+      <el-alert v-if="topic?.topicId && form.topicType === 'NOTICE'" type="info" :closable="false" title="修改通知内容不会自动再次向教师发送提醒；如需全员/指定重发，请在详情页使用“再次通知”。" />
     </el-form>
-    <template #footer><el-button @click="close">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">保存并发布</el-button></template>
+    <template #footer><el-button @click="close">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">{{ topic?.topicId ? '保存修改' : '保存并发布' }}</el-button></template>
   </el-dialog>
 </template>
 

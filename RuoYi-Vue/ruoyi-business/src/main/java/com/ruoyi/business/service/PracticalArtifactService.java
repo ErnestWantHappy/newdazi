@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,8 @@ import com.ruoyi.common.utils.file.FileUploadUtils;
 @Service
 public class PracticalArtifactService
 {
+    @Value("${ruoyi.migration.startup-recovery-enabled:true}")
+    private boolean startupRecoveryEnabled = true;
     private static final long STUCK_NORMALIZATION_TIMEOUT_MILLIS = 10L * 60L * 1000L;
     private static final long AUTO_RETRY_INTERVAL_MILLIS = 60L * 60L * 1000L;
     private static final long RECOVER_STUCK_NORMALIZATION_TIMEOUT_MILLIS = 2L * 60L * 1000L;
@@ -361,6 +364,8 @@ public class PracticalArtifactService
     @EventListener(ApplicationReadyEvent.class)
     public void recoverOfficeAttachmentsMissingPreviewAfterStartup()
     {
+        // 文件尚在同步时不能把历史预览重新入队或修改附件状态。
+        if (!startupRecoveryEnabled) return;
         List<PracticalAttachment> attachments = artifactMapper.selectOfficeAttachmentsMissingPreview(
                 MAX_MISSING_PREVIEW_RECOVERY_COUNT);
         int reconciledCount = 0;
