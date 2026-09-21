@@ -11,6 +11,9 @@ public class ResearchPublicPostVo implements Serializable
 {
     private static final long serialVersionUID = 1L;
 
+    private String postType;
+    private String courseTitle;
+
     /** 留言正文（保存时已过滤）。 */
     private String contentHtml;
 
@@ -25,6 +28,11 @@ public class ResearchPublicPostVo implements Serializable
     private Boolean edited;
 
     public String getContentHtml() { return contentHtml; }
+
+    public String getCourseTitle() { return courseTitle; }
+    public void setCourseTitle(String value) { courseTitle = value; }
+    public String getPostType() { return postType; }
+    public void setPostType(String postType) { this.postType = postType; }
 
     public void setContentHtml(String contentHtml) { this.contentHtml = contentHtml; }
 

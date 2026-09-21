@@ -305,7 +305,7 @@
             SELECT pair.student_id, pair.lesson_id, lesson.dept_id, lesson.creator_id,
                    CASE WHEN performance.is_absent = 1 OR lesson.lesson_mode = 'attendance' THEN NULL
                         ELSE LEAST(100, GREATEST(0,
-                             CASE WHEN adjustment.action_type = 'UPDATE'
+                             CASE WHEN adjustment.action_type = 'ADJUST' AND adjustment.adjusted_homework_score IS NOT NULL
                                   THEN IFNULL(adjustment.adjusted_homework_score, 0)
                                   ELSE IFNULL(homework.homework_score, 0) END
                              + IFNULL(performance.score, 0))) END AS final_score
@@ -630,7 +630,7 @@
                        WHERE answer.lesson_id = #{q.lessonId}
                          AND answer.student_id = student.student_id), 0) AS originalHomeworkScore,
                COALESCE(
-                   (SELECT CASE WHEN adjustment.action_type = 'UPDATE'
+                   (SELECT CASE WHEN adjustment.action_type = 'ADJUST' AND adjustment.adjusted_homework_score IS NOT NULL
                                 THEN adjustment.adjusted_homework_score ELSE NULL END
                     FROM biz_score_adjustment adjustment
                     WHERE adjustment.lesson_id = #{q.lessonId}
@@ -646,7 +646,7 @@
                CASE WHEN performance.is_absent = 1 THEN NULL
                     ELSE LEAST(100, GREATEST(0,
                          COALESCE(
-                             (SELECT CASE WHEN adjustment.action_type = 'UPDATE'
+                             (SELECT CASE WHEN adjustment.action_type = 'ADJUST' AND adjustment.adjusted_homework_score IS NOT NULL
                                           THEN adjustment.adjusted_homework_score ELSE NULL END
                               FROM biz_score_adjustment adjustment
                               WHERE adjustment.lesson_id = #{q.lessonId}

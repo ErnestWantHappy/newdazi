@@ -176,7 +176,7 @@
                 {{ courseMyScore !== null ? courseMyScore : "待完成" }}
               </div>
             </div>
-            <div class="score-rule-note" title="理论题锁定首次提交不可更改；打字题与编程题取历史最高分；文件作品按当前版本计分">计分规则：理论锁首次 · 打字编程取最高 · 文件计当前版本</div>
+            <div class="score-rule-note" title="理论题提交后锁定，老师安排重做后按新提交计分；打字题与编程题取历史最高分；文件作品按当前版本计分">计分规则：理论按本次提交 · 打字编程取最高 · 文件计当前版本</div>
           </div>
         </div>
       </div>
@@ -430,6 +430,7 @@
                 | 得分:
                 <span class="section-score-value score-num">{{ theoryScore }}分</span>
               </template>
+              <el-tag v-else-if="theoryRevision > 0" type="warning" size="small">待重做</el-tag>
             </span>
           </div>
           <div class="theory-grid">
@@ -495,6 +496,7 @@
               type="success"
               size="large"
               @click="submitTheory"
+              :loading="theorySubmitting"
               :disabled="theorySubmitted"
             >
               {{ theorySubmitted ? "已提交" : "提交理论测试" }}
@@ -1437,6 +1439,9 @@ const timerIntervals = {};
 // 理论测试得分状态
 const theoryScore = ref(null); // null表示未提交
 const theorySubmitted = ref(false);
+const theoryRevision = ref(0);
+const typingRevision = ref(0);
+const theorySubmitting = ref(false);
 
 // 分类题目
 const typingQuestions = computed(() =>
@@ -1642,7 +1647,9 @@ const uploadHeaders = computed(() => ({
 }));
 
 // 加载数据（silent=静默轮询：不触发整屏 loading，失败时保留现有页面状态）
+let lessonFetchSequence = 0;
 async function fetchData(opts = {}) {
+  const sequence = ++lessonFetchSequence;
   const silent = opts && opts.silent === true;
   if (!silent) {
     loading.value = true;
@@ -1671,6 +1678,8 @@ async function fetchData(opts = {}) {
         collaborationHistory.value = [];
       }
     }
+    if (res.hasLesson) await resolveMissingPracticalModes(res.questions || [], res.lessonId);
+    if (sequence !== lessonFetchSequence) return;
     if (res.blockedByCountyExam) {
       router.replace("/student/county-exam");
       return;
@@ -1684,6 +1693,25 @@ async function fetchData(opts = {}) {
     checkinTime.value = null;
     iotEnabled.value = false;
     if (res.hasLesson) {
+      const theoryChanged = Number(res.theoryRevision || 0) !== theoryRevision.value || lessonId.value !== res.lessonId;
+      const typingChanged = Number(res.typingRevision || 0) !== typingRevision.value || lessonId.value !== res.lessonId;
+      if (typingChanged) {
+        for (const q of allQuestions.value) {
+          if (q.questionType !== 'typing') continue;
+          clearInterval(timerIntervals[q.questionId]);
+          delete timerIntervals[q.questionId];
+          delete typingStates.value[q.questionId];
+          delete answers.value[q.questionId];
+        }
+      }
+      typingRevision.value = Number(res.typingRevision || 0);
+      if (theoryChanged) {
+        // 清掉旧轮理论选项，保留同课打字和操作题的本地状态。
+        for (const q of allQuestions.value) {
+          if (q.questionType === 'choice' || q.questionType === 'judgment') delete answers.value[q.questionId];
+        }
+      }
+      theoryRevision.value = Number(res.theoryRevision || 0);
       lessonId.value = res.lessonId;
       lessonTitle.value = res.lessonTitle;
       lessonMode.value = res.lessonMode === "attendance" ? "attendance" : "assessment";
@@ -1704,7 +1732,6 @@ async function fetchData(opts = {}) {
       
       // 应用随机逻辑
       const rawQuestions = res.questions || [];
-      await resolveMissingPracticalModes(rawQuestions, res.lessonId);
       
       const studentId = res.studentInfo?.studentId || 0;
       allQuestions.value = applyRandomShuffle(
@@ -1728,6 +1755,7 @@ async function fetchData(opts = {}) {
       initTheoryState(); // 初始化理论测试状态（检查是否已提交）
     }
   } catch (err) {
+    if (sequence !== lessonFetchSequence) return;
     // 静默轮询失败不清空现有状态，下个周期再试；避免一次网络抖动抹掉整页课程
     if (silent) {
       return;
@@ -1751,7 +1779,7 @@ async function fetchData(opts = {}) {
     hasPractical.value = false;
     activeLearningMode.value = 'daily';
   } finally {
-    loading.value = false;
+    if (sequence === lessonFetchSequence) loading.value = false;
   }
 }
 
@@ -1844,6 +1872,8 @@ function schedulePracticalPreviewPolling(questionId, attempt = 0) {
 
 // 初始化理论测试状态（检查是否已提交）
 function initTheoryState() {
+  theorySubmitted.value = false;
+  theoryScore.value = null;
   // 检查是否有任何理论题已提交
   let hasSubmitted = false;
   let totalScore = 0;
@@ -2071,6 +2101,7 @@ function autoSubmitTyping(qid) {
     answers: submitData,
     answerTimes: submitTimes,
     typingStats: typingStats, // 新增：打字详情
+    typingRevision: typingRevision.value,
   })
     .then((res) => {
       state.submitted = true;
@@ -2078,9 +2109,13 @@ function autoSubmitTyping(qid) {
       state.myScore = res.totalScore || 0;
       ElMessage.success(`打字成绩已自动提交！得分: ${state.myScore}分`);
     })
-    .catch(() => {
+    .catch((error) => {
       state.submitting = false;
       state.finished = false;
+      if (String(error?.message || error).includes('打字重做')) {
+        fetchData();
+        return;
+      }
       ElMessage.error("提交失败，请手动点击提交按钮重试");
     });
 }
@@ -2121,6 +2156,7 @@ function getCharClass(qid, idx) {
 // ================== 理论测试逻辑 ==================
 
 function submitTheory() {
+  if (theorySubmitting.value) return;
   // 检查是否已经提交过
   if (theorySubmitted.value) {
     ElMessage.warning("理论测试已提交，不可重复提交");
@@ -2132,9 +2168,12 @@ function submitTheory() {
   );
   const ids = theoryQuestions.value.map((q) => q.questionId);
   const submitData = {};
+  const submittedLessonId = lessonId.value;
+  const submittedRevision = theoryRevision.value;
   let answeredCount = 0;
 
   ids.forEach((id) => {
+    submitData[id] = '';
     if (answers.value[id]) {
       const question = theoryQuestionMap.get(id);
       submitData[id] = normalizeQuestionAnswer(
@@ -2150,22 +2189,34 @@ function submitTheory() {
     return;
   }
 
+  theorySubmitting.value = true;
   ElMessageBox.confirm(
     `已完成 ${answeredCount}/${theoryQuestions.value.length} 道题目，确定提交吗？`,
     "提示",
     { type: "warning" }
   ).then(() => {
-    submitAnswersApi({
-      lessonId: lessonId.value,
+    if (submittedLessonId !== lessonId.value || submittedRevision !== theoryRevision.value) {
+      ElMessage.warning('测试已更新，请重新作答');
+      return;
+    }
+    return submitAnswersApi({
+      lessonId: submittedLessonId,
+      theoryRevision: submittedRevision,
       answers: submitData,
     }).then((res) => {
+      if (submittedLessonId !== lessonId.value || submittedRevision !== theoryRevision.value) return;
+      // 交卷成功后，忽略交卷前发起的查询，防止旧响应恢复未提交状态。
+      lessonFetchSequence++;
+      loading.value = false;
       theoryScore.value = res.totalScore || 0;
       theorySubmitted.value = true;
       ElMessage.success(
         `提交成功！理论测试得分: ${res.totalScore}/${theoryTotalScore.value}`
       );
     });
-  });
+  }).catch((error) => {
+    if (error !== 'cancel' && error !== 'close') fetchData({ silent: true });
+  }).finally(() => { theorySubmitting.value = false; });
 }
 
 // ================== 公共逻辑 ==================

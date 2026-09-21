@@ -84,6 +84,17 @@ public class BizStudentAnswer extends BaseEntity
     /** 理论题终态提交标记；非数据库字段，防止重复请求覆盖已判分答案。 */
     private Boolean terminalSubmission;
 
+    /** 页面读取的理论轮次，用于拒绝重做前的过期交卷；不写入答案表。 */
+    private Long theoryRevision;
+    private Long typingRevision;
+    private Boolean typingSubmission;
+    public Long getTypingRevision() { return typingRevision; }
+    public void setTypingRevision(Long value) { typingRevision = value; }
+    public Boolean getTypingSubmission() { return typingSubmission; }
+    public void setTypingSubmission(Boolean value) { typingSubmission = value; }
+    public Long getTheoryRevision() { return theoryRevision; }
+    public void setTheoryRevision(Long value) { theoryRevision = value; }
+
     // Getters and Setters
     public Long getAnswerId() { return answerId; }
     public void setAnswerId(Long answerId) { this.answerId = answerId; }

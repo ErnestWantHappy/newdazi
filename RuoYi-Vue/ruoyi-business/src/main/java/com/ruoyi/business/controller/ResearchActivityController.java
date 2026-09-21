@@ -53,6 +53,24 @@ public class ResearchActivityController extends BaseController
 
     @Autowired private ResearchActivityService service;
 
+    @PostMapping(value="/topics/{topicId}/attachment-posts", consumes="multipart/form-data")
+    @PreAuthorize("@ss.hasPermi('business:researchActivity:add') and " + ROLE_GUARD)
+    public AjaxResult createAttachmentPost(@PathVariable Long topicId,
+            @Valid @RequestPart("payload") com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest payload,
+            @RequestPart(value="files", required=false) List<MultipartFile> files)
+    {
+        return success(service.saveAttachmentPost(topicId, null, payload, files));
+    }
+
+    @PutMapping(value="/posts/{postId}/attachments", consumes="multipart/form-data")
+    @PreAuthorize("@ss.hasPermi('business:researchActivity:edit') and " + ROLE_GUARD)
+    public AjaxResult updateAttachmentPost(@PathVariable Long postId,
+            @Valid @RequestPart("payload") com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest payload,
+            @RequestPart(value="files", required=false) List<MultipartFile> files)
+    {
+        return success(service.saveAttachmentPost(null, postId, payload, files));
+    }
+
     @GetMapping("/topics")
     @PreAuthorize("@ss.hasPermi('business:researchActivity:list') and " + ROLE_GUARD)
     public TableDataInfo topics(ResearchTopicQuery query)

@@ -23,6 +23,10 @@ let heartbeatTimer = null
 let heartbeatPending = false
 let hasBoundListeners = false
 let lastRemindAt = 0
+let verificationPending = null
+let lastVerificationAt = 0
+let lastUnavailableAt = 0
+let remindedToken = null
 
 function normalizeExpiredMessage(message) {
   if (!message) {
@@ -68,31 +72,57 @@ export function isSessionExpiredError(error) {
   if (status === 401) {
     return true
   }
-  const message = String(error?.message || error || '')
-  return message.includes('401')
-    || message.includes('会话已过期')
-    || message.includes('登录状态已过期')
-    || message.includes('认证失败')
+  return isSessionExpiredCode(error?.code) || isSessionExpiredCode(error?.response?.data?.code)
 }
 
-export function handleSessionExpired(message) {
+function showSessionExpired(message, token) {
   const finalMessage = normalizeExpiredMessage(message)
-  if (isRelogin.show) {
+  if (isRelogin.show || remindedToken === token || getToken() !== token) {
     return
   }
+  remindedToken = token
   isRelogin.show = true
   ElMessageBox.confirm(finalMessage, '系统提示', {
     confirmButtonText: '重新登录',
     cancelButtonText: '留在当前页',
     type: 'warning'
   }).then(() => {
-    useUserStore().logOut().then(() => {
+    if (getToken() !== token) return
+    return useUserStore().logOut().then(() => {
       location.href = '/index'
     })
   }).catch(() => {
   }).finally(() => {
     isRelogin.show = false
   })
+}
+
+function notifyUnavailable() {
+  if (Date.now() - lastUnavailableAt < REMIND_COOLDOWN) return
+  lastUnavailableAt = Date.now()
+  ElNotification.warning({ title: '连接暂时异常', message: '暂时无法确认登录状态，请保留当前作答，连接恢复后再保存。', duration: 6000 })
+}
+
+// 只复核会话，不重放保存、交卷等写请求；同一失效会话取消提示后不再反复打断答题。
+export function handleSessionExpired(message) {
+  const token = getToken()
+  if (!token || remindedToken === token) return Promise.resolve()
+  if (verificationPending) return verificationPending
+  if (Date.now() - lastVerificationAt < 5000) return Promise.resolve()
+  lastVerificationAt = Date.now()
+  verificationPending = heartbeatClient.get('/auth/session-status', {
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(res => {
+    if (getToken() !== token) return
+    if (isSessionExpiredCode(res?.data?.code)) showSessionExpired(SESSION_EXPIRED_MESSAGE, token)
+    else if (Number(res?.data?.code) === 200) remindedToken = null
+    else notifyUnavailable()
+  }).catch(error => {
+    if (getToken() !== token) return
+    if (isSessionExpiredError(error)) showSessionExpired(SESSION_EXPIRED_MESSAGE, token)
+    else notifyUnavailable()
+  }).finally(() => { verificationPending = null })
+  return verificationPending
 }
 
 function shouldHeartbeat() {
@@ -144,12 +174,16 @@ export async function runSessionHeartbeat() {
       return
     }
     if (code !== 200) {
+      notifyUnavailable()
       return
     }
+    if (getToken() === token) remindedToken = null
     notifyExpiring(res?.data?.data?.expireTime)
   } catch (error) {
     if (isSessionExpiredError(error)) {
       handleSessionExpired()
+    } else {
+      notifyUnavailable()
     }
   } finally {
     heartbeatPending = false

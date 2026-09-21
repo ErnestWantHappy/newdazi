@@ -43,6 +43,10 @@ async function parseBlobError(data) {
   }
 }
 
+function responseError(message, code) {
+  return Object.assign(new Error(message), { code })
+}
+
 service.interceptors.request.use(config => {
   const isToken = (config.headers || {}).isToken === false
   const isRepeatSubmit = (config.headers || {}).repeatSubmit === false
@@ -103,14 +107,14 @@ service.interceptors.response.use(async res => {
     } else {
       ElMessage.error(msg)
     }
-    return Promise.reject(new Error(msg))
+    return Promise.reject(responseError(msg, code))
   }
 
   const code = parseResponseCode(res.data)
   const msg = parseResponseMessage(res.data, code)
   if (isSessionExpiredCode(code)) {
     handleSessionExpired(msg)
-    return Promise.reject(new Error(msg))
+    return Promise.reject(responseError(msg, code))
   }
   if (code === 500) {
     ElMessage({ message: msg, type: 'error' })

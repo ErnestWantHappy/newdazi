@@ -149,6 +149,14 @@ class ResourceAccessServiceTest
                 () -> service.assertCanRead("/profile/upload/guide-sheet/7/work.docx"));
     }
 
+    @Test
+    void paperPendingFilesCannotUseGenericResourceEndpoint()
+    {
+        login(1L, 10L);
+        assertThrows(ServiceException.class,
+                () -> service.assertCanRead("/profile/upload/student-answer-artifact/paper-pending/abc/original.pdf"));
+    }
+
     private void login(Long userId, Long deptId)
     {
         SysUser user = new SysUser();

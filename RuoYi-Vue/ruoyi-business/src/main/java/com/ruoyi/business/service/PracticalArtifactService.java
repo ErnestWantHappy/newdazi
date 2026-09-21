@@ -89,6 +89,19 @@ public class PracticalArtifactService
                                                   BizLessonQuestionDetailVo question,
                                                   MultipartFile file) throws Exception
     {
+        return stageFile(studentId, lessonId, question, file, "student-answer-artifact/");
+    }
+
+    /** 仅由已校验班级和学生归属的教师代提交服务调用，保留可追溯的来源路径。 */
+    public PracticalUploadTicket stageTeacherPaperFile(Long studentId, Long lessonId,
+            BizLessonQuestionDetailVo question, MultipartFile file) throws Exception
+    {
+        return stageFile(studentId, lessonId, question, file, "student-answer-artifact/teacher-paper/");
+    }
+
+    private PracticalUploadTicket stageFile(Long studentId, Long lessonId,
+            BizLessonQuestionDetailVo question, MultipartFile file, String folder) throws Exception
+    {
         if (studentId == null || lessonId == null || question == null || question.getQuestionId() == null)
         {
             throw new ServiceException("操作题上传上下文不完整");
@@ -97,7 +110,7 @@ public class PracticalArtifactService
                 file, question.getPracticalAllowedExtensions());
 
         String uploadDir = RuoYiConfig.getUploadPath()
-                + "/student-answer-artifact/" + UUID.randomUUID().toString().replace("-", "");
+                + "/" + folder + UUID.randomUUID().toString().replace("-", "");
         String resourcePath = FileUploadUtils.upload(
                 uploadDir, file, new String[] { ticket.getFileExtension() }, true);
         String token = UUID.randomUUID().toString().replace("-", "");
@@ -120,6 +133,23 @@ public class PracticalArtifactService
                                                     Long lessonId,
                                                     Long expectedVersionId,
                                                     List<String> uploadTokens)
+    {
+        return submitArtifact(studentId, submittedByUserId, question, lessonId,
+                expectedVersionId, uploadTokens, false, false, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
+    public PracticalArtifactVo submitTeacherPaperArtifact(Long studentId, Long submittedByUserId,
+            BizLessonQuestionDetailVo question, Long lessonId, Long expectedVersionId,
+            List<String> uploadTokens, boolean replace, Integer expectedScore)
+    {
+        return submitArtifact(studentId, submittedByUserId, question, lessonId,
+                expectedVersionId, uploadTokens, true, replace, expectedScore);
+    }
+
+    private PracticalArtifactVo submitArtifact(Long studentId, Long submittedByUserId,
+            BizLessonQuestionDetailVo question, Long lessonId, Long expectedVersionId,
+            List<String> uploadTokens, boolean teacherPaper, boolean replace, Integer expectedScore)
     {
         List<PracticalUploadTicket> tickets = resolveTickets(
                 studentId, lessonId, question, uploadTokens);
@@ -157,6 +187,14 @@ public class PracticalArtifactService
         if (existingAnswer != null)
         {
             existingAnswer = studentAnswerMapper.selectByIdForUpdate(existingAnswer.getAnswerId());
+        }
+        // 在版本锁和答案锁内再次核对，防止识别期间学生补交或另一位教师完成评分后被覆盖。
+        if (teacherPaper && existingAnswer != null)
+        {
+            boolean hasWork = existingAnswer.getScore() != null
+                    || (existingAnswer.getStudentAnswer() != null && !existingAnswer.getStudentAnswer().trim().isEmpty());
+            if ((hasWork && !replace) || !Objects.equals(expectedScore, existingAnswer.getScore()))
+                throw new ServiceException("作品或成绩已发生变化，请刷新后重新确认导入");
         }
         String scoringDetailsJson = serializeScoringDetails(existingAnswer);
         if (artifact.getCurrentVersionId() != null)

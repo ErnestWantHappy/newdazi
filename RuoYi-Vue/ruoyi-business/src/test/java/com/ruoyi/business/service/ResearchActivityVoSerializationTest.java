@@ -8,6 +8,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class ResearchActivityVoSerializationTest
 {
     @Test
+    void topicResponseNeverExposesShareCiphertext() throws Exception
+    {
+        com.ruoyi.business.domain.vo.ResearchTopicVo topic = new com.ruoyi.business.domain.vo.ResearchTopicVo();
+        topic.setPublicShareTokenCiphertext("private-ciphertext");
+        String json = new ObjectMapper().writeValueAsString(topic);
+        assertFalse(json.contains("publicShareTokenCiphertext"));
+        assertFalse(json.contains("private-ciphertext"));
+    }
+    @Test
     void resourceResponseNeverExposesPrivateStoredPath() throws Exception
     {
         ResearchResourceVo resource = new ResearchResourceVo();

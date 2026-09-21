@@ -64,6 +64,7 @@ public class PracticalAiSuggestionApplyService
         for (PracticalAiResult result : aiMapper.selectResultsByJob(jobId))
         {
             if (!"SUCCESS".equals(result.getResultStatus())) continue;
+            // 待复核是教师确认提示，不阻断主动批量采用；证据矛盾已在生成阶段拦截。
             BizStudentAnswer answer = answerMapper.selectByIdForUpdate(result.getAnswerId());
             boolean flowchart = PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson());
             if (answer == null || !Objects.equals(job.getLessonId(), answer.getLessonId())
@@ -143,6 +144,7 @@ public class PracticalAiSuggestionApplyService
         summary.put("filledUngradedCount", filledUngraded); summary.put("overwrittenCount", overwritten);
         summary.put("skippedManualCount", skippedManual);
         summary.put("skippedVersionCount", skippedVersion); summary.put("failedCount", failed);
+        summary.put("skippedReviewCount", 0);
         return summary;
     }
 

@@ -97,6 +97,47 @@ class PracticalPageRendererTest
         return attachment;
     }
 
+    @Test
+    void shouldKeepA3A4PortraitLandscapeCornersAndPageOrder() throws Exception
+    {
+        File source = tempDir.resolve("papers.pdf").toFile();
+        org.apache.pdfbox.pdmodel.common.PDRectangle[] sizes = {
+            org.apache.pdfbox.pdmodel.common.PDRectangle.A3,
+            org.apache.pdfbox.pdmodel.common.PDRectangle.A4
+        };
+        try (PDDocument document = new PDDocument())
+        {
+            for (org.apache.pdfbox.pdmodel.common.PDRectangle size : sizes)
+                for (int rotation : new int[] {0, 90})
+                {
+                    PDPage page = new PDPage(size); page.setRotation(rotation); document.addPage(page);
+                    try (org.apache.pdfbox.pdmodel.PDPageContentStream content = new org.apache.pdfbox.pdmodel.PDPageContentStream(document, page))
+                    {
+                        content.setNonStrokingColor(Color.RED);
+                        for (float x : new float[] {0, size.getWidth() - 35})
+                            for (float y : new float[] {0, size.getHeight() - 35})
+                            { content.addRect(x, y, 35, 35); content.fill(); }
+                    }
+                }
+            document.save(source);
+        }
+        List<String> pages = renderer.render(attachment(8L, "PDF", "paper-sizes"), source);
+        assertEquals(4, pages.size());
+        for (int i = 0; i < pages.size(); i++)
+        {
+            assertTrue(pages.get(i).endsWith(String.format("page-%03d.jpg", i + 1)));
+            BufferedImage image = ImageIO.read(resourceFile(pages.get(i)));
+            assertEquals(i % 2 == 0, image.getHeight() > image.getWidth());
+            assertEquals(Math.sqrt(2), (double) Math.max(image.getWidth(), image.getHeight()) / Math.min(image.getWidth(), image.getHeight()), 0.02);
+            for (int x : new int[] {10, image.getWidth() - 11})
+                for (int y : new int[] {10, image.getHeight() - 11})
+                {
+                    Color corner = new Color(image.getRGB(x, y));
+                    assertTrue(corner.getRed() > 180 && corner.getGreen() < 80, "纸张四角不得裁掉");
+                }
+        }
+    }
+
     private File resourceFile(String resource)
     {
         return new File(RuoYiConfig.getProfile() + resource.replaceFirst("/profile", ""));

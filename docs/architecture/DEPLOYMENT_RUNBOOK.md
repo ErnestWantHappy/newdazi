@@ -1,5 +1,102 @@
 # 部署与回滚约定
 
+## 2026-09-21 130正式1.30.21
+
+release=/data/apps/xueyeceping/releases/20260921_share_grading_v1，08:51:01 COMPLETED。备份=/data/backups/xueyeceping/20260921_share_grading_v1，database.sql为221147539字节，SHA-256 ca1c16b2624f47fb82209620501bac68b823c821df8443147c3e67a26db5f2e7。备份后执行research_activity_public_share_ciphertext_v2.sql并核验varchar(512)。主密钥及环境文件不变，三服务active；JAR SHA-256 8fa2ad28bfda016d6e108cfe4e022b6f20c6f159b2dec51235c24d004df8585d，index SHA-256 7858e3f9a80a59c294910617d0803409ccc91cd38c8aed77b5af464cfd1c54b6。
+
+回滚先检查活动AI任务，再恢复备份service.before和nginx.before到原systemd/nginx配置路径，daemon-reload、重启后端、nginx -t成功后reload，退回20260921_research_ai_full_v1/1.30.20。保留新增列、所有release和新成绩；不恢复整库、不旋转主密钥。撤回时将1.30.21更新记录转DRAFT。当前update_id100为PUBLISHED且真实教师可见。正式批改模拟回归通过；分享跨设备真实操作待补验，证据output/share-grading-release/。
+
+
+## 2026-09-20晚130学情与整班PDF发布（09-21验收收口）
+
+正式版本1.30.19，release为`/data/apps/xueyeceping/releases/20260920_insight_batch_pdf_v2`，09-20 23:58:06 COMPLETED。基于130原1.30.17隔离移植11个后端源码对应35个class和3个前端模块，未混入其他本机改动；123的1.30.18未动。v1先验证36份报告，完成后v2补轮询主键更新与真实updatedAt；两次切换前均确认AI批改/学情活动任务为0。
+
+最终JAR SHA-256 `b7c1167a11aef6ce0f7a13b0e9d824ca03c1ada1119a7c4394bd2eaf00216b51`，index SHA-256 `4e416e4fc5a5b4f365963c9396b61983650a193a270f3fa305a7fc68a9ada048`。后端/Nginx/aiot-lamp均active，环境文件哈希保持；无业务迁移/新配置/密钥变更，已重启后端。仅SQL `sql/insight_batch_pdf_release_20260920.sql`登记1.30.19/update_id98为PUBLISHED，真实教师list接口可见。
+
+v2整库备份`/data/backups/xueyeceping/20260920_insight_batch_pdf_v2/database.sql`，217403433字节，SHA-256 `c5e39d8f4a2c956756c62d5b622c6bb5be73b4a76a210109d201b1f36a9c48c8`。同目录保留service.before/nginx.before/env.before/config.before及原jar。v1之前备份`/data/backups/xueyeceping/20260920_insight_batch_pdf_v1/database.sql`，216422743字节，SHA-256 `b11e0e914a2830778bd108c096bf78092e7cd4e13004dfa9da2ac49f1bae90fa`。
+
+回滚须先检查并结束当前活动任务。恢复v2备份的service.before到`/etc/systemd/system/xueyeceping-130.service`及nginx.before到`/etc/nginx/sites-available/xueyeceping-130`，daemon-reload、重启后端、nginx -t后reload，可退回v1；v1仍有旧轮询死锁缺陷。若需完整退回本轮之前的1.30.17，同样恢复v1备份内两个配置，指向20260920_redo_export_fixes_v1。保留所有release和新报告，不恢复整库覆盖新成绩，无业务回滚SQL；撤回功能时只把对应1.30.19更新记录转DRAFT。
+
+证据`output/yueling-insight-release-v2/deploy-result.json`、`final-read-result.json`、`input-comparison.json`、`teacher-version.json`及原目录online-result.json/pdf-online-result.json。正式报告4完整715秒、36有效/0失败、覆盖85.71%，仍PARTIAL（21人局部待核对）；成绩未变。72页拆36份测试未提交学生作品。不能把全班运行完成当作人工准确率验收。
+
+## 2026-09-20 123路由开机自动维护（当前方案）
+
+整机重启后接口编号33→44，旧123/32路由缺失，学校/24持久项仍在。现在由SYSTEM任务 `Codex-123-WireGuard-Route` 在开机和每分钟执行 `C:/ProgramData/CodexNetwork/123WireGuard/Ensure-123WireGuard.ps1`，按名称jiaoyuju及WireGuard类型动态识别接口，补ActiveStore的123/32、NextHop=0.0.0.0路由。该目录ACL仅SYSTEM和Administrators可写，Users只读执行；不能改成执行用户可写脚本。
+
+备份及任务配置在同目录 `routes-before.json`、`task.xml`，当前结果 `status.json`。16:54:43重启WireGuard服务后123主机路由消失，16:55:39任务记录repaired=true，随后普通连接收到SSH-2.0-OpenSSH_for_Windows_7.7。初始restart-test.json只记录了重启开始，不能单凭该文件声称整个测试完成；完成依据为status.json和随后普通TCP复核。整机再重启尚未实测，启动触发器已配置；隧道启动后约一分钟恢复。未设置隧道关闭时禁止直连的防火墙。
+
+仅维护123主机路由，学校10.52.1/2/3三个/24、DNS、NRPT和WireGuard配置保持。无服务端变更或产品版本。安装/检查脚本位于 `output/full-release-20260919/Install-123WireGuard.ps1`、`Ensure-123WireGuard.ps1`。回滚以管理员执行同目录 `Uninstall-123WireGuard.ps1`，先禁用/停止/注销该任务，再删除当前WireGuard的123直连主机路由；保留备份目录，不删除学校路由。下文固定IF33持久路由为历史，勿再次按旧编号执行。
+
+## 正式发布更新记录门禁（2026-09-20修正）
+
+130正式部署验收成功后，必须自动登记 `contexts/RELEASE_LOG.md` 并发布对应 `biz_platform_update` 记录为PUBLISHED，再以真实教师身份调用 `/business/platform-update/list` 验证版本可见。已授权部署无需另行询问更新记录发布；只有用户明确要求暂不公开才可保留DRAFT。失败或回滚候选不得标成已上线。
+
+本轮经123跳转130，备份表后执行 `sql/publish_verified_release_notes_20260920.sql`，仅将92～96对应1.30.12～1.30.16从DRAFT改为PUBLISHED，保留内容和原发布时间。教师接口及页面验证通过；无需打包或重启。其他历史草稿不变。
+
+表备份 `/data/backups/xueyeceping/20260920_publish_release_notes/platform-update.sql`，33581字节，SHA-256 `28b297313ace411e38cd10fde4b1a32c9447aae2ff8690bc444e53b6aeb32018`。需撤回时仅精确恢复上述五条的原状态及审计字段，不整表覆盖后续新增记录。证据 `output/full-release-20260919/published-notes.json`、`published-notes.png`。
+
+## 2026-09-20 本机访问123默认走WireGuard
+
+当日后续复查：此前123/32活动和持久项均缺失，原因未定。再次管理员执行下述route命令后，两表均存在且普通未绑定接口TCP连接源地址10.99.1.8，收到123的SSH握手；指定校园网仍超时。不得只凭脚本COMPLETED判断成功，必须现场检查两表及普通连接。未重启隧道/电脑验证，未新增定时任务或修改WireGuard配置，不能把本次恢复视为丢失根因已修复。
+
+用户授权修改全局网络配置，已通过管理员 `route.exe -p ADD 10.52.1.123 MASK 255.255.255.255 10.99.1.8 METRIC 1 IF 33` 添加持久主机路由。活动表显示123/32在jiaoyuju接口33上On-link，持久表网关10.99.1.8。普通未绑接口TcpClient源地址为10.99.1.8，成功收到123 SSH响应。其他校园网路由、NRPT及WireGuard配置未改，访问其他服务器仍按123跳转约束执行。
+
+该状态取代下文“仅为发布连接指定隧道”的本机配置现状。WireGuard需开启；未通过重启电脑或隧道验证持久项恢复，若隧道地址变化须重新核对。未设置隧道断开时阻止校园网回落的防火墙规则。
+
+回滚：管理员执行 `route.exe DELETE 10.52.1.123 MASK 255.255.255.255 10.99.1.8`，再检查活动及持久路由表，确保只删除本次123/32项。操作脚本及状态在 `output/full-release-20260919/set-123-route.ps1`、`route-123-status.txt`。本轮无线上应用发布、SQL或服务器重启。
+
+## 2026-09-19 1.30.16全量发布
+
+当前130前后端统一为 `/data/apps/xueyeceping/releases/20260919_full_insight_fixes_v1`。独立完整构建包含课堂五项修复、学情V3.3.1及已核查的既有热修；不是class替换包。用户已明确授权全量上线。执行入口 `output/full-release-20260919/deploy_release.py`，独立systemd任务完成，`status.py`可只读查询；不得重复执行创建同名release。
+
+正式外置config复制旧后端版本，服务使用 `--spring.config.additional-location`，正式库仍ry-vue、上传仍/data/upload。保留migration-isolation.env及共享env，后者仅新增PRACTICAL_INSIGHT_ENABLED=true，原主密钥及其他值比对不变。SQL只执行practical_insight_v3.sql、restore_typing_statistics_permission_20260919.sql及版本登记full_insight_fixes_release_20260919.sql；废弃paper_scan_v1.sql未执行。
+
+备份目录 `/data/backups/xueyeceping/20260919_full_insight_fixes_v1`，整库203301601字节，SHA-256 `f3a24b70b5b67bfbafe5c9fc8ece82a786a8a54ad042d5cb5cf8c2d38fd45b4f`，已核对dump完成标记。保留旧JAR、config、unit、Nginx及env。新前端额外保留旧static文件供已打开页面加载。
+
+回滚前确认当前仍是本release并取消正在执行的学情任务，恢复service.before至 `/etc/systemd/system/xueyeceping-130.service`、nginx.before至 `/etc/nginx/sites-available/xueyeceping-130`、env.before至 `/data/apps/xueyeceping/shared/xueyeceping-130.env`，然后daemon-reload、restart xueyeceping-130、nginx -t、reload nginx，检查3009/captchaImage和/prod-api/captchaImage。后端回到20260917_ai_apply_home_fix_v1，前端回到20260918_classroom_gate_fix_v1。保留诊断三表与权限，无需回滚SQL，不用整库恢复覆盖新成绩。切换脚本在失败时执行同样回退并探活。
+
+网络：09-18 WorkBuddy新增10.52.1.0/24→10.52.27.254校园网持久路由后，默认及网卡21连接123:22超时；09-19 socket指定WireGuard网卡33并bind10.99.1.8成功。`transport.py`仅为该SSH连接选择隧道并核验123/130固定主机指纹，严格123跳转130，不直连130。未改系统路由、NRPT或WireGuard配置；网卡编号或地址变化时应重新核对，不能盲用常量。
+
+正式三角色页面和API通过；真实学情报告1完成1份，前后正式成绩不变；版本1.30.16已写DRAFT/update_id96。证据、构建日志、manifest、截图及SQL后检位于output/full-release-20260919。真实登录故障接口及37/13原班级未定位，不能把部署完成等同现场根因已查清。
+
+## 2026-09-18 1.30.15课堂开关显示热修
+
+正式130前端root已切 `/data/apps/xueyeceping/releases/20260918_classroom_gate_fix_v1/frontend`，后端仍使用20260917_ai_apply_home_fix_v1，unit/JAR哈希和PID252438保持不变。仅平滑reload Nginx。原域名真实郑老师课程574和郑东旭课程575分别观察约70秒、3次状态查询保持开启，无pageerror。前端5项、推进服务5项测试及Vue3构建通过；真实业务班级未执行推进或关闭操作。正式原JAR推进SQL已在MySQL临时表验证双开及范围隔离。
+
+制品基于下载的活动前端，仅替换课堂开关读取/旧请求保护函数。为避免浏览器缓存，JS模块加gate0918后缀并同步模块引用和gzip文件，旧资源保留；本机AI学情V3未打入正式包。制品清单及脚本位于 `output/gate-fix-20260918/`，首页SHA-256 `d528fd675bd6baca7a5147c82084aa17ba5ccca0d96f49920770d1c1dc80fb63`。
+
+整库备份 `/data/backups/xueyeceping/20260918_classroom_gate_fix_v1/database.sql`，196418043字节，SHA-256 `ec908ae46a551d59d5002b3ddb0c35acbe5842d92f63af5f009387aea748795f`；同目录保留nginx.before/service.before，status=COMPLETED。仅执行发布登记 `sql/classroom_gate_fix_release_20260918.sql`，1.30.15草稿95，无业务迁移。
+
+回滚：先确认当前root仍是本release，再将该备份nginx.before恢复到 `/etc/nginx/sites-available/xueyeceping-130`，执行 `nginx -t` 和 `systemctl reload nginx`。无需切后端、恢复整库或跑回滚SQL。已打开的页面需刷新加载修复版；学生/教研员页面未专项重测。
+
+## 2026-09-17 1.30.14采用与首页热修
+
+当前130为 `20260917_ai_apply_home_fix_v1`，原 `20260917_paper_ai_v2` 保留。前轮线上JAR仍有待核对拦截；本轮只替换已测服务及其匿名内部类两个class，并核验包内字节等于target/classes，不能只比外层JAR哈希。前端批改页恢复单根节点并修正0采用提示。14项测试、构建和真实教师页面通过，任务28唯一建议正式写入52分且审计完整。
+
+备份目录 `/data/backups/xueyeceping/20260917_ai_apply_home_fix_v1`，database.sql为193967886字节，SHA-256 `754e3c8a222419712c7d8ec0ff4c508a9fb5bddf684c83b1644541fb2aa32fe3`。状态COMPLETED；三服务active；JAR `1c799176984647b61e07681992c0d24188ed85bf0ab2dc4887753505bdb77836`，首页 `a08cb534a49f1fe03be8010c3195b9fe5189e5ff67cf0a7c0c5e865afbe0503f`。证据output/ai-apply-fix-20260917。
+
+回滚：确认当前仍为本release，恢复该备份service.before到/etc/systemd/system/xueyeceping-130.service、nginx.before到/etc/nginx/sites-available/xueyeceping-130；执行systemctl daemon-reload、restart xueyeceping-130，nginx -t后reload nginx并探活。无表结构变更和业务回滚SQL，不恢复整库覆盖采用后的成绩。登记SQL为sql/ai_apply_home_fix_release_20260917.sql，1.30.14草稿update_id94。
+
+## 2026-09-17 纸质AI发布1.30.13
+
+当前130 release为 `/data/apps/xueyeceping/releases/20260917_paper_ai_v2`，旧版 `20260916_iot_subscribe_fix_v1` 保留。沿用130的固定SSH指纹、systemd独立发布任务及失败自动回滚；根scripts/deploy.py仍针对123 Windows，不可直接用于130。执行证据在 `output/ai-paper-release-20260917/`。
+
+状态COMPLETED，后端、Nginx、aiot-lamp均active。JAR SHA-256 `b5dedf9df98875a04e4dc8ce50892542bf5a11b8abe2ac01699753bd0898dff3`；首页 `d591f192f2374e61697c6a6390ffc8d8be6bd2bff399ca5e8fa64d4e27700a16`。Nginx重载后需重试首页哈希，等待worker切换；v1曾在后端已启动后校验失败并自动回滚，精确失败步骤当时未记录。
+
+备份 `/data/backups/xueyeceping/20260917_paper_ai_v2` 含整库database.sql（193937386字节，SHA-256 `4a15eb4ff0d67cb45a2964882f3d56bb0672fa3d0ac7a217b804daf805dae365`）、service.before、nginx.before、env.before、原JAR和config.before。未变更shared环境或业务表；仅运行发布登记SQL，1.30.13 DRAFT/update_id93。不得为应用回滚恢复整库覆盖发布后的成绩。
+
+需回滚时，在130确认当前仍为v2后恢复本次备份的unit与Nginx配置，再执行以下命令（需sudo）：
+
+```bash
+cp -a /data/backups/xueyeceping/20260917_paper_ai_v2/service.before /etc/systemd/system/xueyeceping-130.service
+cp -a /data/backups/xueyeceping/20260917_paper_ai_v2/nginx.before /etc/nginx/sites-available/xueyeceping-130
+systemctl daemon-reload
+systemctl restart xueyeceping-130
+nginx -t && systemctl reload nginx
+```
+
+等待后端启动后验证3009及80/prod-api/captchaImage、旧首页哈希及三服务状态；无需业务回滚SQL，保留更新草稿用于审计。禁止轮换AI主密钥。
+
 > 2026-09-16 19:10：130当前release为 `20260916_iot_subscribe_fix_v1`，基于线上JAR仅替换两个物联类、移除废弃Decision类。data订阅补齐、平台自动下发取消。service/nginx/env/整库备份在 `/data/backups/xueyeceping/20260916_iot_subscribe_fix_v1`；回滚命令见 `contexts/junior-iot-poc/ADR-004-original-data-subscription.md`。ACL独立回滚，不应因应用回滚再次取消data订阅。详见PROJECT_CORE.md v3.65。
 
 
@@ -88,3 +185,8 @@ flowchart TB
 
 
 2026-09-14 后续状态：用户授权后已仅重启 xueyeceping-130，PID168090，首页/API/代理均200，EMQX管理API及授权源正常。外置配置已随启动加载，取代此前待重启状态；失败班级重试同步与硬件收数仍待验证。未打包部署或Git推送。见 PROJECT_CORE.md v3.60。
+## 2026-09-21 1.30.20 正式发布
+
+130 已切换至 `20260921_research_ai_full_v1`，原版本为 `20260920_insight_batch_pdf_v2`。发布无业务 SQL，保留外置配置与共享环境哈希。备份位于 `/data/backups/xueyeceping/20260921_research_ai_full_v1/`，数据库备份 SHA-256 为 `ab0cb2417d72f98239adebaa20dc4b1ffdf01714c5315adba64e7250728fffd9`。
+
+回滚：确认无活动 AI 任务后恢复该目录的 `service.before`、`nginx.before`、`env.before`、`config.before` 和旧 JAR，执行 daemon-reload、重启后端、`nginx -t` 后 reload，回到 1.30.19；不覆盖新成绩、不执行业务 SQL 回滚，1.30.20 更新记录转 DRAFT。

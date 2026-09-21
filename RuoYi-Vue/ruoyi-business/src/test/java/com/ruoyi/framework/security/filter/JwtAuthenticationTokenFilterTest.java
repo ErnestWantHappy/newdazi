@@ -14,6 +14,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.doThrow;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,6 +24,33 @@ import static org.mockito.Mockito.when;
 
 class JwtAuthenticationTokenFilterTest
 {
+    @Test
+    void redisReadFailureMustReturn503WithoutRunningBusinessRequest() throws Exception {
+        TokenService service = mock(TokenService.class);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/business/answer/submit");
+        when(service.getLoginUser(request)).thenThrow(new RedisConnectionFailureException("unavailable"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        filter(service).doFilterInternal(request, response, chain);
+        assertEquals(503, response.getStatus());
+        assertNull(chain.getRequest());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void redisRefreshFailureMustNotAuthenticateOrExecuteWrite() throws Exception {
+        TokenService service = mock(TokenService.class);
+        LoginUser user = mock(LoginUser.class);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/auth/session-status");
+        when(service.getLoginUser(request)).thenReturn(user);
+        doThrow(new RedisConnectionFailureException("unavailable")).when(service).verifyToken(user);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        filter(service).doFilterInternal(request, response, chain);
+        assertEquals(503, response.getStatus());
+        assertNull(chain.getRequest());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
     @AfterEach
     void clearSecurityContext()
     {

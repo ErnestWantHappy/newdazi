@@ -107,6 +107,18 @@ export function getPublicNoticePosts(token, pageNum = 1, pageSize = 10) {
   return request({ url: `${BASE_URL}/public/notices/${encodeURIComponent(token)}/posts`, method: 'get', headers: { isToken: false }, params: { pageNum, pageSize } })
 }
 
+export function saveResearchAttachmentPost(topicId, postId, payload, files = []) {
+  const data = new FormData()
+  data.append('payload', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+  files.forEach(file => data.append('files', file))
+  return request({ url: postId ? `${BASE_URL}/posts/${postId}/attachments` : `${BASE_URL}/topics/${topicId}/attachment-posts`,
+    method: postId ? 'put' : 'post', data, timeout: 120000,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false } })
+}
+export function previewResearchResource(resourceId) {
+  return request({ url: `${BASE_URL}/resources/${resourceId}/preview`, method: 'get', responseType: 'blob', timeout: 120000 })
+}
+
 export function getResearchNotificationSummary(limit = 5) {
   return request({ url: `${BASE_URL}/notifications/summary`, method: 'get', params: { limit } })
 }

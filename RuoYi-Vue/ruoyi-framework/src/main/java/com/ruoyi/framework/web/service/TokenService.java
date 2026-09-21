@@ -20,6 +20,7 @@ import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import eu.bitwalker.useragentutils.UserAgent;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 
@@ -76,19 +77,20 @@ public class TokenService
     {
         if (StringUtils.isNotEmpty(token))
         {
+            Claims claims;
             try
             {
-                Claims claims = parseToken(token);
-                // 解析对应的权限以及用户信息
-                String uuid = (String) claims.get(Constants.LOGIN_USER_KEY);
-                String userKey = getTokenKey(uuid);
-                LoginUser user = redisCache.getCacheObject(userKey);
-                return user;
+                claims = parseToken(token);
             }
-            catch (Exception e)
+            catch (JwtException | IllegalArgumentException e)
             {
-                log.error("获取用户信息异常'{}'", e.getMessage());
+                // 无效令牌按未登录处理，日志不记录可能携带令牌的异常原文。
+                return null;
             }
+            Object uuid = claims.get(Constants.LOGIN_USER_KEY);
+            if (!(uuid instanceof String) || StringUtils.isEmpty((String) uuid)) return null;
+            // 缓存故障必须向上报告，不能伪装为会话不存在。
+            return redisCache.getCacheObject(getTokenKey((String) uuid));
         }
         return null;
     }

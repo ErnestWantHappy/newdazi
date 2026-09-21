@@ -101,6 +101,30 @@ export const constantRoutes = [
         component: () => import('@/views/business/teacher/grading'),
         name: 'TeacherGrading',
         meta: { title: '批改操作题', activeMenu: '/business/teacher', noCache: true }
+      },
+      {
+        path: 'paper-scan',
+        redirect: to => ({ path: '/business/teacher/grading', query: to.query }),
+        name: 'PaperScanBatch',
+        meta: { title: '纸质扫描批改', activeMenu: '/business/teacher', noCache: true }
+      },
+      {
+        path: 'paper-scan-identity',
+        redirect: to => ({ path: '/business/teacher/grading', query: to.query }),
+        name: 'PaperScanIdentity',
+        meta: { title: '身份异常核对', activeMenu: '/business/teacher', noCache: true }
+      },
+      {
+        path: 'paper-scan-review',
+        redirect: to => ({ path: '/business/teacher/grading', query: to.query }),
+        name: 'PaperScanReview',
+        meta: { title: 'AI初批复核', activeMenu: '/business/teacher', noCache: true }
+      },
+      {
+        path: 'paper-scan-insight',
+        redirect: to => ({ path: '/business/teacher/grading', query: to.query }),
+        name: 'PaperScanInsight',
+        meta: { title: '班级纸质学情', activeMenu: '/business/teacher', noCache: true }
       }
     ]
   },

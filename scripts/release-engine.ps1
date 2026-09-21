@@ -117,16 +117,16 @@ function Health($expectedIndex,$seconds) {
         try {
             $captcha=Invoke-RestMethod 'http://127.0.0.1:3009/captchaImage' -TimeoutSec 6
             if($captcha.code -ne 200){throw 'captcha_not_ready'}
-            $headers=@{Authorization=('Bearer '+$request.healthToken)}
-            $info=Invoke-RestMethod 'http://127.0.0.1:3010/prod-api/getInfo' -Headers $headers -TimeoutSec 6
+            $headers=@{Authorization=('Bearer '+$request.healthToken);Host='xxkj.xsedu.net.cn'}
+            $info=Invoke-RestMethod 'http://127.0.0.1/prod-api/getInfo' -Headers $headers -TimeoutSec 6
             if($info.code -ne 200 -or -not $info.user.userId){throw 'database_auth_not_ready'}
-            $health=Invoke-RestMethod 'http://127.0.0.1:3010/prod-api/business/collaboration/health' -Headers $headers -TimeoutSec 6
+            $health=Invoke-RestMethod 'http://127.0.0.1/prod-api/business/collaboration/health' -Headers $headers -TimeoutSec 6
             if($health.code -ne 200 -or $health.data.ready -ne $true){throw 'integration_not_ready'}
-            $html=Invoke-WebRequest 'http://127.0.0.1:3010/' -UseBasicParsing -TimeoutSec 6
+            $html=Invoke-WebRequest 'http://127.0.0.1/' -Headers @{Host='xxkj.xsedu.net.cn'} -UseBasicParsing -TimeoutSec 6
             $sha=[Security.Cryptography.SHA256]::Create()
             $actual=[BitConverter]::ToString($sha.ComputeHash($html.RawContentStream.ToArray())).Replace('-','')
             if($actual -ne $expectedIndex){throw 'served_index_mismatch'}
-            foreach($url in @('http://127.0.0.1/','http://127.0.0.1:3012/','http://127.0.0.1:3018/api/config','http://127.0.0.1:3019/')){
+            foreach($url in @('http://127.0.0.1/','http://127.0.0.1:3010/','http://127.0.0.1:3012/','http://127.0.0.1:3018/api/config','http://127.0.0.1:3019/')){
                 if((Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 6).StatusCode -ne 200){throw 'shared_gateway_unhealthy'}
             }
             return

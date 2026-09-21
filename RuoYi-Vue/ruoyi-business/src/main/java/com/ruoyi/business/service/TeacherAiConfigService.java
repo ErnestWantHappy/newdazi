@@ -10,6 +10,7 @@ import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.PracticalRubricSnapshot;
 import com.ruoyi.business.domain.dto.TeacherAiConfigRequest;
@@ -22,8 +23,8 @@ import com.ruoyi.common.utils.StringUtils;
 public class TeacherAiConfigService
 {
     public static final String DEFAULT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-    public static final String DEFAULT_MODEL = "qwen3.7-plus";
-    private static final Set<String> MODELS = new HashSet<String>(Arrays.asList(DEFAULT_MODEL, "qwen3.6-flash"));
+    public static final String DEFAULT_MODEL = "qwen3.8-max";
+    private static final Set<String> MODELS = new HashSet<String>(Arrays.asList(DEFAULT_MODEL, "qwen3.8-max-0902", "qwen3.6-flash", "qwen3.7-plus"));
     @Autowired private PracticalAiGradingMapper mapper;
     @Autowired private PracticalAiCipherService cipherService;
     @Autowired private PracticalVisionGradingProvider provider;
@@ -32,20 +33,30 @@ public class TeacherAiConfigService
     public TeacherAiConfig statusForUpdate(Long teacherUserId) { return mapper.selectConfigForUpdate(teacherUserId); }
     public boolean isMasterKeyConfigured() { return cipherService.isConfigured(); }
 
+    @Transactional(rollbackFor = Exception.class)
     public TeacherAiConfig save(Long teacherUserId, TeacherAiConfigRequest request)
     {
-        String apiKey = request == null ? null : StringUtils.trim(request.getApiKey());
-        if (StringUtils.isBlank(apiKey) || apiKey.length() < 12 || apiKey.length() > 300)
+        if (request == null) throw new ServiceException("配置内容不能为空");
+        String apiKey = StringUtils.trim(request.getApiKey());
+        boolean replaceKey = StringUtils.isNotBlank(apiKey);
+        if (replaceKey && (apiKey.length() < 12 || apiKey.length() > 300))
             throw new ServiceException("请输入有效的阿里云百炼 API Key");
         String model = StringUtils.isBlank(request.getModelName()) ? DEFAULT_MODEL : request.getModelName().trim();
         if (!MODELS.contains(model)) throw new ServiceException("暂不支持该模型");
-        TeacherAiConfig config = new TeacherAiConfig();
+        TeacherAiConfig config = mapper.selectConfigForUpdate(teacherUserId);
+        if (!replaceKey && (config == null || StringUtils.isBlank(config.getApiKeyCiphertext())))
+            throw new ServiceException("首次配置请输入有效的阿里云百炼 API Key");
+        if (config == null) config = new TeacherAiConfig();
         config.setTeacherUserId(teacherUserId);
         config.setProviderCode("QWEN");
         config.setModelName(model);
         config.setEndpointUrl(DEFAULT_ENDPOINT);
-        config.setApiKeyCiphertext(cipherService.encrypt(apiKey));
-        config.setApiKeyHint("****" + apiKey.substring(apiKey.length() - 4));
+        // 切换模型时保留已有密文，只有明确输入新 Key 才替换。
+        if (replaceKey)
+        {
+            config.setApiKeyCiphertext(cipherService.encrypt(apiKey));
+            config.setApiKeyHint("****" + apiKey.substring(apiKey.length() - 4));
+        }
         config.setEnabled(true);
         mapper.upsertConfig(config);
         return mapper.selectConfig(teacherUserId);

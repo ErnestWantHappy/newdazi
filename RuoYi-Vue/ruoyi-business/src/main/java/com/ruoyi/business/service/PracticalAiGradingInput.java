@@ -15,6 +15,15 @@ public class PracticalAiGradingInput
     private List<String> pageLabels = new ArrayList<String>();
     /** 流程图 JSON、结构检查等辅助上下文，不替代图片证据。 */
     private String auxiliaryContextJson;
+    private boolean paperSubmission;
+    private int studentPageCount;
+    private String paperRecognitionJson;
+    public boolean isPaperSubmission() { return paperSubmission; }
+    public void setPaperSubmission(boolean v) { paperSubmission = v; }
+    public int getStudentPageCount() { return studentPageCount; }
+    public void setStudentPageCount(int v) { studentPageCount = v; }
+    public String getPaperRecognitionJson() { return paperRecognitionJson; }
+    public void setPaperRecognitionJson(String v) { paperRecognitionJson = v; }
     public PracticalRubricSnapshot getRubric() { return rubric; } public void setRubric(PracticalRubricSnapshot v) { rubric=v; }
     public List<PracticalScoringItemVo> getScoringItems() { return scoringItems; } public void setScoringItems(List<PracticalScoringItemVo> v) { scoringItems=v; }
     public List<File> getPageImages() { return pageImages; } public void setPageImages(List<File> v) { pageImages=v; }

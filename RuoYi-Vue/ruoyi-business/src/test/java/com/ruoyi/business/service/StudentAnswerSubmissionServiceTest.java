@@ -22,6 +22,8 @@ class StudentAnswerSubmissionServiceTest
 {
     @Mock
     private BizStudentAnswerMapper studentAnswerMapper;
+    @Mock private TheoryRedoService theoryRedoService;
+    @Mock private ClassroomTaskStateWriter stateWriter;
 
     @InjectMocks
     private StudentAnswerSubmissionService service;
@@ -45,6 +47,34 @@ class StudentAnswerSubmissionServiceTest
     }
 
     @Test
+    void staleTypingCannotRestoreOldScore()
+    {
+        BizStudentAnswer answer = answer(8L, "abc", null);
+        answer.setTypingSubmission(true);
+        answer.setTypingRevision(0L);
+        org.mockito.Mockito.when(theoryRedoService.guardTypingSubmission(30L, 5L, 0L))
+                .thenThrow(new ServiceException("过期轮次"));
+        assertThrows(ServiceException.class, () -> service.persistAnswers(30L, 5L, Arrays.asList(answer)));
+        org.mockito.Mockito.verifyNoInteractions(studentAnswerMapper, stateWriter);
+    }
+
+    @Test
+    void typingScoreAndStateShareTransaction()
+    {
+        BizStudentAnswer answer = answer(8L, "abc", null);
+        answer.setTypingSubmission(true);
+        answer.setTypingRevision(2L);
+        com.ruoyi.business.domain.BizStudent student = new com.ruoyi.business.domain.BizStudent();
+        student.setDeptId(9L);
+        org.mockito.Mockito.when(theoryRedoService.guardTypingSubmission(30L, 5L, 2L)).thenReturn(student);
+        service.persistAnswers(30L, 5L, Arrays.asList(answer));
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(theoryRedoService, studentAnswerMapper, stateWriter);
+        order.verify(theoryRedoService).guardTypingSubmission(30L, 5L, 2L);
+        order.verify(studentAnswerMapper).upsertAnswer(answer);
+        order.verify(stateWriter).markInTransaction(student, 9L, 5L, 8L, "GRADED");
+    }
+
+    @Test
     void theorySubmissionUsesInsertOnlyAndRejectsDuplicate()
     {
         BizStudentAnswer answer = answer(7L, "A", null);
@@ -56,6 +86,34 @@ class StudentAnswerSubmissionServiceTest
 
         assertEquals("理论题已提交，不能重复提交", error.getMessage());
         verify(studentAnswerMapper).insertAnswerIfAbsent(answer);
+        verify(studentAnswerMapper, never()).upsertAnswer(answer);
+    }
+
+    @Test
+    void staleTheoryIsRejectedBeforeAnyAnswerWrite()
+    {
+        BizStudentAnswer answer = answer(7L, "A", null);
+        answer.setTerminalSubmission(true);
+        answer.setTheoryRevision(3L);
+        org.mockito.Mockito.when(theoryRedoService.guardSubmission(30L, 5L, 3L))
+                .thenThrow(new ServiceException("过期轮次"));
+        assertThrows(ServiceException.class, () -> service.persistAnswers(30L, 5L, Arrays.asList(answer)));
+        org.mockito.Mockito.verifyNoInteractions(studentAnswerMapper, stateWriter);
+    }
+
+    @Test
+    void newTheoryScoreAndStateAreWrittenInTheSameTransaction()
+    {
+        BizStudentAnswer answer = answer(7L, "B", null);
+        answer.setTerminalSubmission(true);
+        answer.setTheoryRevision(3L);
+        answer.setScore(0);
+        com.ruoyi.business.domain.BizStudent student = new com.ruoyi.business.domain.BizStudent();
+        student.setDeptId(9L);
+        org.mockito.Mockito.when(theoryRedoService.guardSubmission(30L, 5L, 3L)).thenReturn(student);
+        org.mockito.Mockito.when(studentAnswerMapper.insertAnswerIfAbsent(answer)).thenReturn(1);
+        service.persistAnswers(30L, 5L, Arrays.asList(answer));
+        verify(stateWriter).markInTransaction(student, 9L, 5L, 7L, "GRADED");
         verify(studentAnswerMapper, never()).upsertAnswer(answer);
     }
 

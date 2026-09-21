@@ -48,29 +48,6 @@
       <ResearchRichEditor v-model="form.contentHtml" :min-height="240" />
     </el-form-item>
 
-    <el-divider content-position="left">主课件（可选，一个）</el-divider>
-    <div v-if="existingFile" class="existing-file">
-      <span>{{ existingFile.originalFileName }}</span>
-      <el-radio-group v-model="form.fileAction" size="small">
-        <el-radio-button value="KEEP">保留</el-radio-button>
-        <el-radio-button value="REMOVE">移除</el-radio-button>
-        <el-radio-button value="REPLACE">替换</el-radio-button>
-      </el-radio-group>
-    </div>
-    <el-upload
-      v-if="!existingFile || form.fileAction === 'REPLACE'"
-      drag
-      action="#"
-      :auto-upload="false"
-      :limit="1"
-      :on-change="handleFileChange"
-      :on-remove="handleFileRemove"
-      accept=".zip,.rar,.7z"
-    >
-      <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-      <div class="el-upload__text">拖入或点击选择 ZIP / RAR / 7z，严格不超过 50 MiB</div>
-    </el-upload>
-
     <el-divider content-position="left">云盘链接（可选，最多三个）</el-divider>
     <div v-for="(link, index) in form.links" :key="index" class="link-row">
       <div class="link-row__head">
@@ -91,21 +68,19 @@
       </el-row>
     </div>
     <el-button v-if="form.links.length < 3" plain icon="Plus" @click="addLink">添加云盘链接</el-button>
-    <div class="resource-tip">主课件和云盘链接至少填写一项，可以同时提供。</div>
+    <div class="resource-tip">附件和云盘链接至少填写一项，可以同时提供。</div>
   </div>
 </template>
 
 <script setup>
-import { ElMessage } from 'element-plus'
 import ResearchRichEditor from './ResearchRichEditor.vue'
 import { SCHOOL_TYPES, SEMESTERS, LESSON_KINDS, gradeLabel, gradesForSchoolType } from '../utils/researchActivityFormat.js'
-import { createEmptyLink, validatePackageFile } from '../utils/resourceForm.js'
+import { createEmptyLink } from '../utils/resourceForm.js'
 
 const props = defineProps({ modelValue: { type: Object, required: true }, resources: { type: Array, default: () => [] } })
-const emit = defineEmits(['update:modelValue', 'update:file'])
+const emit = defineEmits(['update:modelValue'])
 const form = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const grades = computed(() => gradesForSchoolType(form.value.schoolType))
-const existingFile = computed(() => props.resources.find(item => item.resourceType === 'F'))
 
 function handleSchoolTypeChange() {
   if (!grades.value.includes(Number(form.value.grade))) form.value.grade = null
@@ -115,17 +90,6 @@ function handleLessonKindChange() {
 }
 function addLink() { form.value.links.push(createEmptyLink()) }
 function removeLink(index) { form.value.links.splice(index, 1) }
-function handleFileChange(uploadFile) {
-  const error = validatePackageFile(uploadFile.raw)
-  if (error) {
-    ElMessage.error(error)
-    emit('update:file', null)
-    return
-  }
-  if (existingFile.value) form.value.fileAction = 'REPLACE'
-  emit('update:file', uploadFile.raw)
-}
-function handleFileRemove() { emit('update:file', null) }
 </script>
 
 <style scoped>

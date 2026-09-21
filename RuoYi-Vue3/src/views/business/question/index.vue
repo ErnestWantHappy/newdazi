@@ -232,6 +232,7 @@
         align="left"
         prop="questionContent"
         :show-overflow-tooltip="true"
+        min-width="260"
       />
       <el-table-column v-if="bankView !== 'PYTHON'"
         label="总字数"
@@ -300,6 +301,11 @@
         fixed="right"
       >
         <template #default="scope">
+          <el-button
+            v-if="scope.row.questionType !== 'practical'"
+            v-hasPermi="['business:question:query']"
+            link type="primary" icon="View" @click="handleDetail(scope.row)"
+          >详情</el-button>
           <el-button
             v-if="isFlowchartPracticalQuestion(scope.row) || (scope.row.questionType === 'practical' && scope.row.previewPath)"
             link
@@ -786,6 +792,22 @@
     </el-dialog>
 
     <flowchart-question-preview-dialog v-model="flowchartPreviewVisible" :question="flowchartPreviewQuestion" />
+    <el-dialog v-model="detailVisible" title="题目详情" width="min(760px, 94vw)" append-to-body>
+      <div v-loading="detailLoading" class="question-detail">
+        <template v-if="detailQuestion">
+          <p class="detail-text">{{ detailQuestion.questionContent }}</p>
+          <template v-if="detailQuestion.questionType === 'choice'">
+            <p v-for="key in ['A', 'B', 'C', 'D']" :key="key" class="detail-text">{{ key }}. {{ detailQuestion['option' + key] }}</p>
+          </template>
+          <template v-if="['choice', 'judgment'].includes(detailQuestion.questionType)">
+            <el-divider />
+            <p class="detail-text">标准答案：{{ detailQuestion.answer || '未设置' }}</p>
+            <p class="detail-text">解析：{{ detailQuestion.analysis || '暂无解析' }}</p>
+          </template>
+        </template>
+        <el-empty v-else-if="!detailLoading" description="题目读取失败，请关闭后重试" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -819,6 +841,24 @@ const { biz_question_type, sys_yes_no, biz_grade, biz_semester } =
   proxy.useDict("biz_question_type", "sys_yes_no", "biz_grade", "biz_semester");
 
 const questionList = ref([]);
+const detailVisible = ref(false);
+const detailLoading = ref(false);
+const detailQuestion = ref(null);
+let detailRequestId = 0;
+async function handleDetail(row) {
+  const requestId = ++detailRequestId;
+  detailVisible.value = true;
+  detailLoading.value = true;
+  detailQuestion.value = null;
+  try {
+    const response = await getQuestion(row.questionId);
+    if (requestId === detailRequestId) detailQuestion.value = response.data;
+  } catch (_) {
+    // 请求层已提示失败，详情不能继续显示上一题的内容。
+  } finally {
+    if (requestId === detailRequestId) detailLoading.value = false;
+  }
+}
 const open = ref(false);
 const loading = ref(true);
 const showSearch = ref(true);
@@ -1742,5 +1782,7 @@ getList();
 </script>
 
 <style scoped>
+.detail-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.question-detail { min-height: 120px; }
 .bank-view-tabs{margin-bottom:16px}.python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
 </style>

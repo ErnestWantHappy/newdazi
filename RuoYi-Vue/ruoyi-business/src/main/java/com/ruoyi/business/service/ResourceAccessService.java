@@ -62,6 +62,10 @@ public class ResourceAccessService
             throw new ServiceException("请先登录");
         }
         String resource = normalizeResource(rawResource);
+        if (resource.toLowerCase(Locale.ROOT).startsWith("/profile/upload/student-answer-artifact/paper-pending/"))
+        {
+            throw new ServiceException("纸质导入暂存文件不可通过通用资源接口读取");
+        }
         if (resource.toLowerCase(Locale.ROOT).startsWith("/profile/upload/guide-sheet/"))
         {
             throw new ServiceException("导学单作品只能通过专用接口读取");

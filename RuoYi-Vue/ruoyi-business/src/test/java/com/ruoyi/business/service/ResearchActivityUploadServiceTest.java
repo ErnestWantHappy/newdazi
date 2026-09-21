@@ -22,6 +22,29 @@ class ResearchActivityUploadServiceTest
     @TempDir Path tempDir;
 
     @Test
+    void acceptsDocumentsAndRejectsDisguisedOfficeArchives() throws Exception
+    {
+        assertDoesNotThrow(() -> service.validatePackage(file("notes.pdf", "application/pdf", 100,
+                "%PDF-1.7".getBytes("US-ASCII"))));
+        assertDoesNotThrow(() -> service.validatePackage(file("notes.doc", "application/msword", 100,
+                hex(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1))));
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(bytes))
+        {
+            for (String entry : new String[]{"[Content_Types].xml", "word/document.xml"})
+            {
+                zip.putNextEntry(new java.util.zip.ZipEntry(entry));
+                zip.write("<document/>".getBytes("UTF-8"));
+                zip.closeEntry();
+            }
+        }
+        assertDoesNotThrow(() -> service.validatePackage(file("notes.docx", "application/octet-stream", bytes.size(), bytes.toByteArray())));
+        assertThrows(ServiceException.class, () -> service.validatePackage(file("notes.xlsx", "application/octet-stream", bytes.size(), bytes.toByteArray())));
+        assertThrows(ServiceException.class, () -> service.validatePackage(file("fake.pdf", "application/pdf", 100, hex(0x50, 0x4B))));
+        assertThrows(ServiceException.class, () -> service.validatePackage(file("fake.docx", "application/octet-stream", 100, hex(0x50, 0x4B))));
+    }
+
+    @Test
     void accepts49MiBAndExactly50MiBButRejectsOneByteMore() throws Exception
     {
         assertDoesNotThrow(() -> service.validatePackage(file("a.zip", "application/zip",

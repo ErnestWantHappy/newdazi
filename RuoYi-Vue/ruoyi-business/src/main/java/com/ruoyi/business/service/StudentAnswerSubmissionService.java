@@ -20,6 +20,9 @@ public class StudentAnswerSubmissionService
     @Autowired
     private BizStudentAnswerMapper studentAnswerMapper;
 
+    @Autowired private TheoryRedoService theoryRedoService;
+    @Autowired private ClassroomTaskStateWriter stateWriter;
+
     /**
      * 事务只包围答案写入，避免前置查询延长锁持有时间；READ_COMMITTED 用于减少无关键的间隙锁竞争。
      */
@@ -30,6 +33,20 @@ public class StudentAnswerSubmissionService
             return Collections.emptyList();
         }
 
+        com.ruoyi.business.domain.BizStudent theoryStudent = null;
+        com.ruoyi.business.domain.BizStudent typingStudent = null;
+        for (BizStudentAnswer answer : answers) {
+            if (Boolean.TRUE.equals(answer.getTypingSubmission())) {
+                typingStudent = theoryRedoService.guardTypingSubmission(studentId, lessonId, answer.getTypingRevision());
+                break;
+            }
+        }
+        for (BizStudentAnswer answer : answers) {
+            if (Boolean.TRUE.equals(answer.getTerminalSubmission())) {
+                theoryStudent = theoryRedoService.guardSubmission(studentId, lessonId, answer.getTheoryRevision());
+                break;
+            }
+        }
         List<Long> pendingConversionAnswerIds = new ArrayList<>();
         for (BizStudentAnswer answer : answers) {
             if (Boolean.TRUE.equals(answer.getTerminalSubmission())) {
@@ -38,8 +55,14 @@ public class StudentAnswerSubmissionService
                 if (studentAnswerMapper.insertAnswerIfAbsent(answer) == 0) {
                     throw new ServiceException("理论题已提交，不能重复提交");
                 }
+                stateWriter.markInTransaction(theoryStudent, theoryStudent.getDeptId(), lessonId,
+                        answer.getQuestionId(), ClassroomTaskStateService.GRADED);
             } else {
                 studentAnswerMapper.upsertAnswer(answer);
+                if (Boolean.TRUE.equals(answer.getTypingSubmission())) {
+                    stateWriter.markInTransaction(typingStudent, typingStudent.getDeptId(), lessonId,
+                            answer.getQuestionId(), ClassroomTaskStateService.GRADED);
+                }
             }
             if ("pending".equals(answer.getPreviewStatus())
                     && answer.getAnswerId() != null

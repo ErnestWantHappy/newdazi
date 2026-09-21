@@ -51,6 +51,7 @@
                     <span v-if="post.edited" class="edited-tag">已编辑</span>
                   </div>
                 </div>
+                <strong v-if="post.postType === 'RESOURCE'">{{ post.courseTitle || '课程资源' }}</strong>
                 <div class="rich-content post-body" v-html="renderContent(post.contentHtml)" />
               </div>
             </div>
@@ -319,6 +320,7 @@ onMounted(load)
 
 .author-info {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -382,5 +384,6 @@ onMounted(load)
   .post-item {
     padding: 12px;
   }
+  .post-info { align-items: flex-start; flex-direction: column; gap: 6px; }
 }
 </style>

@@ -1,5 +1,17 @@
 import request from '@/utils/request'
 
+export function resetTyping(data) {
+  return request({ url: '/business/score/theory-redo/typing', method: 'post', data })
+}
+
+export function getTheoryRedoContext(params) {
+  return request({ url: '/business/score/theory-redo', method: 'get', params })
+}
+
+export function resetTheory(data) {
+  return request({ url: '/business/score/theory-redo', method: 'post', data })
+}
+
 // 获取班级列表
 export function getScoreClasses() {
   return request({

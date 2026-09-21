@@ -31,7 +31,8 @@ class ClassroomTaskStateServiceTest
     {
         BizStudent student = student();
         BizStudentTaskState saved = state("WORKING", 2L);
-        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("ENTERED", 1L), saved);
+        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("ENTERED", 1L));
+        when(stateMapper.selectOneForUpdate(9L, 10L, 7L)).thenReturn(saved);
 
         BizStudentTaskState result = service.mark(student, 3L, 9L, 10L,
                 ClassroomTaskStateService.WORKING);
@@ -46,7 +47,8 @@ class ClassroomTaskStateServiceTest
     @Test
     void shouldAllowReturningFromWorkingState()
     {
-        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("WORKING", 2L), state("RETURNED", 3L));
+        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("WORKING", 2L));
+        when(stateMapper.selectOneForUpdate(9L, 10L, 7L)).thenReturn(state("RETURNED", 3L));
 
         BizStudentTaskState result = service.mark(student(), 3L, 9L, 10L,
                 ClassroomTaskStateService.RETURNED);
@@ -57,9 +59,19 @@ class ClassroomTaskStateServiceTest
     }
 
     @Test
+    void shouldReadConcurrentInsertEvenWhenSnapshotIsEmptyAndUpsertIsNoOp()
+    {
+        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(null);
+        when(stateMapper.selectOneForUpdate(9L, 10L, 7L)).thenReturn(state("ENTERED", 1L));
+        assertEquals("ENTERED", service.mark(student(), 3L, 9L, 10L, "ENTERED").getTaskState());
+        verify(stateMapper).upsert(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldAllowGradingReturnedTask()
     {
-        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("RETURNED", 2L), state("GRADED", 3L));
+        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("RETURNED", 2L));
+        when(stateMapper.selectOneForUpdate(9L, 10L, 7L)).thenReturn(state("GRADED", 3L));
 
         BizStudentTaskState result = service.mark(student(), 3L, 9L, 10L,
                 ClassroomTaskStateService.GRADED);

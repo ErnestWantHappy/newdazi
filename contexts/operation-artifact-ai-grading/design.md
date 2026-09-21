@@ -1,5 +1,27 @@
 # 操作题多格式作品与 AI 辅助批改设计
 
+## 2026-09-21 刷新与人工评分时序（130正式1.30.21）
+
+发布证据见PROJECT_CORE v3.92及output/share-grading-release/。正式教师页面与模拟批改回归通过；分享真实跨设备操作待教研员凭据补验。以下本机验证记录保留为历史。
+
+沿用现有请求序号：提交开始递增submissionsRequestSeq废弃旧列表响应，submitting期间不请求名单，主动加载期间不启动静默刷新。静默结果按响应时的studentId定位，仅当answerId、作品版本、评分快照、提交时间、作品引用、成绩、满分和提交状态一致时替换当前展示元数据并刷新预览；否则保留批改对象及输入，标记过期并提供主动重载。保存按answerId更新名单，成功后切人并重新校准；失败不切人。后端接口、事务及expectedScore保护不变。
+
+> 2026-09-21：上述AI失败数量显示与批改页布局已随1.30.20上线，并通过39成功1失败、40项全失败口径验收。
+
+2026-09-19批改页修复（本机未发布）：deadline-status为整课口径，不传questionId，其due/graded/ungraded是操作题答案份数；当前题提交数基于非空submissions，分母直接取名单长度，Mapper排除停用/删除用户。scoring-panel按有选中学生显示，评分表单仍按submitted控制，上下位位于条件外；期限请求序号拒绝迟到响应，失败显示重读且继续禁止提交；静默名单异常不清空旧状态。不变更后端空作品拒绝评分、期限或成绩规则。相关模拟浏览器与期限/Mapper测试通过，详见`contexts/five-issues-20260919.md`。
+
+2026-09-17 1.30.14实现校正：线上旧JAR仍含requiresPaperReview拦截，本轮定向替换已测服务class及匿名内部类，验证包内字节与target/classes一致。前端以appliedCount判定是否真实采用，0时警告并含skippedReviewCount，兼容旧接口结果。PaperImportDrawer与PracticalInsightDrawer归入批改页根div，满足外层Transition单根要求。课程575任务28真实采用1份52分，总分/分项/审计一致，返回教师首页恢复。无表变更，部署/回滚见PROJECT_CORE v3.75。
+
+2026-09-17价格实现：3.8及0902白名单独立，AiModelPricingService缺少DB行时返回官网REFERENCE 0.012/0.036元每千Token，管理员已有记录优先。前端乘1000展示百万单位，任务快照及cost计算仍使用千Token。无需SQL；未预扣缓存、Batch、免费额度。来源https://help.aliyun.com/zh/model-studio/model-pricing （北京地域，当日核对）。
+
+2026-09-17配置保存：request.apiKey空白时事务锁定本人已有配置并保留密文/掩码，无配置拒绝；非空按原校验加密替换。前后端默认qwen3.8-max，数据库既有配置优先，无迁移SQL。
+
+## 2026-09-17 纸质两阶段评分
+
+Worker 根据原附件 teacher-paper 来源标记纸质，并在追加参考页前记录学生页数。第一阶段只发学生页与评分项，校验逐空 JSON 的评分项覆盖、唯一性、状态及页码；第二阶段加入参考材料并基于识别结果评分。服务端保留第一阶段 evidence，拦截空白满分及全空正分。待核对结果纳入批量可采用计数，确认框提示份数；后端移除SKIPPED_REVIEW_REQUIRED分支，兼容字段skippedReviewCount返回0，版本、期限、合法性校验及覆盖审计保持。非纸质流程保持单阶段。
+
+提示词版本 operation-rubric-v3-paper，必须兼容既有 prompt_version VARCHAR(32)；两次调用 token 合并，保留识别请求标识。两款3.8缺少数据库价格时使用上述官网REFERENCE，管理端可覆盖；无 SQL。单份及任务费用直接按元显示，最多6位小数，不乘100转成分。HTTP 使用缓冲发送解决本机多页 TLS 固定长度上传卡住的复现，并非新增总体写超时。决定见 ADR-007-paper-evidence-before-grading.md。
+
 ## 1. 总体设计
 
 系统以“逻辑作品”作为教师和学生看到的业务对象，以“提交版本”和“附件”作为存储对象，以“统一渲染产物”作为人工预览与 AI 视觉输入。人工正式成绩与 AI 草稿严格分离。

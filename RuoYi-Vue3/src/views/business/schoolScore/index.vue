@@ -1,5 +1,11 @@
 <template>
   <div class="app-container supervision-page">
+    <el-tabs v-model="mainTab">
+      <el-tab-pane label="课程与成绩监管" name="supervision" />
+      <el-tab-pane v-if="checkPermi(['business:schoolScore:stats'])" label="打字统计" name="typing" />
+    </el-tabs>
+    <TypingStatistics v-if="mainTab === 'typing' && checkPermi(['business:schoolScore:stats'])" />
+    <div v-show="mainTab === 'supervision'">
     <el-card v-show="mainTab === 'supervision'" shadow="never" class="filter-card">
       <template #header>
         <div class="card-header">
@@ -224,6 +230,7 @@
       />
     </el-card>
 
+    </div>
     <div v-show="mainTab === 'exemption'" class="exemption-panel">
       <el-card shadow="never" class="filter-card">
         <template #header>
@@ -545,6 +552,8 @@
 </template>
 
 <script setup name="TeachingSupervision">
+import TypingStatistics from './TypingStatistics.vue'
+import { checkPermi } from '@/utils/permission'
 import { getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import {
   listSupervisionSchools,

@@ -1,5 +1,7 @@
 # 画程：流程图操作题技术设计
 
+2026-09-19几何保真（本机未发布）：schema与FlowchartDocumentService双端白名单增加可选startPoint/endPoint、pointsList（2至100点）、sourceAnchorId/targetAnchorId、textPosition。坐标有限、正负10000且两位小数，ID遵守原规则，text保持字符串；交给LogicFlow时还原文字坐标对象，缺少旧pointsList才由其重新路由。FlowchartImageRenderer以节点中心和各类型真实尺寸绘制，沿pointsList画多段线与末段箭头，整图含负坐标平移缩放，仍输出原JPEG格式。无需表迁移，但前后端必须配套；旧折点不能恢复。详见ADR-002追加决定和`contexts/five-issues-20260919.md`。
+
 > 基线：Vue 3 + Vite + Element Plus；Spring Boot / Java 8 / MyBatis / MySQL。
 
 ## 1. 总体结构

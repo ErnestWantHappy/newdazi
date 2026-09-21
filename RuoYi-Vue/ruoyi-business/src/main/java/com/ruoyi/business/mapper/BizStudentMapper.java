@@ -9,8 +9,11 @@ import org.apache.ibatis.annotations.Param;
  * @author zdx
  * @date 2025-06-25
  */
-public interface BizStudentMapper 
+public interface BizStudentMapper
 {
+    /** 调用方先校验课程指派和教师班级范围；管理员也复用相同班级名单。 */
+    public List<BizStudent> selectPaperImportRoster(@Param("deptId") Long deptId,
+            @Param("entryYear") String entryYear, @Param("classCode") String classCode);
     /**
      * 查询学生管理
      * 

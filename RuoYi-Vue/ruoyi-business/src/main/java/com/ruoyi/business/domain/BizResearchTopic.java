@@ -18,6 +18,8 @@ public class BizResearchTopic extends BaseEntity
     private String noticeStages;
     private String publicShareEnabled;
     private String publicShareTokenHash;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String publicShareTokenCiphertext;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date activityTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -51,6 +53,8 @@ public class BizResearchTopic extends BaseEntity
     public void setPublicShareEnabled(String publicShareEnabled) { this.publicShareEnabled = publicShareEnabled; }
     public String getPublicShareTokenHash() { return publicShareTokenHash; }
     public void setPublicShareTokenHash(String publicShareTokenHash) { this.publicShareTokenHash = publicShareTokenHash; }
+    public String getPublicShareTokenCiphertext() { return publicShareTokenCiphertext; }
+    public void setPublicShareTokenCiphertext(String value) { publicShareTokenCiphertext = value; }
     public Date getActivityTime() { return activityTime; }
     public void setActivityTime(Date activityTime) { this.activityTime = activityTime; }
     public Date getPublicShareExpireTime() { return publicShareExpireTime; }

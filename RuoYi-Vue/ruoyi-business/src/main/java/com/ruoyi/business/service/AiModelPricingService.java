@@ -28,7 +28,13 @@ public class AiModelPricingService
     public List<AiModelPrice> list()
     {
         List<AiModelPrice> prices = mapper.selectAll();
-        return prices == null ? new ArrayList<AiModelPrice>() : prices;
+        prices = prices == null ? new ArrayList<AiModelPrice>() : new ArrayList<AiModelPrice>(prices);
+        for (String model : new String[] {"qwen3.8-max", "qwen3.8-max-0902"})
+        {
+            if (prices.stream().noneMatch(p -> PROVIDER_QWEN.equals(p.getProviderCode()) && model.equals(p.getModelName())))
+                prices.add(referenceMaxPrice(model));
+        }
+        return prices;
     }
 
     public AiModelPrice require(String providerCode, String modelName)
@@ -36,6 +42,8 @@ public class AiModelPricingService
         AiModelPrice price = mapper.selectByModel(providerCode, modelName);
         if (price == null)
         {
+            if (PROVIDER_QWEN.equals(providerCode) && ("qwen3.8-max".equals(modelName)
+                    || "qwen3.8-max-0902".equals(modelName))) return referenceMaxPrice(modelName);
             throw new ServiceException("当前模型尚未配置参考单价，请联系管理员");
         }
         return price;
@@ -138,9 +146,23 @@ public class AiModelPricingService
 
     BigDecimal cost(long promptTokens, long completionTokens, BigDecimal inputPrice, BigDecimal outputPrice)
     {
+        if (inputPrice == null || outputPrice == null) return null;
         return inputPrice.multiply(BigDecimal.valueOf(promptTokens))
                 .add(outputPrice.multiply(BigDecimal.valueOf(completionTokens)))
                 .divide(BigDecimal.valueOf(1000L), 6, RoundingMode.HALF_UP);
+    }
+
+    private AiModelPrice referenceMaxPrice(String model)
+    {
+        // 官网按百万 token 报价，内部沿用千 token 单位；管理员已保存的价格优先。
+        AiModelPrice price = new AiModelPrice();
+        price.setProviderCode(PROVIDER_QWEN); price.setModelName(model);
+        price.setDisplayName("qwen3.8-max".equals(model) ? "Qwen3.8-Max" : "Qwen3.8-Max-0902");
+        price.setInputPricePerThousand(new BigDecimal("0.012000"));
+        price.setOutputPricePerThousand(new BigDecimal("0.036000"));
+        price.setPriceStatus("REFERENCE");
+        price.setPriceNote("2026-09-17百炼官网北京地域参考价：0<Token≤1M，输入12元/百万、输出36元/百万；未扣缓存、Batch或免费额度；纸质识别和评分分别计费，实际以账单为准");
+        return price;
     }
 
     private boolean invalidPrice(BigDecimal value)

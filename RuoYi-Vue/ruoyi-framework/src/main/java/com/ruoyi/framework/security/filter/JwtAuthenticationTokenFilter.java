@@ -11,6 +11,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.dao.DataAccessException;
 import org.springframework.web.filter.OncePerRequestFilter;
 import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -32,18 +33,30 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException
     {
-        LoginUser loginUser = tokenService.getLoginUser(request);
-        if (loginUser == null && isCookieTokenFileRequest(request))
+        try
         {
-            // 图片和文件链接无法附带 Authorization，请求仅在专用只读接口回退同源 Cookie。
-            loginUser = tokenService.getLoginUser(readCookieToken(request));
+            LoginUser loginUser = tokenService.getLoginUser(request);
+            if (loginUser == null && isCookieTokenFileRequest(request))
+            {
+                // 图片和文件链接无法附带 Authorization，请求仅在专用只读接口回退同源 Cookie。
+                loginUser = tokenService.getLoginUser(readCookieToken(request));
+            }
+            if (StringUtils.isNotNull(loginUser) && StringUtils.isNull(SecurityUtils.getAuthentication()))
+            {
+                tokenService.verifyToken(loginUser);
+                UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginUser, null, loginUser.getAuthorities());
+                authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+            }
         }
-        if (StringUtils.isNotNull(loginUser) && StringUtils.isNull(SecurityUtils.getAuthentication()))
+        catch (DataAccessException e)
         {
-            tokenService.verifyToken(loginUser);
-            UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(loginUser, null, loginUser.getAuthorities());
-            authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+            // 认证依赖故障仍拒绝请求，但不能让前端误以为学生必须重新登录。
+            logger.warn("会话服务暂不可用，路径=" + request.getRequestURI() + "，异常类型=" + e.getClass().getSimpleName());
+            response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"code\":503,\"msg\":\"登录服务暂时不可用，请稍后重试\"}");
+            return;
         }
         chain.doFilter(request, response);
     }

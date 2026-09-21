@@ -21,20 +21,17 @@
       <el-tag size="small">{{ lessonLabel(post) }}</el-tag>
     </div>
     <div class="rich-content" v-html="post.contentHtml" />
+    <AttachmentList :resources="post.resources || []" />
     <div v-if="post.resources?.length" class="resource-list">
-      <div v-for="resource in post.resources" :key="resource.resourceId" class="resource-item">
+      <div v-for="resource in post.resources.filter(item => item.resourceType === 'L')" :key="resource.resourceId" class="resource-item">
         <div>
           <strong>{{ resource.resourceName || resource.originalFileName }}</strong>
-          <span v-if="resource.resourceType === 'F'">{{ formatFileSize(resource.fileSize) }}</span>
-          <el-tag v-else :type="status(resource).expired ? 'danger' : 'success'" size="small">{{ status(resource).text }}</el-tag>
+          <el-tag :type="status(resource).expired ? 'danger' : 'success'" size="small">{{ status(resource).text }}</el-tag>
           <small v-if="resource.description">{{ resource.description }}</small>
         </div>
         <div class="resource-actions">
-          <el-button v-if="resource.resourceType === 'F'" link type="primary" :loading="busyId === resource.resourceId" @click="download(resource)">下载</el-button>
-          <template v-else>
             <el-button link type="primary" @click="openLink(resource)">打开</el-button>
             <el-button v-if="resource.extractCode" link @click="copyCode(resource.extractCode)">复制提取码</el-button>
-          </template>
         </div>
       </div>
     </div>
@@ -46,25 +43,15 @@
 </template>
 
 <script setup>
+import AttachmentList from './AttachmentList.vue'
 import { ElMessage } from 'element-plus'
-import { saveAs } from 'file-saver'
-import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
-import { accessResearchLink, downloadResearchResource } from '@/api/business/researchActivity.js'
-import { SCHOOL_TYPES, SEMESTERS, formatFileSize, gradeLabel, lessonLabel, linkStatus, optionLabel } from '../utils/researchActivityFormat.js'
+import { accessResearchLink } from '@/api/business/researchActivity.js'
+import { SCHOOL_TYPES, SEMESTERS, gradeLabel, lessonLabel, linkStatus, optionLabel } from '../utils/researchActivityFormat.js'
 
 defineProps({ post: { type: Object, required: true }, manager: { type: Boolean, default: false }, showTopic: { type: Boolean, default: false } })
 defineEmits(['action', 'open-topic'])
-const busyId = ref(null)
 const status = resource => resource.linkStatus ? { text: resource.linkStatusText, expired: resource.linkStatus === 'EXPIRED' } : linkStatus(resource)
 
-async function download(resource) {
-  busyId.value = resource.resourceId
-  try {
-    const blob = await downloadResearchResource(resource.resourceId)
-    saveAs(blob, resolveBlobDownloadFilename(blob,
-      `教研活动_课程资源_${resource.originalFileName || resource.resourceName || '附件'}`))
-  } finally { busyId.value = null }
-}
 async function openLink(resource) {
   const response = await accessResearchLink(resource.resourceId)
   const url = response?.data?.linkUrl

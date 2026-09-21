@@ -10,6 +10,10 @@ public interface BizStudentTaskStateMapper
 {
     int upsert(BizStudentTaskState state);
 
+    BizStudentTaskState selectOneForUpdate(@Param("lessonId") Long lessonId,
+                                          @Param("questionId") Long questionId,
+                                          @Param("studentId") Long studentId);
+
     BizStudentTaskState selectOne(@Param("lessonId") Long lessonId,
                                   @Param("questionId") Long questionId,
                                   @Param("studentId") Long studentId);

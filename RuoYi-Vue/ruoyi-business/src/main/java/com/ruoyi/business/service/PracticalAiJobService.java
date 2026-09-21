@@ -28,7 +28,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class PracticalAiJobService
 {
-    public static final String PROMPT_VERSION = "operation-rubric-v2";
+    // 与既有 prompt_version VARCHAR(32) 契约保持兼容。
+    public static final String PROMPT_VERSION = "operation-rubric-v3-paper";
     // 流程图任务标记：数据库 JSON 列只能存合法 JSON，故存带引号的 "FLOWCHART"；读取一律走 isFlowchartJob。
     public static final String FLOWCHART_MARKER = "\"FLOWCHART\"";
     public static boolean isFlowchartJob(String referenceAnswerJson)

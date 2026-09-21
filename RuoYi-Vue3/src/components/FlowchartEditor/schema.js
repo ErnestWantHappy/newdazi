@@ -52,6 +52,7 @@ export function normalizeFlowchartDocument(source) {
       sourceNodeId: safeId(edge?.sourceNodeId, ''),
       targetNodeId: safeId(edge?.targetNodeId, ''),
       text: textValue(edge?.text).slice(0, 200),
+      ...edgeGeometry(edge),
       properties: {
         locked: Boolean(edge?.properties?.locked),
         textEditable: edge?.properties?.textEditable !== false
@@ -91,7 +92,7 @@ export function flowchartToLogicFlow(document) {
     })),
     edges: source.edges.map(edge => ({
       ...edge,
-      text: edge.text
+      text: edge.textPosition ? { ...edge.textPosition, value: edge.text } : edge.text
     }))
   }
 }
@@ -107,6 +108,32 @@ export function logicFlowToFlowchart(graphData) {
 function textValue(text) {
   if (text && typeof text === 'object') return String(text.value || '')
   return String(text || '')
+}
+
+function safePoint(point) {
+  if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return null
+  const x = safeNumber(point.x, null), y = safeNumber(point.y, null)
+  return x === null || y === null ? null : { x, y }
+}
+
+function edgeGeometry(edge) {
+  const result = {}
+  for (const key of ['startPoint', 'endPoint']) {
+    const point = safePoint(edge?.[key])
+    if (point) result[key] = point
+  }
+  if (Array.isArray(edge?.pointsList) && edge.pointsList.length >= 2 && edge.pointsList.length <= 100) {
+    const points = edge.pointsList.map(safePoint)
+    if (points.every(Boolean)) result.pointsList = points
+  }
+  for (const key of ['sourceAnchorId', 'targetAnchorId']) {
+    const id = safeId(edge?.[key], '')
+    if (id) result[key] = id
+  }
+  // 文字仍用字符串供结构判分读取，位置单独保存并在交给 LogicFlow 时还原。
+  const textPosition = safePoint(edge?.text) || safePoint(edge?.textPosition)
+  if (textPosition) result.textPosition = textPosition
+  return result
 }
 
 function safeId(value, fallback) {

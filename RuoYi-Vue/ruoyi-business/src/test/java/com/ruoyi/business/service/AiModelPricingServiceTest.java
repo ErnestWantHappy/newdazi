@@ -31,6 +31,21 @@ class AiModelPricingServiceTest
     }
 
     @Test
+    void maxModelsUseOfficialMillionTokenPricesInThousandUnits()
+    {
+        for (String model : new String[] {"qwen3.8-max", "qwen3.8-max-0902"})
+        {
+            Map<String, Object> price = service.describe("QWEN", model);
+            assertEquals("REFERENCE", price.get("priceStatus"));
+            assertEquals(new BigDecimal("0.012000"), price.get("inputPricePerThousand"));
+            assertEquals(new BigDecimal("0.036000"), price.get("outputPricePerThousand"));
+            assertEquals(new BigDecimal("48.000000"), service.cost(1000000, 1000000,
+                    (BigDecimal)price.get("inputPricePerThousand"), (BigDecimal)price.get("outputPricePerThousand")));
+        }
+        assertEquals(2, service.list().size());
+    }
+
+    @Test
     void shouldCalculateTheoreticalCostInYuan()
     {
         assertEquals(new BigDecimal("0.017742"), service.cost(4564L, 450L,

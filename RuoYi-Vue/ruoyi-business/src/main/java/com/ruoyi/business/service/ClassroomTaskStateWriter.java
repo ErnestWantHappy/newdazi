@@ -16,7 +16,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 课堂状态的独立事务写入器。旁路状态不得加入答案、批改等主业务事务。
+ * 默认使用独立事务写入旁路状态；理论交卷和重做显式使用主事务保证一致。
  */
 @Service
 public class ClassroomTaskStateWriter
@@ -30,6 +30,20 @@ public class ClassroomTaskStateWriter
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public BizStudentTaskState mark(BizStudent student, Long deptId, Long lessonId,
                                     Long questionId, String targetState)
+    {
+        return saveState(student, deptId, lessonId, questionId, targetState);
+    }
+
+    /** 理论重做需要答案与状态原子切换，不能使用旁路独立事务。 */
+    @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
+    public BizStudentTaskState markInTransaction(BizStudent student, Long deptId, Long lessonId,
+                                                 Long questionId, String targetState)
+    {
+        return saveState(student, deptId, lessonId, questionId, targetState);
+    }
+
+    private BizStudentTaskState saveState(BizStudent student, Long deptId, Long lessonId,
+                                           Long questionId, String targetState)
     {
         if (student == null || student.getStudentId() == null || deptId == null
                 || lessonId == null || questionId == null || !isKnownState(targetState))
@@ -57,7 +71,8 @@ public class ClassroomTaskStateWriter
         state.setTaskState(targetState);
         state.setChangedAt(new Date());
         stateMapper.upsert(state);
-        BizStudentTaskState saved = stateMapper.selectOne(lessonId, questionId, student.getStudentId());
+        // 并发同状态写入可能不改变行；当前读避免可重复读快照漏掉另一事务已插入的记录。
+        BizStudentTaskState saved = stateMapper.selectOneForUpdate(lessonId, questionId, student.getStudentId());
         if (saved == null) throw new ServiceException("课堂任务状态保存失败");
         broadcastAfterCommit(student, saved);
         return saved;

@@ -441,10 +441,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             l.lesson_num AS lessonNum,
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-            SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) = 0 THEN 0
+                 WHEN COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0 THEN NULL
+                 ELSE SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END)
+            END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            SUM(IFNULL(a.score, 0)) AS totalScore,
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
+                 THEN 1 ELSE 0 END AS practicalPending,
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
+                 THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
             -- 打字统计（只取打字题的平均值）
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
@@ -473,10 +481,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             l.lesson_num AS lessonNum,
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-            SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore,
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) = 0 THEN 0
+                 WHEN COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0 THEN NULL
+                 ELSE SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END)
+            END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            SUM(IFNULL(a.score, 0)) AS totalScore,
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
+                 THEN 1 ELSE 0 END AS practicalPending,
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
+                 THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate

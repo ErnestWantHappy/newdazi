@@ -238,6 +238,10 @@ guide-sheet:
     enabled: ${GUIDE_SHEET_HELPER_ENABLED:false}
     port: ${GUIDE_SHEET_HELPER_PORT:5000}
 
+# 纸质扫描仅为功能开关与上传约束；AI一律复用教师个人AI配置，不设平台统一Key。
+paper-scan:
+  enabled: ${PAPER_SCAN_ENABLED:true}
+
 # 初中物联网 MQTT 服务端接收器。默认关闭，正式环境由外置环境变量开启。
 iot:
   mqtt:

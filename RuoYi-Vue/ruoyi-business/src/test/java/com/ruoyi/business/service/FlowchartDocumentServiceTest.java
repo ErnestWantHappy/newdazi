@@ -14,6 +14,24 @@ class FlowchartDocumentServiceTest {
     private final FlowchartDocumentService service = new FlowchartDocumentService(objectMapper);
 
     @Test
+    void shouldPreserveEdgeGeometryAndRejectInvalidPoints() throws Exception {
+        String source = "{\"nodes\":[{\"id\":\"a\",\"type\":\"process\",\"x\":100,\"y\":100}],\"edges\":[{"
+                + "\"id\":\"e\",\"sourceNodeId\":\"a\",\"targetNodeId\":\"a\",\"sourceAnchorId\":\"a_right\","
+                + "\"startPoint\":{\"x\":174,\"y\":100},\"endPoint\":{\"x\":100,\"y\":68},"
+                + "\"pointsList\":[{\"x\":174,\"y\":100},{\"x\":250,\"y\":100},{\"x\":250,\"y\":20},{\"x\":100,\"y\":68}],"
+                + "\"text\":{\"value\":\"循环\",\"x\":250,\"y\":50}}]}";
+        String saved = service.normalizeDocument(source);
+        JsonNode edge = objectMapper.readTree(saved).path("edges").get(0);
+        assertEquals(4, edge.path("pointsList").size());
+        assertEquals(174, edge.path("startPoint").path("x").asInt());
+        assertEquals("a_right", edge.path("sourceAnchorId").asText());
+        assertEquals("循环", edge.path("text").asText());
+        assertEquals(250, edge.path("textPosition").path("x").asInt());
+        assertEquals(saved, service.normalizeDocument(saved));
+        assertThrows(ServiceException.class, () -> service.normalizeDocument(source.replace("250", "10001")));
+    }
+
+    @Test
     void shouldKeepOnlyCanonicalFieldsAndElementLocks() throws Exception {
         String source = "{\"schemaVersion\":\"future\",\"nodes\":[{\"id\":\"n1\",\"type\":\"terminal\","
                 + "\"x\":100,\"y\":80,\"text\":\" 开始 \" ,\"evil\":\"drop\"," 

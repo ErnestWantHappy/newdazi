@@ -75,6 +75,7 @@ class PracticalAiJobServiceTest
                 Arrays.asList(submission(true), submission(false)));
 
         assertEquals(55L, job.getJobId());
+        assertTrue(job.getPromptVersion().length() <= 32, "任务版本标识必须符合数据库VARCHAR(32)约束");
         assertEquals(1, job.getTotalCount());
         assertEquals(1, job.getSkippedCount());
         verify(mapper).insertResult(any());

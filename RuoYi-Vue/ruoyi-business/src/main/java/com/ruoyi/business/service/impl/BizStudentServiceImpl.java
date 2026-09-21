@@ -85,6 +85,16 @@ public class BizStudentServiceImpl implements IBizStudentService
     @Override
     public BizStudent selectBizStudentByStudentId(Long studentId)
     {
+        if (studentId == null)
+        {
+            return null;
+        }
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        if (loginUser != null && loginUser.getUser() != null && !loginUser.getUser().isAdmin())
+        {
+            List<BizStudent> students = selectAuthorizedStudents(new Long[]{studentId});
+            return students.isEmpty() ? null : students.get(0);
+        }
         return bizStudentMapper.selectBizStudentByStudentId(studentId);
     }
 
@@ -170,10 +180,35 @@ public class BizStudentServiceImpl implements IBizStudentService
     @Transactional
     public int updateBizStudent(BizStudent bizStudent)
     {
-        SysUser userUpdate = new SysUser();
-        userUpdate.setUserId(bizStudent.getUserId());
-        userUpdate.setNickName(bizStudent.getStudentName());
-        userMapper.updateUser(userUpdate);
+        if (bizStudent == null || bizStudent.getStudentId() == null)
+        {
+            throw new ServiceException("学生ID不能为空");
+        }
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent existing;
+        if (loginUser != null && loginUser.getUser() != null && !loginUser.getUser().isAdmin())
+        {
+            List<BizStudent> authorized = selectAuthorizedStudents(new Long[]{bizStudent.getStudentId()});
+            existing = authorized.get(0);
+        }
+        else
+        {
+            existing = bizStudentMapper.selectBizStudentByStudentId(bizStudent.getStudentId());
+        }
+        if (existing == null)
+        {
+            throw new ServiceException("学生不存在或无权操作");
+        }
+
+        // 仅使用库中原绑定的真实 userId 更新用户姓名，严禁使用前端传来的任意 userId
+        if (existing.getUserId() != null && StringUtils.isNotEmpty(bizStudent.getStudentName()))
+        {
+            SysUser userUpdate = new SysUser();
+            userUpdate.setUserId(existing.getUserId());
+            userUpdate.setNickName(bizStudent.getStudentName());
+            userMapper.updateUser(userUpdate);
+        }
+        bizStudent.setUserId(existing.getUserId());
 
         return bizStudentMapper.updateBizStudent(bizStudent);
     }

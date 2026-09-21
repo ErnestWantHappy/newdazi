@@ -309,7 +309,7 @@ python scripts/deploy.py rollback --release 20260907_blankfix_v1 --backup D:/pro
 - [ ] 上下文只包含已验证事实，不含密码、Token、Cookie 或私密路径内容
 - [ ] 新 AI 只读 `contexts/PROJECT_CORE.md` 和 `docs/architecture/INDEX.md` 即可知道当前真实焦点
 - [ ] 向用户汇报：改了什么、怎么验、剩余风险、下一步  
-- [ ] **发布登记（Agent 词典，仅部署到 10.52.1.123 的轮次必填）**：已在 `contexts/RELEASE_LOG.md` 登记日期/版本号/改动摘要；且本次更新已写入平台更新记录 `biz_platform_update`（草稿或已发布）。
+- [ ] **正式发布登记（130必填，123历史发布同样适用）**：每次正式服务器部署验收成功后，必须自动在 `contexts/RELEASE_LOG.md` 登记日期、版本号、改动摘要，并将对应 `biz_platform_update` 记录设为 `PUBLISHED`，用真实教师的 `/business/platform-update/list` 接口确认可见。只写DRAFT不算完成；用户已授权部署时，配套发布更新记录无需再次确认。仅用户明确要求暂不公开时才保留草稿并注明。失败或回滚的候选不得宣称已上线；仅本机修改、网络维护不生成产品更新版本。
 
 ---
 

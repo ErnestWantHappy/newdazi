@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.TheoryRedoMapper">
+    <!-- 重做和理论交卷共用学生行锁，避免旧请求在清空后重新写回。 -->
+    <select id="lockStudent" resultType="long">
+        SELECT student_id FROM biz_student WHERE student_id = #{studentId} FOR UPDATE
+    </select>
+    <select id="lockCurrentAssignment" resultType="com.ruoyi.business.domain.BizLessonAssignment">
+        SELECT la.lesson_id AS lessonId, la.theory_open AS theoryOpen
+        FROM biz_lesson_assignment la
+        JOIN biz_lesson l ON l.lesson_id = la.lesson_id AND IFNULL(l.status, '0') = '0'
+        WHERE la.dept_id = #{deptId} AND la.entry_year = #{entryYear} AND la.class_code = #{classCode}
+        ORDER BY la.assign_time DESC, la.assignment_id DESC LIMIT 1 FOR UPDATE
+    </select>
+    <select id="revision" resultType="long">
+        SELECT COALESCE(MAX(redo_id), 0) FROM biz_theory_redo_history
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+    <select id="typingRevision" resultType="long">
+        SELECT COALESCE(MAX(redo_id), 0) FROM biz_typing_redo_history
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+    <insert id="archiveTyping">
+        INSERT INTO biz_typing_redo_history
+            (dept_id, lesson_id, student_id, entry_year, class_code, teacher_id, previous_revision, snapshot_json)
+        VALUES (#{deptId}, #{lessonId}, #{studentId}, #{entryYear}, #{classCode}, #{teacherId}, #{revision}, #{snapshot})
+    </insert>
+    <select id="classStatus" resultType="map">
+        SELECT s.student_id AS studentId,
+            (SELECT COALESCE(MAX(h.redo_id), 0) FROM biz_typing_redo_history h
+             WHERE h.student_id = s.student_id AND h.lesson_id = #{lessonId}) AS typingRevision,
+            (SELECT COUNT(*) FROM biz_student_answer a
+             JOIN biz_lesson_question lq ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+             JOIN biz_question q ON q.question_id = a.question_id AND q.question_type = 'typing'
+             WHERE a.student_id = s.student_id AND a.lesson_id = #{lessonId}) AS typingAnswerCount,
+            (SELECT COALESCE(MAX(h.redo_id), 0) FROM biz_theory_redo_history h
+             WHERE h.student_id = s.student_id AND h.lesson_id = #{lessonId}) AS revision,
+            (SELECT COUNT(*) FROM biz_student_answer a
+             JOIN biz_lesson_question lq ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+             JOIN biz_question q ON q.question_id = a.question_id AND q.question_type IN ('choice', 'judgment')
+             WHERE a.student_id = s.student_id AND a.lesson_id = #{lessonId}) AS answerCount
+        FROM biz_student s JOIN sys_user u ON u.user_id = s.user_id AND u.del_flag = '0'
+        WHERE u.dept_id = #{deptId} AND s.entry_year = #{entryYear} AND s.class_code = #{classCode}
+        ORDER BY s.student_id
+    </select>
+    <insert id="archive">
+        INSERT INTO biz_theory_redo_history
+            (dept_id, lesson_id, student_id, entry_year, class_code, teacher_id, previous_revision, snapshot_json)
+        VALUES (#{deptId}, #{lessonId}, #{studentId}, #{entryYear}, #{classCode}, #{teacherId}, #{revision}, #{snapshot})
+    </insert>
+</mapper>

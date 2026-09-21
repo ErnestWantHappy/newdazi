@@ -60,10 +60,11 @@ public class StudentToolServiceImpl implements StudentToolService
         tool.setDeptId(deptId);
         if (tool.getEnabled() == null) { tool.setEnabled(1); }
         if (tool.getSortOrder() == null) { tool.setSortOrder(0); }
-        if (StringUtils.isBlank(tool.getToolName()) || StringUtils.isBlank(tool.getToolUrl()))
+        if (StringUtils.isBlank(tool.getToolName()))
         {
-            throw new ServiceException("工具名称和网址不能为空");
+            throw new ServiceException("工具名称不能为空");
         }
+        tool.setToolUrl(validateHttpUrl(tool.getToolUrl(), "工具网址"));
         mapper.insertStudentTool(tool);
         replaceScopes(tool.getToolId(), scopes, deptId);
         return tool;
@@ -82,10 +83,11 @@ public class StudentToolServiceImpl implements StudentToolService
         {
             throw new ServiceException("工具不存在或无权限修改");
         }
-        if (StringUtils.isBlank(tool.getToolName()) || StringUtils.isBlank(tool.getToolUrl()))
+        if (StringUtils.isBlank(tool.getToolName()))
         {
-            throw new ServiceException("工具名称和网址不能为空");
+            throw new ServiceException("工具名称不能为空");
         }
+        tool.setToolUrl(validateHttpUrl(tool.getToolUrl(), "工具网址"));
         tool.setDeptId(null); // 防止跨校改归属
         mapper.updateStudentTool(tool);
         if (scopes != null)
@@ -93,6 +95,30 @@ public class StudentToolServiceImpl implements StudentToolService
             replaceScopes(tool.getToolId(), scopes, deptId);
         }
         return mapper.selectStudentToolByToolId(tool.getToolId());
+    }
+
+    private String validateHttpUrl(String value, String label)
+    {
+        if (StringUtils.isBlank(value))
+        {
+            throw new ServiceException(label + "不能为空");
+        }
+        String normalized = value.trim();
+        try
+        {
+            java.net.URI uri = new java.net.URI(normalized);
+            String scheme = uri.getScheme();
+            if (scheme == null || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    || StringUtils.isBlank(uri.getHost()) || uri.getUserInfo() != null)
+            {
+                throw new ServiceException(label + "仅支持不含账号信息的HTTP或HTTPS地址");
+            }
+            return uri.toASCIIString();
+        }
+        catch (java.net.URISyntaxException ex)
+        {
+            throw new ServiceException(label + "格式无效");
+        }
     }
 
     @Override

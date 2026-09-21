@@ -54,6 +54,24 @@ class PracticalAiSuggestionApplyServiceTest
     }
 
     @Test
+    void paperRequiringReviewStillSkipsChangedVersion()
+    {
+        PracticalAiResult result = result();
+        result.setEvidenceJson("{\"paperRecognition\":{\"items\":[]},\"needsHumanReview\":true}");
+        when(aiMapper.selectJob(1L, 7L)).thenReturn(job());
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(result));
+        BizStudentAnswer answer = answer();
+        answer.setPracticalVersionId(302L);
+        when(answerMapper.selectByIdForUpdate(101L)).thenReturn(answer);
+        Map<String, Object> summary = service.apply(1L, 7L, 9L, PracticalAiSuggestionApplyService.OVERWRITE_ALL);
+        assertEquals(0, summary.get("skippedReviewCount"));
+        assertEquals(1, summary.get("skippedVersionCount"));
+        assertEquals(0, summary.get("appliedCount"));
+        verify(answerMapper, never()).updateScore(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyInt());
+        verify(aiMapper).updateApplyStatus(201L, "SKIPPED_VERSION_CHANGED", null, null);
+    }
+
+    @Test
     void shouldNeverOverwriteExistingManualScore()
     {
         PracticalAiJob job = job();
@@ -76,8 +94,20 @@ class PracticalAiSuggestionApplyServiceTest
     @Test
     void shouldApplyValidatedItemScoresToUngradedAnswer()
     {
+        assertApplyValidatedItemScores(false);
+    }
+
+    @Test
+    void shouldBatchApplyPaperRequiringReviewToUngradedAnswer()
+    {
+        assertApplyValidatedItemScores(true);
+    }
+
+    private void assertApplyValidatedItemScores(boolean paperReview)
+    {
         PracticalAiJob job = job();
         PracticalAiResult result = result();
+        if (paperReview) result.setEvidenceJson("{\"paperRecognition\":{\"items\":[]},\"needsHumanReview\":true}");
         BizStudentAnswer answer = answer();
         PracticalRubricSnapshot snapshot = new PracticalRubricSnapshot();
         snapshot.setSnapshotId(401L); snapshot.setQuestionScore(30);
@@ -108,8 +138,20 @@ class PracticalAiSuggestionApplyServiceTest
     @Test
     void shouldOverwriteExistingScoreAndKeepBeforeAfterAudit()
     {
+        assertOverwriteExistingScore(false);
+    }
+
+    @Test
+    void shouldBatchOverwritePaperRequiringReviewWithAudit()
+    {
+        assertOverwriteExistingScore(true);
+    }
+
+    private void assertOverwriteExistingScore(boolean paperReview)
+    {
         PracticalAiJob job = job();
         PracticalAiResult result = result();
+        if (paperReview) result.setEvidenceJson("{\"paperRecognition\":{\"items\":[]},\"needsHumanReview\":true}");
         BizStudentAnswer answer = answer(); answer.setScore(18);
         PracticalRubricSnapshot snapshot = new PracticalRubricSnapshot();
         snapshot.setSnapshotId(401L); snapshot.setQuestionScore(30);

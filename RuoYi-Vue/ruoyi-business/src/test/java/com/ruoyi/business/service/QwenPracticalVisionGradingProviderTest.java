@@ -22,6 +22,75 @@ class QwenPracticalVisionGradingProviderTest
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
+    void paperBlankAndUncertainCannotReceiveFullMarks() throws Exception
+    {
+        for (String status : Arrays.asList("blank", "uncertain")) {
+            PracticalAiGradingInput input = paperInput(status);
+            assertThrows(ServiceException.class, () -> provider.parse(paperResponse(10, 30), input));
+        }
+        assertThrows(ServiceException.class, () -> provider.parse(paperResponse(1, 30), paperInput("blank")));
+    }
+
+    @Test
+    void paperPartialBlankPreservesEvidenceAndForcesReview() throws Exception
+    {
+        PracticalAiGradingInput input = paperInput("blank");
+        ObjectNode recognition = (ObjectNode) mapper.readTree(input.getPaperRecognitionJson());
+        ((ArrayNode) recognition.path("items").get(0).path("parts")).addObject()
+            .put("label", "2").put("page", 1).put("status", "written").put("text", "A");
+        input.setPaperRecognitionJson(recognition.toString());
+        PracticalAiGradingOutput output = provider.parse(paperResponse(5, 30), input);
+        assertEquals(35, output.getSuggestedScore());
+        assertEquals(true, mapper.readTree(output.getEvidenceJson()).path("needsHumanReview").asBoolean());
+        assertEquals(recognition, mapper.readTree(output.getEvidenceJson()).path("paperRecognition"));
+        assertEquals("request-test", output.getRequestId());
+        assertEquals(100, output.getPromptTokens());
+    }
+
+    @Test
+    void paperRecognitionRejectsMissingItemsDuplicatePartsAndReferencePage() throws Exception
+    {
+        PracticalAiGradingInput input = paperInput("blank");
+        for (String evidence : Arrays.asList("{\"items\":[]}", input.getPaperRecognitionJson().replace("\"page\":1", "\"page\":2"),
+                input.getPaperRecognitionJson().replace("\"text\":\"\"", "\"text\":\"invented\""))) {
+            input.setPaperRecognitionJson(evidence);
+            final PracticalAiGradingInput invalid = input;
+            assertThrows(ServiceException.class, () -> provider.validateRecognition(invalid));
+        }
+        input = paperInput("written");
+        ObjectNode recognition = (ObjectNode) mapper.readTree(input.getPaperRecognitionJson());
+        ArrayNode parts = (ArrayNode) recognition.path("items").get(0).path("parts");
+        parts.add(parts.get(0).deepCopy());
+        input.setPaperRecognitionJson(recognition.toString());
+        final PracticalAiGradingInput duplicate = input;
+        assertThrows(ServiceException.class, () -> provider.validateRecognition(duplicate));
+    }
+
+    private PracticalAiGradingInput paperInput(String status) throws Exception
+    {
+        PracticalAiGradingInput input = input(); input.setPaperSubmission(true); input.setStudentPageCount(1);
+        ObjectNode recognition = mapper.createObjectNode();
+        ArrayNode items = recognition.putArray("items");
+        for (long id : new long[] {1, 2}) {
+            String state = id == 1 ? status : "written";
+            items.addObject().put("rubricItemId", id).putArray("parts").addObject().put("label", "1")
+                .put("page", 1).put("status", state).put("text", "blank".equals(state) ? "" : "A");
+        }
+        input.setPaperRecognitionJson(recognition.toString()); return input;
+    }
+
+    private String paperResponse(int first, int second) throws Exception
+    {
+        ObjectNode root = (ObjectNode) mapper.readTree(response(first, second, first + second));
+        ObjectNode content = (ObjectNode) mapper.readTree(root.path("choices").get(0).path("message").path("content").asText());
+        content.put("needsHumanReview", false);
+        for (com.fasterxml.jackson.databind.JsonNode item : content.path("rubricResults"))
+            ((ObjectNode) item).putArray("evidence").addObject().put("page", 1).put("description", "逐空核对结果");
+        ((ObjectNode) root.path("choices").get(0).path("message")).put("content", content.toString());
+        return root.toString();
+    }
+
+    @Test
     void shouldAcceptCompleteBoundedJsonAndRecalculateTotal() throws Exception
     {
         PracticalAiGradingOutput output = provider.parse(response(8, 24, 32), input());

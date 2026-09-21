@@ -68,6 +68,21 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Override
     public BizQuestion selectBizQuestionByQuestionId(Long questionId) {
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+        if (question == null) {
+            return null;
+        }
+        // 权限过滤：非公开题目仅创建者本人或超级管理员可查看详情
+        boolean isPublic = "Y".equalsIgnoreCase(question.getIsPublic()) || "1".equals(question.getIsPublic());
+        Long currentUserId = null;
+        try {
+            currentUserId = SecurityUtils.getUserId();
+        } catch (Exception ignored) {
+        }
+        if (!isPublic && (currentUserId == null || !SecurityUtils.isAdmin(currentUserId))) {
+            if (currentUserId == null || !currentUserId.equals(question.getCreatorId())) {
+                throw new ServiceException("无权访问该私有题目");
+            }
+        }
         // P6: 查询评分项 (仅操作题)
         if (isFilePractical(question)) {
             question.setScoringItems(bizScoringItemMapper.selectItemsByQuestion(questionId));

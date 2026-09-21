@@ -215,6 +215,9 @@ public class PracticalAiJobWorker
         int attachmentIndex = 0;
         for (PracticalAttachment attachment : artifactMapper.selectAttachmentsByVersion(versionId))
         {
+            if (attachment.getResourcePath() != null
+                    && attachment.getResourcePath().contains("/student-answer-artifact/teacher-paper/"))
+                input.setPaperSubmission(true);
             attachmentIndex++;
             if (!"success".equalsIgnoreCase(attachment.getNormalizedStatus())
                     || attachment.getNormalizedPagesJson() == null) throw new ServiceException("作品页图尚未转换完成");
@@ -228,12 +231,13 @@ public class PracticalAiJobWorker
                 if (!file.toPath().toAbsolutePath().normalize().startsWith(profile))
                     throw new ServiceException("作品页图路径非法");
                 files.add(file);
-                labels.add("附件" + attachmentIndex + "第" + pageIndex + "页");
+                labels.add("学生作品附件" + attachmentIndex + "第" + pageIndex + "页");
             }
         }
         if (files.isEmpty()) throw new ServiceException("作品没有可识别页图");
         input.setPageImages(files);
         input.setPageLabels(labels);
+        input.setStudentPageCount(files.size());
     }
 
     /** 公共对照材料只转换一次并持久化页图路径，后续学生直接复用。 */

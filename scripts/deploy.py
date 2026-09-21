@@ -43,7 +43,7 @@ def make_manifest(directory, baseline_index):
 
 def admin_token():
     pwd = secret(r'平台管理员验收账号.*?密码：`([^`]+)`')
-    response = requests.post('http://10.52.1.123:3010/prod-api/login',
+    response = requests.post('http://10.52.1.123:3009/login',
                              json={'username': 'admin', 'password': pwd}, timeout=15).json()
     if response.get('code') != 200 or not response.get('token'):
         raise RuntimeError('发布前管理员鉴权未通过，未切换服务')

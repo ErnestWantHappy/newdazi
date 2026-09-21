@@ -121,6 +121,7 @@ function renderChart() {
       if (!student.scores) return;
       
       student.scores.forEach(score => {
+          if (score.isAbsent || score.isMissing || score.pendingGrading) return;
           if (lessonStats[score.lessonId]) {
               const s = lessonStats[score.lessonId];
               s.totalScore += (score.totalScore || 0);

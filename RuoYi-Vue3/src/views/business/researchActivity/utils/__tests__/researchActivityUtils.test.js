@@ -26,6 +26,9 @@ test('云盘永久、有效和过期状态清晰', () => {
 })
 
 test('文件严格允许50MiB并拒绝超出或错误扩展', () => {
+  for (const extension of ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']) {
+    assert.equal(validatePackageFile({ name: `材料.${extension}`, size: 100 }), null)
+  }
   assert.equal(validatePackageFile({ name: '课件.zip', size: MAX_FILE_BYTES }), null)
   assert.match(validatePackageFile({ name: '课件.zip', size: MAX_FILE_BYTES + 1 }), /50MB/)
   assert.match(validatePackageFile({ name: '课件.exe', size: 100 }), /ZIP/)

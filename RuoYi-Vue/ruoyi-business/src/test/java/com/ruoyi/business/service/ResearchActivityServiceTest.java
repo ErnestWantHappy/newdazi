@@ -44,12 +44,75 @@ class ResearchActivityServiceTest
     @Mock private ResearchActivityAccessService accessService;
     @Mock private ResearchActivityHtmlSanitizer sanitizer;
     @Mock private ResearchActivityUploadService uploadService;
+    @Mock private PracticalAiCipherService shareTokenCipher;
+    @Mock private javax.validation.Validator attachmentValidator;
     @InjectMocks private ResearchActivityService service;
 
     @BeforeEach
     void loginTeacher()
     {
         login(20L, "teacher");
+    }
+
+    @Test
+    void activeShareCanBeReadRepeatedlyWithoutRotation()
+    {
+        BizResearchTopic topic = sharedTopic();
+        when(accessService.requireActiveTopic(9L)).thenReturn(topic);
+        when(shareTokenCipher.decrypt("ciphertext")).thenReturn("saved-token");
+        assertEquals("saved-token", service.getPublicShareStatus(9L).getShareUrl());
+        assertEquals("saved-token", service.getPublicShareStatus(9L).getShareUrl());
+        verify(accessService, times(2)).requireManager();
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
+    void expiredAndLegacySharesDoNotReturnToken()
+    {
+        BizResearchTopic topic = sharedTopic();
+        when(accessService.requireActiveTopic(9L)).thenReturn(topic);
+        topic.setPublicShareExpireTime(new Date(0));
+        assertFalse(service.getPublicShareStatus(9L).getEnabled());
+        assertNull(service.getPublicShareStatus(9L).getShareUrl());
+        topic.setPublicShareExpireTime(null);
+        topic.setPublicShareTokenCiphertext(null);
+        assertTrue(service.getPublicShareStatus(9L).getEnabled());
+        assertNull(service.getPublicShareStatus(9L).getShareUrl());
+        verifyNoInteractions(shareTokenCipher);
+    }
+
+    @Test
+    void shareReadRequiresManagerAndMatchingHash()
+    {
+        when(accessService.requireActiveTopic(9L)).thenReturn(sharedTopic());
+        when(shareTokenCipher.decrypt("ciphertext")).thenReturn("different-token");
+        assertThrows(ServiceException.class, () -> service.getPublicShareStatus(9L));
+        doThrow(new ServiceException("无权限")).when(accessService).requireManager();
+        assertThrows(ServiceException.class, () -> service.getPublicShareStatus(9L));
+        verify(shareTokenCipher, times(1)).decrypt(anyString());
+    }
+
+    @Test
+    void generatedTokenIsStoredEncryptedAndMatchesHash()
+    {
+        when(accessService.requireActiveTopic(9L)).thenReturn(sharedTopic());
+        when(shareTokenCipher.encrypt(anyString())).thenReturn("new-ciphertext");
+        when(shareTokenCipher.decrypt("ciphertext")).thenReturn("saved-token");
+        when(mapper.updatePublicShare(eq(9L), anyString(), eq("new-ciphertext"), isNull(), anyString())).thenReturn(1);
+        String token = service.createPublicShare(9L, 0).getShareUrl();
+        assertEquals(43, token.length());
+        verify(shareTokenCipher).encrypt(token);
+        verify(mapper).updatePublicShare(eq(9L), eq(org.apache.commons.codec.digest.DigestUtils.sha256Hex(token)), eq("new-ciphertext"), isNull(), anyString());
+    }
+
+    private BizResearchTopic sharedTopic()
+    {
+        BizResearchTopic topic = new BizResearchTopic();
+        topic.setTopicType("NOTICE");
+        topic.setPublicShareEnabled("Y");
+        topic.setPublicShareTokenHash(org.apache.commons.codec.digest.DigestUtils.sha256Hex("saved-token"));
+        topic.setPublicShareTokenCiphertext("ciphertext");
+        return topic;
     }
 
     @AfterEach
@@ -404,6 +467,86 @@ class ResearchActivityServiceTest
         request.setCourseTitle("在线学习真方便");
         request.setContentHtml("<p>课后反思</p>");
         return request;
+    }
+
+    private com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest attachmentRequest()
+    {
+        com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest request = new com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest();
+        request.setPostType("COMMENT");
+        request.setContentHtml("<p>正文</p>");
+        return request;
+    }
+
+    @Test
+    void rejectsForeignRetainedAttachmentBeforeAnyWrite()
+    {
+        com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest request = attachmentRequest();
+        request.setRetainedResourceIds(Collections.singletonList(999L));
+        assertThrows(ServiceException.class, () -> service.saveAttachmentPost(9L, null, request, null));
+        verify(mapper, never()).insertPost(any());
+        verify(uploadService, never()).storePackage(any(), anyLong(), anyLong());
+    }
+
+    @Test
+    void rejectsTooManyAttachmentsAndAggregateSizeBeforeWriting()
+    {
+        MultipartFile file = mock(MultipartFile.class);
+        assertThrows(ServiceException.class, () -> service.saveAttachmentPost(9L, null, attachmentRequest(), Collections.nCopies(11, file)));
+        when(file.getSize()).thenReturn(30L * 1024 * 1024);
+        assertThrows(ServiceException.class, () -> service.saveAttachmentPost(9L, null, attachmentRequest(), Arrays.asList(file, file)));
+        verify(mapper, never()).insertPost(any());
+    }
+
+    @Test
+    void savesMultipleCommentAttachmentsAndCleansFilesOnRollback()
+    {
+        MultipartFile first = mock(MultipartFile.class);
+        MultipartFile second = mock(MultipartFile.class);
+        when(sanitizer.sanitize(anyString())).thenReturn(new SanitizedHtml("<p>正文</p>", "正文", 0));
+        doAnswer(call -> { ((BizResearchPost) call.getArgument(0)).setPostId(30L); return 1; }).when(mapper).insertPost(any());
+        when(uploadService.storePackage(first, 9L, 30L)).thenReturn(new ResearchActivityUploadService.StoredFile("one.pdf", "9/30/one.pdf", 10, "application/pdf"));
+        when(uploadService.storePackage(second, 9L, 30L)).thenReturn(new ResearchActivityUploadService.StoredFile("two.docx", "9/30/two.docx", 10, "application/octet-stream"));
+        when(mapper.insertResource(any())).thenReturn(1).thenThrow(new IllegalStateException("insert failed"));
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try
+        {
+            assertThrows(IllegalStateException.class, () -> service.saveAttachmentPost(9L, null, attachmentRequest(), Arrays.asList(first, second)));
+            verify(mapper, times(2)).insertResource(any());
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations().forEach(sync ->
+                    sync.afterCompletion(org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK));
+            verify(uploadService).deleteQuietly("9/30/one.pdf");
+            verify(uploadService).deleteQuietly("9/30/two.docx");
+        }
+        finally { org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test
+    void editingRetainsSelectedFilesAndOnlyRemovesDeselectedFile()
+    {
+        BizResearchPost post = new BizResearchPost();
+        post.setPostId(30L); post.setTopicId(9L); post.setPostType("COMMENT"); post.setDelFlag("0");
+        when(mapper.selectPostForUpdate(30L)).thenReturn(post);
+        ResearchResourceVo first = new ResearchResourceVo(); first.setResourceId(1L); first.setResourceType("F"); first.setStoredPath("one.pdf");
+        ResearchResourceVo second = new ResearchResourceVo(); second.setResourceId(2L); second.setResourceType("F"); second.setStoredPath("two.pdf");
+        when(mapper.selectResourcesByPostId(30L)).thenReturn(Arrays.asList(first, second));
+        when(mapper.selectPostById(30L)).thenReturn(new ResearchPostVo());
+        when(sanitizer.sanitize(anyString())).thenReturn(new SanitizedHtml("<p>正文</p>", "正文", 0));
+        com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest request = attachmentRequest();
+        request.setRetainedResourceIds(Collections.singletonList(1L));
+        service.saveAttachmentPost(null, 30L, request, null);
+        verify(accessService).requirePostAuthor(post);
+        verify(mapper).softDeleteResource(30L, 2L, "teacher");
+        verify(mapper, never()).softDeleteResource(30L, 1L, "teacher");
+    }
+
+    @Test
+    void resourcePostRequiresAnAttachmentOrLink()
+    {
+        com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest request = attachmentRequest();
+        request.setPostType("RESOURCE"); request.setCourse(validResource());
+        when(attachmentValidator.validate(any(ResearchResourcePostSaveRequest.class))).thenReturn(Collections.emptySet());
+        assertThrows(ServiceException.class, () -> service.saveAttachmentPost(9L, null, request, null));
+        verify(mapper, never()).insertPost(any());
     }
 
     private ResearchResourceLinkRequest futureLink(String name)

@@ -1,5 +1,5 @@
 const MAX_FILE_BYTES = 50 * 1024 * 1024
-const ALLOWED_EXTENSIONS = ['zip', 'rar', '7z']
+const ALLOWED_EXTENSIONS = ['zip', 'rar', '7z', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
 
 export function createEmptyLink() {
   return { resourceName: '', linkUrl: '', extractCode: '', permanent: true, expireTime: null, description: '' }
@@ -51,7 +51,7 @@ export function normalizeResourcePayload(form) {
 export function validatePackageFile(file) {
   if (!file) return null
   const extension = String(file.name || '').split('.').pop().toLowerCase()
-  if (!ALLOWED_EXTENSIONS.includes(extension)) return '主课件只支持 ZIP、RAR 或 7z 文件'
+  if (!ALLOWED_EXTENSIONS.includes(extension)) return '附件支持 ZIP、RAR、7z、PDF、Word、Excel 和 PowerPoint 文件'
   if (file.size > MAX_FILE_BYTES) return '文件超过50MB，请改用云盘链接'
   return null
 }

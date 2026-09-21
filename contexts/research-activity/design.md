@@ -1,5 +1,19 @@
 # 教研活动模块系统设计
 
+## 2026-09-21 分享回显设计（130正式1.30.21）
+
+发布证据见PROJECT_CORE v3.92及output/share-grading-release/。正式教师页面与模拟批改回归通过；分享真实跨设备操作待教研员凭据补验。以下本机验证记录保留为历史。
+
+新增可空密文列，生成时复用PracticalAiCipherService加密并与SHA-256同次写入；管理GET在有效时解密、核对哈希后返回shareUrl，普通主题JSON忽略密文。撤销清空密文，过期不返回令牌。部署主密钥须稳定保留；无新依赖，需先执行ciphertext_v2 SQL再部署。见ADR-006。
+
+> 2026-09-21：统一附件设计已随正式版本1.30.20发布；真实Word/PDF预览、编辑保留/移除和匿名附件鉴权已验收。
+
+## 2026-09-21 统一附件设计（替代旧单文件方案）
+
+新增POST topics/{topicId}/attachment-posts与PUT posts/{postId}/attachments，multipart字段payload(JSON)及files(数组)；payload含postType/contentHtml/course/retainedResourceIds。复用资源表F类型行，不加依赖与SQL。服务事务锁帖子并检查作者和保留ID归属，上传时校验扩展名、MIME与格式签名，OOXML检查主文档并限制解压规模，失败回滚清理文件。旧接口保持兼容。
+
+GET resources/{resourceId}/preview沿用下载鉴权；PDF原样返回，Office通过已有LibreOffice转换，单进程并发1、私有缓存、转换完成后再次鉴权。AttachmentFields统一编辑，AttachmentList通过鉴权blob显示PDF弹窗并释放URL；压缩包无预览入口。公开接口仅三类正文/标题，不暴露文件信息或云盘。参见ADR-005。
+
 > 版本：v1.1
 > 日期：2026-09-02
 > 对应需求：[requirements.md](./requirements.md)  

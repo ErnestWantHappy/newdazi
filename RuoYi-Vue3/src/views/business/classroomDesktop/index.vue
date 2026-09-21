@@ -14,35 +14,66 @@
       </div>
 
       <div class="toolbar-actions">
-        <!-- 课堂常驻发令闸：一键开启理论题与操作题 -->
-        <div v-if="lessonId && (hasTheory || hasPractical)" class="gate-launcher">
-          <span class="gate-launcher-label">🚩 题目发令：</span>
-          <div v-if="hasTheory" class="gate-switch-item" title="切换当前班级理论测试题的学生可见状态">
-            <span class="gate-item-title">理论题</span>
-            <el-switch
-              v-model="gateTheoryOpen"
-              :disabled="historical"
-              size="small"
-              :loading="gateSaving === 'theory'"
-              active-text="开"
-              inactive-text="关"
-              inline-prompt
-              @change="(val) => handleGateToggle('theory', val)"
-            />
-          </div>
-          <div v-if="hasPractical" class="gate-switch-item" title="切换当前班级操作题的学生可见状态">
-            <span class="gate-item-title">操作题</span>
-            <el-switch
-              v-model="gatePracticalOpen"
-              :disabled="historical"
-              size="small"
-              :loading="gateSaving === 'practical'"
-              active-text="开"
-              inactive-text="关"
-              inline-prompt
-              @change="(val) => handleGateToggle('practical', val)"
-            />
-          </div>
+        <!-- 课堂题目状态静默指示舱 + 轻量控制浮层 -->
+        <div v-if="lessonId && (hasTheory || hasPractical)" class="gate-status-capsule">
+          <el-popover
+            placement="bottom-start"
+            :width="280"
+            trigger="click"
+            popper-class="gate-popover"
+          >
+            <template #reference>
+              <div
+                class="gate-pill-badge"
+                :class="isAllGateOpen ? 'is-all-open' : 'is-part-closed'"
+                title="点击调整理论题或操作题的学生可见状态"
+              >
+                <span class="gate-status-dot" />
+                <span class="gate-status-text">
+                  {{ isAllGateOpen ? '题目正常开放中' : '部分题目已锁定' }}
+                </span>
+                <el-icon class="gate-status-arrow"><ArrowDown /></el-icon>
+              </div>
+            </template>
+            <div class="gate-popover-content">
+              <div class="gate-popover-header">
+                <strong>🚩 课堂题目发令</strong>
+                <span class="gate-popover-hint">控制当前班级学生端可见性</span>
+              </div>
+              <div v-if="hasTheory" class="gate-popover-row">
+                <div class="row-label-group">
+                  <span class="row-title">理论测试题</span>
+                  <span class="row-desc">关闭后学生端隐藏本课理论题</span>
+                </div>
+                <el-switch
+                  v-model="gateTheoryOpen"
+                  :disabled="historical"
+                  size="small"
+                  :loading="gateSaving === 'theory'"
+                  active-text="开"
+                  inactive-text="关"
+                  inline-prompt
+                  @change="(val) => handleGateToggle('theory', val)"
+                />
+              </div>
+              <div v-if="hasPractical" class="gate-popover-row">
+                <div class="row-label-group">
+                  <span class="row-title">操作题任务</span>
+                  <span class="row-desc">关闭后学生端隐藏本课操作题</span>
+                </div>
+                <el-switch
+                  v-model="gatePracticalOpen"
+                  :disabled="historical"
+                  size="small"
+                  :loading="gateSaving === 'practical'"
+                  active-text="开"
+                  inactive-text="关"
+                  inline-prompt
+                  @change="(val) => handleGateToggle('practical', val)"
+                />
+              </div>
+            </div>
+          </el-popover>
         </div>
 
         <el-divider v-if="lessonId && (hasTheory || hasPractical)" direction="vertical" class="toolbar-divider" />
@@ -78,6 +109,31 @@
 
         <!-- 视图与功能按钮组 -->
         <div class="view-controls">
+          <!-- 全班重做操作 -->
+          <el-dropdown
+            v-if="lessonId && !historical && (hasTheory || hasTyping)"
+            trigger="click"
+            class="mr8"
+            @command="handleClassRedoCommand"
+          >
+            <el-button type="warning" plain :icon="RefreshLeft" :loading="classRedoSaving">
+              全班重做 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="hasTyping" command="typing">
+                  ⚡ 发起全班打字重测
+                </el-dropdown-item>
+                <el-dropdown-item v-if="hasTheory" command="theory" :divided="hasTyping" style="color: #F56C6C;">
+                  ⚠️ 发起全班理论重做
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+
+          <el-button type="success" plain :icon="DataAnalysis" @click="goToClassScore">
+            查看本班成绩报表
+          </el-button>
           <el-switch v-model="showGroups" active-text="分组视图" class="group-switch" />
           <el-button type="primary" plain :icon="Setting" @click="openGroupDialog">设置分组</el-button>
           <el-button :type="layoutMode ? 'warning' : 'default'" :icon="Edit" @click="layoutMode = !layoutMode">
@@ -245,6 +301,21 @@
                   <el-button size="small" type="primary" plain class="action-mini-btn" @click="openPerformance(student)">
                     课堂表现
                   </el-button>
+                  <el-dropdown
+                    v-if="lessonId && !historical && (hasTheory || hasTyping)"
+                    trigger="click"
+                    @command="(cmd) => handleSingleStudentRedo(student, cmd)"
+                  >
+                    <el-button size="small" type="warning" plain class="action-mini-btn" :disabled="classRedoSaving">
+                      重做
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item v-if="hasTyping" command="typing">重新打字</el-dropdown-item>
+                        <el-dropdown-item v-if="hasTheory" command="theory">重做理论</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                   <el-button
                     size="small"
                     :type="student.performance?.isAbsent ? 'warning' : 'info'"
@@ -369,6 +440,21 @@
                 <el-button size="small" type="primary" plain class="action-mini-btn" @click="openPerformance(student)">
                   课堂表现
                 </el-button>
+                <el-dropdown
+                  v-if="lessonId && !historical && (hasTheory || hasTyping)"
+                  trigger="click"
+                  @command="(cmd) => handleSingleStudentRedo(student, cmd)"
+                >
+                  <el-button size="small" type="warning" plain class="action-mini-btn" :disabled="classRedoSaving">
+                    重做
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="hasTyping" command="typing">重新打字</el-dropdown-item>
+                      <el-dropdown-item v-if="hasTheory" command="theory">重做理论</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
                 <el-button
                   size="small"
                   :type="student.performance?.isAbsent ? 'warning' : 'info'"
@@ -613,15 +699,19 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { indexRedoStudents, hasRedoAnswers, redoContextKey } from '../score/theoryRedo'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Edit,
   Refresh,
   Setting,
   Grid,
   Monitor,
-  Operation
+  Operation,
+  ArrowDown,
+  RefreshLeft,
+  DataAnalysis
 } from '@element-plus/icons-vue'
 import {
   getClassroomDesktop,
@@ -633,15 +723,27 @@ import {
 } from '@/api/business/classGrouping'
 import { savePerformance } from '@/api/business/classroomPerformance'
 import PerformanceScoreStepper from '@/components/PerformanceScoreStepper/index.vue'
-import { setStudentAbsent, getLessonGate, setLessonGate } from '@/api/business/score'
+import { setStudentAbsent, getLessonGate, setLessonGate, getTheoryRedoContext, resetTheory, resetTyping } from '@/api/business/score'
 
 const route = useRoute()
+const router = useRouter()
 // URL 可能被浏览器历史或外部链接写成 lessonId=undefined；不应让该占位文本触发后端类型转换错误。
 const rawLessonId = String(route.query.lessonId || '').trim()
 const lessonId = /^\d+$/.test(rawLessonId) && Number(rawLessonId) > 0 ? rawLessonId : ''
 const lessonTitle = String(route.query.lessonTitle || '')
 const entryYear = String(route.query.entryYear || '')
 const classCode = String(route.query.classCode || '')
+
+function goToClassScore() {
+  router.push({
+    path: '/business/score',
+    query: {
+      entryYear: entryYear || undefined,
+      classCode: classCode || undefined,
+      lessonId: lessonId || undefined
+    }
+  })
+}
 const historical = ref(false) // 未指派班级的历史课只读模式
 const loading = ref(false)
 const error = ref('')
@@ -666,6 +768,13 @@ const hasPractical = ref(false)
 const gateTheoryOpen = ref(false)
 const gatePracticalOpen = ref(false)
 const gateSaving = ref('')
+const classRedoSaving = ref(false)
+
+const isAllGateOpen = computed(() => {
+  const theoryOk = !hasTheory.value || gateTheoryOpen.value
+  const practicalOk = !hasPractical.value || gatePracticalOpen.value
+  return theoryOk && practicalOk
+})
 
 // 课堂表现弹窗状态
 const performanceDialogVisible = ref(false)
@@ -756,11 +865,17 @@ function handleColumnsChange(val) {
   }
 }
 
+let gateRequestVersion = 0
+
 async function fetchLessonGateState() {
   if (!lessonId || !entryYear || !classCode) return
+  if (gateSaving.value) return
+  const requestVersion = ++gateRequestVersion
   try {
     const res = await getLessonGate(lessonId, entryYear, classCode)
-    const data = res.data || {}
+    // 保存前发出的旧请求不能覆盖教师刚切换的状态；接口字段默认位于顶层。
+    if (gateSaving.value || requestVersion !== gateRequestVersion) return
+    const data = res.data || res
     gateTheoryOpen.value = Boolean(data.theoryOpen)
     gatePracticalOpen.value = Boolean(data.practicalOpen)
   } catch (e) {
@@ -774,6 +889,7 @@ async function handleGateToggle(kind, open) {
     return
   }
   if (!lessonId || !entryYear || !classCode) return
+  ++gateRequestVersion
   gateSaving.value = kind
   try {
     await setLessonGate(lessonId, entryYear, classCode, kind, open)
@@ -784,6 +900,66 @@ async function handleGateToggle(kind, open) {
     ElMessage.error(e?.msg || '设置题目开放状态失败')
   } finally {
     gateSaving.value = ''
+  }
+}
+
+function currentRedoKey() {
+  return redoContextKey([route.query.lessonId], route.query.entryYear, route.query.classCode)
+}
+
+async function handleClassRedoCommand(kind) {
+  await handleDesktopRedo(kind)
+}
+
+async function handleSingleStudentRedo(student, kind) {
+  if (student) await handleDesktopRedo(kind, student)
+}
+
+async function handleDesktopRedo(kind, student = null) {
+  if (classRedoSaving.value || historical.value || !lessonId || !['typing', 'theory'].includes(kind)) return
+  const key = redoContextKey([lessonId], entryYear, classCode)
+  if (!key || key !== currentRedoKey()) return
+  const isTyping = kind === 'typing'
+  const kindLabel = isTyping ? '打字' : '理论'
+  // 读取、确认和提交共用忙碌状态，避免连点打开多个确认框。
+  classRedoSaving.value = true
+  try {
+    const res = await getTheoryRedoContext({ lessonId, entryYear, classCode })
+    if (key !== currentRedoKey()) return
+    const context = res?.data || res
+    if (!context?.current) {
+      ElMessage.warning('仅支持当前课程重做，请刷新课堂')
+      return
+    }
+    const statuses = indexRedoStudents(context.students)
+    const candidates = student ? [student] : students.value
+    const validStudents = candidates.filter(s => !s.performance?.isAbsent && hasRedoAnswers(statuses[s.studentId], isTyping))
+    if (!validStudents.length) {
+      ElMessage.warning(`当前所选学生暂无可重做的${kindLabel}答卷`)
+      return
+    }
+    const studentRevisions = Object.fromEntries(validStudents.map(s =>
+      [s.studentId, Number(statuses[s.studentId][isTyping ? 'typingRevision' : 'revision'])]))
+    const target = student ? `学生【${student.studentName}】` : `本班 ${validStudents.length} 名有答卷的学生`
+    await ElMessageBox.confirm(
+      `${entryYear}级${classCode}班 · ${lessonTitle || '当前课程'}：确认让${target}重做${kindLabel}测试？原${kindLabel}成绩将归档并清空，重新提交后重新计分。${isTyping ? '理论' : '打字'}、操作题及课堂表现不受影响；学生刷新或自动同步后进入新一轮。`,
+      `确认${kindLabel}重做`, { type: 'warning', confirmButtonText: '确认重做', cancelButtonText: '取消' })
+    if (key !== currentRedoKey()) {
+      ElMessage.warning('班级或课程已切换，请重新操作')
+      return
+    }
+    const result = await (isTyping ? resetTyping : resetTheory)({ lessonId, entryYear, classCode, studentRevisions })
+    if (key !== currentRedoKey()) return
+    const changed = Number(result.changedCount ?? result.data?.changedCount ?? 0)
+    if (changed > 0) ElMessage.success(`已为 ${changed} 名学生安排${kindLabel}重做`)
+    else ElMessage.info('没有可重置的答卷，已刷新课堂')
+    await load(false)
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close' && key === currentRedoKey()) {
+      ElMessage.error(e?.msg || e?.message || '重做失败，请刷新后重试')
+    }
+  } finally {
+    classRedoSaving.value = false
   }
 }
 
@@ -1219,6 +1395,9 @@ onBeforeUnmount(() => {
 
 .view-controls {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 10px;
 }
@@ -2003,5 +2182,76 @@ onBeforeUnmount(() => {
     width: 100%;
     padding: 0;
   }
+}
+
+/* 题目发令静默胶囊指示舱样式 */
+.gate-status-capsule {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 12px;
+}
+.gate-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  &.is-all-open {
+    background: #f0f9eb;
+    border: 1px solid #c2e7b0;
+    color: #67c23a;
+    .gate-status-dot { background: #67c23a; }
+  }
+  &.is-part-closed {
+    background: #fdf6ec;
+    border: 1px solid #f5dab1;
+    color: #e6a23c;
+    .gate-status-dot { background: #e6a23c; }
+  }
+  &:hover {
+    filter: brightness(0.95);
+  }
+  .gate-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .gate-status-arrow {
+    font-size: 12px;
+    margin-left: 2px;
+  }
+}
+.gate-popover-content {
+  padding: 6px 4px;
+  .gate-popover-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #ebeef5;
+    strong { font-size: 14px; color: #303133; }
+    .gate-popover-hint { font-size: 12px; color: #909399; margin-top: 2px; }
+  }
+  .gate-popover-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    &:not(:last-child) { border-bottom: 1px dashed #f2f6fc; }
+    .row-label-group {
+      display: flex;
+      flex-direction: column;
+      .row-title { font-size: 13px; font-weight: 600; color: #303133; }
+      .row-desc { font-size: 11px; color: #909399; }
+    }
+  }
+}
+.mr8 {
+  margin-right: 8px;
 }
 </style>

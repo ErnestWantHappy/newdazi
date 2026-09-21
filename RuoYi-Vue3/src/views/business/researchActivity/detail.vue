@@ -37,6 +37,7 @@
             <el-dropdown v-if="post.owner || manager" @command="handlePostAction($event, post)"><el-button link icon="MoreFilled" /><template #dropdown><el-dropdown-menu><el-dropdown-item v-if="post.owner" command="edit">编辑</el-dropdown-item><el-dropdown-item command="delete">隐藏</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </div>
           <div class="rich-content" v-html="post.contentHtml" />
+          <AttachmentList :resources="post.resources || []" />
           <div class="meta">{{ post.createTime }}<template v-if="post.edited"> · 已编辑</template></div>
         </el-card>
       </template>
@@ -52,6 +53,7 @@
 </template>
 
 <script setup name="ResearchActivityDetail">
+import AttachmentList from './components/AttachmentList.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import useUserStore from '@/store/modules/user.js'
 import { deleteResearchPost, deleteResearchTopic, getResearchTopic, listResearchPosts, pinResearchPost, pinResearchTopic } from '@/api/business/researchActivity.js'

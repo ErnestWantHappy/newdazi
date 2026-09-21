@@ -68,6 +68,7 @@ public class ResearchActivityService
     @Autowired private ResearchActivityAccessService accessService;
     @Autowired private ResearchActivityHtmlSanitizer sanitizer;
     @Autowired private ResearchActivityUploadService uploadService;
+    @Autowired private PracticalAiCipherService shareTokenCipher;
 
     public List<ResearchTopicVo> listTopics(ResearchTopicQuery query)
     {
@@ -228,6 +229,99 @@ public class ResearchActivityService
         return result;
     }
 
+    @Autowired private javax.validation.Validator attachmentValidator;
+
+    @Transactional
+    public ResearchPostVo saveAttachmentPost(Long topicId, Long postId,
+            com.ruoyi.business.domain.dto.ResearchAttachmentPostRequest request, List<MultipartFile> files)
+    {
+        accessService.requireReadableRole();
+        if (!isPostType(request.getPostType())) throw new ServiceException("留言类型不正确");
+        BizResearchPost post = null;
+        List<ResearchResourceVo> existing = Collections.emptyList();
+        if (postId != null)
+        {
+            // 编辑时锁住父记录，避免并发保存突破附件数量限制或留下半套附件。
+            post = mapper.selectPostForUpdate(postId);
+            if (post == null || !ResearchActivityConstants.DEL_NORMAL.equals(post.getDelFlag()))
+                throw new ServiceException("内容已不存在");
+            accessService.requirePostAuthor(post);
+            if (!post.getPostType().equals(request.getPostType())) throw new ServiceException("不能修改留言类型");
+            topicId = post.getTopicId();
+            existing = mapper.selectResourcesByPostId(postId);
+        }
+        accessService.requireActiveTopic(topicId);
+        List<Long> retained = request.getRetainedResourceIds();
+        if (retained == null || retained.contains(null) || retained.stream().distinct().count() != retained.size())
+            throw new ServiceException("保留附件列表不正确");
+        List<Long> owned = existing.stream().filter(r -> "F".equals(r.getResourceType()))
+                .map(ResearchResourceVo::getResourceId).collect(Collectors.toList());
+        if (!owned.containsAll(retained)) throw new ServiceException("附件不属于当前留言");
+        List<MultipartFile> uploads = files == null ? Collections.emptyList() : files;
+        if (retained.size() + uploads.size() > 10) throw new ServiceException("每条留言最多10个附件");
+        long total = 0;
+        for (MultipartFile file : uploads)
+        {
+            uploadService.validatePackage(file);
+            total += file.getSize();
+        }
+        if (total > ResearchActivityConstants.MAX_PACKAGE_BYTES) throw new ServiceException("本次上传合计不能超过50MB");
+        boolean resourcePost = ResearchActivityConstants.POST_RESOURCE.equals(request.getPostType());
+        ResearchResourcePostSaveRequest course = request.getCourse();
+        if (resourcePost)
+        {
+            if (course == null) throw new ServiceException("请填写课程信息");
+            course.setContentHtml(request.getContentHtml());
+            java.util.Set<javax.validation.ConstraintViolation<ResearchResourcePostSaveRequest>> violations = attachmentValidator.validate(course);
+            if (!violations.isEmpty()) throw new ServiceException(violations.iterator().next().getMessage());
+            course.setFileAction(uploads.isEmpty() ? "KEEP" : "REPLACE");
+            validateResourceRequest(course, uploads.isEmpty() ? null : uploads.get(0), true, !retained.isEmpty());
+        }
+        SanitizedHtml clean = sanitizer.sanitize(request.getContentHtml());
+        if (post == null)
+        {
+            post = basePost(topicId, request.getPostType(), clean);
+            if (resourcePost) applyCourseFields(post, course);
+            mapper.insertPost(post);
+            postId = post.getPostId();
+            mapper.incrementTopicReply(topicId);
+        }
+        else
+        {
+            post.setContentHtml(clean.getHtml());
+            post.setContentText(clean.getText());
+            if (resourcePost) applyCourseFields(post, course);
+            post.setUpdateBy(SecurityUtils.getUsername());
+            post.setUpdateTime(new Date());
+            mapper.updatePost(post);
+            mapper.refreshTopicLastActivity(topicId);
+        }
+        for (ResearchResourceVo old : existing)
+        {
+            if ("F".equals(old.getResourceType()) && !retained.contains(old.getResourceId()))
+            {
+                mapper.softDeleteResource(postId, old.getResourceId(), SecurityUtils.getUsername());
+                registerFileLifecycle(null, Collections.singletonList(old.getStoredPath()));
+            }
+        }
+        for (MultipartFile file : uploads)
+        {
+            StoredFile stored = uploadService.storePackage(file, topicId, postId);
+            // 先注册回滚清理，再写数据库，插入失败也不会遗留刚上传的文件。
+            registerFileLifecycle(stored.getRelativePath(), Collections.emptyList());
+            mapper.insertResource(fileResource(postId, stored));
+        }
+        if (resourcePost)
+        {
+            mapper.softDeleteResourcesByPost(postId, "L", SecurityUtils.getUsername());
+            insertLinks(postId, course.getLinks());
+        }
+        ResearchPostVo result = mapper.selectPostById(postId);
+        result.setResources(withLinkStatus(mapper.selectResourcesByPostId(postId)));
+        result.setOwner(Boolean.TRUE);
+        return result;
+    }
+
     @Transactional
     public ResearchPostVo updatePost(Long postId, ResearchPostSaveRequest request)
     {
@@ -350,14 +444,17 @@ public class ResearchActivityService
         if (ResearchActivityConstants.FILE_REPLACE.equals(request.getFileAction()))
         {
             StoredFile stored = uploadService.storePackage(file, post.getTopicId(), postId);
-            mapper.insertResource(fileResource(postId, stored));
-            List<String> oldPaths = existingFile == null ? Collections.emptyList()
-                    : Collections.singletonList(existingFile.getStoredPath());
+            List<String> oldPaths = existing.stream()
+                    .filter(r -> ResearchActivityConstants.RESOURCE_FILE.equals(r.getResourceType()))
+                    .map(ResearchResourceVo::getStoredPath).collect(Collectors.toList());
             registerFileLifecycle(stored.getRelativePath(), oldPaths);
+            mapper.insertResource(fileResource(postId, stored));
         }
         else if (ResearchActivityConstants.FILE_REMOVE.equals(request.getFileAction()) && existingFile != null)
         {
-            registerFileLifecycle(null, Collections.singletonList(existingFile.getStoredPath()));
+            registerFileLifecycle(null, existing.stream()
+                    .filter(r -> ResearchActivityConstants.RESOURCE_FILE.equals(r.getResourceType()))
+                    .map(ResearchResourceVo::getStoredPath).collect(Collectors.toList()));
         }
         mapper.refreshTopicLastActivity(post.getTopicId());
         ResearchPostVo result = mapper.selectPostById(postId);
@@ -482,11 +579,11 @@ public class ResearchActivityService
         byte[] bytes = new byte[32];
         PUBLIC_SHARE_RANDOM.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        int affected = mapper.updatePublicShare(topicId, DigestUtils.sha256Hex(token), expireTime, SecurityUtils.getUsername());
+        int affected = mapper.updatePublicShare(topicId, DigestUtils.sha256Hex(token), shareTokenCipher.encrypt(token), expireTime, SecurityUtils.getUsername());
         if (affected != 1) throw new ServiceException("通知不存在或无法生成分享链接");
 
         ResearchPublicShareVo result = publicShareStatus(topicId);
-        // 明文令牌只在本次生成响应中短暂返回，数据库永不保存。
+        // 数据库仅保存密文，明文只通过管理权限接口返回。
         result.setShareUrl(token);
         return result;
     }
@@ -525,7 +622,7 @@ public class ResearchActivityService
         int safePage = Math.max(pageNum, 1);
         int safeSize = Math.min(Math.max(pageSize, 1), 20);
         com.github.pagehelper.PageHelper.startPage(safePage, safeSize);
-        // 公开页只展示课堂反思/活动纪实，课程资源帖没有正文且不应出现空白卡片。
+        // 三类留言只公开正文展示字段，附件和云盘地址仍须登录读取。
         List<ResearchPublicPostVo> rows = mapper.selectPublicPostsByTokenHash(tokenHash);
         com.github.pagehelper.PageInfo<ResearchPublicPostVo> page =
                 new com.github.pagehelper.PageInfo<ResearchPublicPostVo>(rows);
@@ -593,6 +690,13 @@ public class ResearchActivityService
                 && (topic.getPublicShareExpireTime() == null || topic.getPublicShareExpireTime().after(new Date()));
         result.setEnabled(active);
         result.setExpireTime(topic.getPublicShareExpireTime());
+        if (active && StringUtils.isNotBlank(topic.getPublicShareTokenCiphertext()))
+        {
+            String token = shareTokenCipher.decrypt(topic.getPublicShareTokenCiphertext());
+            if (!DigestUtils.sha256Hex(token).equals(topic.getPublicShareTokenHash()))
+                throw new ServiceException("分享链接校验失败，请重新生成");
+            result.setShareUrl(token);
+        }
         return result;
     }
 

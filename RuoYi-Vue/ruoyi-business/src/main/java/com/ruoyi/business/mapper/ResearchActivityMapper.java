@@ -19,6 +19,8 @@ import com.ruoyi.business.domain.vo.ResearchPublicPostVo;
 /** 教研活动主题、留言、资源和通知的数据访问。 */
 public interface ResearchActivityMapper
 {
+    int softDeleteResource(@Param("postId") Long postId, @Param("resourceId") Long resourceId,
+                           @Param("updateBy") String updateBy);
     int insertTopic(BizResearchTopic topic);
     int updateTopic(BizResearchTopic topic);
     ResearchTopicVo selectTopicById(Long topicId);
@@ -36,6 +38,7 @@ public interface ResearchActivityMapper
     int refreshTopicLastActivity(Long topicId);
     int incrementTopicDownload(Long topicId);
     int updatePublicShare(@Param("topicId") Long topicId, @Param("tokenHash") String tokenHash,
+                          @Param("tokenCiphertext") String tokenCiphertext,
                           @Param("expireTime") java.util.Date expireTime, @Param("updateBy") String updateBy);
     int revokePublicShare(@Param("topicId") Long topicId, @Param("updateBy") String updateBy);
     ResearchPublicNoticeVo selectPublicNoticeByTokenHash(String tokenHash);

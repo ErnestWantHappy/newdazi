@@ -108,6 +108,7 @@ public class FlowchartDocumentService {
                 safe.put("sourceNodeId", source);
                 safe.put("targetNodeId", target);
                 safe.put("text", safeText(edge.get("text"), documentName + "第 " + safeEdges.size() + " 条连线"));
+                copyEdgeGeometry(edge, safe);
                 ObjectNode properties = safe.putObject("properties");
                 JsonNode sourceProperties = edge.get("properties");
                 properties.put("locked", booleanValue(sourceProperties, "locked", false));
@@ -175,6 +176,33 @@ public class FlowchartDocumentService {
             throw new ServiceException("节点坐标超出允许范围");
         }
         return Math.round(value * 100.0d) / 100.0d;
+    }
+
+    private void copyEdgeGeometry(JsonNode edge, ObjectNode safe) {
+        for (String key : new String[] {"startPoint", "endPoint", "textPosition"}) {
+            if (edge.has(key)) safe.set(key, safePoint(edge.get(key)));
+        }
+        JsonNode label = edge.get("text");
+        if (!safe.has("textPosition") && label != null && label.isObject()
+                && label.has("x") && label.has("y")) safe.set("textPosition", safePoint(label));
+        for (String key : new String[] {"sourceAnchorId", "targetAnchorId"}) {
+            if (edge.has(key)) safe.put(key, requiredId(edge, key, "连线锚点"));
+        }
+        if (edge.has("pointsList")) {
+            JsonNode points = edge.get("pointsList");
+            if (!points.isArray() || points.size() < 2 || points.size() > 100)
+                throw new ServiceException("每条连线须包含2至100个路径点");
+            ArrayNode list = safe.putArray("pointsList");
+            for (JsonNode point : points) list.add(safePoint(point));
+        }
+    }
+
+    private ObjectNode safePoint(JsonNode point) {
+        if (point == null || !point.isObject()) throw new ServiceException("连线坐标格式不正确");
+        ObjectNode safe = objectMapper.createObjectNode();
+        safe.put("x", coordinate(point.get("x")));
+        safe.put("y", coordinate(point.get("y")));
+        return safe;
     }
 
     private String safeText(JsonNode source, String location) {

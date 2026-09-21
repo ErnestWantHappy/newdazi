@@ -45,6 +45,13 @@ public class ResearchActivityUploadService
                 "application/vnd.rar", "application/x-rar-compressed", "application/octet-stream")));
         mimes.put("7z", new HashSet<>(Arrays.asList(
                 "application/x-7z-compressed", "application/octet-stream")));
+        mimes.put("pdf", new HashSet<>(Arrays.asList("application/pdf", "application/octet-stream")));
+        mimes.put("doc", new HashSet<>(Arrays.asList("application/msword", "application/octet-stream")));
+        mimes.put("docx", new HashSet<>(Arrays.asList("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream")));
+        mimes.put("xls", new HashSet<>(Arrays.asList("application/vnd.ms-excel", "application/octet-stream")));
+        mimes.put("xlsx", new HashSet<>(Arrays.asList("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream")));
+        mimes.put("ppt", new HashSet<>(Arrays.asList("application/vnd.ms-powerpoint", "application/octet-stream")));
+        mimes.put("pptx", new HashSet<>(Arrays.asList("application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/octet-stream")));
         PACKAGE_MIMES = Collections.unmodifiableMap(mimes);
     }
 
@@ -68,7 +75,7 @@ public class ResearchActivityUploadService
         String contentType = normalizeMime(file.getContentType());
         if (allowedMimes == null || !allowedMimes.contains(contentType) || !hasPackageSignature(file, extension))
         {
-            throw new ServiceException("文件类型不正确，请重新压缩后上传");
+            throw new ServiceException("文件类型不正确，请上传支持的附件");
         }
     }
 
@@ -207,7 +214,11 @@ public class ResearchActivityUploadService
         if (StringUtils.isBlank(relativePath)) return;
         try
         {
-            Files.deleteIfExists(resolvePackagePath(relativePath));
+            Path source = resolvePackagePath(relativePath);
+            Files.deleteIfExists(source);
+            Path preview = source.resolveSibling(source.getFileName() + ".preview");
+            Files.deleteIfExists(preview.resolve(FilenameUtils.getBaseName(source.toString()) + ".pdf"));
+            Files.deleteIfExists(preview);
         }
         catch (Exception e)
         {
@@ -220,6 +231,10 @@ public class ResearchActivityUploadService
     {
         byte[] head = readHead(file, 8);
         if ("zip".equals(extension)) return startsWith(head, new int[]{0x50, 0x4B});
+        if ("docx".equals(extension) || "xlsx".equals(extension) || "pptx".equals(extension))
+            return startsWith(head, new int[]{0x50, 0x4B}) && hasOfficePackage(file, extension);
+        if ("pdf".equals(extension)) return startsWith(head, new int[]{0x25, 0x50, 0x44, 0x46});
+        if ("doc".equals(extension) || "xls".equals(extension) || "ppt".equals(extension)) return startsWith(head, new int[]{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1});
         if ("7z".equals(extension)) return startsWith(head, new int[]{0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C});
         if ("rar".equals(extension))
         {
@@ -266,6 +281,33 @@ public class ResearchActivityUploadService
         return true;
     }
 
+    private boolean hasOfficePackage(MultipartFile file, String extension)
+    {
+        String expected = "docx".equals(extension) ? "word/document.xml"
+                : "xlsx".equals(extension) ? "xl/workbook.xml" : "ppt/presentation.xml";
+        boolean contentTypes = false;
+        boolean document = false;
+        // 有界读取 ZIP 目录与内容，避免把改后缀的压缩包或解压炸弹送去 Office 转换。
+        try (java.util.zip.ZipInputStream zip = new java.util.zip.ZipInputStream(file.getInputStream()))
+        {
+            java.util.zip.ZipEntry entry;
+            byte[] buffer = new byte[8192];
+            long bytes = 0;
+            int count = 0;
+            while ((entry = zip.getNextEntry()) != null)
+            {
+                if (++count > 2000) return false;
+                contentTypes |= "[Content_Types].xml".equals(entry.getName());
+                document |= expected.equals(entry.getName());
+                int read;
+                while ((read = zip.read(buffer)) != -1)
+                    if ((bytes += read) > 100L * 1024 * 1024) return false;
+            }
+            return contentTypes && document;
+        }
+        catch (IOException e) { return false; }
+    }
+
     private void copy(MultipartFile file, Path target)
     {
         try
@@ -278,6 +320,7 @@ public class ResearchActivityUploadService
         }
         catch (IOException e)
         {
+            try { Files.deleteIfExists(target); } catch (IOException ignored) { /* 保留原始上传失败原因。 */ }
             throw new ServiceException("保存上传文件失败");
         }
     }

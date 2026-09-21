@@ -13,6 +13,43 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ScoreQueryControllerTest
 {
     @Test
+    void pendingPracticalKeepsFinalScoreEmptyButRealZeroIsGraded()
+    {
+        ScoreQueryController controller = new ScoreQueryController();
+        Map<String, Object> pending = new HashMap<>();
+        pending.put("practicalPending", 1);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyHomeworkAdjustment", pending, null);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", pending, null);
+        assertNull(pending.get("finalScore"));
+        assertTrue(ScoreQueryController.isExcludedFromAverage(pending));
+
+        Map<String, Object> zero = new HashMap<>();
+        zero.put("practicalPending", 0);
+        zero.put("totalScore", 0);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyHomeworkAdjustment", zero, null);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", zero, null);
+        assertEquals(0, zero.get("finalScore"));
+        assertFalse(ScoreQueryController.isExcludedFromAverage(zero));
+    }
+
+    @Test
+    void manualZeroOverridesPendingTotalWithoutInventingPracticalGrade()
+    {
+        ScoreQueryController controller = new ScoreQueryController();
+        Map<String, Object> score = new HashMap<>();
+        score.put("practicalPending", 1);
+        com.ruoyi.business.domain.BizScoreAdjustment adjustment = new com.ruoyi.business.domain.BizScoreAdjustment();
+        adjustment.setActionType("ADJUST");
+        adjustment.setAdjustedHomeworkScore(0);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyHomeworkAdjustment", score, adjustment);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", score, null);
+        assertTrue(Boolean.TRUE.equals(score.get("practicalPending")));
+        assertNull(score.get("originalTotalScore"));
+        assertEquals(0, score.get("finalScore"));
+        assertFalse(ScoreQueryController.isExcludedFromAverage(score));
+    }
+
+    @Test
     void missingRowIsMarkedAndExcluded()
     {
         Map<String, Object> row = ScoreQueryController.missingScoreRow(9492L, 34L, "3-人工智能", 1);

@@ -1,5 +1,37 @@
 # 数据模型与迁移约定
 
+## 2026-09-21 分享令牌密文（130已备份迁移，1.30.21）
+
+发布证据见PROJECT_CORE v3.92及output/share-grading-release/。正式教师页面与模拟批改回归通过；分享真实跨设备操作待教研员凭据补验。以下本机验证记录保留为历史。
+
+`biz_research_topic.public_share_token_ciphertext` 为可空varchar(512)，AES-GCM密文与哈希同次更新，撤销清空两者；普通JSON忽略密文。执行 `sql/research_activity_public_share_ciphertext_v2.sql` 前备份，旧哈希不回填伪令牌，回滚代码可保留列。复用已有AI部署主密钥，恢复数据库需同时保留对应环境密钥。
+
+## 2026-09-21 教研多附件（本机）
+
+复用biz_research_resource的F类型行，一帖多行适用于COMMENT/MOMENT/RESOURCE，无表结构迁移。编辑锁父帖子，保留ID必须属于本帖有效文件；软删除移除行，事务提交后删除物理文件与预览缓存，回滚清理新增文件。L类型仍仅课程资源的云盘链接。Office预览PDF位于原私有文件旁的.preview目录，不新增公开静态路由。新旧客户端并存时，旧REPLACE/REMOVE语义仍为替换/移除全部附件，新接口支持逐个保留。详见research-activity/ADR-005-unified-attachments.md。
+
+## 2026-09-20 打字重做及状态当前读（本机）
+
+typing_redo_v1.sql新增biz_typing_redo_history，独立留存打字原答/分数/统计及题目快照；学生/课程/前轮唯一，最大redo_id作为typingRevision，与理论轮次分开。共用重做事务只删所选类型当前答案，打字新轮重新计分，同轮保留最高分；答案与GRADED同事务。旧请求受学生/指派锁和轮次校验保护。
+
+BizStudentTaskStateMapper写入后用FOR UPDATE当前读，修复REPEATABLE_READ下并发同状态no-op写入后读空快照的问题，表结构和全局隔离未变。本机已备份、两次执行SQL、重启验证；新环境先建理论与打字两表，配套前后端；未迁移正式环境。证据及备份见contexts/theory-redo/tasks.md。
+
+## 2026-09-20 理论重做（仅本机）
+
+`sql/theory_redo_v1.sql`新增biz_theory_redo_history，保留教师/班级/学生/课程、前轮revision、原理论答案与题目JSON快照；(student_id,lesson_id,previous_revision)唯一，redo_id最大值作为新轮次。当前答案表仍只有当前成绩，重做只删除该学生该课的choice/judgment；typing/practical不动。归档、删除及RETURNED在一个事务；新理论答案及GRADED同事务。历史无对外查询接口。
+
+本机已整库备份后执行两次，应用已重启；正式未执行。新后端current-lesson读取依赖该表，须先迁移再配套应用。回退可保留新增表，不自动恢复旧分。证据与备份见`contexts/theory-redo/tasks.md`。
+
+## 2026-09-19 流程图几何与打字权限恢复（本机）
+
+流程图1.0 JSON新增可选edge字段startPoint/endPoint、pointsList（2至100点）、sourceAnchorId/targetAnchorId、textPosition；坐标有限且在正负10000内，保留两位小数，text仍字符串供结构检查。复用现有JSON列，无DDL、不回填历史折点。BizStudentAnswerMapper当前题名单追加sys_user有效/未删除过滤。
+
+`sql/restore_typing_statistics_permission_20260919.sql`补菜单2046下的旧stats按钮权限，只授予原本具有2046的有效researcher，保留监管权限。仅本机库已备份sys_menu/sys_role_menu后执行，幂等复核通过（26028）；正式尚未执行。备份摘要、回退边界见`contexts/five-issues-20260919.md`，不涉及业务数据迁移。
+
+## 2026-09-18 学情 V3 独立数据
+
+`sql/practical_insight_v3.sql`新增report（任务/输入/结果快照、Token、run_token）、paper_map（教师及材料指纹唯一）、student_evidence（报告/学生唯一、版本证据）三表。本机已备份并迁移，正式未执行。原成绩表不写入；报告输入绑定正式确认的当前作品版本、材料哈希、名单、年级、学科、模型及提示词。报告输入发生变化标过期，跨报告只复用相同教师/学生/指纹成功证据。取消后的旧worker不能更新新执行代进度/终态；供应商已返回usage仍累计。课程删除未做三表级联，历史报告因原scope失效不可访问，保留清理策略待定。
+
 > 2026-09-06 中断交接：课程协作与固定组分离的 SQL 草稿为 `sql/collaboration_workspace_v2.sql`，新增快照存档版本、请求去重与分组用途字段。本机及正式库均未执行；部分本机 Mapper 已引用新列，源码未编译测试，不可直接发布到旧库。课堂固定组按班跨课程持久共用；协作按课程、班级和轮次保存，组数取所选文档数。详见核心上下文顶部和协作修复方案。
 
 ## 数据域
@@ -75,3 +107,6 @@ erDiagram
 # 课程删除与物联网外键链路（2026-09-04）
 
 `biz_lesson` 被 `biz_iot_experiment` 引用；实验下游还包括 `biz_iot_class_config`、`biz_iot_group`、`biz_iot_group_student`、`biz_iot_device`、`biz_iot_message` 和 `biz_iot_event`。课程物理删除必须在同一事务按“消息/事件、组员、设备、小组、班级配置、实验、课程关联、课程”的顺序清理，不能依赖数据库级联。当前实现已在 `IotMapper` 与 `BizLessonServiceImpl` 接入该顺序，并随 `20260904_codex_perf_release` 正式发布；真实课程删除回归仍建议在专用验收课程上补测。
+# 2026-09-17 纸质导入方案 A 数据增量
+
+无新增业务表或数据库迁移。教师代交复用 PracticalArtifact、Version、Attachment 及原学生答案/评分明细；提交人使用已有字段，纸质来源使用服务端专用附件目录。Redis 保存 24 小时身份导入凭证和 7 天学情报告，凭证绑定教师/范围/首次确认学生；报告按正式成绩内容指纹失效。`sql/paper_scan_v1.sql` 是废弃草稿，不执行。暂存文件由专用目录清理任务回收，不清理正式作品。

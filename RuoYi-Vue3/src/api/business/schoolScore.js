@@ -1,5 +1,13 @@
 import request from '@/utils/request'
 
+export function listTermStats(query) {
+  return request({ url: '/business/schoolScore/termStats', method: 'get', params: query })
+}
+
+export function listTypingClassDetails(query) {
+  return request({ url: '/business/schoolScore/classDetails', method: 'get', params: query })
+}
+
 export function listSupervisionSchools(query) {
   return request({ url: '/business/schoolScore/schools', method: 'get', params: query })
 }

@@ -15,6 +15,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="noticeStages" column="notice_stages"/>
         <result property="publicShareEnabled" column="public_share_enabled"/>
         <result property="publicShareTokenHash" column="public_share_token_hash"/>
+        <result property="publicShareTokenCiphertext" column="public_share_token_ciphertext"/>
         <result property="activityTime" column="activity_time"/>
         <result property="publicShareExpireTime" column="public_share_expire_time"/>
         <result property="isPinned" column="is_pinned"/>
@@ -37,6 +38,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <resultMap id="TopicEntityResult" type="com.ruoyi.business.domain.BizResearchTopic">
         <id property="topicId" column="topic_id"/>
+        <result property="publicShareTokenCiphertext" column="public_share_token_ciphertext"/>
         <result property="topicType" column="topic_type"/>
         <result property="title" column="title"/>
         <result property="contentHtml" column="content_html"/>
@@ -167,7 +169,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <sql id="topicEntityColumns">
         topic_id, topic_type, title, content_html, content_text, notice_level, notice_scope,
-        notice_stages, public_share_enabled, public_share_token_hash, activity_time, public_share_expire_time, is_pinned, view_count, reply_count, download_count, last_activity_time,
+        notice_stages, public_share_enabled, public_share_token_hash, public_share_token_ciphertext, activity_time, public_share_expire_time, is_pinned, view_count, reply_count, download_count, last_activity_time,
         creator_id, dept_id, del_flag, create_by, create_time, update_by, update_time
     </sql>
 
@@ -269,13 +271,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </update>
     <update id="updatePublicShare">
         UPDATE biz_research_topic
-        SET public_share_enabled='Y', public_share_token_hash=#{tokenHash}, public_share_expire_time=#{expireTime},
+        SET public_share_enabled='Y', public_share_token_hash=#{tokenHash}, public_share_token_ciphertext=#{tokenCiphertext}, public_share_expire_time=#{expireTime},
             update_by=#{updateBy}, update_time=NOW()
         WHERE topic_id=#{topicId} AND topic_type='NOTICE' AND del_flag='0'
     </update>
     <update id="revokePublicShare">
         UPDATE biz_research_topic
-        SET public_share_enabled='N', public_share_token_hash=NULL, public_share_expire_time=NULL,
+        SET public_share_enabled='N', public_share_token_hash=NULL, public_share_token_ciphertext=NULL, public_share_expire_time=NULL,
             update_by=#{updateBy}, update_time=NOW()
         WHERE topic_id=#{topicId} AND topic_type='NOTICE' AND del_flag='0'
     </update>
@@ -296,7 +298,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND (public_share_expire_time IS NULL OR public_share_expire_time &gt; NOW())
     </select>
     <select id="selectPublicPostsByTokenHash" resultType="com.ruoyi.business.domain.vo.ResearchPublicPostVo">
-        SELECT p.content_html AS contentHtml, u.nick_name AS authorName, d.dept_name AS deptName,
+        SELECT p.post_type AS postType, p.course_title AS courseTitle, p.content_html AS contentHtml, u.nick_name AS authorName, d.dept_name AS deptName,
                p.create_time AS createTime, IF(p.update_time IS NOT NULL,1,0) AS edited
         FROM biz_research_post p
         JOIN biz_research_topic t ON t.topic_id=p.topic_id
@@ -306,7 +308,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND t.topic_type='NOTICE' AND t.del_flag='0'
           AND (t.public_share_expire_time IS NULL OR t.public_share_expire_time &gt; NOW())
           AND p.del_flag='0'
-          AND p.post_type IN ('COMMENT','MOMENT')
+          AND p.post_type IN ('COMMENT','MOMENT','RESOURCE')
         ORDER BY p.create_time ASC, p.post_id ASC
     </select>
     <select id="selectPublicPostHtmlsByTokenHash" resultType="java.lang.String">
@@ -317,7 +319,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND t.topic_type='NOTICE' AND t.del_flag='0'
           AND (t.public_share_expire_time IS NULL OR t.public_share_expire_time &gt; NOW())
           AND p.del_flag='0'
-          AND p.post_type IN ('COMMENT','MOMENT')
+          AND p.post_type IN ('COMMENT','MOMENT','RESOURCE')
     </select>
 
     <insert id="insertPost" parameterType="com.ruoyi.business.domain.BizResearchPost"
@@ -466,6 +468,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="incrementResourceAccess">
         UPDATE biz_research_resource SET access_count=access_count+1
         WHERE resource_id=#{resourceId} AND del_flag='0'
+    </update>
+    <update id="softDeleteResource">
+        UPDATE biz_research_resource SET del_flag='2', update_by=#{updateBy}, update_time=NOW()
+        WHERE post_id=#{postId} AND resource_id=#{resourceId} AND resource_type='F' AND del_flag='0'
     </update>
 
     <sql id="enabledTeacherJoin">

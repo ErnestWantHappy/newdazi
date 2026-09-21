@@ -107,6 +107,9 @@ public class StudentHomeController extends BaseController
     private StudentAnswerSubmissionService studentAnswerSubmissionService;
 
     @Autowired
+    private com.ruoyi.business.service.TheoryRedoService theoryRedoService;
+
+    @Autowired
     private PracticalArtifactService practicalArtifactService;
 
     @Autowired
@@ -211,6 +214,9 @@ public class StudentHomeController extends BaseController
         log.debug("【学生首页】课程 {} 包含 {} 道题目", lessonId, questions.size());
         
         // 5. 查询学生已提交的答题记录
+        // 先读轮次再读答案；跨越重置时最多触发刷新，不能把旧答案绑定到新轮次。
+        long theoryRevision = theoryRedoService.revision(student.getStudentId(), lessonId);
+        long typingRevision = theoryRedoService.typingRevision(student.getStudentId(), lessonId);
         List<BizStudentAnswer> submittedAnswers = studentAnswerMapper.selectByStudentAndLesson(student.getStudentId(), lessonId);
         // 转换为Map: { questionId: { answer, score } }
         java.util.Map<Long, java.util.Map<String, Object>> answersMap = new java.util.HashMap<>();
@@ -283,6 +289,8 @@ public class StudentHomeController extends BaseController
                 .put("guideSheetTitle", guideSheetBinding == null ? null : guideSheetBinding.getSnapshotTitle())
                 .put("questions", questions)
                 .put("submittedAnswers", answersMap)  // 新增：学生已提交的答案
+                .put("theoryRevision", theoryRevision)
+                .put("typingRevision", typingRevision)
                 .put("studentInfo", studentInfo)
                 .put("studentTools", studentTools)
                 .put("theoryOpen", theoryOpen)
@@ -577,6 +585,7 @@ public class StudentHomeController extends BaseController
             answer.setStudentAnswer(studentAnswer);
             answer.setSubmitTime(now);
             answer.setAnswerTime(0); // TODO: 前端传递答题时间
+            answer.setTheoryRevision(request.getTheoryRevision());
 
             int score = 0;
             boolean isCorrect = false;
@@ -597,6 +606,8 @@ public class StudentHomeController extends BaseController
                     score = question.getQuestionScore().intValue();
                 }
             } else if ("typing".equals(question.getQuestionType())) {
+                answer.setTypingSubmission(true);
+                answer.setTypingRevision(request.getTypingRevision());
                 String original = question.getQuestionContent();
                 if (original != null && !original.isEmpty() && studentAnswer != null) {
                     int completedCount = studentAnswer.length(); // 完成字数
@@ -707,6 +718,7 @@ public class StudentHomeController extends BaseController
                 studentId, lessonId, answersToSave);
 
         for (BizStudentAnswer savedAnswer : answersToSave) {
+            if (Boolean.TRUE.equals(savedAnswer.getTerminalSubmission()) || Boolean.TRUE.equals(savedAnswer.getTypingSubmission())) continue;
             classroomTaskStateService.markSafely(student, student.getDeptId(), lessonId, savedAnswer.getQuestionId(),
                     savedAnswer.getScore() == null
                             ? ClassroomTaskStateService.SUBMITTED : ClassroomTaskStateService.GRADED);
@@ -962,6 +974,12 @@ public class StudentHomeController extends BaseController
      * 提交答案请求体
      */
     public static class SubmitAnswerRequest {
+        private Long theoryRevision;
+        private Long typingRevision;
+        public Long getTypingRevision() { return typingRevision; }
+        public void setTypingRevision(Long value) { typingRevision = value; }
+        public Long getTheoryRevision() { return theoryRevision; }
+        public void setTheoryRevision(Long value) { theoryRevision = value; }
         private Long lessonId;
         private Map<Long, String> answers;
         private Map<Long, Integer> answerTimes; // 题目ID -> 答题用时(秒)

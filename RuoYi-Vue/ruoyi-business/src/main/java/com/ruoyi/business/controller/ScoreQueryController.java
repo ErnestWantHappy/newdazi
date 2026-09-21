@@ -619,7 +619,14 @@ public class ScoreQueryController extends BaseController {
             int performanceTotal = 0;
             int finalTotal = 0;
             int validScoreCount = 0;
+            int performanceCount = 0;
+            boolean hasPendingGrading = false;
             for (Map<String, Object> score : scores) {
+                hasPendingGrading |= Boolean.TRUE.equals(score.get("pendingGrading"));
+                if (!Boolean.TRUE.equals(score.get("isAbsent")) && !Boolean.TRUE.equals(score.get(SCORE_FLAG_MISSING))) {
+                    performanceTotal += numberToInt(score.get("performanceScore"));
+                    performanceCount++;
+                }
                 if (isExcludedFromAverage(score)) {
                     continue;
                 }
@@ -632,16 +639,15 @@ public class ScoreQueryController extends BaseController {
                     }
                 }
                 homeworkTotal += numberToInt(score.get("totalScore"));
-                performanceTotal += numberToInt(score.get("performanceScore"));
                 finalTotal += numberToInt(score.get("finalScore"));
                 validScoreCount++;
             }
-            row.put("totalScore", homeworkTotal);
+            row.put("totalScore", validScoreCount == 0 && hasPendingGrading ? null : homeworkTotal);
             row.put("totalPerformance", performanceTotal);
-            row.put("totalFinalScore", finalTotal);
-            row.put("averageHomeworkScore", validScoreCount > 0 ? roundOne((double) homeworkTotal / validScoreCount) : 0D);
-            row.put("averagePerformanceScore", validScoreCount > 0 ? roundOne((double) performanceTotal / validScoreCount) : 0D);
-            row.put("averageFinalScore", validScoreCount > 0 ? roundOne((double) finalTotal / validScoreCount) : 0D);
+            row.put("totalFinalScore", validScoreCount == 0 && hasPendingGrading ? null : finalTotal);
+            row.put("averageHomeworkScore", validScoreCount > 0 ? Double.valueOf(roundOne((double) homeworkTotal / validScoreCount)) : (hasPendingGrading ? null : (Double) 0D));
+            row.put("averagePerformanceScore", performanceCount > 0 ? roundOne((double) performanceTotal / performanceCount) : 0D);
+            row.put("averageFinalScore", validScoreCount > 0 ? Double.valueOf(roundOne((double) finalTotal / validScoreCount)) : (hasPendingGrading ? null : (Double) 0D));
             row.put("validScoreCount", validScoreCount);
 
             result.add(row);
@@ -655,7 +661,8 @@ public class ScoreQueryController extends BaseController {
 
     /** 请假与缺考均不计入均分分母与排名。 */
     static boolean isExcludedFromAverage(Map<String, Object> score) {
-        return score == null || Boolean.TRUE.equals(score.get("isAbsent")) || Boolean.TRUE.equals(score.get(SCORE_FLAG_MISSING));
+        return score == null || Boolean.TRUE.equals(score.get("isAbsent")) || Boolean.TRUE.equals(score.get(SCORE_FLAG_MISSING))
+                || Boolean.TRUE.equals(score.get("pendingGrading"));
     }
     /**
      * 是否应标缺考：课程在选定范围、有全班记录、本人无记录。未开课/未指派（全班无记录）一律不标。
@@ -685,8 +692,10 @@ public class ScoreQueryController extends BaseController {
     }
 
     private void applyHomeworkAdjustment(Map<String, Object> score, BizScoreAdjustment adjustment) {
-        int originalScore = numberToInt(score.get("totalScore"));
-        score.put("originalTotalScore", originalScore);
+        boolean practicalPending = numberToInt(score.get("practicalPending")) == 1;
+        score.put("practicalPending", practicalPending);
+        score.put("pendingGrading", practicalPending);
+        score.put("originalTotalScore", score.get("totalScore"));
         score.put("manualAdjusted", false);
         if (!isActiveHomeworkAdjustment(adjustment)) {
             return;
@@ -695,6 +704,7 @@ public class ScoreQueryController extends BaseController {
         int adjustedScore = clampScore(adjustment.getAdjustedHomeworkScore());
         score.put("totalScore", adjustedScore);
         score.put("manualAdjusted", true);
+        score.put("pendingGrading", false);
         score.put("adjustmentReason", adjustment.getReason());
         score.put("adjustedBy", adjustment.getCreateBy());
         score.put("adjustedTime", adjustment.getCreateTime());
@@ -706,7 +716,7 @@ public class ScoreQueryController extends BaseController {
         boolean isAbsent = performance != null && performance.getIsAbsent() != null && performance.getIsAbsent() == 1;
         score.put("performanceScore", performanceScore);
         score.put("isAbsent", isAbsent);
-        if (isAbsent) {
+        if (isAbsent || Boolean.TRUE.equals(score.get("pendingGrading"))) {
             score.put("finalScore", null);
         } else {
             score.put("finalScore", clampScore(numberToInt(score.get("totalScore")) + performanceScore));
@@ -1147,7 +1157,8 @@ public class ScoreQueryController extends BaseController {
             double sumPerformance = 0, sumFinal = 0;
             double typingSpeedSum = 0, accuracySum = 0, completionSum = 0;
             int typingCount = 0;
-            int count = 0;
+            int count = 0, practicalCount = 0, gradedCount = 0;
+            boolean hasPending = false, hasPracticalPending = false;
             
             for (LessonInfoVo lesson : targetLessons) {
                 Long lessonId = lesson.getLessonId();
@@ -1185,10 +1196,20 @@ public class ScoreQueryController extends BaseController {
 
                     sumTyping += numberToInt(targetScore.get("typingScore"));
                     sumTheory += numberToInt(targetScore.get("theoryScore"));
-                    sumPractical += numberToInt(targetScore.get("practicalScore"));
-                    sumTotal += scoreVal;
+                    boolean practicalPending = Boolean.TRUE.equals(targetScore.get("practicalPending"));
+                    boolean pending = Boolean.TRUE.equals(targetScore.get("pendingGrading"));
+                    hasPending |= pending;
+                    hasPracticalPending |= practicalPending;
+                    if (!practicalPending) {
+                        sumPractical += numberToInt(targetScore.get("practicalScore"));
+                        practicalCount++;
+                    }
+                    if (!pending) {
+                        sumTotal += scoreVal;
+                        sumFinal += finalScore;
+                        gradedCount++;
+                    }
                     sumPerformance += performanceScore;
-                    sumFinal += finalScore;
                     count++;
 
                     double typingSpeed = numberToDouble(targetScore.get("avgTypingSpeed"));
@@ -1200,9 +1221,11 @@ public class ScoreQueryController extends BaseController {
                     }
 
                     if (includeLessonDetails) {
-                        row.createCell(colIdx++).setCellValue(scoreVal);
+                        if (pending) row.createCell(colIdx++).setCellValue("待批改");
+                        else row.createCell(colIdx++).setCellValue(scoreVal);
                         row.createCell(colIdx++).setCellValue(performanceScore);
-                        row.createCell(colIdx++).setCellValue(finalScore);
+                        if (pending) row.createCell(colIdx++).setCellValue("待批改");
+                        else row.createCell(colIdx++).setCellValue(finalScore);
                     }
                 }
             }
@@ -1210,10 +1233,10 @@ public class ScoreQueryController extends BaseController {
             // 统计列
             double avgTyping = count > 0 ? sumTyping / count : 0;
             double avgTheory = count > 0 ? sumTheory / count : 0;
-            double avgPractical = count > 0 ? sumPractical / count : 0;
-            double homeworkSummary = singleLessonMode ? sumTotal : (count > 0 ? sumTotal / count : 0);
+            double avgPractical = practicalCount > 0 ? sumPractical / practicalCount : 0;
+            double homeworkSummary = singleLessonMode ? sumTotal : (gradedCount > 0 ? sumTotal / gradedCount : 0);
             double performanceSummary = singleLessonMode ? sumPerformance : (count > 0 ? sumPerformance / count : 0);
-            double finalSummary = singleLessonMode ? sumFinal : (count > 0 ? sumFinal / count : 0);
+            double finalSummary = singleLessonMode ? sumFinal : (gradedCount > 0 ? sumFinal / gradedCount : 0);
             double overallTypingSpeed = typingCount > 0 ? Math.round(typingSpeedSum / typingCount) : 0;
             double overallAccuracy = typingCount > 0 ? Math.round(accuracySum / typingCount) : 0;
             double overallCompletion = typingCount > 0 ? Math.round(completionSum / typingCount) : 0;
@@ -1240,17 +1263,20 @@ public class ScoreQueryController extends BaseController {
                         setOneDecimalCell(row, colIdx++, avgTheory, oneDecimalStyle);
                         break;
                     case "avgPractical":
-                        setOneDecimalCell(row, colIdx++, avgPractical, oneDecimalStyle);
+                        if (practicalCount == 0 && hasPracticalPending) row.createCell(colIdx++).setCellValue("待批改");
+                        else setOneDecimalCell(row, colIdx++, avgPractical, oneDecimalStyle);
                         break;
                     case "filteredTotal":
-                        setSummaryScoreCell(row, colIdx++, homeworkSummary, singleLessonMode, oneDecimalStyle);
+                        if (gradedCount == 0 && hasPending) row.createCell(colIdx++).setCellValue("待批改");
+                        else setSummaryScoreCell(row, colIdx++, homeworkSummary, singleLessonMode, oneDecimalStyle);
                         break;
                     case "totalPerformance":
                         setSummaryScoreCell(row, colIdx++, performanceSummary, singleLessonMode, oneDecimalStyle);
                         break;
                     case "finalTotal":
                     case "filteredAverage":
-                        setSummaryScoreCell(row, colIdx++, finalSummary, singleLessonMode, oneDecimalStyle);
+                        if (gradedCount == 0 && hasPending) row.createCell(colIdx++).setCellValue("待批改");
+                        else setSummaryScoreCell(row, colIdx++, finalSummary, singleLessonMode, oneDecimalStyle);
                         break;
                     case "gradeLevel":
                         row.createCell(colIdx++).setCellValue(rankInfo != null ? rankInfo.getGradeLevel() : "-");

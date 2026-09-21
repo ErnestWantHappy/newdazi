@@ -130,10 +130,10 @@ public class PracticalPageRenderer
     private List<String> toResources(List<File> pages)
     {
         List<String> resources = new ArrayList<String>();
-        String physicalProfile = new File(RuoYiConfig.getProfile()).getAbsolutePath().replace('\\', '/');
+          String physicalProfile = new File(RuoYiConfig.getProfile()).toPath().toAbsolutePath().normalize().toString().replace('\\', '/');
         for (File page : pages)
         {
-            String absolute = page.getAbsolutePath().replace('\\', '/');
+              String absolute = page.toPath().toAbsolutePath().normalize().toString().replace('\\', '/');
             if (!absolute.startsWith(physicalProfile + "/"))
             {
                 throw new ServiceException("规范化页图路径越界");

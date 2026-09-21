@@ -29,6 +29,22 @@ public class ResearchActivityResourceController extends BaseController
     private static final String ROLE_GUARD = "(@ss.hasRole('teacher') or @ss.hasRole('researcher') or @ss.hasRole('admin'))";
 
     @Autowired private ResearchActivityService service;
+    @Autowired private com.ruoyi.business.service.ResearchAttachmentPreviewService previewService;
+
+    @GetMapping("/resources/{resourceId}/preview")
+    @PreAuthorize("@ss.hasPermi('business:researchActivity:download') and " + ROLE_GUARD)
+    public void preview(@PathVariable Long resourceId, HttpServletResponse response) throws IOException
+    {
+        DownloadResource download = service.prepareDownload(resourceId);
+        java.nio.file.Path pdf = previewService.preview(download.getPath());
+        // 转换期间可能发生隐藏或删除，返回文件前再次校验。
+        service.prepareDownload(resourceId);
+        response.setContentType("application/pdf");
+        response.setHeader("Content-Disposition", "inline; filename=preview.pdf");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Cache-Control", "private, no-store, max-age=0");
+        Files.copy(pdf, response.getOutputStream());
+    }
 
     @PostMapping("/images")
     @PreAuthorize("@ss.hasPermi('business:researchActivity:add') and " + ROLE_GUARD)
