@@ -238,7 +238,7 @@
       :lesson-id="selectedLessonIds[0]"
       :class-code="queryParams.classCode"
       :entry-year="queryParams.entryYear"
-      @saved="handleQuery"
+      @saved="handlePerformanceSaved"
     />
 
     <!-- 数据表格 -->
@@ -1213,6 +1213,25 @@ function getAccuracyColor(accuracy) {
 function getDistPercent(count, total) {
   if (!total || total === 0) return 0;
   return Math.min(100, Math.round((count / total) * 100));
+}
+
+function handlePerformanceSaved({ lessonId, performances }) {
+  if (selectedLessonIds.value.length !== 1 || selectedLessonIds.value[0] !== lessonId) return;
+  // 加分不触发整页查询、分析重建或排序，当前名单与滚动容器保持原位。
+  for (const item of performances) {
+    for (const rows of [rawData.value, tableData.value]) {
+      const student = rows.find(row => String(row.studentId) === String(item.studentId));
+      const score = student?.scores?.find(row => row.lessonId === lessonId);
+      if (!score) continue;
+      score.performanceScore = Number(item.score || 0);
+      score.finalScore = clampClientScore(Number(score.totalScore || 0) + score.performanceScore);
+      student.totalPerformance = score.performanceScore;
+      if (!score.pendingGrading && !score.isAbsent && !score.isMissing) {
+        student.filteredAverage = score.finalScore;
+        student.finalTotal = score.finalScore;
+      }
+    }
+  }
 }
 
 function handleQuery() {

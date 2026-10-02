@@ -521,6 +521,8 @@ const groupSize = ref(4)
 const loading = ref(false)
 const saving = ref(false)
 let refreshTimer
+let reconnectTimer = null
+let reconnectAttempt = 0
 let classDataLoading = false
 let classDataRefreshPending = false
 const groupingLoading = ref(false)
@@ -603,6 +605,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (socket) socket.close()
+  if (reconnectTimer) window.clearTimeout(reconnectTimer)
   if (clockTimer) window.clearInterval(clockTimer)
 })
 
@@ -964,9 +967,17 @@ function printCard() {
 
 function connectRealtime() {
   if (!experimentId.value) return
+  if (reconnectTimer) { window.clearTimeout(reconnectTimer); reconnectTimer = null }
   if (socket) socket.close()
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   socket = new WebSocket(`${protocol}//${window.location.host}/ws/iot/${experimentId.value}`)
+  socket.onopen = () => { reconnectAttempt = 0 }
+  socket.onerror = () => { try { socket.close() } catch (_) {} }
+  socket.onclose = () => {
+    if (!experimentId.value) return
+    const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempt++))
+    reconnectTimer = window.setTimeout(() => connectRealtime(), delay)
+  }
   socket.onmessage = event => {
     try {
       if (JSON.parse(event.data).type === 'iot_refresh') {

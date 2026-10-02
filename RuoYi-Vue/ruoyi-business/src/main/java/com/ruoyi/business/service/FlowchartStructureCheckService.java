@@ -73,6 +73,11 @@ public class FlowchartStructureCheckService {
         JsonNode student = documentService.readDocument(studentJson);
         ArrayNode rules = readRules(rulesJson == null || rulesJson.trim().isEmpty() ? generateRules(answerJson) : rulesJson);
 
+        // 无标准答案时只保存作品供教师批改，不能把没有检查依据解释成零分或满分。
+        if (answer.path("nodes").isEmpty() && rules.isEmpty()) {
+            return new CheckOutcome("{\"schemaVersion\":\"1.0\",\"status\":\"MANUAL_REVIEW\",\"items\":[],\"suggestedScore\":null}", null);
+        }
+
         Map<String, JsonNode> answerNodes = nodesById(answer.path("nodes"));
         validateRules(rules, answerNodes);
         Map<String, JsonNode> studentNodes = nodesById(student.path("nodes"));

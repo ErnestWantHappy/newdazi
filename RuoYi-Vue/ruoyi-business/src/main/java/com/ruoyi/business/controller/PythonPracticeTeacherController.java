@@ -57,7 +57,7 @@ public class PythonPracticeTeacherController extends BaseController {
     @PreAuthorize("@ss.hasPermi('business:pythonPractice:edit')")
     @DeleteMapping("/plans/{planId}")
     public AjaxResult delete(@PathVariable Long planId) {
-        return success(service.deletePlan(planId, SecurityUtils.getDeptId()));
+        return success(service.deletePlan(planId, SecurityUtils.getUserId(), SecurityUtils.getDeptId()));
     }
 
     @PreAuthorize("@ss.hasPermi('business:pythonPractice:edit')")
@@ -104,7 +104,7 @@ public class PythonPracticeTeacherController extends BaseController {
     @PreAuthorize("@ss.hasPermi('business:pythonPractice:publish')")
     @PostMapping("/plans/{planId}/versions/{planVersionId}/publish")
     public AjaxResult publish(@PathVariable Long planId, @PathVariable Long planVersionId) {
-        return success(service.publish(planId, planVersionId, SecurityUtils.getDeptId()));
+        return success(service.publish(planId, planVersionId, SecurityUtils.getUserId(), SecurityUtils.getDeptId()));
     }
 
     @PreAuthorize("@ss.hasPermi('business:pythonPractice:analytics')")

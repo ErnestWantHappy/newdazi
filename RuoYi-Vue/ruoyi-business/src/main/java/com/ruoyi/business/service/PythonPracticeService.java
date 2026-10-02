@@ -42,6 +42,8 @@ import com.ruoyi.business.judge.OutputComparator;
 @Service
 public class PythonPracticeService {
     @Autowired private PythonPracticeMapper mapper;
+    @Autowired private com.ruoyi.business.mapper.DataLabMapper dataLabMapper;
+    @Autowired private IDataLabService dataLabService;
     @Autowired private BizQuestionMapper questionMapper;
     @Autowired private ProgrammingJudgeMapper judgeMapper;
     @Autowired private BizStudentMapper studentMapper;
@@ -111,13 +113,16 @@ public class PythonPracticeService {
 
     /** 题单删除采用物理删除，学生练习记录一并清理，不再保留归档入口。 */
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> deletePlan(Long planId, Long deptId) {
+    public Map<String, Object> deletePlan(Long planId, Long userId, Long deptId) {
         Map<String, Object> plan = mapper.selectPlan(planId);
         requirePlanDept(plan, deptId);
+        requirePlanOwner(plan, userId);
         Map<String, Object> result = new HashMap<String, Object>();
         mapper.deletePlanDrafts(planId);
         mapper.deletePlanSubmissionCases(planId);
         mapper.deletePlanSubmissions(planId);
+        dataLabMapper.deletePlanSubmissions(planId);
+        dataLabMapper.deletePlanSnapshots(planId);
         mapper.deletePlanProgress(planId);
         mapper.deleteAllPlanClasses(planId);
         mapper.deletePlanQuestions(planId);
@@ -132,12 +137,19 @@ public class PythonPracticeService {
         return result;
     }
 
+    /** 兼容内部旧调用；控制器删除入口必须传入当前用户。 */
+    @Deprecated
+    public Map<String, Object> deletePlan(Long planId, Long deptId) {
+        return deletePlan(planId, null, deptId);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> updatePlan(Long planId, Map<String, Object> request, Long userId,
                                           String username, Long deptId) {
         require(request, "planName");
         Map<String, Object> plan = mapper.selectPlan(planId);
         requirePlanDept(plan, deptId);
+        requirePlanOwner(plan, userId);
         List<Map<String, String>> classes = parseClasses(request.get("classes"));
         if (classes.isEmpty()) throw new ServiceException("请至少选择一个目标班级");
         validateManagedClasses(classes, userId, deptId);
@@ -149,8 +161,11 @@ public class PythonPracticeService {
 
     /** 已发布版本保持不变；首次修改时复制成新草稿，学生继续使用旧发布版本。 */
     private Long ensureEditableVersion(Long planVersionId, Long userId, String username, Long deptId) {
+        // 题单主行是所有版本编辑的共同锁，避免并发克隆草稿及分配相同序号。
+        mapper.lockPlanByVersion(planVersionId);
         Map<String, Object> version = mapper.selectPlanByVersion(planVersionId);
         requirePlanDept(version, deptId);
+        requirePlanOwner(version, userId);
         String status = String.valueOf(version.get("version_status"));
         if ("DRAFT".equals(status)) return planVersionId;
         if (!"PUBLISHED".equals(status)) throw new ServiceException("该题单版本不能修改");
@@ -166,6 +181,7 @@ public class PythonPracticeService {
         Long targetId = number(draft.get("planVersionId"));
         mapper.clonePlanClasses(planVersionId, targetId, username);
         mapper.cloneSnapshots(planVersionId, targetId, username);
+        dataLabMapper.cloneSnapshots(planVersionId, targetId);
         mapper.cloneSnapshotCases(planVersionId, targetId);
         mapper.clonePlanQuestions(planVersionId, targetId);
         return targetId;
@@ -181,6 +197,9 @@ public class PythonPracticeService {
                                                      String stage, String username) {
         if (mapper.countPlanVersionQuestion(planVersionId, questionId) > 0) throw new ServiceException("该题已在当前题单中");
         BizQuestion question = questionMapper.selectBizQuestionByQuestionId(questionId);
+        if (question != null && "practical".equalsIgnoreCase(question.getQuestionType()) && "DATA_LAB".equals(question.getPracticalMode())) {
+            return addDataLabQuestion(planVersionId, question, sortNo, stage, username);
+        }
         if (question == null || !"practical".equalsIgnoreCase(question.getQuestionType()) || !"PYTHON".equalsIgnoreCase(question.getPracticalMode())) {
             throw new ServiceException("只能加入 Python 在线编程题");
         }
@@ -188,6 +207,8 @@ public class PythonPracticeService {
         if (config == null || !"1".equals(config.getEnabled())) throw new ServiceException("该题尚未启用判题规则");
         if (!"VALID".equals(config.getValidationStatus())) throw new ServiceException("该题尚未通过参考代码验证，不能加入题单");
         validateTestCases(questionId);
+        Long reusableSnapshotId = mapper.selectReusableSnapshot(planVersionId, questionId);
+        if (reusableSnapshotId != null && dataLabMapper.selectSnapshot(planVersionId, questionId) != null) throw new ServiceException("本版本已存在实验快照，请另建题目");
         Map<String, Object> snapshot = new HashMap<String, Object>();
         snapshot.put("sourceType", "BASE_VERSION"); snapshot.put("sourceId", planVersionId); snapshot.put("questionId", questionId);
         snapshot.put("snapshotHash", UUID.randomUUID().toString().replace("-", "")); snapshot.put("questionContent", question.getQuestionContent());
@@ -195,15 +216,51 @@ public class PythonPracticeService {
         snapshot.put("inputDescription", config.getInputDescription()); snapshot.put("outputDescription", config.getOutputDescription()); snapshot.put("sampleExplanation", config.getSampleExplanation());
         snapshot.put("constraintsText", config.getConstraintsText()); snapshot.put("notesText", config.getNotesText()); snapshot.put("starterCode", config.getStarterCode());
         snapshot.put("timeLimitSeconds", config.getTimeLimitSeconds()); snapshot.put("memoryLimitKb", config.getMemoryLimitKb()); snapshot.put("maxProcesses", config.getMaxProcesses()); snapshot.put("maxFileSizeKb", config.getMaxFileSizeKb()); snapshot.put("maxOutputKb", config.getMaxOutputKb()); snapshot.put("createBy", username);
-        mapper.insertSnapshot(snapshot);
-        List<ProgrammingTestCase> cases = judgeMapper.selectTestCases(questionId);
-        int order = 1;
-        for (ProgrammingTestCase item : cases) {
-            Map<String, Object> row = new HashMap<String, Object>(); row.put("snapshotId", snapshot.get("snapshotId")); row.put("caseName", item.getCaseName()); row.put("inputText", item.getInputText()); row.put("expectedOutput", item.getExpectedOutput()); row.put("isPublic", item.getIsPublic()); row.put("scoreWeight", item.getScoreWeight()); row.put("orderNum", order++); mapper.insertSnapshotCase(row);
+        if (reusableSnapshotId == null) {
+            mapper.insertSnapshot(snapshot);
+            List<ProgrammingTestCase> cases = judgeMapper.selectTestCases(questionId);
+            int order = 1;
+            for (ProgrammingTestCase item : cases) {
+                Map<String, Object> row = new HashMap<String, Object>(); row.put("snapshotId", snapshot.get("snapshotId")); row.put("caseName", item.getCaseName()); row.put("inputText", item.getInputText()); row.put("expectedOutput", item.getExpectedOutput()); row.put("isPublic", item.getIsPublic()); row.put("scoreWeight", item.getScoreWeight()); row.put("orderNum", order++); mapper.insertSnapshotCase(row);
+            }
+        } else {
+            // 保留已有快照及测试点，历史提交永远不因移出后重新加入而失去依据。
+            snapshot.clear();
+            snapshot.put("snapshotId", reusableSnapshotId);
         }
-        Map<String, Object> link = new HashMap<String, Object>(); link.put("planVersionId", planVersionId); link.put("questionId", questionId); link.put("snapshotId", snapshot.get("snapshotId")); link.put("sortNo", sortNo == null ? mapper.selectPlanQuestionCount(planVersionId) + 1 : sortNo); link.put("stage", stage == null ? "BEGINNER" : stage); link.put("requiredFlag", "1"); mapper.insertPlanQuestion(link);
+        Map<String, Object> link = new HashMap<String, Object>(); link.put("planVersionId", planVersionId); link.put("questionId", questionId); link.put("snapshotId", snapshot.get("snapshotId")); link.put("sortNo", resolveSortNo(planVersionId, sortNo)); link.put("stage", stage == null ? "BEGINNER" : stage); link.put("requiredFlag", "1"); mapper.insertPlanQuestion(link);
         snapshot.put("planVersionId", planVersionId);
         return snapshot;
+    }
+
+    /** 题单序号受唯一键约束：位置已被占用时直接追加到末尾，而不是让数据库报重复键。 */
+    private Map<String, Object> addDataLabQuestion(Long versionId, BizQuestion question, Integer sortNo, String stage, String username) {
+        com.ruoyi.business.domain.DataLabConfig config = dataLabService.getConfig(question.getQuestionId());
+        if (config == null || config.getExcelFileUrl() == null || config.getMaxScore() == null) throw new ServiceException("实验题尚未配置数据文件和满分");
+        Long snapshotId = mapper.selectReusableSnapshot(versionId, question.getQuestionId());
+        Map<String, Object> snapshot = new HashMap<>();
+        if (snapshotId == null) {
+            snapshot.put("sourceType", "BASE_VERSION"); snapshot.put("sourceId", versionId); snapshot.put("questionId", question.getQuestionId());
+            snapshot.put("snapshotHash", UUID.randomUUID().toString().replace("-", "")); snapshot.put("questionContent", question.getQuestionContent());
+            snapshot.put("questionTitle", config.getExperimentName()); snapshot.put("difficulty", question.getDifficulty());
+            snapshot.put("noInput", "1"); snapshot.put("starterCode", config.getStarterCode()); snapshot.put("timeLimitSeconds", 30);
+            snapshot.put("memoryLimitKb", 262144); snapshot.put("maxProcesses", 1); snapshot.put("maxFileSizeKb", 10240); snapshot.put("maxOutputKb", 64); snapshot.put("createBy", username);
+            mapper.insertSnapshot(snapshot);
+            snapshotId = number(snapshot.get("snapshotId"));
+            dataLabMapper.insertSnapshot(snapshotId, config);
+        } else if (dataLabMapper.selectSnapshot(versionId, question.getQuestionId()) == null) {
+            throw new ServiceException("本版本已存在其他作答方式的快照，请另建题目");
+        }
+        Map<String, Object> link = new HashMap<>();
+        link.put("planVersionId", versionId); link.put("questionId", question.getQuestionId()); link.put("snapshotId", snapshotId);
+        link.put("sortNo", resolveSortNo(versionId, sortNo)); link.put("stage", stage == null ? "BEGINNER" : stage); link.put("requiredFlag", "1");
+        mapper.insertPlanQuestion(link);
+        link.put("practicalMode", "DATA_LAB"); return link;
+    }
+
+    private int resolveSortNo(Long planVersionId, Integer requested) {
+        if (requested != null && requested > 0 && mapper.countPlanQuestionBySort(planVersionId, requested) == 0) return requested;
+        return mapper.selectMaxPlanQuestionSort(planVersionId) + 1;
     }
 
     /** 从 V2 系统题中按知识点和难度自动配题，教师仍可在发布前增删调整。 */
@@ -216,10 +273,9 @@ public class PythonPracticeService {
         if (selected.isEmpty()) {
             throw new ServiceException("暂无可推荐的 V2 系统题，请先完成系统题库导入和验证");
         }
-        int sortNo = mapper.selectPlanQuestionCount(editableVersionId) + 1;
         for (Map<String, Object> item : selected) {
             Long questionId = number(item.get("question_id"));
-            addQuestionToVersion(editableVersionId, questionId, sortNo++, stageByDifficulty(String.valueOf(item.get("difficulty"))), username);
+            addQuestionToVersion(editableVersionId, questionId, null, stageByDifficulty(String.valueOf(item.get("difficulty"))), username);
         }
         Map<String, Object> result = new HashMap<String, Object>();
         result.put("recommendedCount", selected.size());
@@ -234,13 +290,12 @@ public class PythonPracticeService {
         if (questionIds == null || questionIds.isEmpty()) throw new ServiceException("请选择要加入的题目");
         if (questionIds.size() > 100) throw new ServiceException("一次最多加入 100 道题");
         Long editableVersionId = ensureEditableVersion(planVersionId, SecurityUtils.getUserId(), username, deptId);
-        int sortNo = mapper.selectPlanQuestionCount(editableVersionId) + 1;
         int added = 0;
         Set<Long> unique = new HashSet<Long>();
         for (Object item : questionIds) {
             Long questionId = numberOrNull(item);
             if (questionId == null || !unique.add(questionId)) continue;
-            addQuestionToVersion(editableVersionId, questionId, sortNo++, null, username);
+            addQuestionToVersion(editableVersionId, questionId, null, null, username);
             added++;
         }
         Map<String, Object> result = new HashMap<String, Object>();
@@ -350,7 +405,7 @@ public class PythonPracticeService {
         int started = 0, completed = 0, submissions = 0;
         for (Map<String, Object> row : students) {
             int attempted = intValue(row.get("attempted_count"), 0);
-            int passed = intValue(row.get("passed_count"), 0);
+            int passed = intValue(row.get("completed_count"), 0);
             int total = intValue(row.get("question_count"), 0);
             if (attempted > 0) started++;
             if (total > 0 && passed >= total) completed++;
@@ -374,12 +429,19 @@ public class PythonPracticeService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> publish(Long planId, Long planVersionId, Long deptId) {
-        requirePlanDept(mapper.selectPlan(planId), deptId);
+    public Map<String, Object> publish(Long planId, Long planVersionId, Long userId, Long deptId) {
+        mapper.lockPlanByVersion(planVersionId);
+        Map<String, Object> plan = mapper.selectPlan(planId);
+        requirePlanDept(plan, deptId);
+        requirePlanOwner(plan, userId);
         Map<String, Object> version = mapper.selectPlanByVersion(planVersionId);
         if (version == null || !planId.equals(number(version.get("plan_id")))) throw new ServiceException("题单版本不存在或不属于当前题单");
         int questionCount = mapper.selectPlanQuestionCount(planVersionId);
-        if (questionCount == 0 || mapper.selectSnapshotPublicCaseCount(planVersionId, true) < questionCount || mapper.selectSnapshotPublicCaseCount(planVersionId, false) < questionCount) {
+        int labCount = 0;
+        for (Map<String, Object> question : mapper.selectPlanQuestions(planVersionId)) {
+            if ("DATA_LAB".equals(question.get("practical_mode"))) labCount++;
+        }
+        if (questionCount == 0 || mapper.selectSnapshotPublicCaseCount(planVersionId, true) < questionCount - labCount || mapper.selectSnapshotPublicCaseCount(planVersionId, false) < questionCount - labCount) {
             throw new ServiceException("发布前必须为每道题配置公开和隐藏测试点");
         }
         if (mapper.countPlanClasses(planVersionId) == 0) throw new ServiceException("发布前必须至少选择一个目标班级");
@@ -399,6 +461,7 @@ public class PythonPracticeService {
         List<Map<String, Object>> questions = mapper.selectStudentQuestions(student.getDeptId(), student.getEntryYear(), student.getClassCode());
         Map<String, Map<String, Object>> progress = new HashMap<String, Map<String, Object>>();
         for (Map<String, Object> item : mapper.selectStudentProgress(student.getStudentId())) progress.put(progressKey(item), item);
+        for (Map<String, Object> item : dataLabMapper.selectStudentProgress(userId)) progress.put(progressKey(item), item);
         for (Map<String, Object> item : questions) item.put("progress", progress.get(progressKey(item)));
         result.put("questions", questions);
         return result;
@@ -410,6 +473,7 @@ public class PythonPracticeService {
         Map<String, Object> question = mapper.selectQuestion(sourceType, sourceId, questionId);
         if (question == null) throw new ServiceException("题目不存在或未开放");
         Map<String, Object> result = new HashMap<String, Object>(question);
+        if ("DATA_LAB".equals(question.get("practical_mode"))) return result;
         result.put("draft", mapper.selectDraft(student.getStudentId(), sourceType, sourceId, questionId));
         result.put("publicCases", mapper.selectSnapshotCases(number(question.get("snapshot_id")), true));
         List<Map<String, Object>> history = mapper.selectSubmissions(student.getStudentId(), sourceType, sourceId, questionId);
@@ -423,6 +487,7 @@ public class PythonPracticeService {
     public Map<String, Object> saveDraft(Long userId, String sourceType, Long sourceId, Long questionId, String sourceCode) {
         BizStudent student = requireStudent(userId); assertStudentScope(student, student.getDeptId(), sourceType, sourceId, questionId); Map<String, Object> question = mapper.selectQuestion(sourceType, sourceId, questionId);
         if (question == null) throw new ServiceException("题目不存在或未开放");
+        if ("DATA_LAB".equals(question.get("practical_mode"))) throw new ServiceException("实验题请使用实验成果提交入口");
         Map<String, Object> row = new HashMap<String, Object>(); row.put("studentId", student.getStudentId()); row.put("sourceType", sourceType); row.put("sourceId", sourceId); row.put("questionId", questionId); row.put("snapshotId", question.get("snapshot_id")); row.put("sourceCode", sourceCode == null ? "" : sourceCode); mapper.upsertDraft(row); return row;
     }
 
@@ -430,6 +495,7 @@ public class PythonPracticeService {
         BizStudent student = requireStudent(userId); assertStudentScope(student, student.getDeptId(), sourceType, sourceId, questionId); Map<String, Object> question = mapper.selectQuestion(sourceType, sourceId, questionId);
         if (question == null) throw new ServiceException("题目不存在或未开放");
         String normalizedType = submitType == null ? "SUBMIT" : submitType.trim().toUpperCase();
+        if ("DATA_LAB".equals(question.get("practical_mode"))) throw new ServiceException("实验题请使用实验成果提交入口");
         if (!"RUN".equals(normalizedType) && !"SUBMIT".equals(normalizedType) && !"CUSTOM_RUN".equals(normalizedType)) throw new ServiceException("不支持的运行方式");
         String code = sourceCode == null ? "" : sourceCode;
         if (code.trim().isEmpty()) throw new ServiceException("请先输入 Python 代码");
@@ -455,6 +521,23 @@ public class PythonPracticeService {
             row.put("statusMessage", result.get("statusMessage"));
         }
         return row;
+    }
+
+    /** 独立提交的异步判题，只更新 Python 刷题提交表。 */
+    public void markStuckSubmissionAsServiceFailure(Long submissionId) {
+        Map<String, Object> submission = mapper.selectSubmission(submissionId);
+        if (submission == null) return;
+        String status = String.valueOf(submission.get("status_code"));
+        if (!"WAITING".equals(status) && !"JUDGING".equals(status)) return;
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("submissionId", submissionId);
+        result.put("statusCode", "SERVICE_ERROR");
+        result.put("statusMessage", "判题进程重启后未恢复，代码和提交已保留");
+        result.put("score", null);
+        result.put("passedCaseCount", 0);
+        result.put("totalCaseCount", 0);
+        result.put("judgeSummary", "判题进程重启后未恢复");
+        mapper.updateSubmissionResult(result);
     }
 
     /** 独立提交的异步判题，只更新 Python 刷题提交表。 */
@@ -544,6 +627,20 @@ public class PythonPracticeService {
     private static void requirePlanDept(Map<String, Object> plan, Long deptId) {
         if (plan == null) throw new ServiceException("题单不存在");
         if (deptId != null && !deptId.equals(number(plan.get("dept_id")))) throw forbidden("无权访问该题单");
+    }
+
+    private static void requirePlanOwner(Map<String, Object> plan, Long userId) {
+        if (plan == null) throw new ServiceException("题单不存在");
+        if (userId == null) return;
+        Long creatorId = number(plan.get("creator_id"));
+        if (creatorId == null) return;
+        boolean privileged = false;
+        try { privileged = SecurityUtils.isAdmin(userId) || SecurityUtils.hasRole("researcher"); }
+        catch (Exception ignored) { }
+        if (privileged) return;
+        if (userId == null || creatorId == null || !userId.equals(creatorId)) {
+            throw new ServiceException("只能编辑自己创建的题单");
+        }
     }
     private void replacePlanClasses(Long planVersionId, List<Map<String, String>> classes, Long userId,
                                     Long deptId, String username) {

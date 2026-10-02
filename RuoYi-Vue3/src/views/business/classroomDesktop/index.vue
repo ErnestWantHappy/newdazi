@@ -698,7 +698,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { indexRedoStudents, hasRedoAnswers, redoContextKey } from '../score/theoryRedo'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -729,10 +729,10 @@ const route = useRoute()
 const router = useRouter()
 // URL 可能被浏览器历史或外部链接写成 lessonId=undefined；不应让该占位文本触发后端类型转换错误。
 const rawLessonId = String(route.query.lessonId || '').trim()
-const lessonId = /^\d+$/.test(rawLessonId) && Number(rawLessonId) > 0 ? rawLessonId : ''
-const lessonTitle = String(route.query.lessonTitle || '')
-const entryYear = String(route.query.entryYear || '')
-const classCode = String(route.query.classCode || '')
+let lessonId = /^\d+$/.test(rawLessonId) && Number(rawLessonId) > 0 ? rawLessonId : ''
+let lessonTitle = String(route.query.lessonTitle || '')
+let entryYear = String(route.query.entryYear || '')
+let classCode = String(route.query.classCode || '')
 
 function goToClassScore() {
   router.push({
@@ -1265,6 +1265,17 @@ onMounted(() => {
       loadDesktop(true)
     }
   }, 30000)
+})
+
+watch(() => [route.query.lessonId, route.query.lessonTitle, route.query.entryYear, route.query.classCode], (values, oldValues) => {
+  if (JSON.stringify(values) === JSON.stringify(oldValues)) return
+  const nextRaw = String(values[0] || '').trim()
+  if (!/^\d+$/.test(nextRaw) || Number(nextRaw) <= 0) return
+  lessonId = nextRaw
+  lessonTitle = String(values[1] || '')
+  entryYear = String(values[2] || '')
+  classCode = String(values[3] || '')
+  load()
 })
 
 onBeforeUnmount(() => {

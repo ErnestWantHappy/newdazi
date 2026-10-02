@@ -57,8 +57,8 @@
           </el-radio-group>
         </div>
         <div class="toolbar-section toolbar-actions">
-          <el-button type="primary" icon="Check" :loading="saving" @click="handleSave">保存模板</el-button>
-          <el-button icon="View" @click="openPreview">预览</el-button>
+          <el-button type="primary" icon="Check" :loading="saving" :disabled="!designerReady" @click="handleSave">保存模板</el-button>
+          <el-button icon="View" :disabled="!designerReady" @click="openPreview">预览</el-button>
           <el-button icon="ArrowLeft" @click="goBack" :loading="saving">返回列表</el-button>
         </div>
       </div>
@@ -297,7 +297,7 @@
 </template>
 
 <script setup name="GuideSheetDesigner">
-import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, nextTick, watch, getCurrentInstance } from 'vue'
+import { ref, reactive, onMounted, onBeforeMount, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getGuideSheet, updateGuideSheet, addGuideSheet, getGuideSheetCapabilities } from '@/api/business/guideSheet'
 import { ElMessage } from 'element-plus'
@@ -307,6 +307,7 @@ import AdvancedModeBridge from './components/AdvancedModeBridge.vue'
 import BeginnerGuideWizard from './components/BeginnerGuideWizard.vue'
 import { createBeginnerFormJson, DEFAULT_STRUCTURE_PRESET_ID } from './utils/presetFactories.js'
 import { hasRenderableWidgets, parseFormJsonSafely } from './utils/formJsonBridge.js'
+import { createDesignerReadyTask } from './utils/designerReady.js'
 import { useBeginnerGuideDesigner } from './composables/useBeginnerGuideDesigner.js'
 
 const router = useRouter()
@@ -317,6 +318,9 @@ const { biz_grade, biz_semester } = proxy.useDict('biz_grade', 'biz_semester')
 const saving = ref(false)
 const dirty = ref(false)  // 标记表单是否有未保存的修改
 const designerRef = ref(null)
+const designerReady = ref(false)
+let pageActive = true
+let mounted = false
 
 // 评分相关
 const scoringEnabled = ref(false)
@@ -366,12 +370,8 @@ function resetToNewForm() {
     return
   }
 
-  setTimeout(() => {
-    if (designerRef.value && !tabInjected) {
-      designerRef.value.setFormJson({ widgetList: [createTabWidget()] })
-      tabInjected = true
-    }
-  }, 200)
+  rawFormJson.value = { widgetList: [createTabWidget()] }
+  hydrateAdvancedDesigner()
 }
 
 /**
@@ -591,31 +591,44 @@ function markDirty() {
   dirty.value = true
 }
 
-function hydrateAdvancedDesigner(attempt = 0) {
-  if (!designerRef.value) {
-    if (attempt < 20) setTimeout(() => hydrateAdvancedDesigner(attempt + 1), 100)
-    return
-  }
-  try {
+const hydrationTask = createDesignerReadyTask({
+  isActive: () => pageActive && editorMode.value === 'advanced',
+  attempt: () => {
+    const designer = designerRef.value
+    if (!designer || typeof designer.setFormJson !== 'function') return false
     const parsed = deepClone(rawFormJson.value) || createBeginnerFormJson(DEFAULT_STRUCTURE_PRESET_ID, {
       topic: form.teachingTopic,
       estimatedMinutes: form.estimatedMinutes
     })
     fixUploadURLsInPlace(parsed)
-    extractScoredFields(parsed)
-    const hasScoring = Object.keys(parsed._scoringConfig || {}).length > 0
-      || scoredFields.value.some(field => Number(scoringConfig[field.id]?.score || 0) > 0)
-    scoringEnabled.value = hasScoring
     tabInjected = true
-    designerRef.value.setFormJson(parsed)
-    nextTick(startDomObserver)
-  } catch {
-    ElMessage.warning('高级设计器暂时无法载入，请返回新手模式继续编辑')
-  }
+    designer.setFormJson(parsed)
+    extractScoredFields(parsed)
+    scoringEnabled.value = Object.keys(parsed._scoringConfig || {}).length > 0
+      || scoredFields.value.some(field => Number(scoringConfig[field.id]?.score || 0) > 0)
+    designerReady.value = true
+    widgetRegistrationTask.run()
+    return true
+  },
+  onTimeout: () => ElMessage.warning('高级设计器暂时无法载入，请返回新手模式重试，原内容已保留')
+})
+
+const widgetRegistrationTask = createDesignerReadyTask({
+  isActive: () => pageActive && editorMode.value === 'advanced',
+  attempt: () => registerCustomImageWidget()
+})
+
+function hydrateAdvancedDesigner() {
+  designerReady.value = false
+  hydrationTask.run()
 }
 
+watch(editorMode, () => {
+  hydrationTask.cancel()
+  widgetRegistrationTask.cancel()
+  designerReady.value = false
+}, { flush: 'sync' })
 
-// 表单设计器配置
 const designerConfig = ref({
   languageMenu: true,
   externalLink: false,
@@ -633,6 +646,7 @@ const designerConfig = ref({
  * 设计器表单内容变化时，更新组件内部状态
  */
 function onFormJsonChange(formJson) {
+  if (!designerReady.value || !pageActive) return
   try {
     if (formJson) {
       // 标记表单已修改
@@ -1255,6 +1269,8 @@ function flattenCascaderOptions(options, parentPath) {
  * 获取当前表单 JSON 字符串（含评分配置 + AI API Key）
  */
 function getFormJsonString() {
+  // 未完成回填时只能读取原稿，不能把设计器的临时空表单带回新手模式。
+  if (!designerReady.value) return rawFormJson.value ? JSON.stringify(rawFormJson.value) : ''
   if (designerRef.value) {
     const json = designerRef.value.getFormJson()
     if (!json) return ''
@@ -1541,40 +1557,6 @@ watch(formJsonVersion, () => {
   })
 })
 
-// DOM 观察器：比 VNode 树遍历更快地检测 FieldPanel，用于注册「图片展示」扩展组件
-let domObserverStarted = false
-let domObserver = null
-function startDomObserver() {
-  if (editorMode.value !== 'advanced') return
-  if (domObserverStarted) return
-  const container = document.querySelector('.designer-card')
-  if (!container) {
-    setTimeout(startDomObserver, 50)
-    return
-  }
-  domObserverStarted = true
-  domObserver = new MutationObserver(() => {
-    const panelEl = document.querySelector('.panel-container')
-    if (panelEl) {
-      registerCustomImageWidget()
-      if (domObserver) {
-        domObserver.disconnect()
-        domObserver = null
-        domObserverStarted = false
-      }
-    }
-  })
-  domObserver.observe(container, { childList: true, subtree: true })
-  // 安全兜底：10 秒后断开观察器，避免长期占用
-  setTimeout(() => {
-    if (domObserver) {
-      domObserver.disconnect()
-      domObserver = null
-      domObserverStarted = false
-    }
-  }, 10000)
-}
-
 /**
  * VForm3 自定义扩展组件：图片展示（image-add）
  * 来自 DigitalGuide 增量，挂在左侧「自定义扩展字段」面板，不参与自动评分。
@@ -1613,100 +1595,105 @@ const IMAGE_ADD_WIDGET_SCHEMA = {
  * 向 VForm3 设计器 FieldPanel 注册「图片展示」组件。
  * 通过组件树找到 widget-panel，写入 customFields，并修补 i18n 与 schema 查找。
  */
+function findFieldPanelInstanceByDom() {
+  // FieldPanel 在 VForm3 预构建包中层级较深（VFormDesigner > ElContainer > ElAside > FieldPanel），
+  // 通过 VNode 树遍历（instance.$.subTree）不稳定易漏。这里借用 DOM 元素的 __vueParentComponent
+  // 指针向上回溯，稳定命中 name==='FieldPanel' 的组件实例。
+  // 关键：优先在当前可见的 VForm3 设计器根节点($el)内部查找，避免命中 keep-alive/HMR 遗留的陈旧实例。
+  const scopeRoot = designerRef.value?.$el
+  if (!scopeRoot?.querySelector) return null
+  const el = scopeRoot.querySelector('.panel-container')
+    || scopeRoot.querySelector('.field-widget-item')
+    || scopeRoot.querySelector('.widget-panel')
+  if (!el) return null
+  let inst = el.__vueParentComponent
+  let depth = 0
+  while (inst && depth < 40) {
+    const name = inst.type && (inst.type.name || inst.type.__name)
+    if (name === 'FieldPanel' || name === 'WidgetPanel' || name === 'widget-panel') {
+      return inst
+    }
+    inst = inst.parent
+    depth++
+  }
+  return null
+}
+
+function injectImageAddIntoArray(arr) {
+  if (!Array.isArray(arr)) return false
+  if (arr.some(f => f.type === 'image-add')) return false
+  arr.push({
+    key: 'image_add',
+    ...IMAGE_ADD_WIDGET_SCHEMA,
+    displayName: '图片展示'
+  })
+  return true
+}
+
 function registerCustomImageWidget() {
   try {
-    if (!designerRef.value) return
-    const vFormInstance = designerRef.value
-
-    let fieldPanel = null
-    const root = vFormInstance.$.subTree
-    if (!root) return
-
-    function findFieldPanel(vnode) {
-      if (!vnode || fieldPanel) return
-      if (vnode.component) {
-        const comp = vnode.component
-        const name = comp.type && (comp.type.name || comp.type.__name)
-        if (name === 'FieldPanel' || name === 'WidgetPanel' || name === 'widget-panel') {
-          fieldPanel = comp
-          return
-        }
-        if (comp.subTree) {
-          findFieldPanel(comp.subTree)
-        }
-      }
-      if (vnode.children && Array.isArray(vnode.children)) {
-        for (const child of vnode.children) {
-          findFieldPanel(child)
-          if (fieldPanel) return
-        }
-      }
-      if (vnode.dynamicChildren && Array.isArray(vnode.dynamicChildren)) {
-        for (const child of vnode.dynamicChildren) {
-          findFieldPanel(child)
-          if (fieldPanel) return
-        }
-      }
+    const fieldPanel = findFieldPanelInstanceByDom()
+    if (!fieldPanel) {
+      return false
     }
-    findFieldPanel(root)
+    const proxy = fieldPanel.proxy
 
-    if (!fieldPanel) return
-
-    // FieldPanel 为 Options API，customFields 在 data 中
-    const customFields = fieldPanel.data.customFields
-    if (customFields && Array.isArray(customFields)) {
-      const alreadyRegistered = customFields.some(f => f.type === 'image-add')
-      if (!alreadyRegistered) {
-        customFields.push({
-          key: 'image_add_' + Date.now(),
-          ...IMAGE_ADD_WIDGET_SCHEMA,
-          displayName: '图片展示'
-        })
-      }
-    }
-
-    // image-add 不在 VForm3 内置 locale，需覆盖 proxy.i18n2t 才能显示中文标签
+    // 1) 可见文字补丁：左侧面板每个 item 的文字由 i18n2t('designer.widgetLabel.${type}') 在渲染期生成，
+    //    image-add 不在内置 locale 中，必须覆盖 proxy.i18n2t（Vue3 render 通过 proxy 取方法）才会显示"图片展示"。
     if (!fieldPanel._i18nPatched) {
       fieldPanel._i18nPatched = true
-      const proxy = fieldPanel.proxy
       const originalI18n2t = proxy.i18n2t
       proxy.i18n2t = function(d, e) {
-        if (d === 'designer.widgetLabel.image-add') {
-          return '图片展示'
-        }
+        if (d === 'designer.widgetLabel.image-add') return '图片展示'
         return originalI18n2t.call(this, d, e)
-      }
-      if (customFields && customFields.length > 0) {
-        const lastItem = customFields[customFields.length - 1]
-        customFields.push({ ...lastItem, key: 'image_add_force_' + Date.now() })
-        customFields.pop()
       }
     }
 
-    // 属性面板依赖 getFieldWidgetByType；补丁保证 image-add 能打开配置项
+    // 2) 属性面板补丁：让 image-add 能像原生字段一样被选中并渲染属性编辑器
     const designer = fieldPanel.props.designer
-    if (designer && designer.getFieldWidgetByType) {
-      if (!designer._imageAddPatched) {
-        designer._imageAddPatched = true
-        const originalGetFieldWidgetByType = designer.getFieldWidgetByType
-        designer.getFieldWidgetByType = function(type) {
-          if (type === 'image-add') {
-            return {
-              key: 'image_add',
-              ...IMAGE_ADD_WIDGET_SCHEMA,
-              displayName: '图片展示'
-            }
-          }
-          return originalGetFieldWidgetByType.call(this, type)
+    if (designer && designer.getFieldWidgetByType && !designer._imageAddPatched) {
+      designer._imageAddPatched = true
+      const originalGetFieldWidgetByType = designer.getFieldWidgetByType
+      designer.getFieldWidgetByType = function(type) {
+        if (type === 'image-add') {
+          return { key: 'image_add', ...IMAGE_ADD_WIDGET_SCHEMA, displayName: '图片展示' }
         }
+        return originalGetFieldWidgetByType.call(this, type)
       }
     }
-  } catch (e) {
-    // 设计器尚未就绪时静默忽略，由轮询/DOM 观察器重试
+
+    // 3) 核心修复：FieldPanel 在 created() 时通过「模块级 customFields 闭包」一次性构建左侧面板列表，
+    //    该闭包在 install(loadExtension) 写入后即固定，addCustomWidgetSchema 未导出、外部无法再 push。
+    //    因此补丁 FieldPanel 实例的 loadWidgets：每次重建时在基础列表上追加 image-add，
+    //    使 this.customFields 变为新数组引用（与 VForm3 原生 .map() 行为一致），触发 vuedraggable 重渲染。
+    if (!fieldPanel._imageAddLoadPatched) {
+      fieldPanel._imageAddLoadPatched = true
+      const origLoadWidgets = proxy.loadWidgets
+      proxy.loadWidgets = function() {
+        if (typeof origLoadWidgets === 'function') origLoadWidgets()
+        injectImageAddIntoArray(this.customFields)
+      }
+    }
+
+    // 4) 若 image-add 尚未进入渲染列表，则立即触发一次重建（idempotent，避免每秒轮询重复刷新）
+    if (!Array.isArray(proxy.customFields) || !proxy.customFields.some(f => f.type === 'image-add')) {
+      if (typeof proxy.loadWidgets === 'function') {
+        proxy.loadWidgets()
+      } else {
+        injectImageAddIntoArray(proxy.customFields)
+      }
+      nextTick(() => {
+        if (typeof proxy.$forceUpdate === 'function') proxy.$forceUpdate()
+      })
+    }
+    return Boolean(proxy.customFields?.some(field => field.type === 'image-add'))
+  } catch {
+    return false
   }
 }
 
 onMounted(() => {
+  mounted = true
   fetchCapabilities()
   const copyFrom = route.query.copyFrom
   const sheetId = route.params.sheetId
@@ -1718,13 +1705,12 @@ onMounted(() => {
     loadSheet(sheetId)
   } else {
     // 新建导学单：显式重置所有状态为空白，确保不残留任何旧数据
-    // resetToNewForm 内部会通过 setTimeout 注入 HomeTab 标签页
     resetToNewForm()
   }
 
   // 高级模式才运行 VForm3 的兼容轮询，避免新手流程产生后台开销。
   pollingTimer = setInterval(() => {
-    if (editorMode.value !== 'advanced') return
+    if (!pageActive || !designerReady.value || editorMode.value !== 'advanced') return
     refreshScoredFields()
     registerCustomImageWidget()
   }, 5000)
@@ -1735,29 +1721,33 @@ onBeforeUnmount(() => {
     clearInterval(pollingTimer)
     pollingTimer = null
   }
-  if (domObserver) {
-    domObserver.disconnect()
-    domObserver = null
-    domObserverStarted = false
-  }
+  pageActive = false
+  mounted = false
+  hydrationTask.cancel()
+  widgetRegistrationTask.cancel()
 })
 
 // 监听路由变化：从其他页面跳转到新建表单时，重置为空白状态
 watch(
   () => route.path,
   (newPath, oldPath) => {
-    if (newPath === '/business/guide-sheet/designer' && oldPath && oldPath !== '/business/guide-sheet/designer') {
+    if (mounted && newPath === '/business/guide-sheet/designer' && oldPath && oldPath !== '/business/guide-sheet/designer') {
       nextTick(() => resetToNewForm())
     }
   }
 )
 
-// keep-alive 缓存激活时：若为新建表单，重置为仅含 HomeTab 标签页的空白状态
+// 首次激活不重复重置；从缓存恢复时保留教师当前内容。
 onActivated(() => {
-  if (!route.params.sheetId && !dirty.value && !form.sheetTitle) {
-    nextTick(() => resetToNewForm())
-  }
-  if (editorMode.value === 'advanced') nextTick(startDomObserver)
+  pageActive = true
+  if (designerReady.value) widgetRegistrationTask.run()
+  else if (editorMode.value === 'advanced') hydrateAdvancedDesigner()
+})
+
+onDeactivated(() => {
+  pageActive = false
+  hydrationTask.cancel()
+  widgetRegistrationTask.cancel()
 })
 
 </script>

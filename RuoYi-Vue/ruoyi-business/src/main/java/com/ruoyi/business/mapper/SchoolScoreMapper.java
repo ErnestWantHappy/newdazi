@@ -18,12 +18,16 @@ public interface SchoolScoreMapper {
      */
     List<SchoolScoreStatsVO> selectSchoolScoreStats(@Param("startDate") String startDate, 
                                                     @Param("endDate") String endDate, 
-                                                    @Param("deptName") String deptName);
+                                                    @Param("deptName") String deptName,
+                                                    @Param("entryYear") String entryYear,
+                                                    @Param("schoolType") String schoolType);
 
     /**
      * 查询指定学校在指定时间范围内的班级成绩详情
      */
     List<SchoolScoreStatsVO> selectClassScoreStats(@Param("startDate") String startDate, 
                                                    @Param("endDate") String endDate, 
-                                                   @Param("deptId") Long deptId);
+                                                   @Param("deptId") Long deptId,
+                                                   @Param("entryYear") String entryYear,
+                                                   @Param("schoolType") String schoolType);
 }

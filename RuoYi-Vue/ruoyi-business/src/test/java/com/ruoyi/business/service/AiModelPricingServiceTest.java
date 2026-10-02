@@ -1,6 +1,7 @@
 package com.ruoyi.business.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -42,7 +43,8 @@ class AiModelPricingServiceTest
             assertEquals(new BigDecimal("48.000000"), service.cost(1000000, 1000000,
                     (BigDecimal)price.get("inputPricePerThousand"), (BigDecimal)price.get("outputPricePerThousand")));
         }
-        assertEquals(2, service.list().size());
+        assertEquals(4, service.list().size());
+        assertNull(service.describe("DEEPSEEK", "deepseek-flash").get("estimatedCostPerGradingYuan"));
     }
 
     @Test

@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.DataLabMapper">
+
+  <select id="countVersionQuestion" resultType="int">
+    SELECT COUNT(*) FROM biz_python_practice_plan_question q JOIN biz_data_lab_snapshot d ON d.snapshot_id=q.snapshot_id
+    WHERE q.plan_version_id=#{versionId} AND q.question_id=#{questionId}
+  </select>
+  <select id="selectSnapshot" resultMap="DataLabConfigResult">
+    SELECT d.*,s.question_id FROM biz_data_lab_snapshot d JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=d.snapshot_id
+    WHERE s.source_type='BASE_VERSION' AND s.source_id=#{versionId} AND s.question_id=#{questionId}
+  </select>
+  <insert id="insertSnapshot">
+    INSERT INTO biz_data_lab_snapshot(snapshot_id,experiment_name,description,starter_code,excel_file_url,excel_file_name,excel_file_size,max_score)
+    VALUES(#{snapshotId},#{config.experimentName},#{config.description},#{config.starterCode},#{config.excelFileUrl},#{config.excelFileName},#{config.excelFileSize},#{config.maxScore})
+  </insert>
+  <insert id="cloneSnapshots">
+    INSERT INTO biz_data_lab_snapshot(snapshot_id,experiment_name,description,starter_code,excel_file_url,excel_file_name,excel_file_size,max_score)
+    SELECT ns.snapshot_id,d.experiment_name,d.description,d.starter_code,d.excel_file_url,d.excel_file_name,d.excel_file_size,d.max_score
+    FROM biz_python_practice_question_snapshot os JOIN biz_data_lab_snapshot d ON d.snapshot_id=os.snapshot_id
+    JOIN biz_python_practice_question_snapshot ns ON ns.source_type='BASE_VERSION' AND ns.source_id=#{toVersionId} AND ns.question_id=os.question_id
+    WHERE os.source_type='BASE_VERSION' AND os.source_id=#{fromVersionId}
+  </insert>
+  <insert id="insertUpload">INSERT INTO biz_data_lab_upload(file_url,user_id) VALUES(#{url},#{userId})</insert>
+  <select id="countOwnedUpload" resultType="int">SELECT COUNT(*) FROM biz_data_lab_upload WHERE file_url=#{url} AND user_id=#{userId}</select>
+  <delete id="deletePlanSubmissions">DELETE d FROM biz_data_lab_submission d JOIN biz_python_practice_plan_version v ON d.source_type='BASE_VERSION' AND d.source_id=v.plan_version_id WHERE v.plan_id=#{planId}</delete>
+  <delete id="deletePlanSnapshots">DELETE d FROM biz_data_lab_snapshot d JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=d.snapshot_id JOIN biz_python_practice_plan_version v ON s.source_type='BASE_VERSION' AND s.source_id=v.plan_version_id WHERE v.plan_id=#{planId}</delete>
+  <select id="selectStudentProgress" resultType="map">
+    SELECT source_type,source_id,question_id,score best_score,'1' completed_flag,
+      CASE WHEN score IS NULL THEN '1' ELSE '0' END pending_grading,
+      CASE WHEN score=max_score THEN '1' ELSE '0' END passed_flag,
+      revision submit_count,submitted_at last_practice_time
+    FROM biz_data_lab_submission WHERE student_id=#{userId}
+  </select>
+  <select id="selectSubmissionByChart" resultMap="DataLabSubmissionResult">SELECT * FROM biz_data_lab_submission WHERE chart_image_url=#{resource} LIMIT 1</select>
+
+  <resultMap type="com.ruoyi.business.domain.DataLabConfig" id="DataLabConfigResult">
+    <id     property="questionId"     column="question_id" />
+    <result property="experimentName" column="experiment_name" />
+    <result property="description"    column="description" />
+    <result property="starterCode"    column="starter_code" />
+    <result property="excelFileUrl"   column="excel_file_url" />
+    <result property="excelFileName"  column="excel_file_name" />
+    <result property="excelFileSize"  column="excel_file_size" />
+    <result property="maxScore"       column="max_score" />
+    <result property="createBy"       column="create_by" />
+    <result property="createTime"     column="create_time" />
+    <result property="updateBy"       column="update_by" />
+    <result property="updateTime"     column="update_time" />
+  </resultMap>
+
+  <resultMap type="com.ruoyi.business.domain.DataLabSubmission" id="DataLabSubmissionResult">
+    <id     property="submissionId"   column="submission_id" />
+    <result property="revision" column="revision" />
+    <result property="maxScore" column="max_score" />
+    <result property="studentId"      column="student_id" />
+    <result property="questionId"     column="question_id" />
+    <result property="sourceType"     column="source_type" />
+    <result property="sourceId"       column="source_id" />
+    <result property="sourceCode"     column="source_code" />
+    <result property="chartImageUrl"  column="chart_image_url" />
+    <result property="outputText"     column="output_text" />
+    <result property="score"          column="score" />
+    <result property="scoreComment"   column="score_comment" />
+    <result property="scoredBy"       column="scored_by" />
+    <result property="scoredAt"       column="scored_at" />
+    <result property="submittedAt"    column="submitted_at" />
+    <result property="studentName"    column="student_name" />
+    <result property="studentNumber"  column="student_number" />
+  </resultMap>
+
+  <select id="selectConfigByQuestionId" resultMap="DataLabConfigResult">
+    SELECT question_id, experiment_name, description, starter_code,
+           excel_file_url, excel_file_name, excel_file_size, max_score,
+           create_by, create_time, update_by, update_time
+    FROM biz_data_lab_config
+    WHERE question_id = #{questionId}
+  </select>
+
+  <insert id="upsertConfig">
+    INSERT INTO biz_data_lab_config (
+      question_id, experiment_name, description, starter_code,
+      excel_file_url, excel_file_name, excel_file_size, max_score,
+      create_by, create_time, update_by, update_time
+    ) VALUES (
+      #{questionId}, #{experimentName}, #{description}, #{starterCode},
+      #{excelFileUrl}, #{excelFileName}, #{excelFileSize}, #{maxScore},
+      #{createBy}, #{createTime}, #{updateBy}, #{updateTime}
+    )
+    ON DUPLICATE KEY UPDATE
+      experiment_name = VALUES(experiment_name),
+      description     = VALUES(description),
+      starter_code    = VALUES(starter_code),
+      excel_file_url  = VALUES(excel_file_url),
+      excel_file_name = VALUES(excel_file_name),
+      excel_file_size = VALUES(excel_file_size),
+      max_score       = VALUES(max_score),
+      update_by       = VALUES(update_by),
+      update_time     = VALUES(update_time)
+  </insert>
+
+  <select id="selectSubmission" resultMap="DataLabSubmissionResult">
+    SELECT s.*, u.nick_name AS student_name, u.user_name AS student_number
+    FROM biz_data_lab_submission s
+    LEFT JOIN sys_user u ON u.user_id = s.student_id
+    WHERE s.student_id = #{studentId}
+      AND s.question_id = #{questionId}
+      AND s.source_type = #{sourceType}
+      <choose>
+        <when test="sourceId != null">
+          AND s.source_id = #{sourceId}
+        </when>
+        <otherwise>
+          AND s.source_id IS NULL
+        </otherwise>
+      </choose>
+  </select>
+
+  <select id="selectSubmissionById" resultMap="DataLabSubmissionResult">
+    SELECT s.*, u.nick_name AS student_name, u.user_name AS student_number
+    FROM biz_data_lab_submission s
+    LEFT JOIN sys_user u ON u.user_id = s.student_id
+    WHERE s.submission_id = #{submissionId}
+  </select>
+
+  <select id="selectSubmissionsByQuestionAndSource" resultMap="DataLabSubmissionResult">
+    SELECT s.*, u.nick_name AS student_name, u.user_name AS student_number
+    FROM biz_data_lab_submission s
+    LEFT JOIN sys_user u ON u.user_id = s.student_id
+    JOIN biz_student st ON st.user_id=u.user_id
+    WHERE s.question_id = #{questionId}
+      AND u.dept_id=#{deptId}
+      <if test="!privileged">
+        AND EXISTS (SELECT 1 FROM biz_teacher_class tc WHERE tc.user_id=#{teacherId} AND tc.dept_id=u.dept_id
+          AND CAST(tc.entry_year AS BINARY)=CAST(st.entry_year AS BINARY) AND CAST(tc.class_code AS BINARY)=CAST(st.class_code AS BINARY))
+      </if>
+      AND s.source_type = #{sourceType}
+      <choose>
+        <when test="sourceId != null">
+          AND s.source_id = #{sourceId}
+        </when>
+        <otherwise>
+          AND s.source_id IS NULL
+        </otherwise>
+      </choose>
+    ORDER BY s.submitted_at DESC
+  </select>
+
+  <insert id="upsertSubmission" useGeneratedKeys="true" keyProperty="submissionId">
+    INSERT INTO biz_data_lab_submission (
+      student_id, question_id, source_type, source_id,
+      source_code, chart_image_url, output_text, submitted_at, max_score, revision
+    ) VALUES (
+      #{studentId}, #{questionId}, #{sourceType}, #{sourceId},
+      #{sourceCode}, #{chartImageUrl}, #{outputText}, #{submittedAt}, #{maxScore}, 1
+    )
+    ON DUPLICATE KEY UPDATE
+      source_code     = VALUES(source_code),
+      chart_image_url = VALUES(chart_image_url),
+      output_text     = VALUES(output_text),
+      submitted_at    = VALUES(submitted_at),
+      max_score = VALUES(max_score), revision = revision + 1,
+      score = NULL, score_comment = NULL, scored_by = NULL, scored_at = NULL
+  </insert>
+
+  <update id="updateScore">
+    UPDATE biz_data_lab_submission
+    SET score = #{score},
+        score_comment = #{scoreComment},
+        scored_by = #{scoredBy},
+        scored_at = NOW()
+    WHERE submission_id = #{submissionId} AND revision = #{revision}
+  </update>
+
+</mapper>

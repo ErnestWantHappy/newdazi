@@ -1,5 +1,15 @@
 # 部署与回滚约定
 
+## 2026-09-22 130正式1.30.23
+
+用户授权全量汇总发布，release=`/data/apps/xueyeceping/releases/20260921_full_datalab_classroom_v1`，原1.30.22=`20260921_monitor129_v1`。JAR SHA-256 `1f03f4073301d56f9f602311e08e0c976e642484e19f020de55eb3171185aa34`，index SHA-256 `f4aabaf47ec7cbca3beb412a9508a0fdcf7a9daf8a44e12ad0ca94fab7e19074`。部署任务COMPLETED，三服务active；保留原正式外置config/migration-isolation.env，shared env哈希不变。123只作SSH跳板。
+
+备份目录`/data/backups/xueyeceping/20260921_full_datalab_classroom_v1`，database.sql为240480272字节，SHA-256 `46068ca2a4fc7fb3c08790e86f6a9785a206d8c7d9d43dcbdf8a39fcf745a7c9`；同目录有service.before/nginx.before/env.before/config.before/原jar。先完整备份再执行data_lab_v1/v2，4表及非空来源/评分版本后检通过；未执行seed。验收后执行full_datalab_classroom_release_20260922.sql，update_id102为PUBLISHED，真实教师可见。
+
+现场修复Nginx默认mjs返回application/octet-stream：仅`location ~ ^/pyodide/.*\.mjs$`设置`types { application/javascript mjs; }`并try_files=404，nginx -t后reload；补改前另存nginx.before-mjs。最终Nginx SHA-256 `2a52a8121729bea9cfa76017c5f1b50e8d15fffad657d8a647b0b0bf0f78f47d`。`/profile/`代理后端，不能改为实验目录静态alias。后续部署需保留此MIME规则及public/pyodide、public/datalab资产。
+
+回滚：先核对活动AI任务和当前版本，恢复本次service.before/nginx.before到原systemd/Nginx文件，daemon-reload、重启xueyeceping-130、nginx -t后reload，检查captcha与旧index哈希，退1.30.22。保留DATA_LAB新增表/列/上传及所有新成绩，**不恢复整库**，无业务回滚SQL；撤回更新记录102为DRAFT。证据`output/full-release-20260921/`。正式师生写入流程未代操作，已在专用克隆库验证；正式教师页面和线上Excel/中文PNG/超时恢复已通过。
+
 ## 2026-09-21 130正式1.30.21
 
 release=/data/apps/xueyeceping/releases/20260921_share_grading_v1，08:51:01 COMPLETED。备份=/data/backups/xueyeceping/20260921_share_grading_v1，database.sql为221147539字节，SHA-256 ca1c16b2624f47fb82209620501bac68b823c821df8443147c3e67a26db5f2e7。备份后执行research_activity_public_share_ciphertext_v2.sql并核验varchar(512)。主密钥及环境文件不变，三服务active；JAR SHA-256 8fa2ad28bfda016d6e108cfe4e022b6f20c6f159b2dec51235c24d004df8585d，index SHA-256 7858e3f9a80a59c294910617d0803409ccc91cd38c8aed77b5af464cfd1c54b6。

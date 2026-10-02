@@ -298,6 +298,7 @@ public class GuideSheetAnswerServiceImpl implements IGuideSheetAnswerService
             if (requestedRevision <= existingRevision)
             {
                 copyPersistedIdentity(answer, existing);
+                answer.getParams().put("staleDraftRevision", true);
                 return false;
             }
             answer.setDraftRevision(requestedRevision);

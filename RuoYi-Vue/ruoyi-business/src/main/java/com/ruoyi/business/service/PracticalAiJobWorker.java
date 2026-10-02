@@ -66,7 +66,8 @@ public class PracticalAiJobWorker
             event(jobId, null, "INFO", "JOB_STARTED", "AI 批改任务开始或继续执行");
             List<ComparisonPage> comparisonPages = PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson())
                     ? new ArrayList<ComparisonPage>() : prepareComparisonPages(job);
-            TeacherAiConfig config = configService.status(job.getTeacherUserId());
+            TeacherAiConfig config = configService.configForJob(
+                    job.getTeacherUserId(), job.getProviderCode(), job.getModelName());
             String apiKey = configService.apiKey(config);
             for (PracticalAiResult candidate : aiMapper.selectResultsByJob(jobId))
             {

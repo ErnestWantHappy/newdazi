@@ -76,6 +76,7 @@
       <el-form-item v-if="bankView !== 'PYTHON'" label="操作方式" prop="practicalMode">
         <el-select v-model="queryParams.practicalMode" placeholder="请选择操作方式" clearable style="width: 200px">
           <el-option label="Python 在线编程" value="PYTHON" />
+          <el-option label="数据分析实验" value="DATA_LAB" />
           <el-option label="画程流程图" value="FLOWCHART" />
           <el-option label="文件作品" value="FILE" />
         </el-select>
@@ -139,6 +140,10 @@
           v-hasPermi="['business:question:add']"
           >新增</el-button
         >
+      </el-col>
+      <el-col :span="1.5">
+        <el-button type="primary" plain icon="Plus" @click="dataLabEditor.open()"
+          v-hasPermi="['business:question:add']">新建数据分析实验题</el-button>
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -809,6 +814,7 @@
       </div>
     </el-dialog>
   </div>
+  <DataLabEditor ref="dataLabEditor" @saved="getList" />
 </template>
 
 <script setup name="Question">
@@ -823,6 +829,7 @@ import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQue
 import { getFlowchartQuestion, saveFlowchartQuestion } from "@/api/business/flowchart";
 import FlowchartQuestionDesigner from "@/components/FlowchartEditor/FlowchartQuestionDesigner.vue";
 import FlowchartQuestionPreviewDialog from "@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue";
+import DataLabEditor from "@/components/DataLabExperiment/Editor.vue";
 import { EMPTY_FLOWCHART, DEFAULT_FLOWCHART_PERMISSIONS, parseFlowchartDocument } from "@/components/FlowchartEditor/schema";
 import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
@@ -837,6 +844,7 @@ import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance();
 const userStore = useUserStore();
+const dataLabEditor = ref(null);
 const { biz_question_type, sys_yes_no, biz_grade, biz_semester } =
   proxy.useDict("biz_question_type", "sys_yes_no", "biz_grade", "biz_semester");
 
@@ -1251,6 +1259,7 @@ function isFlowchartPracticalQuestion(question) {
 
 function practicalModeLabel(mode) {
   if (mode === "PYTHON") return "Python 在线编程";
+  if (mode === "DATA_LAB") return "数据分析实验";
   if (mode === "FLOWCHART") return "画程流程图";
   return "文件作品";
 }
@@ -1491,6 +1500,10 @@ function handleUpdate(row) {
   reset();
   const _questionId = row.questionId || ids.value[0];
   getQuestion(_questionId).then((response) => {
+    if (response.data?.practicalMode === 'DATA_LAB') {
+      dataLabEditor.value?.open(_questionId);
+      return;
+    }
     form.value = response.data;
     form.value.programming = defaultProgrammingConfig();
     form.value.practicalAllowedExtensionList = String(
@@ -1569,15 +1582,7 @@ function submitForm(validateAfterSave = false) {
           ElMessage.warning(unsafeTextMessage)
           return
         }
-        if (parseFlowchartDocument(config.answerJson).nodes.length === 0) {
-          ElMessage.warning("请先制作画程标准答案");
-          return;
-        }
-        if (parseFlowchartDocument(config.starterJson).nodes.length === 0) {
-          ElMessage.warning("请先制作发给学生的基础流程图");
-          return;
-        }
-        if (!hasFlowchartRules(config.rulesJson)) {
+        if (parseFlowchartDocument(config.answerJson).nodes.length > 0 && !hasFlowchartRules(config.rulesJson)) {
           ElMessage.warning("请在画程的“检查规则”中从标准答案生成规则");
           return;
         }

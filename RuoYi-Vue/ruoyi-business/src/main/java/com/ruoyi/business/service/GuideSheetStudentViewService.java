@@ -33,7 +33,7 @@ public class GuideSheetStudentViewService
             "input", "textarea", "number", "radio", "checkbox", "select", "time", "time-range",
             "date", "date-range", "switch", "rate", "color", "slider", "cascader", "tree-select",
             "static-text", "html-text", "divider", "picture", "image", "picture-upload", "file-upload",
-            "rich-editor", "signature")));
+            "rich-editor", "signature", "image-add")));
 
     private static final Set<String> SAFE_WIDGET_KEYS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "key", "type", "category", "icon", "formItemFlag", "id", "internal", "displayType",
@@ -49,7 +49,7 @@ public class GuideSheetStudentViewService
             "fileMaxSize", "fileTypes", "contentHeight", "showBlankRow", "showRowNumber", "cellWidth",
             "cellHeight", "colHeight", "gutter", "responsive", "span", "offset", "push", "pull", "md",
             "sm", "xs", "min", "max", "precision", "step", "controlsPosition", "showWordLimit",
-            "minLength", "maxLength", "activeText", "inactiveText", "switchWidth", "lowThreshold",
+            "minLength", "maxLength", "activeText", "inactiveText", "switchWidth", "lowThreshold", "imageUrl",
             "highThreshold", "maxStars", "allowHalf", "showScore", "showText", "showStops", "range",
             "folded", "showFold", "cardWidth", "shadow", "active", "content")));
 

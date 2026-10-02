@@ -12,6 +12,16 @@ import {
 } from '../utils/formJsonBridge.js'
 import { createBeginnerFormJson } from '../utils/presetFactories.js'
 
+test('图片展示组件在新手往返和学生预览中保留内容、尺寸和顺序', () => {
+  const image = { id: 'image1', type: 'image-add', formItemFlag: true,
+    options: { name: 'image1', label: '教学图片', imageUrl: 'data:image/png;base64,dGVzdA==', imageWidth: 320, imageHeight: 180 } }
+  const source = { widgetList: [image], formConfig: {} }
+  const result = writeBeginnerDocument(source, readBeginnerDocument(source))
+  assert.deepEqual(result.widgetList[0], image)
+  assert.deepEqual(createSafePreviewFormJson(result).widgetList[0], image)
+  assert.deepEqual(source.widgetList[0], image)
+})
+
 test('损坏数据进入可恢复状态且不会抛出异常', () => {
   const result = parseFormJsonSafely('{broken')
   assert.equal(result.ok, false)

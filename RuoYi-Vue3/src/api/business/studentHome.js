@@ -26,6 +26,10 @@ export function submitAnswers(data) {
   })
 }
 
+export function getReturnedPractical() {
+  return request({ url: '/business/student-home/returned-practical', method: 'get' })
+}
+
 // 将已暂存文件提交为一个新的操作题作品版本
 export function submitPracticalArtifact(data) {
   return request({

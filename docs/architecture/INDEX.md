@@ -1,5 +1,17 @@
 # 架构资料索引
 
+> 2026-09-24 当前本机候选：用户确定课程推进后旧课立即停止学生提交，退回与重交仅限当前课；同时修复打字高分回显和理论提交失败后打字作答状态。Java 定向测试 46 项及 Vue3 构建通过；真实师生联调状态见 [PROJECT_CORE v3.99](../../contexts/PROJECT_CORE.md)。正式仍为 130 的 1.30.23。规则见[当前课提交 ADR](../../contexts/student-experiment-tools/ADR-004-current-lesson-only-submission.md)。以下旧课补交记录仅为历史。
+
+> 2026-09-23 **当前本地候选**：退回重交、画程上下锚点与可选尺寸、题库 DATA_LAB 入口、打字统计年级筛选、百炼/DeepSeek/豆包视觉模型配置已实现。隔离库师生 API、Chromium 画布/页面、Java 94 项、Node 6 项、双端构建通过；真实厂商模型调用因无 Key 未验，隔离库旧 DATA_LAB 缺快照使 v2 迁移按设计阻断。只在本机执行 AI 凭据增量 SQL，正式仍为 130 的 1.30.23，未连接或部署服务器。以 [PROJECT_CORE v3.98](../../contexts/PROJECT_CORE.md) 和 [本地计划与验收](../../contexts/dev-plan-20260923.md) 为准；以下各段为此前阶段的历史记录。
+
+> 2026-09-22当前正式：130已全量发布1.30.23，包含DATA_LAB、加分、题单并发/快照、协作与流程图、导学单修改，保留1.30.22监控。DATA_LAB四表已备份迁移，运行库/中文字体本站提供，Nginx补mjs MIME。654 Java通过/2跳过、构建、隔离库真实师生与并发、正式教师页面及线上Pyodide通过；更新102已PUBLISHED且教师可见。正式未写学生作品成绩，课堂协作/低配压力仍需观察。当前事实见PROJECT_CORE v3.96，备份回滚见DEPLOYMENT_RUNBOOK；以下较早状态是历史。
+
+> 当前本地DATA_LAB以PROJECT_CORE v3.95及[ADR-014](../../contexts/python-judge0/adr/ADR-014-data-lab-version-access.md)为准：补齐版本快照、班级授权、进度和评分版本控制，已解除本地临时全拒绝。22项测试/构建和真实Pyodide运行通过；未迁移、未真实数据库联调、未发布。必须先v1/v2 SQL再配套应用更新，学校离线环境须准备Pyodide镜像。下段v3.94是本轮修复前的状态。
+
+> 2026-09-21本地审查（PROJECT_CORE v3.94，未发布）：加分改为保存快照后局部更新；题单编辑事务锁共同主行并复用历史快照。DATA_LAB因来源权限/快照/统计未闭环，服务和资源入口统一拒绝，普通Python题单不依赖其新表。Worker隔离和文件校验不代表功能已可启用；未操作数据库或服务器。见[审查记录](../../contexts/local-review-20260921.md)和[ADR-013](../../contexts/python-judge0/adr/ADR-013-plan-edit-lock-and-data-lab-isolation.md)。
+
+> 2026-09-21本机电子导学单定点移植：保留现有模板/绑定/草稿架构，补齐图片组件和可取消的设计器初始化；36项前端测试、生产构建及模拟接口浏览器回归通过。未真实三角色联调、未发布，无SQL/新依赖/后端重启。来源与边界见 `../../contexts/guide-sheet-targeted-integration-20260921.md` 和 PROJECT_CORE v3.93。正式状态仍如下1.30.21。
+
 > 当前状态（2026-09-21）：130已发布1.30.21/20260921_share_grading_v1，分享密文列已迁移、前后端已切换；批改刷新正式页面模拟回归与教师版本可见通过。真实分享跨设备操作待正式教研员凭据补验。下方版本为历史，见PROJECT_CORE v3.92及DEPLOYMENT_RUNBOOK。
 
 

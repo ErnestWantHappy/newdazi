@@ -108,8 +108,8 @@
             (student_id, lesson_id, question_id, schema_version, document_json,
              revision, base_submission_version, create_time, update_time)
         VALUES
-            (#{studentId}, #{lessonId}, #{questionId}, #{schemaVersion}, #{documentJson},
-             1, #{baseSubmissionVersion}, NOW(), NOW())
+            (#{draft.studentId}, #{draft.lessonId}, #{draft.questionId}, #{draft.schemaVersion}, #{draft.documentJson},
+             1, #{draft.baseSubmissionVersion}, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
             schema_version = VALUES(schema_version),
             document_json = VALUES(document_json),

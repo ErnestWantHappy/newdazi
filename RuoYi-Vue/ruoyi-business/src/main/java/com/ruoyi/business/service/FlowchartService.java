@@ -36,6 +36,7 @@ public class FlowchartService {
     private final GuideSheetAccessService guideSheetAccessService;
     private final FlowchartDocumentService documentService;
     private final FlowchartStructureCheckService checkService;
+    private final ClassroomTaskStateService taskStateService;
 
     public FlowchartService(FlowchartMapper flowchartMapper,
                             BizQuestionMapper questionMapper,
@@ -45,7 +46,8 @@ public class FlowchartService {
                             BizStudentAnswerMapper answerMapper,
                             GuideSheetAccessService guideSheetAccessService,
                             FlowchartDocumentService documentService,
-                            FlowchartStructureCheckService checkService) {
+                            FlowchartStructureCheckService checkService,
+                            ClassroomTaskStateService taskStateService) {
         this.flowchartMapper = flowchartMapper;
         this.questionMapper = questionMapper;
         this.studentMapper = studentMapper;
@@ -55,6 +57,7 @@ public class FlowchartService {
         this.guideSheetAccessService = guideSheetAccessService;
         this.documentService = documentService;
         this.checkService = checkService;
+        this.taskStateService = taskStateService;
     }
 
     public FlowchartQuestionConfig teacherConfig(Long questionId, Long userId, boolean admin) {
@@ -92,14 +95,9 @@ public class FlowchartService {
         normalized.setSchemaVersion(FlowchartDocumentService.SCHEMA_VERSION);
         normalized.setStarterJson(documentService.normalizeDocument(request.getStarterJson(), "学生基础图"));
         normalized.setAnswerJson(documentService.normalizeDocument(request.getAnswerJson(), "标准答案"));
-        if (documentService.readDocument(normalized.getStarterJson()).path("nodes").isEmpty()) {
-            throw new ServiceException("请先制作发给学生的基础流程图");
-        }
-        if (documentService.readDocument(normalized.getAnswerJson()).path("nodes").isEmpty()) {
-            throw new ServiceException("请先制作画程标准答案");
-        }
         normalized.setPermissionsJson(documentService.normalizePermissions(request.getPermissionsJson()));
-        normalized.setRulesJson(request.getRulesJson() == null || request.getRulesJson().trim().isEmpty()
+        normalized.setRulesJson(documentService.readDocument(normalized.getAnswerJson()).path("nodes").isEmpty()
+                ? "[]" : request.getRulesJson() == null || request.getRulesJson().trim().isEmpty()
                 ? checkService.generateRules(normalized.getAnswerJson()) : request.getRulesJson());
         // 通过一次零分值结构检查完成规则 JSON 格式和引用校验，避免非法规则进入题库。
         checkService.check(normalized.getAnswerJson(), normalized.getAnswerJson(), normalized.getRulesJson(), 100);
@@ -160,6 +158,7 @@ public class FlowchartService {
         result.put("snapshot", snapshot == null ? null : snapshot.toStudentView());
         result.put("draft", draft);
         result.put("latestSubmission", latest == null ? null : latest.toStudentView());
+        result.put("returned", taskStateService.isReturned(student.getStudentId(), lessonId, questionId));
         result.put("readOnly", latest != null && (draft.getBaseSubmissionVersion() == null
                 || draft.getBaseSubmissionVersion() < latest.getVersionNo()));
         return result;
@@ -314,17 +313,20 @@ public class FlowchartService {
         BizStudent student = studentMapper.selectBizStudentByUserId(userId);
         if (student == null) throw new ServiceException("未找到当前学生信息");
         Long studentDeptId = student.getDeptId() == null ? deptId : student.getDeptId();
-        Long currentLesson = assignmentMapper.selectCurrentLessonByClass(
+        // 工作区首次进入也可能创建草稿，四个学生入口统一锁住当前指派直到事务结束。
+        BizLessonAssignment locked = assignmentMapper.selectCurrentAssignmentForUpdate(
                 student.getEntryYear(), student.getClassCode(), studentDeptId);
+        Long currentLesson = locked == null ? null : locked.getLessonId();
         if (currentLesson == null || !currentLesson.equals(lessonId)) {
             throw new ServiceException("只能进入本人班级当前课程的画程题目");
         }
+        boolean returned = taskStateService.isReturned(student.getStudentId(), lessonId, questionId);
         List<Long> questionIds = lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId);
         if (questionIds == null || !questionIds.contains(questionId)) throw new ServiceException("题目不属于当前课程");
         if (!isFlowchartQuestion(questionMapper.selectBizQuestionByQuestionId(questionId))) {
             throw new ServiceException("当前题目不是画程流程图操作题");
         }
-        if (requireOpen) {
+        if (requireOpen && !returned) {
             BizLessonAssignment filter = new BizLessonAssignment();
             filter.setLessonId(lessonId);
             filter.setEntryYear(student.getEntryYear());
@@ -361,14 +363,14 @@ public class FlowchartService {
     }
 
     /**
-     * 历史数据可能已有配置行但只写入了其中一张图。课程快照必须同时具备学生基础图和教师标准答案，
-     * 否则学生虽然能作答，教师批改时却没有可用的对照依据。
+     * 空图是合法的从零作图任务；仍要求配置存在且两张图可以解析。
      */
     private boolean isLessonConfigReady(FlowchartQuestionConfig config) {
         if (config == null) return false;
         try {
-            return !documentService.readDocument(config.getStarterJson()).path("nodes").isEmpty()
-                    && !documentService.readDocument(config.getAnswerJson()).path("nodes").isEmpty();
+            documentService.normalizeDocument(config.getStarterJson(), "学生基础图");
+            documentService.normalizeDocument(config.getAnswerJson(), "标准答案");
+            return true;
         } catch (ServiceException ignored) {
             // 早期或异常配置不能让题库列表白屏；一律要求出题教师重新打开并保存规范配置。
             return false;

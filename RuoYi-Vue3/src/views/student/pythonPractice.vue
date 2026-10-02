@@ -12,7 +12,7 @@
         <el-button size="small" :disabled="currentPlanIndex < 0 || currentPlanIndex >= currentPlanQuestions.length - 1 || questionLoading" @click="goRelative(1)">下一题</el-button>
       </div>
       <div class="header-actions">
-        <el-tag type="success" effect="plain">已通过 {{ passedCount }}/{{ questions.length }}</el-tag>
+        <el-tag type="success" effect="plain">已完成 {{ passedCount }}/{{ questions.length }}</el-tag>
         <el-button text @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '全屏' }}</el-button>
         <el-button text @click="$router.push('/student/index')">返回首页</el-button>
       </div>
@@ -23,7 +23,16 @@
     </el-alert>
 
     <div v-if="current" v-loading="questionLoading" class="oj-workspace">
-      <splitpanes class="main-split" @resized="refreshEditor">
+      <!-- 数据分析实验题专属模式 -->
+      <data-lab-experiment
+        :key="keyOf(current)"
+        v-if="isDataLab"
+        :question="current"
+        :source-type="current.source_type"
+        :source-id="current.source_id"
+        @submitted="onDataLabSubmitted"
+      />
+      <splitpanes v-else class="main-split" @resized="refreshEditor">
         <pane :size="50" :min-size="28">
           <section class="statement-pane">
             <div class="statement-scroll">
@@ -121,7 +130,7 @@
       <div v-for="section in sections" :key="section.key" class="question-section">
         <div class="section-label">{{ section.label }}</div>
         <button v-for="item in section.items" :key="keyOf(item)" class="question-item" :class="{ active: activeKey === keyOf(item) }" @click="selectQuestion(item); listVisible = false">
-          <span><b>{{ item.sort_no }}.</b> {{ titleOf(item) }}</span><small :class="statusClass(item)">{{ statusOf(item) }}</small>
+          <span><b>{{ item.sort_no }}.</b> <el-tag v-if="item.practical_mode === 'DATA_LAB'" size="small" type="warning" style="margin-right: 4px;">实验</el-tag>{{ titleOf(item) }}</span><small :class="statusClass(item)">{{ statusOf(item) }}</small>
         </button>
       </div>
     </el-drawer>
@@ -141,6 +150,7 @@ import { ElMessage } from 'element-plus'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { getStudentPracticeOverview, getStudentPracticeQuestion, saveStudentPracticeDraft, submitStudentPractice } from '@/api/business/pythonPractice'
+import DataLabExperiment from '@/components/DataLabExperiment/index.vue'
 
 const StatementBlock = defineComponent({
   props: { title: String, content: String },
@@ -168,10 +178,12 @@ const CaseResults = defineComponent({
 
 const workspace = ref(null); const questions = ref([]); const current = ref(null); const sourceCode = ref(''); const history = ref([]); const activeKey = ref(''); const filter = ref('ALL'); const saving = ref(false); const running = ref(false); const customRunning = ref(false); const submitting = ref(false); const overviewLoading = ref(false); const questionLoading = ref(false); const pageError = ref(''); const questionError = ref(''); const draftState = ref('草稿未保存'); const editorElement = ref(null); const listVisible = ref(false); const consoleTab = ref('custom'); const customInput = ref(''); const darkTheme = ref(false); const fullscreen = ref(false); const selectedHistory = ref(null); let editorView; let pollTimer; let pollAttempts = 0
 const themeCompartment = new Compartment()
-const passedCount = computed(() => questions.value.filter(item => item.progress?.passed_flag === '1').length)
+const isDataLab = computed(() => current.value?.practical_mode === 'DATA_LAB')
+function isComplete(item) { return item.practical_mode === 'DATA_LAB' ? item.progress?.completed_flag === '1' : item.progress?.passed_flag === '1' }
+const passedCount = computed(() => questions.value.filter(isComplete).length)
 const questionTitle = computed(() => current.value ? titleOf(current.value) : 'Python 练习')
 const knowledgeTags = computed(() => String(current.value?.knowledge_points || '').split(/[,，]/).map(item => item.trim()).filter(Boolean))
-const filteredQuestions = computed(() => questions.value.filter(item => { const progress = item.progress; if (filter.value === 'DONE') return progress?.passed_flag === '1'; if (filter.value === 'WRONG') return progress && progress.passed_flag !== '1' && progress.submit_count > 0; if (filter.value === 'TODO') return !progress || progress.passed_flag !== '1'; return true }))
+const filteredQuestions = computed(() => questions.value.filter(item => { const progress = item.progress; if (filter.value === 'DONE') return isComplete(item); if (filter.value === 'WRONG') return progress && progress.passed_flag !== '1' && progress.submit_count > 0 && progress.pending_grading !== '1'; if (filter.value === 'TODO') return !isComplete(item); return true }))
 const sections = computed(() => {
   const groups = new Map()
   filteredQuestions.value.forEach(item => {
@@ -201,8 +213,8 @@ const pendingLabel = computed(() => pendingSubmission.value?.status_code === 'JU
 
 function keyOf(item) { return `${item.source_type}-${item.source_id}-${item.question_id}` }
 function titleOf(item) { return item.question_title || String(item.question_content || '').split(/\r?\n/)[0].replace(/^#+\s*/, '') || `Python 题目 ${item.question_id}` }
-function statusOf(item) { if (item.progress?.passed_flag === '1') return '已通过'; if (item.progress?.submit_count) return '待改进'; return '未开始' }
-function statusClass(item) { return item.progress?.passed_flag === '1' ? 'accepted' : item.progress?.submit_count ? 'failed' : '' }
+function statusOf(item) { if (item.practical_mode === 'DATA_LAB' && isComplete(item)) return item.progress.pending_grading === '1' ? '已提交，待批改' : `已评分 ${item.progress.best_score}分`; if (item.progress?.passed_flag === '1') return '已通过'; if (item.progress?.submit_count) return '待改进'; return '未开始' }
+function statusClass(item) { return isComplete(item) ? 'accepted' : item.progress?.submit_count ? 'failed' : '' }
 function statusClassName(status) { return String(status || '').toLowerCase().replaceAll('_', '-') }
 function statusLabel(status) { return ({ ACCEPTED: '通过', PARTIAL: '部分通过', WRONG_ANSWER: '答案错误', SYNTAX_ERROR: '语法错误', RUNTIME_ERROR: '运行时错误', TIME_LIMIT: '运行超时', MEMORY_LIMIT: '内存超限', WAITING: '等待中', JUDGING: '判题中', SERVICE_ERROR: '服务异常', SERVICE_BUSY: '队列繁忙' })[status] || status || '未知' }
 function resultTitle(item) { return `${item.status_message || statusLabel(item.status_code)}${item.score == null ? '' : ` · ${item.score} 分`}（${item.passed_case_count || 0}/${item.total_case_count || 0}）` }
@@ -253,13 +265,20 @@ async function selectQuestion(item) {
   try {
     const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
     current.value = res.data || {}
-    await nextTick(mountEditor)
-    setCode(current.value.draft?.source_code || current.value.starter_code || '')
-    draftState.value = current.value.draft ? '草稿已保存' : '草稿未保存'
-    history.value = (current.value.history || []).map(normalizeSubmission)
-    if (history.value[0]?.status_code === 'WAITING' || history.value[0]?.status_code === 'JUDGING') { selectedHistory.value = history.value[0]; poll() }
+    if (!isDataLab.value) {
+      await nextTick(mountEditor)
+      setCode(current.value.draft?.source_code || current.value.starter_code || '')
+      draftState.value = current.value.draft ? '草稿已保存' : '草稿未保存'
+      history.value = (current.value.history || []).map(normalizeSubmission)
+      if (history.value[0]?.status_code === 'WAITING' || history.value[0]?.status_code === 'JUDGING') { selectedHistory.value = history.value[0]; poll() }
+    } else {
+      editorView?.destroy()
+      editorView = null
+      draftState.value = ''
+    }
   } catch (error) { questionError.value = '题目加载失败，请重试'; ElMessage.error(questionError.value) } finally { questionLoading.value = false }
 }
+function onDataLabSubmitted() { loadOverview() }
 async function saveDraft() { if (!current.value || saving.value) return; saving.value = true; try { await saveStudentPracticeDraft({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value }); draftState.value = '草稿已保存' } catch (error) { ElMessage.error('草稿保存失败，请稍后重试'); throw error } finally { saving.value = false } }
 async function enqueue(type) { if (!current.value || !sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码'); if (isJudging.value) return ElMessage.info('当前代码仍在排队或判题，请稍候'); if (type === 'RUN') running.value = true; else if (type === 'CUSTOM_RUN') customRunning.value = true; else submitting.value = true; try { await saveDraft(); const res = await submitStudentPractice({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value, submitType: type, customInput: type === 'CUSTOM_RUN' ? customInput.value : undefined }); selectedHistory.value = normalizeSubmission(res.data || {}); history.value = [selectedHistory.value, ...history.value.filter(item => item.submission_id !== selectedHistory.value.submission_id)]; consoleTab.value = type === 'SUBMIT' ? 'judge' : type === 'RUN' ? 'samples' : 'custom'; pollAttempts = 0; poll() } catch (error) { ElMessage.error('提交失败，请检查网络后重试') } finally { running.value = false; customRunning.value = false; submitting.value = false } }
 function runSamples() { return enqueue('RUN') } function runCustom() { return enqueue('CUSTOM_RUN') } function submit() { return enqueue('SUBMIT') }

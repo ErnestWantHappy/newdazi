@@ -10,6 +10,7 @@
   { hostname, ip, os, kernel, cpu:{model,cores,sockets}, memory:{totalBytes,usedBytes,availableBytes}, disks:[{mount,fs,totalBytes,freeBytes,usedPercent}], nodeVersion, cryptpadNodeVersion, java:{version,startTime,home,arguments} }
 - 后端把 java 对象展开为 hostHardware.javaVersion/javaStartTime/javaHome/javaArguments；disks 与 memory 原样透传；cpu 已支持 model/cores。无新表、无新接口，字段并入现有 GET /monitor/extension/health 的 hostHardware。
 - 129 侧探针脚本：deploy/host129/hwprobe.sh（uname/hostname/ip/nproc/lscpu/meminfo/df/node -v/java 进程 ps 与参数），由运维凭据恢复后部署并授权 SSH 执行。
+- 2026-09-21 正式配置：130 使用 `/home/admin2/.ssh/id_ed25519_monitor` 登录 123 的 `Administrator`，再由 123 使用 `id_ed25519_monitor129` 登录 129 执行 `/home/admin2/hwprobe.sh`；命令写入 `MONITOR_HOST129_SSH_COMMAND`，`known_hosts` 启用严格校验。
 
 ### 1.2 前端（views/monitor/extension/index.vue）
 - 现有 129 硬件卡渲染 hostHw；本次扩展：

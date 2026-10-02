@@ -61,15 +61,18 @@ public class PracticalInsightInputService
         input.gradeLabel = grade + "年级" + (request.grade == null ? "（按测评日期推算）" : "（教师确认）");
         TeacherAiConfig config = configs.status(input.teacherId);
         if (config == null || !Boolean.TRUE.equals(config.getEnabled())) throw new ServiceException("请启用教师个人AI配置");
-        input.model = config.getModelName();
+        input.provider = config.getProviderCode(); input.model = config.getModelName();
         AiModelPrice price = prices.require(config.getProviderCode(), input.model);
+        if (price.getInputPricePerThousand() == null || price.getOutputPricePerThousand() == null)
+            throw new ServiceException("所选模型单价待确认，暂不能计算学情诊断费用上限");
         input.inputPrice = price.getInputPricePerThousand(); input.outputPrice = price.getOutputPricePerThousand();
         input.materials = materials(input);
         List<Object> materialHashes = new ArrayList<>();
         for (PracticalQuestionMaterial m : input.materials)
             materialHashes.add(Arrays.asList(m.getMaterialType(), m.getResourcePath(), fileHash(resource(m.getResourcePath()))));
         input.paperFingerprint = hash(Arrays.asList(PracticalInsightV3.VERSION, input.teacherId, request.lessonId,
-                request.questionId, request.subject, input.gradeLabel, input.questionContent, input.model, materialHashes));
+                request.questionId, request.subject, input.gradeLabel, input.questionContent,
+                input.provider, input.model, materialHashes));
         Set<Long> roster = new TreeSet<>(); scope.roster(request).forEach(s -> roster.add(s.getStudentId())); input.total = roster.size();
         List<PracticalSubmissionVo> rows = answers.selectPracticalSubmissions(request.lessonId, request.questionId,
                 request.classCode, request.entryYear, input.deptId);

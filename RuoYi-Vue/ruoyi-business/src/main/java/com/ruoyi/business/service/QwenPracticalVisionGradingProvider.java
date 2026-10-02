@@ -28,7 +28,7 @@ import com.ruoyi.business.domain.vo.PracticalScoringItemVo;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 
-/** 阿里云百炼 OpenAI 兼容视觉接口适配器。 */
+/** 固定清单中的国产模型共用 OpenAI 兼容视觉请求与评分校验。 */
 @Service
 public class QwenPracticalVisionGradingProvider implements PracticalVisionGradingProvider
 {
@@ -111,7 +111,7 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         if ("length".equals(root.path("choices").path(0).path("finish_reason").asText()))
             throw new ServiceException("AI 输出达到长度限制，请缩小批改范围后重试");
         String text = root.path("choices").path(0).path("message").path("content").asText("");
-        if (text.trim().isEmpty()) throw new ServiceException("千问未返回评分内容");
+        if (text.trim().isEmpty()) throw new ServiceException("模型未返回评分内容");
         return text.trim();
     }
 
@@ -128,39 +128,7 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
             throw new ServiceException("当前尚未配置 AI 批改服务，请先完成 AI 配置");
         try
         {
-            ObjectNode body = objectMapper.createObjectNode();
-            body.put("model", config.getModelName());
-            body.put("temperature", 0.1D);
-            body.put("max_tokens", maxTokens);
-            body.put("enable_thinking", false);
-            body.putObject("response_format").put("type", "json_object");
-            ArrayNode messages = body.putArray("messages");
-            messages.addObject().put("role", "system").put("content", system);
-            ObjectNode user = messages.addObject();
-            user.put("role", "user");
-            ArrayNode content = user.putArray("content");
-            content.addObject().put("type", "text").put("text", prompt);
-
-            long totalBytes = 0;
-            if (images != null)
-            {
-                if (images.size() > MAX_IMAGES) throw new ServiceException("作品超过 AI 单次最多 50 页限制");
-                for (int index = 0; index < images.size(); index++)
-                {
-                    File page = images.get(index);
-                    if (page == null || !page.isFile()) throw new ServiceException("作品页图不存在");
-                    long size = page.length();
-                    totalBytes += size;
-                    if (size <= 0 || size > MAX_IMAGE_BYTES || totalBytes > MAX_TOTAL_BYTES)
-                        throw new ServiceException("作品页图体积超过 AI 安全限制");
-                    String label = labels != null && index < labels.size() && labels.get(index) != null
-                            ? labels.get(index) : "作品第" + (index + 1) + "页";
-                    content.addObject().put("type", "text").put("text", "以下图片是" + label);
-                    String dataUrl = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(page.toPath()));
-                    content.addObject().put("type", "image_url").putObject("image_url").put("url", dataUrl);
-                }
-            }
-
+            ObjectNode body = buildRequestBody(config, prompt, images, labels, maxTokens, system);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(apiKey);
@@ -177,8 +145,49 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         }
         catch (Exception e)
         {
-            throw new ServiceException("千问视觉评分调用失败");
+            throw new ServiceException("视觉模型调用失败");
         }
+    }
+
+    ObjectNode buildRequestBody(TeacherAiConfig config, String prompt,
+            List<File> images, List<String> labels, int maxTokens, String system) throws Exception
+    {
+        validateEndpoint(config);
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("model", config.getModelName());
+        body.put("temperature", 0.1D);
+        body.put("max_tokens", maxTokens);
+        if (config.getProviderCode() == null || "QWEN".equals(config.getProviderCode()))
+            body.put("enable_thinking", false);
+        body.putObject("response_format").put("type", "json_object");
+        ArrayNode messages = body.putArray("messages");
+        messages.addObject().put("role", "system").put("content", system);
+        ObjectNode user = messages.addObject();
+        user.put("role", "user");
+        ArrayNode content = user.putArray("content");
+        content.addObject().put("type", "text").put("text", prompt);
+
+        long totalBytes = 0;
+        if (images != null)
+        {
+            if (images.size() > MAX_IMAGES) throw new ServiceException("作品超过 AI 单次最多 50 页限制");
+            long maxTotal = "DEEPSEEK".equals(config.getProviderCode()) ? 30L * 1024 * 1024 : MAX_TOTAL_BYTES;
+            for (int index = 0; index < images.size(); index++)
+            {
+                File page = images.get(index);
+                if (page == null || !page.isFile()) throw new ServiceException("作品页图不存在");
+                long size = page.length();
+                totalBytes += size;
+                if (size <= 0 || size > MAX_IMAGE_BYTES || totalBytes > maxTotal)
+                    throw new ServiceException("作品页图体积超过 AI 安全限制");
+                String label = labels != null && index < labels.size() && labels.get(index) != null
+                        ? labels.get(index) : "作品第" + (index + 1) + "页";
+                content.addObject().put("type", "text").put("text", "以下图片是" + label);
+                String dataUrl = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(Files.readAllBytes(page.toPath()));
+                content.addObject().put("type", "image_url").putObject("image_url").put("url", dataUrl);
+            }
+        }
+        return body;
     }
 
     private String gradingPromptChecked(PracticalAiGradingInput input)
@@ -197,7 +206,7 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
     {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode choices = root.path("choices");
-        if (!choices.isArray() || choices.size() == 0) throw new ServiceException("千问未返回评分内容");
+        if (!choices.isArray() || choices.size() == 0) throw new ServiceException("模型未返回评分内容");
         String raw = choices.get(0).path("message").path("content").asText();
         JsonNode result = objectMapper.readTree(raw);
         JsonNode rubricResults = result.path("rubricResults");
@@ -384,7 +393,9 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
 
     private void validateEndpoint(TeacherAiConfig config)
     {
-        if (config == null || !TeacherAiConfigService.DEFAULT_ENDPOINT.equals(config.getEndpointUrl()))
+        if (config == null || !PracticalVisionModelCatalog.endpoint(
+                config.getProviderCode() == null ? "QWEN" : config.getProviderCode(),
+                config.getModelName()).equals(config.getEndpointUrl()))
             throw new ServiceException("AI 接口地址不在允许列表");
     }
 
@@ -406,14 +417,14 @@ public class QwenPracticalVisionGradingProvider implements PracticalVisionGradin
         }
         String normalizedCode = code == null ? "" : code.toLowerCase();
         if ("arrearage".equalsIgnoreCase(code))
-            return "阿里云账户可能余额不足或已欠费，请充值后重试";
+            return "模型厂商账户可能余额不足或已欠费，请核实后重试";
         if (normalizedCode.startsWith("invalidapikey"))
             return "AI Key 无效或已过期，请重新配置";
         if (normalizedCode.startsWith("throttling") || normalizedCode.contains("ratequota")
                 || normalizedCode.contains("ratelimit") || normalizedCode.contains("rate_limit"))
             return "请求过于频繁，已触发限流，请稍后重试";
         String safeMessage = truncateMessage(message, 200);
-        return "千问接口调用失败（HTTP " + status + "）"
+        return "模型接口调用失败（HTTP " + status + "）"
                 + (StringUtils.isBlank(safeMessage) ? "" : "：" + safeMessage);
     }
 

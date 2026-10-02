@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.business.domain.vo.SchoolScoreStatsVO;
 import com.ruoyi.business.mapper.SchoolScoreMapper;
+import com.ruoyi.business.util.AcademicYearUtils;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
@@ -33,10 +35,12 @@ public class SchoolScoreController extends BaseController {
     public AjaxResult termStats(
             @RequestParam String academicYear, // 如 "2024" (表示2024-2025学年)
             @RequestParam String semester,     // "1" 或 "2"
-            @RequestParam(required = false) String deptName) {
+            @RequestParam(required = false) String deptName,
+            @RequestParam(required = false) Integer grade) {
         String[] dates = getSemesterDateRange(academicYear, semester);
 
-        List<SchoolScoreStatsVO> list = schoolScoreMapper.selectSchoolScoreStats(dates[0], dates[1], deptName);
+        List<SchoolScoreStatsVO> list = schoolScoreMapper.selectSchoolScoreStats(dates[0], dates[1], deptName,
+                gradeEntryYear(academicYear, grade), gradeSchoolType(grade));
         return AjaxResult.success(list);
     }
 
@@ -48,11 +52,13 @@ public class SchoolScoreController extends BaseController {
     public TableDataInfo classDetails(
             @RequestParam String academicYear,
             @RequestParam String semester,
-            @RequestParam Long deptId) {
+            @RequestParam Long deptId,
+            @RequestParam(required = false) Integer grade) {
         
         String[] dates = getSemesterDateRange(academicYear, semester);
         startPage();
-        List<SchoolScoreStatsVO> list = schoolScoreMapper.selectClassScoreStats(dates[0], dates[1], deptId);
+        List<SchoolScoreStatsVO> list = schoolScoreMapper.selectClassScoreStats(dates[0], dates[1], deptId,
+                gradeEntryYear(academicYear, grade), gradeSchoolType(grade));
         return getDataTable(list);
     }
 
@@ -68,12 +74,28 @@ public class SchoolScoreController extends BaseController {
         if ("1".equals(semester)) {
             // 第一学期: 2024-09-01 ~ 2025-01-31
             startDate = year + "-09-01";
-            endDate = (year + 1) + "-01-31";
+            endDate = (year + 1) + "-02-01";
         } else {
             // 第二学期: 2025-02-01 ~ 2025-08-31
             startDate = (year + 1) + "-02-01";
-            endDate = (year + 1) + "-08-31";
+            endDate = (year + 1) + "-09-01";
         }
         return new String[]{startDate, endDate};
+    }
+
+    private String gradeEntryYear(String academicYear, Integer grade) {
+        if (grade == null) return null;
+        validateGrade(grade);
+        return String.valueOf(Integer.parseInt(academicYear) - AcademicYearUtils.gradeInSection(grade) + 1);
+    }
+
+    private String gradeSchoolType(Integer grade) {
+        if (grade == null) return null;
+        validateGrade(grade);
+        return grade <= 6 ? "1" : grade <= 9 ? "2" : "3";
+    }
+
+    private void validateGrade(Integer grade) {
+        if (grade < 1 || grade > 12) throw new ServiceException("年级必须为1至12");
     }
 }

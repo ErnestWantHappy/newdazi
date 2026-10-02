@@ -34,24 +34,26 @@
     SELECT p.*,v.plan_version_id,v.version_no,v.status version_status
     FROM biz_python_practice_plan p
     JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id
-    WHERE v.plan_version_id=#{planVersionId}
+    WHERE v.plan_version_id=#{planVersionId} FOR UPDATE
   </select>
   <select id="selectLatestDraftVersion" resultType="map">
     SELECT p.*,v.plan_version_id,v.version_no,v.status version_status
     FROM biz_python_practice_plan p
     JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.status='DRAFT'
     WHERE p.plan_id=#{planId}
-    ORDER BY v.version_no DESC LIMIT 1
+    ORDER BY v.version_no DESC LIMIT 1 FOR UPDATE
   </select>
-  <select id="selectMaxVersionNo" resultType="int">SELECT COALESCE(MAX(version_no),0) FROM biz_python_practice_plan_version WHERE plan_id=#{planId}</select>
+  <select id="selectMaxVersionNo" resultType="int">SELECT COALESCE(MAX(version_no),0) FROM biz_python_practice_plan_version WHERE plan_id=#{planId} FOR UPDATE</select>
 
   <select id="selectPlanQuestions" resultType="map">
     SELECT q.plan_question_id,q.question_id,q.sort_no,q.stage,q.required_flag,s.snapshot_id,s.question_title,
       s.difficulty,s.knowledge_points,s.no_input,s.question_content,s.input_description,s.output_description,
       s.sample_explanation,s.constraints_text,s.notes_text,s.starter_code,s.language_code,
-      s.time_limit_seconds,s.memory_limit_kb
+      s.time_limit_seconds,s.memory_limit_kb,
+      CASE WHEN d.snapshot_id IS NULL THEN 'PYTHON' ELSE 'DATA_LAB' END practical_mode
     FROM biz_python_practice_plan_question q
     JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
+    LEFT JOIN biz_data_lab_snapshot d ON d.snapshot_id=s.snapshot_id
     WHERE q.plan_version_id=#{planVersionId}
     ORDER BY q.sort_no,q.plan_question_id
   </select>
@@ -94,7 +96,8 @@
     SELECT 'BASE_VERSION' source_type,v.plan_version_id source_id,p.plan_id,p.plan_name,q.question_id,q.sort_no,
       q.stage,q.required_flag,s.snapshot_id,s.question_title,s.difficulty,s.knowledge_points,s.no_input,
       s.question_content,s.input_description,s.output_description,s.sample_explanation,s.constraints_text,
-      s.notes_text,s.starter_code,s.language_code,s.time_limit_seconds,s.memory_limit_kb
+      s.notes_text,s.starter_code,s.language_code,s.time_limit_seconds,s.memory_limit_kb,
+      CASE WHEN d.snapshot_id IS NULL THEN 'PYTHON' ELSE 'DATA_LAB' END practical_mode
     FROM biz_python_practice_plan p
     JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.status='PUBLISHED' AND v.version_no=p.current_version_no
     JOIN biz_python_practice_plan_class pc ON pc.plan_version_id=v.plan_version_id AND pc.dept_id=#{deptId}
@@ -102,14 +105,16 @@
       AND CAST(pc.class_code AS BINARY)=CAST(#{classCode} AS BINARY)
     JOIN biz_python_practice_plan_question q ON q.plan_version_id=v.plan_version_id
     JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
+    LEFT JOIN biz_data_lab_snapshot d ON d.snapshot_id=s.snapshot_id
     WHERE p.dept_id=#{deptId} AND p.status='ACTIVE'
     ORDER BY p.plan_id DESC,q.sort_no,q.plan_question_id
   </select>
-  <select id="selectQuestion" resultType="map">SELECT s.* FROM biz_python_practice_question_snapshot s WHERE s.source_type=#{sourceType} AND s.source_id=#{sourceId} AND s.question_id=#{questionId} LIMIT 1</select>
+  <select id="selectQuestion" resultType="map">SELECT s.*, CASE WHEN d.snapshot_id IS NULL THEN 'PYTHON' ELSE 'DATA_LAB' END practical_mode FROM biz_python_practice_question_snapshot s LEFT JOIN biz_data_lab_snapshot d ON d.snapshot_id=s.snapshot_id WHERE s.source_type=#{sourceType} AND s.source_id=#{sourceId} AND s.question_id=#{questionId} LIMIT 1</select>
   <select id="selectDraft" resultType="map">SELECT * FROM biz_python_practice_draft WHERE student_id=#{studentId} AND source_type=#{sourceType} AND source_id=#{sourceId} AND question_id=#{questionId}</select>
   <insert id="upsertDraft">INSERT INTO biz_python_practice_draft(student_id,source_type,source_id,question_id,snapshot_id,source_code,update_time) VALUES(#{studentId},#{sourceType},#{sourceId},#{questionId},#{snapshotId},#{sourceCode},NOW()) ON DUPLICATE KEY UPDATE snapshot_id=VALUES(snapshot_id),source_code=VALUES(source_code),update_time=NOW()</insert>
   <select id="selectSubmissions" resultType="map">SELECT submission_id,submission_key,source_type,source_id,question_id,submit_type,status_code,status_message,score,passed_case_count,total_case_count,judge_summary,submitted_at,judged_at FROM biz_python_practice_submission WHERE student_id=#{studentId} AND source_type=#{sourceType} AND source_id=#{sourceId} AND question_id=#{questionId} ORDER BY submission_id DESC LIMIT 20</select>
   <select id="selectSubmission" resultType="map">SELECT p.*,s.time_limit_seconds,s.memory_limit_kb FROM biz_python_practice_submission p JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=p.snapshot_id WHERE p.submission_id=#{submissionId}</select>
+  <select id="selectStuckSubmissions" resultType="map">SELECT submission_id,status_code FROM biz_python_practice_submission WHERE status_code IN ('WAITING','JUDGING') AND submitted_at &lt; #{before} ORDER BY submitted_at LIMIT #{limit}</select>
   <!-- 隐藏点只返回状态和资源消耗，SQL 层即切断输入、答案、程序输出和错误详情。 -->
   <select id="selectSubmissionCases" resultType="map">
     SELECT r.submission_case_id,r.submission_id,r.case_name,r.is_public,r.status_code,r.judge0_status_id,r.time_seconds,r.memory_kb,r.order_num,
@@ -143,9 +148,14 @@
   <insert id="insertSnapshotCase">INSERT INTO biz_python_practice_snapshot_case(snapshot_id,case_name,input_text,expected_output,is_public,score_weight,order_num) VALUES(#{snapshotId},#{caseName},#{inputText},#{expectedOutput},#{isPublic},#{scoreWeight},#{orderNum})</insert>
   <insert id="insertPlanQuestion">INSERT INTO biz_python_practice_plan_question(plan_version_id,question_id,snapshot_id,sort_no,stage,required_flag) VALUES(#{planVersionId},#{questionId},#{snapshotId},#{sortNo},#{stage},#{requiredFlag})</insert>
   <delete id="deletePlanQuestion">DELETE FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId} AND question_id=#{questionId}</delete>
-  <select id="countPlanVersionQuestion" resultType="int">SELECT COUNT(*) FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId} AND question_id=#{questionId}</select>
+  <select id="countPlanVersionQuestion" resultType="int">SELECT COUNT(*) FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId} AND question_id=#{questionId} FOR UPDATE</select>
   <update id="offsetPlanQuestionSort">UPDATE biz_python_practice_plan_question SET sort_no=-(sort_no+1000000) WHERE plan_version_id=#{planVersionId}</update>
   <update id="updatePlanQuestionSort">UPDATE biz_python_practice_plan_question SET sort_no=#{sortNo} WHERE plan_version_id=#{planVersionId} AND question_id=#{questionId}</update>
+  <!-- 移出题目不会压缩剩余序号，追加位置只能取最大序号之后，取数量会撞 uk_python_practice_plan_sort。 -->
+  <select id="selectMaxPlanQuestionSort" resultType="int">SELECT COALESCE(MAX(sort_no),0) FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId} FOR UPDATE</select>
+  <select id="countPlanQuestionBySort" resultType="int">SELECT COUNT(*) FROM biz_python_practice_plan_question WHERE plan_version_id=#{planVersionId} AND sort_no=#{sortNo} FOR UPDATE</select>
+  <select id="lockPlanByVersion" resultType="long">SELECT p.plan_id FROM biz_python_practice_plan p WHERE p.plan_id=(SELECT v.plan_id FROM biz_python_practice_plan_version v WHERE v.plan_version_id=#{planVersionId}) FOR UPDATE</select>
+  <select id="selectReusableSnapshot" resultType="long">SELECT snapshot_id FROM biz_python_practice_question_snapshot WHERE source_type='BASE_VERSION' AND source_id=#{planVersionId} AND question_id=#{questionId} FOR UPDATE</select>
 
   <update id="retractPublishedVersions">UPDATE biz_python_practice_plan_version SET status='RETRACTED',update_time=NOW() WHERE plan_id=#{planId} AND status='PUBLISHED' AND (#{exceptVersionId} IS NULL OR plan_version_id&lt;&gt;#{exceptVersionId})</update>
   <update id="publishVersion">UPDATE biz_python_practice_plan_version SET status='PUBLISHED',published_time=NOW(),update_time=NOW() WHERE plan_id=#{planId} AND plan_version_id=#{planVersionId} AND status IN ('DRAFT','PUBLISHED')</update>
@@ -172,14 +182,17 @@
   <select id="selectPlanAnalyticsStudents" resultType="map">
     SELECT s.student_id,s.student_no,u.nick_name student_name,pc.entry_year,pc.class_code,
       COUNT(DISTINCT q.question_id) question_count,
-      COUNT(DISTINCT CASE WHEN pr.progress_id IS NOT NULL THEN q.question_id END) attempted_count,
-      COALESCE(SUM(CASE WHEN pr.passed_flag='1' THEN 1 ELSE 0 END),0) passed_count,
-      COALESCE(SUM(pr.submit_count),0) submit_count,MAX(pr.last_practice_time) last_practice_time
+      COUNT(DISTINCT CASE WHEN pr.progress_id IS NOT NULL OR lab.submission_id IS NOT NULL THEN q.question_id END) attempted_count,
+      COALESCE(SUM(CASE WHEN pr.passed_flag='1' OR lab.score=lab.max_score THEN 1 ELSE 0 END),0) passed_count,
+      COALESCE(SUM(CASE WHEN pr.passed_flag='1' OR lab.submission_id IS NOT NULL THEN 1 ELSE 0 END),0) completed_count,
+      COALESCE(SUM(COALESCE(lab.revision,pr.submit_count)),0) submit_count,
+      MAX(COALESCE(lab.submitted_at,pr.last_practice_time)) last_practice_time
     FROM biz_python_practice_plan_class pc
     JOIN biz_student s ON CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)
     JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=pc.dept_id
     JOIN biz_python_practice_plan_question q ON q.plan_version_id=pc.plan_version_id
     LEFT JOIN biz_python_practice_progress pr ON pr.student_id=s.student_id AND pr.source_type='BASE_VERSION' AND pr.source_id=pc.plan_version_id AND pr.question_id=q.question_id
+    LEFT JOIN biz_data_lab_submission lab ON lab.student_id=u.user_id AND lab.source_type='BASE_VERSION' AND lab.source_id=pc.plan_version_id AND lab.question_id=q.question_id
     WHERE pc.plan_version_id=#{planVersionId} AND pc.dept_id=#{deptId}
       <if test="entryYear != null and entryYear != ''">AND CAST(pc.entry_year AS BINARY)=CAST(#{entryYear} AS BINARY)</if>
       <if test="classCode != null and classCode != ''">AND CAST(pc.class_code AS BINARY)=CAST(#{classCode} AS BINARY)</if>
@@ -190,15 +203,17 @@
   <select id="selectPlanAnalyticsQuestions" resultType="map">
     SELECT q.question_id,snap.question_title,snap.difficulty,snap.knowledge_points,
       COUNT(DISTINCT s.student_id) target_student_count,
-      COUNT(DISTINCT CASE WHEN pr.progress_id IS NOT NULL THEN s.student_id END) attempted_student_count,
-      COUNT(DISTINCT CASE WHEN pr.passed_flag='1' THEN s.student_id END) passed_student_count,
-      COALESCE(SUM(pr.submit_count),0) submit_count
+      COUNT(DISTINCT CASE WHEN pr.progress_id IS NOT NULL OR lab.submission_id IS NOT NULL THEN s.student_id END) attempted_student_count,
+      COUNT(DISTINCT CASE WHEN pr.passed_flag='1' OR lab.score=lab.max_score THEN s.student_id END) passed_student_count,
+      COUNT(DISTINCT CASE WHEN pr.passed_flag='1' OR lab.submission_id IS NOT NULL THEN s.student_id END) completed_student_count,
+      COALESCE(SUM(COALESCE(lab.revision,pr.submit_count)),0) submit_count
     FROM biz_python_practice_plan_question q
     JOIN biz_python_practice_question_snapshot snap ON snap.snapshot_id=q.snapshot_id
     JOIN biz_python_practice_plan_class pc ON pc.plan_version_id=q.plan_version_id
     JOIN biz_student s ON CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)
     JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=pc.dept_id
     LEFT JOIN biz_python_practice_progress pr ON pr.student_id=s.student_id AND pr.source_type='BASE_VERSION' AND pr.source_id=q.plan_version_id AND pr.question_id=q.question_id
+    LEFT JOIN biz_data_lab_submission lab ON lab.student_id=u.user_id AND lab.source_type='BASE_VERSION' AND lab.source_id=q.plan_version_id AND lab.question_id=q.question_id
     WHERE q.plan_version_id=#{planVersionId} AND pc.dept_id=#{deptId}
       <if test="entryYear != null and entryYear != ''">AND CAST(pc.entry_year AS BINARY)=CAST(#{entryYear} AS BINARY)</if>
       <if test="classCode != null and classCode != ''">AND CAST(pc.class_code AS BINARY)=CAST(#{classCode} AS BINARY)</if>

@@ -57,6 +57,21 @@
             update_time = NOW()
     </insert>
 
+    <select id="selectStudentLessonStates" resultMap="TaskStateResult">
+        SELECT question_id, task_state, state_version, changed_at
+        FROM biz_student_task_state
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
+    </select>
+
+    <select id="selectStudentReturnedStates" resultMap="TaskStateResult">
+        SELECT state_id, dept_id, lesson_id, question_id, student_id,
+               task_state, state_version, changed_at
+        FROM biz_student_task_state
+        WHERE student_id = #{studentId} AND task_state = 'RETURNED'
+        ORDER BY changed_at DESC
+        LIMIT 50
+    </select>
+
     <select id="selectOne" resultMap="TaskStateResult">
         SELECT state_id, dept_id, lesson_id, question_id, student_id,
                task_state, state_version, changed_at

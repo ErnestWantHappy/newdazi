@@ -229,14 +229,19 @@ public class PracticalInsightAiService
             throw new ServiceException("教学建议包含未经证实的班级外推");
         return result;
     }
+    TeacherAiConfig configForInput(Input input)
+    {
+        return configs.configForJob(input.teacherId,
+                input.provider == null ? "QWEN" : input.provider, input.model);
+    }
+
     private <T> T call(Job job, Input input, String prompt, List<File> files, List<String> labels, int tokens, Class<T> type) throws Exception
     {
         Job current = mapper.get(job.reportId);
         if (current == null || !"RUNNING".equals(current.status) || !Objects.equals(current.runToken, job.runToken)) throw new ServiceException("诊断已停止");
+        // 历史报告无厂商字段时按原百炼任务读取，续跑不能随教师后来切换的厂商漂移。
+        TeacherAiConfig config = configForInput(input);
         requireBudget(current, input, maxCostYuan);
-        TeacherAiConfig config = configs.status(input.teacherId);
-        if (config == null || !Boolean.TRUE.equals(config.getEnabled()) || !Objects.equals(config.getModelName(), input.model))
-            throw new ServiceException("AI配置已变化，请重新生成诊断");
         JsonNode response = provider.chatInsight(config, configs.apiKey(config), prompt, files, labels, tokens);
         mapper.usage(job.reportId, response.path("usage").path("prompt_tokens").asLong(), response.path("usage").path("completion_tokens").asLong());
         if ("length".equals(response.path("choices").path(0).path("finish_reason").asText())) throw new ServiceException("诊断输出超出长度，请缩小材料范围");

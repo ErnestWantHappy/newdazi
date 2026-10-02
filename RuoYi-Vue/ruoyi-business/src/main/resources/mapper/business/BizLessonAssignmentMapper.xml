@@ -149,6 +149,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where entry_year = #{entryYear}
           and class_code = #{classCode}
           and dept_id = #{deptId}
+          and exists (select 1 from biz_lesson l where l.lesson_id = biz_lesson_assignment.lesson_id and ifnull(l.status, '0') = '0')
+        order by assign_time desc, assignment_id desc
         limit 1
         for update
     </select>
@@ -207,16 +209,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
              #{assignment.assignerId}, #{assignment.assignTime}, #{advancedBy},
              #{advanceSource}, #{advancedTime})
     </insert>
-
-    <select id="countRecentAdvanceHistory" resultType="int">
-        select count(1)
-        from biz_lesson_assignment_history
-        where (lesson_id = #{lessonId} or next_lesson_id = #{lessonId})
-          and entry_year = #{entryYear}
-          and class_code = #{classCode}
-          and dept_id = #{deptId}
-          and advanced_time &gt;= #{advancedAfter}
-    </select>
 
     <select id="countHistoricalAssignment" resultType="int">
         select count(1)

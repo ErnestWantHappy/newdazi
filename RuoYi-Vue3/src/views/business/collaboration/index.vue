@@ -301,6 +301,8 @@ const saving = ref(false)
 const saveError = ref('')
 const isNewRound = ref(false)
 const requestId = ref(newRequestId())
+let lastSavePayload = ''
+const batchRequestIds = new Map()
 // 已确认的班级：取消切换时恢复，避免 radio 已变更但数据仍是旧班级。
 const confirmedClassKey = ref('')
 // 保存成功后的基线：切换班级、改文档前对比，有未保存调整先确认，避免静默丢失。
@@ -600,6 +602,7 @@ function autoSplit(manual) {
 
 // 批量建组：每个选中班级独立均分、独立保存，互不影响；已开始的班级跳过。
 async function batchSave() {
+  if (saving.value) return
   if (!selectedMaterialIds.value.length) {
     ElMessage.warning('请先选择协作文档')
     return
@@ -617,7 +620,6 @@ async function batchSave() {
       }
       const groups = splitGroupsFor(item.students || [], selectedMaterialIds.value)
       const payload = {
-        requestId: newRequestId(),
         entryYear: item.entryYear,
         classCode: item.classCode,
         materialIds: selectedMaterialIds.value.map(Number),
@@ -625,20 +627,24 @@ async function batchSave() {
         currentActivityId: item.current?.activityId || null,
         newRound: false
       }
+      const fingerprint = JSON.stringify({ lessonId: lessonId.value, ...payload })
+      if (!batchRequestIds.has(fingerprint)) batchRequestIds.set(fingerprint, newRequestId())
+      payload.requestId = batchRequestIds.get(fingerprint)
       try {
         await saveCollaborationWorkspace(lessonId.value, payload)
+        batchRequestIds.delete(fingerprint)
         done.push(`${item.entryYear}级${item.classCode}班`)
       } catch (e) {
         failed.push(`${item.entryYear}级${item.classCode}班（${e?.message || '保存失败'}）`)
       }
     }
+    await load()
     if (done.length) ElMessage.success(`已生成：${done.join('、')}`)
     if (skipped.length) ElMessage.warning(`已跳过进行中的班级：${skipped.join('、')}`)
     if (failed.length) {
       saveError.value = `失败：${failed.join('、')}`
       ElMessage.error(saveError.value)
     }
-    await load()
   } finally {
     saving.value = false
   }
@@ -694,6 +700,7 @@ function validateBeforeSave() {
 }
 
 async function save() {
+  if (saving.value) return
   const message = validateBeforeSave()
   if (message) {
     saveError.value = message
@@ -718,7 +725,14 @@ async function save() {
       currentActivityId: detail?.activityId || null,
       newRound: isNewRound.value
     }
-    const response = await saveCollaborationWorkspace(lessonId.value, payload)
+    // 未知结果的原请求保留标识以便安全重试；修改内容后必须使用新的幂等标识。
+    const fingerprint = JSON.stringify({ ...payload, requestId: undefined })
+    if (lastSavePayload && lastSavePayload !== fingerprint) requestId.value = newRequestId()
+    lastSavePayload = fingerprint
+    payload.requestId = requestId.value
+    await saveCollaborationWorkspace(lessonId.value, payload)
+    requestId.value = newRequestId()
+    lastSavePayload = ''
     ElMessage.success(isNewRound.value ? '新一轮协作已创建，旧作品已保留' : '协作分组已保存')
     await load()
   } catch (e) {

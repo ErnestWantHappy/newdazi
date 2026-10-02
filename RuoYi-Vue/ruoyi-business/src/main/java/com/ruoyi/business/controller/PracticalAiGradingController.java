@@ -67,7 +67,19 @@ public class PracticalAiGradingController extends BaseController
         status.put("modelName", config == null ? TeacherAiConfigService.DEFAULT_MODEL : config.getModelName());
         status.put("apiKeyHint", config == null ? null : config.getApiKeyHint());
         status.put("enabled", config != null && Boolean.TRUE.equals(config.getEnabled()));
-        status.put("modelPrice", pricingService.describe("QWEN",
+        status.put("modelOptions", com.ruoyi.business.service.PracticalVisionModelCatalog.options());
+        List<Map<String, String>> savedProviders = new java.util.ArrayList<Map<String, String>>();
+        for (com.ruoyi.business.domain.TeacherAiProviderKey key : configService.savedProviders(SecurityUtils.getUserId()))
+        {
+            Map<String, String> saved = new LinkedHashMap<String, String>();
+            saved.put("providerCode", key.getProviderCode());
+            saved.put("modelName", key.getModelName());
+            saved.put("apiKeyHint", key.getApiKeyHint());
+            savedProviders.add(saved);
+        }
+        status.put("savedProviders", savedProviders);
+        status.put("modelPrice", pricingService.describe(config == null || config.getProviderCode() == null
+                ? "QWEN" : config.getProviderCode(),
                 config == null ? TeacherAiConfigService.DEFAULT_MODEL : config.getModelName()));
         return AjaxResult.success(status);
     }
@@ -90,6 +102,15 @@ public class PracticalAiGradingController extends BaseController
                 pricingService.update(modelName, request, SecurityUtils.getUsername()));
     }
 
+    @PutMapping("/model-prices/{providerCode}/{modelName}")
+    @PreAuthorize("@ss.hasRole('admin')")
+    public AjaxResult updateProviderModelPrice(@PathVariable String providerCode, @PathVariable String modelName,
+                                               @RequestBody AiModelPriceRequest request)
+    {
+        return AjaxResult.success("模型参考价已更新",
+                pricingService.update(providerCode, modelName, request, SecurityUtils.getUsername()));
+    }
+
     @PutMapping("/config")
     public AjaxResult saveConfig(@RequestBody TeacherAiConfigRequest request)
     {
@@ -102,6 +123,13 @@ public class PracticalAiGradingController extends BaseController
     {
         configService.delete(SecurityUtils.getUserId());
         return AjaxResult.success("AI 配置已删除");
+    }
+
+    @DeleteMapping("/config/provider/{providerCode}")
+    public AjaxResult deleteProviderKey(@PathVariable String providerCode)
+    {
+        configService.deleteProvider(SecurityUtils.getUserId(), providerCode.toUpperCase(java.util.Locale.ROOT));
+        return AjaxResult.success("所选厂商 API Key 已删除");
     }
 
     @PostMapping("/config/test")

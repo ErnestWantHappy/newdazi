@@ -1,8 +1,6 @@
 package com.ruoyi.business.service;
 
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 import java.io.File;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -12,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.domain.TeacherAiConfig;
+import com.ruoyi.business.domain.TeacherAiProviderKey;
 import com.ruoyi.business.domain.PracticalRubricSnapshot;
 import com.ruoyi.business.domain.dto.TeacherAiConfigRequest;
 import com.ruoyi.business.domain.vo.PracticalScoringItemVo;
@@ -22,15 +21,18 @@ import com.ruoyi.common.utils.StringUtils;
 @Service
 public class TeacherAiConfigService
 {
-    public static final String DEFAULT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    public static final String DEFAULT_ENDPOINT = PracticalVisionModelCatalog.QWEN_ENDPOINT;
     public static final String DEFAULT_MODEL = "qwen3.8-max";
-    private static final Set<String> MODELS = new HashSet<String>(Arrays.asList(DEFAULT_MODEL, "qwen3.8-max-0902", "qwen3.6-flash", "qwen3.7-plus"));
     @Autowired private PracticalAiGradingMapper mapper;
     @Autowired private PracticalAiCipherService cipherService;
     @Autowired private PracticalVisionGradingProvider provider;
 
     public TeacherAiConfig status(Long teacherUserId) { return mapper.selectConfig(teacherUserId); }
     public TeacherAiConfig statusForUpdate(Long teacherUserId) { return mapper.selectConfigForUpdate(teacherUserId); }
+    public java.util.List<TeacherAiProviderKey> savedProviders(Long teacherUserId)
+    {
+        return mapper.selectProviderKeys(teacherUserId);
+    }
     public boolean isMasterKeyConfigured() { return cipherService.isConfigured(); }
 
     @Transactional(rollbackFor = Exception.class)
@@ -40,23 +42,33 @@ public class TeacherAiConfigService
         String apiKey = StringUtils.trim(request.getApiKey());
         boolean replaceKey = StringUtils.isNotBlank(apiKey);
         if (replaceKey && (apiKey.length() < 12 || apiKey.length() > 300))
-            throw new ServiceException("请输入有效的阿里云百炼 API Key");
+            throw new ServiceException("请输入有效的模型厂商 API Key");
+        String providerCode = StringUtils.isBlank(request.getProviderCode()) ? "QWEN"
+                : request.getProviderCode().trim().toUpperCase(java.util.Locale.ROOT);
         String model = StringUtils.isBlank(request.getModelName()) ? DEFAULT_MODEL : request.getModelName().trim();
-        if (!MODELS.contains(model)) throw new ServiceException("暂不支持该模型");
+        String endpoint = PracticalVisionModelCatalog.endpoint(providerCode, model);
         TeacherAiConfig config = mapper.selectConfigForUpdate(teacherUserId);
-        if (!replaceKey && (config == null || StringUtils.isBlank(config.getApiKeyCiphertext())))
-            throw new ServiceException("首次配置请输入有效的阿里云百炼 API Key");
-        if (config == null) config = new TeacherAiConfig();
-        config.setTeacherUserId(teacherUserId);
-        config.setProviderCode("QWEN");
-        config.setModelName(model);
-        config.setEndpointUrl(DEFAULT_ENDPOINT);
-        // 切换模型时保留已有密文，只有明确输入新 Key 才替换。
+        TeacherAiProviderKey providerKey = mapper.selectProviderKey(teacherUserId, providerCode);
+        if (!replaceKey && (providerKey == null || StringUtils.isBlank(providerKey.getApiKeyCiphertext())))
+            throw new ServiceException("该厂商尚未保存 API Key，请先输入");
+        if (providerKey == null) providerKey = new TeacherAiProviderKey();
+        providerKey.setTeacherUserId(teacherUserId);
+        providerKey.setProviderCode(providerCode);
+        providerKey.setModelName(model);
         if (replaceKey)
         {
-            config.setApiKeyCiphertext(cipherService.encrypt(apiKey));
-            config.setApiKeyHint("****" + apiKey.substring(apiKey.length() - 4));
+            providerKey.setApiKeyCiphertext(cipherService.encrypt(apiKey));
+            providerKey.setApiKeyHint("****" + apiKey.substring(apiKey.length() - 4));
         }
+        mapper.upsertProviderKey(providerKey);
+        if (config == null) config = new TeacherAiConfig();
+        config.setTeacherUserId(teacherUserId);
+        config.setProviderCode(providerCode);
+        config.setModelName(model);
+        config.setEndpointUrl(endpoint);
+        // 旧配置表仍表示当前厂商；任务续跑从厂商表取凭据，避免切换模型后漂移。
+        config.setApiKeyCiphertext(providerKey.getApiKeyCiphertext());
+        config.setApiKeyHint(providerKey.getApiKeyHint());
         config.setEnabled(true);
         mapper.upsertConfig(config);
         return mapper.selectConfig(teacherUserId);
@@ -68,7 +80,38 @@ public class TeacherAiConfigService
         return cipherService.decrypt(config.getApiKeyCiphertext());
     }
 
-    public void delete(Long teacherUserId) { mapper.deleteConfig(teacherUserId); }
+    public TeacherAiConfig configForJob(Long teacherUserId, String providerCode, String modelName)
+    {
+        String endpoint = PracticalVisionModelCatalog.endpoint(providerCode, modelName);
+        TeacherAiProviderKey key = mapper.selectProviderKey(teacherUserId, providerCode);
+        if (key == null || StringUtils.isBlank(key.getApiKeyCiphertext()))
+            throw new ServiceException("任务所用的 " + providerCode + " API Key 已删除，无法继续批改");
+        TeacherAiConfig config = new TeacherAiConfig();
+        config.setTeacherUserId(teacherUserId);
+        config.setProviderCode(providerCode);
+        config.setModelName(modelName);
+        config.setEndpointUrl(endpoint);
+        config.setApiKeyCiphertext(key.getApiKeyCiphertext());
+        config.setApiKeyHint(key.getApiKeyHint());
+        config.setEnabled(true);
+        return config;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long teacherUserId)
+    {
+        mapper.deleteConfig(teacherUserId);
+        mapper.deleteProviderKeys(teacherUserId);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteProvider(Long teacherUserId, String providerCode)
+    {
+        PracticalVisionModelCatalog.assertProvider(providerCode);
+        TeacherAiConfig active = mapper.selectConfigForUpdate(teacherUserId);
+        if (active != null && providerCode.equals(active.getProviderCode())) mapper.deleteConfig(teacherUserId);
+        mapper.deleteProviderKey(teacherUserId, providerCode);
+    }
 
     /** 用无学生信息的本地测试图验证 Key、网络、模型与结构化输出。 */
     public void testConnection(Long teacherUserId)

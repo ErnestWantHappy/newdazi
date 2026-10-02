@@ -144,13 +144,6 @@ public interface BizLessonAssignmentMapper
                          @Param("kind") String kind,
                          @Param("open") Boolean open);
 
-    /** 判断学生所在班级是否在指定时间后从该课程推进离开 */
-    int countRecentAdvanceHistory(@Param("lessonId") Long lessonId,
-                                  @Param("entryYear") String entryYear,
-                                  @Param("classCode") String classCode,
-                                  @Param("deptId") Long deptId,
-                                  @Param("advancedAfter") java.util.Date advancedAfter);
-
     /** 历史推进记录同样证明课程曾真实指派给该届班级。 */
     int countHistoricalAssignment(@Param("lessonId") Long lessonId,
                                   @Param("entryYear") String entryYear,

@@ -8,6 +8,7 @@ import com.ruoyi.business.domain.PracticalAiApplyAudit;
 import com.ruoyi.business.domain.PracticalAiEvent;
 import com.ruoyi.business.domain.PracticalAiResult;
 import com.ruoyi.business.domain.TeacherAiConfig;
+import com.ruoyi.business.domain.TeacherAiProviderKey;
 import com.ruoyi.business.domain.TeacherPracticalReferenceAnswer;
 
 public interface PracticalAiGradingMapper
@@ -16,6 +17,13 @@ public interface PracticalAiGradingMapper
     TeacherAiConfig selectConfigForUpdate(@Param("teacherUserId") Long teacherUserId);
     int upsertConfig(TeacherAiConfig config);
     int deleteConfig(@Param("teacherUserId") Long teacherUserId);
+    TeacherAiProviderKey selectProviderKey(@Param("teacherUserId") Long teacherUserId,
+                                           @Param("providerCode") String providerCode);
+    List<TeacherAiProviderKey> selectProviderKeys(@Param("teacherUserId") Long teacherUserId);
+    int upsertProviderKey(TeacherAiProviderKey key);
+    int deleteProviderKey(@Param("teacherUserId") Long teacherUserId,
+                          @Param("providerCode") String providerCode);
+    int deleteProviderKeys(@Param("teacherUserId") Long teacherUserId);
     int insertJob(PracticalAiJob job);
     PracticalAiJob selectJob(@Param("jobId") Long jobId, @Param("teacherUserId") Long teacherUserId);
     PracticalAiJob selectJobForWorker(@Param("jobId") Long jobId);

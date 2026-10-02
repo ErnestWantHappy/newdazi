@@ -53,7 +53,7 @@ const realSrcList = computed(() => {
 })
 
 function resolveImageUrl(path) {
-  if (path.includes('/profile/upload/')) {
+  if (path.includes('/profile/upload/') || path.includes('/profile/datalab/')) {
     return import.meta.env.VITE_APP_BASE_API + '/common/resource/view?resource=' + encodeURIComponent(path)
   }
   if (isExternal(path)) return path

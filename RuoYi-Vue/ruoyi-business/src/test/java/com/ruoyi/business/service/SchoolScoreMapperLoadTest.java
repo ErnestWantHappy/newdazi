@@ -7,6 +7,7 @@ import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 真实加载 Mapper，避免仅编译 Java 时漏掉 XML 损坏。 */
 class SchoolScoreMapperLoadTest
@@ -29,6 +30,14 @@ class SchoolScoreMapperLoadTest
                 assertNotNull(config.getMappedStatement("com.ruoyi.business.mapper.SchoolScoreMapper." + id)
                         .getBoundSql(params).getSql());
             }
+        }
+        params.put("entryYear", "2024");
+        params.put("schoolType", "2");
+        for (String id : new String[] {"selectSchoolScoreStats", "selectClassScoreStats"}) {
+            String sql = config.getMappedStatement("com.ruoyi.business.mapper.SchoolScoreMapper." + id)
+                    .getBoundSql(params).getSql();
+            assertTrue(sql.contains("s.entry_year = ?"));
+            assertTrue(sql.contains("d.school_type = ?"));
         }
     }
 }

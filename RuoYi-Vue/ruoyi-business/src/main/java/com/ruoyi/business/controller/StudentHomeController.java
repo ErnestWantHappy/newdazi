@@ -1,12 +1,12 @@
 package com.ruoyi.business.controller;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Date;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +28,7 @@ import com.ruoyi.common.utils.file.FileUploadUtils;
 import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.BizStudentTaskState;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.StudentLessonQuestionVo;
 import com.ruoyi.business.mapper.BizStudentMapper;
@@ -121,8 +122,49 @@ public class StudentHomeController extends BaseController
     @Autowired
     private ClassroomTaskStateService classroomTaskStateService;
 
-    @Value("${student.submission-grace-minutes:15}")
-    private long submissionGraceMinutes;
+    /** 只向学生展示当前课程中被退回的操作题。 */
+    @GetMapping("/returned-practical")
+    public AjaxResult returnedPractical()
+    {
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        BizStudent student = bizStudentMapper.selectBizStudentByUserId(loginUser.getUserId());
+        if (student == null) throw new ServiceException("未找到学生信息");
+        if (hasPendingCountyExam()) return AjaxResult.success(new ArrayList<>());
+        Long deptId = loginUser.getDeptId();
+        Long currentLessonId = lessonAssignmentMapper.selectCurrentLessonByClass(
+                student.getEntryYear(), student.getClassCode(), deptId);
+        List<Map<String, Object>> tasks = new ArrayList<>();
+        for (BizStudentTaskState state : classroomTaskStateService.listStudentReturnedStates(student.getStudentId()))
+        {
+            Long lessonId = state.getLessonId();
+            Long questionId = state.getQuestionId();
+            BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+            if (lesson == null || !deptId.equals(lesson.getDeptId())) continue;
+            if (!lessonId.equals(currentLessonId)) continue;
+            BizLessonQuestionDetailVo question = lessonQuestionMapper.selectDetailsByLessonId(lessonId).stream()
+                    .filter(item -> questionId.equals(item.getQuestionId())
+                            && "practical".equalsIgnoreCase(item.getQuestionType()))
+                    .findFirst().orElse(null);
+            if (question == null) continue;
+            String mode = question.getPracticalMode();
+            if ("PYTHON".equalsIgnoreCase(mode) || "DATA_LAB".equalsIgnoreCase(mode)) continue;
+            Map<String, Object> item = new HashMap<>();
+            item.put("lessonId", lessonId);
+            item.put("lessonTitle", lesson.getLessonTitle());
+            item.put("questionId", questionId);
+            item.put("questionContent", question.getQuestionContent());
+            item.put("practicalMode", mode);
+            item.put("practicalAllowedExtensions", question.getPracticalAllowedExtensions());
+            item.put("practicalImageMaxCount", question.getPracticalImageMaxCount());
+            if (!"FLOWCHART".equalsIgnoreCase(mode))
+            {
+                item.put("artifact", practicalArtifactService.getCurrentLessonArtifact(
+                        student.getStudentId(), lessonId, questionId));
+            }
+            tasks.add(item);
+        }
+        return AjaxResult.success(tasks);
+    }
 
     /**
      * 获取学生当前课程信息
@@ -220,9 +262,14 @@ public class StudentHomeController extends BaseController
         List<BizStudentAnswer> submittedAnswers = studentAnswerMapper.selectByStudentAndLesson(student.getStudentId(), lessonId);
         // 转换为Map: { questionId: { answer, score } }
         java.util.Map<Long, java.util.Map<String, Object>> answersMap = new java.util.HashMap<>();
+        java.util.Map<Long, String> taskStates = new java.util.HashMap<>();
+        for (com.ruoyi.business.domain.BizStudentTaskState state : classroomTaskStateService.listStudentLessonStates(student.getStudentId(), lessonId)) {
+            taskStates.put(state.getQuestionId(), state.getTaskState());
+        }
         for (BizStudentAnswer sa : submittedAnswers) {
             java.util.Map<String, Object> info = new java.util.HashMap<>();
             info.put("answer", sa.getStudentAnswer());
+            info.put("taskState", taskStates.get(sa.getQuestionId()));
             info.put("score", sa.getScore());
             info.put("submitTime", sa.getSubmitTime());
             info.put("previewStatus", sa.getPreviewStatus());
@@ -422,6 +469,7 @@ public class StudentHomeController extends BaseController
         {
             throw new ServiceException("题目不存在或不是操作题");
         }
+        assertPracticalOpen(student, loginUser.getDeptId(), lessonId);
 
         PracticalUploadTicket ticket = practicalArtifactService.stageStudentFile(
                 student.getStudentId(), lessonId, question, file);
@@ -458,6 +506,7 @@ public class StudentHomeController extends BaseController
         }
         BizLessonQuestionDetailVo question = findPracticalQuestion(
                 request.getLessonId(), request.getQuestionId());
+        assertPracticalOpen(student, loginUser.getDeptId(), request.getLessonId());
         PracticalArtifactVo result = practicalArtifactService.submitLessonArtifact(
                 student.getStudentId(), loginUser.getUserId(), question,
                 request.getLessonId(), request.getExpectedVersionId(), request.getUploadTokens());
@@ -566,6 +615,8 @@ public class StudentHomeController extends BaseController
         if (!hasMatchedQuestion(answers, questionMap)) {
             return AjaxResult.error("提交的题目与当前课程不匹配，未保存任何答案");
         }
+        String gateError = validateQuestionGates(student, deptId, lessonId, answers, questionMap);
+        if (gateError != null) return AjaxResult.error(gateError);
 
         Date now = new Date();
         int totalScore = 0;
@@ -717,6 +768,16 @@ public class StudentHomeController extends BaseController
         java.util.List<Long> pendingConversionAnswerIds = persistAnswersWithDeadlockRetry(
                 studentId, lessonId, answersToSave);
 
+        // 打字题落库时保留最高分；接口必须返回实际保存的分数，避免重打低分后页面与成绩表不一致。
+        for (BizStudentAnswer savedAnswer : answersToSave) {
+            if (!Boolean.TRUE.equals(savedAnswer.getTypingSubmission())) continue;
+            BizStudentAnswer persisted = studentAnswerMapper.selectLatestByStudentLessonQuestion(
+                    studentId, lessonId, savedAnswer.getQuestionId());
+            if (persisted != null && persisted.getScore() != null) {
+                totalScore += persisted.getScore().intValue() - savedAnswer.getScore().intValue();
+            }
+        }
+
         for (BizStudentAnswer savedAnswer : answersToSave) {
             if (Boolean.TRUE.equals(savedAnswer.getTerminalSubmission()) || Boolean.TRUE.equals(savedAnswer.getTypingSubmission())) continue;
             classroomTaskStateService.markSafely(student, student.getDeptId(), lessonId, savedAnswer.getQuestionId(),
@@ -861,15 +922,38 @@ public class StudentHomeController extends BaseController
         }
         Long currentLessonId = lessonAssignmentMapper.selectCurrentLessonByClass(
                 student.getEntryYear(), student.getClassCode(), deptId);
-        if (lessonId.equals(currentLessonId))
-        {
-            return null;
+        return lessonId.equals(currentLessonId) ? null : "该课程已结束，仅能提交当前课程的作业";
+    }
+
+    private void assertPracticalOpen(BizStudent student, Long deptId, Long lessonId)
+    {
+        BizLessonAssignment query = new BizLessonAssignment();
+        query.setEntryYear(student.getEntryYear()); query.setClassCode(student.getClassCode()); query.setDeptId(deptId);
+        List<BizLessonAssignment> rows = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
+        BizLessonAssignment current = rows == null || rows.isEmpty() ? null : rows.get(0);
+        if (current == null || !lessonId.equals(current.getLessonId()) || !Integer.valueOf(1).equals(current.getPracticalOpen()))
+            throw new ServiceException("本课操作题暂未开放");
+    }
+
+    private String validateQuestionGates(BizStudent student, Long deptId, Long lessonId,
+                                         Map<Long, String> answers, Map<Long, BizLessonQuestionDetailVo> questionMap)
+    {
+        BizLessonAssignment query = new BizLessonAssignment();
+        query.setEntryYear(student.getEntryYear()); query.setClassCode(student.getClassCode()); query.setDeptId(deptId);
+        List<BizLessonAssignment> rows = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
+        BizLessonAssignment current = rows == null || rows.isEmpty() ? null : rows.get(0);
+        boolean theoryOpen = current != null && lessonId.equals(current.getLessonId()) && Integer.valueOf(1).equals(current.getTheoryOpen());
+        boolean practicalOpen = current != null && lessonId.equals(current.getLessonId()) && Integer.valueOf(1).equals(current.getPracticalOpen());
+        for (Long questionId : answers.keySet()) {
+            BizLessonQuestionDetailVo q = questionMap.get(questionId);
+            if (q == null) continue;
+            if (("choice".equalsIgnoreCase(q.getQuestionType()) || "judgment".equalsIgnoreCase(q.getQuestionType())) && !theoryOpen)
+                return "本课理论题暂未开放";
+            if ("practical".equalsIgnoreCase(q.getQuestionType()) && !practicalOpen
+                    && !classroomTaskStateService.isReturned(student.getStudentId(), lessonId, questionId))
+                return "本课操作题暂未开放";
         }
-        Date graceStart = new Date(System.currentTimeMillis()
-                - java.util.concurrent.TimeUnit.MINUTES.toMillis(Math.max(submissionGraceMinutes, 0L)));
-        int recentAdvance = lessonAssignmentMapper.countRecentAdvanceHistory(
-                lessonId, student.getEntryYear(), student.getClassCode(), deptId, graceStart);
-        return recentAdvance > 0 ? null : "该课程已结束，补交时间已超过" + submissionGraceMinutes + "分钟";
+        return null;
     }
 
     private void validatePracticalAnswerPath(Long studentId, Long lessonId, Long questionId, String resource)

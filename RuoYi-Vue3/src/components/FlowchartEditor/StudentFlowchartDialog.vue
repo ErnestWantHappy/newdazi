@@ -15,7 +15,7 @@
           <span v-if="latestSubmission.suggestedScore != null">· 结构检查建议 {{ latestSubmission.suggestedScore }} 分</span>
         </div>
         <div class="workspace-actions">
-          <el-button v-if="readOnly && !mobileViewOnly" type="warning" plain :loading="reopening" @click="reopen">从此版本补交</el-button>
+          <el-button v-if="readOnly && !mobileViewOnly" type="warning" plain :loading="reopening" @click="reopen">{{ returned ? '修改并重新提交' : '从此版本补交' }}</el-button>
           <el-button v-if="canEdit" type="primary" :loading="submitting" :disabled="conflict" @click="submit">完成并提交</el-button>
         </div>
       </div>
@@ -62,6 +62,7 @@ const permissionsJson = ref('{}')
 const revision = ref(0)
 const latestSubmission = ref(null)
 const readOnly = ref(false)
+const returned = ref(false)
 const saveStatus = ref('saved')
 const conflict = ref(false)
 const mobileViewOnly = ref(window.innerWidth < 900)
@@ -98,6 +99,7 @@ async function loadWorkspace() {
     permissionsJson.value = data.snapshot?.permissionsJson || '{}'
     latestSubmission.value = data.latestSubmission || null
     readOnly.value = Boolean(data.readOnly)
+    returned.value = Boolean(data.returned)
     const local = loadLocalFlowchartDraft(draftKey.value)
     if (!readOnly.value && local && !local.synced && local.documentJson !== documentJson.value) {
       if (Number(local.revision) === revision.value) {

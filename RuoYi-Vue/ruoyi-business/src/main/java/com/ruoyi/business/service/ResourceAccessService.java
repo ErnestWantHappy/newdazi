@@ -30,6 +30,7 @@ import com.ruoyi.common.utils.StringUtils;
 @Service
 public class ResourceAccessService
 {
+    @Autowired private DataLabAccessService dataLabAccessService;
     @Autowired
     private ResourceAccessMapper resourceAccessMapper;
 
@@ -62,6 +63,12 @@ public class ResourceAccessService
             throw new ServiceException("请先登录");
         }
         String resource = normalizeResource(rawResource);
+        // 实验图表必须按提交归属鉴权，不能落入教师通用文件的放行分支。
+        if (resource.toLowerCase(Locale.ROOT).startsWith("/profile/datalab/"))
+        {
+            dataLabAccessService.chart(resource);
+            return resource;
+        }
         if (resource.toLowerCase(Locale.ROOT).startsWith("/profile/upload/student-answer-artifact/paper-pending/"))
         {
             throw new ServiceException("纸质导入暂存文件不可通过通用资源接口读取");

@@ -5,10 +5,13 @@ const base = '/business/teacher/grading/ai'
 export function getAiConfig() { return request({ url: `${base}/config`, method: 'get' }) }
 export function saveAiConfig(data) { return request({ url: `${base}/config`, method: 'put', data }) }
 export function deleteAiConfig() { return request({ url: `${base}/config`, method: 'delete' }) }
+export function deleteAiProviderKey(providerCode) {
+  return request({ url: `${base}/config/provider/${encodeURIComponent(providerCode)}`, method: 'delete' })
+}
 export function testAiConfig() { return request({ url: `${base}/config/test`, method: 'post' }) }
 export function getAiModelPrices() { return request({ url: `${base}/model-prices`, method: 'get' }) }
 export function updateAiModelPrice(modelName, data) {
-  return request({ url: `${base}/model-prices/${encodeURIComponent(modelName)}`, method: 'put', data })
+  return request({ url: `${base}/model-prices/${encodeURIComponent(data.providerCode)}/${encodeURIComponent(modelName)}`, method: 'put', data })
 }
 export function createAiJob(data) { return request({ url: `${base}/jobs`, method: 'post', data }) }
 export function getAiPreflight(params) { return request({ url: `${base}/preflight`, method: 'get', params }) }

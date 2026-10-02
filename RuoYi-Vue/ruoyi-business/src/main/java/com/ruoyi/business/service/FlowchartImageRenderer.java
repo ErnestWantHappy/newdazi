@@ -37,10 +37,10 @@ public class FlowchartImageRenderer {
             if (!nodes.isArray() || nodes.size() > 200) throw new ServiceException("流程图节点数量无效");
             double minX = 0, minY = 0, maxX = 340, maxY = 180;
             for (JsonNode node : nodes) {
-                minX = Math.min(minX, node.path("x").asDouble() - 90);
-                minY = Math.min(minY, node.path("y").asDouble() - 55);
-                maxX = Math.max(maxX, node.path("x").asDouble() + 90);
-                maxY = Math.max(maxY, node.path("y").asDouble() + 55);
+                minX = Math.min(minX, node.path("x").asDouble() - nodeWidth(node) / 2d - 8);
+                minY = Math.min(minY, node.path("y").asDouble() - nodeHeight(node) / 2d - 8);
+                maxX = Math.max(maxX, node.path("x").asDouble() + nodeWidth(node) / 2d + 8);
+                maxY = Math.max(maxY, node.path("y").asDouble() + nodeHeight(node) / 2d + 8);
             }
             for (JsonNode edge : edges) {
                 List<JsonNode> positions = new ArrayList<JsonNode>();
@@ -124,13 +124,51 @@ public class FlowchartImageRenderer {
         return new Point2D.Double(point.path("x").asDouble(), point.path("y").asDouble());
     }
 
+    private int nodeColumns(JsonNode node) {
+        String type = node.path("type").asText();
+        int longest = 0;
+        for (String row : node.path("text").asText("").split("\\r\\n|\\r|\\n", -1)) {
+            longest = Math.max(longest, row.codePointCount(0, row.length()));
+        }
+        int minimum = "decision".equals(type) ? 4 : "inputOutput".equals(type) ? 6 : 7;
+        return Math.max(minimum, Math.min("decision".equals(type) ? 10 : 18, (int) Math.ceil(Math.sqrt(longest) * 1.3)));
+    }
+
+    private int nodeWidth(JsonNode node) {
+        int saved = node.path("properties").path("width").asInt(0);
+        if (saved >= 80 && saved <= 1200) return saved;
+        String type = node.path("type").asText();
+        int textWidth = nodeColumns(node) * 15;
+        return "decision".equals(type) ? Math.max(164, textWidth * 2 + 20)
+                : Math.max("inputOutput".equals(type) ? 140 : NODE_W, textWidth + 36);
+    }
+
     private int nodeHeight(JsonNode node) {
-        return "decision".equals(node.path("type").asText()) ? 96 : "inputOutput".equals(node.path("type").asText()) ? 60 : NODE_H;
+        int saved = node.path("properties").path("height").asInt(0);
+        if (saved >= 40 && saved <= 800) return saved;
+        String type = node.path("type").asText();
+        int minimum = "decision".equals(type) ? 96 : "inputOutput".equals(type) ? 60 : NODE_H;
+        return Math.max(minimum, (nodeLines(node).size() * 20 + 16) * ("decision".equals(type) ? 2 : 1));
+    }
+
+    /** 与浏览器使用相同的全角字宽和中心文字区，避免 AI 图片中的文字越过图形。 */
+    private List<String> nodeLines(JsonNode node) {
+        String type = node.path("type").asText();
+        int columns = nodeColumns(node);
+        List<String> lines = new ArrayList<>();
+        for (String row : node.path("text").asText("").split("\\r\\n|\\r|\\n", -1)) {
+            int[] chars = row.codePoints().toArray();
+            if (chars.length == 0) lines.add("");
+            for (int i = 0; i < chars.length; i += columns) {
+                lines.add(new String(chars, i, Math.min(columns, chars.length - i)));
+            }
+        }
+        return lines;
     }
 
     private void drawNode(Graphics2D g, JsonNode node) {
         String type = node.path("type").asText("");
-        int NODE_W = "decision".equals(type) ? 164 : "inputOutput".equals(type) ? 140 : FlowchartImageRenderer.NODE_W;
+        int NODE_W = nodeWidth(node);
         int NODE_H = nodeHeight(node);
         int x = (int) Math.round(node.path("x").asDouble() - NODE_W / 2d);
         int y = (int) Math.round(node.path("y").asDouble() - NODE_H / 2d);
@@ -150,8 +188,16 @@ public class FlowchartImageRenderer {
         } else if ("inputOutput".equals(type)) {
             Path2D shape = new Path2D.Double(); shape.moveTo(x + 12, y); shape.lineTo(x + NODE_W, y); shape.lineTo(x + NODE_W - 12, y + NODE_H); shape.lineTo(x, y + NODE_H); shape.closePath(); g.draw(shape);
         } else g.drawRect(x, y, NODE_W, NODE_H);
-        String text = node.path("text").asText("");
-        FontMetrics fm = g.getFontMetrics(); int tx = x + (NODE_W - fm.stringWidth(text)) / 2;
-        g.setColor(new Color(30, 35, 45)); g.drawString(text, tx, y + (NODE_H + fm.getAscent() - fm.getDescent()) / 2);
+        Font priorFont = g.getFont();
+        g.setFont(priorFont.deriveFont(15f));
+        List<String> lines = nodeLines(node);
+        FontMetrics fm = g.getFontMetrics();
+        g.setColor(new Color(30, 35, 45));
+        int baseline = y + (NODE_H - lines.size() * 20) / 2 + (20 + fm.getAscent() - fm.getDescent()) / 2;
+        for (String line : lines) {
+            g.drawString(line, x + (NODE_W - fm.stringWidth(line)) / 2, baseline);
+            baseline += 20;
+        }
+        g.setFont(priorFont);
     }
 }

@@ -82,8 +82,11 @@ public class FlowchartController extends BaseController {
         Object result = service.saveDraft(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
                 lessonId, questionId, requiredInt(request, "expectedRevision"), requiredString(request, "documentJson"));
         BizStudent student = currentStudent();
-        taskStateService.markSafely(student, student.getDeptId(), lessonId, questionId,
-                ClassroomTaskStateService.WORKING);
+        // 退回任务在再次提交前保留 RETURNED，避免当前课程的草稿保存后失去重交状态。
+        if (!taskStateService.isReturned(student.getStudentId(), lessonId, questionId)) {
+            taskStateService.markSafely(student, student.getDeptId(), lessonId, questionId,
+                    ClassroomTaskStateService.WORKING);
+        }
         return success(result);
     }
 

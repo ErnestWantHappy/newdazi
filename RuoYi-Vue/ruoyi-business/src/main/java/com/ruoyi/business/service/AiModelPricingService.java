@@ -34,6 +34,13 @@ public class AiModelPricingService
             if (prices.stream().noneMatch(p -> PROVIDER_QWEN.equals(p.getProviderCode()) && model.equals(p.getModelName())))
                 prices.add(referenceMaxPrice(model));
         }
+        for (Map<String, String> option : PracticalVisionModelCatalog.options())
+        {
+            String provider = option.get("providerCode"), model = option.get("modelName");
+            if (!PROVIDER_QWEN.equals(provider) && prices.stream().noneMatch(p ->
+                    provider.equals(p.getProviderCode()) && model.equals(p.getModelName())))
+                prices.add(unpricedModel(provider, model));
+        }
         return prices;
     }
 
@@ -44,14 +51,21 @@ public class AiModelPricingService
         {
             if (PROVIDER_QWEN.equals(providerCode) && ("qwen3.8-max".equals(modelName)
                     || "qwen3.8-max-0902".equals(modelName))) return referenceMaxPrice(modelName);
-            throw new ServiceException("当前模型尚未配置参考单价，请联系管理员");
+            PracticalVisionModelCatalog.endpoint(providerCode, modelName);
+            return unpricedModel(providerCode, modelName);
         }
         return price;
     }
 
     public AiModelPrice update(String modelName, AiModelPriceRequest request, String username)
     {
-        AiModelPrice current = require(PROVIDER_QWEN, modelName);
+        return update(PROVIDER_QWEN, modelName, request, username);
+    }
+
+    public AiModelPrice update(String providerCode, String modelName, AiModelPriceRequest request, String username)
+    {
+        PracticalVisionModelCatalog.endpoint(providerCode, modelName);
+        AiModelPrice current = require(providerCode, modelName);
         if (request == null || invalidPrice(request.getInputPricePerThousand())
                 || invalidPrice(request.getOutputPricePerThousand()))
         {
@@ -68,7 +82,7 @@ public class AiModelPricingService
         current.setPriceNote(truncate(StringUtils.trim(request.getPriceNote()), 255));
         current.setUpdateBy(username);
         mapper.upsert(current);
-        return require(PROVIDER_QWEN, modelName);
+        return require(providerCode, modelName);
     }
 
     public Map<String, Object> describe(String providerCode, String modelName)
@@ -126,7 +140,7 @@ public class AiModelPricingService
                 : current == null ? null : current.getPriceStatus());
         usage.put("priceNote", job.getPriceNote() != null ? job.getPriceNote()
                 : current == null ? null : current.getPriceNote());
-        usage.put("disclaimer", "估算值，实际以阿里云账单为准");
+        usage.put("disclaimer", "费用估算仅供参考，实际以所选模型厂商账单为准");
         return usage;
     }
 
@@ -162,6 +176,17 @@ public class AiModelPricingService
         price.setOutputPricePerThousand(new BigDecimal("0.036000"));
         price.setPriceStatus("REFERENCE");
         price.setPriceNote("2026-09-17百炼官网北京地域参考价：0<Token≤1M，输入12元/百万、输出36元/百万；未扣缓存、Batch或免费额度；纸质识别和评分分别计费，实际以账单为准");
+        return price;
+    }
+
+    private AiModelPrice unpricedModel(String provider, String model)
+    {
+        AiModelPrice price = new AiModelPrice();
+        price.setProviderCode(provider);
+        price.setModelName(model);
+        price.setDisplayName(model);
+        price.setPriceStatus("TO_CONFIRM");
+        price.setPriceNote("单价和免费额度须在所选厂商账户中核实；尚未记录参考价，不按零元估算");
         return price;
     }
 

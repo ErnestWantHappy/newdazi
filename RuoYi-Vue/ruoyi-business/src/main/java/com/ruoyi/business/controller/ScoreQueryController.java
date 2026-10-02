@@ -285,6 +285,12 @@ public class ScoreQueryController extends BaseController {
         {
             return AjaxResult.error("只能对当前课程开启/关闭题目，历史课程请回到当时的课堂上开启");
         }
+        if (!SecurityUtils.isAdmin(SecurityUtils.getUserId())
+                && teacherClassMapper.countManagedClass(SecurityUtils.getUserId(), deptId,
+                        entryYear.trim(), classCode.trim()) <= 0)
+        {
+            return AjaxResult.error("只能操作自己管理班级的题目开关");
+        }
         int updated = lessonAssignmentMapper.updateLessonGate(
                 assignment.getAssignmentId(), "theory".equals(kind) ? "theory" : "practical", open);
         if (updated == 0)

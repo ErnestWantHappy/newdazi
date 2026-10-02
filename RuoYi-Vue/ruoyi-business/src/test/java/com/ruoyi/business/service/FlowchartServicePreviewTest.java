@@ -46,19 +46,19 @@ class FlowchartServicePreviewTest {
     }
 
     @Test
-    void previewShouldReportIncompleteConfigWithoutLeakingAnswer() {
+    void previewShouldAllowEmptyAnswerWithoutLeakingAnswer() {
         FlowchartMapper flowchartMapper = mock(FlowchartMapper.class);
         BizQuestionMapper questionMapper = mock(BizQuestionMapper.class);
         FlowchartService service = newService(flowchartMapper, questionMapper);
         FlowchartQuestionConfig config = new FlowchartQuestionConfig();
         config.setStarterJson(singleNodeJson("starter"));
-        config.setAnswerJson("{\"nodes\":[]}");
+        config.setAnswerJson("{\"schemaVersion\":\"1.0\",\"nodes\":[],\"edges\":[]}");
         when(questionMapper.selectBizQuestionByQuestionId(1L)).thenReturn(flowchartQuestion("Y", 10L));
         when(flowchartMapper.selectQuestionConfig(1L)).thenReturn(config);
 
         Map<String, Object> preview = service.teacherPreview(1L, 20L, false);
 
-        assertEquals(false, preview.get("configReady"));
+        assertEquals(true, preview.get("configReady"));
         assertFalse(preview.containsKey("answerJson"));
     }
 
@@ -86,7 +86,7 @@ class FlowchartServicePreviewTest {
         FlowchartService service = new FlowchartService(flowchartMapper, mock(BizQuestionMapper.class), studentMapper,
                 mock(BizLessonAssignmentMapper.class), mock(BizLessonQuestionMapper.class),
                 mock(BizStudentAnswerMapper.class), accessService, mock(FlowchartDocumentService.class),
-                mock(FlowchartStructureCheckService.class));
+                mock(FlowchartStructureCheckService.class), mock(ClassroomTaskStateService.class));
 
         assertThrows(ServiceException.class, () -> service.gradingSubmission(372L, 2012L, 30L, 1));
 
@@ -94,11 +94,32 @@ class FlowchartServicePreviewTest {
         verify(accessService, never()).assertCanViewLessonClass(372L, "2025", "1");
     }
 
+    @Test
+    void shouldSaveBothEmptyDiagramsAndDiscardOldRules() {
+        FlowchartMapper mapper = mock(FlowchartMapper.class);
+        BizQuestionMapper questions = mock(BizQuestionMapper.class);
+        ObjectMapper json = new ObjectMapper();
+        FlowchartDocumentService documents = new FlowchartDocumentService(json);
+        FlowchartService service = new FlowchartService(mapper, questions, mock(BizStudentMapper.class),
+                mock(BizLessonAssignmentMapper.class), mock(BizLessonQuestionMapper.class),
+                mock(BizStudentAnswerMapper.class), mock(GuideSheetAccessService.class), documents,
+                new FlowchartStructureCheckService(json, documents), mock(ClassroomTaskStateService.class));
+        when(questions.selectBizQuestionByQuestionId(1L)).thenReturn(flowchartQuestion("N", 10L));
+        FlowchartQuestionConfig request = new FlowchartQuestionConfig();
+        request.setRulesJson("[{\"expectedNodeId\":\"removed\"}]");
+        service.saveTeacherConfig(1L, request, 10L, false, "teacher");
+        verify(mapper).insertQuestionConfig(org.mockito.ArgumentMatchers.argThat(config ->
+                "[]".equals(config.getRulesJson())
+                && documents.readDocument(config.getStarterJson()).path("nodes").isEmpty()
+                && documents.readDocument(config.getAnswerJson()).path("nodes").isEmpty()));
+    }
+
     private FlowchartService newService(FlowchartMapper flowchartMapper, BizQuestionMapper questionMapper) {
         return new FlowchartService(flowchartMapper, questionMapper, mock(BizStudentMapper.class),
                 mock(BizLessonAssignmentMapper.class), mock(BizLessonQuestionMapper.class),
                 mock(BizStudentAnswerMapper.class), mock(GuideSheetAccessService.class),
-                new FlowchartDocumentService(new ObjectMapper()), mock(FlowchartStructureCheckService.class));
+                new FlowchartDocumentService(new ObjectMapper()), mock(FlowchartStructureCheckService.class),
+                mock(ClassroomTaskStateService.class));
     }
 
     private String singleNodeJson(String id) {

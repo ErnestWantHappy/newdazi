@@ -40,7 +40,8 @@ export function normalizeFlowchartDocument(source) {
       text: textValue(node?.text).slice(0, 200),
       properties: {
         locked: Boolean(node?.properties?.locked),
-        textEditable: node?.properties?.textEditable !== false
+        textEditable: node?.properties?.textEditable !== false,
+        ...nodeSize(node)
       }
     }
   })
@@ -79,6 +80,7 @@ export function normalizeFlowchartPermissions(value) {
 
 export function flowchartToLogicFlow(document) {
   const source = normalizeFlowchartDocument(document)
+  const nodeById = new Map(source.nodes.map(node => [node.id, node]))
   return {
     nodes: source.nodes.map(node => ({
       ...node,
@@ -91,10 +93,46 @@ export function flowchartToLogicFlow(document) {
       }
     })),
     edges: source.edges.map(edge => ({
-      ...edge,
+      ...migrateLegacySideAnchors(edge, nodeById),
       text: edge.textPosition ? { ...edge.textPosition, value: edge.text } : edge.text
     }))
   }
+}
+
+function nodeSize(node) {
+  const properties = node?.properties || {}
+  const width = Number(properties.width)
+  const height = Number(properties.height)
+  return Number.isFinite(width) && width >= 80 && width <= 1200
+    && Number.isFinite(height) && height >= 40 && height <= 800
+    ? { width: Math.round(width), height: Math.round(height) } : {}
+}
+
+function migrateLegacySideAnchors(edge, nodeById) {
+  const source = nodeById.get(edge.sourceNodeId)
+  const target = nodeById.get(edge.targetNodeId)
+  const result = { ...edge }
+  let migrated = false
+  for (const [node, peer, key, outgoing] of [
+    [source, target, 'sourceAnchorId', true], [target, source, 'targetAnchorId', false]
+  ]) {
+    if (!node || node.type === 'decision') continue
+    const oldId = result[key]
+    const suffix = oldId?.slice(node.id.length + 1)
+    if (!oldId || !oldId.startsWith(`${node.id}_`)) continue
+    if (['left', 'right', '0', '1', '2', '3'].includes(suffix)) {
+      const position = ['0', '2'].includes(suffix) ? (suffix === '0' ? 'top' : 'bottom')
+        : (outgoing ? (peer?.y >= node.y ? 'bottom' : 'top') : (peer?.y > node.y ? 'bottom' : 'top'))
+      result[key] = `${node.id}_${position}`
+      migrated = true
+    }
+  }
+  if (migrated) {
+    delete result.startPoint
+    delete result.endPoint
+    delete result.pointsList
+  }
+  return result
 }
 
 export function logicFlowToFlowchart(graphData) {

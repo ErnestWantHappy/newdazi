@@ -1,6 +1,7 @@
 package com.ruoyi.web.controller.monitor;
 
 import java.io.InputStream;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -67,7 +68,8 @@ public class ExtensionHealthController
 
     /**
      * 129 硬件探针命令：经免密 SSH 拉取 hwprobe.sh 的 JSON 输出。
-     * 留空（默认）则探针禁用；生产由 NSSM 环境变量 MONITOR_HOST129_SSH_COMMAND 注入。
+     * 留空（默认）则探针禁用；生产由 monitor.host129.ssh-command 或
+     * MONITOR_HOST129_SSH_COMMAND 注入。命令由当前后端宿主机执行，支持 Windows/Linux。
      */
     @Value("${monitor.host129.ssh-command:${MONITOR_HOST129_SSH_COMMAND:}}")
     private String host129SshCommand;
@@ -249,7 +251,7 @@ public class ExtensionHealthController
         }
         try
         {
-            ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", host129SshCommand.trim());
+            ProcessBuilder pb = probeProcess(host129SshCommand.trim());
             pb.redirectErrorStream(false);
             final Process p = pb.start();
             // 看门狗：超时强杀进程，保证下方 readAll 能拿到 EOF 而不是永久阻塞
@@ -285,6 +287,20 @@ public class ExtensionHealthController
         {
             return unavailableHost(safeMessage(e));
         }
+    }
+
+    /**
+     * 监控后端已从 Windows 123 迁到 Linux 130，不能把探针命令固定交给 cmd.exe。
+     * Windows 继续使用 cmd，Linux 使用 bash -lc；命令本身由部署配置限制为只读 SSH 探针。
+     */
+    private ProcessBuilder probeProcess(String command)
+    {
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (os.contains("win"))
+        {
+            return new ProcessBuilder("cmd.exe", "/d", "/s", "/c", command);
+        }
+        return new ProcessBuilder("/bin/bash", "-lc", command);
     }
 
     private Map<String, Object> unavailableHost(String reason)

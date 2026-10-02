@@ -45,6 +45,9 @@ public interface BizTeacherClassMapper
      */
     public List<BizTeacherClass> selectAvailableClasses(@Param("deptId") Long deptId);
 
+    int countManagedClass(@Param("userId") Long userId, @Param("deptId") Long deptId,
+                          @Param("entryYear") String entryYear, @Param("classCode") String classCode);
+
     /**
      * 新增教师-班级管理关联
      * 

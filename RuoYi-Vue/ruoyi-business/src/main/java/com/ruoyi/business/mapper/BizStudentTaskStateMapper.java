@@ -8,6 +8,9 @@ import org.apache.ibatis.annotations.Param;
 /** 学生课堂任务状态 Mapper。 */
 public interface BizStudentTaskStateMapper
 {
+    List<BizStudentTaskState> selectStudentLessonStates(@Param("studentId") Long studentId,
+                                                       @Param("lessonId") Long lessonId);
+    List<BizStudentTaskState> selectStudentReturnedStates(@Param("studentId") Long studentId);
     int upsert(BizStudentTaskState state);
 
     BizStudentTaskState selectOneForUpdate(@Param("lessonId") Long lessonId,

@@ -1,0 +1,24 @@
+{
+  "version": "0.26.4",
+  "sha256": {
+    "pyodide.mjs": "7f24c6655a79eacf0061d3d4e6a60dc0b1938812d15c52d7ff8b37d9e0689e51",
+    "pyodide.asm.js": "919560652ed3dad3707cb3a394785da1e046fb13dc0defa162058ff230cb7eed",
+    "pyodide.asm.wasm": "b7e66a19427a55010ac3367c1b6c64b893f9826f783412945fdf0c3337f3bc94",
+    "python_stdlib.zip": "72894522b791858b9d613ac786b951d8b5094035dcf376313ea24a466810f336",
+    "pyodide-lock.json": "cd50b49de944c579045e122fe8628b31f9ce446379f032f36c05e273d38766e0",
+    "numpy-1.26.4-cp312-cp312-pyodide_2024_0_wasm32.whl": "4a2f5303a88a0747c5e6c80701e0ff4ff5667e487c0c9f9c73875e4d88f4cf9a",
+    "six-1.16.0-py2.py3-none-any.whl": "f359c3850331f250d1a5e394aae58193774c6358676340aba992718589b9dcf1",
+    "python_dateutil-2.9.0.post0-py2.py3-none-any.whl": "302d74af893af51ee8b52e2c06a1fc2bc73cfe645eed3f35a17f082cdf101c7d",
+    "pytz-2024.1-py2.py3-none-any.whl": "561652a008b98ef7b66a6acf816e3f4d1c0e17e8ed9eb8dbb993037413cda597",
+    "pandas-2.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl": "ae979af0f0be1e8c482408d838ea1366d187f3f057f47b429910e66dbba60673",
+    "cycler-0.12.1-py3-none-any.whl": "decbe5b1367b9890a30d8b1f0d5d5a062af628d3b3ccc59112cf3c53f7c6b84b",
+    "fonttools-4.51.0-py3-none-any.whl": "02bfb3707f47724672e28951be5a47e8669edc556bc79873cb1b96c8f83fc15b",
+    "kiwisolver-1.4.5-cp312-cp312-pyodide_2024_0_wasm32.whl": "7cb47be55135cfb57f65be10d173b09c162097e3242ff120306d7b55f887d634",
+    "packaging-23.2-py3-none-any.whl": "3c30fe6689a35520f2040f4963eae8dbdf6aaa8e326674a13bca3f11514c674a",
+    "pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl": "9f3ae58c481ade2a88f794a5aa130b9514d315ef549f254e474f9593a73428cf",
+    "pyparsing-3.1.2-py3-none-any.whl": "346cc485c0fb067121825224c5bfe258991f4f2509e1c56adbe7237ea58bb16b",
+    "matplotlib_pyodide-0.2.2-py3-none-any.whl": "41e8016ed2f586b99b8e4e506b511fd324a466e7c1d01ebd6c47fdbf158ccc16",
+    "matplotlib-3.5.2-cp312-cp312-pyodide_2024_0_wasm32.whl": "7321e0aa4dcd53cc7826fb558bed79ec6624a6430b00fa048b21fbe21fa0cc2e",
+    "micropip-0.6.0-py3-none-any.whl": "d97c0c01748ddbc52a19944c6a6788c6a8969ed13158c06bc63c6eb02779cd98"
+  }
+}

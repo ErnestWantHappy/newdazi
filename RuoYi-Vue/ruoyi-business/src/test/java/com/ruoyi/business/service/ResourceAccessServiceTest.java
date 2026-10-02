@@ -40,6 +40,7 @@ class ResourceAccessServiceTest
     @Mock private BizStudentMapper studentMapper;
     @Mock private BizTeacherClassMapper teacherClassMapper;
     @Mock private BizLessonMapper lessonMapper;
+    @Mock private DataLabAccessService dataLabAccessService;
 
     @InjectMocks
     private ResourceAccessService service;
@@ -48,6 +49,16 @@ class ResourceAccessServiceTest
     void clearSecurityContext()
     {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void dataLabResourcesCannotFallThroughToGenericResourcePermissions()
+    {
+        login(1L, 10L);
+        org.mockito.Mockito.doThrow(new ServiceException("无权访问")).when(dataLabAccessService).chart(any());
+        assertThrows(ServiceException.class, () -> service.assertCanRead("/profile/datalab/charts/a.png"));
+        assertThrows(ServiceException.class, () -> service.assertCanRead("/profile/datalab/excel/a.xlsx"));
+        org.mockito.Mockito.verifyNoInteractions(resourceAccessMapper);
     }
 
     @Test

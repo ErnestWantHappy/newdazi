@@ -268,6 +268,10 @@ public class GuideSheetController extends BaseController
             return success("提交成功");
         }
         answerService.saveAnswer(answer);
+        if (Boolean.TRUE.equals(answer.getParams().get("staleDraftRevision")))
+        {
+            return error("答卷已在其他页面更新，请刷新后重试");
+        }
         return success("保存成功").put("savedRevision", answer.getDraftRevision());
     }
 

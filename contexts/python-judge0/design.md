@@ -1,5 +1,21 @@
 # Python 在线编程与 Judge0 CE 设计
 
+## 2026-09-23 实验题入口调整（本机）
+
+题库管理页复用现有 `DataLabExperiment/Editor.vue`，保存仍走既有题目与实验配置接口；列表增加 `DATA_LAB` 操作方式筛选，编辑同一题 ID 时直接打开该编辑器。Excel 上传与配置保存接受题库 add/edit 或原 Python 题单 edit 权限，配置读取接受 question:query 或原 pythonPractice:query；学生发布与评分权限不变。无需新表、依赖或题单发布语义变更。前端构建、教师入口弹窗及隔离库真实上传/创建/编辑/筛选已通过。当前本机源库含缺实验快照的旧题单，隔离库 `data_lab_v2.sql` 按设计阻断；题库入口验收只补 v1/上传表，不能视为完整迁移。
+
+## 2026-09-22 运行资产与正式部署
+
+Pyodide默认`/pyodide/`，保留VITE_PYODIDE_BASE_URL覆盖；scripts/prepare_pyodide.py固定0.26.4并按lockfile校验依赖wheel。openpyxl/et_xmlfile与Noto字体从`/datalab/`加载。Nginx必须将pyodide的mjs返回application/javascript，wasm返回application/wasm。真实正式浏览器阻断外域后Excel/中文绘图/超时重建通过。版本快照与权限设计不变，v1/v2已随1.30.23迁移，详见ADR-014与部署手册。
+
+## 2026-09-21 DATA_LAB版本与权限补齐
+
+以普通题目快照为键附加不可变实验配置，版本克隆复制；DataLabAccessService集中校验登录身份、版本/班级和提交归属，资源接口委托同一规则。提交事务锁题单主行，评分按revision乐观校验。Worker提供超时终止/重建；本地wheel补openpyxl，本地Noto字体解决中文，Pyodide主库支持镜像配置。详见ADR-014；替代下方临时全拒绝状态，仍须完成数据库与真实师生联调后发布。
+
+## 2026-09-21 本地边界修正
+
+题单编辑事务先锁共同plan主行，再锁定读取版本和MAX序号；发布使用同一锁。重新加入同版本题目复用原快照及测试点，不重新拍摄当前题库。普通题单查询不动态JOIN DATA_LAB配置。DATA_LAB服务denyAll及资源门禁必须保留至来源权限/快照/统计闭环；运行代码改为组件独占Worker，超时销毁重建。详见adr/ADR-013-plan-edit-lock-and-data-lab-isolation.md。
+
 ## 数据边界
 
 `biz_question.question_type=practical` 继续是统一题库入口，`practical_mode=FILE/PYTHON` 区分文件作品和在线编程；`biz_lesson_question` 继续保存课程分值。五张 `biz_programming_*` 表只保存 Python 配置、测试点、草稿和不可变提交历史。正式判题终态才更新既有 `biz_student_answer`，因此 Judge0 不可用不会把已有成绩变为零分。成绩汇总既有的操作题统计直接覆盖两种作答方式。

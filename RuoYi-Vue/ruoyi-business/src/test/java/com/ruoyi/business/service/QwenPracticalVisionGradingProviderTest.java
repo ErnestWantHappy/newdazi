@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.Arrays;
 import java.util.Collections;
+import java.io.File;
+import java.nio.file.Files;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.business.domain.PracticalRubricSnapshot;
+import com.ruoyi.business.domain.TeacherAiConfig;
 import com.ruoyi.business.domain.vo.PracticalScoringItemVo;
 import com.ruoyi.common.exception.ServiceException;
 
@@ -20,6 +23,33 @@ class QwenPracticalVisionGradingProviderTest
 {
     private final QwenPracticalVisionGradingProvider provider = new QwenPracticalVisionGradingProvider();
     private final ObjectMapper mapper = new ObjectMapper();
+
+    @Test
+    void threeProvidersUseVisionJsonPayloadWithoutLeakingQwenOptions() throws Exception
+    {
+        File image = File.createTempFile("anonymous-vision-", ".jpg");
+        try
+        {
+            Files.write(image.toPath(), new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, (byte) 0xd9});
+            for (String[] selected : new String[][] {
+                    {"QWEN", "qwen3.8-max"}, {"DEEPSEEK", "deepseek-flash"},
+                    {"DOUBAO", "doubao-seed-2.1-pro"}})
+            {
+                TeacherAiConfig config = new TeacherAiConfig();
+                config.setProviderCode(selected[0]);
+                config.setModelName(selected[1]);
+                config.setEndpointUrl(PracticalVisionModelCatalog.endpoint(selected[0], selected[1]));
+                ObjectNode body = provider.buildRequestBody(config, "匿名评分样本",
+                        Collections.singletonList(image), Collections.singletonList("学生作品"), 256, "只返回 JSON");
+                assertEquals(selected[1], body.path("model").asText());
+                assertEquals("json_object", body.path("response_format").path("type").asText());
+                assertEquals(true, body.path("messages").get(1).path("content").get(2)
+                        .path("image_url").path("url").asText().startsWith("data:image/jpeg;base64,"));
+                assertEquals("QWEN".equals(selected[0]), body.has("enable_thinking"));
+            }
+        }
+        finally { Files.deleteIfExists(image.toPath()); }
+    }
 
     @Test
     void paperBlankAndUncertainCannotReceiveFullMarks() throws Exception
@@ -167,7 +197,7 @@ class QwenPracticalVisionGradingProviderTest
     @Test
     void shouldMapProviderBillingKeyAndThrottleErrors()
     {
-        assertEquals("阿里云账户可能余额不足或已欠费，请充值后重试",
+        assertEquals("模型厂商账户可能余额不足或已欠费，请核实后重试",
                 provider.friendlyHttpError(error("Arrearage", "Account balance is insufficient")));
         assertEquals("AI Key 无效或已过期，请重新配置",
                 provider.friendlyHttpError(error("InvalidApiKey.NotFound", "bad key")));
@@ -178,9 +208,9 @@ class QwenPracticalVisionGradingProviderTest
     @Test
     void shouldKeepSafeServerMessageForUnknownErrors()
     {
-        assertEquals("千问接口调用失败（HTTP 400）：模型参数无效",
+        assertEquals("模型接口调用失败（HTTP 400）：模型参数无效",
                 provider.friendlyHttpError(error("InvalidParameter", "模型参数无效")));
-        assertEquals("千问接口调用失败（HTTP 400）：API Key: ***，Bearer ***",
+        assertEquals("模型接口调用失败（HTTP 400）：API Key: ***，Bearer ***",
                 provider.friendlyHttpError(error("Unknown", "API Key: sk-secret123456，Bearer abc.def.ghi")));
     }
 

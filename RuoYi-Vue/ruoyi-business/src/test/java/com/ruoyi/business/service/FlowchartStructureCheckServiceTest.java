@@ -58,6 +58,14 @@ class FlowchartStructureCheckServiceTest {
                 answer, answer, objectMapper.writeValueAsString(rules), 20));
     }
 
+    @Test
+    void emptyAnswerRequiresManualReview() throws Exception {
+        String empty = "{\"schemaVersion\":\"1.0\",\"nodes\":[],\"edges\":[]}";
+        FlowchartStructureCheckService.CheckOutcome outcome = service.check(empty, empty, "[]", 20);
+        assertEquals(null, outcome.getSuggestedScore());
+        assertEquals("MANUAL_REVIEW", objectMapper.readTree(outcome.getResultJson()).path("status").asText());
+    }
+
     private String document(String firstText, String secondText, String edgeText) {
         return "{\"schemaVersion\":\"1.0\",\"nodes\":["
                 + "{\"id\":\"n1\",\"type\":\"terminal\",\"x\":100,\"y\":100,\"text\":\"" + firstText + "\"},"

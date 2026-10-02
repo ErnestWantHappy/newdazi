@@ -108,6 +108,24 @@ class CollaborationRoomServiceAccessTest
                 () -> ReflectionTestUtils.invokeMethod(service, "requireRoomAccess", room("1"), 5551L));
     }
 
+    @Test
+    void currentRoomsOnlyIncludeCurrentActivityAndOwnGroup()
+    {
+        ReflectionTestUtils.setField(service, "enabled", true);
+        when(collaborationMapper.selectCurrentActivity(268L, 169L, "2025", "1"))
+                .thenReturn(Collections.<String, Object>singletonMap("activityId", 11L));
+        CollaborationRoom own = room("1");
+        own.setStatus("OPEN");
+        CollaborationRoom other = room("1");
+        other.setRoomId(100L);
+        other.setStatus("OPEN");
+        when(collaborationMapper.selectRoomsByActivity(11L)).thenReturn(java.util.Arrays.asList(own, other));
+        when(collaborationMapper.countActivityRoomMembership(99L, 7001L)).thenReturn(1);
+        when(collaborationMapper.countActivityRoom(99L)).thenReturn(1);
+        assertEquals(1, service.currentStudentRooms().size());
+        org.mockito.Mockito.verify(collaborationMapper, org.mockito.Mockito.never()).selectRoomsByLesson(268L, 169L);
+    }
+
     private CollaborationRoom room(String classCode)
     {
         CollaborationRoom room = new CollaborationRoom();

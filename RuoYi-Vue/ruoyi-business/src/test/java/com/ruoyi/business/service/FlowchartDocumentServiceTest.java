@@ -48,6 +48,16 @@ class FlowchartDocumentServiceTest {
     }
 
     @Test
+    void shouldRoundTripOptionalNodeSizeAndRejectOversize() throws Exception {
+        String source = "{\"nodes\":[{\"id\":\"p\",\"type\":\"inputOutput\",\"x\":100,\"y\":100,"
+                + "\"properties\":{\"width\":320,\"height\":110}}],\"edges\":[]}";
+        String normalized = service.normalizeDocument(source);
+        assertEquals(normalized, service.normalizeDocument(normalized));
+        assertEquals(320, objectMapper.readTree(normalized).path("nodes").get(0).path("properties").path("width").asInt());
+        assertThrows(ServiceException.class, () -> service.normalizeDocument(source.replace("320", "5000")));
+    }
+
+    @Test
     void shouldRejectHtmlAndDanglingEdges() {
         ServiceException html = assertThrows(ServiceException.class, () -> service.normalizeDocument(
                 "{\"nodes\":[{\"id\":\"n1\",\"type\":\"process\",\"x\":1,\"y\":1,\"text\":\"<script>\"}],\"edges\":[]}", "标准答案"));

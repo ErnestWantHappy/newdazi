@@ -192,10 +192,6 @@ xss:
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
 
-# 学生提交配置。课程推进后保留短暂补交窗口，当前课仍会立即切换。
-student:
-  submission-grace-minutes: ${STUDENT_SUBMISSION_GRACE_MINUTES:15}
-
 # Swagger 示例接口默认不注册，仅本机显式开启。
 demo:
   enabled: ${DEMO_ENABLED:false}

@@ -2,6 +2,7 @@ package com.ruoyi.business.mapper;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Date;
 import org.apache.ibatis.annotations.Param;
 
 /** Python 刷题独立业务域数据访问。 */
@@ -41,6 +42,8 @@ public interface PythonPracticeMapper {
     int updateSubmissionResult(Map<String, Object> params);
     int insertSubmission(Map<String, Object> params);
     int insertSubmissionCase(Map<String, Object> params);
+    List<Map<String, Object>> selectStuckSubmissions(@Param("before") Date before,
+                                                     @Param("limit") int limit);
 
     int insertPlan(Map<String, Object> params);
     int updatePlanName(@Param("planId") Long planId,
@@ -72,6 +75,13 @@ public interface PythonPracticeMapper {
     int updatePlanQuestionSort(@Param("planVersionId") Long planVersionId,
                                @Param("questionId") Long questionId,
                                @Param("sortNo") Integer sortNo);
+    int selectMaxPlanQuestionSort(@Param("planVersionId") Long planVersionId);
+    int countPlanQuestionBySort(@Param("planVersionId") Long planVersionId,
+                                @Param("sortNo") Integer sortNo);
+
+    Long lockPlanByVersion(@Param("planVersionId") Long planVersionId);
+    Long selectReusableSnapshot(@Param("planVersionId") Long planVersionId,
+                                @Param("questionId") Long questionId);
 
     int publishVersion(@Param("planId") Long planId, @Param("planVersionId") Long planVersionId);
     int retractPublishedVersions(@Param("planId") Long planId, @Param("exceptVersionId") Long exceptVersionId);

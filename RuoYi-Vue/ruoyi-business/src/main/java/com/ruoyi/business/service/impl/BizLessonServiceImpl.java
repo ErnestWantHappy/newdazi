@@ -639,6 +639,11 @@ public class BizLessonServiceImpl implements IBizLessonService
         lessonQuestionMapper.deleteByLessonId(lessonId);
         if (!CollectionUtils.isEmpty(questions)) {
             for (BizLessonQuestionDetailVo question : questions) {
+                com.ruoyi.business.domain.BizQuestion storedQuestion = bizQuestionMapper.selectBizQuestionByQuestionId(question.getQuestionId());
+                if ("DATA_LAB".equalsIgnoreCase(question.getPracticalMode())
+                        || (storedQuestion != null && "DATA_LAB".equalsIgnoreCase(storedQuestion.getPracticalMode()))) {
+                    throw new ServiceException("数据分析实验题请通过 Python 练习题单发布，暂不支持加入课程");
+                }
                 if ("practical".equalsIgnoreCase(question.getQuestionType()) && "PYTHON".equalsIgnoreCase(question.getPracticalMode())) {
                     ProgrammingQuestionConfig config = programmingJudgeMapper.selectConfig(question.getQuestionId());
                     if (config == null || !"1".equals(config.getEnabled()) || !"VALID".equals(config.getValidationStatus())) {

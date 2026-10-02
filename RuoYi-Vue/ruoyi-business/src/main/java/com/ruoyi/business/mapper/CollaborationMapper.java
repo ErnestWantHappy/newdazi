@@ -132,6 +132,8 @@ public interface CollaborationMapper
     /** 快照各组成员明细：学号+姓名，供教师房间列表展示。 */
     List<Map<String,Object>> selectSnapshotGroupMembers(@Param("snapshotId") Long snapshotId);
     Long lockLesson(@Param("lessonId") Long lessonId);
+    /** 退出事件写入前锁定房间，保证重复请求不会并发产生多条离开记录。 */
+    Long lockRoom(@Param("roomId") Long roomId);
     Map<String,Object> selectCurrentActivity(@Param("lessonId") Long lessonId, @Param("deptId") Long deptId, @Param("entryYear") String entryYear, @Param("classCode") String classCode);
     Map<String,Object> selectActivityByRequest(@Param("requestId") String requestId);
     int identifyActivity(@Param("activityId") Long activityId, @Param("requestId") String requestId, @Param("requestHash") String requestHash);

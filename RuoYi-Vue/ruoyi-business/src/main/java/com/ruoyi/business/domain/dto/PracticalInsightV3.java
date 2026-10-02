@@ -19,7 +19,7 @@ public final class PracticalInsightV3
     {
         public Request scope;
         public Long teacherId, deptId;
-        public String fingerprint, paperFingerprint, questionContent, gradeLabel, model;
+        public String fingerprint, paperFingerprint, questionContent, gradeLabel, provider, model;
         public java.math.BigDecimal inputPrice, outputPrice;
         public int total;
         public List<PracticalQuestionMaterial> materials = new ArrayList<>();

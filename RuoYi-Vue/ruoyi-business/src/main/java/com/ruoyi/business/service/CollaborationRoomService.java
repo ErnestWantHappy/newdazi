@@ -203,7 +203,10 @@ public class CollaborationRoomService
         if (lessonId == null) return new ArrayList<Map<String, Object>>();
         Map<String,Object> active = collaborationMapper.selectCurrentActivity(lessonId, deptId, student.getEntryYear(), normalizeClass(student.getClassCode()));
         List<CollaborationRoom> matches = new ArrayList<CollaborationRoom>();
-        for (CollaborationRoom room : collaborationMapper.selectRoomsByLesson(lessonId, deptId))
+        List<CollaborationRoom> currentRooms = active == null
+                ? collaborationMapper.selectRoomsByLesson(lessonId, deptId)
+                : collaborationMapper.selectRoomsByActivity(((Number) active.get("activityId")).longValue());
+        for (CollaborationRoom room : currentRooms)
         {
             if (student.getEntryYear().equals(room.getEntryYear())
                     && normalizeClass(student.getClassCode()).equals(normalizeClass(room.getClassCode()))

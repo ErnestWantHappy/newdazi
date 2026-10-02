@@ -18,8 +18,8 @@
     <!-- 表格视图 -->
     <div v-if="viewMode === 'table'" v-loading="loading">
       <div class="tip-text">课堂表现分范围 -10 ~ +10，正数为加分，负数为扣分。总分 = min(作业分 + 课堂表现分, 100)</div>
-      <el-table class="performance-table" :data="tableData" border stripe max-height="350" style="width: 100%">
-        <el-table-column prop="studentNo" label="学号" width="70" align="center" sortable :sort-method="naturalCodeCompare" />
+      <el-table class="performance-table" row-key="studentId" :data="tableData" border stripe max-height="350" style="width: 100%">
+        <el-table-column prop="studentNo" label="学号" width="70" align="center" sortable :sort-method="(a, b) => naturalCodeCompare(a.studentNo, b.studentNo)" />
         <el-table-column prop="studentName" label="姓名" width="100" align="center" />
         <el-table-column label="课堂表现分" width="160" align="center" class-name="performance-score-column">
           <template #default="scope">
@@ -86,6 +86,8 @@ const originalData = ref({}) // 保存原始数据用于对比
 const chartRef = ref(null)
 let chartInstance = null
 const autoSaveTimers = new Map()
+let contextVersion = 0
+const rowRequests = new Map()
 
 // 学号可能以字符串保存；按自然数值顺序比较，避免 1、10、2 的字典序。
 function naturalCodeCompare(a, b) {
@@ -99,6 +101,12 @@ const hasChartData = computed(() => {
 
 // 加载数据
 async function loadData() {
+  const version = ++contextVersion
+  autoSaveTimers.forEach(timer => clearTimeout(timer))
+  autoSaveTimers.clear()
+  tableData.value = []
+  originalData.value = {}
+  loading.value = false
   if (!props.lessonId || !props.classCode || !props.entryYear) return
   
   loading.value = true
@@ -108,6 +116,7 @@ async function loadData() {
       classCode: props.classCode,
       entryYear: props.entryYear
     })
+    if (version !== contextVersion) return
     tableData.value = (res.data || []).map(item => ({
       ...item,
       score: item.score,
@@ -123,7 +132,7 @@ async function loadData() {
   } catch (e) {
     console.error('加载课堂表现数据失败', e)
   } finally {
-    loading.value = false
+    if (version === contextVersion) loading.value = false
   }
 }
 
@@ -161,34 +170,40 @@ function handleDataChange(row) {
 
 // 静默保存单条记录
 async function saveSingleRow(row) {
+  if (rowRequests.has(row)) return rowRequests.get(row)
+  const request = persistRow(row)
+  rowRequests.set(row, request)
+  try { await request } finally { rowRequests.delete(row) }
+}
+
+async function persistRow(row) {
   row.changed = hasRowChanged(row)
   if (!row.changed) return
-
+  const version = contextVersion
+  const lessonId = props.lessonId
   row.saving = true
   try {
-    const res = await batchSavePerformance({
-      lessonId: props.lessonId,
-      performances: [{
-        studentId: row.studentId,
-        score: row.score,
-        reason: row.reason
-      }]
-    })
-    // 保存成功，更新基线原始数据
-    originalData.value[row.studentId] = { score: row.score, reason: row.reason || '' }
-    row.changed = false
-    row.performanceId = res.data || row.performanceId || true
-    emit('saved')
+    // 响应只能确认发出时的值；请求期间继续点击的修改在下一轮保存。
+    while (version === contextVersion && hasRowChanged(row)) {
+      const submitted = { studentId: row.studentId, score: row.score, reason: row.reason || '' }
+      await batchSavePerformance({ lessonId, performances: [submitted] })
+      if (version !== contextVersion) return
+      originalData.value[row.studentId] = { score: submitted.score, reason: submitted.reason }
+      row.changed = hasRowChanged(row)
+      row.performanceId = row.performanceId || true
+      emit('saved', { lessonId, performances: [submitted] })
+    }
   } catch (e) {
     ElMessage.error('自动保存失败: ' + row.studentName)
   } finally {
     row.saving = false
+    if (version === contextVersion) row.changed = hasRowChanged(row)
   }
 }
 
 // 保存全部
 async function saveAll() {
-  const changedItems = tableData.value.filter(item => item.changed || item.score !== 0)
+  const changedItems = tableData.value.filter(item => hasRowChanged(item) || rowRequests.has(item))
   if (changedItems.length === 0) {
     ElMessage.info('没有需要保存的数据')
     return
@@ -196,17 +211,10 @@ async function saveAll() {
   
   saving.value = true
   try {
-    await batchSavePerformance({
-      lessonId: props.lessonId,
-      performances: changedItems.map(item => ({
-        studentId: item.studentId,
-        score: item.score,
-        reason: item.reason
-      }))
-    })
-    ElMessage.success('保存成功')
-    emit('saved')
-    await loadData() // 重新加载刷新状态
+    autoSaveTimers.forEach(timer => clearTimeout(timer))
+    autoSaveTimers.clear()
+    await Promise.all(changedItems.map(saveSingleRow))
+    if (!changedItems.some(item => item.changed)) ElMessage.success('保存成功')
   } catch (e) {
     ElMessage.error('保存失败')
   } finally {
@@ -334,6 +342,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  ++contextVersion
   window.removeEventListener('resize', handleResize)
   autoSaveTimers.forEach(timer => clearTimeout(timer))
   autoSaveTimers.clear()

@@ -19,6 +19,7 @@ class PythonPracticeDeletePlanTest {
         PythonPracticeMapper mapper = mock(PythonPracticeMapper.class);
         PythonPracticeService service = new PythonPracticeService();
         ReflectionTestUtils.setField(service, "mapper", mapper);
+        ReflectionTestUtils.setField(service, "dataLabMapper", mock(com.ruoyi.business.mapper.DataLabMapper.class));
         Map<String, Object> plan = new HashMap<String, Object>();
         plan.put("plan_id", 13L);
         plan.put("dept_id", 169L);

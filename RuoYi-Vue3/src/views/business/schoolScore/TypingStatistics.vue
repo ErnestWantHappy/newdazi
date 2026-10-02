@@ -7,6 +7,9 @@
       <el-form-item label="学期"><el-select v-model="filters.semester" style="width: 130px">
         <el-option label="第一学期" value="1" /><el-option label="第二学期" value="2" />
       </el-select></el-form-item>
+      <el-form-item label="年级"><el-select v-model="filters.grade" clearable placeholder="全部年级" style="width: 130px" @change="onGradeChange">
+        <el-option v-for="grade in grades" :key="grade.value" :label="grade.label" :value="grade.value" />
+      </el-select></el-form-item>
       <el-form-item label="学校"><el-input v-model="filters.deptName" clearable @keyup.enter="load" /></el-form-item>
       <el-form-item><el-button type="primary" icon="Search" @click="load">查询</el-button></el-form-item>
     </el-form>
@@ -48,8 +51,15 @@ const today = new Date()
 const month = today.getMonth() + 1
 const year = String(today.getFullYear() - (month < 9 ? 1 : 0))
 const years = Array.from({ length: 5 }, (_, i) => String(Number(year) - i))
-const filters = reactive({ academicYear: year, semester: month >= 2 && month <= 8 ? '2' : '1', deptName: '' })
+const grades = Array.from({ length: 12 }, (_, index) => ({
+  value: index + 1,
+  label: index < 9 ? `${['一', '二', '三', '四', '五', '六', '七', '八', '九'][index]}年级` : `高${['一', '二', '三'][index - 9]}`
+}))
+const filters = reactive({ academicYear: year, semester: month >= 2 && month <= 8 ? '2' : '1', grade: null, deptName: '' })
 const schoolType = ref('1'), rows = ref([]), loading = ref(false), failed = ref(false)
+function onGradeChange(grade) {
+  schoolType.value = grade ? (grade <= 6 ? '1' : grade <= 9 ? '2' : '3') : '1'
+}
 const chartElement = ref(null)
 let chart, observer, requestId = 0, classRequestId = 0
 let loadedFilters = { ...filters }

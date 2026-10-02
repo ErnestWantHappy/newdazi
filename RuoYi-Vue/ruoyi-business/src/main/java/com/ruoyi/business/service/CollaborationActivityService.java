@@ -132,10 +132,27 @@ public class CollaborationActivityService
         // 心跳只用于确认会话仍有效，不是可审计的学习操作；写入事件表会在整班协作时无界膨胀。
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void recordLeave(Long roomId)
     {
         roomService.assertRoomAccess(roomId);
-        mapper.insertOperationEvent(roomId, SecurityUtils.getUserId(), mapper.selectStudentIdByUserId(SecurityUtils.getUserId()), "LEAVE", null, new Date());
+        Long userId = SecurityUtils.getUserId();
+        // 页面卸载、网络重试可能同时调用退出接口；以房间行锁串行化检查和写入。
+        mapper.lockRoom(roomId);
+        List<Map<String, Object>> events = mapper.selectOperationEvents(roomId);
+        for (Map<String, Object> event : events)
+        {
+            if (userId.equals(number(event.get("userId")))
+                    && "LEAVE".equals(String.valueOf(event.get("eventType"))))
+            {
+                return;
+            }
+            if (userId.equals(number(event.get("userId"))))
+            {
+                break;
+            }
+        }
+        mapper.insertOperationEvent(roomId, userId, mapper.selectStudentIdByUserId(userId), "LEAVE", null, new Date());
     }
 
     public List<Map<String, Object>> timeline(Long roomId)

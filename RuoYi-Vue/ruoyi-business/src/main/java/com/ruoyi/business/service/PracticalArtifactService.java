@@ -24,6 +24,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.business.domain.BizScoringDetail;
 import com.ruoyi.business.domain.BizStudentAnswer;
+import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.PracticalArtifact;
 import com.ruoyi.business.domain.PracticalAttachment;
 import com.ruoyi.business.domain.PracticalQuestionMaterial;
@@ -35,6 +37,8 @@ import com.ruoyi.business.domain.vo.PracticalArtifactVo;
 import com.ruoyi.business.domain.vo.PracticalSubmissionVo;
 import com.ruoyi.business.mapper.BizScoringDetailMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
+import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.PracticalArtifactMapper;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.core.redis.RedisCache;
@@ -68,6 +72,12 @@ public class PracticalArtifactService
 
     @Autowired
     private BizStudentAnswerMapper studentAnswerMapper;
+
+    @Autowired
+    private BizStudentMapper studentMapper;
+
+    @Autowired
+    private BizLessonAssignmentMapper lessonAssignmentMapper;
 
     @Autowired
     private BizScoringDetailMapper scoringDetailMapper;
@@ -134,6 +144,13 @@ public class PracticalArtifactService
                                                     Long expectedVersionId,
                                                     List<String> uploadTokens)
     {
+        BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
+        if (student == null) throw new ServiceException("未找到学生信息");
+        // 与课程推进共用指派行锁，防止控制器校验后课程切换，旧课作品仍写入。
+        BizLessonAssignment current = lessonAssignmentMapper.selectCurrentAssignmentForUpdate(
+                student.getEntryYear(), student.getClassCode(), student.getDeptId());
+        if (current == null || !lessonId.equals(current.getLessonId()))
+            throw new ServiceException("该课程已结束，仅能提交当前课程的作业");
         return submitArtifact(studentId, submittedByUserId, question, lessonId,
                 expectedVersionId, uploadTokens, false, false, null);
     }

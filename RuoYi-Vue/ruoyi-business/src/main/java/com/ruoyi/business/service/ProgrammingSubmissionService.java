@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizQuestion;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizStudentAnswer;
 import com.ruoyi.business.domain.ProgrammingDraft;
 import com.ruoyi.business.domain.ProgrammingQuestionConfig;
@@ -384,6 +385,10 @@ public class ProgrammingSubmissionService {
         if (student == null || lessonId == null || questionId == null) throw new ServiceException("课程或题目参数不完整");
         Long current = lessonAssignmentMapper.selectCurrentLessonByClass(student.getEntryYear(), student.getClassCode(), deptId);
         if (!lessonId.equals(current)) throw forbidden("只能操作当前指派课程的编程题");
+        BizLessonAssignment assignment = lessonAssignmentMapper.selectCurrentAssignmentForUpdate(
+                student.getEntryYear(), student.getClassCode(), deptId);
+        if (assignment == null || !Integer.valueOf(1).equals(assignment.getPracticalOpen()))
+            throw forbidden("本课操作题暂未开放");
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null) throw new ServiceException("课程不存在");
         if (lesson.getDeptId() == null || !deptId.equals(lesson.getDeptId())) throw forbidden("无权访问该课程");

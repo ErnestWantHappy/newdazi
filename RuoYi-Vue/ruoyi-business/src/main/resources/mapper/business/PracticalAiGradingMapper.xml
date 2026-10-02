@@ -60,6 +60,30 @@
           api_key_hint=VALUES(api_key_hint),enabled=VALUES(enabled),update_time=NOW()
     </insert>
     <delete id="deleteConfig">DELETE FROM biz_teacher_ai_config WHERE teacher_user_id=#{teacherUserId}</delete>
+    <resultMap id="ProviderKeyResult" type="com.ruoyi.business.domain.TeacherAiProviderKey">
+        <id property="teacherUserId" column="teacher_user_id"/>
+        <id property="providerCode" column="provider_code"/>
+        <result property="apiKeyCiphertext" column="api_key_ciphertext"/>
+        <result property="apiKeyHint" column="api_key_hint"/>
+        <result property="modelName" column="model_name"/>
+    </resultMap>
+    <select id="selectProviderKey" resultMap="ProviderKeyResult">
+        SELECT * FROM biz_teacher_ai_provider_key WHERE teacher_user_id=#{teacherUserId} AND provider_code=#{providerCode}
+    </select>
+    <select id="selectProviderKeys" resultMap="ProviderKeyResult">
+        SELECT * FROM biz_teacher_ai_provider_key WHERE teacher_user_id=#{teacherUserId} ORDER BY provider_code
+    </select>
+    <insert id="upsertProviderKey">
+        INSERT INTO biz_teacher_ai_provider_key
+          (teacher_user_id,provider_code,api_key_ciphertext,api_key_hint,model_name,create_time,update_time)
+        VALUES (#{teacherUserId},#{providerCode},#{apiKeyCiphertext},#{apiKeyHint},#{modelName},NOW(),NOW())
+        ON DUPLICATE KEY UPDATE api_key_ciphertext=VALUES(api_key_ciphertext),api_key_hint=VALUES(api_key_hint),
+          model_name=VALUES(model_name),update_time=NOW()
+    </insert>
+    <delete id="deleteProviderKey">
+        DELETE FROM biz_teacher_ai_provider_key WHERE teacher_user_id=#{teacherUserId} AND provider_code=#{providerCode}
+    </delete>
+    <delete id="deleteProviderKeys">DELETE FROM biz_teacher_ai_provider_key WHERE teacher_user_id=#{teacherUserId}</delete>
 
     <insert id="insertJob" useGeneratedKeys="true" keyProperty="jobId">
         INSERT INTO biz_practical_ai_job

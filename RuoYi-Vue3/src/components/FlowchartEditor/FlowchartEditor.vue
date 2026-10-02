@@ -26,7 +26,7 @@
     </div>
     <div class="huacheng-hint">
       <span v-if="readonly">只读查看：可以缩放和导出，不会修改作品。</span>
-      <span v-else>单击图形可自动添加，也可把图形拖到指定位置；选中节点或连线后可删除。</span>
+      <span v-else>拖入图形并连接；选中图形后拖动四角可调整大小。</span>
       <slot name="status"></slot>
     </div>
     <div ref="canvasRef" class="huacheng-canvas" :style="{ height: `${height}px` }"
@@ -38,9 +38,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LogicFlow, {
   DiamondNode, DiamondNodeModel, PolygonNode, PolygonNodeModel,
-  RectNode, RectNodeModel
+  RectNode, RectNodeModel, BaseText, h
 } from '@logicflow/core'
 import '@logicflow/core/es/index.css'
+import { nodeTextLayout, fitWithoutEnlarging } from './layout'
 import {
   flowchartToLogicFlow, logicFlowToFlowchart, normalizeFlowchartPermissions,
   parseFlowchartDocument, stringifyFlowchartDocument
@@ -50,7 +51,7 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   mode: { type: String, default: 'STUDENT' },
   permissions: { type: [String, Object], default: () => ({}) },
-  height: { type: Number, default: 560 },
+  height: { type: Number, default: 480 },
   exportable: { type: Boolean, default: true }
 })
 const emit = defineEmits(['update:modelValue', 'change'])
@@ -79,8 +80,59 @@ const palette = [
   { key: 'inputOutput', type: 'inputOutput', label: '输入/输出', text: '输入或输出' }
 ]
 
-class TerminalModel extends RectNodeModel {
-  setAttributes() { this.width = 148; this.height = 64; this.radius = 32 }
+function nodeDimensions(model) {
+  const { width, height } = nodeTextLayout(model.type, model.text?.value)
+  const storedWidth = Number(model.properties?.width)
+  const storedHeight = Number(model.properties?.height)
+  return {
+    width: storedWidth >= 80 && storedWidth <= 1200 ? storedWidth : width,
+    height: storedHeight >= 40 && storedHeight <= 800 ? storedHeight : height
+  }
+}
+
+function wrappedModel(Base) {
+  return class extends Base {
+    updateText(value) {
+      super.updateText(value)
+      this.setAttributes()
+      // 文字改变节点尺寸后，同步已连接的锚点，避免箭头留在旧边框上。
+      for (const edge of this.graphModel.edges) {
+        if (edge.sourceNodeId === this.id) {
+          const anchor = this.anchors.find(item => item.id === edge.sourceAnchorId)
+          if (anchor) edge.updateStartPoint(anchor)
+        }
+        if (edge.targetNodeId === this.id) {
+          const anchor = this.anchors.find(item => item.id === edge.targetAnchorId)
+          if (anchor) edge.updateEndPoint(anchor)
+        }
+      }
+    }
+  }
+}
+
+// 保留 LogicFlow 的双击编辑事件，用 SVG 分行显示，确保 PNG 导出也能保留文字。
+class WrappedText extends BaseText {
+  getShape() {
+    const model = this.props.model
+    const { lines } = nodeTextLayout(model.type, model.text?.value)
+    const { x, y } = model.text
+    return h('text', { fill: model.getTextStyle().color || '#24445d', fontSize: 15,
+      textAnchor: 'middle', dominantBaseline: 'central', className: 'lf-element-text' },
+    lines.map((line, index) => h('tspan', { x, y: y + (index - (lines.length - 1) / 2) * 20 }, line)))
+  }
+}
+
+function wrappedView(Base) {
+  return class extends Base {
+    getText() {
+      const text = super.getText()
+      return text ? h(WrappedText, text.props) : null
+    }
+  }
+}
+
+class TerminalModel extends wrappedModel(RectNodeModel) {
+  setAttributes() { Object.assign(this, nodeDimensions(this)); this.radius = 32 }
   getNodeStyle() {
     const style = super.getNodeStyle()
     style.fill = '#ecf8ff'
@@ -91,26 +143,26 @@ class TerminalModel extends RectNodeModel {
     const { x, y, width, height, id } = this
     return [
       { x, y: y - height / 2, id: `${id}_top`, direction: 'top' },
-      { x: x + width / 2, y, id: `${id}_right`, direction: 'right' },
-      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' },
-      { x: x - width / 2, y, id: `${id}_left`, direction: 'left' }
+      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' }
     ]
   }
 }
-class ProcessModel extends RectNodeModel {
-  setAttributes() { this.width = 148; this.height = 64; this.radius = 0 }
+class ProcessModel extends wrappedModel(RectNodeModel) {
+  setAttributes() { Object.assign(this, nodeDimensions(this)); this.radius = 0 }
   getDefaultAnchor() {
     const { x, y, width, height, id } = this
     return [
       { x, y: y - height / 2, id: `${id}_top`, direction: 'top' },
-      { x: x + width / 2, y, id: `${id}_right`, direction: 'right' },
-      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' },
-      { x: x - width / 2, y, id: `${id}_left`, direction: 'left' }
+      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' }
     ]
   }
 }
-class DecisionModel extends DiamondNodeModel {
-  setAttributes() { this.rx = 82; this.ry = 48 }
+class DecisionModel extends wrappedModel(DiamondNodeModel) {
+  setAttributes() {
+    const size = nodeDimensions(this)
+    this.rx = Number(this.properties?.rx) || size.width / 2
+    this.ry = Number(this.properties?.ry) || size.height / 2
+  }
   getDefaultAnchor() {
     const { x, y, rx, ry, id } = this
     return [
@@ -120,26 +172,37 @@ class DecisionModel extends DiamondNodeModel {
       { x: x - rx, y, id: `${id}_left`, direction: 'left' }
     ]
   }
+  resize(info) {
+    // LogicFlow 的菱形 resize 参数是半径，持久化仍统一使用完整宽高。
+    if (info.width < 40 || info.width > 600 || info.height < 20 || info.height > 400) return this.getData()
+    const result = super.resize(info)
+    this.properties.width = Math.round(this.width)
+    this.properties.height = Math.round(this.height)
+    return result
+  }
 }
-class InputOutputModel extends PolygonNodeModel {
+class InputOutputModel extends wrappedModel(PolygonNodeModel) {
   setAttributes() {
     // PolygonNodeModel 以图形左上角为原点；使用负坐标会让图形与文字中心错位。
-    this.points = [[12, 0], [140, 0], [128, 60], [0, 60]]
+    const { width, height } = nodeDimensions(this)
+    this.points = [[12, 0], [width, 0], [width - 12, height], [0, height]]
+  }
+
+  resize(info) {
+    if (info.width < 80 || info.width > 1200 || info.height < 40 || info.height > 800) return this.getData()
+    const result = super.resize(info)
+    // PolygonNodeModel 只记录 points；同时留存宽高，重新打开草稿仍能复原尺寸。
+    this.properties.width = Math.round(this.width)
+    this.properties.height = Math.round(this.height)
+    return result
   }
 
   getDefaultAnchor() {
-    // 多边形四条边的中点作为吸附锚点，便于对齐箭头与节点移动随动
-    const points = this.pointsPosition
-    const directions = ['top', 'right', 'bottom', 'left']
-    return points.map((point, index) => {
-      const next = points[(index + 1) % points.length]
-      return {
-        x: (point.x + next.x) / 2,
-        y: (point.y + next.y) / 2,
-        id: `${this.id}_${index}`,
-        direction: directions[index] || 'center'
-      }
-    })
+    const { x, y, width, height, id } = this
+    return [
+      { x, y: y - height / 2, id: `${id}_top`, direction: 'top' },
+      { x, y: y + height / 2, id: `${id}_bottom`, direction: 'bottom' }
+    ]
   }
 }
 
@@ -153,16 +216,16 @@ onMounted(async () => {
     keyboard: { enabled: true },
     snapline: true,
     allowRotate: false,
-    allowResize: false,
+    allowResize: true,
     guards: {
       beforeDelete: data => canDelete(data)
     }
   })
   lf.batchRegister([
-    { type: 'terminal', view: RectNode, model: TerminalModel },
-    { type: 'process', view: RectNode, model: ProcessModel },
-    { type: 'decision', view: DiamondNode, model: DecisionModel },
-    { type: 'inputOutput', view: PolygonNode, model: InputOutputModel }
+    { type: 'terminal', view: wrappedView(RectNode), model: TerminalModel },
+    { type: 'process', view: wrappedView(RectNode), model: ProcessModel },
+    { type: 'decision', view: wrappedView(DiamondNode), model: DecisionModel },
+    { type: 'inputOutput', view: wrappedView(PolygonNode), model: InputOutputModel }
   ])
   lf.setTheme({
     baseNode: { fill: '#ffffff', stroke: '#3182ce', strokeWidth: 2 },
@@ -185,6 +248,8 @@ onMounted(async () => {
   })
   applyEditConfig()
   lf.graphModel.addNodeMoveRules(nodeModel => canMove(nodeModel))
+  lf.graphModel.addNodeResizeRules((nodeModel, deltaX, deltaY, width, height) =>
+    canMove(nodeModel) && width >= 80 && width <= 1200 && height >= 40 && height <= 800)
   renderValue(props.modelValue)
   lf.on('element:click', ({ data }) => {
     selectedId.value = data?.id || ''
@@ -219,7 +284,7 @@ function applyEditConfig() {
     edgeTextEdit: !readonly.value && p.allowEditText,
     hideAnchors: readonly.value || !p.allowAddEdge,
     allowRotate: false,
-    allowResize: false
+    allowResize: !readonly.value && p.allowMoveNode
   })
 }
 
@@ -227,7 +292,7 @@ function renderValue(value) {
   if (!lf) return
   rendering = true
   lf.render(flowchartToLogicFlow(parseFlowchartDocument(value)))
-  setTimeout(() => { rendering = false; applyElementLocks(); lf.fitView(36, 36) }, 0)
+  setTimeout(() => { rendering = false; applyElementLocks(); fitView() }, 0)
 }
 
 function applyElementLocks() {
@@ -235,6 +300,7 @@ function applyElementLocks() {
   for (const node of lf.graphModel.nodes) {
     const locked = Boolean(node.properties?.locked)
     node.draggable = !readonly.value && permissionsState.value.allowMoveNode && !locked
+    node.resizable = !readonly.value && permissionsState.value.allowMoveNode && !locked
     if (node.text) node.text.editable = !readonly.value && permissionsState.value.allowEditText
       && !locked && node.properties?.textEditable !== false
   }
@@ -324,8 +390,12 @@ function toggleSelectedLock() {
 
 function undo() { lf?.undo() }
 function redo() { lf?.redo() }
-function zoom(direction) { lf?.zoom(direction) }
-function fitView() { lf?.fitView(36, 36) }
+function zoom(direction) {
+  if (!lf) return
+  const current = lf.getTransform().SCALE_X
+  lf.zoom(Math.max(0.2, Math.min(2, Math.round((current + (direction ? 0.25 : -0.25)) * 100) / 100)))
+}
+function fitView() { fitWithoutEnlarging(lf) }
 function resize() { lf?.resize() }
 
 async function exportPng() {

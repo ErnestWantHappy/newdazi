@@ -33,6 +33,20 @@ public class ClassroomTaskStateService
     @Autowired private BizStudentTaskStateMapper stateMapper;
     @Autowired private ClassroomTaskStateWriter stateWriter;
 
+    public List<BizStudentTaskState> listStudentLessonStates(Long studentId, Long lessonId) {
+        return stateMapper.selectStudentLessonStates(studentId, lessonId);
+    }
+
+    public List<BizStudentTaskState> listStudentReturnedStates(Long studentId) {
+        return stateMapper.selectStudentReturnedStates(studentId);
+    }
+
+    public boolean isReturned(Long studentId, Long lessonId, Long questionId) {
+        if (studentId == null || lessonId == null || questionId == null) return false;
+        BizStudentTaskState state = stateMapper.selectOne(lessonId, questionId, studentId);
+        return state != null && RETURNED.equals(state.getTaskState());
+    }
+
     public BizStudentTaskState mark(BizStudent student, Long deptId, Long lessonId,
                                     Long questionId, String targetState)
     {

@@ -177,7 +177,7 @@
            description="当前操作题暂无学生提交；左侧未交学生不能进入批改"
          />
          <div v-else-if="currentStudent" class="preview-content">
-             <flowchart-grading-panel v-if="isCurrentFlowchart" :lesson-id="selectedLessonId"
+             <flowchart-grading-panel v-if="isCurrentFlowchart" :key="`${selectedLessonId}-${selectedQuestionId}-${currentStudent.answerId || currentStudent.studentId}`" :lesson-id="selectedLessonId"
                :question-id="selectedQuestionId" :student-id="currentStudent.studentId"
                :ai-suggestion="currentAiSuggestion" :ai-summary="currentAiSummary"
                @apply-suggestion="applyFlowchartSuggestion" />
@@ -383,7 +383,7 @@
             <el-button type="primary" size="large" class="submit-btn" :loading="submitting" :disabled="submitting || loading || gradingSnapshotStale || !deadlineStatus?.canGrade" @click="submitScore">
                提交并下一位 (Enter)
             </el-button>
-            <el-button type="warning" plain :disabled="submitting || !deadlineStatus?.canGrade || currentStudent.taskState === 'RETURNED'" @click="returnCurrentTask">
+            <el-button type="warning" plain :disabled="submitting || loading || gradingSnapshotStale || !deadlineStatus?.canGrade || currentStudent.taskState === 'RETURNED'" @click="returnCurrentTask">
                退回重交
             </el-button>
             </template>
@@ -406,13 +406,17 @@
         type="error" :closable="false" style="margin-bottom: 16px"
       />
       <el-form label-width="100px">
-        <el-form-item label="模型厂商"><el-input model-value="阿里云百炼·通义千问" disabled /></el-form-item>
+        <el-form-item label="模型厂商">
+          <el-select v-model="aiConfigForm.providerCode" style="width: 100%" @change="onAiProviderChange">
+            <el-option label="阿里云百炼 · 通义千问" value="QWEN" />
+            <el-option label="DeepSeek" value="DEEPSEEK" />
+            <el-option label="火山方舟 · 豆包" value="DOUBAO" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="视觉模型">
           <el-select v-model="aiConfigForm.modelName" style="width: 100%">
-            <el-option label="Qwen3.8-Max（性能最强）" value="qwen3.8-max" />
-            <el-option label="Qwen3.8-Max-0902（0902 版本）" value="qwen3.8-max-0902" />
-            <el-option label="Qwen3.7-Plus" value="qwen3.7-plus" />
-            <el-option label="Qwen3.6-Flash（速度/成本优先）" value="qwen3.6-flash" />
+            <el-option v-for="option in availableAiModels" :key="option.modelName"
+              :label="option.modelName" :value="option.modelName" />
           </el-select>
         </el-form-item>
         <el-form-item label="参考费用">
@@ -426,31 +430,32 @@
               按{{ currentModelPrice.usageEstimateSource === 'MODEL_HISTORY' ? `同模型 ${currentModelPrice.sampleCount} 份历史平均用量` : '参考用量' }}，
               每份约 {{ formatUnitPrice(currentModelPrice.estimatedCostPerGradingYuan) }} 元。
             </div>
-            <small>{{ currentModelPrice.priceNote || '参考价格待管理员维护' }}；估算值，实际以阿里云账单为准。</small>
+            <small>{{ currentModelPrice.priceNote || '参考价格待管理员维护' }}；实际以所选厂商账单为准。</small>
           </div>
-          <span v-else class="ai-price-empty">当前模型暂无参考价</span>
+          <span v-else class="ai-price-empty">当前模型暂无参考价；免费额度请在厂商账户核实</span>
         </el-form-item>
         <el-form-item label="API Key">
           <div class="ai-key-field">
             <el-input v-model="aiConfigForm.apiKey" type="password" show-password autocomplete="new-password"
-              :placeholder="aiConfig?.configured ? `已配置 ${aiConfig.apiKeyHint}；输入新 Key 可替换` : '请输入百炼 API Key'" />
+              :placeholder="selectedSavedProvider ? `已保存 ${selectedSavedProvider.apiKeyHint}；留空复用，输入新 Key 可替换` : '首次使用该厂商，请输入 API Key'" />
             <el-link
               class="ai-key-apply-link"
               type="primary"
               :underline="false"
-              href="https://bailian.console.aliyun.com/?apiKey=1&tab=model"
+              :href="aiProviderLinks[aiConfigForm.providerCode]"
               target="_blank"
               rel="noopener noreferrer"
             >
-              还没有 Key？前往阿里云百炼申请 API Key
+              前往所选厂商申请 API Key
             </el-link>
           </div>
         </el-form-item>
       </el-form>
       <div v-if="isAdmin" class="ai-price-admin">
-        <div class="ai-price-admin-title">管理员参考价维护 <small>单位：元/千 token</small></div>
+        <div class="ai-price-admin-title">管理员参考价维护 <small>单位：元/千 token；免费额度以厂商账户为准</small></div>
         <el-table :data="editableModelPrices" size="small" border>
           <el-table-column prop="displayName" label="模型" min-width="130" />
+          <el-table-column prop="providerCode" label="厂商" width="100" />
           <el-table-column label="输入价" width="125">
             <template #default="scope"><el-input-number v-model="scope.row.inputPricePerThousand" :min="0" :max="100" :precision="6" :step="0.0001" controls-position="right" /></template>
           </el-table-column>
@@ -472,7 +477,8 @@
         </el-table>
       </div>
       <template #footer>
-        <el-button v-if="aiConfig?.configured" type="danger" plain @click="removeAiConfig">删除配置</el-button>
+        <el-button v-if="selectedSavedProvider" type="danger" plain @click="removeSelectedAiProvider">删除所选厂商 Key</el-button>
+        <el-button v-if="aiConfig?.savedProviders?.length" type="danger" plain @click="removeAiConfig">删除全部配置</el-button>
         <el-button v-if="aiConfig?.configured" :loading="aiTesting" @click="testSavedAiConfig">测试连通性</el-button>
         <el-button @click="aiConfigVisible = false">取消</el-button>
         <el-button type="primary" :loading="aiConfigSaving" :disabled="!aiConfig?.masterKeyConfigured" @click="submitAiConfig">加密保存</el-button>
@@ -541,7 +547,7 @@
         <div><strong>{{ formatTokenCount(aiUsage?.totalTokens) }}</strong><span>消耗 token</span></div>
         <div><strong>{{ formatEstimatedCost(aiUsage?.estimatedCostYuan) }}</strong><span>预计费用</span></div>
       </div>
-      <p class="ai-usage-disclaimer">{{ aiUsage?.disclaimer || '估算值，实际以阿里云账单为准' }}</p>
+      <p class="ai-usage-disclaimer">{{ aiUsage?.disclaimer || '估算值，实际以所选厂商账单为准' }}</p>
       <el-progress :percentage="aiCompletionPercentage" :status="aiJob?.jobStatus === 'COMPLETED' ? 'success' : undefined" />
       <div class="ai-current-stage">
         <div><span>当前处理：</span><strong>{{ aiCurrentStudentName }}</strong></div>
@@ -602,7 +608,7 @@ import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
 import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission, returnClassroomTask } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
-import { getAiConfig, saveAiConfig, deleteAiConfig, testAiConfig, createAiJob, getAiJob, getAiJobEvents,
+import { getAiConfig, saveAiConfig, deleteAiConfig, deleteAiProviderKey, testAiConfig, createAiJob, getAiJob, getAiJobEvents,
     getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
     pauseAiJob, resumeAiJob, cancelAiJob, retryFailedAiJob, getAiModelPrices, updateAiModelPrice } from '@/api/business/practicalAiGrading';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -618,6 +624,7 @@ const route = useRoute();
 const userStore = useUserStore();
 const loading = ref(false);
 let submissionsRequestSeq = 0;
+let lessonContextRequestSeq = 0;
 const STUCK_PREVIEW_TIMEOUT_MS = 10 * 60 * 1000;
 const gradeGroups = ref([]);
 const lessons = ref([]);
@@ -670,7 +677,12 @@ const aiScopeMode = ref('UNGRADED_ONLY');
 const aiJobBatchAdoptAllowed = ref(false);
 const aiReferenceAccept = '.doc,.docx,.pdf,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png';
 const aiConfig = ref(null);
-const aiConfigForm = ref({ apiKey: '', modelName: 'qwen3.8-max' });
+const aiConfigForm = ref({ apiKey: '', providerCode: 'QWEN', modelName: 'qwen3.8-max' });
+const aiProviderLinks = {
+    QWEN: 'https://bailian.console.aliyun.com/?apiKey=1&tab=model',
+    DEEPSEEK: 'https://platform.deepseek.com/api_keys',
+    DOUBAO: 'https://console.volcengine.com/ark'
+};
 const aiModelPrices = ref([]);
 const aiPriceSaving = ref('');
 const aiJob = ref(null);
@@ -737,9 +749,21 @@ const currentPreviewStatus = computed(() => currentAttachment.value?.previewStat
 const currentAiResult = computed(() => aiResultFor(currentStudent.value));
 const isAdmin = computed(() => userStore.roles.includes('admin'));
 const editableModelPrices = computed(() => aiModelPrices.value.filter(item =>
-    ['qwen3.7-plus', 'qwen3.6-flash', 'qwen3.8-max', 'qwen3.8-max-0902'].includes(item.modelName)));
-const currentModelPrice = computed(() => aiModelPrices.value.find(item => item.modelName === aiConfigForm.value.modelName)
-    || (aiConfig.value?.modelPrice?.modelName === aiConfigForm.value.modelName ? aiConfig.value.modelPrice : null));
+    (aiConfig.value?.modelOptions || []).some(option => option.providerCode === item.providerCode
+        && option.modelName === item.modelName)));
+const availableAiModels = computed(() => (aiConfig.value?.modelOptions || [])
+    .filter(item => item.providerCode === aiConfigForm.value.providerCode));
+const selectedSavedProvider = computed(() => (aiConfig.value?.savedProviders || [])
+    .find(item => item.providerCode === aiConfigForm.value.providerCode));
+const currentModelPrice = computed(() => aiModelPrices.value.find(item => item.providerCode === aiConfigForm.value.providerCode
+    && item.modelName === aiConfigForm.value.modelName)
+    || (aiConfig.value?.modelPrice?.providerCode === aiConfigForm.value.providerCode
+        && aiConfig.value.modelPrice.modelName === aiConfigForm.value.modelName ? aiConfig.value.modelPrice : null));
+
+function onAiProviderChange() {
+    aiConfigForm.value.modelName = selectedSavedProvider.value?.modelName || availableAiModels.value[0]?.modelName || '';
+    aiConfigForm.value.apiKey = '';
+}
 const currentAiSuggestion = computed(() => currentAiResult.value?.resultStatus === 'SUCCESS' ? currentAiResult.value : null);
 const currentAiSummary = computed(() => {
     if (!currentAiSuggestion.value?.evidenceJson) return '';
@@ -979,6 +1003,7 @@ function getClassOptionClass(classItem) {
 
 // P3.5: 选择课程后加载班级列表
 async function onLessonChange(val) {
+  const contextSeq = ++lessonContextRequestSeq;
   submissionsRequestSeq++;
   loading.value = false;
   resetAiJobView();
@@ -992,10 +1017,12 @@ async function onLessonChange(val) {
   if (val) {
     // 先加载操作题列表（需要在班级选择前完成，以便自动选择）
     const questionsRes = await getPracticalQuestions(val);
+    if (contextSeq !== lessonContextRequestSeq || String(val) !== String(selectedLessonId.value)) return;
     questions.value = questionsRes.data || [];
     
     // 加载班级列表
     getClassesByLesson(val).then(res => {
+        if (contextSeq !== lessonContextRequestSeq || String(val) !== String(selectedLessonId.value)) return;
         classes.value = res.data;
         
         // 检查URL参数中的 classCode，自动选中
@@ -1347,6 +1374,7 @@ function getFileUrl(path) {
 function loadAiConfigStatus() {
     return getAiConfig().then(res => {
         aiConfig.value = res.data || {};
+        aiConfigForm.value.providerCode = aiConfig.value.providerCode || 'QWEN';
         aiConfigForm.value.modelName = aiConfig.value.modelName || 'qwen3.8-max';
     });
 }
@@ -1377,8 +1405,8 @@ async function saveModelPrice(row) {
 }
 
 async function submitAiConfig() {
-    if (!aiConfigForm.value.apiKey.trim() && !aiConfig.value?.configured) {
-        ElMessage.warning('首次配置请输入 API Key');
+    if (!aiConfigForm.value.apiKey.trim() && !selectedSavedProvider.value) {
+        ElMessage.warning('该厂商首次配置请输入 API Key');
         return;
     }
     aiConfigSaving.value = true;
@@ -1394,7 +1422,7 @@ async function submitAiConfig() {
 }
 
 async function removeAiConfig() {
-    await ElMessageBox.confirm('删除后将无法继续执行新的 AI 批改任务，确定删除吗？', '删除 AI 配置', { type: 'warning' });
+    await ElMessageBox.confirm('将删除全部厂商 Key，相关未完成任务也无法继续，确定删除吗？', '删除全部 AI 配置', { type: 'warning' });
     await deleteAiConfig();
     ElMessage.success('AI 配置已删除');
     aiConfigVisible.value = false;
@@ -1664,6 +1692,14 @@ function formatEstimatedCost(value) {
     return `${formatUnitPrice(value)} 元`;
 }
 
+async function removeSelectedAiProvider() {
+    const providerCode = aiConfigForm.value.providerCode;
+    await ElMessageBox.confirm(`删除 ${providerCode} 的 Key 后，使用该厂商的未完成任务将失败，确定删除吗？`, '删除厂商 Key', { type: 'warning' });
+    await deleteAiProviderKey(providerCode);
+    ElMessage.success('所选厂商 Key 已删除');
+    await loadAiConfigStatus();
+}
+
 
 function requiresPaperReview(result) {
     if (!result?.evidenceJson) return false;
@@ -1811,11 +1847,24 @@ function loadScoringDetailsForStudent(answerId) {
         details.forEach(detail => {
             if (itemScores.value.hasOwnProperty(detail.itemId)) {
                 itemScores.value[detail.itemId] = detail.score || 0;
+                const item = scoringItems.value.find(candidate => candidate.itemId === detail.itemId);
+                const inferred = inferUniqueStarCount(item?.maxScore, detail.score);
+                if (inferred != null) itemStarCounts.value[detail.itemId] = inferred;
             }
         });
     }).catch(() => {
         // 如果加载失败，保持0
     });
+}
+
+function inferUniqueStarCount(maxScore, score) {
+    const target = Number(score);
+    if (!Number.isFinite(target)) return null;
+    const matches = [];
+    for (let stars = 0; stars <= 5; stars += 1) {
+        if (calculateStarScore(maxScore, stars) === target) matches.push(stars);
+    }
+    return matches.length === 1 ? matches[0] : null;
 }
 
 function handleStudentClick(student, index) {
@@ -1950,28 +1999,36 @@ async function submitScore() {
 }
 
 async function returnCurrentTask() {
-    if (!currentStudent.value || submitting.value) return;
+    if (!currentStudent.value || submitting.value || loading.value || gradingSnapshotStale.value || !deadlineStatus.value?.canGrade) return;
+    // 确认框和网络请求期间可能切换学生，退回目标必须使用点击时的快照。
+    const target = { ...currentStudent.value };
+    const lessonId = selectedLessonId.value;
+    const questionId = selectedQuestionId.value;
+    const classCode = selectedClassCode.value;
     const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
     if (!classInfo?.entryYear) {
         ElMessage.error('当前班级届别缺失，请刷新后重试');
         return;
     }
+    submitting.value = true;
+    ++submissionsRequestSeq;
     try {
         await ElMessageBox.confirm(
-            `确定将 ${currentStudent.value.studentName} 的当前作品退回重交吗？原作品和成绩会保留用于审计。`,
+            `确定将 ${target.studentName} 的当前作品退回重交吗？原作品和成绩会保留用于审计。`,
             '退回重交', { type: 'warning' }
         );
-        submitting.value = true;
         await returnClassroomTask({
-            lessonId: selectedLessonId.value,
-            questionId: selectedQuestionId.value,
-            studentId: currentStudent.value.studentId,
+            lessonId,
+            questionId,
+            studentId: target.studentId,
             entryYear: classInfo.entryYear,
-            classCode: selectedClassCode.value
+            classCode
         });
-        currentStudent.value.taskState = 'RETURNED';
-        const row = submissions.value.find(item => item.studentId === currentStudent.value.studentId);
-        if (row) row.taskState = 'RETURNED';
+        if (selectedLessonId.value === lessonId && selectedQuestionId.value === questionId && selectedClassCode.value === classCode) {
+            if (currentStudent.value?.answerId === target.answerId) currentStudent.value.taskState = 'RETURNED';
+            const row = submissions.value.find(item => item.answerId === target.answerId);
+            if (row) row.taskState = 'RETURNED';
+        }
         ElMessage.success('已退回，等待学生重新提交');
     } catch (error) {
         // Element Plus 取消确认使用 cancel/close，接口失败必须明确反馈给教师。

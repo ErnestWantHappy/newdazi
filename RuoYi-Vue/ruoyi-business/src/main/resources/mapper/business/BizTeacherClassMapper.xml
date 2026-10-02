@@ -143,4 +143,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select count(*) from biz_teacher_class
         where user_id = #{userId} and dept_id = #{deptId} and entry_year = #{entryYear} and class_code = #{classCode}
     </select>
+
+    <select id="countManagedClass" resultType="int">
+        select count(*) from biz_teacher_class
+        where user_id = #{userId} and dept_id = #{deptId}
+          and entry_year = #{entryYear} and class_code = #{classCode}
+    </select>
 </mapper>

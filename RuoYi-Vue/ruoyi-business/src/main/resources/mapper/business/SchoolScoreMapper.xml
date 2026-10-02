@@ -39,19 +39,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 s.class_code,
                 SUM(CASE WHEN a.typing_speed > 0 THEN a.typing_speed ELSE 0 END) AS typing_speed_sum,
                 COUNT(CASE WHEN a.typing_speed > 0 THEN 1 END) AS typing_speed_count,
-                SUM(IFNULL(a.score, 0)) AS lesson_total_score
+                SUM(a.score) AS lesson_total_score
             FROM biz_student_answer a
             INNER JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+            INNER JOIN biz_question q ON q.question_id = a.question_id
             INNER JOIN biz_student s ON a.student_id = s.student_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             INNER JOIN sys_dept d ON u.dept_id = d.dept_id
             WHERE d.del_flag = '0' 
               AND d.parent_id != 0 <!-- 排除顶级节点 -->
-              AND a.submit_time BETWEEN #{startDate} AND #{endDate}
+              AND a.submit_time &gt;= #{startDate} AND a.submit_time &lt; #{endDate}
+            <if test="entryYear != null and entryYear != ''">
+                AND s.entry_year = #{entryYear} AND d.school_type = #{schoolType}
+            </if>
             <if test="deptName != null and deptName != ''">
                 AND d.dept_name like concat('%', #{deptName}, '%')
             </if>
             GROUP BY a.student_id, a.lesson_id, u.dept_id, d.dept_name, d.school_type, s.entry_year, s.class_code
+            HAVING SUM(CASE WHEN q.question_type = 'practical' AND a.score IS NULL THEN 1 ELSE 0 END) = 0
         ) t
         GROUP BY t.dept_id, t.dept_name, t.school_type
         ORDER BY avg_typing_speed DESC
@@ -80,15 +85,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 s.class_code,
                 SUM(CASE WHEN a.typing_speed > 0 THEN a.typing_speed ELSE 0 END) AS typing_speed_sum,
                 COUNT(CASE WHEN a.typing_speed > 0 THEN 1 END) AS typing_speed_count,
-                SUM(IFNULL(a.score, 0)) AS lesson_total_score
+                SUM(a.score) AS lesson_total_score
             FROM biz_student_answer a
             INNER JOIN biz_lesson l ON a.lesson_id = l.lesson_id
+            INNER JOIN biz_question q ON q.question_id = a.question_id
             INNER JOIN biz_student s ON a.student_id = s.student_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             INNER JOIN sys_dept d ON u.dept_id = d.dept_id
             WHERE u.dept_id = #{deptId}
-              AND a.submit_time BETWEEN #{startDate} AND #{endDate}
+              AND a.submit_time &gt;= #{startDate} AND a.submit_time &lt; #{endDate}
+            <if test="entryYear != null and entryYear != ''">
+                AND s.entry_year = #{entryYear} AND d.school_type = #{schoolType}
+            </if>
             GROUP BY a.student_id, a.lesson_id, u.dept_id, d.school_type, s.entry_year, s.class_code
+            HAVING SUM(CASE WHEN q.question_type = 'practical' AND a.score IS NULL THEN 1 ELSE 0 END) = 0
         ) t
         GROUP BY t.dept_id, t.school_type, t.entry_year, t.class_code
         ORDER BY t.entry_year DESC, t.class_code ASC

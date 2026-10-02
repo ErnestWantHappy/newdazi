@@ -26,7 +26,7 @@ class PracticalInsightAiServiceTest
         Job job=new Job();job.reportId=1L;job.status="RUNNING";job.runToken="test";
         Input input=new Input();input.teacherId=2L;input.model="test";input.scope=new Request();input.inputPrice=BigDecimal.ONE;input.outputPrice=BigDecimal.ONE;
         TeacherAiConfig config=new TeacherAiConfig();config.setEnabled(true);config.setModelName("test");
-        when(mapper.get(1L)).thenReturn(job);when(configs.status(2L)).thenReturn(config);when(configs.apiKey(config)).thenReturn("test-only");
+        when(mapper.get(1L)).thenReturn(job);when(configs.configForJob(2L,"QWEN","test")).thenReturn(config);when(configs.apiKey(config)).thenReturn("test-only");
         Paper paper=new Paper();Question q=new Question();q.id="Q1";q.contextComplete=true;paper.questions.add(q);
         Part part=new Part();part.id="P1";part.referenceStatus="CLEAR";part.sourceKeys.add("7:18:A");q.parts.add(part);
         Knowledge k=new Knowledge();k.id="K1";k.questionIds.add("Q1");paper.knowledgePoints.add(k);
@@ -100,7 +100,7 @@ class PracticalInsightAiServiceTest
         Input input = new Input(); input.teacherId = 2L; input.model = "test"; input.scope = new Request();
         input.inputPrice = BigDecimal.ONE; input.outputPrice = BigDecimal.ONE;
         TeacherAiConfig config = new TeacherAiConfig(); config.setEnabled(true); config.setModelName("test");
-        when(mapper.get(1L)).thenReturn(job); when(configs.status(2L)).thenReturn(config);
+        when(mapper.get(1L)).thenReturn(job); when(configs.configForJob(2L,"QWEN","test")).thenReturn(config);
         when(configs.apiKey(config)).thenReturn("test-only");
         Paper paper = new Paper(); Knowledge k = new Knowledge(); k.id = "K1"; paper.knowledgePoints.add(k);
         Result invalid = new Result(), valid = new Result();

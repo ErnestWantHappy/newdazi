@@ -144,6 +144,8 @@
 
     <!-- 主内容区 -->
     <main v-else v-show="activeLearningMode === 'daily'" class="main-content">
+      <returned-practical-tasks :tasks="returnedTasks.filter(task => task.lessonId === lessonId)" @open-flowchart="openReturnedFlowchart"
+        @submitted="handleReturnedSubmission" />
       <!-- 课程信息Banner -->
       <div class="lesson-banner" v-if="hasLesson">
         <div class="banner-content">
@@ -221,13 +223,6 @@
           <div v-for="room in collaborationRooms" :key="room.roomId" class="collaboration-room-row">
             <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.fileName }} · 第 {{ room.version }} 版</span><el-tag v-if="room.groupRoom" size="small" type="info" style="margin-left: 6px">本组</el-tag><el-tag v-else size="small" type="success" style="margin-left: 6px">全班</el-tag></div>
             <el-button type="primary" @click="openCollaboration(room)">进入房间</el-button>
-          </div>
-        </el-card>
-        <el-card v-if="collaborationHistory.length" shadow="never" class="collaboration-card">
-          <template #header><div class="card-header"><span>协作历史作品（只读）</span><el-tag type="info">我参与过的小组</el-tag></div></template>
-          <div v-for="room in collaborationHistory" :key="room.roomId" class="collaboration-room-row">
-            <div><strong>{{ room.roomTitle }}</strong><span class="collaboration-meta">{{ room.lessonTitle }} · {{ room.groupName }} · {{ room.fileName }}</span></div>
-            <el-button @click="openCollaborationHistory(room)">查看</el-button>
           </div>
         </el-card>
         <!-- 空状态提示 -->
@@ -529,6 +524,7 @@
                 <div class="card-header">
                   <span class="badge">操作题</span>
                   <span class="score-status">
+                    <el-tag v-if="submittedAnswers[q.questionId]?.taskState === 'RETURNED'" type="warning">已退回，请修改后重新提交</el-tag>
                     <!-- 已提交且已批阅：显示分数 -->
                     <template
                       v-if="
@@ -678,6 +674,7 @@
               <template #header>
                 <div class="card-header">
                   <span class="badge flowchart-badge">画程流程图</span>
+                  <el-tag v-if="submittedAnswers[q.questionId]?.taskState === 'RETURNED'" type="warning">已退回，请修改后重新提交</el-tag>
                   <span class="score-status">
                     <span v-if="practicalScores[q.questionId] != null" class="scored score-num">{{ practicalScores[q.questionId] }}/{{ q.questionScore }}分</span>
                     <span v-else-if="practicalUploads[q.questionId]" class="pending">已提交 · 待批阅</span>
@@ -1023,8 +1020,8 @@
 
     <!-- PDF预览组件 -->
     <pdf-preview ref="pdfPreviewRef" />
-    <student-flowchart-dialog v-model="flowchartDialogVisible" :lesson-id="lessonId"
-      :question="activeFlowchartQuestion" @submitted="fetchData" />
+    <student-flowchart-dialog v-model="flowchartDialogVisible" :lesson-id="activeFlowchartLessonId"
+      :question="activeFlowchartQuestion" @submitted="handleReturnedSubmission" />
   </div>
 </template>
 
@@ -1032,6 +1029,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import {
   getCurrentLesson,
+  getReturnedPractical,
   submitAnswers as submitAnswersApi,
   getHistoryScores,
   getWrongQuestions,
@@ -1050,10 +1048,11 @@ import PdfPreview from "@/components/PdfPreview/index.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
 import StudentProgrammingQuestion from "@/components/StudentProgrammingQuestion/index.vue";
 import StudentFlowchartDialog from "@/components/FlowchartEditor/StudentFlowchartDialog.vue";
+import ReturnedPracticalTasks from "@/components/FlowchartEditor/ReturnedPracticalTasks.vue";
 import { getStudentProgramming } from "@/api/business/programming";
 import { questionTypeLabel } from "@/utils/questionType";
 import Download from "@/plugins/download";
-import { getCollaborationHistory, getCurrentCollaborationRooms } from "@/api/business/collaboration";
+import { getCurrentCollaborationRooms } from "@/api/business/collaboration";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
@@ -1101,7 +1100,6 @@ const studentClassLabel = computed(() => {
   return `${gradeLabel}${classCode}班`
 })
 const collaborationRooms = ref([]);
-const collaborationHistory = ref([]);
 
 function openCollaboration(room) {
   if (!room?.roomId) {
@@ -1111,14 +1109,6 @@ function openCollaboration(room) {
   router.push(`/student/collaboration/${room.roomId}`);
 }
 
-function openCollaborationHistory(room) {
-  const roomId = room?.roomId || room?.roomid;
-  if (!roomId) {
-    ElMessage.error('协作房间 ID 无效，无法进入');
-    return;
-  }
-  router.push(`/student/collaboration/${roomId}`);
-}
 
 const checkinTimeText = computed(() => {
   if (!checkinTime.value) return "签到成功";
@@ -1509,9 +1499,32 @@ const filePracticalQuestions = computed(() =>
 );
 const flowchartDialogVisible = ref(false);
 const activeFlowchartQuestion = ref(null);
+const activeFlowchartLessonId = ref(null);
+const returnedTasks = ref([]);
+
+async function fetchReturnedTasks() {
+  try {
+    const response = await getReturnedPractical();
+    returnedTasks.value = response.data || [];
+  } catch (_) {
+    returnedTasks.value = [];
+  }
+}
+
+function openReturnedFlowchart(task) {
+  activeFlowchartLessonId.value = task.lessonId;
+  activeFlowchartQuestion.value = task;
+  flowchartDialogVisible.value = true;
+}
+
+function handleReturnedSubmission() {
+  fetchReturnedTasks();
+  fetchData({ silent: true });
+}
 
 function openFlowchart(question) {
   markQuestionWorking(question.questionId);
+  activeFlowchartLessonId.value = lessonId.value;
   activeFlowchartQuestion.value = question;
   flowchartDialogVisible.value = true;
 }
@@ -1671,12 +1684,6 @@ async function fetchData(opts = {}) {
       } catch (collaborationError) {
         collaborationRooms.value = [];
       }
-      try {
-        const historyRes = await getCollaborationHistory();
-        collaborationHistory.value = historyRes.data || historyRes || [];
-      } catch (historyError) {
-        collaborationHistory.value = [];
-      }
     }
     if (res.hasLesson) await resolveMissingPracticalModes(res.questions || [], res.lessonId);
     if (sequence !== lessonFetchSequence) return;
@@ -1800,7 +1807,7 @@ async function handleStudentCheckin() {
 
 // 初始化操作题状态（加载已提交的作品）
 function initPracticalStates() {
-  filePracticalQuestions.value.forEach((q) => {
+  [...filePracticalQuestions.value, ...flowchartPracticalQuestions.value].forEach((q) => {
     syncPracticalSubmission(q.questionId, submittedAnswers.value[q.questionId]);
   });
 }
@@ -1901,6 +1908,9 @@ function initTheoryState() {
 
 function initTypingStates() {
   typingQuestions.value.forEach((q) => {
+    // 同一课程静默刷新时，正在作答的状态和计时器必须保持同一个对象。
+    const activeState = typingStates.value[q.questionId];
+    if (activeState?.started && !activeState.submitted) return;
     // 检查是否已提交过答案
     const submitted = submittedAnswers.value[q.questionId];
     const hasSubmitted = !!submitted;
@@ -2591,6 +2601,7 @@ function scheduleGatePoll() {
 onMounted(() => {
   window.addEventListener("beforeunload", beforeUnloadHandler);
   fetchData();
+  fetchReturnedTasks();
   scheduleGatePoll();
 });
 

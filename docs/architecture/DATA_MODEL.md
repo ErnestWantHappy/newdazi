@@ -1,5 +1,35 @@
 # 数据模型与迁移约定
 
+## 2026-09-23 本地增量：多厂商 Key 与画程尺寸
+
+`biz_teacher_ai_provider_key` 以 `(teacher_user_id, provider_code)` 为主键，保存 AES-GCM 密文、末四位掩码和该厂商上次模型。`sql/operation_ai_multi_provider_keys_v1.sql` 幂等建表并用 `INSERT IGNORE` 迁入旧 `biz_teacher_ai_config` 中的当前配置；旧表继续表示当前选中厂商，不能用其密文续跑其他厂商的任务。任务行原有厂商、模型、价格快照不变；续跑从新表按任务厂商取 Key，缺 Key 明确失败。只在本机开发库和隔离克隆库验证，正式环境未迁移；必须保留原主密钥，应用与 SQL 配套更新。
+
+```mermaid
+flowchart LR
+  T[教师] --> C[当前厂商配置]
+  T --> K[按厂商加密 Key]
+  C --> N[新 AI 任务冻结厂商/模型/价格]
+  N --> W[任务续跑]
+  K -->|按任务厂商读取| W
+  W --> R[AI 建议]
+  R -->|教师确认| S[正式成绩]
+```
+
+画程沿用版本化 JSON，不加列、不回填作品。节点 `properties.width/height` 可选，旧节点仍按文字布局；普通图旧左右锚点在前端加载时映射为上下中线，判断菱形四点不变。结构判题忽略尺寸和布局；教师评分仍绑定提交版本。打字统计的可选 `grade` 由查询学年换算 `entry_year` 并同时限制学校学段，学校汇总和班级明细复用该条件，不落表。
+
+本机克隆库的 DATA_LAB 旧题单缺不可变快照，`data_lab_v2.sql` 前检拒绝；为入口验收仅在该隔离库创建 v1 表和上传表，不能将其视为完整 v2 迁移。正式 130 在 1.30.23 已完成 v1/v2，未在本轮重新操作。
+
+## 2026-09-22 DATA_LAB已正式迁移
+
+130的1.30.23已备份执行v1/v2，config/submission/snapshot/upload四表及source_id非空、revision/max_score已核验。专用隔离库迁移重复执行、旧缺快照阻断、4并发提交单行、4并发克隆唯一草稿与序号、发布快照隔离均通过。下段“未迁移”为历史；回退应用保留实验数据，不恢复整库。
+
+## 2026-09-21 DATA_LAB（本地代码，未迁移）
+
+- biz_data_lab_snapshot以普通题单snapshot_id为主键，固定Excel路径/名称、说明、初始代码和满分；版本克隆复制，重加复用，不动态读取题库当前配置。
+- biz_data_lab_upload记录UUID文件上传user_id归属；biz_data_lab_submission.student_id使用sys_user.user_id，与普通Python的学生档案ID必须转换。
+- 提交唯一键来源非空，仅BASE_VERSION；revision重交递增，评分WHERE revision匹配，max_score取版本快照。
+- 迁移顺序v1/v2；历史歧义拒绝自动迁移。当前代码的题单查询依赖新增表，未迁移不可部署。未进行真实MySQL迁移/并发验收，见ADR-014。
+
 ## 2026-09-21 分享令牌密文（130已备份迁移，1.30.21）
 
 发布证据见PROJECT_CORE v3.92及output/share-grading-release/。正式教师页面与模拟批改回归通过；分享真实跨设备操作待教研员凭据补验。以下本机验证记录保留为历史。

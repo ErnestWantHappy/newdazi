@@ -37,6 +37,7 @@ function setup() {
     vm.createContext(ctx);
     vm.runInContext(extract('function loadSubmissions(options = {})', 'const gradedCount'), ctx);
     vm.runInContext(extract('async function submitScore()', 'async function returnCurrentTask()'), ctx);
+    vm.runInContext(extract('async function returnCurrentTask()', 'function getPreviewStatusText'), ctx);
     vm.runInContext(extract('async function nextSubmittedStudent()', 'function prevStudent()'), ctx);
     return { ctx, a, b, requests, grades, messages };
 }
@@ -107,4 +108,31 @@ test('名单加载中不允许提交，静默轮询不能抢占主动重载', as
     ctx.loadSubmissions();
     ctx.loadSubmissions({ silent: true }); await ctx.submitScore();
     assert.equal(requests.length, 1); assert.equal(grades.length, 0);
+});
+
+test('退回确认期间切换学生，仍只退回点击时的学生', async () => {
+    const { ctx, a, b } = setup();
+    let confirm, finish;
+    const calls = [];
+    ctx.ElMessageBox = { confirm: () => new Promise(resolve => { confirm = resolve; }) };
+    ctx.returnClassroomTask = data => { calls.push(data); return new Promise(resolve => { finish = resolve; }); };
+    const pending = ctx.returnCurrentTask();
+    assert.equal(ctx.submitting.value, true);
+    await ctx.returnCurrentTask();
+    ctx.selectStudent(b, 1);
+    confirm(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].studentId, a.studentId);
+    finish(); await pending;
+    assert.equal(a.taskState, 'RETURNED');
+    assert.equal(b.taskState, undefined);
+    assert.equal(ctx.submitting.value, false);
+});
+
+test('取消退回不调用接口，恢复按钮', async () => {
+    const { ctx } = setup();
+    ctx.ElMessageBox = { confirm: () => Promise.reject('cancel') };
+    ctx.returnClassroomTask = () => assert.fail('不应发送退回');
+    await ctx.returnCurrentTask();
+    assert.equal(ctx.submitting.value, false);
 });

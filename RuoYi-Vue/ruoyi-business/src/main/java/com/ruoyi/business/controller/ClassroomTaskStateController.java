@@ -2,12 +2,14 @@ package com.ruoyi.business.controller;
 
 import java.util.List;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizStudentTaskState;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.ClassroomStudentTaskSummaryVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
+import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.service.ClassroomTaskStateService;
 import com.ruoyi.business.service.GuideSheetAccessService;
 import com.ruoyi.common.core.controller.BaseController;
@@ -17,6 +19,7 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,6 +34,7 @@ public class ClassroomTaskStateController extends BaseController
 {
     @Autowired private ClassroomTaskStateService taskStateService;
     @Autowired private BizStudentMapper studentMapper;
+    @Autowired private BizStudentAnswerMapper answerMapper;
     @Autowired private BizLessonAssignmentMapper assignmentMapper;
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
     @Autowired private GuideSheetAccessService guideSheetAccessService;
@@ -86,6 +90,7 @@ public class ClassroomTaskStateController extends BaseController
 
     @PreAuthorize("@ss.hasRole('teacher') or @ss.hasRole('admin')")
     @PostMapping("/return")
+    @Transactional(rollbackFor = Exception.class)
     public AjaxResult returnForResubmission(@RequestBody StateRequest request)
     {
         if (StringUtils.isBlank(request.getEntryYear()) || StringUtils.isBlank(request.getClassCode())
@@ -102,6 +107,16 @@ public class ClassroomTaskStateController extends BaseController
                 || !normalizeClassCode(request.getClassCode()).equals(normalizeClassCode(student.getClassCode())))
         {
             throw new ServiceException("学生不属于当前班级");
+        }
+        // 退回与推进互斥；推进完成后的旧课不能再产生可重交任务。
+        BizLessonAssignment current = assignmentMapper.selectCurrentAssignmentForUpdate(
+                student.getEntryYear(), normalizeClassCode(student.getClassCode()), lessonDeptId);
+        if (current == null || !request.getLessonId().equals(current.getLessonId()))
+            throw new ServiceException("该课程已结束，仅能退回当前课程的作业");
+        if (answerMapper.selectLatestByStudentLessonQuestion(student.getStudentId(),
+                request.getLessonId(), request.getQuestionId()) == null)
+        {
+            throw new ServiceException("学生尚未提交该题，无法退回重做");
         }
         taskStateService.mark(student, student.getDeptId(), request.getLessonId(),
                 request.getQuestionId(), ClassroomTaskStateService.RETURNED);

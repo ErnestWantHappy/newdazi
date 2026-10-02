@@ -20,7 +20,8 @@
         <flowchart-editor :model-value="answerJson" mode="READONLY" :height="460" />
       </el-tab-pane>
       <el-tab-pane label="结构检查" name="check">
-        <div class="check-summary">
+        <el-alert v-if="submission.suggestedScore == null" title="未设置标准答案，请人工批改" type="info" :closable="false" />
+        <div v-else class="check-summary">
           <el-statistic title="结构检查参考分" :value="Number(submission.suggestedScore || 0)" />
           <el-button type="success" plain @click="$emit('apply-suggestion', Number(submission.suggestedScore || 0))">填入评分框</el-button>
           <span>结构检查只作参考，正式成绩以教师确认提交为准。</span>
@@ -57,23 +58,27 @@ const activeTab = ref('student')
 const submission = ref(null)
 const answerJson = ref('')
 const checkItems = ref([])
+let requestSeq = 0
 
 watch(() => [props.lessonId, props.questionId, props.studentId], load, { immediate: true })
 
 async function load() {
   if (!props.lessonId || !props.questionId || !props.studentId) return
+  const seq = ++requestSeq
+  const context = [String(props.lessonId), String(props.questionId), String(props.studentId)]
   loading.value = true
   submission.value = null
   try {
     const response = await getFlowchartGradingSubmission({
       lessonId: props.lessonId, questionId: props.questionId, studentId: props.studentId
     })
+    if (seq !== requestSeq || context.join(':') !== [String(props.lessonId), String(props.questionId), String(props.studentId)].join(':')) return
     submission.value = response.data?.submission || null
     answerJson.value = response.data?.answerJson || ''
     try { checkItems.value = JSON.parse(submission.value?.checkResultJson || '{}').items || [] }
     catch (_) { checkItems.value = [] }
     activeTab.value = 'student'
-  } finally { loading.value = false }
+  } finally { if (seq === requestSeq) loading.value = false }
 }
 
 function formatConfidence(value) {

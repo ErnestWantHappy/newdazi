@@ -90,6 +90,17 @@ public class FlowchartDocumentService {
                 JsonNode sourceProperties = node.get("properties");
                 properties.put("locked", booleanValue(sourceProperties, "locked", false));
                 properties.put("textEditable", booleanValue(sourceProperties, "textEditable", true));
+                // 宽高是可选字段；旧作品仍使用原有默认尺寸。
+                if (sourceProperties != null && sourceProperties.has("width") && sourceProperties.has("height")) {
+                    double width = sourceProperties.path("width").asDouble(Double.NaN);
+                    double height = sourceProperties.path("height").asDouble(Double.NaN);
+                    if (!Double.isFinite(width) || width < 80 || width > 1200
+                            || !Double.isFinite(height) || height < 40 || height > 800) {
+                        throw new ServiceException("流程图节点尺寸超出允许范围");
+                    }
+                    properties.put("width", Math.round(width));
+                    properties.put("height", Math.round(height));
+                }
             }
 
             ArrayNode safeEdges = normalized.putArray("edges");

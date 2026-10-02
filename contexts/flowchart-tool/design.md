@@ -1,5 +1,16 @@
 # 画程：流程图操作题技术设计
 
+## 2026-09-24 当前课边界（本机候选）
+
+`FlowchartService.assertStudentAccess` 在事务内锁定当前班级指派行；工作区首次进入可能创建草稿，因此与保存、重开和正式提交一样持锁核对当前课。`RETURNED` 只影响当前课是否绕过操作题关闭开关，不再允许进入旧课。教师退回由课堂状态接口按当前指派行锁限制。历史草稿和提交版本不删除。
+
+
+## 2026-09-23 本地增量设计（未发布）
+
+LogicFlow 的 `terminal/process/inputOutput` 模型只生成 `${nodeId}_top/bottom`，`decision` 保留四锚点。`schema.js` 在旧作品加载时把普通图的左右锚点转到按相邻节点上下关系选定的中线点，清除旧端点/折点供画布重新布线；新保存仍保留边几何。节点 `properties.width/height` 为可选完整尺寸，前后端规范化边界一致；菱形内部 `rx/ry` 是半径，写入 JSON 时转成完整宽高；多边形根据宽高重算顶点。旧节点无尺寸时沿文字布局，缩放只改作品，视图缩放不写 JSON。判断条件只读类型/文字/方向，不比较节点坐标和大小。
+
+画布默认高 480px，缩放按钮以 0.25 为步长并限制 0.2～2 倍；窗口适配仍不放大小图。锁定/只读和题目移动权限限制节点缩放。教师退回状态由学生工作区识别，重开复制最新提交为新草稿；草稿保存和正式提交仍由原修订号与版本检查保护。实现决策见 `ADR-005-top-bottom-anchors-and-size.md`。
+
 2026-09-19几何保真（本机未发布）：schema与FlowchartDocumentService双端白名单增加可选startPoint/endPoint、pointsList（2至100点）、sourceAnchorId/targetAnchorId、textPosition。坐标有限、正负10000且两位小数，ID遵守原规则，text保持字符串；交给LogicFlow时还原文字坐标对象，缺少旧pointsList才由其重新路由。FlowchartImageRenderer以节点中心和各类型真实尺寸绘制，沿pointsList画多段线与末段箭头，整图含负坐标平移缩放，仍输出原JPEG格式。无需表迁移，但前后端必须配套；旧折点不能恢复。详见ADR-002追加决定和`contexts/five-issues-20260919.md`。
 
 > 基线：Vue 3 + Vite + Element Plus；Spring Boot / Java 8 / MyBatis / MySQL。

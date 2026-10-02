@@ -188,6 +188,12 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         }
         answerDeletionGuardService.assertQuestionsDeletable(questionIds);
         for (Long questionId : questionIds) {
+            BizQuestion labQuestion = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+            if (labQuestion != null && "DATA_LAB".equals(labQuestion.getPracticalMode())) {
+                assertPythonQuestionDeletable(questionId);
+            }
+        }
+        for (Long questionId : questionIds) {
             BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
             if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
                 assertPythonQuestionDeletable(questionId);
@@ -210,6 +216,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     public int deleteBizQuestionByQuestionId(Long questionId) {
         answerDeletionGuardService.assertQuestionsDeletable(new Long[] { questionId });
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+        if (question != null && "DATA_LAB".equals(question.getPracticalMode())) assertPythonQuestionDeletable(questionId);
         if (isPythonPractical(question) || programmingJudgeMapper.selectConfig(questionId) != null) {
             assertPythonQuestionDeletable(questionId);
             deletePythonQuestionChildren(questionId);
@@ -413,6 +420,19 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             bizQuestion.setFilePath(null);
             bizQuestion.setPreviewPath(null);
         } else if ("practical".equals(questionType)) {
+            if ("DATA_LAB".equals(bizQuestion.getPracticalMode())) {
+                // 实验数据和评分独立保存，不能落入下方 FILE 分支触发文件转换。
+                bizQuestion.setFilePath(null);
+                bizQuestion.setPreviewPath(null);
+                bizQuestion.setPreviewStatus(null);
+                bizQuestion.setPracticalAllowedExtensions(null);
+                bizQuestion.setPracticalImageMaxCount(PRACTICAL_IMAGE_MAX_COUNT_DEFAULT);
+                bizQuestion.setPracticalMaterials(null);
+                bizQuestion.setScoringItems(null);
+                bizQuestion.setWordCount(null);
+                bizQuestion.setTypingDuration(null);
+                return;
+            }
             if (isPythonPractical(bizQuestion)) {
                 // 在线编程由 Judge0 配置和测试点评分，不能混入文件作品和人工评分项。
                 bizQuestion.setPracticalMode("PYTHON");

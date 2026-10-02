@@ -8,6 +8,7 @@ import com.ruoyi.business.mapper.BizTeacherClassMapper;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.service.IBizTeacherClassService;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.SecurityUtils;
 
 /**
  * 教师-班级管理关联Service业务层处理
@@ -130,6 +131,19 @@ public class BizTeacherClassServiceImpl implements IBizTeacherClassService
     @Override
     public int deleteBizTeacherClassByIds(Long[] ids)
     {
+        if (ids == null || ids.length == 0) return 0;
+        Long userId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getDeptId();
+        boolean admin = SecurityUtils.isAdmin(userId);
+        for (Long id : ids)
+        {
+            BizTeacherClass row = bizTeacherClassMapper.selectBizTeacherClassById(id);
+            if (row == null) continue;
+            if (!admin && (!deptId.equals(row.getDeptId()) || !userId.equals(row.getUserId())))
+            {
+                throw new ServiceException("只能删除自己管理的班级记录");
+            }
+        }
         return bizTeacherClassMapper.deleteBizTeacherClassByIds(ids);
     }
 
@@ -142,6 +156,14 @@ public class BizTeacherClassServiceImpl implements IBizTeacherClassService
     @Override
     public int deleteBizTeacherClassById(Long id)
     {
+        Long userId = SecurityUtils.getUserId();
+        Long deptId = SecurityUtils.getDeptId();
+        BizTeacherClass row = bizTeacherClassMapper.selectBizTeacherClassById(id);
+        if (row != null && !SecurityUtils.isAdmin(userId)
+                && (!deptId.equals(row.getDeptId()) || !userId.equals(row.getUserId())))
+        {
+            throw new ServiceException("只能删除自己管理的班级记录");
+        }
         return bizTeacherClassMapper.deleteBizTeacherClassById(id);
     }
 

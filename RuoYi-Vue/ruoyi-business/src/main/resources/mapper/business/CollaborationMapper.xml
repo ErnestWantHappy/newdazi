@@ -62,6 +62,13 @@
         creator_user_id, modifier_user_id, last_open_time, last_save_time, last_callback_type,
         last_callback_status, last_wps_request_id, last_error_message, create_time, update_time</sql>
 
+    <!-- 关联多表查询时显式携带别名 r. 避免同名字段歧义（如 room_id） -->
+    <sql id="roomPrefixedColumns">r.room_id, r.provider, r.provider_session_key, r.public_file_id, r.lesson_id, r.question_id, r.source_material_id,
+        r.dept_id, r.entry_year, r.class_code, r.room_title, r.status, r.current_version, r.current_file_name,
+        r.current_file_path, r.current_file_extension, r.current_mime_type, r.current_file_size, r.current_sha256,
+        r.creator_user_id, r.modifier_user_id, r.last_open_time, r.last_save_time, r.last_callback_type,
+        r.last_callback_status, r.last_wps_request_id, r.last_error_message, r.create_time, r.update_time</sql>
+
     <select id="selectOpenLessonIdsByLessonIds" resultType="long">
         SELECT DISTINCT lesson_id
         FROM biz_collab_room
@@ -200,6 +207,7 @@
     <select id="selectStudentIdByUserId" resultType="long">SELECT student_id FROM biz_student WHERE user_id=#{userId} LIMIT 1</select>
     <insert id="insertOperationEvent">INSERT INTO biz_collab_operation_event(room_id,user_id,student_id,event_type,event_detail,create_time) VALUES(#{roomId},#{userId},#{studentId},#{eventType},#{eventDetail},#{createTime})</insert>
     <select id="selectOperationEvents" resultType="map">SELECT e.event_id AS eventId,e.room_id AS roomId,e.user_id AS userId,e.student_id AS studentId,e.event_type AS eventType,e.event_detail AS eventDetail,e.create_time AS createTime,COALESCE(CONCAT(s.student_no,' ',u.nick_name),u.user_name) AS actorName FROM biz_collab_operation_event e LEFT JOIN biz_student s ON s.student_id=e.student_id LEFT JOIN sys_user u ON u.user_id=e.user_id WHERE e.room_id=#{roomId} ORDER BY e.create_time DESC,e.event_id DESC LIMIT 500</select>
+    <select id="lockRoom" resultType="long">SELECT room_id FROM biz_collab_room WHERE room_id=#{roomId} FOR UPDATE</select>
     <select id="selectRoomRoster" resultType="map">SELECT g.group_name AS groupName,sm.student_id AS studentId,CONCAT(s.student_no,' ',COALESCE(u.nick_name,s.student_no)) AS name,(SELECT MAX(e.create_time) FROM biz_collab_operation_event e WHERE e.room_id=gt.room_id AND e.event_type='ENTER' AND e.student_id=sm.student_id) AS enterTime FROM biz_collab_group_task gt JOIN biz_lesson_group_snapshot_group g ON g.snapshot_group_id=gt.snapshot_group_id JOIN biz_lesson_group_snapshot_member sm ON sm.snapshot_group_id=g.snapshot_group_id JOIN biz_student s ON s.student_id=sm.student_id LEFT JOIN sys_user u ON u.user_id=s.user_id AND u.del_flag='0' WHERE gt.room_id=#{roomId} ORDER BY sm.sort_no</select>
     <select id="selectBankStarterSearch" resultType="map">SELECT q.question_id AS questionId,q.question_content AS questionContent,q.grade AS grade,q.semester AS semester,q.lesson_num AS lessonNum,q.preview_path AS previewPath,m.material_id AS materialId,m.original_file_name AS fileName,m.file_extension AS fileExtension,m.file_size AS fileSize,m.resource_path AS resourcePath FROM biz_question q JOIN biz_practical_question_material m ON m.question_id=q.question_id AND m.material_type='STARTER' WHERE q.question_type='practical' AND q.practical_mode='FILE' <if test="creatorId != null">AND (q.is_public IN ('Y','1') OR q.creator_id=#{creatorId})</if><if test="grade != null"> AND q.grade=#{grade}</if><if test="semester != null and semester != ''"> AND q.semester=#{semester}</if><if test="lessonNum != null"> AND q.lesson_num=#{lessonNum}</if><if test="keyword != null and keyword != ''"> AND (q.question_content LIKE CONCAT('%',#{keyword},'%') OR m.original_file_name LIKE CONCAT('%',#{keyword},'%'))</if> ORDER BY q.question_id DESC,m.file_order</select>
     <select id="selectRoomTeacherEnters" resultType="map">SELECT COALESCE(u.nick_name,u.user_name) AS name,MAX(e.create_time) AS enterTime FROM biz_collab_operation_event e JOIN sys_user u ON u.user_id=e.user_id AND u.del_flag='0' WHERE e.room_id=#{roomId} AND e.event_type='ENTER' AND e.student_id IS NULL GROUP BY e.user_id ORDER BY enterTime DESC</select>
@@ -225,7 +233,7 @@
         WHERE r.lesson_id = #{lessonId} AND r.dept_id = #{deptId} AND r.status != 'CLOSED' AND gt.room_id IS NULL
     </update>
     <select id="selectRoomsByActivity" resultMap="RoomResult">
-        SELECT <include refid="roomColumns"/> FROM biz_collab_room r JOIN biz_collab_group_task gt ON gt.room_id = r.room_id WHERE gt.activity_id = #{activityId}
+        SELECT <include refid="roomPrefixedColumns"/> FROM biz_collab_room r JOIN biz_collab_group_task gt ON gt.room_id = r.room_id WHERE gt.activity_id = #{activityId}
     </select>
     <delete id="deleteGroupTasksByActivity">DELETE FROM biz_collab_group_task WHERE activity_id = #{activityId}</delete>
     <delete id="deleteTaskVersionsByActivity">DELETE FROM biz_collab_task_version WHERE activity_id = #{activityId}</delete>

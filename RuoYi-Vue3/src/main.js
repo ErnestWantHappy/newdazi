@@ -45,6 +45,7 @@ import ImagePreview from "@/components/ImagePreview"
 // 字典标签组件
 import DictTag from '@/components/DictTag'
 import ImageDisplay from '@/components/ImageDisplay/index.vue'
+import ImageAddWidget from '@/components/ImageAddWidget/index.vue'
 import VForm3 from 'vform3-builds'
 import 'vform3-builds/dist/designer.style.css'
 
@@ -68,6 +69,7 @@ app.component('FileUpload', FileUpload)
 app.component('ImageUpload', ImageUpload)
 app.component('ImagePreview', ImagePreview)
 app.component('ImageDisplay', ImageDisplay)
+app.component('image-add-widget', ImageAddWidget)
 app.component('RightToolbar', RightToolbar)
 app.component('Editor', Editor)
 
