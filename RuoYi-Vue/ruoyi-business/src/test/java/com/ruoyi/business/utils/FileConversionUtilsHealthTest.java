@@ -139,4 +139,110 @@ class FileConversionUtilsHealthTest {
         assertNotNull(reason);
         assertEquals(true, reason.contains("持续无成功转换"));
     }
+
+    // ==================== 2026-10-12 回归：假健康 / 退避 / 毒文件隔离 ====================
+
+    @Test
+    void postRebuildObservationIsUnhealthyWhenAttemptedButNeverSucceeded() {
+        // 回归 130 事故：重建清零了在途与失败计数，旧逻辑立刻报 healthy=true。
+        // 现在只要"重建过 + 超过软超时 + 期间确实有转换尝试且仍无成功"就判为不健康。
+        assertTrue(FileConversionUtils.isPostRebuildObservationUnhealthy(
+                true, 200_000L, 120_000L, 3));
+    }
+
+    @Test
+    void postRebuildObservationIsHealthyWhenPoolIsMerelyIdle() {
+        // 深夜无人提交时不能误判：没有转换尝试就说明只是空闲，不该反复重启
+        assertFalse(FileConversionUtils.isPostRebuildObservationUnhealthy(
+                true, 3_600_000L, 120_000L, 0));
+    }
+
+    @Test
+    void postRebuildObservationIsHealthyBeforeSoftTimeout() {
+        assertFalse(FileConversionUtils.isPostRebuildObservationUnhealthy(
+                true, 50_000L, 120_000L, 5));
+    }
+
+    @Test
+    void postRebuildObservationIsHealthyWhenAlreadyRecovered() {
+        // 已出现真实成功（awaiting=false）即恢复，退避也随之清零
+        assertFalse(FileConversionUtils.isPostRebuildObservationUnhealthy(
+                false, 3_600_000L, 120_000L, 9));
+    }
+
+    @Test
+    void cooldownBacksOffExponentiallyWithoutSuccess() {
+        // 基础 2 分钟：1 次无成功 -> 4 分钟，2 次 -> 8 分钟，3 次 -> 16 分钟
+        assertEquals(120_000L, FileConversionUtils.effectiveCooldownMs(120_000L, 0));
+        assertEquals(240_000L, FileConversionUtils.effectiveCooldownMs(120_000L, 1));
+        assertEquals(480_000L, FileConversionUtils.effectiveCooldownMs(120_000L, 2));
+        assertEquals(960_000L, FileConversionUtils.effectiveCooldownMs(120_000L, 3));
+        // 增长到 3 次后封顶，不会无限膨胀
+        assertEquals(960_000L, FileConversionUtils.effectiveCooldownMs(120_000L, 99));
+    }
+
+    @Test
+    void cooldownIsCappedAtThirtyMinutes() {
+        // 基础 20 分钟，翻倍后应被 30 分钟上限截断
+        assertEquals(30L * 60L * 1000L, FileConversionUtils.effectiveCooldownMs(20L * 60L * 1000L, 1));
+    }
+
+    @Test
+    void poisonFileBecomesIsolatedAfterThresholdHit() {
+        String poison = "/data/upload/upload/student-answer-artifact/poison-test/case-a.docx";
+        assertFalse(FileConversionUtils.isPoisonFileIsolated(poison));
+        assertEquals(0, FileConversionUtils.getPoisonFileHitCount(poison));
+
+        // 阈值默认 1：崩一次即隔离，不再让它第二次进共享池
+        FileConversionUtils.registerPoisonFileHit(poison);
+        assertEquals(1, FileConversionUtils.getPoisonFileHitCount(poison));
+        assertTrue(FileConversionUtils.isPoisonFileIsolated(poison));
+
+        // 命中次数持续累加，便于运维观察
+        FileConversionUtils.registerPoisonFileHit(poison);
+        assertEquals(2, FileConversionUtils.getPoisonFileHitCount(poison));
+    }
+
+    @Test
+    void unrelatedHealthyFileIsNotIsolated() {
+        String healthy = "/data/upload/upload/student-answer-artifact/poison-test/case-b.docx";
+        assertFalse(FileConversionUtils.isPoisonFileIsolated(healthy));
+    }
+
+    @Test
+    void nullPathIsNeverIsolated() {
+        assertFalse(FileConversionUtils.isPoisonFileIsolated(null));
+        assertFalse(FileConversionUtils.isUnconvertible(null));
+        assertEquals(0, FileConversionUtils.registerPoisonFileHit(null));
+    }
+
+    @Test
+    void unconvertibleFileIsRecordedButNotDeleted() {
+        // 隔离进程也失败后登记为不可转换，用于停止自动重试；原始文件始终保留
+        String broken = "/data/upload/upload/student-answer-artifact/poison-test/case-c.docx";
+        assertFalse(FileConversionUtils.isUnconvertible(broken));
+
+        FileConversionUtils.markUnconvertible(broken, "文件内容异常");
+        assertTrue(FileConversionUtils.isUnconvertible(broken));
+        assertEquals("文件内容异常", FileConversionUtils.getUnconvertibleReason(broken));
+        assertNull(FileConversionUtils.getUnconvertibleReason(
+                "/data/upload/upload/student-answer-artifact/poison-test/never-seen.docx"));
+    }
+
+    @Test
+    void unconvertibleMessageIsRecognisedRegardlessOfPrefix() {
+        // 落库文本可能被截断或带前缀，判定只看关键片段，避免标记失效后又被捞回重试
+        assertTrue(FileConversionUtils.isUnconvertibleMessage(FileConversionUtils.UNCONVERTIBLE_MESSAGE));
+        assertTrue(FileConversionUtils.isUnconvertibleMessage(
+                "转换执行异常：" + FileConversionUtils.UNCONVERTIBLE_MESSAGE));
+    }
+
+    @Test
+    void ordinaryFailureMessageIsNotTreatedAsUnconvertible() {
+        // 普通失败（如服务重启、文件不存在）必须允许重试，不能误判成永久不可转换
+        assertFalse(FileConversionUtils.isUnconvertibleMessage("PDF 文件生成失败"));
+        assertFalse(FileConversionUtils.isUnconvertibleMessage("源文件不存在"));
+        assertFalse(FileConversionUtils.isUnconvertibleMessage(null));
+        assertFalse(FileConversionUtils.isUnconvertibleMessage(""));
+    }
 }

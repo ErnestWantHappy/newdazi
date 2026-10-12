@@ -161,6 +161,15 @@ public class AsyncConversionService {
             return false;
         }
 
+        // 文件本身不可转换时，忽略重试上限也不能再捞回：
+        // 手动重转会传 ignoreRetryLimit=true 绕过计数上限，只有这层文本判定能兜住。
+        // 学生重新导出后是新文件新行，不会被这条拦住。
+        if (FileConversionUtils.isUnconvertibleMessage(answerSnapshot.getPreviewErrorMessage())) {
+            log.warn("【异步转换】源文件已被判定不可转换，拒绝重试 answerId={}, source={}",
+                    answerSnapshot.getAnswerId(), triggerSource);
+            return false;
+        }
+
         Integer currentRetryCount = normalizeRetryCount(answerSnapshot.getPreviewRetryCount());
         if (!ignoreRetryLimit && currentRetryCount >= MAX_AUTO_RETRY_COUNT) {
             log.info("【异步转换】达到自动重试上限，跳过 answerId={}, retryCount={}, source={}",
@@ -198,6 +207,14 @@ public class AsyncConversionService {
      */
     public boolean claimCountyRetryAndExecute(CountyExamAnswer answerSnapshot, boolean ignoreRetryLimit, String triggerSource) {
         if (answerSnapshot == null || answerSnapshot.getAnswerId() == null) {
+            return false;
+        }
+
+        // 与操作题同一道闸：文本标记持久化在答题行上，重启后依然挡得住手动重转。
+        String countyErrorMessage = answerSnapshot.getPreviewErrorMessage();
+        if (FileConversionUtils.isUnconvertibleMessage(countyErrorMessage)) {
+            log.warn("【区域抽测转换】源文件已被判定不可转换，拒绝重试 answerId={}, source={}",
+                    answerSnapshot.getAnswerId(), triggerSource);
             return false;
         }
 
@@ -374,7 +391,15 @@ public class AsyncConversionService {
                 studentAnswerMapper.updatePreviewStatus(answer);
             } else {
                 log.error("【异步转换】转换失败 answerId={}", answerId);
-                markFailed(answer, "PDF 文件生成失败");
+                if (FileConversionUtils.isUnconvertible(docxFullPath)) {
+                    // 共享池与隔离进程都转不出来，属于文件本身的问题。
+                    // 把重试计数直接打满，命中重试选择的 retry_count < maxRetryCount 条件，
+                    // 从此不再被自动重试捞回；原始文件保留，教师可下载原件核对。
+                    answer.setPreviewRetryCount(MAX_AUTO_RETRY_COUNT);
+                    markFailed(answer, FileConversionUtils.UNCONVERTIBLE_MESSAGE);
+                } else {
+                    markFailed(answer, "PDF 文件生成失败");
+                }
             }
         } catch (Exception e) {
             log.error("【异步转换】异常 answerId={}, error={}", answerId, e.getMessage(), e);
@@ -441,7 +466,16 @@ public class AsyncConversionService {
                 answer.setPreviewErrorMessage(null);
                 countyExamAnswerMapper.updatePreviewStatus(answer);
             } else {
-                markCountyFailed(answer, "PDF 文件生成失败");
+                if (FileConversionUtils.isUnconvertible(docxFullPath)) {
+                    // 与操作题一致：文件本身不可转换，打满重试计数停止自动重试，原始文件保留。
+                    // 注意区域抽测侧的重试上限检查与 SQL 过滤用的是 normalized_retry_count，
+                    // 必须写这个字段才真正生效（preview_retry_count 在抽测链路上不参与判定）。
+                    answer.setNormalizedRetryCount(MAX_AUTO_RETRY_COUNT);
+                    answer.setPreviewRetryCount(MAX_AUTO_RETRY_COUNT);
+                    markCountyFailed(answer, FileConversionUtils.UNCONVERTIBLE_MESSAGE);
+                } else {
+                    markCountyFailed(answer, "PDF 文件生成失败");
+                }
             }
         } catch (Exception e) {
             log.error("【区域抽测转换】异常 answerId={}, error={}", answerId, e.getMessage(), e);

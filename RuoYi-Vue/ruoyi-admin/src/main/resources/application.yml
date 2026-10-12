@@ -33,6 +33,13 @@ ruoyi:
     rebuild-cooldown-ms: 120000
     # 在途转换挂起超过该时间视为半死信号；应明显小于 task-execution-timeout
     soft-hang-timeout-ms: 120000
+    # 是否保留 jodconverter 默认的 RefreshFilter（转换前对文档做一次完整重排）。
+    # 默认 true 保持既有行为：实测本批异常 docx 在无该过滤器的隔离 CLI 下同样崩溃/挂起，
+    # 说明崩因在文档本身而非该过滤器，故不做未经证实的行为变更。保留开关以便按需关闭。
+    refresh-filter-enabled: true
+    # 同一源文件把共享池打崩多少次后改走一次性隔离进程。
+    # 默认 1：崩一次即隔离。漏判会让整池反复重启，误判只是让正常文件多走一次较慢的隔离转换，代价不对称。
+    poison-isolate-threshold: 1
   # 操作题预览转换队列：交卷与预览解耦，高峰只排队不拖垮提交
   conversion:
     queue-capacity: 800

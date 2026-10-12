@@ -4,6 +4,7 @@ import org.jodconverter.core.DocumentConverter;
 import org.jodconverter.core.office.OfficeException;
 import org.jodconverter.core.office.OfficeManager;
 import org.jodconverter.local.LocalConverter;
+import org.jodconverter.local.filter.NoopFilter;
 import org.jodconverter.local.office.LocalOfficeManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,6 +62,10 @@ public class FileConversionUtils {
      * 应明显小于 task-execution-timeout，以便 1～2 分钟内自愈。
      */
     private static long softHangTimeoutMs = 120_000L;
+    /** 是否保留 jodconverter 默认的 RefreshFilter（完整重排），默认关闭，见 init 注释 */
+    private static boolean refreshFilterEnabled = false;
+    /** 同一源文件把共享池打崩多少次后改走隔离进程 */
+    private static int poisonIsolateThreshold = 1;
 
     private static final ReentrantReadWriteLock OFFICE_MANAGER_LOCK = new ReentrantReadWriteLock(true);
     private static final Lock OFFICE_READ_LOCK = OFFICE_MANAGER_LOCK.readLock();
@@ -69,6 +75,41 @@ public class FileConversionUtils {
     private static final AtomicInteger consecutiveServiceFailures = new AtomicInteger(0);
     private static final AtomicInteger inFlightConversions = new AtomicInteger(0);
     private static final AtomicLong oldestInFlightStartMs = new AtomicLong(0L);
+
+    /**
+     * 在途转换“世代”号。每次整池重建 +1。
+     * 卡死的旧 convert 线程在重建后才返回并调用 endInFlight，
+     * 若只按计数递减，它会把新一轮的在途数减掉，导致挂起判定失真。
+     * 线程记下自己开始时的世代，只有世代相同才允许递减。
+     */
+    private static final AtomicLong inFlightEpoch = new AtomicLong(0L);
+    /** 记录每个转换线程的开始时间与世代，重建时用于定位并中断卡死线程 */
+    private static final ConcurrentHashMap<Thread, InFlightSlot> inFlightSlots = new ConcurrentHashMap<>();
+
+    /**
+     * 毒文件隔离表：源文件绝对路径 -> 已把共享池打崩的次数。
+     * LibreOffice Writer 会在部分 docx 上 SIGABRT 自我终止（Signal 6），
+     * 这类文件继续走共享池只会反复拖垮整池，命中后改走一次性隔离进程。
+     * 不删除原始文件，仅改变转换通道。
+     */
+    private static final ConcurrentHashMap<String, AtomicInteger> poisonFileHits = new ConcurrentHashMap<>();
+
+    /**
+     * 任何通道都转换不出来的源文件（绝对路径 -> 原因）。
+     * 隔离通道也失败后登记，用于停止无意义重试；原始文件始终保留。
+     */
+    private static final ConcurrentHashMap<String, String> unconvertibleFiles = new ConcurrentHashMap<>();
+
+    /** 重建后尚未出现一次成功转换；此期间不得判定为健康，避免"假恢复" */
+    private static volatile boolean awaitingPostRebuildSuccess = false;
+    /**
+     * 重建后已发起的转换次数。
+     * 用于区分"重建后真的转不动"和"重建后根本没人提交、只是空闲"：
+     * 没有这个门，深夜无人提交时也会被判定为不健康并反复重启。
+     */
+    private static final AtomicInteger conversionAttemptsSinceRebuild = new AtomicInteger(0);
+    /** 连续重建且期间无成功转换的次数，用于指数退避，打断每 3～7 分钟重启一次的循环 */
+    private static volatile int rebuildsWithoutSuccess = 0;
 
     private static volatile long lastSuccessAtMs = 0L;
     private static volatile long lastFailureAtMs = 0L;
@@ -112,6 +153,22 @@ public class FileConversionUtils {
     @Value("${ruoyi.libre-office.soft-hang-timeout-ms:120000}")
     private long configuredSoftHangTimeoutMs;
 
+    /**
+     * 是否在共享池转换链末尾保留 jodconverter 默认的 RefreshFilter（会对文档做一次完整重排）。
+     * 默认 true，即保持既有行为：实测本批异常 docx 在隔离 CLI（无 RefreshFilter）下同样
+     * SIGABRT 或挂起，说明崩溃源于文档本身而非该过滤器，因此不做未经证实的行为变更。
+     * 保留开关，便于后续按需跳过这次强制重排。
+     */
+    @Value("${ruoyi.libre-office.refresh-filter-enabled:true}")
+    private boolean configuredRefreshFilterEnabled;
+
+    /**
+     * 同一源文件把共享池打崩多少次后改走一次性隔离进程。
+     * 默认 1：崩一次即隔离，避免同一毒文件反复拖垮整池。
+     */
+    @Value("${ruoyi.libre-office.poison-isolate-threshold:1}")
+    private int configuredPoisonIsolateThreshold;
+
     @PostConstruct
     public void init() {
         libreOfficeHome = configuredOfficeHome;
@@ -126,6 +183,8 @@ public class FileConversionUtils {
         maxRetry = Math.max(configuredMaxRetry, 0);
         failureThreshold = Math.max(configuredFailureThreshold, 1);
         rebuildCooldownMs = Math.max(configuredRebuildCooldownMs, 30_000L);
+        refreshFilterEnabled = configuredRefreshFilterEnabled;
+        poisonIsolateThreshold = Math.max(configuredPoisonIsolateThreshold, 1);
         // 软挂起超时不超过硬超时，且至少 30 秒，避免高峰排队误杀
         softHangTimeoutMs = Math.min(
                 Math.max(configuredSoftHangTimeoutMs, 30_000L),
@@ -182,14 +241,22 @@ public class FileConversionUtils {
 
             newOfficeManager.start();
             officeManager = newOfficeManager;
-            documentConverter = LocalConverter.builder()
-                    .officeManager(newOfficeManager)
-                    .build();
+            LocalConverter.Builder converterBuilder = LocalConverter.builder()
+                    .officeManager(newOfficeManager);
+            if (!refreshFilterEnabled) {
+                // 不使用 jodconverter 默认链（末尾是 RefreshFilter，会对文档做完整重排）。
+                // NoopFilter.CHAIN 什么都不做：不修改文档，直接交给 store 导出 PDF。
+                // 实测 RefreshFilter 触发的重排会让 Writer 在部分 docx 上 SIGABRT。
+                converterBuilder.filterChain(NoopFilter.CHAIN);
+            }
+            documentConverter = converterBuilder.build();
             serviceAvailable = true;
             serviceFailureCount.set(0);
             consecutiveServiceFailures.set(0);
+            conversionAttemptsSinceRebuild.set(0);
             clearInFlightTracking();
-            log.info("【LibreOffice服务】服务启动成功，支持{}个并发转换实例", officeInstanceCount);
+            log.info("【LibreOffice服务】服务启动成功，支持{}个并发转换实例（refreshFilter={}）",
+                    officeInstanceCount, refreshFilterEnabled);
             return true;
         } catch (Exception e) {
             officeManager = null;
@@ -241,6 +308,13 @@ public class FileConversionUtils {
                 return true;
             }
             log.warn("【LibreOffice服务】开始重建，原因={}", reason);
+            // 先中断卡死的转换线程，再杀进程停池。
+            // 否则卡在 convert 里的线程会变成僵尸继续占用 conversionExecutor
+            //（130 上池仅 2 个线程，两个卡死即全池瘫痪），并在重建后错误回收新一轮的在途计数。
+            int interrupted = interruptStuckConversions(0L, softHangTimeoutMs);
+            if (interrupted > 0) {
+                log.warn("【LibreOffice服务】重建前中断卡死转换线程 {} 个", interrupted);
+            }
             stopOfficeManagerInternal(true);
             waitForOfficeShutdown();
             boolean started = startOfficeManagerInternal(false);
@@ -344,10 +418,25 @@ public class FileConversionUtils {
         File pdfFile = new File(pdfFilePath);
 
         if (requiresIsolatedCli(officeFilePath)) {
+            // 演示文稿/表格：常驻管道路径会永久卡住，直接走一次性隔离进程
             return convertWithIsolatedOfficeProcess(officeFile, outputDirectory, pdfFile);
         }
 
         for (int attempt = 0; attempt <= maxRetry; attempt++) {
+            // 毒文件检查必须放在循环内：第 1 次尝试把整池打崩后，本次调用就会把该文件
+            // 登记为毒文件；重试必须立即改走隔离进程，否则同一次调用会把整池再打崩一次。
+            if (isPoisonFileIsolated(officeFilePath)) {
+                log.warn("【LibreOffice服务】源文件已命中隔离阈值，改走一次性隔离进程: {}", officeFilePath);
+                String isolatedResult = convertWithIsolatedOfficeProcess(officeFile, outputDirectory, pdfFile);
+                if (isolatedResult == null) {
+                    // 隔离通道也救不回来：该文件本身不可转换，登记后停止无意义重试。
+                    // 只登记不删文件——学生原始作品必须保留。
+                    markUnconvertible(officeFilePath,
+                            "文件内容导致 LibreOffice 无法转换（隔离转换同样失败）");
+                }
+                return isolatedResult;
+            }
+
             if (!ensureOfficeManagerReady()) {
                 log.error("【LibreOffice服务】服务不可用，无法进行转换: {}", officeFilePath);
                 markServiceFailure("服务不可用");
@@ -355,7 +444,7 @@ public class FileConversionUtils {
             }
 
             long startTime = System.currentTimeMillis();
-            beginInFlight(startTime);
+            beginInFlight(startTime, officeFilePath);
             try {
                 if (!executeConversionWithSharedLock(officeFile, pdfFile)) {
                     markServiceFailure("服务未就绪");
@@ -378,10 +467,26 @@ public class FileConversionUtils {
                 markServiceFailure("PDF未生成");
                 return null;
             } catch (OfficeException e) {
-                if (!isServiceLevelFailure(e)) {
-                    log.error("【服务模式转换】文档转换失败，不触发服务重建: {}", e.getMessage(), e);
-                    markServiceFailure("文档级失败");
+                // 进程数掉到实例数以下 = soffice 崩溃了，这是唯一能把“文档级失败”
+                // 升级为服务级失败的证据。不要用异常文本判断：实测崩溃时上层拿到的
+                // 是 “Local conversion failed”，不含任何连接/socket 关键字。
+                boolean processCrashed = countOfficeProcesses() < officeInstanceCount;
+
+                if (!isServiceLevelFailure(e) && !processCrashed) {
+                    // 纯文档级失败：只记录，不计入服务失败计数。
+                    // 旧实现这里调用 markServiceFailure，导致一份坏文档就能把
+                    // consecutiveServiceFailures 推到阈值，触发整池重启——
+                    // 这正是 130 上「9× 连续服务失败达到阈值(4>=3)」的来源。
+                    log.error("【服务模式转换】文档转换失败，不影响服务健康: {} 文件={}", e.getMessage(), officeFilePath);
+                    markDocumentFailureOnly();
                     return null;
+                }
+
+                if (!isServiceLevelFailure(e)) {
+                    // 文档级异常 + 进程真的没了：判定为该文件把池打崩，登记毒文件
+                    int hits = registerPoisonFileHit(officeFilePath);
+                    log.warn("【服务模式转换】转换导致 soffice 进程减少（命中次数={}）: {}",
+                            hits, officeFilePath);
                 }
 
                 int failureCount = serviceFailureCount.incrementAndGet();
@@ -539,9 +644,15 @@ public class FileConversionUtils {
             return cleanupAndRestart("进程数超过阈值");
         }
         if (isServiceAvailable()) {
-            // Windows 上每个实例通常对应 exe+bin；少于实例数说明池已半死，转换前强制重建
-            if (officeInstanceCount >= 3 && processCount > 0 && processCount < officeInstanceCount) {
-                log.warn("【LibreOffice服务】表面可用但进程严重偏少 process={}/instances={}，转换前受控重建",
+            // 进程数偏少可能是启动/重启毛刺，也可能是半死。
+            // 只有明确证据（在途挂起、失败信号）才在转换前重建，避免正常排队时误杀整池。
+            // 同时不再用 officeInstanceCount >= 3 这个硬编码门槛：130 上实例数为 2，
+            // 该分支永远不会生效，等于形同虚设；改用与健康判定一致的证据条件。
+            int expectedMin = officeInstanceCount;
+            if (processCount > 0 && processCount < expectedMin
+                    && !awaitingPostRebuildSuccess
+                    && (consecutiveServiceFailures.get() >= 1 || inFlightConversions.get() > 0)) {
+                log.warn("【LibreOffice服务】表面可用但进程偏少 process={}/instances={}（有失败或在途证据），转换前受控重建",
                         processCount, officeInstanceCount);
                 return cleanupAndRestart("转换前发现进程严重偏少");
             }
@@ -649,12 +760,17 @@ public class FileConversionUtils {
         }
 
         if (isInRebuildCooldown(now)) {
-            long remainMs = rebuildCooldownMs - (now - lastRebuildAtMs);
+            // 退避期间的重启间隔会随“连续无成功重建次数”成倍拉长，
+            // 用于打断“每 3～7 分钟重启一次整池”的循环。
+            long remainMs = effectiveCooldownMs() - (now - lastRebuildAtMs);
             result.put("skipped", Boolean.TRUE);
             result.put("action", "cooldown");
             result.put("cooldownRemainMs", Math.max(remainMs, 0L));
+            result.put("effectiveCooldownMs", effectiveCooldownMs());
+            result.put("rebuildsWithoutSuccess", rebuildsWithoutSuccess);
             result.put("message", "LibreOffice 不健康但处于重建冷却中: " + reason);
-            log.warn("【LibreOffice自愈】跳过重建（冷却中），原因={}，剩余约{}ms", reason, Math.max(remainMs, 0L));
+            log.warn("【LibreOffice自愈】跳过重建（冷却中），原因={}，剩余约{}ms（本次冷却{}ms，连续无成功重建={}）",
+                    reason, Math.max(remainMs, 0L), effectiveCooldownMs(), rebuildsWithoutSuccess);
             return result;
         }
 
@@ -665,7 +781,8 @@ public class FileConversionUtils {
         result.put("message", success
                 ? "LibreOffice 不健康已清理并重启: " + reason
                 : "LibreOffice 清理重启失败: " + reason);
-        // 刷新探测结果
+        // 刷新探测结果供调用方观察重启后的即时状态；
+        // 注意观察期判定会在重启后立即生效，因此这里通常仍显示不健康，属于预期行为。
         result.putAll(probeHealth(System.currentTimeMillis()));
         result.put("recovered", success);
         result.put("message", success
@@ -694,6 +811,18 @@ public class FileConversionUtils {
                 available, processCount, processWarnThreshold, officeInstanceCount,
                 consecutiveFailures, failureThreshold, inFlight, hangMs, softHangTimeoutMs,
                 sinceSuccessMs);
+        // 重建后观察期：重建过、但至今没有一次真实成功转换，且已超过软挂起超时。
+        // 旧实现把在途与失败计数一起清零，于是下一轮巡检 inFlight=0、failures=0 直接报 healthy=true，
+        // 而卡死的旧线程与毒文件仍在，重试立刻再次打崩整池——这就是 21:36～21:43 连续 8 分钟
+        // sinceSuccessMs 一路涨到 467965 却报健康的原因。此判定不受计数是否被清零影响。
+        long sinceRebuildMs = lastRebuildAtMs > 0L ? Math.max(now - lastRebuildAtMs, 0L) : -1L;
+        if (unhealthyReason == null
+                && isPostRebuildObservationUnhealthy(awaitingPostRebuildSuccess, sinceRebuildMs,
+                        softHangTimeoutMs, conversionAttemptsSinceRebuild.get())) {
+            unhealthyReason = "重建后长时间无成功转换(" + sinceRebuildMs
+                    + "ms, 尝试=" + conversionAttemptsSinceRebuild.get()
+                    + ", 连续无成功重建=" + rebuildsWithoutSuccess + ")";
+        }
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("healthy", unhealthyReason == null);
@@ -715,6 +844,26 @@ public class FileConversionUtils {
         data.put("lastRebuildReason", lastRebuildReason);
         data.put("sinceLastSuccessMs", sinceSuccessMs);
         return data;
+    }
+
+    /**
+     * 纯判定：重建后的观察期是否应判定为不健康。
+     * <p>
+     * 关键回归点：重建会把在途计数与失败计数清零，旧逻辑因此立刻报 healthy=true，
+     * 而卡死的线程与毒文件仍在，重试随即再次打崩整池——这就是 130 上
+     * 21:36～21:43 连续 8 分钟零成功转换却报健康的原因。
+     * 本判定不依赖那两个被清零的计数，只看"重建过 + 仍在无成功 + 期间确有转换尝试"。
+     *
+     * @param attemptsSinceRebuild 重建后已发起的转换次数；为 0 说明只是空闲，不能判为不健康
+     */
+    static boolean isPostRebuildObservationUnhealthy(boolean awaitingPostRebuildSuccess,
+                                                     long sinceRebuildMs,
+                                                     long softHangTimeoutMs,
+                                                     int attemptsSinceRebuild) {
+        return awaitingPostRebuildSuccess
+                && softHangTimeoutMs > 0
+                && sinceRebuildMs >= softHangTimeoutMs
+                && attemptsSinceRebuild > 0;
     }
 
     /**
@@ -825,6 +974,10 @@ public class FileConversionUtils {
                 return true;
             }
             log.warn("【LibreOffice服务】开始清理重启，原因={}", reason);
+            int interrupted = interruptStuckConversions(0L, softHangTimeoutMs);
+            if (interrupted > 0) {
+                log.warn("【LibreOffice服务】清理重启前中断卡死转换线程 {} 个", interrupted);
+            }
             stopOfficeManagerInternal(true);
             waitForOfficeShutdown();
             // stop 内已杀过一次；再扫一遍兜底
@@ -868,37 +1021,183 @@ public class FileConversionUtils {
     }
 
     private static void markRebuild(String reason, boolean started) {
-        lastRebuildAtMs = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+        lastRebuildAtMs = now;
         lastRebuildReason = reason == null ? "" : reason;
-        clearInFlightTracking();
+        // 重建后必须等一次真实成功转换才算恢复。
+        // 旧实现直接清零在途与失败计数，导致下一轮巡检看到 inFlight=0、failures=0 就报 healthy=true，
+        // 而卡死的旧线程其实还在（毒文件还会被重试捞回），形成“假恢复 + 反复整池重启”。
+        awaitingPostRebuildSuccess = true;
+        conversionAttemptsSinceRebuild.set(0);
         if (started) {
+            rebuildsWithoutSuccess++;
             consecutiveServiceFailures.set(0);
             serviceFailureCount.set(0);
+        } else {
+            // 重建失败本身也是不健康证据，保留失败计数以免被当成健康
+            rebuildsWithoutSuccess++;
+            markServiceFailure("重建失败:" + reason);
         }
+        log.warn("【LibreOffice服务】重建完成 started={} 连续无成功重建次数={}", started, rebuildsWithoutSuccess);
+    }
+
+    /**
+     * 重建退避：连续重建且期间没有一次成功转换时，逐步拉长冷却，避免每 3～7 分钟重启一次整池。
+     * 只要出现一次成功转换，立即恢复到基础冷却。
+     */
+    private static long effectiveCooldownMs() {
+        return effectiveCooldownMs(rebuildCooldownMs, rebuildsWithoutSuccess);
+    }
+
+    /**
+     * 纯计算：连续重建且期间无成功转换时，冷却按 2 倍逐级拉长，上限 30 分钟。
+     * 抽成静态纯函数便于单测；用于打断"每 3～7 分钟重启一次整池"的循环。
+     */
+    static long effectiveCooldownMs(long baseCooldownMs, int rebuildsWithoutSuccess) {
+        int n = Math.min(Math.max(rebuildsWithoutSuccess, 0), 3);
+        long cooldown = baseCooldownMs;
+        for (int i = 0; i < n; i++) {
+            cooldown = Math.min(cooldown * 2L, 30L * 60L * 1000L);
+        }
+        return cooldown;
     }
 
     private static boolean isInRebuildCooldown(long now) {
-        return lastRebuildAtMs > 0L && (now - lastRebuildAtMs) < rebuildCooldownMs;
+        return lastRebuildAtMs > 0L && (now - lastRebuildAtMs) < effectiveCooldownMs();
     }
 
     private static void markServiceSuccess() {
         lastSuccessAtMs = System.currentTimeMillis();
         consecutiveServiceFailures.set(0);
         serviceFailureCount.set(0);
+        // 出现真实成功才算恢复：解除重建后观察期并清空退避
+        awaitingPostRebuildSuccess = false;
+        rebuildsWithoutSuccess = 0;
+        conversionAttemptsSinceRebuild.set(0);
     }
 
     private static void markServiceFailure(String reason) {
         lastFailureAtMs = System.currentTimeMillis();
         consecutiveServiceFailures.incrementAndGet();
-        log.debug("【LibreOffice服务】记录失败信号: {}", reason);
+        // 提升到 info：生产默认 INFO 级别下 debug 不落盘，故障时无法从日志判断计数来源
+        log.info("【LibreOffice服务】记录失败信号: {}", reason);
     }
 
-    private static void beginInFlight(long startTime) {
+    /**
+     * 仅记录文档级失败，不计入服务失败计数。
+     * 单份坏文档不应该让整池被判为不健康并触发重启；
+     * 服务是否健康由进程存活、在途挂起、服务级异常共同决定。
+     */
+    private static void markDocumentFailureOnly() {
+        lastFailureAtMs = System.currentTimeMillis();
+    }
+
+    /**
+     * 毒文件登记：记录某源文件把共享池打崩的次数，达到阈值后改走隔离进程。
+     *
+     * @return 该文件当前的命中次数
+     */
+    static int registerPoisonFileHit(String path) {
+        if (path == null || path.isEmpty()) {
+            return 0;
+        }
+        AtomicInteger counter = poisonFileHits.computeIfAbsent(path, key -> new AtomicInteger(0));
+        int hits = counter.incrementAndGet();
+        log.warn("【LibreOffice服务】源文件触发共享池崩溃，命中次数={} 文件={}", hits, path);
+        return hits;
+    }
+
+    /**
+     * 该文件是否应改走一次性隔离进程（隔离进程不做刷新，也不会拖垮共享池）。
+     */
+    static boolean isPoisonFileIsolated(String path) {
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        AtomicInteger counter = poisonFileHits.get(path);
+        return counter != null && counter.get() >= poisonIsolateThreshold;
+    }
+
+    static int getPoisonFileHitCount(String path) {
+        AtomicInteger counter = path == null ? null : poisonFileHits.get(path);
+        return counter == null ? 0 : counter.get();
+    }
+
+    static Map<String, Integer> getPoisonFileSnapshot() {
+        Map<String, Integer> snapshot = new LinkedHashMap<>();
+        poisonFileHits.forEach((path, counter) -> snapshot.put(path, counter.get()));
+        return snapshot;
+    }
+
+    /**
+     * 登记“任何通道都转不出来”的源文件，避免无限重试反复拖垮整池。
+     * 仅在隔离通道也失败后调用；只记录，绝不删除学生原始文件。
+     */
+    static void markUnconvertible(String path, String reason) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        String previous = unconvertibleFiles.putIfAbsent(path, reason);
+        if (previous == null) {
+            log.error("【LibreOffice服务】登记不可转换文件（保留原文件，停止自动重试）: {} 原因={}", path, reason);
+        }
+    }
+
+    /** 该源文件是否已被判定为任何通道都无法转换 */
+    public static boolean isUnconvertible(String path) {
+        return path != null && !path.isEmpty() && unconvertibleFiles.containsKey(path);
+    }
+
+    /**
+     * 该源文件是否已被判定为任何通道都无法转换（按路径查询，供转换前拦截）。
+     */
+    public static boolean isPersistentlyUnconvertible(String path) {
+        return isUnconvertible(path);
+    }
+
+    /**
+     * 落库的“不可转换”失败原因文本。
+     * 内存登记表 {@link #unconvertibleFiles} 会随后端重启清空，而答题行里的
+     * preview_error_message 不会；重试链路又恰好会先把它清成 NULL。
+     * 因此把它作为持久化标记：重启后仍能识别并拒绝再次转换同一毒文件，
+     * 避免教师在失败后手动点“重转”把整池再打崩一轮。
+     */
+    public static final String UNCONVERTIBLE_MESSAGE =
+            "该文件无法转换为预览（文件内容异常，已隔离并停止自动重试，请重新导出后提交）";
+
+    /**
+     * 判断答题行上的失败原因是否就是“不可转换”标记。
+     * 用于重试领取前拦截：自动重试靠 preview_retry_count 打满即可挡住，
+     * 但教师手动重转会传 ignoreRetryLimit=true 绕过计数上限，必须靠这里的文本判定兜住。
+     */
+    public static boolean isUnconvertibleMessage(String errorMessage) {
+        return errorMessage != null && errorMessage.contains(UNCONVERTIBLE_MESSAGE);
+    }
+
+    /** 不可转换的原因说明，用于回写教师可见的失败原因 */
+    public static String getUnconvertibleReason(String path) {
+        return path == null ? null : unconvertibleFiles.get(path);
+    }
+
+    static Map<String, String> getUnconvertibleSnapshot() {
+        return new LinkedHashMap<>(unconvertibleFiles);
+    }
+
+    private static void beginInFlight(long startTime, String filePath) {
+        conversionAttemptsSinceRebuild.incrementAndGet();
         inFlightConversions.incrementAndGet();
         oldestInFlightStartMs.compareAndSet(0L, startTime);
+        inFlightSlots.put(Thread.currentThread(),
+                new InFlightSlot(startTime, inFlightEpoch.get(), filePath));
     }
 
     private static void endInFlight() {
+        InFlightSlot slot = inFlightSlots.remove(Thread.currentThread());
+        // 世代不符说明本线程属于重建之前的那一轮，其结果不能用来修改当前在途计数
+        if (slot != null && slot.epoch != inFlightEpoch.get()) {
+            log.debug("【LibreOffice服务】丢弃跨重建的在途计数回收，线程={}", Thread.currentThread().getName());
+            return;
+        }
         int left = inFlightConversions.decrementAndGet();
         // 重建可能已清零计数；避免减成负数干扰后续挂起判定
         if (left <= 0) {
@@ -907,10 +1206,68 @@ public class FileConversionUtils {
         }
     }
 
+    /**
+     * 重建前重置在途跟踪。
+     * 进入新一轮世代，让仍在锁外执行的旧 convert 线程无法再影响新计数；
+     * 同时保留它们的时间证据（写入 oldestInFlightStartMs 由新老判定使用），
+     * 不做“假装什么都没发生”的静默清零。
+     */
     private static void clearInFlightTracking() {
-        // 注意：锁外仍可能有旧 convert 线程；清零后依赖 sinceSuccess/失败信号做半死判定
+        inFlightEpoch.incrementAndGet();
         inFlightConversions.set(0);
         oldestInFlightStartMs.set(0L);
+        inFlightSlots.clear();
+    }
+
+    /**
+     * 中断卡死的转换线程。
+     * 旧实现只杀 soffice 进程，卡在 convert 里的 Java 线程仍然是僵尸并继续占用
+     * conversionExecutor 线程（130 上池只有 2 个线程，两个卡死即全池瘫痪）。
+     * <p>
+     * 注意：进程被杀后所有在途转换都会失败，因此本方法会中断全部在途线程；
+     * 但只有“已经卡超过软挂起超时”的线程，其文件才被判为毒文件——
+     * 否则一次整池重建会把当时所有正常排队的文件都误判成毒文件。
+     *
+     * @param minAgeMs 仅中断运行时长达到该值的线程；0 表示全部中断
+     * @param poisonMinAgeMs 运行时长达到该值的线程，其源文件登记为毒文件；小于等于 0 表示不登记
+     * @return 被中断的线程数
+     */
+    private static int interruptStuckConversions(long minAgeMs, long poisonMinAgeMs) {
+        long now = System.currentTimeMillis();
+        int interrupted = 0;
+        for (Map.Entry<Thread, InFlightSlot> entry : inFlightSlots.entrySet()) {
+            Thread worker = entry.getKey();
+            InFlightSlot slot = entry.getValue();
+            if (worker == null || slot == null || !worker.isAlive()) {
+                continue;
+            }
+            long age = now - slot.startMs;
+            if (minAgeMs > 0 && age < minAgeMs) {
+                continue;
+            }
+            // 只有长时间卡住的文件才是崩溃诱因，短时在途属于正常排队
+            if (poisonMinAgeMs > 0 && age >= poisonMinAgeMs && slot.filePath != null) {
+                registerPoisonFileHit(slot.filePath);
+            }
+            log.warn("【LibreOffice服务】中断卡死的转换线程 线程={} 已运行={}ms 世代={} 文件={}",
+                    worker.getName(), age, slot.epoch, slot.filePath);
+            worker.interrupt();
+            interrupted++;
+        }
+        return interrupted;
+    }
+
+    /** 在途转换槽位：记录开始时间、所属世代与源文件路径 */
+    private static final class InFlightSlot {
+        final long startMs;
+        final long epoch;
+        final String filePath;
+
+        InFlightSlot(long startMs, long epoch, String filePath) {
+            this.startMs = startMs;
+            this.epoch = epoch;
+            this.filePath = filePath;
+        }
     }
 
     private static int countProcessByName(String processName) {
