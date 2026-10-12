@@ -1,6 +1,6 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 上下文版本 **v4.34**，更新日期 **2026-10-12**。130 最新正式 **1.30.43**（release `20261012_audit_fix_v1`，前后端同版，后端本次已改并重启一次），机位助手 0.2.1；修复与验收证据见 `output/audit-130-20261012/`。旧过程在 [历史归档](PROJECT_HISTORY_20261005.md)。
+> 上下文版本 **v4.35**，更新日期 **2026-10-12**。130 最新正式 **1.30.43**（release `20261012_audit_fix_v1`，前后端同版，后端本次已改并重启一次），机位助手 0.2.1；修复与验收证据见 `output/audit-130-20261012/`。旧过程在 [历史归档](PROJECT_HISTORY_20261005.md)。
 
 ## 当前正式修复（2026-10-12，130 双端已发布 1.30.43）
 
@@ -42,9 +42,10 @@
 
 ### 剩余风险与下一步
 
-1. **`SPRING_QUARTZ_AUTO_STARTUP=false` 未解决**：`releases/20261008_seat_install_v1/migration-isolation.env` 自 2026-09-09 起将其关闭，Quartz 从未启动，`sys_job` 100–105 全部 `status=0`、`sys_job_log` 冻结在 2026-09-09 18:05:01。这是「自动推进失效」的**第二个独立原因**，本次刻意排除，**启用前需单独确认并安排在非课堂时段**。
+1. **Quartz 已于 2026-10-12 20:16:53 启用（原「未解决」结论作废，需重启才生效）**：`releases/20261008_seat_install_v1/migration-isolation.env` 第 2 行 `SPRING_QUARTZ_AUTO_STARTUP` 由 `false` 改为 `true`（文件 SHA-256 `b72c39e4…` → `8e8928f1…`；改前备份 `migration-isolation.env.20261012_201649.before_quartz_on`，sha 与改前一致），`daemon-reload` + `restart` 后 20 秒 READY，`MainPID=2181061`、`NRestarts=0`。**硬证据**：`/proc/2181061/environ` 读到 `SPRING_QUARTZ_AUTO_STARTUP=true`；日志出现 `[quartzScheduler_Worker-N]` 线程；`sys_job_log` 自重启后新增 24 行（20:18–20:35），101/103/105 号 `status=0`、`exception_info` 全空、`SCHEDULER_EXCEPTION=0`，耗时 103 号 45–68 毫秒 / 101 号 307–514 毫秒 / 105 号 4436–5757 毫秒。**开启前后错误面未变化**（重启前 5 分 23 秒 8 条慢 SQL，重启后同样水位；错误日志里 1800 余行 Broken pipe 是学生浏览器断开的正常堆栈，非业务异常）。
+   > **发布红线**：该开关只存在于服务器 env 文件，**仓库内没有任何模板或脚本设置它**（仅两份上下文文档提及）。下次发布若沿用 `20261008_seat_install_v1` 的旧 env 副本，会再次静默关闭全部定时任务；发布核对清单必须比对这一行。
 2. 页图精度提升会使既有页图缓存失效，首次访问按需重渲染，课堂高峰有一次性转换压力。
-3. `task 315` 条 `failed` 转换积压未清理；`ResourceAccessMapper.selectStudentAnswerIdByResource` 两列均无索引的鉴权全表扫未动。
+3. 预览积压已核清（2026-10-12 20:40 实测）：`biz_student_answer` 中操作题且 `preview_path IS NULL` 共 3676 条，其中 **3327 条 `preview_status` 为 NULL**——这些的 `student_answer` 存的是 **Python 代码正文**（非文件路径），本就不参与文件预览转换；另 238 条已成功、204 条 `failed` 且重试次数已达 3 封顶。**21:00 的 100 号任务实际只会捞走 4 条**，不存在「315 件一次性放量」风险。`ResourceAccessMapper.selectStudentAnswerIdByResource` 两列均无索引的鉴权全表扫仍未动。
 4. AOCI 未同步，相关索引需后续复核。
 
 ## 当前正式修复（2026-10-10，130 前端已发布 1.30.42）
