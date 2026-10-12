@@ -1,8 +1,71 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 上下文版本 **v4.35**，更新日期 **2026-10-12**。130 最新正式 **1.30.43**（release `20261012_audit_fix_v1`，前后端同版，后端本次已改并重启一次），机位助手 0.2.1；修复与验收证据见 `output/audit-130-20261012/`。旧过程在 [历史归档](PROJECT_HISTORY_20261005.md)。
+> 上下文版本 **v4.36**，更新日期 **2026-10-13**。130 最新正式 **1.30.43**（release `20261012_audit_fix_v1`，前后端同版，后端本次已改并重启一次），机位助手 0.2.1；修复与验收证据见 `output/audit-130-20261012/`。旧过程在 [历史归档](PROJECT_HISTORY_20261005.md)。
 
-## 当前正式修复（2026-10-12，130 双端已发布 1.30.43）
+## 当前正式修复（2026-10-13，130 后端已发布 1.30.44）
+
+LibreOffice 毒文件隔离修复的**第二轮**。第一轮（`d3b04ca`，release `20261012_lo_crashfix_v1`）只在内存生效，
+线上实测发现隔离结果从未落库，毒文件仍会被反复捞回、反复打崩进程池。本轮修掉两个真实根因，
+后端 release `20261013_lo_crashfix_v3`，前端未改动。验证证据见 `output/audit-130-20261012/` 的 p82～p92 脚本与产物。
+
+**版本号**：上一个已发布版本 `1.30.43`（`update_id=121`），本轮顺延为 **`1.30.44`**（`update_id=122`）。
+
+### 两个根因（都已实测修复）
+
+1. **崩溃判定不能看异常文本**：坏文档让 `soffice` SIGABRT 后，jodconverter 抛的是 `Task was cancelled`（含 `cancelled`），
+   会被 `isServiceLevelFailure` 判成**服务级异常**，导致原本写在「文档级失败」分支里的毒文件登记**根本不可达**；
+   而且它会**立刻补起新实例**，按进程数在同一秒内就看不出异常。
+   改为转换前后各采集一次 `soffice` PID 集合，**出现旧 PID 消失即判为崩溃**，与异常文案和瞬时重启均无关。
+2. **毒文件标记必须落在真正执行的链路上**：实际调用链是
+   `AsyncConversionService.claimRetryAndExecute` → `enqueueClaimedPreview` → **`AsyncConversionWorkerService`**。
+   上一轮的 `isUnconvertible` 判定被写在 `AsyncConversionService` 里**同名的私有方法**上（全项目零调用方，死代码），
+   所以共享池与一次性隔离进程都失败后，落库的仍是「PDF 文件生成失败」。
+   现在在 **Worker** 的失败分支补上判定：命中则**顶满重试计数**并把判定文本写入 `preview_error_message`。
+   **手动重转会传 `ignoreRetryLimit=true` 绕过计数上限，只有这行文本能在领取前拦住它。**
+   区域抽测路径同步处理；`AsyncConversionService` 的死代码已加注释标明，避免下次再改错文件。
+
+**原始文件一律保留不删**；学生重新导出后是新文件新行，不会被标记误伤。
+
+### 已验证事实（130 实测）
+
+- **单测**：`mvn -pl ruoyi-business -am test -Dtest=FileConversionUtilsHealthTest,OfficeLinuxProcessScopeTest -Dsurefire.failIfNoSpecifiedTests=false -DforkCount=0`
+  → **Tests run: 34, Failures: 0, Errors: 0, BUILD SUCCESS**（含 PID 身份丢失 5 例）。
+- **产物**：`ruoyi-admin.jar` 108,078,833 B，SHA-256 `9843ed35f96d6aedf5316bd8a8948890d7e398258d877b0f1b5198ae95071aaa`，远端校验一致。
+- **正常文件未误伤**：`answer_id=101556` 由 `failed/rc=0` → **`success/rc=1`**，PDF 重新生成（日志 `【服务模式转换】成功`）。
+- **毒文件隔离闭环成立**：`answer_id=548595` 由 `failed/rc=1/"PDF 文件生成失败"` → **`failed/rc=3/隔离标记文本`**，10 秒内完成；
+  `sys-error.log` 留下 `【隔离模式转换】失败 exitCode=1` 与 `登记不可转换文件（保留原文件，停止自动重试）` 两行铁证。
+- **4 条毒文件行全部 `MARKED` + `rc=3`**（440616 / 514480 / 514546 / 548595）。
+- **后端稳定**：`active`、`NRestarts=0`、恒为 2 个 `soffice.bin`，观察期内**无重建风暴**。
+- **103 号自愈任务已恢复**：`sys_job.status='0'`，重启后按分钟连续执行（01:34/01:35/01:36/01:37），耗时 41～64 ms。
+- **发布登记**：`biz_platform_update` `update_id=122` / `1.30.44` → `PUBLISHED`，published_at 2026-10-13 01:40:47；
+  **真实教师账号 `19157727791` 经 `/business/platform-update/list` 实测可见**（`code=200`，`total=98`，1.30.44 位于首位）。
+- **回滚**：unit 备份 `<BACKUP_DIR>/xueyeceping-130.service.bak_v3` 指向 v2；登记回滚执行
+  `UPDATE \`ry-vue\`.biz_platform_update SET status='DRAFT' WHERE version_no='1.30.44';`
+
+### 关键经验（避免重复踩坑）
+
+1. **本机日志分级陷阱**：`logback.xml` 用 `LevelFilter` 精确过滤——`sys-info.log` **只收 INFO**，`sys-error.log` **只收 ERROR**。
+   `log.warn` 在**两个文件里都看不到**（只进 console/journald）。上一轮因此误判「隔离没生效」，
+   实际是**证据被日志级别过滤掉了**。排查警告级行为必须换 ERROR 或直接查库/查接口。
+2. **`s.sql()` 是「执行并返回结果文本」**，不能再把返回值塞进 `run()`，否则 bash 会拿查询结果当命令跑（`rc=127 / command not found`）。
+3. **`sys_job` 无 `previous_time` / `next_time`**（在 Quartz 表里）；`sys_job_log` 也无 `job_id`，只有 `job_name`。
+4. **直连 SQL 改 `sys_job.status` 不会让运行中的 Quartz 注册任务**：`resumeJob` 对「从未注册过」的 job 是空操作，
+   唯一可靠办法是**重启**，让它随启动按 `status='0'` 重新 `createScheduleJob`。
+5. 本机 `ps` 视角与 JVM 视角一致（JVM 属主 `admin2`，`processCount=2`），进程采集本身没问题。
+
+### 剩余风险与下一步
+
+1. **第 5 个异常 DOCX 仍未定位**（`8ba91c9a…1cd2bde2.docx`）：在 `biz_student_answer` 中**查不到任何对应行**，
+   因此既不参与重试也不触发崩溃，暂按「无影响」处理，但来源（是否为已清理的测试数据）未确认。
+2. **手动重转的兜底依赖文本匹配**：`preview_error_message` 被截断到 255 字符，判定用 `contains` 关键片段。
+   若未来有人改写这段文案，需同步更新 `UNCONVERTIBLE_MESSAGE`。
+3. **隔离判定仍有一处 `log.warn`**（`进程身份丢失` 那行）在文件日志中不可见，不利于现场排障；
+   后续可考虑把该行提升为 `log.error` 或补写独立诊断文件。
+4. `AsyncConversionService` 中两份**死代码**（`convertClaimedPreview` / `convertCountyExamPreview`）未删除，只加了注释；
+   建议后续专项清理，避免再次改错文件。
+5. AOCI 未同步，受管源码变化后相关索引需后续复核。
+
+## 历史正式修复（2026-10-12，130 双端已发布 1.30.43）
 
 只读审计 130 后按用户「生成方案后直接按推荐方案改代码」完成的修复，已**正式发布到 130**。release `20261012_audit_fix_v1`（前后端同版）。方案与全部探测证据见 `output/audit-130-20261012/`（`方案-130修复.md` 与 p1–p44 脚本/输出）。
 

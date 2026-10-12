@@ -1,5 +1,20 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-10-13 · 1.30.44 · LibreOffice 毒文件隔离与落库修复
+
+130 仅后端发布 release `20261013_lo_crashfix_v3`（**前端未改动**，故前端无需同步）。这是 2026-10-12 `d3b04ca` 那轮的**第二轮修复**：上一轮只在内存生效，线上毒文件仍会被反复捞回、反复打崩进程池。
+
+- **根因一（崩溃判定失效）**：坏文档让 `soffice` SIGABRT 后，jodconverter 抛的是 `Task was cancelled`（含 `cancelled`），被 `isServiceLevelFailure` 判成**服务级异常**，导致写在「文档级失败」分支里的毒文件登记**根本不可达**；且它会**立刻补起新实例**，按进程数在同一秒内看不出异常。改为**转换前后比对 `soffice` PID 集合，旧 PID 消失即判崩溃**，与异常文案、瞬时重启均无关。
+- **根因二（标记写错文件）**：实际链路是 `claimRetryAndExecute → enqueueClaimedPreview → AsyncConversionWorkerService`；上一轮的 `isUnconvertible` 判定写在 `AsyncConversionService` 同名的**私有死代码**上，故落库的始终是「PDF 文件生成失败」。现改到 **Worker** 失败分支：命中则**顶满重试计数** + 写入判定文本。**手动重转传 `ignoreRetryLimit=true` 绕过计数上限，只有这行文本能在领取前拦住它。** 区域抽测同步处理。**原始文件一律保留不删**。
+- **单测**：`FileConversionUtilsHealthTest` + `OfficeLinuxProcessScopeTest` → **Tests run: 34, Failures: 0, Errors: 0, BUILD SUCCESS**（含 PID 身份丢失 5 例）。
+- **产物**：`ruoyi-admin.jar` 108,078,833 B，SHA-256 `9843ed35f96d6aedf5316bd8a8948890d7e398258d877b0f1b5198ae95071aaa`；远端 `sha256sum` 一致；切换 systemd unit 指向新 release 后 `daemon-reload` + `restart`，**约 20 秒 READY**，`active`、`NRestarts=0`、恒 2 个 `soffice.bin`。
+- **实测验收**：正常文件 `answer_id=101556` 由 `failed/rc=0` → **`success/rc=1`**（PDF 重新生成，日志 `【服务模式转换】成功`），**未误伤**；毒文件 `answer_id=548595` 由 `failed/rc=1` → **`failed/rc=3` + 隔离标记**，10 秒内闭环，`sys-error.log` 留有 `【隔离模式转换】失败 exitCode=1` 与 `登记不可转换文件` 两行铁证；**4 条毒文件行全部 `MARKED` + `rc=3`**（440616/514480/514546/548595）；观察期内**无重建风暴**。
+- **103 号自愈任务已恢复**：`sys_job.status='0'`，重启后按分钟连续执行 01:34/01:35/01:36/01:37（41～64 ms）。注意：**直连 SQL 改状态不会让运行中的 Quartz 注册任务**（`resumeJob` 对未注册 job 是空操作），必须重启让其随启动 `createScheduleJob`。
+- **发布登记**：`biz_platform_update` `update_id=122` / `1.30.44` → `PUBLISHED`，published_at 2026-10-13 01:40:47；**真实教师账号 `19157727791` 经 `/business/platform-update/list` 实测可见**（`code=200`、`total=98`、1.30.44 居首位）。登记 SQL 见 `sql/libreoffice_poison_isolation_release_20261013.sql`。
+- **回滚**：unit 备份 `<BACKUP_DIR>/xueyeceping-130.service.bak_v3`（指向 v2）；登记回滚 `UPDATE \`ry-vue\`.biz_platform_update SET status='DRAFT' WHERE version_no='1.30.44';`。
+- **排障经验**：`logback.xml` 用 `LevelFilter` 精确过滤——`sys-info.log` **只收 INFO**、`sys-error.log` **只收 ERROR**，**`log.warn` 两个文件里都看不到**。上一轮正是因此误判「隔离未生效」。排查警告级行为须换 ERROR 或直接查库/查接口。
+- **未验证**：第 5 个异常 DOCX（`8ba91c9a…1cd2bde2.docx`）在 `biz_student_answer` 中查不到任何对应行，来源未确认但当前无影响；AOCI 未同步，相关索引需后续复核。
+
 ## 2026-10-12 · 1.30.43 · 教师端体验修复与课堂一键推进恢复
 
 130 双端发布 release `20261012_audit_fix_v1`（**前端先切零停机，后端后切并重启一次**；后端重启完成时刻 130 本地 2026-10-12 18:57:34）。版本号顺延说明：`1.30.41` / `1.30.42` 已于 2026-10-10 被 codex 占用（`update_id` 119/120），本次登记为 **1.30.43**。
