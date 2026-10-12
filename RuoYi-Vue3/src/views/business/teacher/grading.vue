@@ -177,17 +177,18 @@
            description="当前操作题暂无学生提交；左侧未交学生不能进入批改"
          />
          <div v-else-if="currentStudent" class="preview-content">
-             <flowchart-grading-panel v-if="isCurrentFlowchart" :key="`${selectedLessonId}-${selectedQuestionId}-${currentStudent.answerId || currentStudent.studentId}`" :lesson-id="selectedLessonId"
+             <flowchart-grading-panel v-if="isCurrentFlowchart" :key="`${selectedLessonId}-${selectedQuestionId}-${currentStudent.answerId || currentStudent.studentId}-${currentStudent.flowchartSubmissionId || ''}`" :lesson-id="selectedLessonId"
                :question-id="selectedQuestionId" :student-id="currentStudent.studentId"
+               :version-no="currentStudent.versionNo"
                :ai-suggestion="currentAiSuggestion" :ai-summary="currentAiSummary"
                @apply-suggestion="applyFlowchartSuggestion" />
              <template v-else>
              <div class="preview-header">
                  <div class="header-info">
                     <span class="student-label">{{ currentStudent.studentName }} 的提交作品</span>
-                    <span v-if="currentAttachment" class="file-name">📄 {{ currentAttachment.originalFileName || getFileName(currentAttachment.resourcePath) }}</span>
+                    <span v-if="currentAttachment" class="file-name">📄 {{ currentAttachment.originalFileName || getFileName(currentAttachment.resourcePath) }}（{{ formatPracticalFileSize(currentAttachment.fileSize) }}）</span>
                  </div>
-                 <a v-if="currentAttachment" :href="getFileUrl(currentAttachment.resourcePath)" target="_blank" class="download-link">下载当前文件</a>
+                 <el-button v-if="currentAttachment" link type="primary" @click="downloadCurrentAttachment">下载当前文件</el-button>
              </div>
              <div v-if="currentAttachments.length > 1" class="attachment-tabs">
                 <el-button
@@ -197,10 +198,13 @@
                   :type="attachmentIndex === currentAttachmentIndex ? 'primary' : 'default'"
                   @click="selectAttachment(attachmentIndex)"
                 >
-                  {{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}
+                  {{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}（{{ formatPracticalFileSize(attachment.fileSize) }}）
                 </el-button>
              </div>
-             <div v-if="currentNormalizedPages.length" class="normalized-page-strip">
+             <el-alert v-if="['TEXT', 'HTML', 'ARCHIVE'].includes(currentAttachment?.fileKind)" title="此格式由老师人工评分，本期不支持 AI 批改，不会参与 AI 评分队列。" type="info" :closable="false" />
+             <practical-text-preview v-if="['TEXT', 'HTML'].includes(currentAttachment?.fileKind)" :attachment-id="currentAttachment.attachmentId" />
+             <el-alert v-else-if="currentAttachment?.fileKind === 'ARCHIVE'" title="压缩包已提交，请下载后查看并手动评分。" description="平台不解压压缩包，也不对其中的文件进行 AI 批改。" type="info" :closable="false" />
+             <div v-else-if="currentNormalizedPages.length" class="normalized-page-strip">
                 <img
                   v-for="(pagePath, pageIndex) in currentNormalizedPages"
                   :key="pagePath"
@@ -380,10 +384,11 @@
                   </div>
             </div>
             
-            <el-button type="primary" size="large" class="submit-btn" :loading="submitting" :disabled="submitting || loading || gradingSnapshotStale || !deadlineStatus?.canGrade" @click="submitScore">
+            <el-alert v-if="currentStudent.taskState === 'RETURNED'" title="已退回，保留原成绩，等待学生重新提交后再批改。" type="warning" :closable="false" />
+            <el-button type="primary" size="large" class="submit-btn" :loading="submitting" :disabled="submitting || loading || gradingSnapshotStale || currentStudent.taskState === 'RETURNED' || !deadlineStatus?.canGrade" @click="submitScore">
                提交并下一位 (Enter)
             </el-button>
-            <el-button type="warning" plain :disabled="submitting || loading || gradingSnapshotStale || !deadlineStatus?.canGrade || currentStudent.taskState === 'RETURNED'" @click="returnCurrentTask">
+            <el-button v-if="currentStudent.canReturn" type="warning" plain :disabled="submitting || loading || gradingSnapshotStale || !deadlineStatus?.canGrade" @click="returnCurrentTask">
                退回重交
             </el-button>
             </template>
@@ -519,6 +524,7 @@
           type="warning" :closable="false" style="margin-top: 12px" />
         <div v-if="isCurrentFlowchart" class="ai-starter-note">流程图课程标准答案图会自动生成并作为对照，学生作品图片为主要评分依据，结构检查结果仅供参考。</div>
         <div v-else class="ai-starter-note">空白起始材料：{{ aiPreflight?.starterCount || 0 }} 个；没有起始材料时，AI 仍会按题干与参考答案评分。</div>
+        <el-alert v-if="!isCurrentFlowchart" title="TXT、HTML/HTM 和压缩包不支持 AI 批改，会跳过并保留原成绩；请人工评分。" type="info" :closable="false" style="margin-top: 12px" />
       </div>
       <template #footer>
         <el-button @click="aiJobDialogVisible = false">取消</el-button>
@@ -603,6 +609,7 @@
 </template>
 
 <script setup name="TeacherGrading">
+import { formatPracticalFileSize } from '@/utils/practicalFileDisplay';
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
@@ -619,6 +626,8 @@ import FlowchartGradingPanel from '@/components/FlowchartEditor/FlowchartGrading
 import websocketClient from '@/plugins/websocket';
 import PaperImportDrawer from './components/PaperImportDrawer.vue';
 import PracticalInsightDrawer from './components/PracticalInsightDrawer.vue';
+import PracticalTextPreview from '@/components/PracticalTextPreview/index.vue';
+import Download from '@/plugins/download';
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -1692,6 +1701,12 @@ function formatEstimatedCost(value) {
     return `${formatUnitPrice(value)} 元`;
 }
 
+function downloadCurrentAttachment() {
+    const attachment = currentAttachment.value;
+    if (attachment?.attachmentId) Download.zip(`/business/practical-attachment/${attachment.attachmentId}/download`, attachment.originalFileName || '作品附件');
+    else if (attachment?.resourcePath) Download.resource(attachment.resourcePath, attachment.originalFileName);
+}
+
 async function removeSelectedAiProvider() {
     const providerCode = aiConfigForm.value.providerCode;
     await ElMessageBox.confirm(`删除 ${providerCode} 的 Key 后，使用该厂商的未完成任务将失败，确定删除吗？`, '删除厂商 Key', { type: 'warning' });
@@ -1954,6 +1969,7 @@ async function submitScore() {
         answerId: targetAnswerId,
         score: finalScore,
         expectedScore,
+        expectedAnswer: targetStudent.studentAnswer,
         practicalVersionId: targetStudent.practicalVersionId || null,
         rubricSnapshotId: targetStudent.rubricSnapshotId || null,
         mode: requestMode,
@@ -1999,7 +2015,7 @@ async function submitScore() {
 }
 
 async function returnCurrentTask() {
-    if (!currentStudent.value || submitting.value || loading.value || gradingSnapshotStale.value || !deadlineStatus.value?.canGrade) return;
+    if (!currentStudent.value || currentStudent.value.score == null || currentStudent.value.taskState === 'RETURNED' || submitting.value || loading.value || gradingSnapshotStale.value || !deadlineStatus.value?.canGrade) return;
     // 确认框和网络请求期间可能切换学生，退回目标必须使用点击时的快照。
     const target = { ...currentStudent.value };
     const lessonId = selectedLessonId.value;
@@ -2022,7 +2038,9 @@ async function returnCurrentTask() {
             questionId,
             studentId: target.studentId,
             entryYear: classInfo.entryYear,
-            classCode
+            classCode,
+            expectedScore: target.score,
+            expectedAnswer: target.studentAnswer
         });
         if (selectedLessonId.value === lessonId && selectedQuestionId.value === questionId && selectedClassCode.value === classCode) {
             if (currentStudent.value?.answerId === target.answerId) currentStudent.value.taskState = 'RETURNED';

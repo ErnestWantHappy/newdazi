@@ -82,6 +82,22 @@ class PaperBatchImportServiceTest
         for (long i = 1; i <= 36; i++) { roster.add(i); plan.add(segment((int) i * 2 - 1, (int) i * 2, i)); }
         assertDoesNotThrow(() -> PaperBatchImportService.validateSegments(plan, 72, roster));
     }
+
+    @Test void splitLocksKeepWaitersTogetherWithoutBlockingOtherTokens()
+    {
+        PaperBatchImportService service = new PaperBatchImportService();
+        Object first = ReflectionTestUtils.invokeMethod(service, "acquireSplitLock", "first");
+        Object waiter = ReflectionTestUtils.invokeMethod(service, "acquireSplitLock", "first");
+        Object other = ReflectionTestUtils.invokeMethod(service, "acquireSplitLock", "other");
+        assertSame(first, waiter);
+        assertNotSame(first, other);
+        ReflectionTestUtils.invokeMethod(service, "releaseSplitLock", "first", first);
+        Object newcomer = ReflectionTestUtils.invokeMethod(service, "acquireSplitLock", "first");
+        assertSame(first, newcomer);
+        ReflectionTestUtils.invokeMethod(service, "releaseSplitLock", "first", waiter);
+        ReflectionTestUtils.invokeMethod(service, "releaseSplitLock", "first", newcomer);
+        assertNotSame(first, ReflectionTestUtils.invokeMethod(service, "acquireSplitLock", "first"));
+    }
     @Test void rejectsGapsOverlapsOmissionsDuplicateStudentsAndUnconfirmedPlan()
     {
         Set<Long> roster = new HashSet<>(Arrays.asList(1L, 2L));

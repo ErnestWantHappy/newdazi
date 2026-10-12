@@ -78,6 +78,7 @@ public class TeacherGradingController extends BaseController {
 
     @Autowired
     private ClassroomTaskStateService classroomTaskStateService;
+    @Autowired private com.ruoyi.business.mapper.BizLessonAssignmentMapper assignmentMapper;
 
     /**
      * 获取课程的班级列表（用于批改页面班级选择下拉框）
@@ -134,6 +135,13 @@ public class TeacherGradingController extends BaseController {
         List<PracticalSubmissionVo> submissions = studentAnswerMapper.selectPracticalSubmissions(
                 lessonId, questionId, classCode.trim(), entryYear.trim(), deptId);
         practicalArtifactService.enrichSubmissions(submissions);
+        Long currentLesson = assignmentMapper.selectCurrentLessonByClass(entryYear.trim(),
+                com.ruoyi.business.config.ClassroomRoomKey.normalizeClassCode(classCode), deptId);
+        for (PracticalSubmissionVo row : submissions) {
+            row.setCanReturn(lessonId.equals(currentLesson) && row.getScore() != null
+                    && !ClassroomTaskStateService.RETURNED.equals(row.getTaskState())
+                    && !"PYTHON".equalsIgnoreCase(row.getPracticalMode()) && !"DATA_LAB".equalsIgnoreCase(row.getPracticalMode()));
+        }
         return AjaxResult.success(submissions);
     }
 
@@ -184,8 +192,12 @@ public class TeacherGradingController extends BaseController {
         if (StringUtils.isBlank(answer.getStudentAnswer())) {
             return AjaxResult.error("学生尚未提交操作题作品");
         }
+        if (classroomTaskStateService.isReturnedForUpdate(answer.getStudentId(), answer.getLessonId(), answer.getQuestionId()))
+            return AjaxResult.error("作品已退回，请等待学生重新提交后再批改");
         boolean answerChanged = answer.getPracticalVersionId() != null
                 ? !Objects.equals(request.getPracticalVersionId(), answer.getPracticalVersionId())
+                : answer.getStudentAnswer().startsWith("FLOWCHART:")
+                ? !Objects.equals(request.getExpectedAnswer(), answer.getStudentAnswer())
                 : request.getSubmitTime() == null || !request.getSubmitTime().equals(answer.getSubmitTime());
         if (answerChanged || !Objects.equals(request.getExpectedScore(), answer.getScore())) {
             return AjaxResult.error("答卷或成绩已发生变化，请刷新后重新批改");
@@ -244,7 +256,7 @@ public class TeacherGradingController extends BaseController {
         BizStudent student = studentMapper.selectBizStudentByStudentId(answer.getStudentId());
         if (student == null || student.getDeptId() == null) throw new ServiceException("学生档案不存在");
         // 管理员批改时当前部门未必就是学生学校，状态归属必须使用学生档案的学校。
-        classroomTaskStateService.markSafely(student, student.getDeptId(), answer.getLessonId(),
+        classroomTaskStateService.markInTransaction(student, student.getDeptId(), answer.getLessonId(),
                 answer.getQuestionId(), ClassroomTaskStateService.GRADED);
 
         return AjaxResult.success("批改成功");
@@ -363,6 +375,9 @@ public class TeacherGradingController extends BaseController {
         private Long answerId;
         private Integer score;
         private Integer expectedScore;
+        private String expectedAnswer;
+        public String getExpectedAnswer() { return expectedAnswer; }
+        public void setExpectedAnswer(String value) { expectedAnswer = value; }
         private Long practicalVersionId;
         private Long rubricSnapshotId;
         private String mode;

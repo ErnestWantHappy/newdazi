@@ -24,6 +24,10 @@
       <el-alert v-if="job?.errorMessage" :title="job.errorMessage" type="warning" :closable="false" />
       <el-alert v-if="data?.stale" title="材料或成绩已变化，以下为历史报告，请重新生成。" type="warning" :closable="false" />
       <template v-if="report">
+        <div class="actions">
+          <el-button type="success" :loading="busy" :disabled="running || data?.stale || !!data?.publicationId" @click="publishToStudents">{{ data?.publicationId ? '本报告已发布给学生' : '发布给本班学生' }}</el-button>
+          <span class="muted">只发布学生本人的作答分析；重新生成后须再次发布才会更新。</span>
+        </div>
         <el-alert v-if="!running" :title="report.coverage.sufficient ? '样本达到展示门槛，各知识点仍按有效证据判断' : '样本不足，当前只能作为初步诊断'" :description="`有效 ${report.coverage.valid}/${report.coverage.total} 人（${report.coverage.rate ?? 0}%），正式确认 ${report.coverage.confirmed} 人。${report.coverage.sufficient ? '' : '不能据此推断全班共性；至少10人且覆盖80%。'}`" :type="report.coverage.sufficient ? 'success' : 'warning'" :closable="false" show-icon />
         <section class="paper-summary"><h3>这张卷子考什么</h3><p>{{ brief(report.paper.summary, 130) }}</p></section>
         <el-alert v-if="referenceIssues.length" type="warning" :closable="false" :title="`有 ${referenceIssues.length} 个作答位的参考答案待核对，争议证据不参与判错`"><el-collapse><el-collapse-item title="查看参考答案疑点"><button v-for="item in referenceIssues" :key="item.questionId + item.partId" class="student-link" @click="openReferenceIssue(item)">{{ item.number }} · {{ item.prompt || item.partId }}：{{ item.issue }}</button></el-collapse-item></el-collapse></el-alert>
@@ -67,7 +71,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Refresh, DataAnalysis, Close } from '@element-plus/icons-vue'
-import { latestInsight, createInsight, readInsight, retryInsight, cancelInsight, insightStudent, insightPage } from '@/api/business/paperScan'
+import { latestInsight, createInsight, readInsight, retryInsight, cancelInsight, insightStudent, insightPage, publishInsight } from '@/api/business/paperScan'
 import InsightChart from './InsightChart.vue'
 const props = defineProps({ scope: { type: Object, required: true } })
 defineEmits(['close'])
@@ -113,6 +117,7 @@ function schedule() { clearTimeout(timer); if (!disposed && running.value) timer
 async function poll() { try { accept(await readInsight(job.value.reportId)); error.value = '' } catch (e) { error.value = e.message || '状态读取失败，可刷新接续' } finally { schedule() } }
 async function load() { if (busy.value) return; busy.value = true; clearTimeout(timer); try { accept(await latestInsight({ ...scope, ...form.value })); if (data.value.scope) form.value = { grade: data.value.scope.grade, subject: data.value.scope.subject, lessonMinutes: data.value.scope.lessonMinutes }; settingsOpen.value = !report.value ? ['settings'] : []; error.value = '' } catch (e) { error.value = e.message || '读取失败' } finally { busy.value = false; schedule() } }
 async function generate() { await execute(() => createInsight({ ...scope, ...form.value })) }
+async function publishToStudents() { await execute(async () => { await publishInsight(job.value.reportId); return readInsight(job.value.reportId) }) }
 async function action(fn) { await execute(() => fn(job.value.reportId)) }
 async function execute(fn) { if (busy.value) return; busy.value = true; clearTimeout(timer); try { accept(await fn()); error.value = '' } catch (e) { error.value = e.message || '请求失败，已有报告已保留' } finally { busy.value = false; schedule() } }
 function clearImage() { imageSeq++; if (pageUrl.value) URL.revokeObjectURL(pageUrl.value); pageUrl.value = '' }

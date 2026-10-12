@@ -1,5 +1,25 @@
 # 数据模型与迁移约定
 
+> 2026-10-03正式1.30.26无表结构变更；`seat_helper_enable_http_20261003.sql`仅启用当前61所有效学校并为新配置填写HTTP根地址，已有地址不覆盖，设备与基准不自动生成。验收数据仅独立学校，已停用/撤销，真实成绩不变；详见 [助手验收](../../contexts/classroom-experience-20261002/seat-helper-release-verification-20261003.md)。
+
+> 2026-10-03正式1.30.24已上线（v4.02），先前本机候选描述转为历史；四份课堂SQL及厂商密钥依赖已迁移，正式API13组/浏览器9组通过。118条历史状态未治理，助手保持关闭、机房待验。见 [正式验收](../../contexts/classroom-experience-20261002/release-verification-20261003.md)。
+
+> 2026-10-03 v4.01本机修复候选：无新增表列。clearPracticalAnswer明确写submit_time=NULL；当前作品指针与WORKING专用撤回在同事务，普通状态上报不降级SUBMITTED。成绩Mapper新增submittedAnswerCount，空文件占位不产生待批；0分是有效评分。历史旧状态未批量治理，待只读审计。 证据与限制见 [修复验收](../../contexts/classroom-experience-20261002/repair-verification-20261003.md)，未正式发布。
+
+## 2026-10-02 作品更新、个人反馈与可选机位（本机候选）
+
+本轮只在新隔离库迁移并重复执行验证，目标环境需另行备份、迁移全部四份 SQL、配套发布前后端并重启。明细与回退见 [专题验收](../../contexts/classroom-experience-20261002/verification.md)。
+
+| 数据 | 真源和约束 | 脚本 |
+| --- | --- | --- |
+| 当前作品与正式成绩 | 复用原作品版本/答案/任务状态；score NULL 表示未批，0 分已批；退回保留旧分，成功重交后当前待批，旧版本留分。流程图提交新增 `score_snapshot INT NULL`、`scoring_details_json LONGTEXT NULL` | `classroom_experience_flowchart_history_v1.sql` |
+| 附件分类 | 既有 `biz_practical_attachment` CHECK 增加 TEXT/HTML/ARCHIVE；格式白名单仍由具体题目控制，不回填旧题、不开区域抽测 | `classroom_experience_attachment_kinds_v1.sql` |
+| 学生个人反馈 | `biz_student_feedback_publication`：`(report_id,content_hash)` 唯一，记录教师/学校/课/题/班；`biz_student_feedback_snapshot`：`(publication_id,student_id)` 主键，源作品版本与本人 JSON 不可变。内容指纹包括输入、报告与排序后的个人结果，同内容发布幂等，结果变化必须新发布 | `classroom_experience_feedback_v1.sql` |
+| 学校/设备 | `biz_seat_helper_school`：学校双开关的学校配置；`biz_seat_helper_device`：随机 device_id、机房机位、密钥哈希、机器指纹和撤销状态。注册锁学校行并当前读取有效机位，阻止并发重复注册；同机位已撤销记录保留 | `classroom_experience_seat_helper_v1.sql` |
+| 长期常用机位 | `biz_seat_helper_binding` 主键 `(dept_id,room_name,entry_year,class_code,student_id)`，记录 device_id、确认教师与时间；事务锁当前指派、学校、基准行并复核观测。整班允许已确认互换，缺席/未知/重复与链式保留冲突不覆盖 | 同上 |
+
+注册码、单次打开凭证、设备心跳和登录后观测保存在 Redis 有限 TTL 中，不把“在线”落成长久身份事实。教师拖动大屏卡片和改变班级分组不更新机位绑定。应用回退保留新增列/表和所有新作品/反馈，不反向清分或恢复整库覆盖新数据。
+
 ## 2026-09-23 本地增量：多厂商 Key 与画程尺寸
 
 `biz_teacher_ai_provider_key` 以 `(teacher_user_id, provider_code)` 为主键，保存 AES-GCM 密文、末四位掩码和该厂商上次模型。`sql/operation_ai_multi_provider_keys_v1.sql` 幂等建表并用 `INSERT IGNORE` 迁入旧 `biz_teacher_ai_config` 中的当前配置；旧表继续表示当前选中厂商，不能用其密文续跑其他厂商的任务。任务行原有厂商、模型、价格快照不变；续跑从新表按任务厂商取 Key，缺 Key 明确失败。只在本机开发库和隔离克隆库验证，正式环境未迁移；必须保留原主密钥，应用与 SQL 配套更新。
@@ -140,3 +160,16 @@ erDiagram
 # 2026-09-17 纸质导入方案 A 数据增量
 
 无新增业务表或数据库迁移。教师代交复用 PracticalArtifact、Version、Attachment 及原学生答案/评分明细；提交人使用已有字段，纸质来源使用服务端专用附件目录。Redis 保存 24 小时身份导入凭证和 7 天学情报告，凭证绑定教师/范围/首次确认学生；报告按正式成绩内容指纹失效。`sql/paper_scan_v1.sql` 是废弃草稿，不执行。暂存文件由专用目录清理任务回收，不清理正式作品。
+
+
+## 2026-10-05 机位助手自动关联（正式1.30.27）
+
+复用原学校/设备/基准三表，无新列或结构SQL。同校机器指纹查询及设备密钥轮换在学校行锁内；数据库成功提交才写Redis结果。配对300秒、结果120秒，随机轮询证明和设备密钥仅服务端/本机保存，浏览器不能领取。正式验收临时学校停用、作品和一条基准保留审计。 证据、限制与下一步见 [正式验收](../../contexts/classroom-experience-20261002/seat-helper-auto-verification-20261005.md) 和 [ADR-004](../../contexts/classroom-experience-20261002/adr/ADR-004-student-zero-config-seat-helper.md)。
+
+## 2026-10-06 学校动态查询优化
+
+只改LoginPreviewMapper聚合顺序：90天活动先按lesson_id/student_id取MAX，再以学生实际学校/年班匹配唯一scope，保持COUNT DISTINCT和使用时间排序。原非空答题及当前题目批改条件保持；无结构或索引迁移。正式同一快照旧新6行逐字段一致，证据见[性能验收](../../contexts/login-showrooms-20261005/performance-verification-20261006.md)。
+
+## 2026-10-07 查询修复（无结构迁移）
+
+推进和班级成绩人数对操作题复用成绩汇总事实：非空答案、已有成绩或有效版本指针；空占位不计入。理论/打字和独立课堂表现规则保留。图片SQL同时约束主题、学校、作者有效性。机位候选机房并集包含本班历史已确认基准，设备改归属不自动搬移基准；管理员注册码在学校锁内拒绝同指纹有效设备重复注册。未治理历史重复设备与空作品状态。见 [复核记录](../../contexts/bug-review-20261007.md)。

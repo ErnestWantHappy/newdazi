@@ -6,12 +6,12 @@
         <span>匿名答卷仅显示题目、文件和评卷状态</span>
       </div>
       <div class="header-actions">
-        <el-radio-group v-model="query.gradingStatus" @change="() => loadTasks(false)">
+        <el-radio-group v-model="query.gradingStatus" :disabled="submitting" @change="() => loadTasks(false)">
           <el-radio-button value="">全部</el-radio-button>
           <el-radio-button value="0">待评</el-radio-button>
           <el-radio-button value="1">已评</el-radio-button>
         </el-radio-group>
-        <el-button :icon="Refresh" @click="loadTasks">刷新</el-button>
+        <el-button :icon="Refresh" :disabled="submitting" @click="loadTasks">刷新</el-button>
         <el-button type="primary" plain :icon="FullScreen" @click="toggleFullscreen">
           {{ isFullscreen ? '退出全屏' : '全屏评卷' }}
         </el-button>
@@ -123,7 +123,7 @@
             </el-form-item>
           </el-form>
 
-          <el-button type="primary" class="submit-btn" :icon="Check" :loading="submitting" @click="submitGrade">
+          <el-button type="primary" class="submit-btn" :icon="Check" :loading="submitting" :disabled="detailLoading" @click="submitGrade">
             提交并下一份
           </el-button>
           <div class="nav-actions">
@@ -161,6 +161,8 @@ const useItemScoring = ref(false)
 const gradingPageRef = ref(null)
 const isFullscreen = ref(false)
 const query = reactive({ gradingStatus: '0' })
+let taskRequestVersion = 0
+let detailRequestVersion = 0
 
 const submittedCount = computed(() => tasks.value.length)
 const gradedCount = computed(() => tasks.value.filter(item => item.gradingStatus === '1').length)
@@ -192,28 +194,43 @@ const totalItemScore = computed(() => {
 })
 
 async function loadTasks(keepCurrent = true) {
+  if (submitting.value) return
+  const version = ++taskRequestVersion
+  const status = query.gradingStatus
+  if (!keepCurrent) {
+    tasks.value = []
+    clearCurrentTask()
+  }
   loading.value = true
   try {
     const previousAnswerId = currentAnswerId.value
-    const response = await getCountyExamGradingTasks({ gradingStatus: query.gradingStatus })
+    const response = await getCountyExamGradingTasks({ gradingStatus: status })
+    if (version !== taskRequestVersion || status !== query.gradingStatus) return
     tasks.value = response.data || []
     if (tasks.value.length === 0) {
       clearCurrentTask()
       return
     }
-    const preserved = keepCurrent ? tasks.value.find(item => item.answerId === previousAnswerId) : null
+    const preserved = keepCurrent
+      ? tasks.value.find(item => item.answerId === currentAnswerId.value) || tasks.value.find(item => item.answerId === previousAnswerId)
+      : null
     const nextTask = preserved || tasks.value.find(item => item.gradingStatus !== '1') || tasks.value[0]
     await selectTask(nextTask.answerId)
   } finally {
-    loading.value = false
+    if (version === taskRequestVersion) loading.value = false
   }
 }
 
-async function selectTask(answerId) {
+async function selectTask(answerId, force = false) {
+  if (submitting.value && !force) return
+  const version = ++detailRequestVersion
   currentAnswerId.value = answerId
+  detail.value = null
+  scoringItems.value = []
   detailLoading.value = true
   try {
     const response = await getCountyExamGradingAnswer(answerId)
+    if (version !== detailRequestVersion || currentAnswerId.value !== answerId) return
     detail.value = response.data
     scoringItems.value = response.data?.scoringItems || []
     Object.keys(itemScores).forEach(key => delete itemScores[key])
@@ -228,12 +245,12 @@ async function selectTask(answerId) {
     manualScore.value = Number(response.data?.score || 0)
     focusScoreInput()
   } finally {
-    detailLoading.value = false
+    if (version === detailRequestVersion) detailLoading.value = false
   }
 }
 
 async function submitGrade() {
-  if (!detail.value) return
+  if (submitting.value || detailLoading.value || !detail.value || detail.value.answerId !== currentAnswerId.value) return
   const score = useItemScoring.value && scoringItems.value.length ? totalItemScore.value : Number(manualScore.value || 0)
   if (score < 0) {
     ElMessage.warning('得分不能为负数')
@@ -261,7 +278,10 @@ async function submitGrade() {
 }
 
 async function reloadAfterSubmit(previousIndex) {
-  const response = await getCountyExamGradingTasks({ gradingStatus: query.gradingStatus })
+  const version = ++taskRequestVersion
+  const status = query.gradingStatus
+  const response = await getCountyExamGradingTasks({ gradingStatus: status })
+  if (version !== taskRequestVersion || status !== query.gradingStatus) return
   tasks.value = response.data || []
   if (tasks.value.length === 0) {
     clearCurrentTask()
@@ -271,10 +291,12 @@ async function reloadAfterSubmit(previousIndex) {
     || tasks.value.find(item => item.gradingStatus !== '1')
     || tasks.value[Math.min(previousIndex + 1, tasks.value.length - 1)]
     || tasks.value[0]
-  await selectTask(nextTask.answerId)
+  await selectTask(nextTask.answerId, true)
 }
 
 function clearCurrentTask() {
+  ++detailRequestVersion
+  detailLoading.value = false
   detail.value = null
   currentAnswerId.value = null
   scoringItems.value = []
@@ -362,6 +384,7 @@ function handleFullscreenChange() {
 }
 
 function handleKeydown(event) {
+  if (submitting.value) return
   if (event.key === 'PageUp') {
     event.preventDefault()
     prevTask()
@@ -379,6 +402,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  ++taskRequestVersion
+  ++detailRequestVersion
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('keydown', handleKeydown)
 })

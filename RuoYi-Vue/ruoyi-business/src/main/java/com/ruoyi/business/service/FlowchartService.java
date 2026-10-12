@@ -21,6 +21,9 @@ import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentAnswerMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.FlowchartMapper;
+import com.ruoyi.business.mapper.BizScoringDetailMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 
@@ -37,6 +40,8 @@ public class FlowchartService {
     private final FlowchartDocumentService documentService;
     private final FlowchartStructureCheckService checkService;
     private final ClassroomTaskStateService taskStateService;
+    @Autowired private BizScoringDetailMapper scoringDetailMapper;
+    @Autowired private ObjectMapper objectMapper;
 
     public FlowchartService(FlowchartMapper flowchartMapper,
                             BizQuestionMapper questionMapper,
@@ -137,6 +142,9 @@ public class FlowchartService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> studentWorkspace(Long userId, Long deptId, Long lessonId, Long questionId) {
         BizStudent student = assertStudentAccess(userId, deptId, lessonId, questionId, true);
+        BizStudentAnswer answer = lockAnswer(student, lessonId, questionId);
+        boolean returned = taskStateService.isReturnedForUpdate(student.getStudentId(), lessonId, questionId);
+        boolean editable = PracticalSubmissionPolicy.canUpdate(answer, returned);
         FlowchartLessonSnapshot snapshot = resolveSnapshot(lessonId, questionId);
         FlowchartDraft draft = flowchartMapper.selectDraft(student.getStudentId(), lessonId, questionId);
         if (draft == null) {
@@ -153,14 +161,20 @@ public class FlowchartService {
         }
         FlowchartSubmission latest = flowchartMapper.selectLatestSubmission(
                 student.getStudentId(), lessonId, questionId);
+        if (editable && latest != null && (draft.getBaseSubmissionVersion() == null
+                || draft.getBaseSubmissionVersion() < latest.getVersionNo())) {
+            // 只推进草稿的基础版本，不覆盖尚未提交的编辑内容。
+            flowchartMapper.alignDraftBase(student.getStudentId(), lessonId, questionId, latest.getVersionNo());
+            draft.setBaseSubmissionVersion(latest.getVersionNo());
+        }
         Map<String, Object> result = new HashMap<String, Object>();
         // 学生端只下发脱敏快照（基础图+权限），标准答案与评分规则不出内网。
         result.put("snapshot", snapshot == null ? null : snapshot.toStudentView());
         result.put("draft", draft);
         result.put("latestSubmission", latest == null ? null : latest.toStudentView());
-        result.put("returned", taskStateService.isReturned(student.getStudentId(), lessonId, questionId));
-        result.put("readOnly", latest != null && (draft.getBaseSubmissionVersion() == null
-                || draft.getBaseSubmissionVersion() < latest.getVersionNo()));
+        result.put("returned", returned);
+        result.put("score", answer == null ? null : answer.getScore());
+        result.put("readOnly", !editable);
         return result;
     }
 
@@ -168,6 +182,7 @@ public class FlowchartService {
     public FlowchartDraft saveDraft(Long userId, Long deptId, Long lessonId, Long questionId,
                                     Integer expectedRevision, String documentJson) {
         BizStudent student = assertStudentAccess(userId, deptId, lessonId, questionId, true);
+        assertCanUpdate(student, lessonId, questionId);
         if (expectedRevision == null) throw new ServiceException("草稿修订号不能为空");
         FlowchartSubmission latest = flowchartMapper.selectLatestSubmission(student.getStudentId(), lessonId, questionId);
         FlowchartDraft current = flowchartMapper.selectDraft(student.getStudentId(), lessonId, questionId);
@@ -192,6 +207,7 @@ public class FlowchartService {
     public FlowchartSubmission submit(Long userId, Long deptId, Long lessonId, Long questionId,
                                       Integer expectedRevision) {
         BizStudent student = assertStudentAccess(userId, deptId, lessonId, questionId, true);
+        BizStudentAnswer previousAnswer = assertCanUpdate(student, lessonId, questionId);
         FlowchartDraft draft = flowchartMapper.selectDraftForUpdate(student.getStudentId(), lessonId, questionId);
         if (draft == null) throw new ServiceException("草稿不存在，请先打开画程");
         if (expectedRevision == null || !expectedRevision.equals(draft.getRevision())) {
@@ -199,7 +215,20 @@ public class FlowchartService {
         }
         FlowchartSubmission duplicate = flowchartMapper.selectSubmissionByDraftRevision(
                 student.getStudentId(), lessonId, questionId, draft.getRevision());
-        if (duplicate != null) return duplicate.toStudentView();
+        if (duplicate != null) {
+            if (!taskStateService.isReturnedForUpdate(student.getStudentId(), lessonId, questionId)) return duplicate.toStudentView();
+            // 退回后允许原样重交，但必须生成新版本，不能误认作上一次提交的重试。
+            if (flowchartMapper.updateDraft(draft, draft.getRevision()) != 1) throw new ServiceException("草稿已变化，请刷新后重交");
+            draft = flowchartMapper.selectDraftForUpdate(student.getStudentId(), lessonId, questionId);
+        }
+        FlowchartSubmission previous = flowchartMapper.selectLatestSubmission(student.getStudentId(), lessonId, questionId);
+        if (previous != null && previousAnswer != null && previousAnswer.getScore() != null) {
+            try {
+                if (flowchartMapper.archiveSubmissionGrade(previous.getSubmissionId(), previousAnswer.getScore(),
+                        objectMapper.writeValueAsString(scoringDetailMapper.selectDetailsByAnswerId(previousAnswer.getAnswerId()))) != 1)
+                    throw new ServiceException("原作品版本不存在");
+            } catch (Exception e) { throw new ServiceException("原成绩归档失败，未替换作品"); }
+        }
 
         FlowchartLessonSnapshot snapshot = resolveSnapshot(lessonId, questionId);
         int maxScore = lessonQuestionScore(lessonId, questionId);
@@ -233,14 +262,20 @@ public class FlowchartService {
         answerMapper.upsertAnswer(answer);
         flowchartMapper.updateSubmissionAnswerId(submission.getSubmissionId(), answer.getAnswerId());
         submission.setAnswerId(answer.getAnswerId());
+        if (previousAnswer != null) scoringDetailMapper.deleteBizScoringDetailByAnswerId(previousAnswer.getAnswerId());
+        flowchartMapper.alignDraftBase(student.getStudentId(), lessonId, questionId, submission.getVersionNo());
+        taskStateService.markInTransaction(student, student.getDeptId(), lessonId, questionId, ClassroomTaskStateService.SUBMITTED);
         return submission.toStudentView();
     }
 
     @Transactional(rollbackFor = Exception.class)
     public FlowchartDraft reopen(Long userId, Long deptId, Long lessonId, Long questionId) {
         BizStudent student = assertStudentAccess(userId, deptId, lessonId, questionId, true);
+        assertCanUpdate(student, lessonId, questionId);
         FlowchartSubmission latest = flowchartMapper.selectLatestSubmission(student.getStudentId(), lessonId, questionId);
         if (latest == null) throw new ServiceException("尚无正式提交，无需补交重开");
+        FlowchartDraft existing = flowchartMapper.selectDraftForUpdate(student.getStudentId(), lessonId, questionId);
+        if (existing != null && latest.getVersionNo().equals(existing.getBaseSubmissionVersion())) return existing;
         FlowchartDraft draft = new FlowchartDraft();
         draft.setStudentId(student.getStudentId());
         draft.setLessonId(lessonId);
@@ -279,6 +314,18 @@ public class FlowchartService {
         config.setRulesJson("[]");
         config.setConfigRevision(0);
         return config;
+    }
+
+    private BizStudentAnswer lockAnswer(BizStudent student, Long lessonId, Long questionId) {
+        BizStudentAnswer answer = answerMapper.selectLatestByStudentLessonQuestion(student.getStudentId(), lessonId, questionId);
+        return answer == null ? null : answerMapper.selectByIdForUpdate(answer.getAnswerId());
+    }
+
+    private BizStudentAnswer assertCanUpdate(BizStudent student, Long lessonId, Long questionId) {
+        BizStudentAnswer answer = lockAnswer(student, lessonId, questionId);
+        PracticalSubmissionPolicy.assertCanUpdate(answer,
+                taskStateService.isReturnedForUpdate(student.getStudentId(), lessonId, questionId));
+        return answer;
     }
 
     private void assertQuestionOwner(Long questionId, Long userId, boolean admin) {

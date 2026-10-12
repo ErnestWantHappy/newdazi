@@ -46,3 +46,7 @@ tools/tests/__pycache__/
 
 # 旧直连部署脚本含明文凭据且绕过发布门禁：不执行、不提交（2026-09-09）
 /快速部署.ps1
+
+# AOCI agent host integration (machine-bound; do not commit)
+.codex/config.toml
+.codex/config.toml.backup.*

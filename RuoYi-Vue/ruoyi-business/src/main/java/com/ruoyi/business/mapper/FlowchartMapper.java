@@ -28,6 +28,10 @@ public interface FlowchartMapper {
     int updateDraft(@Param("draft") FlowchartDraft draft,
                     @Param("expectedRevision") Integer expectedRevision);
     int replaceDraftFromSubmission(@Param("draft") FlowchartDraft draft);
+    int alignDraftBase(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId,
+                       @Param("questionId") Long questionId, @Param("versionNo") Integer versionNo);
+    int archiveSubmissionGrade(@Param("submissionId") Long submissionId,
+                               @Param("score") Integer score, @Param("detailsJson") String detailsJson);
 
     Integer selectNextSubmissionVersion(@Param("studentId") Long studentId,
                                         @Param("lessonId") Long lessonId,

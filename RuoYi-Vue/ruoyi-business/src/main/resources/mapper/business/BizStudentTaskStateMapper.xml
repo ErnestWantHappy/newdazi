@@ -27,14 +27,14 @@
                  AND (
                     VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED')
                     OR (VALUES(task_state) = 'WORKING'
-                        AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED'))
+                        AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING'))
                     OR (VALUES(task_state) = 'ENTERED'
                         AND task_state IN ('NOT_ENTERED', 'ENTERED'))
                  ) THEN 1 ELSE 0 END,
             dept_id = CASE
                 WHEN VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED')
                   OR (VALUES(task_state) = 'WORKING'
-                      AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED'))
+                      AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING'))
                   OR (VALUES(task_state) = 'ENTERED'
                       AND task_state IN ('NOT_ENTERED', 'ENTERED'))
                 THEN VALUES(dept_id) ELSE dept_id END,
@@ -43,18 +43,29 @@
                  AND (
                     VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED')
                     OR (VALUES(task_state) = 'WORKING'
-                        AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED'))
+                        AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING'))
                     OR (VALUES(task_state) = 'ENTERED'
                         AND task_state IN ('NOT_ENTERED', 'ENTERED'))
                  ) THEN VALUES(changed_at) ELSE changed_at END,
             task_state = CASE
                 WHEN VALUES(task_state) IN ('SUBMITTED', 'GRADED', 'RETURNED') THEN VALUES(task_state)
                 WHEN VALUES(task_state) = 'WORKING'
-                     AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING', 'RETURNED') THEN VALUES(task_state)
+                     AND task_state IN ('NOT_ENTERED', 'ENTERED', 'WORKING') THEN VALUES(task_state)
                 WHEN VALUES(task_state) = 'ENTERED'
                      AND task_state IN ('NOT_ENTERED', 'ENTERED') THEN VALUES(task_state)
                 ELSE task_state END,
             update_time = NOW()
+    </insert>
+
+    <!-- 仅供已锁定作品及答案的删除事务使用，普通作答上报仍走不可降级的 upsert。 -->
+    <insert id="withdrawSubmission" parameterType="com.ruoyi.business.domain.BizStudentTaskState">
+        INSERT INTO biz_student_task_state
+            (dept_id, lesson_id, question_id, student_id, task_state, state_version, changed_at, create_time, update_time)
+        VALUES
+            (#{deptId}, #{lessonId}, #{questionId}, #{studentId}, 'WORKING', 1, #{changedAt}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            state_version = state_version + 1,
+            task_state = 'WORKING', changed_at = VALUES(changed_at), update_time = NOW()
     </insert>
 
     <select id="selectStudentLessonStates" resultMap="TaskStateResult">

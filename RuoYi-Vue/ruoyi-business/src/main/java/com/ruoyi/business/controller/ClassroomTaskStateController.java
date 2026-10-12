@@ -4,6 +4,8 @@ import java.util.List;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizStudentTaskState;
+import com.ruoyi.business.domain.BizStudentAnswer;
+import java.util.Objects;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.ClassroomStudentTaskSummaryVo;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
@@ -38,6 +40,7 @@ public class ClassroomTaskStateController extends BaseController
     @Autowired private BizLessonAssignmentMapper assignmentMapper;
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
     @Autowired private GuideSheetAccessService guideSheetAccessService;
+    @Autowired private com.ruoyi.business.service.PracticalGradingDeadlineService gradingDeadlines;
 
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/student")
@@ -113,12 +116,25 @@ public class ClassroomTaskStateController extends BaseController
                 student.getEntryYear(), normalizeClassCode(student.getClassCode()), lessonDeptId);
         if (current == null || !request.getLessonId().equals(current.getLessonId()))
             throw new ServiceException("该课程已结束，仅能退回当前课程的作业");
-        if (answerMapper.selectLatestByStudentLessonQuestion(student.getStudentId(),
-                request.getLessonId(), request.getQuestionId()) == null)
-        {
-            throw new ServiceException("学生尚未提交该题，无法退回重做");
-        }
-        taskStateService.mark(student, student.getDeptId(), request.getLessonId(),
+        BizLessonQuestionDetailVo question = lessonQuestionMapper.selectDetailsByLessonId(request.getLessonId())
+                .stream().filter(item -> request.getQuestionId().equals(item.getQuestionId())).findFirst().orElse(null);
+        if (question == null || !"practical".equalsIgnoreCase(question.getQuestionType())
+                || "PYTHON".equalsIgnoreCase(question.getPracticalMode())
+                || "DATA_LAB".equalsIgnoreCase(question.getPracticalMode()))
+            throw new ServiceException("仅支持退回文件或画程操作题");
+        BizStudentAnswer answer = answerMapper.selectLatestByStudentLessonQuestion(student.getStudentId(),
+                request.getLessonId(), request.getQuestionId());
+        if (answer == null) throw new ServiceException("学生尚未提交该题，无法退回重交");
+        answer = answerMapper.selectByIdForUpdate(answer.getAnswerId());
+        if (answer == null || answer.getScore() == null)
+            throw new ServiceException("作品尚未批改，学生可自行更新，无需退回");
+        gradingDeadlines.assertCanGrade(answer.getAnswerId());
+        if (!Objects.equals(request.getExpectedScore(), answer.getScore())
+                || !Objects.equals(request.getExpectedAnswer(), answer.getStudentAnswer()))
+            throw new ServiceException("作品或成绩已变化，请刷新后重新退回");
+        if (taskStateService.isReturnedForUpdate(student.getStudentId(), request.getLessonId(), request.getQuestionId()))
+            return success("作品已退回，等待学生重交");
+        taskStateService.markInTransaction(student, student.getDeptId(), request.getLessonId(),
                 request.getQuestionId(), ClassroomTaskStateService.RETURNED);
         return success("已退回学生重交");
     }
@@ -147,6 +163,12 @@ public class ClassroomTaskStateController extends BaseController
         private String taskState;
         private String entryYear;
         private String classCode;
+        private Integer expectedScore;
+        private String expectedAnswer;
+        public Integer getExpectedScore() { return expectedScore; }
+        public void setExpectedScore(Integer value) { expectedScore = value; }
+        public String getExpectedAnswer() { return expectedAnswer; }
+        public void setExpectedAnswer(String value) { expectedAnswer = value; }
         public Long getLessonId() { return lessonId; }
         public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
         public Long getQuestionId() { return questionId; }

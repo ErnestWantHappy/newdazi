@@ -384,6 +384,7 @@
                     <div class="lesson-score-cell">
                       <!-- 请假状态：天蓝 Tag -->
                       <el-tag v-if="isLessonAbsent(scope.row, lessonId)" size="small" type="primary" effect="plain" class="score-tag-absent">请假</el-tag>
+                      <el-tag v-else-if="getLessonScoreObj(scope.row, lessonId)?.unsubmitted" size="small" type="info">未提交</el-tag>
                       <!-- 缺考状态：橙色 Tag（有课表无记录，后端已显式标记） -->
                       <el-tag v-else-if="isLessonMissing(scope.row, lessonId)" size="small" type="warning" effect="plain" class="score-tag-absent">缺考</el-tag>
                       <el-tag v-else-if="getLessonScoreObj(scope.row, lessonId)?.pendingGrading" size="small" type="warning">待批改</el-tag>
@@ -429,7 +430,7 @@
                       size="small"
                       :class="{ 'selected-tag': selectedLessonIds.includes(score.lessonId) }"
                       class="score-num"
-                    >{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.pendingGrading ? '待批改' : (score.finalScore ?? score.totalScore))) }}</el-tag>
+                    >{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.unsubmitted ? '未提交' : (score.pendingGrading ? '待批改' : (score.finalScore ?? score.totalScore)))) }}</el-tag>
                   </template>
                   <div class="score-detail">
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
@@ -439,13 +440,13 @@
                       <b>其中：</b>文件作品 <span class="score-num">{{ score.filePracticalScore || 0 }}</span> 分，Python 编程 <span class="score-num">{{ score.pythonPracticalScore || 0 }}</span> 分
                     </p>
                     <p>
-                      <b>作业分：</b><span class="score-num">{{ score.pendingGrading ? '待批改' : score.totalScore }}</span> 分
+                      <b>作业分：</b><span class="score-num">{{ score.unsubmitted ? '未提交' : (score.pendingGrading ? '待批改' : score.totalScore) }}</span> 分
                       <el-tag v-if="score.manualAdjusted" size="small" type="danger" effect="plain" class="manual-score-mark">修</el-tag>
                     </p>
                     <p v-if="score.manualAdjusted"><b>原始作业分：</b><span class="score-num">{{ score.practicalPending ? '待批改' : score.originalTotalScore }}</span> 分</p>
                     <p v-if="score.manualAdjusted"><b>修正原因：</b>{{ score.adjustmentReason || '-' }}</p>
                     <p><b>课堂表现：</b><span class="score-num">{{ (score.performanceScore || 0) > 0 ? '+' : '' }}{{ score.performanceScore || 0 }}</span> 分</p>
-                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.pendingGrading ? '待批改' : (score.finalScore ?? score.totalScore))) }}</span></p>
+                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.unsubmitted ? '未提交' : (score.pendingGrading ? '待批改' : (score.finalScore ?? score.totalScore)))) }}</span></p>
                     <el-divider v-if="score.avgTypingSpeed" style="margin: 8px 0" />
                     <template v-if="score.avgTypingSpeed">
                       <p><b>打字速度：</b><span class="score-num">{{ score.avgTypingSpeed }}</span> <small>字/分</small></p>
@@ -978,8 +979,20 @@ const gateContext = ref(null);
 const gateSaving = ref('');
 let gateRequestVersion = 0;
 let queryRequestVersion = 0;
+let analysisRequestVersion = 0;
+let matrixRequestVersion = 0;
+
+function invalidateAnalysis() {
+  ++analysisRequestVersion;
+  ++matrixRequestVersion;
+  analysisData.value = [];
+  matrixData.value = [];
+  analysisLoading.value = false;
+  matrixLoading.value = false;
+}
 
 watch(() => JSON.stringify([selectedLessonIds.value, queryParams.value.entryYear, queryParams.value.classCode]), () => {
+  invalidateAnalysis();
   ++gateRequestVersion;
   ++queryRequestVersion;
   gateContext.value = null;
@@ -1226,7 +1239,7 @@ function handlePerformanceSaved({ lessonId, performances }) {
       score.performanceScore = Number(item.score || 0);
       score.finalScore = clampClientScore(Number(score.totalScore || 0) + score.performanceScore);
       student.totalPerformance = score.performanceScore;
-      if (!score.pendingGrading && !score.isAbsent && !score.isMissing) {
+      if (!score.pendingGrading && !score.isAbsent && !score.isMissing && !score.unsubmitted) {
         student.filteredAverage = score.finalScore;
         student.finalTotal = score.finalScore;
       }
@@ -1235,6 +1248,7 @@ function handlePerformanceSaved({ lessonId, performances }) {
 }
 
 function handleQuery() {
+  invalidateAnalysis();
   if (!queryParams.value.entryYear) {
     ElMessage.warning('请选择入学年份');
     return;
@@ -1245,6 +1259,8 @@ function handleQuery() {
   scoreTableRef.value?.clearSelection();
   redoContext.value = null;
   ++redoContextSequence;
+  rawData.value = [];
+  tableData.value = [];
   loading.value = true;
   refreshGuideSheetContext();
   
@@ -1341,7 +1357,7 @@ function processData() {
     let typingSpeedSum = 0, accuracySum = 0, completionSum = 0, typingCount = 0;
 
     filteredScores.forEach(s => {
-      if (s.isAbsent || s.isMissing) return; // 请假与缺考的课程不参与均分计算
+      if (s.isAbsent || s.isMissing || s.unsubmitted) return; // 请假与缺考的课程不参与均分计算
       
       validScoreCount++;
       sumTyping += (s.typingScore || 0);
@@ -1502,39 +1518,40 @@ function handleExport(selectedColumns) {
 // 处理答题分析
 // 加载答题分析
 function loadAnalysis(lessonId) {
+  const version = ++analysisRequestVersion;
+  ++matrixRequestVersion;
+  const classCode = queryParams.value.classCode;
+  const entryYear = queryParams.value.entryYear;
   analysisLoading.value = true;
   analysisData.value = [];
+  matrixData.value = [];
+  matrixLoading.value = false;
   
   // 传入班级和年份进行过滤
-  const params = {
-      lessonId,
-      classCode: queryParams.value.classCode,
-      entryYear: queryParams.value.entryYear
-  };
-  
-  
-  getQuestionAnalysis(lessonId, queryParams.value.classCode, queryParams.value.entryYear).then(res => {
+  getQuestionAnalysis(lessonId, classCode, entryYear).then(res => {
+    if (version !== analysisRequestVersion || selectedLessonIds.value.length !== 1 || selectedLessonIds.value[0] !== lessonId || classCode !== queryParams.value.classCode || entryYear !== queryParams.value.entryYear) return;
     analysisData.value = res.data || [];
     analysisLoading.value = false;
     nextTick(() => {
-      renderAnalysisChart();
+      if (version === analysisRequestVersion) renderAnalysisChart();
     });
     // 加载学生答题矩阵
-    loadMatrix(lessonId);
+    loadMatrix(lessonId, classCode, entryYear);
   }).catch(() => {
-     analysisLoading.value = false;
+     if (version === analysisRequestVersion) analysisLoading.value = false;
   });
 }
 
 // 加载学生答题矩阵
-function loadMatrix(lessonId) {
+function loadMatrix(lessonId, classCode, entryYear) {
+    const version = ++matrixRequestVersion;
     matrixLoading.value = true;
     matrixData.value = [];
-    getStudentAnswerMatrix(lessonId, queryParams.value.classCode, queryParams.value.entryYear).then(res => {
+    getStudentAnswerMatrix(lessonId, classCode, entryYear).then(res => {
+        if (version !== matrixRequestVersion || selectedLessonIds.value.length !== 1 || selectedLessonIds.value[0] !== lessonId || classCode !== queryParams.value.classCode || entryYear !== queryParams.value.entryYear) return;
         // 数据转换：将 results 数组转换为 component 需要的 answersMap 对象列表
         // 同时处理班级显示名称 "601"
-        const entryYear = parseInt(queryParams.value.entryYear || 0);
-        const grade = calculateGradeNumber(entryYear, '2') || 0;
+        const grade = calculateGradeNumber(parseInt(entryYear || 0), '2') || 0;
 
         const processedData = (res || []).map(student => {
             const answersMap = {};
@@ -1569,9 +1586,9 @@ function loadMatrix(lessonId) {
         
         matrixData.value = processedData;
     }).catch(e => {
-        console.error('加载矩阵失败', e);
+        if (version === matrixRequestVersion) console.error('加载矩阵失败', e);
     }).finally(() => {
-        matrixLoading.value = false;
+        if (version === matrixRequestVersion) matrixLoading.value = false;
     });
 }
 
@@ -1788,7 +1805,7 @@ function getLessonScoreObj(student, lessonId) {
 function hasLessonSubmission(student, lessonId) {
     const s = getLessonScoreObj(student, lessonId);
     if (!s) return false;
-    if (s.isAbsent || s.isMissing) return false;
+    if (s.isAbsent || s.isMissing || s.unsubmitted) return false;
     return s.totalScore !== null && s.totalScore !== undefined;
 }
 
@@ -1810,6 +1827,7 @@ function getLessonScoreDisplay(student, lessonId) {
     const s = student.scores.find(item => item.lessonId === lessonId);
     if (s && s.isAbsent) return '请假';
     if (s && s.isMissing) return '缺考';
+    if (s?.unsubmitted) return '未提交';
     if (s?.pendingGrading) return '待批改';
     const performance = s.performanceScore || 0;
     const performanceText = performance > 0 ? `+${performance}` : String(performance);

@@ -389,6 +389,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.submit_time AS submitTime,
             COALESCE(state.task_state,
                 CASE WHEN a.answer_id IS NULL THEN 'NOT_ENTERED'
+                     WHEN a.submit_time IS NULL OR NULLIF(TRIM(a.student_answer), '') IS NULL THEN 'WORKING'
                      WHEN a.score IS NULL THEN 'SUBMITTED' ELSE 'GRADED' END) AS taskState,
             COALESCE(state.state_version, 0) AS stateVersion,
             state.changed_at AS stateChangedAt,
@@ -439,18 +440,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.lesson_id AS lessonId,
             l.lesson_title AS lessonTitle,
             l.lesson_num AS lessonNum,
+            SUM(CASE WHEN q.question_type &lt;&gt; 'practical' OR (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 ELSE 0 END) AS submittedAnswerCount,
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) = 0 THEN 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) = 0 THEN 0
                  WHEN COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0 THEN NULL
                  ELSE SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END)
             END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN 1 ELSE 0 END AS practicalPending,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
             -- 打字统计（只取打字题的平均值）
@@ -479,18 +481,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.lesson_id AS lessonId,
             l.lesson_title AS lessonTitle,
             l.lesson_num AS lessonNum,
+            SUM(CASE WHEN q.question_type &lt;&gt; 'practical' OR (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 ELSE 0 END) AS submittedAnswerCount,
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) = 0 THEN 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) = 0 THEN 0
                  WHEN COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0 THEN NULL
                  ELSE SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END)
             END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN 1 ELSE 0 END AS practicalPending,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
@@ -542,7 +545,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SET student_answer = '',
             is_correct = 0,
             score = NULL,
-            submit_time = #{submitTime},
+            submit_time = NULL,
             preview_status = NULL,
             preview_path = NULL,
             preview_retry_count = 0,
@@ -644,8 +647,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             s.class_code AS classCode,
             s.entry_year AS entryYear,
             COUNT(DISTINCT s.student_id) AS totalStudents,
-            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL THEN a.student_id END) AS practicalSubmitted,
-            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND a.student_answer IS NOT NULL AND a.score IS NULL THEN a.student_id END) AS practicalUngraded
+            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND NULLIF(TRIM(a.student_answer), '') IS NOT NULL THEN a.student_id END) AS practicalSubmitted,
+            COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND NULLIF(TRIM(a.student_answer), '') IS NOT NULL AND a.score IS NULL THEN a.student_id END) AS practicalUngraded
         FROM biz_student_answer a
         INNER JOIN (
             <include refid="latestAnswerIdSubquery"/>
@@ -683,7 +686,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             COUNT(DISTINCT CASE
                 WHEN u.user_id IS NOT NULL
                  AND IFNULL(p.is_absent, 0) = 0
-                 AND (ans.student_id IS NOT NULL OR p.performance_id IS NOT NULL)
+                 AND ((ans.student_id IS NOT NULL AND (q.question_type &lt;&gt; 'practical'
+                       OR NULLIF(TRIM(ans.student_answer), '') IS NOT NULL OR ans.score IS NOT NULL OR ans.practical_version_id IS NOT NULL))
+                       OR p.performance_id IS NOT NULL)
                 THEN s.student_id
             END) AS scoreReadyCount
         FROM (
@@ -768,6 +773,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 ON current_lq.lesson_id = a.lesson_id
                AND current_lq.question_id = a.question_id
             WHERE a.lesson_id = #{lessonId}
+              AND (EXISTS (SELECT 1 FROM biz_question counted_q WHERE counted_q.question_id = a.question_id AND counted_q.question_type &lt;&gt; 'practical')
+                   OR NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL)
         ) ans ON ans.student_id = s.student_id
         LEFT JOIN biz_classroom_performance p
             ON p.student_id = s.student_id

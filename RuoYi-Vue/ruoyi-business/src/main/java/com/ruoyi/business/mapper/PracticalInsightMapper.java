@@ -12,6 +12,8 @@ public interface PracticalInsightMapper
     int insert(Job job);
     @Select("SELECT " + JOB_COLUMNS + " FROM biz_practical_insight_report WHERE report_id=#{id}")
     Job get(Long id);
+    @Select("SELECT " + JOB_COLUMNS + " FROM biz_practical_insight_report WHERE report_id=#{id} FOR UPDATE")
+    Job getForUpdate(Long id);
     @Select("SELECT " + JOB_COLUMNS + " FROM biz_practical_insight_report WHERE teacher_id=#{teacher} AND fingerprint=#{fingerprint}")
     Job find(@Param("teacher") Long teacher, @Param("fingerprint") String fingerprint);
     @Select("SELECT " + JOB_COLUMNS + " FROM biz_practical_insight_report WHERE teacher_id=#{teacher} AND lesson_id=#{scope.lessonId} AND question_id=#{scope.questionId} AND entry_year=#{scope.entryYear} AND class_code=#{scope.classCode} ORDER BY report_id DESC LIMIT 1")

@@ -58,7 +58,8 @@ public class ClassroomTaskStateWriter
                 && !ClassroomTaskStateService.ENTERED.equals(currentState))
                 || (ClassroomTaskStateService.WORKING.equals(targetState)
                 && (ClassroomTaskStateService.SUBMITTED.equals(currentState)
-                || ClassroomTaskStateService.GRADED.equals(currentState))))
+                || ClassroomTaskStateService.GRADED.equals(currentState)
+                || ClassroomTaskStateService.RETURNED.equals(currentState))))
         {
             return current;
         }
@@ -76,6 +77,26 @@ public class ClassroomTaskStateWriter
         if (saved == null) throw new ServiceException("课堂任务状态保存失败");
         broadcastAfterCommit(student, saved);
         return saved;
+    }
+
+    /** 删除业务已锁定指派、作品和答案，此入口与清除提交事实使用同一事务。 */
+    @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
+    public void withdrawSubmissionInTransaction(BizStudent student, Long lessonId, Long questionId) {
+        if (student == null || student.getStudentId() == null || student.getDeptId() == null
+                || lessonId == null || questionId == null) throw new ServiceException("课堂任务状态参数不完整");
+        stateMapper.selectOneForUpdate(lessonId, questionId, student.getStudentId());
+        BizStudentTaskState state = new BizStudentTaskState();
+        state.setDeptId(student.getDeptId());
+        state.setStudentId(student.getStudentId());
+        state.setLessonId(lessonId);
+        state.setQuestionId(questionId);
+        state.setTaskState(ClassroomTaskStateService.WORKING);
+        state.setChangedAt(new Date());
+        stateMapper.withdrawSubmission(state);
+        BizStudentTaskState saved = stateMapper.selectOneForUpdate(lessonId, questionId, student.getStudentId());
+        if (saved == null || !ClassroomTaskStateService.WORKING.equals(saved.getTaskState()))
+            throw new ServiceException("撤销提交状态失败");
+        broadcastAfterCommit(student, saved);
     }
 
     private boolean isKnownState(String state)

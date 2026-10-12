@@ -1,9 +1,10 @@
 import router from "./router";
+import { captureSeatHelperToken } from '@/utils/seatHelper';
 import { ElMessage } from "element-plus";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 import { isSessionExpiredError } from "@/utils/session";
-import { getToken } from "@/utils/auth";
+import { getToken, needsSchoolSelection } from "@/utils/auth";
 import { isHttp, isPathMatch } from "@/utils/validate";
 import { isRelogin } from "@/utils/request";
 import useUserStore from "@/store/modules/user";
@@ -21,6 +22,12 @@ const isWhiteList = (path) => {
 
 router.beforeEach((to, from, next) => {
   NProgress.start();
+  if (/^#seat-helper=[a-f0-9]{64}$/.test(to.hash)) {
+    captureSeatHelperToken(to.hash);
+    // 先清除路由片段，再走原登录守卫，避免单次凭证进入登录重定向的查询参数和访问日志。
+    next({ path: to.path, query: to.query, hash: '', replace: true });
+    return;
+  }
   // 懒加载目标页和首屏数据期间遮住旧页面，避免地址已切换却仍操作上一页。
   document.documentElement.classList.add('route-pending');
   // 平台菜单实际路由为 /platform-update，兼容历史书签中的旧地址。
@@ -29,6 +36,11 @@ router.beforeEach((to, from, next) => {
     return;
   }
   if (getToken()) {
+    if (needsSchoolSelection()) {
+      next(to.path === '/login' ? undefined : { path: '/login', replace: true });
+      NProgress.done();
+      return;
+    }
     to.meta.title && useSettingsStore().setTitle(to.meta.title);
     /* has token*/
     if (to.path === "/login") {

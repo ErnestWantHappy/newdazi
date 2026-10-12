@@ -3,6 +3,7 @@ package com.ruoyi.business.service;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +26,26 @@ import org.springframework.web.multipart.MultipartFile;
 public class PaperBatchImportService
 {
     private static final String PREFIX = "teacher:class-paper:";
+    private final ConcurrentHashMap<String, SplitLock> splitLocks = new ConcurrentHashMap<>();
+
+    private static class SplitLock { int users; }
+
+    private SplitLock acquireSplitLock(String token)
+    {
+        return splitLocks.compute(token, (key, existing) -> {
+            SplitLock lock = existing == null ? new SplitLock() : existing;
+            lock.users++;
+            return lock;
+        });
+    }
+
+    private void releaseSplitLock(String token, SplitLock lock)
+    {
+        splitLocks.computeIfPresent(token, (key, existing) -> {
+            if (existing != lock) return existing;
+            return --existing.users == 0 ? null : existing;
+        });
+    }
     @Autowired private TeacherPaperSubmissionService submissions;
     @Autowired private PracticalFilePolicyService policy;
     @Autowired private PaperScanVisionGateway vision;
@@ -95,7 +116,17 @@ public class PaperBatchImportService
         if (next != pages + 1) throw new ServiceException("仍有页面未分配，不能遗漏原件页面");
     }
 
-    public synchronized List<Map<String, Object>> split(PaperImportRequest request) throws Exception
+    public List<Map<String, Object>> split(PaperImportRequest request) throws Exception
+    {
+        SplitLock lock = acquireSplitLock(request.token);
+        try
+        {
+            synchronized (lock) { return splitLocked(request); }
+        }
+        finally { releaseSplitLock(request.token, lock); }
+    }
+
+    private List<Map<String, Object>> splitLocked(PaperImportRequest request) throws Exception
     {
         Pending parent = owned(request); Set<Long> roster = new HashSet<>();
         submissions.roster(request).forEach(s -> roster.add(s.getStudentId()));

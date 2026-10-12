@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.LoginPreviewMapper">
+    <!-- 不读取正文/附件/定向接收人；只有主题日期、标题与发布学校/教师进入概览。 -->
+    <select id="selectActivities" resultType="java.util.LinkedHashMap">
+        SELECT t.topic_id AS topicId,
+               DATE_FORMAT(COALESCE(t.activity_time, t.create_time), '%m-%d') AS date,
+               t.title, d.dept_name AS school, u.nick_name AS teacher
+        FROM biz_research_topic t
+        INNER JOIN sys_dept d ON d.dept_id = t.dept_id AND d.del_flag = '0' AND d.status = '0'
+        INNER JOIN sys_user u ON u.user_id = t.creator_id AND u.del_flag = '0' AND u.status = '0'
+        WHERE t.del_flag = '0' AND t.topic_type IN ('NOTICE', 'SHARE')
+        ORDER BY t.create_time DESC, t.topic_id DESC
+        LIMIT 5
+    </select>
+
+    <select id="selectTopicContentHtml" resultType="java.lang.String">
+        SELECT t.content_html FROM biz_research_topic t
+        INNER JOIN sys_dept d ON d.dept_id = t.dept_id AND d.del_flag = '0' AND d.status = '0'
+        INNER JOIN sys_user u ON u.user_id = t.creator_id AND u.del_flag = '0' AND u.status = '0'
+        WHERE t.topic_id = #{topicId} AND t.del_flag = '0' AND t.topic_type IN ('NOTICE', 'SHARE')
+    </select>
+
+    <!-- 查询最新包含图片的教研互动跟帖/课堂实录，供登录页真实焦点图轮播提取 -->
+    <select id="selectLatestPostImages" resultType="java.util.LinkedHashMap">
+        SELECT p.post_id AS postId, p.topic_id AS topicId, p.content_html AS contentHtml,
+               t.title AS topicTitle, d.dept_name AS school, u.nick_name AS teacher,
+               DATE_FORMAT(COALESCE(p.create_time, t.create_time), '%m-%d') AS date
+        FROM biz_research_post p
+        INNER JOIN biz_research_topic t ON t.topic_id = p.topic_id AND t.del_flag = '0'
+        INNER JOIN sys_dept td ON td.dept_id = t.dept_id AND td.del_flag = '0' AND td.status = '0'
+        INNER JOIN sys_user tu ON tu.user_id = t.creator_id AND tu.del_flag = '0' AND tu.status = '0'
+        INNER JOIN sys_dept d ON d.dept_id = p.dept_id AND d.del_flag = '0' AND d.status = '0'
+        INNER JOIN sys_user u ON u.user_id = p.author_id AND u.del_flag = '0' AND u.status = '0'
+        WHERE p.del_flag = '0' AND p.content_html LIKE '%&lt;img%'
+        ORDER BY p.create_time DESC, p.post_id DESC
+        LIMIT 10
+    </select>
+
+    <select id="selectPostContentHtml" resultType="java.lang.String">
+        SELECT p.content_html FROM biz_research_post p
+        INNER JOIN biz_research_topic t ON t.topic_id = p.topic_id AND t.del_flag = '0'
+        INNER JOIN sys_dept td ON td.dept_id = t.dept_id AND td.del_flag = '0' AND td.status = '0'
+        INNER JOIN sys_user tu ON tu.user_id = t.creator_id AND tu.del_flag = '0' AND tu.status = '0'
+        INNER JOIN sys_dept d ON d.dept_id = p.dept_id AND d.del_flag = '0' AND d.status = '0'
+        INNER JOIN sys_user u ON u.user_id = p.author_id AND u.del_flag = '0' AND u.status = '0'
+        WHERE p.post_id = #{postId} AND p.del_flag = '0'
+    </select>
+
+
+    <!-- 使用时间取真实答题/签到/课堂表现的最近活动；不将建课、指派时间冒充开课。 -->
+    <select id="selectLessons" resultType="java.util.LinkedHashMap">
+        WITH raw_activity AS (
+            SELECT lesson_id, student_id, submit_time AS used_at FROM biz_student_answer
+            WHERE submit_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY)
+              AND submit_time &lt;= NOW() AND student_answer IS NOT NULL AND TRIM(student_answer) &lt;&gt; ''
+            UNION ALL
+            SELECT lesson_id, student_id, checkin_time FROM biz_lesson_checkin
+            WHERE checkin_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND checkin_time &lt;= NOW()
+            UNION ALL
+            SELECT lesson_id, student_id, create_time FROM biz_classroom_performance
+            WHERE create_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND create_time &lt;= NOW()
+        ), activity AS (
+            <!-- 一名学生每题都会产生记录，先按课/学生去重，避免与班级事实反复关联。 -->
+            SELECT lesson_id, student_id, MAX(used_at) AS used_at
+            FROM raw_activity GROUP BY lesson_id, student_id
+        ), recent_class AS (
+            SELECT scope.scope_id, scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code,
+                   MAX(a.used_at) AS used_at, COUNT(DISTINCT a.student_id) AS participant_count
+            FROM activity a
+            <!-- 从已去重活动匹配学生班级，避免按每个课程班级重复扫描该课所有学生。 -->
+            STRAIGHT_JOIN biz_student s ON s.student_id = a.student_id
+            STRAIGHT_JOIN sys_user u ON u.user_id = s.user_id AND u.del_flag = '0' AND u.status = '0'
+            STRAIGHT_JOIN biz_lesson_class_scope scope ON scope.lesson_id = a.lesson_id AND scope.dept_id = u.dept_id
+                  AND scope.entry_year = s.entry_year AND scope.class_code = s.class_code
+            STRAIGHT_JOIN biz_lesson l ON l.lesson_id = scope.lesson_id AND l.dept_id = scope.dept_id
+            STRAIGHT_JOIN sys_dept d ON d.dept_id = scope.dept_id AND d.del_flag = '0' AND d.status = '0'
+            GROUP BY scope.scope_id, scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code
+            ORDER BY used_at DESC, scope.scope_id DESC LIMIT 6
+        ), practical AS (
+            SELECT c.scope_id, COUNT(*) AS submitted_count, SUM(a.score IS NULL) AS pending
+            FROM recent_class c
+            INNER JOIN biz_student_answer a ON a.lesson_id = c.lesson_id
+            INNER JOIN biz_lesson_question lq ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
+            INNER JOIN biz_question q ON q.question_id = a.question_id AND q.question_type = 'practical'
+            INNER JOIN biz_student s ON s.student_id = a.student_id AND s.entry_year = c.entry_year AND s.class_code = c.class_code
+            INNER JOIN sys_user u ON u.user_id = s.user_id AND u.dept_id = c.dept_id AND u.del_flag = '0' AND u.status = '0'
+            WHERE a.student_answer IS NOT NULL AND TRIM(a.student_answer) &lt;&gt; '' AND a.submit_time IS NOT NULL
+            GROUP BY c.scope_id
+        )
+        SELECT DATE_FORMAT(c.used_at, '%m-%d %H:%i') AS time, DATE_FORMAT(c.used_at, '%Y-%m-%d') AS usageDay,
+               d.dept_name AS school, teacher.nick_name AS teacher, l.lesson_title AS topic,
+               c.entry_year AS entryYear, c.class_code AS classCode, d.school_type AS schoolType,
+               c.participant_count AS participantCount,
+               (SELECT COUNT(*) FROM biz_student s INNER JOIN sys_user u ON u.user_id = s.user_id
+                WHERE s.entry_year = c.entry_year AND s.class_code = c.class_code
+                  AND u.dept_id = c.dept_id AND u.del_flag = '0' AND u.status = '0') AS totalStudentCount,
+               COALESCE(p.pending, 0) AS pending, COALESCE(p.submitted_count, 0) AS submittedCount
+        FROM recent_class c
+        INNER JOIN biz_lesson l ON l.lesson_id = c.lesson_id
+        INNER JOIN sys_dept d ON d.dept_id = c.dept_id
+        LEFT JOIN sys_user teacher ON teacher.user_id = l.creator_id AND teacher.del_flag = '0'
+        LEFT JOIN practical p ON p.scope_id = c.scope_id
+        ORDER BY c.used_at DESC, c.scope_id DESC
+    </select>
+</mapper>

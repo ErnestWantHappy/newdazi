@@ -96,10 +96,29 @@ class ClassroomTaskStateServiceTest
                 org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void withdrawalUsesDedicatedWriteAndBroadcastsNewVersion() {
+        when(stateMapper.selectOneForUpdate(9L, 10L, 7L))
+                .thenReturn(state("SUBMITTED", 4L), state("WORKING", 5L));
+        service.withdrawSubmissionInTransaction(student(), 9L, 10L);
+        verify(stateMapper).withdrawSubmission(org.mockito.ArgumentMatchers.any());
+        verify(stateMapper, never()).upsert(org.mockito.ArgumentMatchers.any());
+        verify(webSocketHandler).broadcastToClassroom(eq(3L), eq("2025"), eq("1班"), eq(9L), contains("\"stateVersion\":5"));
+    }
+
+    @Test
+    void normalWorkingReportCannotWithdrawSubmission() {
+        when(stateMapper.selectOne(9L, 10L, 7L)).thenReturn(state("SUBMITTED", 4L));
+        assertEquals("SUBMITTED", service.mark(student(), 3L, 9L, 10L, "WORKING").getTaskState());
+        verify(stateMapper, never()).upsert(org.mockito.ArgumentMatchers.any());
+        verify(stateMapper, never()).withdrawSubmission(org.mockito.ArgumentMatchers.any());
+    }
+
     private BizStudent student()
     {
         BizStudent student = new BizStudent();
         student.setStudentId(7L);
+        student.setDeptId(3L);
         student.setEntryYear("2025");
         student.setClassCode("1班");
         return student;

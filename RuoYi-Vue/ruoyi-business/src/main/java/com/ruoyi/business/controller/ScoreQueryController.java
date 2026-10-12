@@ -665,10 +665,10 @@ public class ScoreQueryController extends BaseController {
     /** 缺考标记键：有课表无记录、无请假，显式标出但不计入分母。 */
     static final String SCORE_FLAG_MISSING = "isMissing";
 
-    /** 请假与缺考均不计入均分分母与排名。 */
+    /** 请假、缺考、未提交和待批改均不计入均分分母与排名。 */
     static boolean isExcludedFromAverage(Map<String, Object> score) {
         return score == null || Boolean.TRUE.equals(score.get("isAbsent")) || Boolean.TRUE.equals(score.get(SCORE_FLAG_MISSING))
-                || Boolean.TRUE.equals(score.get("pendingGrading"));
+                || Boolean.TRUE.equals(score.get("pendingGrading")) || Boolean.TRUE.equals(score.get("unsubmitted"));
     }
     /**
      * 是否应标缺考：课程在选定范围、有全班记录、本人无记录。未开课/未指派（全班无记录）一律不标。
@@ -699,6 +699,8 @@ public class ScoreQueryController extends BaseController {
 
     private void applyHomeworkAdjustment(Map<String, Object> score, BizScoreAdjustment adjustment) {
         boolean practicalPending = numberToInt(score.get("practicalPending")) == 1;
+        score.put("unsubmitted", score.containsKey("submittedAnswerCount")
+                && numberToInt(score.get("submittedAnswerCount")) == 0 && !isActiveHomeworkAdjustment(adjustment));
         score.put("practicalPending", practicalPending);
         score.put("pendingGrading", practicalPending);
         score.put("originalTotalScore", score.get("totalScore"));
@@ -722,7 +724,9 @@ public class ScoreQueryController extends BaseController {
         boolean isAbsent = performance != null && performance.getIsAbsent() != null && performance.getIsAbsent() == 1;
         score.put("performanceScore", performanceScore);
         score.put("isAbsent", isAbsent);
-        if (isAbsent || Boolean.TRUE.equals(score.get("pendingGrading"))) {
+        // 独立课堂表现与人工修正仍按原规则计分，空作品占位行本身不构成成绩。
+        if (performance != null) score.put("unsubmitted", false);
+        if (isAbsent || Boolean.TRUE.equals(score.get("pendingGrading")) || Boolean.TRUE.equals(score.get("unsubmitted"))) {
             score.put("finalScore", null);
         } else {
             score.put("finalScore", clampScore(numberToInt(score.get("totalScore")) + performanceScore));
@@ -1164,7 +1168,7 @@ public class ScoreQueryController extends BaseController {
             double typingSpeedSum = 0, accuracySum = 0, completionSum = 0;
             int typingCount = 0;
             int count = 0, practicalCount = 0, gradedCount = 0;
-            boolean hasPending = false, hasPracticalPending = false;
+            boolean hasPending = false, hasPracticalPending = false, hasUnsubmitted = false;
             
             for (LessonInfoVo lesson : targetLessons) {
                 Long lessonId = lesson.getLessonId();
@@ -1181,6 +1185,13 @@ public class ScoreQueryController extends BaseController {
                         row.createCell(colIdx++).setCellValue("");
                         row.createCell(colIdx++).setCellValue("");
                         row.createCell(colIdx++).setCellValue("");
+                    }
+                } else if (Boolean.TRUE.equals(targetScore.get("unsubmitted"))) {
+                    hasUnsubmitted = true;
+                    if (includeLessonDetails) {
+                        row.createCell(colIdx++).setCellValue("未提交");
+                        row.createCell(colIdx++).setCellValue("未提交");
+                        row.createCell(colIdx++).setCellValue("未提交");
                     }
                 } else if (Boolean.TRUE.equals(targetScore.get("isAbsent"))) {
                     // 请假行只写标记、不计入均分分母，与页面 isExcludedFromAverage 口径一致；缺考分支在其后。
@@ -1270,10 +1281,12 @@ public class ScoreQueryController extends BaseController {
                         break;
                     case "avgPractical":
                         if (practicalCount == 0 && hasPracticalPending) row.createCell(colIdx++).setCellValue("待批改");
+                        else if (count == 0 && hasUnsubmitted) row.createCell(colIdx++).setCellValue("未提交");
                         else setOneDecimalCell(row, colIdx++, avgPractical, oneDecimalStyle);
                         break;
                     case "filteredTotal":
                         if (gradedCount == 0 && hasPending) row.createCell(colIdx++).setCellValue("待批改");
+                        else if (count == 0 && hasUnsubmitted) row.createCell(colIdx++).setCellValue("未提交");
                         else setSummaryScoreCell(row, colIdx++, homeworkSummary, singleLessonMode, oneDecimalStyle);
                         break;
                     case "totalPerformance":
@@ -1282,6 +1295,7 @@ public class ScoreQueryController extends BaseController {
                     case "finalTotal":
                     case "filteredAverage":
                         if (gradedCount == 0 && hasPending) row.createCell(colIdx++).setCellValue("待批改");
+                        else if (count == 0 && hasUnsubmitted) row.createCell(colIdx++).setCellValue("未提交");
                         else setSummaryScoreCell(row, colIdx++, finalSummary, singleLessonMode, oneDecimalStyle);
                         break;
                     case "gradeLevel":

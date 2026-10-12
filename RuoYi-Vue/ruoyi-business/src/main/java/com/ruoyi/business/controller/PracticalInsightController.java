@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 public class PracticalInsightController
 {
     @Autowired private PracticalInsightReportService reports;
+    @Autowired private com.ruoyi.business.service.StudentFeedbackService feedback;
+    @PostMapping("/{id}/publish") public AjaxResult publish(@PathVariable Long id) throws Exception { return AjaxResult.success(feedback.publish(id)); }
     @PostMapping("/latest") public AjaxResult latest(@RequestBody Request request) throws Exception { return AjaxResult.success(reports.latest(request)); }
     @PostMapping public AjaxResult create(@RequestBody Request request) throws Exception { return AjaxResult.success(reports.create(request)); }
     @GetMapping("/{id}") public AjaxResult get(@PathVariable Long id) throws Exception { return AjaxResult.success(reports.get(id)); }

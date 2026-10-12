@@ -4,21 +4,20 @@
     <div class="desktop-toolbar">
       <div class="title-section">
         <div class="main-title-row">
-          <h2 class="page-title">{{ lessonTitle || `${entryYear}级${classCode}班` }} · 课堂监控大屏</h2>
-          <el-tag v-if="historical" type="warning" effect="dark" size="small" class="history-tag">历史数据（只读）</el-tag>
+          <h2 class="page-title">{{ lessonTitle || `${entryYear}级${classCode}班` }} · 课堂监控</h2>
+          <el-tag v-if="historical" type="warning" effect="dark" size="small" class="history-tag">历史只读</el-tag>
+          <el-tooltip content="终端连接与作答进度独立统计；即使学生临时离线，卡片亦保留常用机位记忆。" placement="bottom">
+            <el-icon class="title-tip-icon"><InfoFilled /></el-icon>
+          </el-tooltip>
         </div>
-        <p class="subtitle-hint">
-          <el-icon><Monitor /></el-icon>
-          <span>终端在线与作答进度分别统计，在线状态不等同于考勤</span>
-        </p>
       </div>
 
       <div class="toolbar-actions">
-        <!-- 课堂题目状态静默指示舱 + 轻量控制浮层 -->
+        <!-- 课堂题目状态发令胶囊 -->
         <div v-if="lessonId && (hasTheory || hasPractical)" class="gate-status-capsule">
           <el-popover
             placement="bottom-start"
-            :width="280"
+            :width="260"
             trigger="click"
             popper-class="gate-popover"
           >
@@ -26,25 +25,21 @@
               <div
                 class="gate-pill-badge"
                 :class="isAllGateOpen ? 'is-all-open' : 'is-part-closed'"
-                title="点击调整理论题或操作题的学生可见状态"
+                title="调整理论或操作题对学生的可见性"
               >
                 <span class="gate-status-dot" />
                 <span class="gate-status-text">
-                  {{ isAllGateOpen ? '题目正常开放中' : '部分题目已锁定' }}
+                  {{ isAllGateOpen ? '题目开放中' : '部分题目锁定' }}
                 </span>
                 <el-icon class="gate-status-arrow"><ArrowDown /></el-icon>
               </div>
             </template>
             <div class="gate-popover-content">
               <div class="gate-popover-header">
-                <strong>🚩 课堂题目发令</strong>
-                <span class="gate-popover-hint">控制当前班级学生端可见性</span>
+                <strong>课堂发令</strong>
               </div>
               <div v-if="hasTheory" class="gate-popover-row">
-                <div class="row-label-group">
-                  <span class="row-title">理论测试题</span>
-                  <span class="row-desc">关闭后学生端隐藏本课理论题</span>
-                </div>
+                <span class="row-title">理论题</span>
                 <el-switch
                   v-model="gateTheoryOpen"
                   :disabled="historical"
@@ -57,10 +52,7 @@
                 />
               </div>
               <div v-if="hasPractical" class="gate-popover-row">
-                <div class="row-label-group">
-                  <span class="row-title">操作题任务</span>
-                  <span class="row-desc">关闭后学生端隐藏本课操作题</span>
-                </div>
+                <span class="row-title">操作题</span>
                 <el-switch
                   v-model="gatePracticalOpen"
                   :disabled="historical"
@@ -78,98 +70,90 @@
 
         <el-divider v-if="lessonId && (hasTheory || hasPractical)" direction="vertical" class="toolbar-divider" />
 
-        <!-- 每排人数调节器（弹性缩放） -->
-        <div class="columns-controller" title="调整每排显示的同学数量，卡片将自适应放大或缩小">
+        <!-- 每排人数调节（紧凑下拉） -->
+        <div class="columns-controller">
           <span class="ctrl-label">
             <el-icon><Grid /></el-icon>
-            每排人数：
+            每排:
           </span>
-          <el-button-group size="small" class="cols-preset-group">
-            <el-button
-              v-for="preset in [4, 6, 8, 10]"
-              :key="preset"
-              :type="columnsCount === preset ? 'primary' : 'default'"
-              @click="setColumns(preset)"
-            >
-              {{ preset }}列
-            </el-button>
-          </el-button-group>
-          <el-input-number
+          <el-select
             v-model="columnsCount"
-            :min="3"
-            :max="12"
             size="small"
-            controls-position="right"
-            class="cols-number-input"
+            style="width: 82px"
             @change="handleColumnsChange"
-          />
+          >
+            <el-option v-for="preset in [4, 6, 8, 10, 12]" :key="preset" :label="`${preset}人`" :value="preset" />
+          </el-select>
         </div>
 
         <el-divider direction="vertical" class="toolbar-divider" />
 
         <!-- 视图与功能按钮组 -->
         <div class="view-controls">
-          <!-- 全班重做操作 -->
-          <el-dropdown
-            v-if="lessonId && !historical && (hasTheory || hasTyping)"
-            trigger="click"
-            class="mr8"
-            @command="handleClassRedoCommand"
-          >
-            <el-button type="warning" plain :icon="RefreshLeft" :loading="classRedoSaving">
-              全班重做 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          <!-- 课堂控制集合菜单（全班重做、调座、设置分组） -->
+          <el-dropdown trigger="click" @command="handleClassroomCommand">
+            <el-button type="primary" plain size="small" class="ctrl-btn">
+              <el-icon><Operation /></el-icon> 课堂控制 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item v-if="hasTyping" command="typing">
+                <el-dropdown-item v-if="lessonId && !historical && hasTyping" command="typing">
                   ⚡ 发起全班打字重测
                 </el-dropdown-item>
-                <el-dropdown-item v-if="hasTheory" command="theory" :divided="hasTyping" style="color: #F56C6C;">
+                <el-dropdown-item v-if="lessonId && !historical && hasTheory" command="theory" style="color: #F56C6C;">
                   ⚠️ 发起全班理论重做
+                </el-dropdown-item>
+                <el-dropdown-item :divided="lessonId && !historical && (hasTyping || hasTheory)" command="layout">
+                  {{ layoutMode ? '退出调座模式' : '🪑 调整座位排布' }}
+                </el-dropdown-item>
+                <el-dropdown-item command="group">
+                  👥 设置班级分组
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
 
-          <el-button type="success" plain :icon="DataAnalysis" @click="goToClassScore">
-            查看本班成绩报表
+          <el-button type="success" plain size="small" :icon="DataAnalysis" @click="goToClassScore">
+            成绩报表
           </el-button>
-          <el-switch v-model="showGroups" active-text="分组视图" class="group-switch" />
-          <el-button type="primary" plain :icon="Setting" @click="openGroupDialog">设置分组</el-button>
-          <el-button :type="layoutMode ? 'warning' : 'default'" :icon="Edit" @click="layoutMode = !layoutMode">
-            {{ layoutMode ? '退出调座' : '调整座位' }}
-          </el-button>
-          <el-button :icon="Refresh" :loading="loading" @click="() => load(false)">刷新</el-button>
+          <el-switch v-model="showGroups" active-text="分组视图" class="group-switch" size="small" />
+          <el-button size="small" :icon="Refresh" :loading="loading" @click="() => load(false)">刷新</el-button>
         </div>
       </div>
     </div>
 
-    <!-- 课堂状态概览指示条 -->
-    <div v-if="students.length > 0" class="classroom-summary-bar">
-      <div class="summary-item total">
-        <span class="summary-label">全班总人数</span>
-        <span class="summary-num">{{ students.length }}</span>
-      </div>
-      <div class="summary-item online">
-        <span class="summary-dot is-online" />
-        <span class="summary-label">当前已连接</span>
-        <span class="summary-num">{{ onlineStudentCount }}</span>
-      </div>
-      <div class="summary-item offline">
-        <span class="summary-dot is-offline" />
-        <span class="summary-label">未连接终端</span>
-        <span class="summary-num">{{ students.length - onlineStudentCount }}</span>
-      </div>
-      <div v-if="lessonId" class="summary-item progress">
-        <span class="summary-label">已提交作业</span>
-        <span class="summary-num">{{ submittedStudentCount }}</span>
-      </div>
-      <div v-if="absentStudentCount > 0" class="summary-item absent">
-        <span class="summary-label">本节请假</span>
-        <span class="summary-num">{{ absentStudentCount }}</span>
-      </div>
-      <div class="summary-scale-hint">
-        <span>当前视图：每排 {{ columnsCount }} 人（{{ getScaleLabel() }}）</span>
+    <!-- 顶部状态栏：机位管理与全班看板横向融合 -->
+    <div class="classroom-top-banner">
+      <classroom-seat-panel
+        :lesson-id="lessonId"
+        :entry-year="entryYear"
+        :class-code="classCode"
+        :historical="historical"
+        @updated="updateSeatObservations"
+      />
+      <div v-if="students.length > 0" class="classroom-summary-bar">
+        <div class="summary-item total">
+          <span class="summary-label">全班</span>
+          <span class="summary-num">{{ students.length }}人</span>
+        </div>
+        <div class="summary-item online">
+          <span class="summary-dot is-online" />
+          <span class="summary-label">连接</span>
+          <span class="summary-num">{{ onlineStudentCount }}</span>
+        </div>
+        <div class="summary-item offline">
+          <span class="summary-dot is-offline" />
+          <span class="summary-label">未连</span>
+          <span class="summary-num">{{ students.length - onlineStudentCount }}</span>
+        </div>
+        <div v-if="lessonId" class="summary-item progress">
+          <span class="summary-label">已提交</span>
+          <span class="summary-num">{{ submittedStudentCount }}</span>
+        </div>
+        <div v-if="absentStudentCount > 0" class="summary-item absent">
+          <span class="summary-label">请假</span>
+          <span class="summary-num">{{ absentStudentCount }}</span>
+        </div>
       </div>
     </div>
 
@@ -216,115 +200,115 @@
                 @drop="drop(student)"
               >
                 <!-- 组长金色角标 -->
-                <div v-if="student.leaderStudentId === student.studentId" class="card-leader-ribbon" title="本组组长">
+                <div v-if="student.leaderStudentId === student.studentId" class="card-leader-ribbon" title="组长">
                   👑 组长
                 </div>
 
-                <!-- 卡片头部：状态灯、姓名学号、连接状态 -->
-                <div class="card-top-bar">
-                  <div class="student-identity">
-                    <span
-                      class="presence-beacon"
-                      :class="student.online ? 'beacon-online' : 'beacon-offline'"
-                      :title="student.online ? '终端已连接' : '未连接'"
-                    />
-                    <div class="name-box">
-                      <span class="student-no-badge">#{{ student.studentNo }}</span>
-                      <strong class="student-name" :title="student.studentName">{{ student.studentName }}</strong>
+                <!-- 默认常驻区：机位号、在线状态灯、姓名、IP与常驻备注 -->
+                <div class="card-main-visual">
+                  <div class="card-top-bar">
+                    <div class="student-identity">
+                      <span
+                        class="presence-beacon"
+                        :class="student.online ? 'beacon-online' : 'beacon-offline'"
+                        :title="student.online ? '终端已连接' : '未连接'"
+                      />
+                      <span class="seat-badge" :class="{ 'is-offline': !student.online }">
+                        {{ getStudentSeatName(student) }}
+                      </span>
+                      <strong class="student-name" :class="practicalNameClass(student)" :title="student.studentName">
+                        {{ student.studentName }}
+                      </strong>
                     </div>
+                    <span class="student-ip-text" :class="{ 'is-offline': !student.online }" :title="getStudentIpTitle(student)">
+                      {{ getStudentIpDisplay(student) }}
+                    </span>
                   </div>
-                  <el-tag
-                    size="small"
-                    :type="student.online ? 'success' : 'info'"
-                    effect="light"
-                    class="conn-status-tag"
-                  >
-                    {{ student.online ? '在线' : '离线' }}
-                  </el-tag>
-                </div>
 
-                <!-- 作答状态胶囊（课程模式下） -->
-                <div v-if="lessonId" class="card-task-capsule">
-                  <el-tag size="small" :type="taskTagType(student.taskState)" effect="plain" class="task-state-tag">
-                    {{ taskLabel(student.taskState) }}
-                  </el-tag>
-                  <span v-if="student.totalQuestionCount > 0" class="task-progress-text">
-                    {{ student.startedQuestionCount || 0 }}/{{ student.totalQuestionCount }} 题已开
-                  </span>
-                </div>
+                  <!-- 作答总状态胶囊 -->
+                  <div v-if="lessonId" class="card-task-capsule">
+                    <el-tag size="small" :type="taskTagType(student.taskState)" effect="plain" class="task-state-tag">
+                      {{ taskLabel(student.taskState) }}
+                    </el-tag>
+                    <span v-if="student.totalQuestionCount > 0" class="task-progress-text">
+                      {{ student.startedQuestionCount || 0 }}/{{ student.totalQuestionCount }} 题
+                    </span>
+                  </div>
 
-                <!-- 多维度成绩微指标矩阵 -->
-                <div class="card-metrics-matrix">
-                  <div v-if="hasTyping" class="metric-pill typing" title="打字成绩">
-                    <span class="pill-icon">⚡</span>
-                    <span class="pill-title">打字</span>
-                    <span class="pill-value">{{ scoreLabel(student.typing?.score) }}分</span>
-                    <span class="pill-sub">({{ scoreLabel(student.typing?.speed) }}字/分)</span>
-                  </div>
-                  <div v-if="hasTheory" class="metric-pill theory" title="理论成绩">
-                    <span class="pill-icon">📝</span>
-                    <span class="pill-title">理论</span>
-                    <span class="pill-value">{{ scoreLabel(student.theory?.score) }}分</span>
-                    <span class="pill-sub">({{ scoreLabel(student.theory?.accuracy) }}%)</span>
-                  </div>
-                  <div v-if="hasPractical" class="metric-pill practical" title="操作题成绩">
-                    <span class="pill-icon">💻</span>
-                    <span class="pill-title">操作</span>
-                    <span class="pill-value">{{ practicalShortLabel(student.practical) }}</span>
-                  </div>
-                  <div class="metric-pill performance" title="课堂表现分">
-                    <span class="pill-icon">⭐</span>
-                    <span class="pill-title">表现</span>
-                    <span class="pill-value" :class="{ 'has-score': student.performance?.score !== 0 }">
-                      {{ student.performance?.score > 0 ? `+${student.performance.score}` : (student.performance?.score || 0) }}分
+                  <!-- 【关键要求】：备注一开始就要显示的！常驻备注与机位异常标签 -->
+                  <div v-if="hasCardRemarks(student)" class="card-permanent-remarks">
+                    <span v-if="getSeatAlertText(student)" class="remark-pill is-seat-alert" :title="seatObservationTitle(student.studentId)">
+                      ⚠️ {{ getSeatAlertText(student) }}
+                    </span>
+                    <span v-if="student.remark" class="remark-pill is-student-note" :title="student.remark">
+                      📌 {{ student.remark }}
+                    </span>
+                    <span v-if="student.performance?.isAbsent" class="remark-pill is-absent-note">
+                      🏖️ 请假
                     </span>
                   </div>
                 </div>
 
-                <!-- 终端信息与备注 -->
-                <div class="card-meta-line">
-                  <span class="ip-address" :title="`终端 IP: ${student.connectionIp || '未连接'}`">
-                    IP: {{ student.connectionIp ? formatIp(student.connectionIp) : '未接入' }}
-                  </span>
-                  <span v-if="student.remark" class="student-remark" :title="student.remark">
-                    注: {{ student.remark }}
-                  </span>
-                </div>
+                <!-- 鼠标悬浮展开浮层（Hover 时秒现指标与快捷操作） -->
+                <div class="card-hover-overlay">
+                  <!-- 多维度成绩微指标矩阵 -->
+                  <div class="card-metrics-matrix">
+                    <div v-if="hasTyping" class="metric-pill typing" title="打字成绩">
+                      <span class="pill-icon">⚡</span>
+                      <span class="pill-title">打字</span>
+                      <span class="pill-value">{{ scoreLabel(student.typing?.score) }}分</span>
+                      <span class="pill-sub">({{ scoreLabel(student.typing?.speed) }}字/分)</span>
+                    </div>
+                    <div v-if="hasTheory" class="metric-pill theory" title="理论成绩">
+                      <span class="pill-icon">📝</span>
+                      <span class="pill-title">理论</span>
+                      <span class="pill-value">{{ scoreLabel(student.theory?.score) }}分</span>
+                      <span class="pill-sub">({{ scoreLabel(student.theory?.accuracy) }}%)</span>
+                    </div>
+                    <div v-if="hasPractical" class="metric-pill practical" title="操作题成绩">
+                      <span class="pill-icon">💻</span>
+                      <span class="pill-title">操作</span>
+                      <span class="pill-value">{{ practicalShortLabel(student.practical) }}</span>
+                    </div>
+                    <div class="metric-pill performance" title="课堂表现分">
+                      <span class="pill-icon">⭐</span>
+                      <span class="pill-title">表现</span>
+                      <span class="pill-value" :class="{ 'has-score': student.performance?.score !== 0 }">
+                        {{ student.performance?.score > 0 ? `+${student.performance.score}` : (student.performance?.score || 0) }}分
+                      </span>
+                    </div>
+                  </div>
 
-                <!-- 请假标记横条 -->
-                <div v-if="student.performance?.isAbsent" class="card-absent-banner">
-                  <span>🏖️ 本节课已请假</span>
-                </div>
-
-                <!-- 卡片底部快捷操作 -->
-                <div class="card-footer-actions">
-                  <el-button size="small" type="primary" plain class="action-mini-btn" @click="openPerformance(student)">
-                    课堂表现
-                  </el-button>
-                  <el-dropdown
-                    v-if="lessonId && !historical && (hasTheory || hasTyping)"
-                    trigger="click"
-                    @command="(cmd) => handleSingleStudentRedo(student, cmd)"
-                  >
-                    <el-button size="small" type="warning" plain class="action-mini-btn" :disabled="classRedoSaving">
-                      重做
+                  <!-- 卡片底部快捷操作（Hover 展现） -->
+                  <div class="card-footer-actions">
+                    <el-button size="small" type="primary" plain class="action-mini-btn" @click.stop="openPerformance(student)">
+                      表现
                     </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item v-if="hasTyping" command="typing">重新打字</el-dropdown-item>
-                        <el-dropdown-item v-if="hasTheory" command="theory">重做理论</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                  <el-button
-                    size="small"
-                    :type="student.performance?.isAbsent ? 'warning' : 'info'"
-                    plain
-                    class="action-mini-btn"
-                    @click="toggleAbsent(student)"
-                  >
-                    {{ student.performance?.isAbsent ? '取消请假' : '请假' }}
-                  </el-button>
+                    <el-dropdown
+                      v-if="lessonId && !historical && (hasTheory || hasTyping)"
+                      trigger="click"
+                      @command="(cmd) => handleSingleStudentRedo(student, cmd)"
+                    >
+                      <el-button size="small" type="warning" plain class="action-mini-btn" :disabled="classRedoSaving">
+                        重做 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item v-if="hasTyping" command="typing">重新打字</el-dropdown-item>
+                          <el-dropdown-item v-if="hasTheory" command="theory">重做理论</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                    <el-button
+                      size="small"
+                      :type="student.performance?.isAbsent ? 'warning' : 'info'"
+                      plain
+                      class="action-mini-btn"
+                      @click.stop="toggleAbsent(student)"
+                    >
+                      {{ student.performance?.isAbsent ? '销假' : '请假' }}
+                    </el-button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -335,138 +319,138 @@
       <!-- 模式二：普通全班流式展示 -->
       <template v-else>
         <div class="flex-fluid-grid">
-          <div
-            v-for="student in orderedStudents"
-            :key="student.studentId"
-            class="fluid-card-wrapper"
-            :style="cardFluidStyle"
-          >
             <div
-              class="student-card-item"
-              :class="[
-                student.online ? 'is-connected' : 'is-disconnected',
-                { 'is-leader': student.leaderStudentId === student.studentId },
-                { 'is-absent': student.performance?.isAbsent },
-                cardDensityClass
-              ]"
-              :draggable="layoutMode"
-              @dragstart="dragStart(student)"
-              @dragover.prevent
-              @drop="drop(student)"
+              v-for="student in orderedStudents"
+              :key="student.studentId"
+              class="fluid-card-wrapper"
+              :style="cardFluidStyle"
             >
-              <!-- 组长专属流金角标 -->
-              <div v-if="student.leaderStudentId === student.studentId" class="card-leader-ribbon" title="本班/本组组长">
-                👑 组长
-              </div>
+              <div
+                class="student-card-item"
+                :class="[
+                  student.online ? 'is-connected' : 'is-disconnected',
+                  { 'is-leader': student.leaderStudentId === student.studentId },
+                  { 'is-absent': student.performance?.isAbsent },
+                  cardDensityClass
+                ]"
+                :draggable="layoutMode"
+                @dragstart="dragStart(student)"
+                @dragover.prevent
+                @drop="drop(student)"
+              >
+                <!-- 组长金色角标 -->
+                <div v-if="student.leaderStudentId === student.studentId" class="card-leader-ribbon" title="组长">
+                  👑 组长
+                </div>
 
-              <!-- 卡片头部：状态灯、姓名学号、连接状态 -->
-              <div class="card-top-bar">
-                <div class="student-identity">
-                  <span
-                    class="presence-beacon"
-                    :class="student.online ? 'beacon-online' : 'beacon-offline'"
-                    :title="student.online ? '终端已连接' : '未连接'"
-                  />
-                  <div class="name-box">
-                    <span class="student-no-badge">#{{ student.studentNo }}</span>
-                    <strong class="student-name" :title="student.studentName">{{ student.studentName }}</strong>
+                <!-- 默认常驻区：机位号、在线状态灯、姓名、IP与常驻备注 -->
+                <div class="card-main-visual">
+                  <div class="card-top-bar">
+                    <div class="student-identity">
+                      <span
+                        class="presence-beacon"
+                        :class="student.online ? 'beacon-online' : 'beacon-offline'"
+                        :title="student.online ? '终端已连接' : '未连接'"
+                      />
+                      <span class="seat-badge" :class="{ 'is-offline': !student.online }">
+                        {{ getStudentSeatName(student) }}
+                      </span>
+                      <strong class="student-name" :class="practicalNameClass(student)" :title="student.studentName">
+                        {{ student.studentName }}
+                      </strong>
+                    </div>
+                    <span class="student-ip-text" :class="{ 'is-offline': !student.online }" :title="getStudentIpTitle(student)">
+                      {{ getStudentIpDisplay(student) }}
+                    </span>
+                  </div>
+
+                  <!-- 作答总状态胶囊 -->
+                  <div v-if="lessonId" class="card-task-capsule">
+                    <el-tag size="small" :type="taskTagType(student.taskState)" effect="plain" class="task-state-tag">
+                      {{ taskLabel(student.taskState) }}
+                    </el-tag>
+                    <span v-if="student.totalQuestionCount > 0" class="task-progress-text">
+                      {{ student.startedQuestionCount || 0 }}/{{ student.totalQuestionCount }} 题
+                    </span>
+                  </div>
+
+                  <!-- 【关键要求】：备注一开始就要显示的！常驻备注与机位异常标签 -->
+                  <div v-if="hasCardRemarks(student)" class="card-permanent-remarks">
+                    <span v-if="getSeatAlertText(student)" class="remark-pill is-seat-alert" :title="seatObservationTitle(student.studentId)">
+                      ⚠️ {{ getSeatAlertText(student) }}
+                    </span>
+                    <span v-if="student.remark" class="remark-pill is-student-note" :title="student.remark">
+                      📌 {{ student.remark }}
+                    </span>
+                    <span v-if="student.performance?.isAbsent" class="remark-pill is-absent-note">
+                      🏖️ 请假
+                    </span>
                   </div>
                 </div>
-                <el-tag
-                  size="small"
-                  :type="student.online ? 'success' : 'info'"
-                  effect="light"
-                  class="conn-status-tag"
-                >
-                  {{ student.online ? '在线' : '离线' }}
-                </el-tag>
-              </div>
 
-              <!-- 作答状态胶囊（课程模式下） -->
-              <div v-if="lessonId" class="card-task-capsule">
-                <el-tag size="small" :type="taskTagType(student.taskState)" effect="plain" class="task-state-tag">
-                  {{ taskLabel(student.taskState) }}
-                </el-tag>
-                <span v-if="student.totalQuestionCount > 0" class="task-progress-text">
-                  {{ student.startedQuestionCount || 0 }}/{{ student.totalQuestionCount }} 题已开
-                </span>
-              </div>
+                <!-- 鼠标悬浮展开浮层（Hover 时秒现指标与快捷操作） -->
+                <div class="card-hover-overlay">
+                  <!-- 多维度成绩微指标矩阵 -->
+                  <div class="card-metrics-matrix">
+                    <div v-if="hasTyping" class="metric-pill typing" title="打字成绩">
+                      <span class="pill-icon">⚡</span>
+                      <span class="pill-title">打字</span>
+                      <span class="pill-value">{{ scoreLabel(student.typing?.score) }}分</span>
+                      <span class="pill-sub">({{ scoreLabel(student.typing?.speed) }}字/分)</span>
+                    </div>
+                    <div v-if="hasTheory" class="metric-pill theory" title="理论成绩">
+                      <span class="pill-icon">📝</span>
+                      <span class="pill-title">理论</span>
+                      <span class="pill-value">{{ scoreLabel(student.theory?.score) }}分</span>
+                      <span class="pill-sub">({{ scoreLabel(student.theory?.accuracy) }}%)</span>
+                    </div>
+                    <div v-if="hasPractical" class="metric-pill practical" title="操作题成绩">
+                      <span class="pill-icon">💻</span>
+                      <span class="pill-title">操作</span>
+                      <span class="pill-value">{{ practicalShortLabel(student.practical) }}</span>
+                    </div>
+                    <div class="metric-pill performance" title="课堂表现分">
+                      <span class="pill-icon">⭐</span>
+                      <span class="pill-title">表现</span>
+                      <span class="pill-value" :class="{ 'has-score': student.performance?.score !== 0 }">
+                        {{ student.performance?.score > 0 ? `+${student.performance.score}` : (student.performance?.score || 0) }}分
+                      </span>
+                    </div>
+                  </div>
 
-              <!-- 多维度成绩微指标矩阵 -->
-              <div class="card-metrics-matrix">
-                <div v-if="hasTyping" class="metric-pill typing" title="打字成绩">
-                  <span class="pill-icon">⚡</span>
-                  <span class="pill-title">打字</span>
-                  <span class="pill-value">{{ scoreLabel(student.typing?.score) }}分</span>
-                  <span class="pill-sub">({{ scoreLabel(student.typing?.speed) }}字/分)</span>
+                  <!-- 卡片底部快捷操作（Hover 展现） -->
+                  <div class="card-footer-actions">
+                    <el-button size="small" type="primary" plain class="action-mini-btn" @click.stop="openPerformance(student)">
+                      表现
+                    </el-button>
+                    <el-dropdown
+                      v-if="lessonId && !historical && (hasTheory || hasTyping)"
+                      trigger="click"
+                      @command="(cmd) => handleSingleStudentRedo(student, cmd)"
+                    >
+                      <el-button size="small" type="warning" plain class="action-mini-btn" :disabled="classRedoSaving">
+                        重做 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item v-if="hasTyping" command="typing">重新打字</el-dropdown-item>
+                          <el-dropdown-item v-if="hasTheory" command="theory">重做理论</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                    <el-button
+                      size="small"
+                      :type="student.performance?.isAbsent ? 'warning' : 'info'"
+                      plain
+                      class="action-mini-btn"
+                      @click.stop="toggleAbsent(student)"
+                    >
+                      {{ student.performance?.isAbsent ? '销假' : '请假' }}
+                    </el-button>
+                  </div>
                 </div>
-                <div v-if="hasTheory" class="metric-pill theory" title="理论成绩">
-                  <span class="pill-icon">📝</span>
-                  <span class="pill-title">理论</span>
-                  <span class="pill-value">{{ scoreLabel(student.theory?.score) }}分</span>
-                  <span class="pill-sub">({{ scoreLabel(student.theory?.accuracy) }}%)</span>
-                </div>
-                <div v-if="hasPractical" class="metric-pill practical" title="操作题成绩">
-                  <span class="pill-icon">💻</span>
-                  <span class="pill-title">操作</span>
-                  <span class="pill-value">{{ practicalShortLabel(student.practical) }}</span>
-                </div>
-                <div class="metric-pill performance" title="课堂表现分">
-                  <span class="pill-icon">⭐</span>
-                  <span class="pill-title">表现</span>
-                  <span class="pill-value" :class="{ 'has-score': student.performance?.score !== 0 }">
-                    {{ student.performance?.score > 0 ? `+${student.performance.score}` : (student.performance?.score || 0) }}分
-                  </span>
-                </div>
-              </div>
-
-              <!-- 终端信息与备注 -->
-              <div class="card-meta-line">
-                <span class="ip-address" :title="`终端 IP: ${student.connectionIp || '未连接'}`">
-                  IP: {{ student.connectionIp ? formatIp(student.connectionIp) : '未接入' }}
-                </span>
-                <span v-if="student.remark" class="student-remark" :title="student.remark">
-                  注: {{ student.remark }}
-                </span>
-              </div>
-
-              <!-- 请假标记横条 -->
-              <div v-if="student.performance?.isAbsent" class="card-absent-banner">
-                <span>🏖️ 本节课已请假</span>
-              </div>
-
-              <!-- 卡片底部快捷操作 -->
-              <div class="card-footer-actions">
-                <el-button size="small" type="primary" plain class="action-mini-btn" @click="openPerformance(student)">
-                  课堂表现
-                </el-button>
-                <el-dropdown
-                  v-if="lessonId && !historical && (hasTheory || hasTyping)"
-                  trigger="click"
-                  @command="(cmd) => handleSingleStudentRedo(student, cmd)"
-                >
-                  <el-button size="small" type="warning" plain class="action-mini-btn" :disabled="classRedoSaving">
-                    重做
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item v-if="hasTyping" command="typing">重新打字</el-dropdown-item>
-                      <el-dropdown-item v-if="hasTheory" command="theory">重做理论</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-                <el-button
-                  size="small"
-                  :type="student.performance?.isAbsent ? 'warning' : 'info'"
-                  plain
-                  class="action-mini-btn"
-                  @click="toggleAbsent(student)"
-                >
-                  {{ student.performance?.isAbsent ? '取消请假' : '请假' }}
-                </el-button>
               </div>
             </div>
-          </div>
         </div>
       </template>
     </div>
@@ -711,7 +695,8 @@ import {
   Operation,
   ArrowDown,
   RefreshLeft,
-  DataAnalysis
+  DataAnalysis,
+  InfoFilled
 } from '@element-plus/icons-vue'
 import {
   getClassroomDesktop,
@@ -723,6 +708,65 @@ import {
 } from '@/api/business/classGrouping'
 import { savePerformance } from '@/api/business/classroomPerformance'
 import PerformanceScoreStepper from '@/components/PerformanceScoreStepper/index.vue'
+import ClassroomSeatPanel from '@/components/SeatHelper/ClassroomSeatPanel.vue'
+import { seatStateLabels, displaySeatName, classroomIp } from '@/utils/seatHelper'
+const seatObservations = ref({})
+function updateSeatObservations(rows) { seatObservations.value = Object.fromEntries(rows.map(row => [row.studentId, row])) }
+function seatObservationLabel(id) { const row = seatObservations.value[id]; return row ? `${displaySeatName(row.seatName) || '机位未命名'} · ${seatStateLabels[row.state] || ''}` : '' }
+function seatObservationTitle(id) { const row = seatObservations.value[id]; return row ? `${row.roomName || ''} ${displaySeatName(row.seatName) || '机位未命名'}；内网IP：${row.localIp || '未获取'}；常用机位：${displaySeatName(row.expectedSeat) || '未命名或未确认'}` : '' }
+
+// 课堂控制综合下拉菜单命令分发
+function handleClassroomCommand(cmd) {
+  if (cmd === 'typing' || cmd === 'theory') {
+    handleClassRedoCommand(cmd)
+  } else if (cmd === 'layout') {
+    layoutMode.value = !layoutMode.value
+  } else if (cmd === 'group') {
+    openGroupDialog()
+  }
+}
+
+// 获取学生机位显示名称
+function getStudentSeatName(student) {
+  const obs = seatObservations.value[student.studentId]
+  if (displaySeatName(obs?.seatName)) return displaySeatName(obs.seatName)
+  if (displaySeatName(obs?.expectedSeat)) return displaySeatName(obs.expectedSeat)
+  return `#${student.studentNo || ''}`
+}
+
+// 内网地址优先，降级连接地址时明确标注来源。
+function getStudentIpDisplay(student) {
+  const ip = classroomIp(student, seatObservations.value[student.studentId])
+  if (ip.value) return `${ip.source}：${formatIp(ip.value)}`
+  return student.online ? '已连入' : '离线'
+}
+
+function getStudentIpTitle(student) {
+  const obs = seatObservations.value[student.studentId]
+  const ip = classroomIp(student, obs)
+  const seat = displaySeatName(obs?.seatName) || displaySeatName(obs?.expectedSeat) || '未指定机位'
+  const state = obs ? (seatStateLabels[obs.state] || '') : ''
+  return `机位: ${seat} | ${ip.source}: ${ip.value || '未获取'} | 状态: ${state || (student.online ? '在线' : '离线')}`
+}
+
+// 判断是否有常驻需显示的备注
+function hasCardRemarks(student) {
+  if (student.remark) return true
+  if (student.performance?.isAbsent) return true
+  const obs = seatObservations.value[student.studentId]
+  if (obs && (obs.state === 'CHANGED' || obs.state === 'OTHER_ROOM' || obs.state === 'SHARED_DEVICE')) return true
+  return false
+}
+
+// 获取机位异常提示文本
+function getSeatAlertText(student) {
+  const obs = seatObservations.value[student.studentId]
+  if (!obs) return ''
+  if (obs.state === 'CHANGED') return `换座(${displaySeatName(obs.seatName) || '新位'})`
+  if (obs.state === 'OTHER_ROOM') return `跨机房(${obs.roomName || ''})`
+  if (obs.state === 'SHARED_DEVICE') return '机位冲突'
+  return ''
+}
 import { setStudentAbsent, getLessonGate, setLessonGate, getTheoryRedoContext, resetTheory, resetTyping } from '@/api/business/score'
 
 const route = useRoute()
@@ -866,15 +910,20 @@ function handleColumnsChange(val) {
 }
 
 let gateRequestVersion = 0
+let desktopRequestVersion = 0
+let desktopDisposed = false
+let desktopPendingKey = null
+const desktopKey = () => JSON.stringify([lessonId, entryYear, classCode])
 
 async function fetchLessonGateState() {
   if (!lessonId || !entryYear || !classCode) return
   if (gateSaving.value) return
   const requestVersion = ++gateRequestVersion
+  const key = desktopKey()
   try {
     const res = await getLessonGate(lessonId, entryYear, classCode)
     // 保存前发出的旧请求不能覆盖教师刚切换的状态；接口字段默认位于顶层。
-    if (gateSaving.value || requestVersion !== gateRequestVersion) return
+    if (desktopDisposed || key !== desktopKey() || gateSaving.value || requestVersion !== gateRequestVersion) return
     const data = res.data || res
     gateTheoryOpen.value = Boolean(data.theoryOpen)
     gatePracticalOpen.value = Boolean(data.practicalOpen)
@@ -889,17 +938,20 @@ async function handleGateToggle(kind, open) {
     return
   }
   if (!lessonId || !entryYear || !classCode) return
-  ++gateRequestVersion
+  const requestVersion = ++gateRequestVersion
+  const key = desktopKey()
   gateSaving.value = kind
   try {
     await setLessonGate(lessonId, entryYear, classCode, kind, open)
+    if (desktopDisposed || key !== desktopKey() || requestVersion !== gateRequestVersion) return
     ElMessage.success(`${kind === 'theory' ? '理论测试题' : '操作题'}已${open ? '开启并向学生开放' : '关闭'}`)
   } catch (e) {
+    if (desktopDisposed || key !== desktopKey() || requestVersion !== gateRequestVersion) return
     if (kind === 'theory') gateTheoryOpen.value = !open
     if (kind === 'practical') gatePracticalOpen.value = !open
     ElMessage.error(e?.msg || '设置题目开放状态失败')
   } finally {
-    gateSaving.value = ''
+    if (key === desktopKey() && requestVersion === gateRequestVersion) gateSaving.value = ''
   }
 }
 
@@ -968,7 +1020,11 @@ function loadDesktop(silent = false) {
     error.value = '缺少班级参数'
     return
   }
-  if (loading.value) return
+  const key = desktopKey()
+  if (silent && desktopPendingKey === key) return
+  const ticket = ++desktopRequestVersion
+  desktopPendingKey = key
+  const active = () => !desktopDisposed && ticket === desktopRequestVersion && key === desktopKey()
   if (!silent) loading.value = true
   error.value = ''
   const request = lessonId
@@ -977,6 +1033,7 @@ function loadDesktop(silent = false) {
 
   return request
     .then(res => {
+      if (!active()) return
       historical.value = !!res.data?.historical
       students.value = res.data?.students || []
       layout.value = res.data?.layout || null
@@ -999,10 +1056,10 @@ function loadDesktop(silent = false) {
       }
     })
     .catch(e => {
-      error.value = e?.msg || '课堂大屏加载失败'
+      if (active()) error.value = e?.msg || '课堂大屏加载失败'
     })
     .finally(() => {
-      loading.value = false
+      if (active()) { loading.value = false; desktopPendingKey = null }
     })
 }
 
@@ -1042,7 +1099,9 @@ function saveLayout() {
     }))
   }).then(res => {
     layout.value = res.data?.layout || layout.value
-    students.value = res.data?.students || students.value
+    // 布局接口只返回座位字段，保留概览已经加载的任务、成绩与在线状态。
+    const previous = new Map(students.value.map(student => [String(student.studentId), student]))
+    students.value = res.data?.students?.map(student => ({ ...previous.get(String(student.studentId)), ...student })) || students.value
     layoutMode.value = false
     ElMessage.success(`布局与 ${cols} 列设置已保存`)
   }).catch(() => {
@@ -1061,6 +1120,13 @@ function formatIp(ip) {
   // 简写过长的 IPv6/本地回环
   if (ip === '127.0.0.1' || ip === '0:0:0:0:0:0:0:1') return '本机'
   return ip.replace('::ffff:', '')
+}
+
+function practicalNameClass(student) {
+  if (!hasPractical.value) return ''
+  if (student.taskState === 'RETURNED') return 'practical-returned'
+  if (student.practical?.submitted) return 'practical-submitted'
+  return ''
 }
 
 function normalizeGroups(groups, members = []) {
@@ -1270,8 +1336,23 @@ onMounted(() => {
 watch(() => [route.query.lessonId, route.query.lessonTitle, route.query.entryYear, route.query.classCode], (values, oldValues) => {
   if (JSON.stringify(values) === JSON.stringify(oldValues)) return
   const nextRaw = String(values[0] || '').trim()
-  if (!/^\d+$/.test(nextRaw) || Number(nextRaw) <= 0) return
-  lessonId = nextRaw
+  ++desktopRequestVersion
+  ++gateRequestVersion
+  desktopPendingKey = null
+  students.value = []
+  layout.value = null
+  dragging.value = null
+  seatObservations.value = {}
+  groupDialogVisible.value = false
+  performanceDialogVisible.value = false
+  performanceStudent.value = null
+  layoutMode.value = false
+  historical.value = true
+  hasTyping.value = hasTheory.value = hasPractical.value = false
+  gateTheoryOpen.value = gatePracticalOpen.value = false
+  gateSaving.value = ''
+  loading.value = false
+  lessonId = /^\d+$/.test(nextRaw) && Number(nextRaw) > 0 ? nextRaw : ''
   lessonTitle = String(values[1] || '')
   entryYear = String(values[2] || '')
   classCode = String(values[3] || '')
@@ -1279,6 +1360,9 @@ watch(() => [route.query.lessonId, route.query.lessonTitle, route.query.entryYea
 })
 
 onBeforeUnmount(() => {
+  desktopDisposed = true
+  ++desktopRequestVersion
+  ++gateRequestVersion
   window.clearInterval(presenceRefreshTimer)
 })
 </script>
@@ -1560,13 +1644,17 @@ onBeforeUnmount(() => {
 /* 卡片顶部栏 */
 .card-top-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
   justify-content: space-between;
   margin-bottom: 8px;
   padding-right: 18px; /* 留出组长角标间距 */
 }
 
 .student-identity {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1622,12 +1710,15 @@ onBeforeUnmount(() => {
 }
 
 .student-name {
+  flex-shrink: 0;
   font-size: 14px;
   color: #1d2129;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
 }
+.student-name.practical-submitted { color: #16753b; }
+.student-name.practical-returned { color: #b42318; }
 
 .conn-status-tag {
   flex-shrink: 0;
@@ -1768,6 +1859,7 @@ onBeforeUnmount(() => {
   padding: 16px 18px;
 }
 .density-comfortable .student-name {
+  flex-shrink: 0;
   font-size: 16px;
 }
 .density-comfortable .student-no-badge {
@@ -1788,6 +1880,7 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
 }
 .density-compact .student-name {
+  flex-shrink: 0;
   font-size: 12px;
 }
 .density-compact .student-no-badge {
@@ -2266,3 +2359,141 @@ onBeforeUnmount(() => {
   margin-right: 8px;
 }
 </style>
+
+
+/* 课堂顶部状态栏：融合机位助手与全班看板 */
+.classroom-top-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.title-tip-icon {
+  font-size: 15px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.title-tip-icon:hover {
+  color: #0284c7;
+}
+
+/* 极简卡片视觉与常驻备注 */
+.card-main-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seat-badge {
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.seat-badge.is-offline {
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.student-ip-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.student-ip-text.is-offline {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+/* 【关键要求】：备注一开始就要显示的常驻标签 */
+.card-permanent-remarks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.remark-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.remark-pill.is-seat-alert {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  font-weight: 600;
+}
+
+.remark-pill.is-student-note {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  font-weight: 500;
+}
+
+.remark-pill.is-absent-note {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+/* 鼠标悬浮展开浮层（Hover 时顺滑展开，平常隐藏零噪音） */
+.card-hover-overlay {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.22s ease, max-height 0.28s ease, transform 0.22s ease, margin 0.2s ease;
+}
+
+.student-card-item:hover .card-hover-overlay {
+  opacity: 1;
+  max-height: 140px;
+  overflow: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  margin-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 8px;
+}
+
+.student-card-item {
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+.student-card-item:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: #93c5fd;
+  transform: translateY(-2px);
+  z-index: 10;
+}

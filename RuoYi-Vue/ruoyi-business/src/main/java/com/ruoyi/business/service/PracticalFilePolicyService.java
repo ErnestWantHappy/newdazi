@@ -32,7 +32,7 @@ public class PracticalFilePolicyService
 
     private static final Set<String> SUPPORTED_EXTENSIONS = Collections.unmodifiableSet(
             new LinkedHashSet<String>(Arrays.asList(
-                    "doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png")));
+                    "doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "zip", "rar", "7z")));
 
     private static final Set<String> IMAGE_EXTENSIONS = Collections.unmodifiableSet(
             new HashSet<String>(Arrays.asList("jpg", "jpeg", "png")));
@@ -54,9 +54,14 @@ public class PracticalFilePolicyService
         }
 
         String originalFileName = leafFileName(file.getOriginalFilename());
-        if (StringUtils.isBlank(originalFileName) || originalFileName.length() > 255)
+        if (StringUtils.isBlank(originalFileName))
         {
-            throw new ServiceException("文件名为空或过长");
+            throw new ServiceException("文件名不能为空");
+        }
+        // 与落盘工具使用同一限制，提前给出可操作提示，避免落盘异常被包装成系统繁忙。
+        if (file.getOriginalFilename().length() > FileUploadUtils.DEFAULT_FILE_NAME_LENGTH)
+        {
+            throw new ServiceException("文件名不能超过" + FileUploadUtils.DEFAULT_FILE_NAME_LENGTH + "个字符（含扩展名），请缩短文件名后重新上传");
         }
         String extension = FilenameUtils.getExtension(originalFileName).toLowerCase(Locale.ROOT);
         Set<String> questionAllowed = parseAllowedExtensions(allowedExtensions);
@@ -125,6 +130,22 @@ public class PracticalFilePolicyService
     {
         try
         {
+            if ("txt".equals(extension) || "html".equals(extension) || "htm".equals(extension)) {
+                if (file.getSize() > PracticalTextCodec.MAX_BYTES) throw new ServiceException("TXT/HTML 文件不能超过2 MiB");
+                PracticalTextCodec.decode(file.getBytes());
+                return;
+            }
+            if ("zip".equals(extension)) {
+                byte[] header = new byte[4];
+                try (InputStream input = file.getInputStream()) {
+                    if (input.read(header) != 4 || header[0] != 'P' || header[1] != 'K'
+                            || !((header[2] == 3 && header[3] == 4) || (header[2] == 5 && header[3] == 6)))
+                        throw new ServiceException("压缩包内容与扩展名不匹配");
+                }
+                return;
+            }
+            if ("rar".equals(extension)) { requirePrefix(file, new byte[] {'R','a','r','!',0x1a,7}); return; }
+            if ("7z".equals(extension)) { requirePrefix(file, new byte[] {0x37,0x7a,(byte)0xbc,(byte)0xaf,0x27,0x1c}); return; }
             if ("pdf".equals(extension))
             {
                 requirePrefix(file, new byte[] { '%', 'P', 'D', 'F', '-' });
@@ -256,6 +277,9 @@ public class PracticalFilePolicyService
     {
         if (IMAGE_EXTENSIONS.contains(extension)) return "IMAGE";
         if ("pdf".equals(extension)) return "PDF";
+        if ("txt".equals(extension)) return "TEXT";
+        if ("html".equals(extension) || "htm".equals(extension)) return "HTML";
+        if ("zip".equals(extension) || "rar".equals(extension) || "7z".equals(extension)) return "ARCHIVE";
         return "OFFICE";
     }
 
@@ -280,6 +304,12 @@ public class PracticalFilePolicyService
         result.put("jpg", mimeSet("image/jpeg", "image/jpg"));
         result.put("jpeg", mimeSet("image/jpeg", "image/jpg"));
         result.put("png", mimeSet("image/png"));
+        result.put("txt", mimeSet("text/plain", "application/octet-stream"));
+        result.put("html", mimeSet("text/html", "text/plain", "application/octet-stream"));
+        result.put("htm", result.get("html"));
+        result.put("zip", mimeSet("application/zip", "application/x-zip-compressed", "application/octet-stream"));
+        result.put("rar", mimeSet("application/vnd.rar", "application/x-rar-compressed", "application/octet-stream"));
+        result.put("7z", mimeSet("application/x-7z-compressed", "application/octet-stream"));
         return Collections.unmodifiableMap(result);
     }
 

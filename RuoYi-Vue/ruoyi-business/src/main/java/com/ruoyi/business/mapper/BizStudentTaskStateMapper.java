@@ -13,6 +13,8 @@ public interface BizStudentTaskStateMapper
     List<BizStudentTaskState> selectStudentReturnedStates(@Param("studentId") Long studentId);
     int upsert(BizStudentTaskState state);
 
+    int withdrawSubmission(BizStudentTaskState state);
+
     BizStudentTaskState selectOneForUpdate(@Param("lessonId") Long lessonId,
                                           @Param("questionId") Long questionId,
                                           @Param("studentId") Long studentId);

@@ -45,6 +45,7 @@ public class PracticalAiSuggestionApplyService
     @Autowired private ObjectMapper objectMapper;
     @Autowired private FlowchartMapper flowchartMapper;
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
+    @Autowired private ClassroomTaskStateService taskStateService;
 
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> apply(Long jobId, Long teacherUserId, Long deptId, String applyMode)
@@ -83,6 +84,12 @@ public class PracticalAiSuggestionApplyService
                 aiMapper.updateApplyStatus(result.getResultId(), "SKIPPED_MANUAL_GRADE", null, null);
                 continue;
             }
+            if (taskStateService.isReturnedForUpdate(answer.getStudentId(), answer.getLessonId(), answer.getQuestionId())) {
+                skippedVersion++;
+                aiMapper.updateApplyStatus(result.getResultId(), "SKIPPED_RETURNED", null, null);
+                continue;
+            }
+            boolean scoreWritten = false;
             try
             {
                 if (flowchart) {
@@ -97,6 +104,8 @@ public class PracticalAiSuggestionApplyService
                     List<BizScoringDetail> oldDetails = detailMapper.selectDetailsByAnswerId(answer.getAnswerId());
                     deadlineService.assertCanGrade(answer.getAnswerId());
                     answerMapper.updateScore(answer.getAnswerId(), result.getSuggestedScore().intValue());
+                    scoreWritten = true;
+                    taskStateService.markGradedInTransaction(answer);
                     detailMapper.deleteBizScoringDetailByAnswerId(answer.getAnswerId());
                     PracticalAiApplyAudit audit = buildAudit(job, result, teacherUserId, applyMode,
                             oldScore, result.getSuggestedScore().intValue(), oldDetails,
@@ -119,6 +128,8 @@ public class PracticalAiSuggestionApplyService
                 Integer oldScore = answer.getScore();
                 List<BizScoringDetail> oldDetails = detailMapper.selectDetailsByAnswerId(answer.getAnswerId());
                 answerMapper.updateScore(answer.getAnswerId(), finalScore);
+                scoreWritten = true;
+                taskStateService.markGradedInTransaction(answer);
                 detailMapper.deleteBizScoringDetailByAnswerId(answer.getAnswerId());
                 for (BizScoringDetail detail : details)
                 {
@@ -135,6 +146,8 @@ public class PracticalAiSuggestionApplyService
             }
             catch (ServiceException e)
             {
+                // 已进入成绩写入后不能吞掉失败；由外层事务回滚，避免“采用失败”却改了正式分数。
+                if (scoreWritten) throw e;
                 failed++;
                 aiMapper.updateApplyStatus(result.getResultId(), "APPLY_FAILED", null, null);
             }

@@ -18,6 +18,12 @@ public class FlowchartSubmission {
     private BigDecimal suggestedScore;
     private Long answerId;
     private Date submitTime;
+    private Integer scoreSnapshot;
+    private String scoringDetailsJson;
+    public Integer getScoreSnapshot() { return scoreSnapshot; }
+    public void setScoreSnapshot(Integer value) { scoreSnapshot = value; }
+    public String getScoringDetailsJson() { return scoringDetailsJson; }
+    public void setScoringDetailsJson(String value) { scoringDetailsJson = value; }
 
     public Long getSubmissionId() { return submissionId; }
     public void setSubmissionId(Long submissionId) { this.submissionId = submissionId; }
@@ -52,7 +58,7 @@ public class FlowchartSubmission {
     public FlowchartSubmission toStudentView() {
         this.rulesSnapshotJson = null;
         this.checkResultJson = null;
+        this.scoringDetailsJson = null;
         return this;
     }
 }
-

@@ -7,6 +7,9 @@
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue'
 import { AppMain } from './components'
+import { provideStudentSeatSession } from '@/components/SeatHelper/studentSession'
+
+provideStudentSeatSession()
 
 let socket
 let heartbeatTimer

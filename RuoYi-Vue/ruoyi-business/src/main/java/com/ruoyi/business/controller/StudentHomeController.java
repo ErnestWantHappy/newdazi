@@ -469,7 +469,7 @@ public class StudentHomeController extends BaseController
         {
             throw new ServiceException("题目不存在或不是操作题");
         }
-        assertPracticalOpen(student, loginUser.getDeptId(), lessonId);
+        assertPracticalOpen(student, loginUser.getDeptId(), lessonId, questionId);
 
         PracticalUploadTicket ticket = practicalArtifactService.stageStudentFile(
                 student.getStudentId(), lessonId, question, file);
@@ -506,12 +506,10 @@ public class StudentHomeController extends BaseController
         }
         BizLessonQuestionDetailVo question = findPracticalQuestion(
                 request.getLessonId(), request.getQuestionId());
-        assertPracticalOpen(student, loginUser.getDeptId(), request.getLessonId());
+        assertPracticalOpen(student, loginUser.getDeptId(), request.getLessonId(), request.getQuestionId());
         PracticalArtifactVo result = practicalArtifactService.submitLessonArtifact(
                 student.getStudentId(), loginUser.getUserId(), question,
                 request.getLessonId(), request.getExpectedVersionId(), request.getUploadTokens());
-        classroomTaskStateService.markSafely(student, student.getDeptId(), request.getLessonId(),
-                request.getQuestionId(), ClassroomTaskStateService.SUBMITTED);
         triggerPracticalDeadlineCheck(
                 request.getLessonId(), loginUser.getDeptId(), student.getEntryYear(), student.getClassCode());
         return AjaxResult.success("作品提交成功", result);
@@ -720,40 +718,8 @@ public class StudentHomeController extends BaseController
             }
             
             if ("practical".equals(question.getQuestionType())) {
-                // 操作题：保存文件路径，异步转换为PDF
-                if (studentAnswer != null && !studentAnswer.trim().isEmpty()) {
-                    validatePracticalAnswerPath(studentId, lessonId, questionId, studentAnswer);
-                    String lowerCaseAnswer = studentAnswer.toLowerCase();
-                    answer.setPreviewRetryCount(0);
-                    answer.setPreviewLastRetryTime(null);
-                    // 检查是否为docx文件，标记为待转换
-                    if (lowerCaseAnswer.endsWith(".docx") || lowerCaseAnswer.endsWith(".doc")) {
-                        answer.setPreviewStatus("pending");
-                        answer.setPreviewPath(null);
-                        answer.setPreviewErrorMessage(null);
-                    } else if (lowerCaseAnswer.endsWith(".pdf")) {
-                        // PDF 可直接预览，无需转换
-                        answer.setPreviewStatus("success");
-                        answer.setPreviewPath(studentAnswer);
-                        answer.setPreviewErrorMessage(null);
-                    } else {
-                        // 其他文件暂不支持在线预览，保留原文件下载即可
-                        answer.setPreviewStatus("failed");
-                        answer.setPreviewPath(null);
-                        answer.setPreviewErrorMessage("不支持在线预览的文件类型");
-                        log.warn("【操作题】暂不支持在线预览的文件类型，lessonId={}, questionId={}, answer={}",
-                                lessonId, questionId, studentAnswer);
-                    }
-                } else {
-                    answer.setPreviewStatus(null);
-                    answer.setPreviewPath(null);
-                    answer.setPreviewRetryCount(0);
-                    answer.setPreviewLastRetryTime(null);
-                    answer.setPreviewErrorMessage(null);
-                }
-                // 操作题不自动评分，score必须为null
-                answer.setIsCorrect(false); // 均视为未判
-                answer.setScore(null);
+                // 文件和画程必须经过不可变版本入口，旧的路径交卷不能绕过评分锁定。
+                return AjaxResult.error("请使用操作题作品提交入口更新作业");
             } else {
                 answer.setIsCorrect(isCorrect);
                 answer.setScore(score);
@@ -925,13 +891,15 @@ public class StudentHomeController extends BaseController
         return lessonId.equals(currentLessonId) ? null : "该课程已结束，仅能提交当前课程的作业";
     }
 
-    private void assertPracticalOpen(BizStudent student, Long deptId, Long lessonId)
+    private void assertPracticalOpen(BizStudent student, Long deptId, Long lessonId, Long questionId)
     {
         BizLessonAssignment query = new BizLessonAssignment();
         query.setEntryYear(student.getEntryYear()); query.setClassCode(student.getClassCode()); query.setDeptId(deptId);
         List<BizLessonAssignment> rows = lessonAssignmentMapper.selectBizLessonAssignmentList(query);
         BizLessonAssignment current = rows == null || rows.isEmpty() ? null : rows.get(0);
-        if (current == null || !lessonId.equals(current.getLessonId()) || !Integer.valueOf(1).equals(current.getPracticalOpen()))
+        if (current == null || !lessonId.equals(current.getLessonId())
+                || (!Integer.valueOf(1).equals(current.getPracticalOpen())
+                    && !classroomTaskStateService.isReturned(student.getStudentId(), lessonId, questionId)))
             throw new ServiceException("本课操作题暂未开放");
     }
 

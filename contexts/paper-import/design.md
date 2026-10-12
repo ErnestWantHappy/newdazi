@@ -1,5 +1,9 @@
 # 方案 A 实现设计
 
+## 2026-10-02 个人反馈发布快照（本机未发布）
+
+`StudentFeedbackService` 以登录身份读取本人作答/正式分项；教师对有权且未陈旧的报告 publish，锁任务并对输入、报告和排序个人证据计算内容指纹。新增 publication/snapshot 两表，`(report_id,content_hash)` 唯一、`(publication_id,student_id)` 主键；同内容幂等，结果更新须新发布，旧 JSON 不改。仅个人 DTO 下发，没有整班报告权限；不改变诊断生成或整班 PDF 确认。迁移和实际验收见 [设计](../classroom-experience-20261002/design.md)、[verification.md](../classroom-experience-20261002/verification.md)。
+
 ## 2026-09-20 V3.4与整班分段
 
 `insight-v3.4.0`：原答以评分快照ID/评分项ID/作答位标签建立sourceKey，试卷Part.sourceKeys映射到实际原答；referenceStatus为CLEAR/DISPUTED/UNKNOWN，说明文字不再作为非空即争议的判断。无效原答、重复映射、页码越界保留不确定；成绩继续作为独立背景。

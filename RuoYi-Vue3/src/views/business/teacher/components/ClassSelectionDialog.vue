@@ -21,10 +21,10 @@
           :class="getBtnClass(cls)"
         >
           <span class="class-name">{{ cls.classCode }}班</span>
-          <template v-if="mode === 'score'">
+          <template v-if="showScoreStats">
             <span v-if="statsLoading && !cls.hasData" class="badge-loading">统计中...</span>
             <span v-else-if="cls.scoreReadyCount > 0" class="badge-graded">{{ cls.scoreReadyCount }}/{{ cls.totalStudents || 0 }}有成绩</span>
-            <span v-else class="badge-none">暂无成绩</span>
+            <span v-else class="badge-none">{{ statsError ? '统计暂不可用' : '暂无成绩' }}</span>
           </template>
           <template v-else>
             <span v-if="cls.hasData" class="grading-status-text" :class="gradingStatusClass(cls)">
@@ -35,13 +35,13 @@
       </div>
     </div>
     <div v-if="!loading && classes.length === 0" class="empty-tip">
-      暂无关联班级
+      {{ statsError ? '班级加载失败，请关闭弹窗后重试' : '暂无关联班级' }}
     </div>
-    <div v-if="mode === 'score' && statsLoading && classes.length > 0" class="stats-tip">
-      正在加载成绩统计，可先选择班级查看成绩
+    <div v-if="showScoreStats && statsLoading && classes.length > 0" class="stats-tip">
+      正在加载成绩统计，可先选择班级{{ selectionAction }}
     </div>
-    <div v-if="mode === 'score' && statsError" class="stats-tip error">
-      成绩统计暂时加载失败，可直接选择班级查看成绩
+    <div v-if="showScoreStats && statsError" class="stats-tip error">
+      成绩统计暂时加载失败，请关闭弹窗后重试
     </div>
   </el-dialog>
 </template>
@@ -57,7 +57,10 @@ const statsError = ref(false);
 const classes = ref([]);
 const resolvePromise = ref(null);
 const mode = ref('grading');
-const dialogTitle = computed(() => mode.value === 'score' ? '请选择班级查看成绩' : '请选择班级');
+// 课堂入口展示整课成绩人数，只有批改入口使用操作题提交与期限状态。
+const showScoreStats = computed(() => mode.value === 'score' || mode.value === 'classroom');
+const selectionAction = computed(() => mode.value === 'classroom' ? '进入课堂' : '查看成绩');
+const dialogTitle = computed(() => showScoreStats.value ? `请选择班级${selectionAction.value}` : '请选择班级');
 let requestSeq = 0;
 
 /**
@@ -100,13 +103,13 @@ function open(simpleClassList, lessonId = null, openMode = 'grading') {
       })
       .catch(() => {
         if (requestId !== requestSeq) return;
-        statsError.value = shouldShowSimpleFirst;
+        statsError.value = true;
       })
       .finally(() => {
         if (requestId !== requestSeq) return;
         loading.value = false;
         statsLoading.value = false;
-        if (shouldShowSimpleFirst) {
+        if (shouldShowSimpleFirst && !statsError.value) {
           classes.value = classes.value.map(cls => ({ ...cls, hasData: true }));
         }
       });
@@ -187,7 +190,7 @@ function handleClose() {
 
 function getBtnClass(cls) {
   if (!cls.hasData) return '';
-  if (mode.value === 'score') {
+  if (showScoreStats.value) {
     if (cls.scoreReadyCount > 0 && cls.scoreReadyCount >= (cls.totalStudents || 0)) return 'btn-all-done';
     if (cls.scoreReadyCount > 0) return 'btn-action-needed';
     return 'btn-no-data';

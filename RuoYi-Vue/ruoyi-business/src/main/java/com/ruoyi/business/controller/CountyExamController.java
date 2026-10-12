@@ -280,7 +280,7 @@ public class CountyExamController extends BaseController {
         String scopedUploadPath = RuoYiConfig.getUploadPath() + "/county-exam/" + examId
                 + "/" + questionId + "/" + UUID.randomUUID();
         String fileName = FileUploadUtils.upload(
-                scopedUploadPath, file, MimeTypeUtils.DEFAULT_ALLOWED_EXTENSION, true);
+                scopedUploadPath, file, new String[] { "doc", "docx", "ppt", "pptx", "xls", "xlsx", "pdf", "jpg", "jpeg", "png" }, true);
         redisCache.setCacheObject("student:county-exam-upload-owner:" + fileName, studentId, 60,
                 java.util.concurrent.TimeUnit.MINUTES);
         AjaxResult ajax = AjaxResult.success();

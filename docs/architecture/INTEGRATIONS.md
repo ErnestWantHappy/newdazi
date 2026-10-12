@@ -1,5 +1,50 @@
 # 外部协议与实时链路
 
+> 当前正式1.30.27（2026-10-05）：客户端0.2.0学生直接运行自动读取IP，原网页登录确定学校，教师设置名称并确认。正式配对/DPAPI、重复关联、撤销及98秒Python续期通过；下面较早记录为历史。见 [自动关联验收](../../contexts/classroom-experience-20261002/seat-helper-auto-verification-20261005.md)。
+
+> 2026-10-03正式1.30.26：用户要求HTTP可用，助手全局及61校已开启；客户端0.1.2与服务端允许HTTP/HTTPS根地址，注册码/设备/会话/长期基准规则保留。网页30秒续期不依赖首页，正式Python页面超过98秒仍关联；撤销/未安装/学校关闭不影响正常教学。HTTP不加密，按学校可信网络使用；机房自启/还原仍待现场。见 [当前事实](../../contexts/PROJECT_CORE.md) 与 [助手验收](../../contexts/classroom-experience-20261002/seat-helper-release-verification-20261003.md)，下面默认关闭为历史阶段。
+
+> 2026-10-03正式1.30.24已上线（v4.02），先前本机候选描述转为历史；四份课堂SQL及厂商密钥依赖已迁移，正式API13组/浏览器9组通过。118条历史状态未治理，助手保持关闭、机房待验。见 [正式验收](../../contexts/classroom-experience-20261002/release-verification-20261003.md)。
+
+> 2026-10-03 v4.01本机修复候选：学生布局承担30秒网页机位续期（服务端90秒TTL不变）；身份变化/卸载终止旧轮询。注册响应添加公开platformUrl；客户端0.1.1-pilot使用独立公开根地址缓存降级，不含设备密钥或关联token。接口异常/损坏配置7项通过，真实Win10/极域/还原卡仍待验。 证据与限制见 [修复验收](../../contexts/classroom-experience-20261002/repair-verification-20261003.md)，未正式发布。
+
+## Windows机位助手（2026-10-05自动关联）
+
+```mermaid
+sequenceDiagram
+    participant Admin as 学校管理员
+    participant Client as Windows 助手
+    participant API as 原平台 API
+    participant Browser as 原浏览器
+    participant Teacher as 教师大屏
+    Admin->>API: 开启学校、配置公开平台根地址
+    Browser->>API: 学生鉴权下载EXE
+    API-->>Browser: EXE附带公开根地址，无账号或密钥
+    Browser->>Client: 学生直接运行，无配置表单
+    Client->>API: 机器指纹、内网IP、独立随机轮询证明
+    API-->>Client: 五分钟单次配对链接
+    Client->>Browser: 打开原网页登录入口并及时清片段
+    Browser->>API: 已登录学生消费链接，学校取账号归属
+    API->>API: 学校锁内复用有效设备，提交后发布结果
+    Client->>API: 使用独立证明领取结果
+    API-->>Client: 设备密钥，仅客户端领取
+    Client->>Client: DPAPI保存，再确认领取
+    loop 每30秒
+        Client->>API: 认证设备心跳与内网 IPv4
+    end
+    Client->>API: 取得60秒单次打开凭证
+    Client->>Browser: 原平台入口 URL fragment
+    Browser->>Browser: 移入 sessionStorage、清 fragment、原登录
+    Browser->>API: 登录身份消费凭证并刷新观测
+    Teacher->>API: 当前授权课堂设置机房/机位、明确确认基准
+```
+
+新部署默认 `seat-helper.enabled=false`，正式全局及61校已开启。自动配对300秒，领取结果120秒，保存后确认；日常打开凭证60秒且单次消费，片段不得进入登录redirect查询。管理员人工注册码30分钟仅高级兼容入口使用。设备TTL75秒、学生观测TTL90秒，服务端核对真实登录UUID；长期基准存MySQL，由教师明确确认，Redis保存短期观测，不用IP作为设备主键。重复配对复用同校有效电脑和教师命名，撤销电脑不能自动恢复。
+
+学校现有HTTP/HTTPS根地址均支持，不要求先配置HTTPS。学校配置网页根，不带 `/student/index`；下载包只附公开入口，客户端自动推导 `/prod-api`，学生无需填地址。后端 `seat-helper.client-path` 指向真实EXE，Linux可分发Windows程序；HTTP无传输加密。助手关闭/断线不影响原网页登录与教学。
+
+客户端无新增平台依赖，C#/.NET Framework 4 WinForms；HKCU Run 是当前 Windows 用户登录后的启动，不是未登录时系统服务。网页不能自动下载到 D 盘或运行 EXE；极域只分发程序，逐机凭据不复制。DPAPI 密钥、桌面/注册表自启和机器标识需纳入该校还原基线，D 盘保留不足以保证自启。真实 Windows 10/极域/还原卡/镜像克隆待现场小范围验收；当前 EXE 未签名。详见 [安装与撤销说明](../../clients/seat-helper/README.md)、[ADR-003](../../contexts/classroom-experience-20261002/ADR-003-optional-seat-helper.md)。
+
 > 2026-09-16 19:10 修正：当前为原 data Topic 发布/订阅，平台不再判定命令或自动下发。130 已切 `20260916_iot_subscribe_fix_v1`；真实班级账号原 Topic SUBACK 128→0、跨班仍128，28项测试通过。真机及登录后页面待验；见 PROJECT_CORE.md v3.65 和 junior-iot-poc/ADR-004-original-data-subscription.md。以下相冲突的自动下行记录仅为历史。
 
 
@@ -89,3 +134,17 @@ flowchart LR
 
 
 2026-09-14 后续状态：用户授权后已仅重启 xueyeceping-130，PID168090，首页/API/代理均200，EMQX管理API及授权源正常。外置配置已随启动加载，取代此前待重启状态；失败班级重试同步与硬件收数仍待验证。未打包部署或Git推送。见 PROJECT_CORE.md v3.60。
+
+## 2026-10-07 机位恢复补充（本机）
+
+教师面板首次失败仍重试，切班与卸载清理唯一轮询；学生状态异常保留上次信息并标待核对，不冒充未关联。整批确认继续拒绝陈旧观测，失败后自动刷新；不改变75/90秒TTL或真实设备授权。详情见 [复核记录](../../contexts/bug-review-20261007.md)。
+
+
+## 2026-10-08 自动安装与还原基线（本机待发布）
+
+机位助手0.2.1为本机候选：优先D盘安装并从安装目录运行，当前Windows用户HKCU Run自启，快捷方式与自启独立核验，手动启动显示安装与关联结果。设备凭据、指纹和平台配对协议不变；无新依赖/SQL。程序目录、Windows自启与DPAPI/机器环境须纳入还原基线，现场重启未验。正式仍0.2.0，发布需替换下载制品并核对实际配置路径。详见clients/seat-helper/README.md。
+
+
+## 2026-10-08正式1.30.37机位显示与助手0.2.1
+
+上方同日“本机待发布/正式仍0.2.0”已由此次发布取代。130 release `20261008_seat_install_v1`，JAR字节不变，助手下载路径切换并重启后台，三服务active；只执行产品更新SQL，更新115 PUBLISHED且教师可见。教师课堂/学生首页和实际下载通过；机房自启及还原基线仍需现场重启验收。备份哈希及恢复service/nginx/env的回滚步骤见 [正式验收](../../contexts/seat-install-release-verification-20261008.md)。

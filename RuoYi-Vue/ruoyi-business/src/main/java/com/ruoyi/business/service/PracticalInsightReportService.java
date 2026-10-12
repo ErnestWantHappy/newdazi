@@ -21,6 +21,7 @@ public class PracticalInsightReportService
     @Autowired private PracticalInsightWorker worker;
     @Autowired private TeacherPaperSubmissionService scope;
     @Autowired private ObjectMapper json;
+    @Autowired private com.ruoyi.business.mapper.StudentFeedbackMapper feedbackMapper;
     @Value("${practical-insight.enabled:false}") private boolean enabled;
     @Value("${practical-insight.max-cost-yuan:20}") private BigDecimal maxCostYuan;
 
@@ -113,7 +114,8 @@ public class PracticalInsightReportService
                 "status", job.status, "stage", job.stage, "completed", job.completed, "failed", job.failed,
                 "total", input.students.size(), "errorMessage", job.errorMessage, "promptTokens", job.promptTokens,
                 "completionTokens", job.completionTokens, "estimatedCostYuan", cost, "createdAt", job.createdAt, "updatedAt", job.updatedAt),
-                "maxCostYuan", maxCostYuan, "scope", input.scope, "stale", stale, "report", report);
+                "maxCostYuan", maxCostYuan, "scope", input.scope, "stale", stale, "report", report,
+                "publicationId", feedbackMapper.publishedReport(job.reportId,StudentFeedbackService.publicationHash(job,mapper.evidence(job.reportId))));
     }
     private void requireEnabled() { if (!enabled) throw new ServiceException("班级诊断V3尚未启用"); }
 }

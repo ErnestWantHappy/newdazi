@@ -13,6 +13,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ScoreQueryControllerTest
 {
     @Test
+    void clearedArtifactIsUnsubmittedRatherThanPendingOrZeroGrade() {
+        ScoreQueryController controller = new ScoreQueryController();
+        Map<String, Object> score = new HashMap<>();
+        score.put("submittedAnswerCount", 0); score.put("practicalPending", 0); score.put("totalScore", 0);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyHomeworkAdjustment", score, null);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", score, null);
+        assertEquals(true, score.get("unsubmitted"));
+        assertEquals(false, score.get("pendingGrading"));
+        assertNull(score.get("finalScore"));
+        assertTrue(ScoreQueryController.isExcludedFromAverage(score));
+    }
+
+    @Test
     void pendingPracticalKeepsFinalScoreEmptyButRealZeroIsGraded()
     {
         ScoreQueryController controller = new ScoreQueryController();

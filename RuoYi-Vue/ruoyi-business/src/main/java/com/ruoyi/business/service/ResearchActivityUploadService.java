@@ -2,6 +2,11 @@ package com.ruoyi.business.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.file.Files;
@@ -17,6 +22,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Iterator;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +43,8 @@ import com.ruoyi.common.utils.StringUtils;
 public class ResearchActivityUploadService
 {
     private static final Logger log = LoggerFactory.getLogger(ResearchActivityUploadService.class);
+    private static final int LOGIN_PREVIEW_MAX_EDGE = 1600;
+    private static final float LOGIN_PREVIEW_JPEG_QUALITY = 0.78f;
     private static final Map<String, Set<String>> PACKAGE_MIMES;
     private static final Set<String> IMAGE_MIMES = new HashSet<>(
             Arrays.asList("image/jpeg", "image/jpg", "image/png", "image/webp"));
@@ -121,7 +134,43 @@ public class ResearchActivityUploadService
         Path target = root.resolve(relative).normalize();
         if (!target.startsWith(root)) throw new ServiceException("图片存储路径非法");
         copy(file, target);
+        // 原图用于教研正文和下载，登录展厅固定读取独立展示图，避免把高分辨率原图带入登录链路。
+        resolveLoginPreviewImage(target);
         return "/profile/upload/research-activity/images/" + relative.toString().replace('\\', '/');
+    }
+
+    /**
+     * 获取登录展厅使用的 JPEG 展示图。历史图片首次展示时补生成，新上传图片在上传后已生成；
+     * 原图无法由 JDK 解码（例如未安装 WebP 解码器）时保留原图展示，不能影响教研图片上传。
+     */
+    public Path resolveLoginPreviewImage(Path source)
+    {
+        if (source == null || !Files.isRegularFile(source)) return source;
+        Path imageRoot = imageRoot();
+        Path normalizedSource = source.toAbsolutePath().normalize();
+        if (!normalizedSource.startsWith(imageRoot)) return source;
+
+        Path relative = imageRoot.relativize(normalizedSource);
+        String previewName = FilenameUtils.getBaseName(relative.getFileName().toString()) + ".jpg";
+        Path preview = loginPreviewRoot().resolve(relative).resolveSibling(previewName).normalize();
+        if (!preview.startsWith(loginPreviewRoot())) return source;
+        if (Files.isRegularFile(preview)) return preview;
+
+        synchronized (this)
+        {
+            if (Files.isRegularFile(preview)) return preview;
+            try
+            {
+                writeLoginPreview(normalizedSource, preview);
+                return preview;
+            }
+            catch (Exception e)
+            {
+                // 展示图生成失败不得让正常教研上传或已有内容失效，接口会临时回退读取原图。
+                log.warn("教研登录展示图生成失败 file={}", relative);
+                return source;
+            }
+        }
     }
 
     public Path resolvePackagePath(String relativePath)
@@ -333,6 +382,81 @@ public class ResearchActivityUploadService
     private Path imageRoot()
     {
         return Paths.get(profile, "upload", "research-activity", "images").toAbsolutePath().normalize();
+    }
+
+    private Path loginPreviewRoot()
+    {
+        return Paths.get(profile, "upload", "research-activity", "login-previews").toAbsolutePath().normalize();
+    }
+
+    private void writeLoginPreview(Path source, Path target) throws IOException
+    {
+        BufferedImage original = ImageIO.read(source.toFile());
+        if (original == null) throw new IOException("不支持的图片解码格式");
+
+        int originalWidth = original.getWidth();
+        int originalHeight = original.getHeight();
+        int longestEdge = Math.max(originalWidth, originalHeight);
+        double scale = longestEdge > LOGIN_PREVIEW_MAX_EDGE
+                ? (double) LOGIN_PREVIEW_MAX_EDGE / longestEdge : 1D;
+        int width = Math.max(1, (int) Math.round(originalWidth * scale));
+        int height = Math.max(1, (int) Math.round(originalHeight * scale));
+        BufferedImage preview = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = preview.createGraphics();
+        try
+        {
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, width, height);
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.drawImage(original, 0, 0, width, height, null);
+        }
+        finally
+        {
+            graphics.dispose();
+        }
+
+        Files.createDirectories(target.getParent());
+        Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
+        try
+        {
+            writeJpeg(preview, temporary);
+            try
+            {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (java.nio.file.AtomicMoveNotSupportedException ignored)
+            {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+        finally
+        {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private void writeJpeg(BufferedImage image, Path target) throws IOException
+    {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+        if (!writers.hasNext()) throw new IOException("缺少 JPEG 编码器");
+        ImageWriter writer = writers.next();
+        try (OutputStream output = Files.newOutputStream(target);
+             ImageOutputStream imageOutput = ImageIO.createImageOutputStream(output))
+        {
+            writer.setOutput(imageOutput);
+            ImageWriteParam parameter = writer.getDefaultWriteParam();
+            if (parameter.canWriteCompressed())
+            {
+                parameter.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                parameter.setCompressionQuality(LOGIN_PREVIEW_JPEG_QUALITY);
+            }
+            writer.write(null, new IIOImage(image, null, null), parameter);
+        }
+        finally
+        {
+            writer.dispose();
+        }
     }
 
     private String extension(MultipartFile file)

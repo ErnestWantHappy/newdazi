@@ -159,7 +159,8 @@ public class FileUtils
         }
 
         // 检查允许下载的文件规则
-        if (ArrayUtils.contains(MimeTypeUtils.DEFAULT_ALLOWED_EXTENSION, FileTypeUtils.getFileType(resource)))
+        if (ArrayUtils.contains(MimeTypeUtils.DEFAULT_ALLOWED_EXTENSION, FileTypeUtils.getFileType(resource))
+                || "7z".equalsIgnoreCase(FileTypeUtils.getFileType(resource)))
         {
             return true;
         }

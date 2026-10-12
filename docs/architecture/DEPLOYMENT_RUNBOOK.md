@@ -1,5 +1,61 @@
 # 部署与回滚约定
 
+## 2026-10-09 130正式1.30.40（首页加载性能与运行稳定性优化）
+
+前后端 release `20261009_slowness_fix_v1`（前端零停机切 Nginx 根；后端 jar 内仅 1 个嵌套 Mapper 条目不同，需重启）。上一版前端 `20261008_login_input_latency_v1`、后端 `20261008_login_preview_compress_v1`。完整改动、验证与未解决项见 [发布登记](../../contexts/RELEASE_LOG.md) 与 `output/130-opt-20261009/`。
+
+- Nginx：`/etc/nginx/nginx.conf` 启用 gzip 全套并加 `gzip_static`；站点配置新增 `location ^~ /static/` immutable 与 `try_files`。修改前副本 `nginx.conf.before`(`b659a333…`)、`nginx-site.before`(`102e94ad…`)。切换后 `nginx -t && systemctl reload nginx`，实测入口 JS 957,772 B、CSS 71,292 B。
+- systemd：`WorkingDirectory` 与 `ExecStart` 指向 `20261009_slowness_fix_v1/backend`；`--spring.config.additional-location` 仍为 `20261008_seat_install_v1/config/`（未改动）。原件备份为 `service.before.newbackend`。
+- shared env：新增 `IOT_MQTT_CLIENT_ID=dazi-platform-iot-130`、`LOG_PATH=/data/logs/app`（新建目录并 chown admin2）；原件 `env.before`(`36530188…`)。
+- logrotate：`/etc/logrotate.d/xueyeceping` 的 `su admin2 admin2` → `su root root`；原件 `logrotate.before`(`8fbd96b7…`)。
+- 数据库：无结构迁移。仅执行 2 条数据修正（`answer_id` 150004、184413 的 `preview_status` 由 `converting` 改 `failed`，回退语句见发布登记）；曾试加 `idx_answer_latest` 覆盖索引但实测计划未变（InnoDB 二级索引已隐含主键），已 `DROP`，净索引变化为零。发布登记 `sql/slowness_fix_release_20261009.sql` 写 118/1.30.40 = PUBLISHED。慢 SQL 修复说明另见 `sql/biz_student_answer_latest_index_20261009.sql`。
+- 备份：`/data/backups/xueyeceping/20261009_slowness_fix_v1`，`database.sql` 362,841,290 bytes SHA-256 `3086521a0eb1f9aab487193d5349737da5643a4e53be1b2eeed2bc3f7d16ef82`，含上述 5 份配置副本。
+- 回滚：确认当前 release 后 `cp -a <备份>/service.before.newbackend /etc/systemd/system/xueyeceping-130.service`、`cp -a <备份>/nginx.conf.before /etc/nginx/nginx.conf`、`cp -a <备份>/nginx-site.before /etc/nginx/sites-available/xueyeceping-130`、`cp -a <备份>/env.before /data/apps/xueyeceping/shared/xueyeceping-130.env`、`cp -a <备份>/logrotate.before /etc/logrotate.d/xueyeceping`，随后 `systemctl daemon-reload && systemctl restart xueyeceping-130`、`nginx -t && systemctl reload nginx`；数据修正按发布登记中的 UPDATE 反向执行；撤回更新 118 为 DRAFT。**不恢复整库**覆盖期间新增成绩。
+- 重启纪律（本次教训）：课堂高峰在线连接可达 576，重启 21 秒会造成该分钟约 2,327 次 502（均为轮询客户端重试，下一分钟自动恢复，未见数据丢失）。后端重启必须安排在非课堂时段。
+- 123 侧：NSSM `NewDaziBackend3009` 的 `Parameters\AppEnvironmentExtra` 增加 `IOT_MQTT_ENABLED=false` 并移除 4 个 MQTT 连接项（原件 `D:\program\3009dazipingtai\backups\20261009_mqtt_stop\nssm-env.before.txt`），重启后 `1883` 连接为 0、`3010` 前端与 API 均 200。回滚：恢复该注册表多字符串并重启服务。
+
+## 2026-10-07 130正式1.30.35（三份AI报告复核修复）
+
+双端release `20261007_bug_review_v1`，上一版`20261007_login_align_v1`。发布任务COMPLETED，三服务active，JAR与首页哈希、整库备份及教师/学生/浏览器验收见[正式验收](../../contexts/bug-review-release-verification-20261007.md)。无结构迁移，仅执行`sql/bug_review_release_20261007.sql`登记更新113/1.30.35为PUBLISHED并确认教师可见。回退前先核对当前release和活动任务，恢复本次备份的service/Nginx配置，重启后台和reload Nginx，撤回更新113；不整库回灌覆盖新增成绩。
+
+## 2026-10-06 130正式1.30.31（双端）
+
+前后端 20261006_login_redesign_v1，上一版为 20261006_login_preview_fast_v1（后台）和 20261005_login_showrooms_v1（前端）。独立systemd任务COMPLETED，三服务active，首页SHA-256 e64822b5afb8e0b29239dac96b21748dc29411e043cccdd7ac9f0984273b754。备份目录 /data/backups/xueyeceping/20261006_login_redesign_v1，database.sql 325760497 bytes，SHA-256 9e9038ed7faae3e81ad691c0ec941ad1ca2d7d900e26b4f98fcdbcf098176a5d。无业务表迁移，更新109/1.30.31为PUBLISHED且真实教师更新列表可见。回退恢复service.before与nginx.before，daemon-reload、重启后台并reload Nginx，退回1.30.30。
+
+## 2026-10-06 130正式1.30.30（仅后台）
+
+后台`20261006_login_preview_fast_v1`，前端仍`20261005_login_showrooms_v1`，Nginx及shared env哈希保持。COMPLETED、三服务active；无结构迁移，仅登记产品更新。备份`/data/backups/xueyeceping/20261006_login_preview_fast_v1`，整库SHA-256 `9f9f1c0060db6cb43241872051bea701a595898b307c061d40aa3b54d66c83bd`。回退核对当前后台及活动任务后只恢复本次service.before、daemon-reload和restart后台，退1.30.28并撤本次更新；不改前端/env，不整库回灌。执行入口`output/login-perf-20261006/`，具体证据见[性能验收](../../contexts/login-showrooms-20261005/performance-verification-20261006.md)。
+
+## 2026-10-05 130正式1.30.28登录双展厅
+
+最新双端release `20261005_login_showrooms_v1`，上一版 `20261005_seat_helper_auto_v2`（1.30.27）；独立systemd任务COMPLETED，后台/Nginx/aiot-lamp active。共享env字节及外置配置保持，助手0.2.0下载仍指向已验证旧release。只新增登录摘要接口，原内部详情鉴权保持。无结构迁移，产品更新107 PUBLISHED且真实教师可见。
+
+备份 `/data/backups/xueyeceping/20261005_login_showrooms_v1`，database.sql 313994316 bytes，SHA-256 `1bec3cab2e18adb41ef73ff711c9475b51ba7f4229c09d7b0e7b0c6e3489429e`；同目录service.before/nginx.before/env.before/config.before。回退核对当前版本和活动任务后恢复这三份配置、重启后台并校验/reload Nginx，退回1.30.27，撤更新107；不恢复整库覆盖新数据。执行脚本和清单 `output/login-release-20261005/`，具体证据、首页哈希及剩余事项见[正式验收](../../contexts/login-showrooms-20261005/release-verification.md)。
+
+## 2026-10-03 正式1.30.26机位助手HTTP启用
+
+用户授权开启；当前前后端root为 `/data/apps/xueyeceping/releases/20261003_seat_helper_http_v1`。完整库备份SHA-256 `9ed2bbdeac148985b54e85835df3f812f73f5273a5c5f7d4d8071c0d7e772f84`，目录 `/data/backups/xueyeceping/20261003_seat_helper_http_v1`。共享env仅新增 `SEAT_HELPER_ENABLED=true` 和 `SEAT_HELPER_CLIENT_PATH=/data/apps/xueyeceping/releases/20261003_seat_helper_http_v1/clients/SeatHelper.exe`；旧AI主密钥、数据库及外置配置保持。无表结构迁移，启用学校脚本仅改助手配置，当前61校启用。网页根 `http://10.52.1.130`，客户端接口 `http://10.52.1.130/prod-api`。
+
+新release制品上传/哈希/候选配置校验后，由独立systemd任务切换并自动回滚，最终COMPLETED。后台/Nginx/aiot-lamp active，真实下载EXE/教师学生关联及正常教学通过，更新105 PUBLISHED。详见 [验收与具体回退](../../contexts/classroom-experience-20261002/seat-helper-release-verification-20261003.md)。回退恢复本次service.before/nginx.before/env.before后重启后台、检查及reload Nginx，撤回更新；前端回1.30.25、后台回1.30.24。不回灌全库，不删期间注册的设备。助手全局关闭即停用，正常网页保留。
+
+## 2026-10-03 130正式1.30.25（仅前端）
+
+前端root=`/data/apps/xueyeceping/releases/20261003_classroom_score_count_v1/frontend`，后端继续下文1.30.24的 `20261003_classroom_experience_repair_v1`，PID1271670保持且未重启；后台unit/JAR及shared env哈希保持，Nginx仅平滑reload，原静态资源保留。独立systemd任务 `release-20261003_classroom_score_count_v1-front` COMPLETED，三服务active，首页SHA-256 `313046925be328df236e954eac46916006418f67740ddb4a6baad7080e2e13a1`，代理探活通过。
+
+备份=`/data/backups/xueyeceping/20261003_classroom_score_count_v1`，含nginx.before/service.before和完整database.sql；313974965 bytes，SHA-256 `26c5d6fe242de018ecba5fe44d529cf8cdc6b386b58050d182aca42da40e83eb`。无业务迁移，仅验收后执行 `sql/classroom_score_count_release_20261003.sql`：更新104/1.30.25 PUBLISHED，真实教师list可见。
+
+制品与上一版清单匹配，实际语义差异只有班级弹窗模块；沿用已通过的前端构建及六项模拟组件检查，并完成真实教师候选和正式浏览器复核。课程629/12班42/42有成绩，成绩弹窗一致、课堂路由正常，页面异常/HTTP500为0。证据 `output/class-selection-release-20261003/`（manifest、candidate-browser、online-browser、deploy-result、registration、teacher-version及截图）。
+
+回滚前确认Nginx root仍指向本release，将本次备份nginx.before恢复到 `/etc/nginx/sites-available/xueyeceping-130`，执行 `nginx -t` 和 `systemctl reload nginx`，核对首页回到1.30.24哈希 `7970429b4cfdf1ff61718a6a6703a26cb870b2b949d1b98f22bbf236423169d1` 及代理可用，并将更新104撤回DRAFT。无需后端重启或业务回滚SQL，不回灌整库覆盖发布期间成绩。
+
+## 2026-10-03 130正式1.30.24
+
+当前release=`/data/apps/xueyeceping/releases/20261003_classroom_experience_repair_v1`，旧1.30.23=`20260921_full_datalab_classroom_v1`。备份=`/data/backups/xueyeceping/20261003_classroom_experience_repair_v1`，database.sql 313920460 bytes，SHA-256 `e9c3e1b809cf20d8126c59fc261dd2decd820af91e20f184f7b3038a0ad3d247`。原config/env保持、三服务active、系统任务COMPLETED；四份课堂体验SQL及operation_ai_multi_provider_keys_v1依赖已执行，发布103/1.30.24教师可见。
+
+后续发布前必须核对厂商密钥表依赖；本次首次浏览器发现该表缺失，补迁后原5份配置/主密钥保持，正式页面9组重新通过。助手仍关闭，EXE在新release/clients；启用必须配置实际绝对路径及HTTPS，不把本机loopback配置搬到正式。
+
+回滚前确认当前release和活动AI任务，恢复备份service.before/nginx.before/env.before到原systemd/Nginx/shared env路径；daemon-reload、restart xueyeceping-130、nginx -t、reload nginx并探活，更新103撤DRAFT。保留新增表列、密文及全部新作品/成绩，禁止整库回灌覆盖期间写入。完整哈希、SQL、真实验证和剩余范围见 [正式验收](../../contexts/classroom-experience-20261002/release-verification-20261003.md)，本机发布证据`output/classroom-release-20261003/`。
+
 ## 2026-09-22 130正式1.30.23
 
 用户授权全量汇总发布，release=`/data/apps/xueyeceping/releases/20260921_full_datalab_classroom_v1`，原1.30.22=`20260921_monitor129_v1`。JAR SHA-256 `1f03f4073301d56f9f602311e08e0c976e642484e19f020de55eb3171185aa34`，index SHA-256 `f4aabaf47ec7cbca3beb412a9508a0fdcf7a9daf8a44e12ad0ca94fab7e19074`。部署任务COMPLETED，三服务active；保留原正式外置config/migration-isolation.env，shared env哈希不变。123只作SSH跳板。
@@ -200,3 +256,13 @@ flowchart TB
 130 已切换至 `20260921_research_ai_full_v1`，原版本为 `20260920_insight_batch_pdf_v2`。发布无业务 SQL，保留外置配置与共享环境哈希。备份位于 `/data/backups/xueyeceping/20260921_research_ai_full_v1/`，数据库备份 SHA-256 为 `ab0cb2417d72f98239adebaa20dc4b1ffdf01714c5315adba64e7250728fffd9`。
 
 回滚：确认无活动 AI 任务后恢复该目录的 `service.before`、`nginx.before`、`env.before`、`config.before` 和旧 JAR，执行 daemon-reload、重启后端、`nginx -t` 后 reload，回到 1.30.19；不覆盖新成绩、不执行业务 SQL 回滚，1.30.20 更新记录转 DRAFT。
+
+
+## 2026-10-05 机位助手自动关联（正式1.30.27）
+
+正式release `20261005_seat_helper_auto_v2`，后台/Nginx/aiot-lamp均active。完整备份v1 `96bb5a487976da96a6b49a70b1d552bba0540c8ef451f6a5399de627b84dc954`、v2 `bc3bbe1981059f4566cc67e5e3c2f384a5e02d7e2b692bd55c5be77776deb77d`，目录分别 `/data/backups/xueyeceping/20261005_seat_helper_auto_v1`、`..._v2`。无结构SQL，更新106 PUBLISHED且教师可见。回退到1.30.26须恢复v1初始backup的service.before/nginx.before/env.before并重启/探活，不用v2的未验收v1基线；不回灌整库，更新106撤DRAFT。共享其他env保持；client-path改为新release。 证据、限制与下一步见 [正式验收](../../contexts/classroom-experience-20261002/seat-helper-auto-verification-20261005.md) 和 [ADR-004](../../contexts/classroom-experience-20261002/adr/ADR-004-student-zero-config-seat-helper.md)。
+
+
+## 2026-10-08正式1.30.37机位显示与助手0.2.1
+
+上方同日“本机待发布/正式仍0.2.0”已由此次发布取代。130 release `20261008_seat_install_v1`，JAR字节不变，助手下载路径切换并重启后台，三服务active；只执行产品更新SQL，更新115 PUBLISHED且教师可见。教师课堂/学生首页和实际下载通过；机房自启及还原基线仍需现场重启验收。备份哈希及恢复service/nginx/env的回滚步骤见 [正式验收](../../contexts/seat-install-release-verification-20261008.md)。

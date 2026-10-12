@@ -1,8 +1,9 @@
 import router from '@/router'
+import { clearSeatHelperToken } from '@/utils/seatHelper'
 import usePermissionStore from '@/store/modules/permission'
 import { ElMessageBox, } from 'element-plus'
 import { login, logout, getInfo, selectSchool as selectSchoolApi } from '@/api/login'
-import { getToken, setToken, removeToken } from '@/utils/auth'
+import { getToken, setToken, removeToken, needsSchoolSelection, setSchoolSelectionPending } from '@/utils/auth'
 import { isHttp, isEmpty } from "@/utils/validate"
 import defAva from '@/assets/images/profile.jpg'
 
@@ -19,7 +20,7 @@ const useUserStore = defineStore(
       permissions: [],
       schools: [],
       currentDeptId: null,
-      needsSchoolSelection: false,
+      needsSchoolSelection: needsSchoolSelection(),
       needChangePwd: false
     }),
     actions: {
@@ -31,6 +32,7 @@ const useUserStore = defineStore(
         const uuid = userInfo.uuid
         return new Promise((resolve, reject) => {
           login(username, password, code, uuid).then(res => {
+            setSchoolSelectionPending(!!res.needsSchoolSelection)
             setToken(res.token)
             this.token = res.token
             this.roles = []
@@ -72,7 +74,7 @@ const useUserStore = defineStore(
             } else if (!this.currentDeptId && schools.length === 1) {
               this.currentDeptId = schools[0].deptId
             }
-            this.needsSchoolSelection = false
+            this.needsSchoolSelection = needsSchoolSelection()
             /* 初始密码提示 */
             if(res.isDefaultModifyPwd) {
               ElMessageBox.confirm('您的密码还是初始密码，请修改密码！',  '安全提示', {  confirmButtonText: '确定',  cancelButtonText: '取消',  type: 'warning' }).then(() => {
@@ -93,6 +95,7 @@ const useUserStore = defineStore(
       },
       // 退出系统
       logOut() {
+        clearSeatHelperToken()
         return new Promise((resolve, reject) => {
           logout(this.token).catch(() => {}).finally(() => {
             this.token = ''
@@ -111,6 +114,7 @@ const useUserStore = defineStore(
       selectSchool(deptId) {
         return new Promise((resolve, reject) => {
           selectSchoolApi(deptId).then(res => {
+            setSchoolSelectionPending(false)
             setToken(res.token)
             this.token = res.token
             this.currentDeptId = deptId

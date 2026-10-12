@@ -53,6 +53,8 @@
               @click="handleCommand('history')"
               >历史成绩</el-button
             >
+            <el-button type="primary" link @click="feedbackVisible = true">我的作答与反馈</el-button>
+            <student-seat-helper />
             <el-button
               type="danger"
               link
@@ -581,6 +583,9 @@
                 <span class="upload-label">提交作品：</span>
                 <el-upload
                   class="work-uploader"
+                  :ref="el => setPracticalUploader(q.questionId, el)"
+                  v-model:file-list="practicalFileLists[q.questionId]"
+                  :disabled="!canUpdatePractical(q.questionId) || !!submittingPracticalQuestionId"
                   :action="uploadUrl"
                   :data="{ lessonId, questionId: q.questionId }"
                   :headers="uploadHeaders"
@@ -593,17 +598,21 @@
                   :show-file-list="false"
                   :accept="getPracticalAccept(q)"
                 >
-                  <el-button type="primary" icon="Upload" :loading="submittingPracticalQuestionId === q.questionId">
+                  <el-button type="primary" icon="Upload" :disabled="!canUpdatePractical(q.questionId) || !!submittingPracticalQuestionId" :loading="submittingPracticalQuestionId === q.questionId">
                     {{ practicalUploads[q.questionId] ? "选择并提交新版本" : "选择并提交作品" }}
                   </el-button>
                 </el-upload>
+                <span v-if="!canUpdatePractical(q.questionId)" class="upload-tip">已批改，如需修改请联系老师退回重交</span>
+                <p v-if="getPracticalAllowedExtensions(q).some(ext => ['html', 'htm', 'txt'].includes(ext))" class="upload-tip">网页请提交单个 HTML/HTM，推荐命名 index.html，CSS 和 JavaScript 写在文件内；无需用姓名或学号重命名。TXT 按文字查看。文本和网页不超过 2 MiB，均由老师人工评分。</p>
+                <p v-if="getPracticalAllowedExtensions(q).some(ext => ['zip', 'rar', '7z'].includes(ext))" class="upload-tip">压缩包由老师下载查看；希望直接预览时，请优先提交本题允许的原文件。</p>
 
                 <div v-if="getPracticalDrafts(q.questionId).length" class="practical-draft-list">
                   <div v-for="(draft, draftIndex) in getPracticalDrafts(q.questionId)" :key="draft.uploadToken" class="draft-file">
-                    <span>{{ draftIndex + 1 }}. {{ draft.originalFileName }}</span>
-                    <el-button link type="danger" @click="removePracticalDraft(q.questionId, draftIndex)">移除</el-button>
+                    <span>{{ draftIndex + 1 }}. {{ draft.originalFileName }}（{{ formatPracticalFileSize(draft.fileSize) }}）</span>
+                    <el-button link type="danger" :disabled="!!submittingPracticalQuestionId" @click="removePracticalDraft(q.questionId, draftIndex)">移除</el-button>
                   </div>
-                  <span class="upload-tip">文件上传完成后会自动提交。Office/PDF 仅 1 个；图片可按顺序提交 1～{{ getPracticalUploadLimit(q) }} 张</span>
+                  <el-button size="small" :disabled="!!submittingPracticalQuestionId || !!practicalUploadStates[q.questionId]?.pendingFileUids.size" @click="retryPracticalArtifact(q)">重试提交</el-button>
+                  <span class="upload-tip">文件上传完成后会自动提交。非图片作品仅 1 个；图片可按顺序提交 1～{{ getPracticalUploadLimit(q) }} 张</span>
                 </div>
 
                 <!-- 新版本已提交，预览转换由服务器异步完成 -->
@@ -622,6 +631,7 @@
                     <span class="file-name">{{
                       getPracticalDisplayName(q.questionId)
                     }}</span>
+                    <span v-if="getPracticalAttachments(q.questionId).length === 1">{{ formatPracticalFileSize(getPracticalAttachments(q.questionId)[0].fileSize) }}</span>
                     <span
                       class="preview-state"
                       :class="getPracticalPreviewClass(q.questionId)"
@@ -649,6 +659,7 @@
                       type="danger"
                       size="small"
                       icon="Delete"
+                      :disabled="practicalScores[q.questionId] != null"
                       @click="deleteWork(q.questionId)"
                       >删除</el-button
                     >
@@ -656,7 +667,7 @@
                 </div>
                 <div v-if="getPracticalAttachments(q.questionId).length > 1" class="practical-attachment-list">
                   <div v-for="(attachment, attachmentIndex) in getPracticalAttachments(q.questionId)" :key="attachment.attachmentId || attachmentIndex" class="attachment-row">
-                    <span>{{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}</span>
+                    <span>{{ attachmentIndex + 1 }}. {{ attachment.originalFileName || getFileName(attachment.resourcePath) }}（{{ formatPracticalFileSize(attachment.fileSize) }}）</span>
                     <el-button
                       link
                       type="primary"
@@ -689,7 +700,7 @@
                   <p>拖动图形、连接箭头，系统会自动保存草稿；完成后请点击“完成并提交”。</p>
                 </div>
                 <el-button type="primary" size="large" @click="openFlowchart(q)">
-                  {{ practicalUploads[q.questionId] ? '查看画程作品' : '打开画程开始作答' }}
+                  {{ practicalUploads[q.questionId] ? (canUpdatePractical(q.questionId) ? '继续修改画程' : '查看画程作品') : '打开画程开始作答' }}
                 </el-button>
               </div>
             </el-card>
@@ -1020,13 +1031,18 @@
 
     <!-- PDF预览组件 -->
     <pdf-preview ref="pdfPreviewRef" />
+    <student-feedback-dialog v-model="feedbackVisible" :lesson-id="lessonId" />
+    <el-dialog v-model="textPreviewVisible" title="作品预览" width="90%" destroy-on-close>
+      <practical-text-preview v-if="textPreviewAttachmentId" :attachment-id="textPreviewAttachmentId" />
+    </el-dialog>
     <student-flowchart-dialog v-model="flowchartDialogVisible" :lesson-id="activeFlowchartLessonId"
       :question="activeFlowchartQuestion" @submitted="handleReturnedSubmission" />
   </div>
 </template>
 
 <script setup name="StudentIndex">
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { formatPracticalFileSize, practicalFileNameLimit } from '@/utils/practicalFileDisplay';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import {
   getCurrentLesson,
   getReturnedPractical,
@@ -1045,6 +1061,9 @@ import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { lessonToolHref } from '@/utils/lessonToolUrl';
 import PdfPreview from "@/components/PdfPreview/index.vue";
+import PracticalTextPreview from "@/components/PracticalTextPreview/index.vue";
+import StudentFeedbackDialog from "@/components/StudentFeedbackDialog/index.vue";
+import StudentSeatHelper from "@/components/SeatHelper/StudentSeatHelper.vue";
 import StudentGuideSheet from "@/views/student/guideSheet/index.vue";
 import StudentProgrammingQuestion from "@/components/StudentProgrammingQuestion/index.vue";
 import StudentFlowchartDialog from "@/components/FlowchartEditor/StudentFlowchartDialog.vue";
@@ -1056,6 +1075,8 @@ import { getCurrentCollaborationRooms } from "@/api/business/collaboration";
 
 // PDF预览组件引用
 const pdfPreviewRef = ref(null);
+const textPreviewVisible = ref(false), textPreviewAttachmentId = ref(null);
+const feedbackVisible = ref(false);
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -1456,9 +1477,8 @@ const theoryTotalScore = computed(() => {
 
 // 操作题：老师课堂上开启后才显示（老师未开启时不渲染作答区）
 const practicalQuestions = computed(() =>
-  practicalOpen.value
-    ? allQuestions.value.filter((q) => q.questionType === "practical")
-    : []
+  allQuestions.value.filter((q) => q.questionType === "practical"
+    && (practicalOpen.value || submittedAnswers.value[q.questionId]?.taskState === 'RETURNED'))
 );
 // 兼容历史接口的下划线字段和不同大小写，避免 Python 题误回退到文件上传。
 function isPythonPracticalQuestion(question) {
@@ -1535,6 +1555,26 @@ const practicalPreviewPaths = ref({}); // { questionId: previewPath }
 const practicalArtifacts = ref({}); // { questionId: 当前不可变作品版本 }
 const practicalDrafts = ref({}); // { questionId: 暂存文件凭证[] }
 const practicalUploadStates = ref({});
+const practicalFileLists = ref({});
+const practicalUploaderRefs = new Map();
+let practicalUploadEpoch = 0;
+function setPracticalUploader(questionId, el) {
+  if (el) practicalUploaderRefs.set(questionId, el);
+  else practicalUploaderRefs.delete(questionId);
+}
+function resetPracticalUploads() {
+  practicalUploadEpoch++;
+  practicalUploaderRefs.forEach(el => { el.abort(); el.clearFiles(); });
+  practicalAutoCommitTimers.forEach(clearTimeout);
+  practicalAutoCommitTimers.clear();
+  Object.keys(practicalPollingTimers).forEach(clearPracticalPolling);
+  uploadingQuestionId.value = null;
+  practicalDrafts.value = {};
+  practicalFileLists.value = {};
+  practicalUploadStates.value = {};
+  submittingPracticalQuestionId.value = null;
+}
+watch(lessonId, resetPracticalUploads, { flush: 'sync' });
 const practicalAutoCommitTimers = new Map();
 const submittedAnswers = ref({}); // 学生已提交的答案 { questionId: { answer, score, previewStatus, previewPath } }
 const uploadingQuestionId = ref(null); // 正在上传/转换的题目ID（用于显示loading）
@@ -1836,7 +1876,10 @@ function clearPracticalPolling(questionId) {
 }
 
 async function refreshPracticalSubmission(questionId) {
+  const epoch = practicalUploadEpoch;
+  const requestedLesson = lessonId.value;
   const res = await getCurrentLesson();
+  if (epoch !== practicalUploadEpoch || requestedLesson !== lessonId.value || String(res.lessonId) !== String(requestedLesson)) return null;
   const latestAnswers = res.submittedAnswers || {};
   submittedAnswers.value = latestAnswers;
   const submitted = latestAnswers[questionId];
@@ -1846,9 +1889,12 @@ async function refreshPracticalSubmission(questionId) {
 
 function schedulePracticalPreviewPolling(questionId, attempt = 0) {
   clearPracticalPolling(questionId);
+  const epoch = practicalUploadEpoch;
   practicalPollingTimers[questionId] = setTimeout(async () => {
+    if (epoch !== practicalUploadEpoch) return;
     try {
       const submitted = await refreshPracticalSubmission(questionId);
+      if (epoch !== practicalUploadEpoch) return;
       const previewStatus = submitted?.previewStatus || "";
       if (previewStatus === "success" || submitted?.previewPath) {
         uploadingQuestionId.value = null;
@@ -1870,6 +1916,7 @@ function schedulePracticalPreviewPolling(questionId, attempt = 0) {
       }
       schedulePracticalPreviewPolling(questionId, attempt + 1);
     } catch (error) {
+      if (epoch !== practicalUploadEpoch) return;
       uploadingQuestionId.value = null;
       clearPracticalPolling(questionId);
       ElMessage.warning("已上传作品，但刷新转换状态失败，请稍后查看");
@@ -2261,6 +2308,10 @@ function getPracticalAllowedExtensions(question) {
     : ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"];
 }
 
+function canUpdatePractical(questionId) {
+  return practicalScores.value[questionId] == null || submittedAnswers.value[questionId]?.taskState === 'RETURNED';
+}
+
 function getStudentMaterials(question) {
   if (Array.isArray(question?.practicalMaterials) && question.practicalMaterials.length) {
     return question.practicalMaterials;
@@ -2277,6 +2328,11 @@ function getPracticalUploadLimit(question) {
 }
 
 function beforePracticalUpload(question, file) {
+  if (submittingPracticalQuestionId.value || !canUpdatePractical(question.questionId)) return false;
+  if (String(file?.name || '').length > practicalFileNameLimit) {
+    ElMessage.error(`文件名不能超过${practicalFileNameLimit}个字符（含扩展名），请缩短文件名后重新上传`);
+    return false;
+  }
   markQuestionWorking(question.questionId);
   const extension = String(file?.name || "").split(".").pop().toLowerCase();
   if (!getPracticalAllowedExtensions(question).includes(extension)) {
@@ -2301,7 +2357,8 @@ function getPracticalDrafts(questionId) {
 
 function removePracticalDraft(questionId, index) {
   const drafts = [...getPracticalDrafts(questionId)];
-  drafts.splice(index, 1);
+  const [removed] = drafts.splice(index, 1);
+  practicalFileLists.value[questionId] = (practicalFileLists.value[questionId] || []).filter(file => file.uid !== removed?.uid);
   practicalDrafts.value[questionId] = drafts;
 }
 
@@ -2320,6 +2377,7 @@ function schedulePracticalAutoCommit(question) {
   practicalAutoCommitTimers.set(questionId, setTimeout(() => {
     practicalAutoCommitTimers.delete(questionId);
     const state = practicalUploadStates.value[questionId];
+    if (submittingPracticalQuestionId.value) { schedulePracticalAutoCommit(question); return; }
     if (!state?.pendingFileUids.size && !state?.failed) {
       commitPracticalArtifact(question).catch(() => {
         ElMessage.error("作品提交失败，请重新选择文件后再试");
@@ -2331,11 +2389,13 @@ function schedulePracticalAutoCommit(question) {
 // 上传成功后立即提交，避免学生再做一次重复的“确认提交”操作。
 function handleUploadSuccess(questionId, res, file) {
   const state = practicalUploadStates.value[questionId];
-  state?.pendingFileUids.delete(file?.uid);
+  if (!state?.pendingFileUids.has(file?.uid)) return;
+  state.pendingFileUids.delete(file.uid);
   if (res.code === 200) {
     practicalDrafts.value[questionId] = [
       ...getPracticalDrafts(questionId),
       {
+        uid: file.uid,
         uploadToken: res.uploadToken,
         originalFileName: res.newFileName || file?.name || getFileName(res.fileName),
         fileKind: res.fileKind,
@@ -2346,14 +2406,23 @@ function handleUploadSuccess(questionId, res, file) {
     schedulePracticalAutoCommit({ questionId });
   } else {
     if (state) state.failed = true;
+    practicalFileLists.value[questionId] = (practicalFileLists.value[questionId] || []).filter(item => item.uid !== file.uid);
     ElMessage.error(res.msg || "上传失败");
   }
+}
+
+async function retryPracticalArtifact(question) {
+  try { await commitPracticalArtifact(question); }
+  catch { ElMessage.error('作品提交失败，文件已保留，请稍后重试'); }
 }
 
 async function commitPracticalArtifact(question) {
   const questionId = question.questionId;
   const drafts = getPracticalDrafts(questionId);
-  if (!drafts.length || submittingPracticalQuestionId.value) return;
+  if (!drafts.length || submittingPracticalQuestionId.value || practicalUploadStates.value[questionId]?.pendingFileUids.size) return;
+  const epoch = practicalUploadEpoch;
+  const submittedLesson = lessonId.value;
+  const active = () => epoch === practicalUploadEpoch && submittedLesson === lessonId.value;
   submittingPracticalQuestionId.value = questionId;
   try {
     await submitPracticalArtifact({
@@ -2362,11 +2431,18 @@ async function commitPracticalArtifact(question) {
       expectedVersionId: practicalArtifacts.value[questionId]?.versionId || null,
       uploadTokens: drafts.map((item) => item.uploadToken),
     });
-    practicalDrafts.value[questionId] = [];
+    if (!active()) return;
+    const submittedUids = new Set(drafts.map(item => item.uid));
+    practicalDrafts.value[questionId] = getPracticalDrafts(questionId).filter(item => !submittedUids.has(item.uid));
+    practicalFileLists.value[questionId] = (practicalFileLists.value[questionId] || []).filter(item => !submittedUids.has(item.uid));
     uploadingQuestionId.value = questionId;
     const submitted = await refreshPracticalSubmission(questionId);
+    if (!active()) return;
     const previewStatus = submitted?.previewStatus || "";
-    if (previewStatus === "success" || submitted?.previewPath) {
+    if (previewStatus === "unsupported") {
+      uploadingQuestionId.value = null;
+      ElMessage.success("作品提交成功，压缩包可下载查看");
+    } else if (previewStatus === "success" || submitted?.previewPath) {
       uploadingQuestionId.value = null;
       ElMessage.success("作品提交成功，可以直接预览");
     } else {
@@ -2374,12 +2450,13 @@ async function commitPracticalArtifact(question) {
       schedulePracticalPreviewPolling(questionId);
     }
   } finally {
-    submittingPracticalQuestionId.value = null;
+    if (active()) submittingPracticalQuestionId.value = null;
   }
 }
 
 function handleUploadError(questionId, _error, file) {
   const state = practicalUploadStates.value[questionId];
+  if (!state?.pendingFileUids.has(file?.uid)) return;
   if (state) {
     state.pendingFileUids.delete(file?.uid);
     state.failed = true;
@@ -2412,6 +2489,7 @@ function getPracticalPreviewLabel(questionId) {
   if (status === "pending") return "已交卷·预览排队";
   if (status === "converting") return "已交卷·预览转换中";
   if (status === "failed") return "已交卷·预览暂不可用";
+  if (status === "unsupported") return "已交卷·下载查看";
   return "待处理";
 }
 
@@ -2428,6 +2506,7 @@ function isPracticalAttachmentPreviewable(attachment) {
   if (!attachment) return false;
   // 历史图片可能没有旧 previewPath，但图片源文件本身就是可预览资源。
   if (attachment.fileKind === "IMAGE") return !!attachment.resourcePath;
+  if (["TEXT", "HTML"].includes(attachment.fileKind)) return !!attachment.attachmentId;
   return !!attachment.previewPath && attachment.previewStatus !== "failed";
 }
 
@@ -2440,6 +2519,10 @@ function downloadSubmittedWork(questionId, attachmentIndex = 0) {
   const attachment = getPracticalAttachments(questionId)[attachmentIndex];
   const filePath = attachment?.resourcePath;
   if (!filePath) return;
+  if (attachment?.attachmentId) {
+    Download.zip(`/business/practical-attachment/${attachment.attachmentId}/download`, attachment.originalFileName || '作品附件');
+    return;
+  }
   Download.resource(filePath, `学生操作题作品_${attachment?.originalFileName || getFileName(filePath)}`);
 }
 
@@ -2448,6 +2531,11 @@ function previewWork(questionId, attachmentIndex = 0) {
   const attachment = getPracticalAttachments(questionId)[attachmentIndex];
   const filePath = attachment?.resourcePath;
   if (!filePath) return;
+  if (["TEXT", "HTML"].includes(attachment?.fileKind)) {
+    textPreviewAttachmentId.value = attachment.attachmentId;
+    textPreviewVisible.value = true;
+    return;
+  }
   const baseUrl = import.meta.env.VITE_APP_BASE_API;
   const previewStatus = attachment?.previewStatus || practicalPreviewStatuses.value[questionId];
   const previewPath = attachment?.previewPath || practicalPreviewPaths.value[questionId];
@@ -2606,6 +2694,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  resetPracticalUploads();
   window.removeEventListener("beforeunload", beforeUnloadHandler);
   if (gatePollTimer) clearTimeout(gatePollTimer);
   Object.values(timerIntervals).forEach((i) => clearInterval(i));
@@ -3013,13 +3102,13 @@ onUnmounted(() => {
 }
 
 .char-pending {
-  color: #606266;
+  color: #000;
 }
 .char-correct {
-  color: #67c23a;
+  color: #16753b;
 }
 .char-error {
-  color: #f56c6c;
+  color: #c62828;
   background: #fef0f0;
 }
 
@@ -3037,6 +3126,8 @@ onUnmounted(() => {
 
 /* 打字输入框与原文字体对齐 */
 .typing-input :deep(textarea) {
+  color: #000;
+  -webkit-text-fill-color: #000;
   font-size: 18px !important;
   line-height: 2 !important;
   letter-spacing: 1px !important;

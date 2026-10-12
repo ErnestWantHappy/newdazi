@@ -23,6 +23,7 @@ class PracticalInsightReportServiceTest
         ReflectionTestUtils.setField(service,"mapper",mapper); ReflectionTestUtils.setField(service,"inputs",inputs);
         ReflectionTestUtils.setField(service,"worker",worker); ReflectionTestUtils.setField(service,"scope",scope);
         ReflectionTestUtils.setField(service,"json",json); ReflectionTestUtils.setField(service,"enabled",true);
+        ReflectionTestUtils.setField(service,"feedbackMapper",mock(com.ruoyi.business.mapper.StudentFeedbackMapper.class));
         LoginUser user = new LoginUser(); user.setUserId(7L); SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(user,null));
     }
     @AfterEach void cleanup() { SecurityContextHolder.clearContext(); }

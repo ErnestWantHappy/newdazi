@@ -32,6 +32,7 @@ public class ClassroomTaskStateService
 
     @Autowired private BizStudentTaskStateMapper stateMapper;
     @Autowired private ClassroomTaskStateWriter stateWriter;
+    @Autowired private com.ruoyi.business.mapper.BizStudentMapper studentMapper;
 
     public List<BizStudentTaskState> listStudentLessonStates(Long studentId, Long lessonId) {
         return stateMapper.selectStudentLessonStates(studentId, lessonId);
@@ -45,6 +46,27 @@ public class ClassroomTaskStateService
         if (studentId == null || lessonId == null || questionId == null) return false;
         BizStudentTaskState state = stateMapper.selectOne(lessonId, questionId, studentId);
         return state != null && RETURNED.equals(state.getTaskState());
+    }
+
+    /** 写入权限必须使用当前读，避免评分或重交后仍读取事务旧快照。 */
+    public boolean isReturnedForUpdate(Long studentId, Long lessonId, Long questionId) {
+        BizStudentTaskState state = stateMapper.selectOneForUpdate(lessonId, questionId, studentId);
+        return state != null && RETURNED.equals(state.getTaskState());
+    }
+
+    public void markInTransaction(BizStudent student, Long deptId, Long lessonId,
+                                  Long questionId, String targetState) {
+        stateWriter.markInTransaction(student, deptId, lessonId, questionId, targetState);
+    }
+
+    public void markGradedInTransaction(com.ruoyi.business.domain.BizStudentAnswer answer) {
+        BizStudent student = studentMapper.selectBizStudentByStudentId(answer.getStudentId());
+        if (student == null) throw new com.ruoyi.common.exception.ServiceException("学生记录不存在");
+        markInTransaction(student, student.getDeptId(), answer.getLessonId(), answer.getQuestionId(), GRADED);
+    }
+
+    public void withdrawSubmissionInTransaction(BizStudent student, Long lessonId, Long questionId) {
+        stateWriter.withdrawSubmissionInTransaction(student, lessonId, questionId);
     }
 
     public BizStudentTaskState mark(BizStudent student, Long deptId, Long lessonId,

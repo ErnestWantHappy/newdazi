@@ -33,8 +33,8 @@
       SUM(CASE WHEN q.question_type IN ('choice', 'judgment') AND a.submit_time IS NOT NULL THEN 1 ELSE 0 END) AS theoryAnsweredCount,
       SUM(CASE WHEN q.question_type IN ('choice', 'judgment') AND a.submit_time IS NOT NULL AND a.is_correct = 1 THEN 1 ELSE 0 END) AS theoryCorrectCount,
       SUM(CASE WHEN q.question_type IN ('choice', 'judgment') AND a.submit_time IS NOT NULL THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-      SUM(CASE WHEN q.question_type = 'practical' THEN 1 ELSE 0 END) AS practicalAnsweredCount,
-      SUM(CASE WHEN q.question_type = 'practical' AND a.submit_time IS NOT NULL THEN 1 ELSE 0 END) AS practicalSubmittedCount,
+      SUM(CASE WHEN q.question_type = 'practical' AND NULLIF(TRIM(a.student_answer), '') IS NOT NULL THEN 1 ELSE 0 END) AS practicalAnsweredCount,
+      SUM(CASE WHEN q.question_type = 'practical' AND a.submit_time IS NOT NULL AND NULLIF(TRIM(a.student_answer), '') IS NOT NULL THEN 1 ELSE 0 END) AS practicalSubmittedCount,
       SUM(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 ELSE 0 END) AS practicalScoredCount,
       SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END) AS practicalScore
     FROM biz_student_answer a

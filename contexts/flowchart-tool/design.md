@@ -1,5 +1,9 @@
 # 画程：流程图操作题技术设计
 
+## 2026-10-02 评分与提交版本一致性（本机未发布）
+
+统一用 `PracticalSubmissionPolicy` 按正式 score/RETURNED 判断编辑，保持未提交草稿。成功重交把原评分归档至 `biz_flowchart_submission.score_snapshot/scoring_details_json`，清当前分并同事务标记 SUBMITTED；原样退回重交递增 revision 并建提交。教师评分核对 `FLOWCHART:<submissionId>` 基线，退回待重交拒绝评分与 AI 采用。学生 DTO 不下发标准答案/评分规则。需 `classroom_experience_flowchart_history_v1.sql`，整体配套升级见 [新设计](../classroom-experience-20261002/design.md)、[ADR-001](../classroom-experience-20261002/ADR-001-practical-update-and-formats.md)。
+
 ## 2026-09-24 当前课边界（本机候选）
 
 `FlowchartService.assertStudentAccess` 在事务内锁定当前班级指派行；工作区首次进入可能创建草稿，因此与保存、重开和正式提交一样持锁核对当前课。`RETURNED` 只影响当前课是否绕过操作题关闭开关，不再允许进入旧课。教师退回由课堂状态接口按当前指派行锁限制。历史草稿和提交版本不删除。
@@ -235,3 +239,17 @@ sequenceDiagram
 - 浏览器：教师出题→课程选择→学生作答/刷新恢复/提交→教师批改确认；另做跨学生和未开放探针。
 - AI 专项：流程图批量生成→队列进度/暂停/重试→视觉建议展示→单份或批量采用前的版本校验；验证学生补交不会污染旧结果。
 - 教师设计器专项：开始/结束独立、单击添加、拖拽落点添加、节点删除、连线删除、输入/输出文字居中及四边中点锚点、标准答案复制基础图及覆盖确认。
+
+## 2026-10-03 审查修复补充
+
+学生本机草稿键和owner同时绑定登录用户/课程/题目，不恢复无归属旧键；异步请求和定时器绑定身份/实例。已批只读使用正式提交JSON，本机未同步草稿独立保留。保存期间继续编辑时不能把上一画布作为当前提交。已完成定向测试与真实画布模拟接口验证，未正式发布；见 [课堂修复验收](../classroom-experience-20261002/repair-verification-20261003.md)。
+
+## 2026-10-03 正式发布补充
+
+130正式1.30.24已包含本轮课堂修复；正式专用班级API与页面验证通过，现有师生数据未代修改。密钥表依赖已迁移，原配置/主密钥保持；历史状态及真实厂商/机房验证按 [正式验收](../classroom-experience-20261002/release-verification-20261003.md) 的范围执行。
+
+## 2026-10-07 报告复核与本机修复
+
+教师面板按提交ID重建并按versionNo读取；草稿冲突显式选择本机或平台，重取revision再CAS；已批改切正式版只读并保留本地未同步内容。
+
+定向Java、Node和模拟浏览器验证见 [逐条核验记录](../bug-review-20261007.md)。130正式1.30.35双端已发布，教师批改班级只读接口通过；真实画布冲突写入待隔离数据验收，见[正式验收](../bug-review-release-verification-20261007.md)。AOCI未同步。

@@ -618,6 +618,7 @@
             <el-checkbox-group v-model="form.practicalAllowedExtensionList">
               <el-checkbox v-for="item in practicalExtensionOptions" :key="item" :value="item">{{ item.toUpperCase() }}</el-checkbox>
             </el-checkbox-group>
+            <div class="el-form-item__tip">TXT 以文本预览；HTML/HTM 请提交单个网页（内联 CSS/JS）；ZIP/RAR/7Z 仅下载查看。新增格式由老师手动评分，不支持 AI 批改。</div>
           </el-form-item>
           <el-form-item label="图片上限">
             <el-input-number v-model="form.practicalImageMaxCount" :min="1" :max="10" />
@@ -1193,7 +1194,7 @@ const recommendedDuration = computed(() => {
   return Math.ceil(wordCount / typingBaseSpeed.value);
 });
 
-const practicalExtensionOptions = ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"];
+const practicalExtensionOptions = ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "zip", "rar", "7z"];
 
 function materialPaths(materials, type) {
   return (materials || [])

@@ -35,6 +35,9 @@ public class PracticalAttachmentConversionService
 
     public boolean convertAsync(Long attachmentId)
     {
+        PracticalAttachment attachment = artifactMapper.selectAttachmentById(attachmentId);
+        if (attachment == null || !("OFFICE".equals(attachment.getFileKind()) || "PDF".equals(attachment.getFileKind())
+                || "IMAGE".equals(attachment.getFileKind()))) return false;
         Date claimedAt = new Date();
         if (artifactMapper.claimAttachmentNormalization(attachmentId, claimedAt) <= 0) return false;
         self.processClaimedAsync(attachmentId);
@@ -116,6 +119,8 @@ public class PracticalAttachmentConversionService
 
     public boolean retry(Long attachmentId)
     {
+        PracticalAttachment attachment = artifactMapper.selectAttachmentById(attachmentId);
+        if (attachment == null || "unsupported".equals(attachment.getNormalizedStatus())) return false;
         if (artifactMapper.resetAttachmentNormalization(attachmentId, new Date()) <= 0) return false;
         return self.convertAsync(attachmentId);
     }

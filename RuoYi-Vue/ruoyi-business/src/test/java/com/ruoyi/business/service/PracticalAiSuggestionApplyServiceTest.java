@@ -30,6 +30,7 @@ import com.ruoyi.business.mapper.PracticalRubricSnapshotMapper;
 @ExtendWith(MockitoExtension.class)
 class PracticalAiSuggestionApplyServiceTest
 {
+    @Mock private ClassroomTaskStateService taskStateService;
     @Mock private PracticalAiGradingMapper aiMapper;
     @Mock private BizStudentAnswerMapper answerMapper;
     @Mock private BizScoringDetailMapper detailMapper;
@@ -43,6 +44,7 @@ class PracticalAiSuggestionApplyServiceTest
     void setUp()
     {
         service = new PracticalAiSuggestionApplyService();
+        ReflectionTestUtils.setField(service, "taskStateService", taskStateService);
         ReflectionTestUtils.setField(service, "aiMapper", aiMapper);
         ReflectionTestUtils.setField(service, "answerMapper", answerMapper);
         ReflectionTestUtils.setField(service, "detailMapper", detailMapper);
@@ -51,6 +53,36 @@ class PracticalAiSuggestionApplyServiceTest
         ReflectionTestUtils.setField(service, "scoringPolicyService", scoringPolicyService);
         ReflectionTestUtils.setField(service, "deadlineService", deadlineService);
         ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
+    }
+
+    @Test
+    void returnedWorkCannotBeOverwrittenByOldAiSuggestion()
+    {
+        BizStudentAnswer answer = answer(); answer.setScore(0);
+        when(aiMapper.selectJob(1L, 7L)).thenReturn(job());
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(result()));
+        when(answerMapper.selectByIdForUpdate(101L)).thenReturn(answer);
+        when(taskStateService.isReturnedForUpdate(answer.getStudentId(), answer.getLessonId(), answer.getQuestionId())).thenReturn(true);
+        Map<String,Object> summary=service.apply(1L,7L,9L,PracticalAiSuggestionApplyService.OVERWRITE_ALL);
+        assertEquals(0,summary.get("appliedCount"));
+        verify(answerMapper,never()).updateScore(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyInt());
+        verify(aiMapper).updateApplyStatus(201L,"SKIPPED_RETURNED",null,null);
+    }
+
+    @Test
+    void failureAfterScoreWriteMustPropagateForTransactionRollback()
+    {
+        BizStudentAnswer answer=answer(); PracticalRubricSnapshot snapshot=new PracticalRubricSnapshot();
+        snapshot.setSnapshotId(401L); snapshot.setQuestionScore(30);
+        when(aiMapper.selectJob(1L,7L)).thenReturn(job());
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(result()));
+        when(answerMapper.selectByIdForUpdate(101L)).thenReturn(answer);
+        when(snapshotMapper.selectByVersionId(301L)).thenReturn(snapshot);
+        when(rubricService.buildScoringItems(snapshot)).thenReturn(Collections.emptyList());
+        when(scoringPolicyService.resolveFinalScore(org.mockito.ArgumentMatchers.eq(25),org.mockito.ArgumentMatchers.eq(30),org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyList())).thenReturn(25);
+        org.mockito.Mockito.doThrow(new com.ruoyi.common.exception.ServiceException("状态写入失败")).when(taskStateService).markGradedInTransaction(answer);
+        org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,()->service.apply(1L,7L,9L,PracticalAiSuggestionApplyService.FILL_UNGRADED));
+        verify(aiMapper,never()).updateApplyStatus(201L,"APPLY_FAILED",null,null);
     }
 
     @Test

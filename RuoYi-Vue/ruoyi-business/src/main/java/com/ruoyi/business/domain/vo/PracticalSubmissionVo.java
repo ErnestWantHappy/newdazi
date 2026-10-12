@@ -70,6 +70,9 @@ public class PracticalSubmissionVo {
     /** 服务端权威任务状态及版本；用于实时消息乱序保护。 */
     private String taskState;
     private Long stateVersion;
+    private boolean canReturn;
+    public boolean isCanReturn() { return canReturn; }
+    public void setCanReturn(boolean value) { canReturn = value; }
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date stateChangedAt;

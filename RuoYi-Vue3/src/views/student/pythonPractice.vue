@@ -176,7 +176,7 @@ const CaseResults = defineComponent({
   }
 })
 
-const workspace = ref(null); const questions = ref([]); const current = ref(null); const sourceCode = ref(''); const history = ref([]); const activeKey = ref(''); const filter = ref('ALL'); const saving = ref(false); const running = ref(false); const customRunning = ref(false); const submitting = ref(false); const overviewLoading = ref(false); const questionLoading = ref(false); const pageError = ref(''); const questionError = ref(''); const draftState = ref('草稿未保存'); const editorElement = ref(null); const listVisible = ref(false); const consoleTab = ref('custom'); const customInput = ref(''); const darkTheme = ref(false); const fullscreen = ref(false); const selectedHistory = ref(null); let editorView; let pollTimer; let pollAttempts = 0
+const workspace = ref(null); const questions = ref([]); const current = ref(null); const sourceCode = ref(''); const history = ref([]); const activeKey = ref(''); const filter = ref('ALL'); const saving = ref(false); const running = ref(false); const customRunning = ref(false); const submitting = ref(false); const overviewLoading = ref(false); const questionLoading = ref(false); const pageError = ref(''); const questionError = ref(''); const draftState = ref('草稿未保存'); const editorElement = ref(null); const listVisible = ref(false); const consoleTab = ref('custom'); const customInput = ref(''); const darkTheme = ref(false); const fullscreen = ref(false); const selectedHistory = ref(null); let editorView; let pollTimer; let pollAttempts = 0; let savePromise = Promise.resolve(); let selectionPending = false
 const themeCompartment = new Compartment()
 const isDataLab = computed(() => current.value?.practical_mode === 'DATA_LAB')
 function isComplete(item) { return item.practical_mode === 'DATA_LAB' ? item.progress?.completed_flag === '1' : item.progress?.passed_flag === '1' }
@@ -257,11 +257,15 @@ watch(darkTheme, value => editorView?.dispatch({ effects: themeCompartment.recon
 
 async function loadOverview() { if (overviewLoading.value) return; overviewLoading.value = true; pageError.value = ''; try { const res = await getStudentPracticeOverview(); questions.value = res.data?.questions || []; if (questions.value.length) await selectQuestion(questions.value[0]) } catch (error) { pageError.value = '题单加载失败，请检查网络后重试'; ElMessage.error(pageError.value) } finally { overviewLoading.value = false } }
 async function selectQuestion(item) {
-  if (!item || questionLoading.value || keyOf(item) === activeKey.value) return
-  if (current.value && draftState.value === '草稿待保存') {
-    try { await saveDraft() } catch (error) { return }
+  if (!item || selectionPending || questionLoading.value || keyOf(item) === activeKey.value) return
+  selectionPending = true
+  questionLoading.value = true
+  while (current.value && (draftState.value === '草稿待保存' || saving.value)) {
+    try { await saveDraft() } catch (error) { questionLoading.value = false; selectionPending = false; return }
   }
-  clearTimeout(pollTimer); pollAttempts = 0; activeKey.value = keyOf(item); questionError.value = ''; questionLoading.value = true; selectedHistory.value = null
+  const previousKey = activeKey.value
+  const previousSelection = selectedHistory.value
+  clearTimeout(pollTimer); pollAttempts = 0; activeKey.value = keyOf(item); questionError.value = ''; selectedHistory.value = null
   try {
     const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
     current.value = res.data || {}
@@ -276,13 +280,65 @@ async function selectQuestion(item) {
       editorView = null
       draftState.value = ''
     }
-  } catch (error) { questionError.value = '题目加载失败，请重试'; ElMessage.error(questionError.value) } finally { questionLoading.value = false }
+  } catch (error) { activeKey.value = previousKey; selectedHistory.value = previousSelection; questionError.value = '题目加载失败，请重试'; ElMessage.error(questionError.value) } finally { questionLoading.value = false; selectionPending = false }
 }
 function onDataLabSubmitted() { loadOverview() }
-async function saveDraft() { if (!current.value || saving.value) return; saving.value = true; try { await saveStudentPracticeDraft({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value }); draftState.value = '草稿已保存' } catch (error) { ElMessage.error('草稿保存失败，请稍后重试'); throw error } finally { saving.value = false } }
-async function enqueue(type) { if (!current.value || !sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码'); if (isJudging.value) return ElMessage.info('当前代码仍在排队或判题，请稍候'); if (type === 'RUN') running.value = true; else if (type === 'CUSTOM_RUN') customRunning.value = true; else submitting.value = true; try { await saveDraft(); const res = await submitStudentPractice({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id, sourceCode: sourceCode.value, submitType: type, customInput: type === 'CUSTOM_RUN' ? customInput.value : undefined }); selectedHistory.value = normalizeSubmission(res.data || {}); history.value = [selectedHistory.value, ...history.value.filter(item => item.submission_id !== selectedHistory.value.submission_id)]; consoleTab.value = type === 'SUBMIT' ? 'judge' : type === 'RUN' ? 'samples' : 'custom'; pollAttempts = 0; poll() } catch (error) { ElMessage.error('提交失败，请检查网络后重试') } finally { running.value = false; customRunning.value = false; submitting.value = false } }
+async function saveDraft(item = current.value, code = sourceCode.value) {
+  if (!item) return
+  const key = keyOf(item)
+  const previous = savePromise
+  const pending = (async () => {
+    try { await previous } catch (error) { /* 前一次失败不阻止当前草稿重试。 */ }
+    saving.value = true
+    try {
+      await saveStudentPracticeDraft({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id, sourceCode: code })
+      if (activeKey.value === key && sourceCode.value === code) draftState.value = '草稿已保存'
+    } catch (error) { ElMessage.error('草稿保存失败，请稍后重试'); throw error }
+    finally { if (savePromise === pending) saving.value = false }
+  })()
+  savePromise = pending
+  return pending
+}
+async function enqueue(type) {
+  if (selectionPending || questionLoading.value) return
+  if (!current.value || !sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码')
+  if (isJudging.value || running.value || customRunning.value || submitting.value) return ElMessage.info('当前代码仍在排队或判题，请稍候')
+  const item = current.value
+  const key = keyOf(item)
+  const code = sourceCode.value
+  const input = customInput.value
+  if (type === 'RUN') running.value = true; else if (type === 'CUSTOM_RUN') customRunning.value = true; else submitting.value = true
+  try {
+    await saveDraft(item, code)
+    const res = await submitStudentPractice({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id, sourceCode: code, submitType: type, customInput: type === 'CUSTOM_RUN' ? input : undefined })
+    if (activeKey.value !== key) return
+    selectedHistory.value = normalizeSubmission(res.data || {})
+    history.value = [selectedHistory.value, ...history.value.filter(row => row.submission_id !== selectedHistory.value.submission_id)]
+    consoleTab.value = type === 'SUBMIT' ? 'judge' : type === 'RUN' ? 'samples' : 'custom'
+    pollAttempts = 0; poll()
+  } catch (error) { ElMessage.error('提交失败，请检查网络后重试') }
+  finally { running.value = false; customRunning.value = false; submitting.value = false }
+}
 function runSamples() { return enqueue('RUN') } function runCustom() { return enqueue('CUSTOM_RUN') } function submit() { return enqueue('SUBMIT') }
-async function poll() { clearTimeout(pollTimer); if (pollAttempts >= 180) { ElMessage.warning('判题等待较久，后台仍会继续处理，可稍后重新打开本题查看'); return } pollAttempts += 1; pollTimer = setTimeout(async () => { if (!current.value) return; try { const res = await getStudentPracticeQuestion({ sourceType: current.value.source_type, sourceId: current.value.source_id, questionId: current.value.question_id }); history.value = (res.data?.history || []).map(normalizeSubmission); selectedHistory.value = history.value[0] || selectedHistory.value; if (selectedHistory.value?.status_code === 'WAITING' || selectedHistory.value?.status_code === 'JUDGING') poll(); else { const overview = await getStudentPracticeOverview(); questions.value = overview.data?.questions || questions.value } } catch (error) { ElMessage.error('判题结果查询失败，可稍后在提交记录中查看') } }, 1000) }
+async function poll() {
+  clearTimeout(pollTimer)
+  if (!current.value) return
+  const item = current.value
+  const key = keyOf(item)
+  if (pollAttempts >= 180) { ElMessage.warning('判题等待较久，后台仍会继续处理，可稍后重新打开本题查看'); return }
+  pollAttempts += 1
+  pollTimer = setTimeout(async () => {
+    if (activeKey.value !== key) return
+    try {
+      const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
+      if (activeKey.value !== key) return
+      history.value = (res.data?.history || []).map(normalizeSubmission)
+      selectedHistory.value = history.value[0] || selectedHistory.value
+      if (selectedHistory.value?.status_code === 'WAITING' || selectedHistory.value?.status_code === 'JUDGING') poll()
+      else { const overview = await getStudentPracticeOverview(); questions.value = overview.data?.questions || questions.value }
+    } catch (error) { if (activeKey.value === key) ElMessage.error('判题结果查询失败，可稍后在提交记录中查看') }
+  }, 1000)
+}
 async function goRelative(offset) { const item = currentPlanQuestions.value[currentPlanIndex.value + offset]; if (item) await selectQuestion(item) }
 function showHistoryResult(row) { selectedHistory.value = row; consoleTab.value = row.submit_type === 'SUBMIT' ? 'judge' : row.submit_type === 'RUN' ? 'samples' : 'custom' }
 async function toggleFullscreen() { if (!document.fullscreenElement) await workspace.value?.requestFullscreen(); else await document.exitFullscreen() }

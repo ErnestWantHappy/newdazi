@@ -118,6 +118,16 @@
             update_time = NOW()
     </insert>
 
+    <update id="alignDraftBase">
+        UPDATE biz_flowchart_draft SET base_submission_version = #{versionNo}
+        WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
+    </update>
+
+    <update id="archiveSubmissionGrade">
+        UPDATE biz_flowchart_submission SET score_snapshot = #{score}, scoring_details_json = #{detailsJson}
+        WHERE submission_id = #{submissionId}
+    </update>
+
     <select id="selectNextSubmissionVersion" resultType="int">
         SELECT COALESCE(MAX(version_no), 0) + 1
         FROM biz_flowchart_submission
@@ -129,7 +139,8 @@
                question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
                schema_version AS schemaVersion, document_json AS documentJson,
                rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
-               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime,
+               score_snapshot AS scoreSnapshot, scoring_details_json AS scoringDetailsJson
         FROM biz_flowchart_submission
         WHERE student_id = #{studentId} AND lesson_id = #{lessonId}
           AND question_id = #{questionId} AND draft_revision = #{draftRevision}
@@ -154,7 +165,8 @@
                question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
                schema_version AS schemaVersion, document_json AS documentJson,
                rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
-               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime,
+               score_snapshot AS scoreSnapshot, scoring_details_json AS scoringDetailsJson
         FROM biz_flowchart_submission
         WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
         ORDER BY version_no DESC LIMIT 1
@@ -165,7 +177,8 @@
                question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
                schema_version AS schemaVersion, document_json AS documentJson,
                rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
-               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime,
+               score_snapshot AS scoreSnapshot, scoring_details_json AS scoringDetailsJson
         FROM biz_flowchart_submission
         WHERE student_id = #{studentId} AND lesson_id = #{lessonId} AND question_id = #{questionId}
           <if test="versionNo != null">AND version_no = #{versionNo}</if>
@@ -177,7 +190,8 @@
                question_id AS questionId, version_no AS versionNo, draft_revision AS draftRevision,
                schema_version AS schemaVersion, document_json AS documentJson,
                rules_snapshot_json AS rulesSnapshotJson, check_result_json AS checkResultJson,
-               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime
+               suggested_score AS suggestedScore, answer_id AS answerId, submit_time AS submitTime,
+               score_snapshot AS scoreSnapshot, scoring_details_json AS scoringDetailsJson
         FROM biz_flowchart_submission WHERE submission_id = #{submissionId}
     </select>
 

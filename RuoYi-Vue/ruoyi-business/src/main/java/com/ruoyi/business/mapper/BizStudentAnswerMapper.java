@@ -149,8 +149,7 @@ public interface BizStudentAnswerMapper
 
     /** 清空当前作品兼容字段，但保留答案行和逻辑作品ID。 */
     int clearPracticalAnswer(@Param("answerId") Long answerId,
-                             @Param("practicalArtifactId") Long practicalArtifactId,
-                             @Param("submitTime") Date submitTime);
+                             @Param("practicalArtifactId") Long practicalArtifactId);
 
     /**
      * 领取首次提交后的预览转换任务

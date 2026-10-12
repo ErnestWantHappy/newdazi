@@ -43,6 +43,7 @@ import com.ruoyi.business.mapper.PracticalArtifactMapper;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.file.FileUploadUtils;
 
 /**
@@ -91,6 +92,8 @@ public class PracticalArtifactService
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired private ClassroomTaskStateService taskStateService;
+
     /**
      * 单文件暂存。多图作品由前端逐张上传，最终一次提交全部 token。
      */
@@ -99,6 +102,11 @@ public class PracticalArtifactService
                                                   BizLessonQuestionDetailVo question,
                                                   MultipartFile file) throws Exception
     {
+        requireFileQuestion(question);
+        BizStudentAnswer current = studentAnswerMapper.selectLatestByStudentLessonQuestion(
+                studentId, lessonId, question.getQuestionId());
+        PracticalSubmissionPolicy.assertCanUpdate(current, current != null && current.getScore() != null
+                && taskStateService.isReturned(studentId, lessonId, question.getQuestionId()));
         return stageFile(studentId, lessonId, question, file, "student-answer-artifact/");
     }
 
@@ -144,6 +152,7 @@ public class PracticalArtifactService
                                                     Long expectedVersionId,
                                                     List<String> uploadTokens)
     {
+        requireFileQuestion(question);
         BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
         if (student == null) throw new ServiceException("未找到学生信息");
         // 与课程推进共用指派行锁，防止控制器校验后课程切换，旧课作品仍写入。
@@ -204,6 +213,10 @@ public class PracticalArtifactService
         if (existingAnswer != null)
         {
             existingAnswer = studentAnswerMapper.selectByIdForUpdate(existingAnswer.getAnswerId());
+        }
+        if (!teacherPaper) {
+            PracticalSubmissionPolicy.assertCanUpdate(existingAnswer,
+                    taskStateService.isReturnedForUpdate(studentId, lessonId, question.getQuestionId()));
         }
         // 在版本锁和答案锁内再次核对，防止识别期间学生补交或另一位教师完成评分后被覆盖。
         if (teacherPaper && existingAnswer != null)
@@ -281,6 +294,11 @@ public class PracticalArtifactService
         }
 
         registerAfterCommit(tickets, attachments);
+        if (!teacherPaper) {
+            BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
+            taskStateService.markInTransaction(student, student.getDeptId(), lessonId,
+                    question.getQuestionId(), ClassroomTaskStateService.SUBMITTED);
+        }
         return buildArtifactVo(artifact.getArtifactId(), version, attachments);
     }
 
@@ -290,6 +308,12 @@ public class PracticalArtifactService
                                             Long questionId,
                                             Long expectedVersionId)
     {
+        BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
+        if (student == null) throw new ServiceException("未找到学生信息");
+        BizLessonAssignment current = lessonAssignmentMapper.selectCurrentAssignmentForUpdate(
+                student.getEntryYear(), student.getClassCode(), student.getDeptId());
+        if (current == null || !lessonId.equals(current.getLessonId()))
+            throw new ServiceException("该课程已结束，仅能修改当前课程的作业");
         PracticalArtifact artifact = artifactMapper.selectByContextForUpdate(
                 CONTEXT_LESSON, lessonId, studentId, questionId);
         if (artifact == null || artifact.getCurrentVersionId() == null)
@@ -307,17 +331,20 @@ public class PracticalArtifactService
             throw new ServiceException("作品答题记录不存在");
         }
         answer = studentAnswerMapper.selectByIdForUpdate(answer.getAnswerId());
+        // 已退回有成绩的作品也应保留到新提交成功，不能通过删除提前撤销原成绩。
+        PracticalSubmissionPolicy.assertCanUpdate(answer, false);
         Date now = new Date();
         artifactMapper.deleteCurrentVersion(
                 artifact.getCurrentVersionId(), answer.getScore(), serializeScoringDetails(answer), now);
         scoringDetailMapper.deleteBizScoringDetailByAnswerId(answer.getAnswerId());
-        studentAnswerMapper.clearPracticalAnswer(answer.getAnswerId(), artifact.getArtifactId(), now);
+        studentAnswerMapper.clearPracticalAnswer(answer.getAnswerId(), artifact.getArtifactId());
         if (artifactMapper.updateCurrentVersion(
                 artifact.getArtifactId(), null, artifact.getLatestVersionNo(),
                 artifact.getLockVersion(), now) <= 0)
         {
             throw new ServiceException("作品版本已发生变化，请刷新后重新操作");
         }
+        taskStateService.withdrawSubmissionInTransaction(student, lessonId, questionId);
     }
 
     public PracticalArtifactVo getCurrentLessonArtifact(Long studentId, Long lessonId, Long questionId)
@@ -546,7 +573,7 @@ public class PracticalArtifactService
         }
         if (!allImages && tickets.size() != 1)
         {
-            throw new ServiceException("Office或PDF作品只能提交一个文件，图片作品可提交多张");
+            throw new ServiceException("非图片作品只能提交一个文件，图片作品可提交多张");
         }
         int imageMaxCount = question.getPracticalImageMaxCount() == null
                 ? 10 : question.getPracticalImageMaxCount();
@@ -554,6 +581,12 @@ public class PracticalArtifactService
         {
             throw new ServiceException("图片作品数量超出题目允许范围");
         }
+    }
+
+    private void requireFileQuestion(BizLessonQuestionDetailVo question) {
+        if (question == null || (StringUtils.isNotBlank(question.getPracticalMode())
+                && !"FILE".equalsIgnoreCase(question.getPracticalMode())))
+            throw new ServiceException("请使用本题对应的作答入口，文件提交仅适用于文件操作题");
     }
 
     private PracticalAttachment toAttachment(PracticalUploadTicket ticket,
@@ -577,6 +610,11 @@ public class PracticalArtifactService
         attachment.setNormalizedRetryCount(0);
         attachment.setCreateTime(now);
         attachment.setUpdateTime(now);
+        if ("TEXT".equals(ticket.getFileKind()) || "HTML".equals(ticket.getFileKind()) || "ARCHIVE".equals(ticket.getFileKind())) {
+            attachment.setNormalizedStatus("unsupported");
+            attachment.setPreviewStatus("ARCHIVE".equals(ticket.getFileKind()) ? "unsupported" : "success");
+            return attachment;
+        }
         if ("IMAGE".equals(ticket.getFileKind()) || "PDF".equals(ticket.getFileKind()))
         {
             attachment.setPreviewStatus("success");
@@ -658,7 +696,8 @@ public class PracticalArtifactService
                 }
                 for (PracticalAttachment attachment : attachments)
                 {
-                    conversionService.convertAsync(attachment.getAttachmentId());
+                    if ("pending".equals(attachment.getNormalizedStatus()))
+                        conversionService.convertAsync(attachment.getAttachmentId());
                 }
             }
         });

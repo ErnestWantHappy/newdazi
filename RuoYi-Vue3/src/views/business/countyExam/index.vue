@@ -302,8 +302,8 @@
         </el-tab-pane>
         <el-tab-pane label="学生明细" name="students">
           <div class="student-filter">
-            <el-input v-model="studentKeyword" placeholder="姓名、账号、学号、学校" clearable style="width: 260px" @keyup.enter="loadStudents" />
-            <el-button icon="Search" @click="loadStudents">查询</el-button>
+            <el-input v-model="studentKeyword" placeholder="姓名、账号、学号、学校" clearable style="width: 260px" @keyup.enter="queryStudents" />
+            <el-button icon="Search" @click="queryStudents">查询</el-button>
             <el-button type="success" icon="Download" @click="handleExport">导出 Excel</el-button>
           </div>
           <el-table v-loading="studentsLoading" :data="studentRows" border>
@@ -322,6 +322,13 @@
               </template>
             </el-table-column>
           </el-table>
+          <pagination
+            v-show="studentTotal > 0"
+            :total="studentTotal"
+            v-model:page="studentPage.pageNum"
+            v-model:limit="studentPage.pageSize"
+            @pagination="loadStudents"
+          />
         </el-tab-pane>
         <el-tab-pane label="评卷进度" name="grading">
           <div class="grading-progress-summary drawer-progress">
@@ -530,6 +537,11 @@ const analysisOfficial = ref(false)
 const studentRows = ref([])
 const studentKeyword = ref('')
 const studentsLoading = ref(false)
+const studentTotal = ref(0)
+const studentPage = reactive({ pageNum: 1, pageSize: 20 })
+let studentRequestVersion = 0
+let detailRequestVersion = 0
+let summaryRequestVersion = 0
 
 // selectedQuestionTotal 已随组卷抽屉移除
 
@@ -1042,7 +1054,15 @@ async function resetAllocateTasks() {
 }
 
 async function openDetail(row) {
+  const version = ++detailRequestVersion
+  ++studentRequestVersion
+  ++summaryRequestVersion
+  studentRows.value = []
+  studentTotal.value = 0
+  studentKeyword.value = ''
+  studentPage.pageNum = 1
   const response = await getCountyExam(row.examId)
+  if (version !== detailRequestVersion) return
   detailDrawer.exam = response.data?.exam || row
   detailDrawer.questions = response.data?.questions || []
   detailDrawer.classes = response.data?.classes || []
@@ -1065,7 +1085,9 @@ function loadDetailTab(tabName) {
 }
 
 async function loadSummary(examId) {
+  const version = ++summaryRequestVersion
   const response = await getCountyExamSummary(examId)
+  if (version !== summaryRequestVersion || detailDrawer.exam?.examId !== examId) return
   summaryRows.value = response.data?.schools || []
   analysisOverview.value = response.data?.overview || {}
   analysisDistribution.value = response.data?.distribution || []
@@ -1073,15 +1095,24 @@ async function loadSummary(examId) {
   analysisOfficial.value = response.data?.official === true
 }
 
+function queryStudents() {
+  studentPage.pageNum = 1
+  loadStudents()
+}
+
 function loadStudents() {
   if (!detailDrawer.exam) return
+  const version = ++studentRequestVersion
+  const examId = detailDrawer.exam.examId
   studentsLoading.value = true
-  listCountyExamStudents(detailDrawer.exam.examId, { keyword: studentKeyword.value, pageNum: 1, pageSize: 9999 })
+  listCountyExamStudents(examId, { keyword: studentKeyword.value, pageNum: studentPage.pageNum, pageSize: studentPage.pageSize })
     .then(response => {
+      if (version !== studentRequestVersion || detailDrawer.exam?.examId !== examId) return
       studentRows.value = response.rows || []
+      studentTotal.value = response.total || 0
     })
     .finally(() => {
-      studentsLoading.value = false
+      if (version === studentRequestVersion) studentsLoading.value = false
     })
 }
 

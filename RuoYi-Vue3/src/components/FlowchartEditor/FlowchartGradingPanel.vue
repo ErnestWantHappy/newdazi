@@ -49,6 +49,7 @@ const props = defineProps({
   lessonId: { type: [Number, String], default: null },
   questionId: { type: [Number, String], default: null },
   studentId: { type: [Number, String], default: null },
+  versionNo: { type: [Number, String], default: null },
   aiSuggestion: { type: Object, default: null },
   aiSummary: { type: String, default: '' }
 })
@@ -60,7 +61,7 @@ const answerJson = ref('')
 const checkItems = ref([])
 let requestSeq = 0
 
-watch(() => [props.lessonId, props.questionId, props.studentId], load, { immediate: true })
+watch(() => [props.lessonId, props.questionId, props.studentId, props.versionNo], load, { immediate: true })
 
 async function load() {
   if (!props.lessonId || !props.questionId || !props.studentId) return
@@ -70,7 +71,7 @@ async function load() {
   submission.value = null
   try {
     const response = await getFlowchartGradingSubmission({
-      lessonId: props.lessonId, questionId: props.questionId, studentId: props.studentId
+      lessonId: props.lessonId, questionId: props.questionId, studentId: props.studentId, versionNo: props.versionNo
     })
     if (seq !== requestSeq || context.join(':') !== [String(props.lessonId), String(props.questionId), String(props.studentId)].join(':')) return
     submission.value = response.data?.submission || null

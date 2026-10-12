@@ -97,9 +97,6 @@ public class FlowchartController extends BaseController {
         Long questionId = requiredLong(request, "questionId");
         Object result = service.submit(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),
                 lessonId, questionId, requiredInt(request, "expectedRevision"));
-        BizStudent student = currentStudent();
-        taskStateService.markSafely(student, student.getDeptId(), lessonId, questionId,
-                ClassroomTaskStateService.SUBMITTED);
         return success(result);
     }
 

@@ -7,3 +7,4 @@
 ## 当前 ADR
 
 - `ADR-001-versioned-classroom-task-state.md`：课堂任务六态、版本号、事务提交后 WebSocket 推送及 REST 校准。
+- [ADR-002-aoci-project-memory.md](ADR-002-aoci-project-memory.md)：本机AOCI索引与现有操作规则、当前事实、历史证据的分工及回退边界。

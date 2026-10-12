@@ -112,6 +112,7 @@ test('名单加载中不允许提交，静默轮询不能抢占主动重载', as
 
 test('退回确认期间切换学生，仍只退回点击时的学生', async () => {
     const { ctx, a, b } = setup();
+    a.score = 0; a.canReturn = true; a.studentAnswer = 'current-work';
     let confirm, finish;
     const calls = [];
     ctx.ElMessageBox = { confirm: () => new Promise(resolve => { confirm = resolve; }) };
@@ -123,6 +124,8 @@ test('退回确认期间切换学生，仍只退回点击时的学生', async ()
     confirm(); await new Promise(resolve => setImmediate(resolve));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].studentId, a.studentId);
+    assert.equal(calls[0].expectedScore, 0);
+    assert.equal(calls[0].expectedAnswer, 'current-work');
     finish(); await pending;
     assert.equal(a.taskState, 'RETURNED');
     assert.equal(b.taskState, undefined);
@@ -131,8 +134,17 @@ test('退回确认期间切换学生，仍只退回点击时的学生', async ()
 
 test('取消退回不调用接口，恢复按钮', async () => {
     const { ctx } = setup();
+    ctx.currentStudent.value.score = 0; ctx.currentStudent.value.canReturn = true;
     ctx.ElMessageBox = { confirm: () => Promise.reject('cancel') };
     ctx.returnClassroomTask = () => assert.fail('不应发送退回');
+    await ctx.returnCurrentTask();
+    assert.equal(ctx.submitting.value, false);
+});
+
+test('未批改学生无需退回，不发送退回请求', async () => {
+    const { ctx } = setup();
+    ctx.ElMessageBox = { confirm: () => assert.fail('未批改作品不应要求退回确认') };
+    ctx.returnClassroomTask = () => assert.fail('未批改作品不应退回');
     await ctx.returnCurrentTask();
     assert.equal(ctx.submitting.value, false);
 });

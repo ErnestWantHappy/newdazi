@@ -2,8 +2,12 @@ package com.ruoyi.business.service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -125,6 +129,31 @@ class ResearchActivityUploadServiceTest
                 "/prod-api/common/resource/view?resource=../../outside.png"));
         assertThrows(ServiceException.class, () -> service.resolvePublicImagePath(
                 "/prod-api/common/resource/view?resource=/profile/upload/research-activity/images/a.png&resource=/profile/upload/research-activity/images/b.png"));
+    }
+
+    @Test
+    void createsDownscaledJpegForLoginPreviewAndKeepsOriginal() throws Exception
+    {
+        ReflectionTestUtils.setField(service, "profile", tempDir.toString());
+        Path original = tempDir.resolve("upload/research-activity/images/2026/10/08/classroom.png");
+        Files.createDirectories(original.getParent());
+        BufferedImage source = new BufferedImage(3200, 2000, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = source.createGraphics();
+        graphics.setColor(Color.BLUE);
+        graphics.fillRect(0, 0, 3200, 2000);
+        graphics.dispose();
+        ImageIO.write(source, "png", original.toFile());
+
+        Path preview = service.resolveLoginPreviewImage(original);
+
+        assertNotEquals(original, preview);
+        assertTrue(Files.isRegularFile(original));
+        assertTrue(Files.isRegularFile(preview));
+        assertTrue(preview.toString().endsWith(".jpg"));
+        BufferedImage result = ImageIO.read(preview.toFile());
+        assertEquals(1600, result.getWidth());
+        assertEquals(1000, result.getHeight());
+        assertEquals(preview, service.resolveLoginPreviewImage(original));
     }
 
     private MultipartFile file(String name, String mime, long size, byte[] header) throws Exception

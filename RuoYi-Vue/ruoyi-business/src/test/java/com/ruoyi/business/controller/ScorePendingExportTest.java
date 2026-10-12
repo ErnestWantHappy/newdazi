@@ -59,7 +59,20 @@ class ScorePendingExportTest
         throw new AssertionError("缺少导出列：" + title);
     }
 
-    private Workbook export(Integer graded) throws Exception {
+    @Test
+    void deletedPlaceholderExportsUnsubmittedAndDoesNotHalveAverage() throws Exception {
+        try (Workbook book = export(null, true)) {
+            assertEquals("未提交", cell(book, "作业分").getStringCellValue());
+            assertEquals("未提交", cell(book, "课程总分").getStringCellValue());
+        }
+        try (Workbook book = export(80, true)) {
+            assertEquals(80D, cell(book, "课程平均分").getNumericCellValue());
+        }
+    }
+
+    private Workbook export(Integer graded) throws Exception { return export(graded, false); }
+
+    private Workbook export(Integer graded, boolean deleted) throws Exception {
         ScoreQueryController controller = new ScoreQueryController();
         BizStudentMapper students = mock(BizStudentMapper.class);
         BizStudentAnswerMapper answers = mock(BizStudentAnswerMapper.class);
@@ -80,7 +93,8 @@ class ScorePendingExportTest
             Map<String, Object> row = new HashMap<>();
             row.put("studentId", 1L); row.put("lessonId", (long) i); row.put("lessonNum", i);
             row.put("totalScore", i == 1 ? null : graded); row.put("practicalScore", i == 1 ? null : graded);
-            row.put("practicalPending", i == 1 ? 1 : 0); rows.add(row);
+            row.put("practicalPending", i == 1 && !deleted ? 1 : 0);
+            row.put("submittedAnswerCount", i == 1 && deleted ? 0 : 1); rows.add(row);
         }
         when(lessons.selectScoreLessons(anyString(), anyString(), anyLong(), anyLong())).thenReturn(visible);
         when(answers.selectScoreSummaryByStudents(anyList(), anyList())).thenReturn(rows);

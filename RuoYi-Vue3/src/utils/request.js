@@ -118,15 +118,15 @@ service.interceptors.response.use(async res => {
   }
   if (code === 500) {
     ElMessage({ message: msg, type: 'error' })
-    return Promise.reject(new Error(msg))
+    return Promise.reject(Object.assign(new Error(msg), { notified: true }))
   }
   if (code === 601) {
     ElMessage({ message: msg, type: 'warning' })
-    return Promise.reject(new Error(msg))
+    return Promise.reject(Object.assign(new Error(msg), { notified: true }))
   }
   if (code !== 200) {
     ElNotification.error({ title: msg })
-    return Promise.reject(new Error(msg))
+    return Promise.reject(Object.assign(new Error(msg), { notified: true }))
   }
   return res.data
 }, error => {
@@ -150,6 +150,7 @@ service.interceptors.response.use(async res => {
     message = errorCode.default
   }
   ElMessage({ message, type: 'error', duration: 5 * 1000 })
+  error.notified = true
   return Promise.reject(error)
 })
 
