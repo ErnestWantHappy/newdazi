@@ -2,12 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.StudentProfileMapper">
 
-    <sql id="latestAnswerIdSubquery">
-        SELECT MAX(answer_id) AS answer_id
-        FROM biz_student_answer
-        GROUP BY student_id, lesson_id, question_id
-    </sql>
-
+    <!-- 说明：业务上 (student_id, lesson_id, question_id) 由唯一键保证单行，
+         原先的 MAX(answer_id) 派生表恒等于原表，已移除；
+         它的全局 GROUP BY 会强制物化全表并阻断 lesson_id 下推。 -->
     <!-- 查询学生基础信息 -->
     <select id="selectStudentBasicInfo" resultType="java.util.HashMap">
         SELECT 
@@ -34,7 +31,6 @@
             MAX(a.submit_time) AS submitTime
         FROM biz_lesson l
         INNER JOIN biz_student_answer a ON a.lesson_id = l.lesson_id
-        INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
         WHERE a.student_id = #{studentId}
         <if test="academicYearStart != null and academicYearStart != ''">
             AND a.submit_time >= #{academicYearStart}
@@ -55,7 +51,6 @@
         INNER JOIN (
             SELECT a.lesson_id, a.student_id, SUM(a.score) AS total_score
             FROM biz_student_answer a
-            INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
             INNER JOIN biz_student s ON s.student_id = a.student_id
             INNER JOIN sys_user u ON s.user_id = u.user_id
             WHERE s.entry_year = #{entryYear}
@@ -80,7 +75,6 @@
             a.typing_speed AS typingSpeed,
             a.submit_time AS submitTime
         FROM biz_student_answer a
-        INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
         INNER JOIN biz_lesson l ON l.lesson_id = a.lesson_id
         INNER JOIN biz_question q ON q.question_id = a.question_id
         WHERE a.student_id = #{studentId}
@@ -124,7 +118,6 @@
             SUM(a.score) AS totalScore,
             MAX(a.submit_time) AS submitTime
         FROM biz_student_answer a
-        INNER JOIN (<include refid="latestAnswerIdSubquery"/>) latest ON latest.answer_id = a.answer_id
         INNER JOIN biz_student s ON s.student_id = a.student_id
         INNER JOIN sys_user u ON s.user_id = u.user_id
         WHERE s.entry_year = #{entryYear}

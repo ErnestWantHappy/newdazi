@@ -204,7 +204,14 @@
              <el-alert v-if="['TEXT', 'HTML', 'ARCHIVE'].includes(currentAttachment?.fileKind)" title="此格式由老师人工评分，本期不支持 AI 批改，不会参与 AI 评分队列。" type="info" :closable="false" />
              <practical-text-preview v-if="['TEXT', 'HTML'].includes(currentAttachment?.fileKind)" :attachment-id="currentAttachment.attachmentId" />
              <el-alert v-else-if="currentAttachment?.fileKind === 'ARCHIVE'" title="压缩包已提交，请下载后查看并手动评分。" description="平台不解压压缩包，也不对其中的文件进行 AI 批改。" type="info" :closable="false" />
-             <div v-else-if="currentNormalizedPages.length" class="normalized-page-strip">
+             <div v-if="currentNormalizedPages.length && previewUrl" class="page-view-switch">
+                <el-radio-group v-model="preferPdfOriginal" size="small">
+                   <el-radio-button :value="false">页图</el-radio-button>
+                   <el-radio-button :value="true">PDF 原图</el-radio-button>
+                </el-radio-group>
+                <span class="page-view-hint">细节（如连线）看不清时切到 PDF 原图</span>
+             </div>
+             <div v-if="currentNormalizedPages.length && !showPdfOriginal" class="normalized-page-strip">
                 <img
                   v-for="(pagePath, pageIndex) in currentNormalizedPages"
                   :key="pagePath"
@@ -670,6 +677,8 @@ const gradingSnapshotStale = ref(false);
 const currentIndex = ref(-1);
 const currentScore = ref(undefined);
 const previewUrl = ref('');
+// 教师主动选择看矢量 PDF 原图（默认关闭，保持原有页图行为不变）
+const preferPdfOriginal = ref(false);
 const currentAttachmentIndex = ref(0);
 const retryLoading = ref(false);
 const submitting = ref(false);
@@ -754,6 +763,8 @@ const currentAttachments = computed(() => {
 const currentAttachment = computed(() => currentAttachments.value[currentAttachmentIndex.value] || null);
 const currentNormalizedPages = computed(() => Array.isArray(currentAttachment.value?.normalizedPages)
     ? currentAttachment.value.normalizedPages : []);
+// 仅有 PDF 时才允许切换；没有 PDF 就退回页图，避免出现空白预览
+const showPdfOriginal = computed(() => preferPdfOriginal.value && !!previewUrl.value);
 const currentPreviewStatus = computed(() => currentAttachment.value?.previewStatus || currentStudent.value?.previewStatus || '');
 const currentAiResult = computed(() => aiResultFor(currentStudent.value));
 const isAdmin = computed(() => userStore.roles.includes('admin'));
@@ -1135,8 +1146,17 @@ function calculateStarScore(maxScore, stars) {
     return max > 0 ? Math.round(max * count / 5) : 0;
 }
 
+// 星级文案数组按满分缓存：轮询刷新会重建组件数据，若每次返回新数组，
+// el-rate 会把 texts 变化当作配置变更而重绘，肉眼表现为星级频闪。
+const starTextsCache = new Map();
 function starScoreTexts(maxScore) {
-    return [1, 2, 3, 4, 5].map(stars => `${stars}星 = ${calculateStarScore(maxScore, stars)}分`);
+    const key = Number(maxScore || 0);
+    let texts = starTextsCache.get(key);
+    if (!texts) {
+        texts = [1, 2, 3, 4, 5].map(stars => `${stars}星 = ${calculateStarScore(key, stars)}分`);
+        starTextsCache.set(key, texts);
+    }
+    return texts;
 }
 
 function starSelectionText(maxScore, stars) {
@@ -1813,6 +1833,7 @@ function selectStudent(student, index) {
     gradingSnapshotStale.value = false;
     currentIndex.value = index;
     currentAttachmentIndex.value = 0;
+    preferPdfOriginal.value = false;
     currentScore.value = student.score != null ? student.score : null; // 默认为空，方便直接输入
     gradingInputMode.value = 'NUMERIC';
     overallStarCount.value = 0;
@@ -2686,6 +2707,20 @@ function autoFocusItem() {
      padding: 8px 12px;
      border-bottom: 1px solid #ebeef5;
      background: #fff;
+  }
+
+  .page-view-switch {
+     display: flex;
+     align-items: center;
+     gap: 10px;
+     padding: 6px 12px;
+     border-bottom: 1px solid #ebeef5;
+     background: #fff;
+  }
+
+  .page-view-hint {
+     font-size: 12px;
+     color: #909399;
   }
 }
 

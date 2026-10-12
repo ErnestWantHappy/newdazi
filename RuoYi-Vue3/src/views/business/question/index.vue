@@ -606,12 +606,12 @@
           <el-form-item label="学生起始文件">
             <file-upload
               v-model="form.filePath"
-              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png']"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'txt', 'html', 'htm', 'zip', 'rar', '7z']"
               :file-size="50"
               :limit="1"
             />
             <div style="color: #909399; font-size: 12px; margin-top: 6px;">
-              可不上传；如上传，学生可下载它继续完成作品。
+              可不上传；如上传，学生可下载它继续完成作品。压缩包（ZIP/RAR/7Z）不生成在线预览，仅供下载。
             </div>
           </el-form-item>
           <el-form-item label="学生提交格式">
@@ -627,20 +627,20 @@
           <el-form-item label="补充资源">
             <file-upload
               v-model="form.practicalResourceFiles"
-              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'zip']"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'txt', 'html', 'htm', 'zip', 'rar', '7z']"
               :file-size="50"
               :limit="5"
             />
-            <div style="color: #909399; font-size: 12px; margin-top: 6px;">学生可见，可包含 ZIP 资源包；不作为学生提交格式。</div>
+            <div style="color: #909399; font-size: 12px; margin-top: 6px;">学生可见，可包含 ZIP/RAR/7Z 资源包；不作为学生提交格式。</div>
           </el-form-item>
           <el-form-item label="教师参考答案">
             <file-upload
               v-model="form.practicalReferenceFiles"
-              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png']"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'txt', 'html', 'htm', 'zip', 'rar', '7z']"
               :file-size="50"
               :limit="5"
             />
-            <div style="color: #e6a23c; font-size: 12px; margin-top: 6px;">仅教师和 AI 批改可见，不会下发给学生；压缩包不能作为可识别答案。</div>
+            <div style="color: #e6a23c; font-size: 12px; margin-top: 6px;">仅教师和 AI 批改可见，不会下发给学生；压缩包不能作为可识别答案，AI 批改时会跳过。</div>
           </el-form-item>
 
           <el-divider content-position="left"
@@ -1097,9 +1097,28 @@ async function averageImportWeights() {
   }
 }
 
+// 模板列名必须与 handlePythonWorkbook 的取值列名完全一致，否则导入读不到数据。
+// 模板列名必须与 handlePythonWorkbook 的取值列名完全一致，否则导入读不到数据。
 function downloadPythonTemplate() {
-  const cases = [{ "外部题号": "PY001", "用例名称": "样例1", "输入": "3 5\n", "期望输出": "8\n", "是否公开": "是", "权重": 50, "顺序": 1 }, { "外部题号": "PY001", "用例名称": "负数边界", "输入": "-10 4\n", "期望输出": "-6\n", "是否公开": "否", "权重": 50, "顺序": 2 }];
-  const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(questions), "题目"); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(cases), "测试点"); XLSX.writeFile(workbook, "Python_OJ题目双Sheet导入模板.xlsx");
+  const templateQuestions = [{
+    "外部题号": "PY001", "标题": "两数之和", "难度": "easy", "知识点": "输入输出",
+    "题目描述": "读入两个整数，输出它们的和。",
+    "输入格式": "一行两个整数，以空格分隔。",
+    "输出格式": "一个整数，表示两数之和。",
+    "数据范围": "|a|,|b| <= 10^9",
+    "样例解释": "3 + 5 = 8", "提示": "注意数据范围，使用长整型。",
+    "起始代码": "",
+    "参考代码": "a, b = map(int, input().split())\nprint(a + b)",
+    "无输入题": "否", "是否公开": "是", "时间限制(秒)": 2, "内存限制(KB)": 131072,
+  }];
+  const cases = [
+    { "外部题号": "PY001", "用例名称": "样例1", "输入": "3 5\n", "期望输出": "8\n", "是否公开": "是", "权重": 50, "顺序": 1 },
+    { "外部题号": "PY001", "用例名称": "负数边界", "输入": "-10 4\n", "期望输出": "-6\n", "是否公开": "否", "权重": 50, "顺序": 2 },
+  ];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(templateQuestions), "题目");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(cases), "测试点");
+  XLSX.writeFile(workbook, "Python_OJ题目双Sheet导入模板.xlsx");
 }
 
 async function confirmPythonWorkbook() {
@@ -1155,9 +1174,10 @@ function reset() {
     updateBy: null,
     updateTime: null,
     scoringItems: [], // P6
-    practicalAllowedExtensions: "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png",
+    // 新建题默认勾选全部可提交格式，减少逐项勾选；编辑已有题时由后端值覆盖
+    practicalAllowedExtensions: "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png,txt,html,htm,zip,rar,7z",
     practicalMode: "FILE",
-    practicalAllowedExtensionList: ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png"],
+    practicalAllowedExtensionList: ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "zip", "rar", "7z"],
     practicalImageMaxCount: 10,
     practicalMaterials: [],
     practicalResourceFiles: "",

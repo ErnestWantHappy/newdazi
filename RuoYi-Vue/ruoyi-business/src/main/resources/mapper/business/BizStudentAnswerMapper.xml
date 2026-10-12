@@ -4,12 +4,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.BizStudentAnswerMapper">
 
-    <sql id="latestAnswerIdSubquery">
-        SELECT MAX(answer_id) AS answer_id
-        FROM biz_student_answer
-        GROUP BY student_id, lesson_id, question_id
-    </sql>
-
+    <!-- 说明：业务上 (student_id, lesson_id, question_id) 由唯一键保证单行，
+         原先的 MAX(answer_id) 派生表恒等于原表，已移除；
+         它的全局 GROUP BY 会强制物化全表并阻断 lesson_id 下推。 -->
     <resultMap type="com.ruoyi.business.domain.BizStudentAnswer" id="BizStudentAnswerResult">
         <result property="answerId" column="answer_id"/>
         <result property="studentId" column="student_id"/>
@@ -183,18 +180,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectByLessonId" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         WHERE a.lesson_id = #{lessonId}
     </select>
 
     <select id="selectByLessonAndClass" resultMap="BizStudentAnswerResult">
         SELECT a.* 
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         INNER JOIN biz_lesson_question current_lq
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id
@@ -228,9 +219,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             SUM(CASE WHEN a.is_correct = 1 THEN 1 ELSE 0 END) as correct_count,
             COUNT(*) as total_count
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         INNER JOIN biz_lesson_question current_lq
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id
@@ -398,13 +386,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                        AND TRIM(a.student_answer) &lt;&gt; '' THEN 1 ELSE 0 END AS submitted
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
-        LEFT JOIN (
-            SELECT a1.*
-            FROM biz_student_answer a1
-            INNER JOIN (
-                <include refid="latestAnswerIdSubquery"/>
-            ) latest ON latest.answer_id = a1.answer_id
-        ) a ON s.student_id = a.student_id
+        LEFT JOIN biz_student_answer a ON s.student_id = a.student_id
            AND a.lesson_id = #{lessonId}
            <if test="questionId != null">
                AND a.question_id = #{questionId}
@@ -440,19 +422,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.lesson_id AS lessonId,
             l.lesson_title AS lessonTitle,
             l.lesson_num AS lessonNum,
-            SUM(CASE WHEN q.question_type &lt;&gt; 'practical' OR (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 ELSE 0 END) AS submittedAnswerCount,
+            SUM(CASE WHEN q.question_type &lt;&gt; 'practical' OR (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 ELSE 0 END) AS submittedAnswerCount,
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) = 0 THEN 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) = 0 THEN 0
                  WHEN COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0 THEN NULL
                  ELSE SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END)
             END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN 1 ELSE 0 END AS practicalPending,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
             -- 打字统计（只取打字题的平均值）
@@ -460,9 +442,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
         INNER JOIN biz_lesson_question lq
             ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
@@ -481,28 +460,25 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.lesson_id AS lessonId,
             l.lesson_title AS lessonTitle,
             l.lesson_num AS lessonNum,
-            SUM(CASE WHEN q.question_type &lt;&gt; 'practical' OR (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 ELSE 0 END) AS submittedAnswerCount,
+            SUM(CASE WHEN q.question_type &lt;&gt; 'practical' OR (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 ELSE 0 END) AS submittedAnswerCount,
             SUM(CASE WHEN q.question_type = 'typing' THEN IFNULL(a.score, 0) ELSE 0 END) AS typingScore,
             SUM(CASE WHEN q.question_type IN ('choice', 'judgment') THEN IFNULL(a.score, 0) ELSE 0 END) AS theoryScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) = 0 THEN 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) = 0 THEN 0
                  WHEN COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0 THEN NULL
                  ELSE SUM(CASE WHEN q.question_type = 'practical' THEN IFNULL(a.score, 0) ELSE 0 END)
             END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN 1 ELSE 0 END AS practicalPending,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL) THEN 1 END) > 0
+            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
                       AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
                  THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         LEFT JOIN biz_lesson l ON a.lesson_id = l.lesson_id
         INNER JOIN biz_lesson_question lq
             ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
@@ -626,9 +602,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LEFT JOIN (
             SELECT a1.*
             FROM biz_student_answer a1
-            INNER JOIN (
-                <include refid="latestAnswerIdSubquery"/>
-            ) latest ON latest.answer_id = a1.answer_id
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a1.lesson_id
                AND current_lq.question_id = a1.question_id
@@ -650,9 +623,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND NULLIF(TRIM(a.student_answer), '') IS NOT NULL THEN a.student_id END) AS practicalSubmitted,
             COUNT(DISTINCT CASE WHEN q.question_type = 'practical' AND NULLIF(TRIM(a.student_answer), '') IS NOT NULL AND a.score IS NULL THEN a.student_id END) AS practicalUngraded
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         JOIN biz_student s ON a.student_id = s.student_id
         INNER JOIN biz_lesson_question lq
             ON lq.lesson_id = a.lesson_id AND lq.question_id = a.question_id
@@ -687,7 +657,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 WHEN u.user_id IS NOT NULL
                  AND IFNULL(p.is_absent, 0) = 0
                  AND ((ans.student_id IS NOT NULL AND (q.question_type &lt;&gt; 'practical'
-                       OR NULLIF(TRIM(ans.student_answer), '') IS NOT NULL OR ans.score IS NOT NULL OR ans.practical_version_id IS NOT NULL))
+                       OR NULLIF(TRIM(ans.student_answer), '') IS NOT NULL OR ans.score IS NOT NULL OR ans.practical_version_id IS NOT NULL OR ans.practical_artifact_id IS NOT NULL))
                        OR p.performance_id IS NOT NULL)
                 THEN s.student_id
             END) AS scoreReadyCount
@@ -766,15 +736,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LEFT JOIN (
             SELECT DISTINCT a.student_id
             FROM biz_student_answer a
-            INNER JOIN (
-                <include refid="latestAnswerIdSubquery"/>
-            ) latest ON latest.answer_id = a.answer_id
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a.lesson_id
                AND current_lq.question_id = a.question_id
             WHERE a.lesson_id = #{lessonId}
               AND (EXISTS (SELECT 1 FROM biz_question counted_q WHERE counted_q.question_id = a.question_id AND counted_q.question_type &lt;&gt; 'practical')
-                   OR NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL)
+                   OR NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL)
         ) ans ON ans.student_id = s.student_id
         LEFT JOIN biz_classroom_performance p
             ON p.student_id = s.student_id
@@ -806,9 +773,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectRecoverablePracticalAnswersForRetry" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         INNER JOIN biz_lesson_question current_lq
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id
@@ -832,9 +796,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectRecoverablePracticalAnswersForManualRetry" resultMap="BizStudentAnswerResult">
         SELECT a.*
         FROM biz_student_answer a
-        INNER JOIN (
-            <include refid="latestAnswerIdSubquery"/>
-        ) latest ON latest.answer_id = a.answer_id
         INNER JOIN biz_lesson_question current_lq
             ON current_lq.lesson_id = a.lesson_id
            AND current_lq.question_id = a.question_id

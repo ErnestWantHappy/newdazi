@@ -502,6 +502,11 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
             bizQuestion.setPreviewStatus("success");
             bizQuestion.setPreviewPath(urlPath);
+        } else if (lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".7z")) {
+            // 压缩包没有可渲染的视觉内容；交给 LibreOffice 只会失败并让状态卡在 pending。
+            // 与批量补丁同一语义：标记 unsupported，教师端按“仅下载”展示。
+            bizQuestion.setPreviewStatus("unsupported");
+            bizQuestion.setPreviewPath(null);
         } else {
             // Office 起始文件统一生成 PDF；不再把 Word 后缀规则误用于 PPT/Excel。
             bizQuestion.setPreviewStatus("pending");

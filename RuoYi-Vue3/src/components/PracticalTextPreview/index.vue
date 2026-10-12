@@ -33,8 +33,10 @@ watch(() => props.attachmentId, async (id) => {
 }, { immediate: true });
 </script>
 <style scoped>
-.text-work-preview { width: 100%; min-height: 180px; }
-.preview-modes { margin: 12px 0; }
-.html-work { width: 100%; min-height: 520px; border: 1px solid #dcdfe6; background: white; }
-.source-work { white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.6 Consolas, monospace; color: #000; background: #fff; padding: 16px; max-height: 65vh; overflow: auto; }
+/* 预览区撑满父容器，源码/网页在内部滚动，避免被祖先 overflow:hidden 裁掉。
+   min-height 保留兜底值，使本组件在非 flex 父容器（如学生端弹窗）中也不会塌陷。 */
+.text-work-preview { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.preview-modes { margin: 12px 0; flex: none; }
+.html-work { flex: 1; width: 100%; min-height: 320px; border: 1px solid #dcdfe6; background: white; }
+.source-work { flex: 1; min-height: 200px; white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.6 Consolas, monospace; color: #000; background: #fff; padding: 16px; overflow: auto; }
 </style>

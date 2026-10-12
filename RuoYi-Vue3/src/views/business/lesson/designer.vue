@@ -122,6 +122,12 @@
             </el-form-item>
 
             <el-form-item label="指派班级" prop="assignedClasses">
+              <!-- 全选仅作用于当前年级过滤后的可见班级，避免误选其他届别 -->
+              <div v-if="filteredManagedClasses.length" class="assign-class-actions">
+                <el-button size="small" link type="primary" @click="selectAllManagedClasses">全选</el-button>
+                <el-button size="small" link type="primary" @click="invertManagedClasses">反选</el-button>
+                <el-button size="small" link type="info" @click="clearManagedClasses">清空</el-button>
+              </div>
               <el-checkbox-group v-model="form.assignedClasses">
                 <el-checkbox 
                   v-for="cls in filteredManagedClasses" 
@@ -665,6 +671,25 @@ const filteredManagedClasses = computed(() => {
   });
   return result;
 });
+
+// 班级勾选批量操作：统一用 "X班" 格式，与勾选框取值保持完全一致
+function managedClassValues() {
+  return filteredManagedClasses.value.map(cls => cls.classCode + '班');
+}
+
+function selectAllManagedClasses() {
+  form.value.assignedClasses = managedClassValues();
+}
+
+function clearManagedClasses() {
+  form.value.assignedClasses = [];
+}
+
+function invertManagedClasses() {
+  const all = managedClassValues();
+  const current = new Set(form.value.assignedClasses || []);
+  form.value.assignedClasses = all.filter(value => !current.has(value));
+}
 
 // 普通编辑只能调整内容年级，已持久化的课程届别保持不变。
 function handleGradeChange(newGrade) {
@@ -1373,6 +1398,11 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+/* 班级批量勾选按钮行：与下方勾选框留出间距，避免视觉拥挤 */
+.assign-class-actions {
+  margin-bottom: 4px;
 }
 
 @media (max-width: 1199px) {

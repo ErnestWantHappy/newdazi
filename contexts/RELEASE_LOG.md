@@ -1,5 +1,24 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-10-12 · 1.30.43 · 教师端体验修复与课堂一键推进恢复
+
+130 双端发布 release `20261012_audit_fix_v1`（**前端先切零停机，后端后切并重启一次**；后端重启完成时刻 130 本地 2026-10-12 18:57:34）。版本号顺延说明：`1.30.41` / `1.30.42` 已于 2026-10-10 被 codex 占用（`update_id` 119/120），本次登记为 **1.30.43**。
+
+- **教师端体验（对应教师反馈 6 项）**：
+  1. 操作题 HTML 源码面板只显示一截 → 面板改为撑满可用高度并在内部滚动，长文件可完整查看；
+  2. 星级打分频闪 → 星级文案按题缓存复用，不再随重绘抖动；
+  3. 文件操作题连线提交后不可见 → 页图渲染提升至 150 DPI / 最长边 2000 / JPEG 0.92，并在批改页新增「页图 / PDF 原图」切换；
+  4. 新增题目时提交格式默认全选；课程设计器指派班级新增全选 / 反选 / 清空；
+  5. 题库操作题起始文件与补充资源支持 RAR / 7Z 上传（压缩包直接标记仅下载，不再卡 pending）；
+  6. Python 题模板下载报错修复（引用不存在的变量）。
+- **课堂一键推进恢复（核心）**：`countScoredStudentsByLessonAndClass` 此前忽略「只提交操作题作品、无文本答案」的学生，班级长期达不到推进门槛，自动与手动推进均被拒绝；现按唯一键 `uk_student_lesson_question` 直接统计，条件放宽为「有文本框内容、有分数或有操作题作品」任一即计入。**该改动是严格超集，只会让推进门槛更易达到**。
+- **成绩页性能**：移除 `BizStudentAnswerMapper` / `StudentProfileMapper` 中成绩查询与学情画像的冗余全局派生表子查询（`SELECT MAX(answer_id) … GROUP BY student_id, lesson_id, question_id`），恢复 `WHERE lesson_id` 下推。
+- **制品与验证**：前端 `index.html` SHA-256 `9cf22d85…`、入口 `index-B281qkOb.js` 3,555,615 B；后端 `ruoyi-admin.jar` 108,072,209 B、SHA-256 `761c0c82…`。切换前整库备份 387,133,113 bytes（SHA-256 `e7d64a65…`），配置与 `service.before`/`nginx-site.before` 同目录保留。`nginx -t` 通过后 `reload`（rc=0），旧 `static` 已合并保留，已打开页面仍可解析旧 chunk；后端切 unit 后 `daemon-reload` + `restart`，**20 秒 READY**，日志 `Started RuoYiApplication in 17.878 seconds`，`Invalid bound statement` / `APPLICATION FAILED TO START` / `Error parsing Mapper` 等危险模式计数全 0，新 mapper 条件命中 16 处，部署包内确认 `page-jpeg-v2`。重启后慢 SQL 由当日累计 2232 条降至 1 条。
+- **发布登记**：`biz_platform_update` 新增 `update_id=121` / `1.30.43` 已置 `PUBLISHED`（published_at 2026-10-12 19:11:17），**真实教师账号 `19157727791` 调 `/business/platform-update/list` 实测第 1 条可见**（`code=200`，`total=97`）。
+- **回滚**：Nginx root 与 systemd unit 均保留 `.before` 备份，整库 dump 可秒级恢复；登记回滚执行 `UPDATE biz_platform_update SET status='DRAFT' WHERE version_no='1.30.43';`。
+- **本次未做、需另行决策**：130 的 `SPRING_QUARTZ_AUTO_STARTUP=false`（`releases/20261008_seat_install_v1/migration-isolation.env`，自 2026-09-09 起）导致 Quartz 未启动，`sys_job` 100–105 全部 `status=0`、`sys_job_log` 停在 2026-09-09 18:05:01。这是「自动推进失效」的**第二个独立原因**，已在本次发布中刻意排除，启用前需单独确认。
+- **未验证**：文件操作题连线的**肉眼最终效果**未做浏览器实测（仅提升渲染保真度并增加原图切换）；LibreOffice PDF 导出滤镜参数未改。AOCI 未同步，相关索引需后续复核。
+
 ## 2026-10-10 · 1.30.42 · 登录页视觉渲染降级与云机房防卡死优化
 
 130 前端 release `20261010_login_render_fix_v1` 已发布（**仅切前端，未重启后端，零停机**；发布时间 130 本地 2026-10-10 17:43）。针对实验小学等云机房（无独立显卡，依赖 CPU 软件渲染）由于大面积实时模糊滤镜造成浏览器合成管线阻塞、输入严重卡死的问题，进行纯静态视觉降级。

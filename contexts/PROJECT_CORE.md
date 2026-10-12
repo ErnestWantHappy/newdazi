@@ -1,6 +1,51 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 上下文版本 **v4.32**，更新日期 **2026-10-10**。130 前端最新正式 **1.30.42**（release `20261010_login_render_fix_v1`；后端仍为 1.30.40 的 `20261009_slowness_fix_v1`，本次未改后端），机位助手 0.2.1；修复与验收证据见 `output/login-diag-20261010/`。旧过程在 [历史归档](PROJECT_HISTORY_20261005.md)。
+> 上下文版本 **v4.34**，更新日期 **2026-10-12**。130 最新正式 **1.30.43**（release `20261012_audit_fix_v1`，前后端同版，后端本次已改并重启一次），机位助手 0.2.1；修复与验收证据见 `output/audit-130-20261012/`。旧过程在 [历史归档](PROJECT_HISTORY_20261005.md)。
+
+## 当前正式修复（2026-10-12，130 双端已发布 1.30.43）
+
+只读审计 130 后按用户「生成方案后直接按推荐方案改代码」完成的修复，已**正式发布到 130**。release `20261012_audit_fix_v1`（前后端同版）。方案与全部探测证据见 `output/audit-130-20261012/`（`方案-130修复.md` 与 p1–p44 脚本/输出）。
+
+**版本号**：`1.30.41` / `1.30.42` 已于 2026-10-10 被 codex 占用（`update_id` 119/120），本次登记顺延为 **1.30.43**（`update_id=121`）。
+
+### 发布事实（已验证）
+
+- **前端**：nginx root 切至 `releases/20261012_audit_fix_v1/frontend`，`index.html` SHA-256 `9cf22d85d6de7a19636806ca74b82e1b9d65cfe33ba82099497617470aa1e5c8`，入口 `index-B281qkOb.js` 3,555,615 B；`nginx -t` 通过后 `reload`（rc=0，零停机）；旧 `static` 已用 `cp -an` 合并保留（2387→2727 个文件），已打开页面仍可解析旧 chunk。
+- **后端**：systemd unit `WorkingDirectory` + `ExecStart` 切至本 release，`daemon-reload` + `restart`，130 本地 **18:57:34 重启，20 秒 READY**，`Started RuoYiApplication in 17.878 seconds`；危险日志模式（`Invalid bound statement` / `APPLICATION FAILED TO START` / `Error parsing Mapper` / `MyBatisSystemException`）计数全 0；新 mapper 条件命中 16 处；部署包内确认 `page-jpeg-v2`。
+- **制品**：后端 `ruoyi-admin.jar` 108,072,209 B、SHA-256 `761c0c82e21eb3895f63fb1ec125cf374c012cf2ec965b4e8620b0e3673dcee7`。
+- **效果**：重启后慢 SQL 由当日累计 2232 条降至 **1** 条。
+- **备份与回滚**：`/data/backups/xueyeceping/20261012_audit_fix_v1/`，含整库 dump 387,133,113 bytes（SHA-256 `e7d64a65…`）与 `service.before` / `nginx-site.before` / `config.before/` / 两个 env 文件 `.before`。回滚 = 还原 unit 与 nginx root 后各重启一次；登记回滚执行 `UPDATE biz_platform_update SET status='DRAFT' WHERE version_no='1.30.43';`。
+- **发布登记**：`biz_platform_update` `update_id=121` / `1.30.43` 已置 `PUBLISHED`（published_at 2026-10-12 19:11:17），**真实教师账号 `19157727791` 调 `/business/platform-update/list` 实测第 1 条可见**（`code=200`，`total=97`）。`contexts/RELEASE_LOG.md` 已登记。
+
+### 已完成的代码改动（9 个文件）
+
+- **后端 SQL 性能**：`StudentProfileMapper.xml`（4 处）+ `BizStudentAnswerMapper.xml`（12 处）移除冗余派生表 join；后者另修 10 处空作品过滤（补 `practical_artifact_id` 判定，覆盖成绩汇总与 `selectClassStatusByLesson`）。
+- **课堂一键推进**：`countScoredStudentsByLessonAndClass` 原忽略「只提交操作题作品、无文本答案」的学生，导致班级达不到推进门槛、自动与手动推进均被拒；现按唯一键直接统计，条件放宽为「有文本框内容、有分数或有操作题作品」任一即计入。**该改动是严格超集，只会让推进门槛更易达到。**
+- **后端压缩包**：`BizQuestionServiceImpl.handlePracticalQuestionFile` 对 ZIP/RAR/7Z 置 `unsupported`、不再交 LibreOffice（原会失败并永久卡 `pending`）；`MimeTypeUtils` 白名单补 `7z`。
+- **后端页图精度**：`PracticalPageRenderer` DPI 120→150、MAX_EDGE 1800→2000、JPEG 质量 0.85→0.92，`RENDERER_VERSION` 升 `page-jpeg-v2` 以失效旧缓存。
+- **前端**：`PracticalTextPreview` 源码区撑满父容器并在内部滚动（修「只能看一截」）；`grading.vue` 星级 `texts` 按满分缓存消除频闪，并新增「页图 / PDF 原图」切换（默认仍为页图）；`designer.vue` 指派班级加全选/反选/清空；`question/index.vue` 提交格式默认全勾 16 项、起始文件与资源支持 RAR/7Z、修复 `downloadPythonTemplate`（原引用未定义变量 `questions`，点击必抛错）。
+
+### 关键实测事实（生产库只读，判定依据）
+
+1. **`biz_student_answer` 上 `uk_student_lesson_question` 为 UNIQUE**（三列 student_id/lesson_id/question_id），且 `rows_all = groups_cnt = 424414` 严格相等 → 原 `MAX(answer_id) GROUP BY 三列` 派生表是**恒等式**，join 回原表等于原表全选；其全局 GROUP BY 会强制物化全表并使 `WHERE lesson_id` 无法下推。**A/B 对拍 4 组查询结果完全一致（diff = 0）**。
+2. **线上 jar 与 git 的 9 处语句差异已逐条归一化比对**：除「派生表写法」外**无任何其他未入库业务逻辑**，改写后不存在「从 HEAD 打包会静默回退」的风险。
+3. **空作品过滤原有真实漏算**：`practical_version_id IS NULL` 判定会漏掉「已交作品但未生成版本号」的提交。全库被挡 **196 行，其中 150 行带真实 `practical_artifact_id`**，仅 46 行是真正空白。
+4. **lesson 639「一键推进 0/43」不是 bug**：该课全平台答题表 0 行、`biz_student_task_state` 0 行、`classroom_performance` 0 行；1/2/8 班实际提交的是 lesson 572（42/41/38 人）。
+5. `schedule-pool-*` 的 1962 条 ERROR **全部来自 Druid `StatFilter` 慢 SQL 告警**，非 Quartz 异常。
+
+### 验收状态
+
+- `mvn -pl ruoyi-business -am compile` 通过；`mvn -pl ruoyi-admin -am clean package` 通过。
+- `npm run build:prod` 通过（EXIT=0，0 错误）。
+- 线上后检：三服务 active、`/profile/` 200、验证码 200、gzip_static 命中（入口 Content-Length 957,769 + `Content-Encoding: gzip`）。
+- **未做**：文件操作题连线的**肉眼最终效果**未做浏览器实测（仅提升渲染保真度并增加原图切换）；LibreOffice PDF 导出滤镜参数未改；未做课堂时段整班并发压测；学生端 6 项交互未逐条现场复验。
+
+### 剩余风险与下一步
+
+1. **`SPRING_QUARTZ_AUTO_STARTUP=false` 未解决**：`releases/20261008_seat_install_v1/migration-isolation.env` 自 2026-09-09 起将其关闭，Quartz 从未启动，`sys_job` 100–105 全部 `status=0`、`sys_job_log` 冻结在 2026-09-09 18:05:01。这是「自动推进失效」的**第二个独立原因**，本次刻意排除，**启用前需单独确认并安排在非课堂时段**。
+2. 页图精度提升会使既有页图缓存失效，首次访问按需重渲染，课堂高峰有一次性转换压力。
+3. `task 315` 条 `failed` 转换积压未清理；`ResourceAccessMapper.selectStudentAnswerIdByResource` 两列均无索引的鉴权全表扫未动。
+4. AOCI 未同步，相关索引需后续复核。
 
 ## 当前正式修复（2026-10-10，130 前端已发布 1.30.42）
 

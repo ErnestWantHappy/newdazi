@@ -30,9 +30,10 @@ import com.ruoyi.common.exception.ServiceException;
 @Service
 public class PracticalPageRenderer
 {
-    public static final String RENDERER_VERSION = "page-jpeg-v1";
+    // v2：提高 DPI 与 JPEG 质量以保住细连线，版本号变更用于让旧页图缓存失效
+    public static final String RENDERER_VERSION = "page-jpeg-v2";
     private static final int MAX_PAGES = 50;
-    private static final int MAX_EDGE = 1800;
+    private static final int MAX_EDGE = 2000;
 
     public List<String> render(PracticalAttachment attachment, File visualSource)
     {
@@ -166,7 +167,7 @@ public class PracticalPageRenderer
             PDFRenderer renderer = new PDFRenderer(document);
             for (int i = 0; i < pageCount; i++)
             {
-                BufferedImage rendered = renderer.renderImageWithDPI(i, 120, ImageType.RGB);
+                BufferedImage rendered = renderer.renderImageWithDPI(i, 150, ImageType.RGB);
                 File target = new File(outputDir, String.format("page-%03d.jpg", i + 1));
                 writeJpeg(scale(rendered), target);
                 result.add(target);
@@ -240,7 +241,7 @@ public class PracticalPageRenderer
             writer.setOutput(output);
             ImageWriteParam params = writer.getDefaultWriteParam();
             params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            params.setCompressionQuality(0.85F);
+            params.setCompressionQuality(0.92F);
             writer.write(null, new IIOImage(image, null, null), params);
         }
         finally
