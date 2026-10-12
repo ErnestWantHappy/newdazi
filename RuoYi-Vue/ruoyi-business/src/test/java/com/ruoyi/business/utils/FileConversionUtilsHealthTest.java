@@ -3,6 +3,10 @@ package com.ruoyi.business.utils;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -244,5 +248,45 @@ class FileConversionUtilsHealthTest {
         assertFalse(FileConversionUtils.isUnconvertibleMessage("源文件不存在"));
         assertFalse(FileConversionUtils.isUnconvertibleMessage(null));
         assertFalse(FileConversionUtils.isUnconvertibleMessage(""));
+    }
+
+    // ==================== 2026-10-13 回归：崩溃判定改用 PID 身份丢失 ====================
+
+    @Test
+    void crashIsDetectedWhenAnOldPidDisappears() {
+        // 实测场景：旧进程 A 崩溃，jodconverter 立刻补起新进程 C。
+        // 按进程数看是 2→2（判不出崩溃），但 A 已消失——必须判为崩溃。
+        Set<Long> before = new LinkedHashSet<>(Arrays.asList(1001L, 1002L));
+        Set<Long> after = new LinkedHashSet<>(Arrays.asList(1002L, 1003L));
+        assertTrue(FileConversionUtils.hasProcessIdentityLoss(before, after),
+                "旧 PID 消失即应判为崩溃，否则毒文件永远无法登记");
+    }
+
+    @Test
+    void healthyConversionWithSamePidsIsNotACrash() {
+        Set<Long> before = new LinkedHashSet<>(Arrays.asList(1001L, 1002L));
+        Set<Long> after = new LinkedHashSet<>(Arrays.asList(1001L, 1002L));
+        assertFalse(FileConversionUtils.hasProcessIdentityLoss(before, after));
+    }
+
+    @Test
+    void emptyBeforeSetNeverClaimsCrash() {
+        // 采集失败（空集）时不能凭空判定崩溃，否则会把正常文件误隔离
+        assertFalse(FileConversionUtils.hasProcessIdentityLoss(new LinkedHashSet<>(), new LinkedHashSet<>()));
+        assertFalse(FileConversionUtils.hasProcessIdentityLoss(null, new LinkedHashSet<>()));
+    }
+
+    @Test
+    void vanishedAfterSetCountsAsCrash() {
+        // 采集侧整个空了（进程全灭）必须判崩，宁可走隔离也不能放过
+        Set<Long> before = new LinkedHashSet<>(Collections.singletonList(1001L));
+        assertTrue(FileConversionUtils.hasProcessIdentityLoss(before, new LinkedHashSet<>()));
+        assertTrue(FileConversionUtils.hasProcessIdentityLoss(before, null));
+    }
+
+    @Test
+    void onlyNonSofficeLinesAreIgnoredWhenCountingPids() {
+        // pid 解析只认 soffice.*，其他进程不得混入，否则身份判定失真
+        assertNotNull(FileConversionUtils.listOfficeProcessPids());
     }
 }

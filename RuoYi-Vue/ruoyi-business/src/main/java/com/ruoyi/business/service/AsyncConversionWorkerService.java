@@ -26,6 +26,8 @@ public class AsyncConversionWorkerService {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncConversionWorkerService.class);
     private static final int MAX_ERROR_MESSAGE_LENGTH = 255;
+    /** 与 AsyncConversionService 的自动重试上限保持一致：顶满即不再被小时级任务捞回 */
+    private static final int MAX_AUTO_RETRY_COUNT = 3;
     private static final ObjectMapper JSON = new ObjectMapper();
 
     @Autowired
@@ -138,6 +140,13 @@ public class AsyncConversionWorkerService {
                 answer.setPreviewPath(previewUrlPath);
                 answer.setPreviewErrorMessage(null);
                 studentAnswerMapper.updatePreviewStatus(answer);
+            } else if (FileConversionUtils.isUnconvertible(docxFullPath)) {
+                // 共享池和一次性隔离进程都转不动这份文件：顶满重试计数并把判定文本落库。
+                // 只在内存里登记没用——手动重转会传 ignoreRetryLimit=true 绕过计数上限，
+                // 重启后内存登记也会丢，必须靠这行文本在领取前把它拦住。
+                // 原始文件保留不删，学生重新导出后是新文件新行，不会被这条误伤。
+                answer.setPreviewRetryCount(MAX_AUTO_RETRY_COUNT);
+                markFailed(answer, FileConversionUtils.UNCONVERTIBLE_MESSAGE);
             } else {
                 markFailed(answer, "PDF 文件生成失败");
             }
@@ -192,7 +201,14 @@ public class AsyncConversionWorkerService {
                         source.getAbsolutePath(), source.getParent());
                 visualSource = pdfFullPath == null ? null : new File(pdfFullPath);
                 if (visualSource == null || !visualSource.isFile()) {
-                    markCountyFailed(answer, "PDF 文件生成失败");
+                    if (FileConversionUtils.isUnconvertible(source.getAbsolutePath())) {
+                        // 与日常操作题同理：两条通道都失败才登记，顶满两个重试计数让自动/手动重转都拿不到它
+                        answer.setNormalizedRetryCount(MAX_AUTO_RETRY_COUNT);
+                        answer.setPreviewRetryCount(MAX_AUTO_RETRY_COUNT);
+                        markCountyFailed(answer, FileConversionUtils.UNCONVERTIBLE_MESSAGE);
+                    } else {
+                        markCountyFailed(answer, "PDF 文件生成失败");
+                    }
                     return;
                 }
                 String previewPrefix = answerFilePath.substring(0, answerFilePath.lastIndexOf('/') + 1);

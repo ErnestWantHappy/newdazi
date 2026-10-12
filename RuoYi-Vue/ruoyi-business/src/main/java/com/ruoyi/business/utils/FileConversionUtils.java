@@ -18,8 +18,10 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -445,6 +447,7 @@ public class FileConversionUtils {
 
             long startTime = System.currentTimeMillis();
             beginInFlight(startTime, officeFilePath);
+            Set<Long> pidsBefore = listOfficeProcessPids();
             try {
                 if (!executeConversionWithSharedLock(officeFile, pdfFile)) {
                     markServiceFailure("服务未就绪");
@@ -467,26 +470,28 @@ public class FileConversionUtils {
                 markServiceFailure("PDF未生成");
                 return null;
             } catch (OfficeException e) {
-                // 进程数掉到实例数以下 = soffice 崩溃了，这是唯一能把“文档级失败”
-                // 升级为服务级失败的证据。不要用异常文本判断：实测崩溃时上层拿到的
-                // 是 “Local conversion failed”，不含任何连接/socket 关键字。
-                boolean processCrashed = countOfficeProcesses() < officeInstanceCount;
+                // 崩溃判定必须看 PID 身份，不能看进程数、也不能看异常文本。
+                // 实测：坏文档让 soffice SIGABRT 后，jodconverter 抛的是
+                // "Task was cancelled"（含 cancelled，会被当作服务级），
+                // 且它会立刻补起新实例，进程数在同一秒内就恢复正常，
+                // 所以“进程数 < 实例数”与“异常文本含连接类关键字”两条判据都失效。
+                Set<Long> pidsAfter = listOfficeProcessPids();
+                boolean processCrashed = hasProcessIdentityLoss(pidsBefore, pidsAfter);
 
-                if (!isServiceLevelFailure(e) && !processCrashed) {
-                    // 纯文档级失败：只记录，不计入服务失败计数。
+                if (processCrashed) {
+                    // 有 soffice 进程消失 = 该文件把池打崩，登记毒文件后改走隔离进程。
+                    // 这一步与异常文本无关，避免再次因为判据失效而漏登记。
+                    int hits = registerPoisonFileHit(officeFilePath);
+                    log.warn("【服务模式转换】检测到 soffice 进程身份丢失（命中次数={}, before={}, after={}）: {}",
+                            hits, pidsBefore, pidsAfter, officeFilePath);
+                } else if (!isServiceLevelFailure(e)) {
+                    // 纯文档级失败：进程都还在，只记录，不计入服务失败计数。
                     // 旧实现这里调用 markServiceFailure，导致一份坏文档就能把
                     // consecutiveServiceFailures 推到阈值，触发整池重启——
                     // 这正是 130 上「9× 连续服务失败达到阈值(4>=3)」的来源。
                     log.error("【服务模式转换】文档转换失败，不影响服务健康: {} 文件={}", e.getMessage(), officeFilePath);
                     markDocumentFailureOnly();
                     return null;
-                }
-
-                if (!isServiceLevelFailure(e)) {
-                    // 文档级异常 + 进程真的没了：判定为该文件把池打崩，登记毒文件
-                    int hits = registerPoisonFileHit(officeFilePath);
-                    log.warn("【服务模式转换】转换导致 soffice 进程减少（命中次数={}）: {}",
-                            hits, officeFilePath);
                 }
 
                 int failureCount = serviceFailureCount.incrementAndGet();
@@ -1297,6 +1302,99 @@ public class FileConversionUtils {
 
     private static boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    }
+
+    /**
+     * 采集当前 soffice 进程的 PID 集合（跨平台）。
+     * <p>
+     * 为什么必须按 PID 而不是按进程数判断崩溃：
+     * 实测 LibreOffice 在坏文档上 SIGABRT 自我终止后，jodconverter 会在同一秒内补起新实例，
+     * 进程计数立刻恢复到实例数，按“进程数 &lt; 实例数”判定会永远看不到这次崩溃。
+     * 崩溃前存在的 PID 在崩溃后必然消失，即使已补起新实例，PID 也已换成新的，
+     * 因此旧 PID 缺失是更可靠的证据。
+     */
+    static Set<Long> listOfficeProcessPids() {
+        Set<Long> pids = new LinkedHashSet<>();
+        try {
+            ProcessBuilder processBuilder = isWindows()
+                    ? new ProcessBuilder("tasklist", "/FO", "CSV", "/NH")
+                    : new ProcessBuilder("ps", "-u", System.getProperty("user.name"), "-o", "pid=,comm=");
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), Charset.defaultCharset()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    Long pid = parseOfficePid(line);
+                    if (pid != null) {
+                        pids.add(pid);
+                    }
+                }
+            }
+            process.waitFor();
+        } catch (Exception e) {
+            log.debug("【LibreOffice服务】采集 soffice PID 失败: {}", e.getMessage());
+        }
+        return pids;
+    }
+
+    /** 从一行 ps / tasklist 输出中解析 soffice 进程 PID；非 soffice 行返回 null。 */
+    private static Long parseOfficePid(String line) {
+        if (line == null || line.trim().isEmpty()) {
+            return null;
+        }
+        if (isWindows()) {
+            // tasklist CSV： "soffice.bin","1234","Console",...
+            String[] fields = line.split("\",\"");
+            if (fields.length < 2) {
+                return null;
+            }
+            String name = fields[0].replace("\"", "").trim().toLowerCase(Locale.ROOT);
+            if (!name.equals("soffice.bin") && !name.equals("soffice.exe")) {
+                return null;
+            }
+            try {
+                return Long.parseLong(fields[1].replace("\"", "").trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        // ps： " 2190478 soffice.bin"
+        String[] parts = line.trim().split("\\s+");
+        if (parts.length < 2) {
+            return null;
+        }
+        String comm = parts[1];
+        if (!comm.equals("soffice.bin") && !comm.equals("soffice.exe")) {
+            return null;
+        }
+        try {
+            return Long.parseLong(parts[0]);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 转换前后是否发生 soffice 进程身份丢失（即有进程消失）。
+     * 纯函数，便于单测覆盖崩溃判定，不受真实进程环境影响。
+     *
+     * @param before 转换前 PID 集合；为空表示采集失败，不能据此判崩
+     * @param after  转换后 PID 集合；采集失败（null/空）视为发生了崩溃，宁可隔离也不放过
+     */
+    static boolean hasProcessIdentityLoss(Set<Long> before, Set<Long> after) {
+        if (before == null || before.isEmpty()) {
+            return false;
+        }
+        if (after == null || after.isEmpty()) {
+            return true;
+        }
+        for (Long pid : before) {
+            if (!after.contains(pid)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static boolean isManagedLinuxOfficeProcess(String line, String processName, int[] ports) {

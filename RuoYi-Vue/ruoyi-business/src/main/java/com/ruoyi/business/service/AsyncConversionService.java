@@ -316,7 +316,12 @@ public class AsyncConversionService {
     }
 
     /**
-     * 学生答题预览转换统一执行入口
+     * 学生预览转换统一执行入口。
+     * <p>
+     * 注意：当前调用链为 claimRetryAndExecute -> enqueueClaimedPreview，
+     * 实际执行的是 AsyncConversionWorkerService#executeClaimedPreviewAsync。
+     * 本方法与下方 convertCountyExamPreview 目前没有调用方，保留仅为兼容历史引用。
+     * 修改转换或毒文件隔离逻辑时必须改 AsyncConversionWorkerService，改这里线上不生效。
      */
     private void convertClaimedPreview(Long answerId, String triggerSource) {
         BizStudentAnswer answer = studentAnswerMapper.selectById(answerId);
