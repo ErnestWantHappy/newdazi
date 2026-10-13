@@ -1,0 +1,11 @@
+# 连接符坐标兼容设计
+
+2026-10-13。交接实验只能证明负偏移与丢线相关；取绝对值后明显右移。关键样本没有表格，Word 锚点实际位于环绕底图右侧；补偿原点为 `图片水平偏移 + 图片宽度 + effectExtent.r + distR`。
+
+部分 LibreOffice 分支已经补偿原点，仅改为正的栏内偏移会重复右移。两套分支统一为页面绝对坐标：`pgMar.left + 环绕右边缘 + 原连接符偏移`。DrawingML 改 `relativeFrom=page` / `posOffset`；VML 改 `mso-position-horizontal-relative:page` / `margin-left`。垂直位置、尺寸、翻转和箭头保持。
+
+`DocxConnectorNormalizer` 仅覆盖单节单栏正文、左侧窄空隙的方形环绕底图及重叠段落；对象须有 `straightConnector1` 和单一 VML `#_x0000_t32`。两分支允许 Word 0.05pt 舍入，真正不一致则跳过。表格、多栏、其他图形、正常 v:line、合法负坐标及补偿后仍出界保持原转换。
+
+XML 禁外部实体、document.xml 上限 8MiB；坏 ZIP/XML、缺 XML 或预处理异常回退原件。只在有修正时建唯一临时目录，文件名保持，转换结束后清理；毒文件判定继续使用原路径。
+
+`page-jpeg-v3` 阻止新转换复用旧缓存，不自动领取旧成功附件；发布后精确重算 25 份。交接 49 份是负值候选，实际 25 份 / 139 条符合本规则；24 份逐字节保持。不得将真实页外图形改造成作答。学生证据只存 `output/connector-fix-20261013/`，不公开提交。

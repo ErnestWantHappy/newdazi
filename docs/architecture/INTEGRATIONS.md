@@ -1,5 +1,9 @@
 # 外部协议与实时链路
 
+## 2026-10-13 连线题转换候选
+
+Office 六通道 → 公共 FileConversionUtils → 可确定环绕原点的 DOCX 临时副本（两分支页面坐标）→ 既有共享池/隔离进程 → PDF / page-jpeg-v3。原件与毒文件身份仍使用原路径，临时副本在转换结束后清理；未知布局保留原转换。无新依赖或配置，52 项测试、49 份样本验证通过，正式切换与 25 份旧图重算待完成。规则、范围与回退见 [专题设计](../../contexts/connector-render-fix-20261013/design.md) 与 [验收](../../contexts/connector-render-fix-20261013/verification.md)；AOCI 未同步。
+
 > 当前正式1.30.27（2026-10-05）：客户端0.2.0学生直接运行自动读取IP，原网页登录确定学校，教师设置名称并确认。正式配对/DPAPI、重复关联、撤销及98秒Python续期通过；下面较早记录为历史。见 [自动关联验收](../../contexts/classroom-experience-20261002/seat-helper-auto-verification-20261005.md)。
 
 > 2026-10-03正式1.30.26：用户要求HTTP可用，助手全局及61校已开启；客户端0.1.2与服务端允许HTTP/HTTPS根地址，注册码/设备/会话/长期基准规则保留。网页30秒续期不依赖首页，正式Python页面超过98秒仍关联；撤销/未安装/学校关闭不影响正常教学。HTTP不加密，按学校可信网络使用；机房自启/还原仍待现场。见 [当前事实](../../contexts/PROJECT_CORE.md) 与 [助手验收](../../contexts/classroom-experience-20261002/seat-helper-release-verification-20261003.md)，下面默认关闭为历史阶段。

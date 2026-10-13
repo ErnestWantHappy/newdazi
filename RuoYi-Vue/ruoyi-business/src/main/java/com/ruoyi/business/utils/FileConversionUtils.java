@@ -405,6 +405,14 @@ public class FileConversionUtils {
             return null;
         }
 
+        try (DocxConnectorNormalizer.PreparedInput prepared = DocxConnectorNormalizer.prepare(officeFile)) {
+            // 隔离判定继续使用原路径，临时副本不能改变毒文件身份与重试规则。
+            return convertPreparedOffice(prepared.getFile(), officeFilePath, outputDir);
+        }
+    }
+
+    private static String convertPreparedOffice(File officeFile, String officeFilePath, String outputDir) {
+
         File outputDirectory = new File(outputDir);
         if (!outputDirectory.exists() && !outputDirectory.mkdirs()) {
             log.error("输出目录创建失败: {}", outputDir);

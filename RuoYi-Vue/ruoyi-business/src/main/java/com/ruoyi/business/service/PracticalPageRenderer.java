@@ -30,8 +30,8 @@ import com.ruoyi.common.exception.ServiceException;
 @Service
 public class PracticalPageRenderer
 {
-    // v2：提高 DPI 与 JPEG 质量以保住细连线，版本号变更用于让旧页图缓存失效
-    public static final String RENDERER_VERSION = "page-jpeg-v2";
+    // v3：连接符坐标兼容修复后，禁止复用旧版本缺线的页图缓存。
+    public static final String RENDERER_VERSION = "page-jpeg-v3";
     private static final int MAX_PAGES = 50;
     private static final int MAX_EDGE = 2000;
 
