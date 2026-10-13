@@ -27,6 +27,11 @@ public class PracticalAttachmentConversionService
 {
     private static final Logger log = LoggerFactory.getLogger(PracticalAttachmentConversionService.class);
     private static final ObjectMapper JSON = new ObjectMapper();
+    /**
+     * 与 PracticalArtifactService.MAX_NORMALIZATION_RETRY_COUNT 及重置 SQL 的
+     * {@code normalized_retry_count < 3} 保持一致：顶满即不再被任何自动/人工重试领取。
+     */
+    private static final int MAX_RETRY_COUNT = 3;
 
     @Autowired private PracticalArtifactMapper artifactMapper;
     @Autowired private BizStudentAnswerMapper studentAnswerMapper;
@@ -74,8 +79,7 @@ public class PracticalAttachmentConversionService
                 visualSource = pdfPath == null ? null : new File(pdfPath);
                 if (visualSource == null || !visualSource.isFile())
                 {
-                    markPreviewFailed(attachment, "PDF 文件生成失败");
-                    markNormalizationFailed(attachment, "PDF 文件生成失败");
+                    markOfficeConversionFailed(attachment, source.getAbsolutePath());
                     return;
                 }
                 String prefix = attachment.getResourcePath().substring(
@@ -174,6 +178,40 @@ public class PracticalAttachmentConversionService
         attachment.setNormalizedErrorMessage(truncate(reason));
         attachment.setUpdateTime(new Date());
         artifactMapper.updateAttachmentNormalization(attachment);
+    }
+
+    /**
+     * Office 素材转 PDF 失败后的收口。
+     * <p>
+     * 与操作题（AsyncConversionWorkerService）、区域抽测（同前）两条通道保持同一判定：
+     * 只有共享池和一次性隔离进程都转不动，FileConversionUtils 才会把它登记为不可转换，
+     * 此时必须顶满两个重试计数并落库标记文本。
+     * <p>
+     * 为什么不能只写“PDF 文件生成失败”：教师看到这句话会以为是临时故障而反复手动重转，
+     * 而手动重转走的 {@code resetAttachmentNormalization} 条件是
+     * {@code normalized_retry_count < 3}，计数没顶满就每次都能捞回，
+     * 每捞一次就把共享池再打崩一轮，这正是线上反复崩溃的成因之一。
+     * <p>
+     * 原始素材文件一律保留不删；教师重新上传后是新文件新行，不会被这条标记误伤。
+     *
+     * @param sourceAbsolutePath 源文件绝对路径，用于查询是否已被登记为不可转换
+     */
+    void markOfficeConversionFailed(PracticalAttachment attachment, String sourceAbsolutePath)
+    {
+        if (FileConversionUtils.isUnconvertible(sourceAbsolutePath))
+        {
+            attachment.setPreviewRetryCount(MAX_RETRY_COUNT);
+            attachment.setNormalizedRetryCount(MAX_RETRY_COUNT);
+            markPreviewFailed(attachment, FileConversionUtils.UNCONVERTIBLE_MESSAGE);
+            markNormalizationFailed(attachment, FileConversionUtils.UNCONVERTIBLE_MESSAGE);
+            log.warn("【逻辑作品页图】素材两条通道均无法转换，已标记并停止重试 attachmentId={}",
+                    attachment.getAttachmentId());
+        }
+        else
+        {
+            markPreviewFailed(attachment, "PDF 文件生成失败");
+            markNormalizationFailed(attachment, "PDF 文件生成失败");
+        }
     }
 
     private void markPreviewFailed(PracticalAttachment attachment, String reason)
