@@ -1,0 +1,1122 @@
+[
+  {
+    "externalId": "PYV3-061",
+    "title": "数字大于 10 吗",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数。如果大于 10 输出“是”，否则输出“否”。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "根据判断输出“是”或“否”。",
+    "constraints": "-1000 ≤ 整数 ≤ 1000。",
+    "sampleExplanation": "输入 15 时，按题意计算后输出 是。",
+    "hint": "比较表达式是 number > 10。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nif number > 10:\n    print(\"是\")\nelse:\n    print(\"否\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "15\n",
+        "expectedOutput": "是\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "10\n",
+        "expectedOutput": "否\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "11\n",
+        "expectedOutput": "是\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-3\n",
+        "expectedOutput": "否\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-062",
+    "title": "判断是不是正数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "正数"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数，正数输出“正数”，否则输出“不是正数”。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "输出判断结果。",
+    "constraints": "-1000 ≤ 整数 ≤ 1000。",
+    "sampleExplanation": "输入 8 时，按题意计算后输出 正数。",
+    "hint": "正数必须严格大于 0。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nif number > 0:\n    print(\"正数\")\nelse:\n    print(\"不是正数\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8\n",
+        "expectedOutput": "正数\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "不是正数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-1\n",
+        "expectedOutput": "不是正数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1000\n",
+        "expectedOutput": "正数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-063",
+    "title": "判断是不是零",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "相等判断"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数，等于 0 输出“是零”，否则输出“不是零”。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "输出判断结果。",
+    "constraints": "-1000 ≤ 整数 ≤ 1000。",
+    "sampleExplanation": "输入 0 时，按题意计算后输出 是零。",
+    "hint": "判断相等要使用 ==。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nif number == 0:\n    print(\"是零\")\nelse:\n    print(\"不是零\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "0\n",
+        "expectedOutput": "是零\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "不是零\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-1\n",
+        "expectedOutput": "不是零\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "999\n",
+        "expectedOutput": "不是零\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-064",
+    "title": "判断是不是偶数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "取余",
+      "偶数"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数，偶数输出“偶数”，否则输出“不是偶数”。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "输出判断结果。",
+    "constraints": "-10000 ≤ 整数 ≤ 10000。",
+    "sampleExplanation": "输入 8 时，按题意计算后输出 偶数。",
+    "hint": "能被 2 整除的数除以 2 余数为 0。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nif number % 2 == 0:\n    print(\"偶数\")\nelse:\n    print(\"不是偶数\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8\n",
+        "expectedOutput": "偶数\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "7\n",
+        "expectedOutput": "不是偶数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "0\n",
+        "expectedOutput": "偶数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-4\n",
+        "expectedOutput": "偶数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-065",
+    "title": "判断是不是奇数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "取余",
+      "奇数"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数，奇数输出“奇数”，否则输出“不是奇数”。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "输出判断结果。",
+    "constraints": "-10000 ≤ 整数 ≤ 10000。",
+    "sampleExplanation": "输入 7 时，按题意计算后输出 奇数。",
+    "hint": "奇数除以 2 的余数不是 0。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nif number % 2 != 0:\n    print(\"奇数\")\nelse:\n    print(\"不是奇数\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "7\n",
+        "expectedOutput": "奇数\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "8\n",
+        "expectedOutput": "不是奇数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "0\n",
+        "expectedOutput": "不是奇数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-3\n",
+        "expectedOutput": "奇数\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-066",
+    "title": "两个数谁更大",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入两个整数，输出较大的数；两个数相等时输出“相等”。",
+    "inputDescription": "一行两个整数 a、b。",
+    "outputDescription": "输出较大整数或文字“相等”。",
+    "constraints": "-1000 ≤ a,b ≤ 1000。",
+    "sampleExplanation": "输入 8 3 时，按题意计算后输出 8。",
+    "hint": "需要分别处理 a>b、a<b 和相等。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b = map(int, input().split())\nif a > b:\n    print(a)\nelif b > a:\n    print(b)\nelse:\n    print(\"相等\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8 3\n",
+        "expectedOutput": "8\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "3 8\n",
+        "expectedOutput": "8\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "5 5\n",
+        "expectedOutput": "相等\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-2 -7\n",
+        "expectedOutput": "-2\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-067",
+    "title": "两个数谁更小",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入两个整数，输出较小的数；两个数相等时输出“相等”。",
+    "inputDescription": "一行两个整数 a、b。",
+    "outputDescription": "输出较小整数或文字“相等”。",
+    "constraints": "-1000 ≤ a,b ≤ 1000。",
+    "sampleExplanation": "输入 8 3 时，按题意计算后输出 3。",
+    "hint": "把大于号换成小于号，仍要处理相等。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b = map(int, input().split())\nif a < b:\n    print(a)\nelif b < a:\n    print(b)\nelse:\n    print(\"相等\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8 3\n",
+        "expectedOutput": "3\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "3 8\n",
+        "expectedOutput": "3\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "5 5\n",
+        "expectedOutput": "相等\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-2 -7\n",
+        "expectedOutput": "-7\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-068",
+    "title": "是不是满分",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入考试成绩，等于 100 输出“满分”，否则输出“继续努力”。",
+    "inputDescription": "一行一个整数成绩。",
+    "outputDescription": "根据成绩输出指定文字。",
+    "constraints": "0 ≤ 成绩 ≤ 100。",
+    "sampleExplanation": "输入 100 时，按题意计算后输出 满分。",
+    "hint": "满分必须正好等于 100。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "score = int(input())\nif score == 100:\n    print(\"满分\")\nelse:\n    print(\"继续努力\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "100\n",
+        "expectedOutput": "满分\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "99\n",
+        "expectedOutput": "继续努力\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "0\n",
+        "expectedOutput": "继续努力\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "60\n",
+        "expectedOutput": "继续努力\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-069",
+    "title": "考试及格了吗",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入考试成绩，达到 60 分输出“及格”，否则输出“不及格”。",
+    "inputDescription": "一行一个整数成绩。",
+    "outputDescription": "输出“及格”或“不及格”。",
+    "constraints": "0 ≤ 成绩 ≤ 100。",
+    "sampleExplanation": "输入 60 时，按题意计算后输出 及格。",
+    "hint": "60 分也算及格，所以使用 >=。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "score = int(input())\nif score >= 60:\n    print(\"及格\")\nelse:\n    print(\"不及格\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "60\n",
+        "expectedOutput": "及格\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "59\n",
+        "expectedOutput": "不及格\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "100\n",
+        "expectedOutput": "及格\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "0\n",
+        "expectedOutput": "不及格\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-070",
+    "title": "上学有没有迟到",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "时间"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入到校时间比规定时间晚了多少分钟。数值不大于 0 输出“准时”，大于 0 输出“迟到”。",
+    "inputDescription": "一行一个整数，表示晚到的分钟数；提前到用负数表示。",
+    "outputDescription": "输出“准时”或“迟到”。",
+    "constraints": "-60 ≤ 分钟数 ≤ 120。",
+    "sampleExplanation": "输入 0 时，按题意计算后输出 准时。",
+    "hint": "0 表示刚好按时，也属于准时。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "minutes = int(input())\nif minutes <= 0:\n    print(\"准时\")\nelse:\n    print(\"迟到\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "0\n",
+        "expectedOutput": "准时\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "5\n",
+        "expectedOutput": "迟到\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-10\n",
+        "expectedOutput": "准时\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "120\n",
+        "expectedOutput": "迟到\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-071",
+    "title": "年龄是否符合活动要求",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "逻辑与"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "活动允许 10～14 岁学生参加。输入年龄，符合输出“可以参加”，否则输出“不能参加”。",
+    "inputDescription": "一行一个整数年龄。",
+    "outputDescription": "输出是否可以参加。",
+    "constraints": "1 ≤ 年龄 ≤ 100。",
+    "sampleExplanation": "输入 12 时，按题意计算后输出 可以参加。",
+    "hint": "年龄要同时满足不小于 10 和不大于 14。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "age = int(input())\nif 10 <= age <= 14:\n    print(\"可以参加\")\nelse:\n    print(\"不能参加\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "12\n",
+        "expectedOutput": "可以参加\n",
+        "isPublic": true,
+        "scoreWeight": 20,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "10\n",
+        "expectedOutput": "可以参加\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "14\n",
+        "expectedOutput": "可以参加\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "9\n",
+        "expectedOutput": "不能参加\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 4
+      },
+      {
+        "caseName": "隐藏测试点 4",
+        "inputText": "15\n",
+        "expectedOutput": "不能参加\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 5
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-072",
+    "title": "温度是否过高",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "温度"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入整数温度，35 摄氏度及以上输出“温度过高”，否则输出“温度正常”。",
+    "inputDescription": "一行一个整数温度。",
+    "outputDescription": "输出温度判断结果。",
+    "constraints": "-50 ≤ 温度 ≤ 60。",
+    "sampleExplanation": "输入 35 时，按题意计算后输出 温度过高。",
+    "hint": "临界值 35 也属于过高。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "temperature = int(input())\nif temperature >= 35:\n    print(\"温度过高\")\nelse:\n    print(\"温度正常\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "35\n",
+        "expectedOutput": "温度过高\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "34\n",
+        "expectedOutput": "温度正常\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "60\n",
+        "expectedOutput": "温度过高\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-10\n",
+        "expectedOutput": "温度正常\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-073",
+    "title": "自动开灯还是关灯",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "传感器"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入光线亮度值。亮度小于 50 输出“开灯”，否则输出“关灯”。",
+    "inputDescription": "一行一个整数亮度值。",
+    "outputDescription": "输出“开灯”或“关灯”。",
+    "constraints": "0 ≤ 亮度值 ≤ 100。",
+    "sampleExplanation": "输入 30 时，按题意计算后输出 开灯。",
+    "hint": "亮度越小表示环境越暗。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "light = int(input())\nif light < 50:\n    print(\"开灯\")\nelse:\n    print(\"关灯\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "30\n",
+        "expectedOutput": "开灯\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "50\n",
+        "expectedOutput": "关灯\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "0\n",
+        "expectedOutput": "开灯\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "100\n",
+        "expectedOutput": "关灯\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-074",
+    "title": "判断输入的口令",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "字符串比较"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一行口令。口令等于 python 时输出“正确”，否则输出“错误”。",
+    "inputDescription": "一行一个只含小写英文字母的口令。",
+    "outputDescription": "输出“正确”或“错误”。",
+    "constraints": "口令长度为 1～20。",
+    "sampleExplanation": "输入 python 时，按题意计算后输出 正确。",
+    "hint": "字符串比较也使用 ==，大小写要一致。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "password = input()\nif password == \"python\":\n    print(\"正确\")\nelse:\n    print(\"错误\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "python\n",
+        "expectedOutput": "正确\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "Python\n",
+        "expectedOutput": "错误\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "hello\n",
+        "expectedOutput": "错误\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "pytho\n",
+        "expectedOutput": "错误\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-075",
+    "title": "数字是否不超过 100",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数，不超过 100 输出“范围内”，否则输出“超出范围”。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "输出范围判断结果。",
+    "constraints": "-10000 ≤ 整数 ≤ 10000。",
+    "sampleExplanation": "输入 100 时，按题意计算后输出 范围内。",
+    "hint": "不超过表示小于或等于。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nif number <= 100:\n    print(\"范围内\")\nelse:\n    print(\"超出范围\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "100\n",
+        "expectedOutput": "范围内\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "101\n",
+        "expectedOutput": "超出范围\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-5\n",
+        "expectedOutput": "范围内\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000\n",
+        "expectedOutput": "超出范围\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-076",
+    "title": "三个数谁最大",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "最大值"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入三个整数，使用条件判断找出并输出最大值。",
+    "inputDescription": "一行三个整数。",
+    "outputDescription": "输出三个数中的最大值。",
+    "constraints": "-1000 ≤ 每个整数 ≤ 1000。",
+    "sampleExplanation": "输入 3 9 5 时，按题意计算后输出 9。",
+    "hint": "先把第一个数当作最大值，再依次比较。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b, c = map(int, input().split())\nmaximum = a\nif b > maximum:\n    maximum = b\nif c > maximum:\n    maximum = c\nprint(maximum)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3 9 5\n",
+        "expectedOutput": "9\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "8 2 1\n",
+        "expectedOutput": "8\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "4 4 4\n",
+        "expectedOutput": "4\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-3 -8 -1\n",
+        "expectedOutput": "-1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-077",
+    "title": "下雨是否带伞",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "字符串比较",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入天气状态“下雨”或“不下雨”。下雨输出“带伞”，否则输出“不带伞”。",
+    "inputDescription": "一行一个天气状态。",
+    "outputDescription": "输出是否带伞。",
+    "constraints": "输入只会是“下雨”或“不下雨”。",
+    "sampleExplanation": "输入 下雨 时，按题意计算后输出 带伞。",
+    "hint": "直接判断输入是否等于“下雨”。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "weather = input()\nif weather == \"下雨\":\n    print(\"带伞\")\nelse:\n    print(\"不带伞\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "下雨\n",
+        "expectedOutput": "带伞\n",
+        "isPublic": true,
+        "scoreWeight": 34,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "不下雨\n",
+        "expectedOutput": "不带伞\n",
+        "isPublic": false,
+        "scoreWeight": 33,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "下雨\n",
+        "expectedOutput": "带伞\n",
+        "isPublic": false,
+        "scoreWeight": 33,
+        "orderNum": 3
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-078",
+    "title": "简单成绩等级判断",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "多分支",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入成绩：90 分及以上为 A，80～89 为 B，60～79 为 C，低于 60 为 D。",
+    "inputDescription": "一行一个整数成绩。",
+    "outputDescription": "输出对应的大写等级字母。",
+    "constraints": "0 ≤ 成绩 ≤ 100。",
+    "sampleExplanation": "输入 95 时，按题意计算后输出 A。",
+    "hint": "条件应从最高分段开始判断。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "score = int(input())\nif score >= 90:\n    print(\"A\")\nelif score >= 80:\n    print(\"B\")\nelif score >= 60:\n    print(\"C\")\nelse:\n    print(\"D\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "95\n",
+        "expectedOutput": "A\n",
+        "isPublic": true,
+        "scoreWeight": 20,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "90\n",
+        "expectedOutput": "A\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "89\n",
+        "expectedOutput": "B\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "60\n",
+        "expectedOutput": "C\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 4
+      },
+      {
+        "caseName": "隐藏测试点 4",
+        "inputText": "59\n",
+        "expectedOutput": "D\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 5
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-079",
+    "title": "输出 1 到 5",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环依次输出 1、2、3、4、5，每个数字占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "依次输出五行数字 1 到 5。",
+    "constraints": "必须使用循环完成。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "range(1, 6) 会产生 1 到 5。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "for number in range(1, 6):\n    print(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n4\n5\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n4\n5\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-080",
+    "title": "输出 1 到 10",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环依次输出 1 到 10，每个数字占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "依次输出十行数字 1 到 10。",
+    "constraints": "必须使用循环完成。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "range 的结束值不包含在结果中。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "for number in range(1, 11):\n    print(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  }
+]

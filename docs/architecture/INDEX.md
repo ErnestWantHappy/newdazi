@@ -1,7 +1,7 @@
 # 架构资料索引
 
 > 整理日期2026-10-05。接管先读 `AGENTS.md` 和 [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表进入专题。
-> 最新现场：130 **1.30.45**，后端 `20261013_connector_fix_v1`，前端仍 1.30.43，助手0.2.1；25 份连线题历史预览已重算，既有字体分页/未修正连接符显示边界见 [专题验收](../../contexts/connector-render-fix-20261013/verification.md)。123不能混用该基线。
+> 最新现场：130 **1.30.46**，前后端统一 `20261013_python_v3_full_v1`，助手0.2.1；Python V3 100 题、出题人筛选、HTML 放大预览和 V3 自动推荐已上线，1.30.45 连线题修复完整包含且 25 份历史预览保持。既有字体分页/未修正连接符显示边界见 [专题验收](../../contexts/connector-render-fix-20261013/verification.md)。123不能混用该基线。
 
 ## 按任务选择资料
 
@@ -14,7 +14,7 @@
 | SQL / MyBatis / 数据规则 | `DATA_MODEL.md` | 根目录 `sql/`、相关 Mapper XML |
 | CryptPad、Judge0、EMQX/MQTT、实时推送 | `INTEGRATIONS.md` | `contexts/online-collaboration/`、`contexts/python-judge0/`、`contexts/junior-iot-poc/` |
 | 小学信息科技实验板正式接入、N17 Python代码生成、EMQX班级精确ACL | `INTEGRATIONS.md`、`DATA_MODEL.md` | `contexts/primary-iot-integration/requirements.md`、`design.md`、`tasks.md`、`ADR-001-reuse-existing-emqx-and-dual-tool-entry.md` |
-| Python OJ、统一题库、练习题单、课程自定义运行、班级范围与判题容量 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md`、`INTEGRATIONS.md` | `contexts/python-judge0/requirements.md`、`design.md`、`adr/ADR-008-unified-python-question-bank.md`、`adr/ADR-009-unified-practice-plan-class-version.md`、`adr/ADR-010-hard-delete-and-natural-class-label.md`、`adr/ADR-011-queued-400-submissions-on-shared-host.md`、`adr/ADR-012-course-custom-run-non-scoring.md` |
+| Python OJ、统一题库、练习题单、课程自定义运行、班级范围与判题容量 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md`、`INTEGRATIONS.md` | `contexts/python-judge0/requirements.md`、`design.md`、`adr/ADR-008-unified-python-question-bank.md`、`adr/ADR-009-unified-practice-plan-class-version.md`、`adr/ADR-010-hard-delete-and-natural-class-label.md`、`adr/ADR-011-queued-400-submissions-on-shared-host.md`、`adr/ADR-012-course-custom-run-non-scoring.md`、`adr/ADR-015-zero-basis-v3-data-package.md` |
 | 操作题作品、批改统计、删题归档、AI 建议与费用估算 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/operation-artifact-ai-grading/requirements.md`、`design.md`、`tasks.md`、`ADR-006-current-question-answers-and-ai-cost-estimation.md` |
 | 连线题页图、Word/LibreOffice 坐标兼容 | `INTEGRATIONS.md` | `contexts/connector-render-fix-20261013/requirements.md`、`design.md`、`tasks.md`、`verification.md`、`ADR-001-page-absolute-temporary-copy.md` |
 | 画程流程图操作题、草稿、结构检查与教师确认 | `SYSTEM_ARCHITECTURE.md`、`BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/flowchart-tool/requirements.md`、`design.md`、`tasks.md`、四份专题 ADR |

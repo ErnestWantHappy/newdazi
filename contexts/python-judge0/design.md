@@ -126,3 +126,11 @@ Java `ThreadPoolExecutor` 的行为是先用核心线程、再入队、队列满
 - 自定义输入在服务端限制为 64 KiB。历史接口继续返回实际输出与错误信息，但不会伪造“通过/失败”的标准答案比较结果。
 - 前端仅在 `noInput=false` 时展示标准输入面板；运行期间与样例/提交共用互斥忙碌态，完成后明确显示“自定义运行不比较标准答案”。
 - 该不计分边界由 `adr/ADR-012-course-custom-run-non-scoring.md` 固化。
+
+## 2026-10-13 Python 零基础题包设计
+
+- 复用 `biz_question`、`biz_programming_question_config`、`biz_programming_test_case`，不新增表列；稳定题号为 `PYV3-001`～`PYV3-100`，配置来源为 `python-system-v3`，统一题目创建人使用教师真实账号。
+- `tools/python_zero_basis_v3_build.py` 是题包单一生成入口：输出完整 JSON、五个每批 20 题的独立事务 SQL 和依赖保护回滚 SQL；文本以 UTF-8 十六进制写入，按外部题号幂等更新并重建本题测试点。
+- 导入脚本只接受姓名为郑东旭、有效且拥有 `teacher` 角色的唯一账号，避免与同名学生账号混淆；外部题号被其他来源占用或存在同名非 V3 题时直接拒绝。
+- 推荐候选查询同时接受 `python-system-v2` 与 `python-system-v3`；该 Mapper 改动已随 130 正式 1.30.46 发布，教师仍可手动筛选，自动推荐也会纳入 V3。
+- 本机验收覆盖生成器自校验、重复执行、真实 Judge0 340 点、后端测试与打包、前端构建和教师/学生浏览器；正式仅备份后分批导入并做教师只读 API 验收，不创建会影响真实班级的临时题单。

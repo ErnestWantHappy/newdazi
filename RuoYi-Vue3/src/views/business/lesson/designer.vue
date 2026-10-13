@@ -382,6 +382,9 @@
                  <el-option label="我的私有" value="N" />
                </el-select>
              </el-form-item>
+             <el-form-item label="出题人" prop="createBy">
+               <el-input v-model="queryParams.createBy" placeholder="教师姓名或账号" clearable @keyup.enter="handleQuery" />
+             </el-form-item>
             <el-form-item label="操作方式" prop="practicalMode">
               <el-select v-model="queryParams.practicalMode" placeholder="操作方式" clearable style="width: 140px">
                  <el-option label="Python 在线编程" value="PYTHON" />
@@ -590,6 +593,7 @@ const queryParams = ref({
   isPublic: null,
   questionType: null,
   practicalMode: null,
+  createBy: null,
   lessonNum: null,
   orderByColumn: 'createTime',  // 按创建时间排序
   isAsc: 'desc',                 // 降序，最新的在前

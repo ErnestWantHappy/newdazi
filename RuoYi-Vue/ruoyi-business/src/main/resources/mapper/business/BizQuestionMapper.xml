@@ -54,6 +54,8 @@
             <if test="questionType != null  and questionType != ''"> and q.question_type = #{questionType}</if>
             <if test="practicalMode != null and practicalMode != ''"> and q.practical_mode = #{practicalMode}</if>
             <if test="difficulty != null and difficulty != ''"> and q.difficulty = #{difficulty}</if>
+            <if test="knowledgePoints != null and knowledgePoints != ''"> and pc.knowledge_points like concat('%', #{knowledgePoints}, '%')</if>
+            <if test="validationStatus != null and validationStatus != ''"> and pc.validation_status = #{validationStatus}</if>
             <if test="bankView != null and bankView == 'PYTHON'"> and q.question_type='practical' and q.practical_mode='PYTHON'</if>
             <if test="bankView != null and bankView == 'COMMON'"> and not (q.question_type='practical' and q.practical_mode='PYTHON')</if>
             <if test="questionContent != null  and questionContent != ''"> and (q.question_content like concat('%', #{questionContent}, '%') or pc.title like concat('%', #{questionContent}, '%'))</if>

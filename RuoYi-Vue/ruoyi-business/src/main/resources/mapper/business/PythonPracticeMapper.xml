@@ -86,7 +86,7 @@
     SELECT q.question_id,q.difficulty,c.external_id,c.title,c.knowledge_points
     FROM biz_question q JOIN biz_programming_question_config c ON c.question_id=q.question_id
     WHERE q.question_type='practical' AND q.practical_mode='PYTHON'
-      AND c.create_by='python-system-v2' AND q.is_public IN ('Y','1')
+      AND c.create_by IN ('python-system-v2','python-system-v3') AND q.is_public IN ('Y','1')
       AND c.enabled='1' AND c.validation_status='VALID' AND c.external_id IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM biz_python_practice_plan_question pq WHERE pq.plan_version_id=#{planVersionId} AND pq.question_id=q.question_id)
     ORDER BY c.external_id,q.question_id

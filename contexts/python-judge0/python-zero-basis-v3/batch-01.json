@@ -1,0 +1,821 @@
+[
+  {
+    "externalId": "PYV3-001",
+    "title": "你好，Python",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，在屏幕上输出一行“你好，Python”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：你好，Python",
+    "constraints": "必须完全按照指定文字输出。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "把要输出的文字放在 print() 的括号中，并用引号括起来。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"你好，Python\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "你好，Python\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "你好，Python\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-002",
+    "title": "输出数字 100",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "整数"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，直接输出整数 100。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行整数 100。",
+    "constraints": "不要输出其他文字。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "数字不需要加引号，也可以直接放进 print()。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(100)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "100\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "100\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-003",
+    "title": "输出我的学校",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出“我的学校是向阳小学”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：我的学校是向阳小学",
+    "constraints": "文字和标点必须完全一致。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "中文文字要写在引号中。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"我的学校是向阳小学\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "我的学校是向阳小学\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "我的学校是向阳小学\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-004",
+    "title": "输出两行文字",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "第一行输出“开始学习”，第二行输出“天天进步”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "按要求输出两行文字。",
+    "constraints": "每句话单独占一行。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "连续使用两次 print()，每次输出一行。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"开始学习\")\nprint(\"天天进步\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "开始学习\n天天进步\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "开始学习\n天天进步\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-005",
+    "title": "输出三行数字",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "依次输出数字 1、2、3，每个数字单独占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "依次输出三行数字 1、2、3。",
+    "constraints": "每行只能有一个数字。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "可以连续写三条 print() 语句。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(1)\nprint(2)\nprint(3)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-006",
+    "title": "我爱信息科技",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出“我爱信息科技”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：我爱信息科技",
+    "constraints": "不要添加句号或空格。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "把完整句子作为一个字符串输出。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"我爱信息科技\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "我爱信息科技\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "我爱信息科技\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-007",
+    "title": "输出一串星号",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出 8 个连续的星号。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行 8 个星号。",
+    "constraints": "星号之间没有空格。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "先数好星号个数，再放进引号中。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"********\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "********\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "********\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-008",
+    "title": "输出两个英文单词",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "空格"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "在同一行输出英文单词 Hello 和 Python，中间留一个空格。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：Hello Python",
+    "constraints": "大小写必须一致，中间只有一个空格。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "可以把两个单词和空格一起写成一个字符串。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"Hello Python\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "Hello Python\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "Hello Python\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-009",
+    "title": "输出中文问候语",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出“同学，你好！”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：同学，你好！",
+    "constraints": "使用中文逗号和中文感叹号。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "注意核对中文标点。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"同学，你好！\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "同学，你好！\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "同学，你好！\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-010",
+    "title": "输出今天星期五",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出“今天星期五”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：今天星期五",
+    "constraints": "不要输出日期或其他说明。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "固定文字直接用 print() 输出即可。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"今天星期五\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "今天星期五\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "今天星期五\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-011",
+    "title": "输出两次欢迎语",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "重复输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "连续输出两行“欢迎学习Python”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出两行相同的欢迎语。",
+    "constraints": "两行内容必须完全相同。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "可以连续使用两次相同的 print()。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"欢迎学习Python\")\nprint(\"欢迎学习Python\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "欢迎学习Python\n欢迎学习Python\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "欢迎学习Python\n欢迎学习Python\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-012",
+    "title": "输出简单表情",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出由符号组成的笑脸 ^_^。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：^_^",
+    "constraints": "不要在符号之间添加空格。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "符号也要作为字符串放进引号中。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"^_^\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "^_^\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "^_^\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-013",
+    "title": "输出一个整数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "整数"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，输出整数 2026。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行整数 2026。",
+    "constraints": "不要输出小数点。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "直接把整数交给 print()。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(2026)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "2026\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "2026\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-014",
+    "title": "输出一段固定对话",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "模拟一段固定对话：第一行输出“小明：你好！”，第二行输出“小红：你好！”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "按顺序输出两行对话。",
+    "constraints": "姓名后的冒号使用中文冒号。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "每个人说的话使用一条 print()。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"小明：你好！\")\nprint(\"小红：你好！\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "小明：你好！\n小红：你好！\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "小明：你好！\n小红：你好！\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-015",
+    "title": "输出 Hello",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "英文字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "编写程序，只输出英文单词 Hello。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出一行：Hello",
+    "constraints": "H 必须大写，其余字母小写。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "英文单词需要放在引号中。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"Hello\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "Hello\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "Hello\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-016",
+    "title": "输出一张固定成绩单",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输出一张三行成绩单：第一行“姓名：小明”，第二行“学科：信息科技”，第三行“成绩：100”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "严格按题目要求输出三行。",
+    "constraints": "使用中文冒号，不要添加多余空格。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "每一项使用一条 print()。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"姓名：小明\")\nprint(\"学科：信息科技\")\nprint(\"成绩：100\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "姓名：小明\n学科：信息科技\n成绩：100\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "姓名：小明\n学科：信息科技\n成绩：100\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-017",
+    "title": "用星号画小三角形",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符图形"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "用星号输出一个三层小三角形，三行分别有 1、2、3 个星号。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出三行星号组成的小三角形。",
+    "constraints": "每行星号之间没有空格。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "从一颗星开始，每行增加一颗。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"*\")\nprint(\"**\")\nprint(\"***\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "*\n**\n***\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "*\n**\n***\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-018",
+    "title": "制作一张文字小名片",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "制作固定小名片：依次输出“姓名：小科”“班级：六（1）班”“爱好：编程”。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "严格按要求输出三行名片内容。",
+    "constraints": "使用中文标点，文字不能省略。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "把名片的每一项分别输出。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(\"姓名：小科\")\nprint(\"班级：六（1）班\")\nprint(\"爱好：编程\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "姓名：小科\n班级：六（1）班\n爱好：编程\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "姓名：小科\n班级：六（1）班\n爱好：编程\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-019",
+    "title": "计算 1+2",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "计算 1 加 2 的结果并输出。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出计算结果 3。",
+    "constraints": "使用 Python 的加号完成计算。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "可以直接在 print() 中写算式。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(1 + 2)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "3\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "3\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-020",
+    "title": "计算 10-3",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "减法",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "计算 10 减 3 的结果并输出。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出计算结果 7。",
+    "constraints": "使用 Python 的减号完成计算。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "减法符号是 -。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "print(10 - 3)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "7\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "7\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  }
+]

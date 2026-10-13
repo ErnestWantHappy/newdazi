@@ -1,0 +1,1092 @@
+[
+  {
+    "externalId": "PYV3-081",
+    "title": "输出五次 Hello",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "重复输出"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环输出五行 Hello。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "连续输出五行 Hello。",
+    "constraints": "必须使用循环，大小写要一致。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "循环变量可以暂时不用，用下划线表示。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "for _ in range(5):\n    print(\"Hello\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "Hello\nHello\nHello\nHello\nHello\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "Hello\nHello\nHello\nHello\nHello\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-082",
+    "title": "输出 1 到 n",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入正整数 n，使用 for 循环从 1 输出到 n，每个数字占一行。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "依次输出 1 到 n。",
+    "constraints": "1 ≤ n ≤ 100。",
+    "sampleExplanation": "输入 5 时，按题意计算后输出 1、2、3、4、5。",
+    "hint": "range(1, n+1) 可以包含 n。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nfor number in range(1, n + 1):\n    print(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "5\n",
+        "expectedOutput": "1\n2\n3\n4\n5\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "2\n",
+        "expectedOutput": "1\n2\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10\n",
+        "expectedOutput": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-083",
+    "title": "输出 2 到 10 的偶数",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range",
+      "偶数"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环输出 2、4、6、8、10，每个数字占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "按从小到大的顺序输出五个偶数。",
+    "constraints": "必须使用循环完成。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "range 可以设置步长为 2。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "for number in range(2, 11, 2):\n    print(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "2\n4\n6\n8\n10\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "2\n4\n6\n8\n10\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-084",
+    "title": "输出 1 到 9 的奇数",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range",
+      "奇数"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环输出 1、3、5、7、9，每个数字占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "按从小到大的顺序输出五个奇数。",
+    "constraints": "必须使用循环完成。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "从 1 开始，每次增加 2。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "for number in range(1, 10, 2):\n    print(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "1\n3\n5\n7\n9\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "1\n3\n5\n7\n9\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-085",
+    "title": "计算 1 到 5 的和",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "累加"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环计算 1+2+3+4+5，并输出结果。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "输出整数 15。",
+    "constraints": "必须使用循环和累加变量。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "先把总和设为 0，每次把当前数字加进去。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "total = 0\nfor number in range(1, 6):\n    total += number\nprint(total)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "15\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "15\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-086",
+    "title": "计算 1 到 n 的和",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "累加",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入正整数 n，计算 1 到 n 所有整数的和。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "输出 1 到 n 的总和。",
+    "constraints": "1 ≤ n ≤ 1000。",
+    "sampleExplanation": "输入 5 时，按题意计算后输出 15。",
+    "hint": "使用变量 total 记录不断增加的总和。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\ntotal = 0\nfor number in range(1, n + 1):\n    total += number\nprint(total)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "5\n",
+        "expectedOutput": "15\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "10\n",
+        "expectedOutput": "55\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1000\n",
+        "expectedOutput": "500500\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-087",
+    "title": "输出 n 次星号",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "重复输出",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入正整数 n，使用 for 循环输出 n 行星号，每行一个星号。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "输出 n 行，每行一个 *。",
+    "constraints": "1 ≤ n ≤ 20。",
+    "sampleExplanation": "输入 3 时，按题意计算后输出 *、*、*。",
+    "hint": "循环执行几次，print() 就会运行几次。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nfor _ in range(n):\n    print(\"*\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3\n",
+        "expectedOutput": "*\n*\n*\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "*\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "5\n",
+        "expectedOutput": "*\n*\n*\n*\n*\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "20\n",
+        "expectedOutput": "*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n*\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-088",
+    "title": "小猫叫 n 声",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "重复输出",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入正整数 n，使用循环输出 n 行“喵”。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "输出 n 行，每行一个“喵”。",
+    "constraints": "1 ≤ n ≤ 20。",
+    "sampleExplanation": "输入 2 时，按题意计算后输出 喵、喵。",
+    "hint": "每次循环输出一次“喵”。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nfor _ in range(n):\n    print(\"喵\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "2\n",
+        "expectedOutput": "喵\n喵\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "喵\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "4\n",
+        "expectedOutput": "喵\n喵\n喵\n喵\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "20\n",
+        "expectedOutput": "喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n喵\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-089",
+    "title": "从 5 倒数到 1",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "倒序range"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 for 循环依次输出 5、4、3、2、1，每个数字占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "按倒序输出五行数字。",
+    "constraints": "必须使用循环完成。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "倒序 range 的步长可以写成 -1。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "for number in range(5, 0, -1):\n    print(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "5\n4\n3\n2\n1\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "5\n4\n3\n2\n1\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-090",
+    "title": "九九乘法表的一行",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "乘法表",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入 1～9 的整数 n，输出乘法表中第 n 行，从 n*1 到 n*n，每个算式占一行。",
+    "inputDescription": "一行一个整数 n。",
+    "outputDescription": "依次输出 n*1 到 n*n 的算式与结果。",
+    "constraints": "1 ≤ n ≤ 9。",
+    "sampleExplanation": "输入 3 时，按题意计算后输出 3*1=3、3*2=6、3*3=9。",
+    "hint": "循环变量从 1 到 n，结果是 n 乘循环变量。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nfor i in range(1, n + 1):\n    print(f\"{n}*{i}={n * i}\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3\n",
+        "expectedOutput": "3*1=3\n3*2=6\n3*3=9\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "1*1=1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "5\n",
+        "expectedOutput": "5*1=5\n5*2=10\n5*3=15\n5*4=20\n5*5=25\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "9\n",
+        "expectedOutput": "9*1=9\n9*2=18\n9*3=27\n9*4=36\n9*5=45\n9*6=54\n9*7=63\n9*8=72\n9*9=81\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-091",
+    "title": "while 输出 1 到 5",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "计数变量"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "使用 while 循环依次输出 1 到 5，每个数字占一行。",
+    "inputDescription": "本题无需输入。",
+    "outputDescription": "依次输出五行数字 1 到 5。",
+    "constraints": "必须使用 while 循环。",
+    "sampleExplanation": "本题没有输入，程序运行后直接输出固定内容。",
+    "hint": "每轮循环后都要让计数变量增加 1。",
+    "noInput": true,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = 1\nwhile number <= 5:\n    print(number)\n    number += 1\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n4\n5\n",
+        "isPublic": true,
+        "scoreWeight": 50,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "",
+        "expectedOutput": "1\n2\n3\n4\n5\n",
+        "isPublic": false,
+        "scoreWeight": 50,
+        "orderNum": 2
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-092",
+    "title": "while 输出 1 到 n",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "计数变量",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入正整数 n，使用 while 循环依次输出 1 到 n。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "每个数字占一行，依次输出 1 到 n。",
+    "constraints": "1 ≤ n ≤ 100。",
+    "sampleExplanation": "输入 4 时，按题意计算后输出 1、2、3、4。",
+    "hint": "循环条件可以写 number <= n。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nnumber = 1\nwhile number <= n:\n    print(number)\n    number += 1\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "4\n",
+        "expectedOutput": "1\n2\n3\n4\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "10\n",
+        "expectedOutput": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "100\n",
+        "expectedOutput": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80\n81\n82\n83\n84\n85\n86\n87\n88\n89\n90\n91\n92\n93\n94\n95\n96\n97\n98\n99\n100\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-093",
+    "title": "while 计算累加和",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "累加",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入正整数 n，使用 while 循环计算 1 到 n 的和。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "输出 1 到 n 的总和。",
+    "constraints": "1 ≤ n ≤ 1000。",
+    "sampleExplanation": "输入 5 时，按题意计算后输出 15。",
+    "hint": "同时维护计数变量和总和变量。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nnumber = 1\ntotal = 0\nwhile number <= n:\n    total += number\n    number += 1\nprint(total)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "5\n",
+        "expectedOutput": "15\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "10\n",
+        "expectedOutput": "55\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1000\n",
+        "expectedOutput": "500500\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-094",
+    "title": "输入 0 结束统计",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "哨兵值",
+      "计数"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "每行输入一个整数，输入 0 时结束。统计并输出在 0 之前输入了几个非零整数。",
+    "inputDescription": "若干行整数，最后一行一定是 0。",
+    "outputDescription": "输出非零整数的个数。",
+    "constraints": "0 之前最多有 100 个整数。",
+    "sampleExplanation": "输入 3、5、0 时，按题意计算后输出 2。",
+    "hint": "0 是结束标记，不计入数量。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "count = 0\nnumber = int(input())\nwhile number != 0:\n    count += 1\n    number = int(input())\nprint(count)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3\n5\n0\n",
+        "expectedOutput": "2\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "7\n0\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1\n2\n3\n4\n0\n",
+        "expectedOutput": "4\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-095",
+    "title": "倒计时直到零",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "倒计时",
+      "输入"
+    ],
+    "difficulty": "MEDIUM",
+    "description": "输入非负整数 n，使用 while 循环从 n 倒数到 0，每个数字占一行。",
+    "inputDescription": "一行一个非负整数 n。",
+    "outputDescription": "依次输出 n、n-1，直到 0。",
+    "constraints": "0 ≤ n ≤ 100。",
+    "sampleExplanation": "输入 3 时，按题意计算后输出 3、2、1、0。",
+    "hint": "每轮输出后让 n 减少 1，循环条件要允许输出 0。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nwhile number >= 0:\n    print(number)\n    number -= 1\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3\n",
+        "expectedOutput": "3\n2\n1\n0\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "1\n",
+        "expectedOutput": "1\n0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10\n",
+        "expectedOutput": "10\n9\n8\n7\n6\n5\n4\n3\n2\n1\n0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-096",
+    "title": "猜数字第一关：判断是否猜对",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "if判断",
+      "猜数字"
+    ],
+    "difficulty": "HARD",
+    "description": "第一行输入秘密数字，第二行输入猜测数字。如果相同输出“猜对了”，否则输出“没猜对”。",
+    "inputDescription": "两行整数，第一行是秘密数字，第二行是猜测数字。",
+    "outputDescription": "输出判断结果。",
+    "constraints": "1 ≤ 两个数字 ≤ 100，不使用随机数。",
+    "sampleExplanation": "输入 36、36 时，按题意计算后输出 猜对了。",
+    "hint": "直接比较秘密数字和猜测数字是否相等。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "secret = int(input())\nguess = int(input())\nif guess == secret:\n    print(\"猜对了\")\nelse:\n    print(\"没猜对\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "36\n36\n",
+        "expectedOutput": "猜对了\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "36\n20\n",
+        "expectedOutput": "没猜对\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "1\n100\n",
+        "expectedOutput": "没猜对\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "75\n75\n",
+        "expectedOutput": "猜对了\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-097",
+    "title": "猜数字第二关：猜大了还是猜小了",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "多分支",
+      "猜数字"
+    ],
+    "difficulty": "HARD",
+    "description": "第一行输入秘密数字，第二行输入猜测数字。猜对输出“猜对了”，猜大输出“猜大了”，猜小输出“猜小了”。",
+    "inputDescription": "两行整数，第一行是秘密数字，第二行是猜测数字。",
+    "outputDescription": "输出三种判断结果之一。",
+    "constraints": "1 ≤ 两个数字 ≤ 100，不使用随机数。",
+    "sampleExplanation": "输入 36、36 时，按题意计算后输出 猜对了。",
+    "hint": "先判断相等，再比较猜测数字的大小。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "secret = int(input())\nguess = int(input())\nif guess == secret:\n    print(\"猜对了\")\nelif guess > secret:\n    print(\"猜大了\")\nelse:\n    print(\"猜小了\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "36\n36\n",
+        "expectedOutput": "猜对了\n",
+        "isPublic": true,
+        "scoreWeight": 20,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "36\n50\n",
+        "expectedOutput": "猜大了\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "36\n20\n",
+        "expectedOutput": "猜小了\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1\n100\n",
+        "expectedOutput": "猜大了\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 4
+      },
+      {
+        "caseName": "隐藏测试点 4",
+        "inputText": "100\n1\n",
+        "expectedOutput": "猜小了\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 5
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-098",
+    "title": "鸡兔同笼第一关：计算鸡兔总腿数",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "变量",
+      "乘法",
+      "鸡兔同笼"
+    ],
+    "difficulty": "HARD",
+    "description": "输入鸡的只数和兔的只数，计算它们一共有多少条腿。鸡有 2 条腿，兔有 4 条腿。",
+    "inputDescription": "一行两个非负整数，依次是鸡和兔的只数。",
+    "outputDescription": "输出腿的总数。",
+    "constraints": "0 ≤ 鸡、兔只数 ≤ 100。",
+    "sampleExplanation": "输入 3 2 时，按题意计算后输出 14。",
+    "hint": "总腿数=鸡数×2+兔数×4。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "chickens, rabbits = map(int, input().split())\nprint(chickens * 2 + rabbits * 4)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3 2\n",
+        "expectedOutput": "14\n",
+        "isPublic": true,
+        "scoreWeight": 20,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0 5\n",
+        "expectedOutput": "20\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "8 0\n",
+        "expectedOutput": "16\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "0 0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 4
+      },
+      {
+        "caseName": "隐藏测试点 4",
+        "inputText": "100 100\n",
+        "expectedOutput": "600\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 5
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-099",
+    "title": "鸡兔同笼第二关：枚举鸡和兔的数量",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "for循环",
+      "枚举",
+      "鸡兔同笼"
+    ],
+    "difficulty": "HARD",
+    "description": "输入动物总只数和腿的总数，枚举并输出鸡兔数量，格式为“鸡x 兔y”；没有答案时输出“无解”。",
+    "inputDescription": "一行两个非负整数，依次是总只数和总腿数。",
+    "outputDescription": "输出唯一的鸡兔数量组合，或输出“无解”。",
+    "constraints": "0 ≤ 总只数 ≤ 100，0 ≤ 总腿数 ≤ 400。",
+    "sampleExplanation": "输入 5 14 时，按题意计算后输出 鸡3 兔2。",
+    "hint": "枚举兔的只数，鸡的只数等于总只数减兔数。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "heads, legs = map(int, input().split())\nfound = False\nfor rabbits in range(heads + 1):\n    chickens = heads - rabbits\n    if chickens * 2 + rabbits * 4 == legs:\n        print(f\"鸡{chickens} 兔{rabbits}\")\n        found = True\n        break\nif not found:\n    print(\"无解\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "5 14\n",
+        "expectedOutput": "鸡3 兔2\n",
+        "isPublic": true,
+        "scoreWeight": 20,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "10 20\n",
+        "expectedOutput": "鸡10 兔0\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "10 40\n",
+        "expectedOutput": "鸡0 兔10\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "3 7\n",
+        "expectedOutput": "无解\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 4
+      },
+      {
+        "caseName": "隐藏测试点 4",
+        "inputText": "0 0\n",
+        "expectedOutput": "鸡0 兔0\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 5
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-100",
+    "title": "韩信点兵入门：在小范围内寻找符合余数条件的数字",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "for循环",
+      "取余",
+      "枚举"
+    ],
+    "difficulty": "HARD",
+    "description": "输入上限 n，在 1～n 中寻找最小的整数 x，使 x 除以 3 余 2、除以 5 余 3、除以 7 余 2。找到就输出 x，否则输出“没有找到”。",
+    "inputDescription": "一行一个正整数 n。",
+    "outputDescription": "输出最小的符合条件的整数，或“没有找到”。",
+    "constraints": "1 ≤ n ≤ 500。",
+    "sampleExplanation": "输入 30 时，按题意计算后输出 23。",
+    "hint": "从 1 开始逐个尝试，同时检查三个余数条件。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "n = int(input())\nfound = False\nfor number in range(1, n + 1):\n    if number % 3 == 2 and number % 5 == 3 and number % 7 == 2:\n        print(number)\n        found = True\n        break\nif not found:\n    print(\"没有找到\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "30\n",
+        "expectedOutput": "23\n",
+        "isPublic": true,
+        "scoreWeight": 20,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "22\n",
+        "expectedOutput": "没有找到\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "23\n",
+        "expectedOutput": "23\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "100\n",
+        "expectedOutput": "23\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 4
+      },
+      {
+        "caseName": "隐藏测试点 4",
+        "inputText": "500\n",
+        "expectedOutput": "23\n",
+        "isPublic": false,
+        "scoreWeight": 20,
+        "orderNum": 5
+      }
+    ]
+  }
+]

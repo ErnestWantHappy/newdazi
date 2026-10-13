@@ -1,5 +1,9 @@
 # 部署与回滚约定
 
+## 2026-10-13 130正式1.30.46（Python V3与作业预览全量发布）
+
+前后端 release `20261013_python_v3_full_v1`，上一后端 `20261013_connector_fix_v1`、上一前端 `20261012_audit_fix_v1`。正式整库备份 `/data/backups/xueyeceping/20261013_python_v3_full_v1/database.sql` 为 397,887,415 bytes，SHA-256 `36f941f43c51b7312920dfbb6e5e5789f1b8b21754ff4739ffa674da52acb9fb`；同目录保留旧 unit、Nginx、env、Quartz env、config、JAR 与首页。JAR SHA-256 `e13e39e6720d8e1df772e5c2584d51524522ff9f99630aa5f63eaeb217ca4825`，首页 SHA-256 `b92c0b266c231be2b48d7d3154982a43db5e3939ffe4fe422d8dcee1ca36e5aa`。无结构迁移，题包不重复导入；更新124/1.30.46 PUBLISHED且真实教师可见。回滚恢复 `service.before` 与 `nginx-site.before`，重启后端并校验/reload Nginx，将 1.30.46 撤回 DRAFT；保留 V3 数据，不回灌整库。
+
 ## 2026-10-09 130正式1.30.40（首页加载性能与运行稳定性优化）
 
 前后端 release `20261009_slowness_fix_v1`（前端零停机切 Nginx 根；后端 jar 内仅 1 个嵌套 Mapper 条目不同，需重启）。上一版前端 `20261008_login_input_latency_v1`、后端 `20261008_login_preview_compress_v1`。完整改动、验证与未解决项见 [发布登记](../../contexts/RELEASE_LOG.md) 与 `output/130-opt-20261009/`。

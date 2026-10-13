@@ -88,12 +88,14 @@
               <el-button v-if="questionQuery.practicalMode==='DATA_LAB'" v-hasPermi="['business:question:add']" @click="labEditor.open()">新建实验题</el-button>
               <el-form-item label="标题"><el-input v-model="questionQuery.questionContent" clearable placeholder="搜索标题或题面" @keyup.enter="loadQuestionOptions" /></el-form-item>
               <el-form-item label="知识点"><el-input v-model="questionQuery.knowledgePoints" clearable placeholder="例如：循环" @keyup.enter="loadQuestionOptions" /></el-form-item>
+              <el-form-item label="出题人"><el-input v-model="questionQuery.createBy" clearable placeholder="教师姓名或账号" @keyup.enter="loadQuestionOptions" /></el-form-item>
               <el-form-item label="难度"><el-select v-model="questionQuery.difficulty" clearable style="width:110px"><el-option label="简单" value="SIMPLE" /><el-option label="中等" value="MEDIUM" /><el-option label="困难" value="HARD" /></el-select></el-form-item>
               <el-button type="primary" @click="loadQuestionOptions">查询</el-button>
             </el-form>
             <el-table ref="bankTable" v-loading="questionLoading" :data="questionOptions" row-key="questionId" height="calc(100vh - 330px)" @selection-change="batchSelection=$event">
               <el-table-column type="selection" width="44" :selectable="canSelectQuestion" />
               <el-table-column label="题目" min-width="240"><template #default="{ row }"><b>{{ row.programmingTitle || row.questionContent }}</b><div class="row-meta">ID {{ row.questionId }} · {{ row.knowledgePoints || '未分类' }}</div></template></el-table-column>
+              <el-table-column label="出题人" width="110" show-overflow-tooltip><template #default="{ row }">{{ row.nickName || row.createBy || '-' }}</template></el-table-column>
               <el-table-column label="难度" width="76"><template #default="{ row }">{{ difficultyLabel(row.difficulty) }}</template></el-table-column>
               <el-table-column label="验证" width="80"><template #default="{ row }"><el-tag size="small" :type="row.validationStatus==='VALID'?'success':'info'">{{ row.practicalMode==='DATA_LAB'?'教师评分':row.validationStatus==='VALID'?'已验证':'待验证' }}</el-tag></template></el-table-column>
               <el-table-column label="操作" width="128"><template #default="{ row }"><el-button link type="primary" @click="previewQuestion(row)">预览</el-button><el-button v-if="row.practicalMode==='DATA_LAB'" v-hasPermi="['business:question:edit']" link @click="labEditor.open(row.questionId)">编辑</el-button></template></el-table-column>
@@ -197,7 +199,7 @@ const plans=ref([]),loading=ref(false),managedClasses=ref([]),createVisible=ref(
 const currentPlan=ref(null),createForm=reactive({planName:'',classKeys:[]}),editForm=reactive({planName:'',classKeys:[]})
 const questionOptions=ref([]),questionTotal=ref(0),questionLoading=ref(false),batchSelection=ref([]),bankTable=ref(null)
 const labEditor=ref(null)
-const questionQuery=reactive({pageNum:1,pageSize:20,questionType:'practical',practicalMode:'PYTHON',validationStatus:'VALID',difficulty:'',questionContent:'',knowledgePoints:''})
+const questionQuery=reactive({pageNum:1,pageSize:20,questionType:'practical',practicalMode:'PYTHON',validationStatus:'VALID',difficulty:'',questionContent:'',knowledgePoints:'',createBy:''})
 const previewVisible=ref(false),previewQuestionData=ref(null),previewConfig=ref({}),previewCases=ref([])
 const classPickerVisible=ref(false),analyticsVisible=ref(false),analyticsPlan=ref(null),analyticsClasses=ref([]),analyticsClassKey=ref(''),analyticsData=ref({}),analyticsTab=ref('students')
 const selectedQuestions=computed(()=>currentPlan.value?.questions||[]), selectedIds=computed(()=>new Set(selectedQuestions.value.map(i=>Number(i.question_id))))

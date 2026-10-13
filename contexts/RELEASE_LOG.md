@@ -1,5 +1,26 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-10-13 · 1.30.46 · Python 零基础题库与作业预览体验升级
+
+130 前后端统一发布 release `20261013_python_v3_full_v1`。本次将此前已导入的 100 道 Python V3 题与应用功能一并上线：题单选题可按出题人筛选、知识点/验证状态查询生效、自动推荐同时纳入 V2/V3；HTML 源码区至少 320px、内部滚动并支持放大查看；当前后端完整包含 1.30.45 连线题 `page-jpeg-v3` 修复。
+
+- 构建：连线题/Python 相关测试 62 项全过；后端 `clean package`、Vue3 `build:prod` 成功。JAR 108,089,873 bytes，SHA-256 `e13e39e6720d8e1df772e5c2584d51524522ff9f99630aa5f63eaeb217ca4825`；首页 SHA-256 `b92c0b266c231be2b48d7d3154982a43db5e3939ffe4fe422d8dcee1ca36e5aa`。
+- 数据：V3 100 题、78/17/5、340 测试点（100 公开/240 隐藏）完整，正式 Judge0 沿用导入时 340/340 Accepted；当前总数 229 是 V2 120 + V3 100 + 教师自建 9，导入后的 1 道教师自建题由业务侧正常维护，不擅自恢复。V3 当前未加入正式题单，学生任务未改变。
+- 验收：三服务 `xueyeceping-130`/Nginx/`aiot-lamp` active，后端 `NRestarts=0`；首页、3009 验证码和 Nginx 代理均 HTTP200。教师接口正确区分真实/不存在的出题人；正式 Chromium 题单设计页筛到“你好，Python”，页面错误与 HTTP5xx 均为 0。25 份连线题页图仍 success/page-jpeg-v3，正常样本与 4 个毒文件隔离状态保持。
+- 首次切换在新进程启动第 1 秒因发布脚本 `curl` 未容忍连接未建立而误判并自动回退，新包仅运行约 1 秒，未进入 Spring 启动阶段；旧版恢复后修正脚本，第二次切换在 **22:22:18** 启动、19 秒 READY，随后 Nginx 平滑切换成功。该误判不是应用启动失败。
+- 备份 `/data/backups/xueyeceping/20261013_python_v3_full_v1/`：数据库 397,887,415 bytes，SHA-256 `36f941f43c51b7312920dfbb6e5e5789f1b8b21754ff4739ffa674da52acb9fb`；旧 unit、Nginx、共享 env、Quartz env、外置 config、JAR 和首页均保留。无结构迁移，也未重复导入题包。
+- 发布登记 `update_id=124/1.30.46/PUBLISHED`，2026-10-13 22:27:04；真实教师平台更新列表 HTTP200/业务200 可见。登记 SQL：`sql/python_zero_basis_v3_release_20261013.sql`。
+- 回退：确认当前仍指向本 release 后，恢复备份中的 `service.before` 和 `nginx-site.before`，`systemctl daemon-reload && systemctl restart xueyeceping-130`，`nginx -t && systemctl reload nginx`；将 1.30.46 改为 DRAFT。题包数据已单独上线并通过判题，不随应用回退删除；禁止整库回灌覆盖发布后的成绩。
+
+## 2026-10-13 · 数据维护 · Python 零基础题库 V3
+
+130 正式库完成题库数据维护，**没有切换前后端 release、没有重启服务，也没有创建新的 `biz_platform_update` 产品版本**。应用仍为 1.30.45 后端 / 1.30.43 前端。
+
+- 导入前 Python 题 130 道，导入后 230 道；新增 `PYV3-001`～`PYV3-100` 共 100 道，难度 78 SIMPLE / 17 MEDIUM / 5 HARD，测试点 340（公开 100、隐藏 240）。
+- 正式 Judge0 340/340 Accepted；正式库后检公开启用 VALID 100、重复标题 0、题号缺失 0、异常测试点组合 0、课程元数据误填 0，创建人 100 条均归属真实教师账号。
+- 整库备份 `/data/backups/xueyeceping/20261013_python_zero_basis_v3/ry-vue.before.sql`，397,735,155 bytes，SHA-256 `ECD1AC64710DFF5911845D3E82B6059AEA198A75E84260E878ECA9C9044D4E9F`；五批 SQL 与依赖保护回滚脚本同目录，上传后 SHA-256 一致。
+- 真实教师题库 API 已检索到新题且创建人正确；本轮没有把题目加入正式题单，学生任务保持不变。HTML 放大、出题人筛选和 V3 自动推荐代码只在本机验收，待后续明确发布。
+
 ## 2026-10-13 · 1.30.45 · 连线题作品预览兼容修复
 
 130 仅后端 `20261013_connector_fix_v1`，前端仍 1.30.43。用户已确认方案 A 和等待高峰结束；近 5 分钟交卷/运行中 AI 均为 0 后，**19:13:31** 重启，**19:13:52 +08:00** 探活成功，约 21 秒恢复。

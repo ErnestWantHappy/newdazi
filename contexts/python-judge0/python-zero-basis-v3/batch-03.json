@@ -1,0 +1,1144 @@
+[
+  {
+    "externalId": "PYV3-041",
+    "title": "我的第一个输入",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一行文字，再把这行文字原样输出。",
+    "inputDescription": "一行文字，不包含换行符。",
+    "outputDescription": "原样输出输入的文字。",
+    "constraints": "文字长度为 1～30 个字符。",
+    "sampleExplanation": "输入 Python 时，按题意计算后输出 Python。",
+    "hint": "input() 读到的内容本来就是字符串。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "text = input()\nprint(text)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "Python\n",
+        "expectedOutput": "Python\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "信息科技\n",
+        "expectedOutput": "信息科技\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "123\n",
+        "expectedOutput": "123\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "你好！\n",
+        "expectedOutput": "你好！\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-042",
+    "title": "输入名字打招呼",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "字符串拼接"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个名字，输出“你好，名字！”。",
+    "inputDescription": "一行一个名字。",
+    "outputDescription": "按“你好，名字！”的格式输出。",
+    "constraints": "名字长度为 1～10 个字符。",
+    "sampleExplanation": "输入 小明 时，按题意计算后输出 你好，小明！。",
+    "hint": "可以使用 f 字符串把名字放进问候语。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "name = input()\nprint(f\"你好，{name}！\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "小明\n",
+        "expectedOutput": "你好，小明！\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "小红\n",
+        "expectedOutput": "你好，小红！\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "Python\n",
+        "expectedOutput": "你好，Python！\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "李老师\n",
+        "expectedOutput": "你好，李老师！\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-043",
+    "title": "输入数字再输出",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "整数"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个整数，再输出这个整数。",
+    "inputDescription": "一行一个整数。",
+    "outputDescription": "输出同一个整数。",
+    "constraints": "-10000 ≤ 整数 ≤ 10000。",
+    "sampleExplanation": "输入 8 时，按题意计算后输出 8。",
+    "hint": "先用 int() 把输入转换成整数。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "number = int(input())\nprint(number)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8\n",
+        "expectedOutput": "8\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-12\n",
+        "expectedOutput": "-12\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000\n",
+        "expectedOutput": "10000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-044",
+    "title": "输入年龄加一岁",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "变量更新"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入今年的年龄，把年龄变量增加 1 后输出。",
+    "inputDescription": "一行一个整数，表示今年年龄。",
+    "outputDescription": "输出增加 1 后的年龄。",
+    "constraints": "1 ≤ 年龄 ≤ 100。",
+    "sampleExplanation": "输入 10 时，按题意计算后输出 11。",
+    "hint": "可以写 age = age + 1 更新变量。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "age = int(input())\nage = age + 1\nprint(age)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "10\n",
+        "expectedOutput": "11\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "2\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "18\n",
+        "expectedOutput": "19\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "99\n",
+        "expectedOutput": "100\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-045",
+    "title": "输入两个数求和",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "加法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入两个整数，计算并输出它们的和。",
+    "inputDescription": "一行两个整数，中间用空格分隔。",
+    "outputDescription": "输出一行整数，表示两数之和。",
+    "constraints": "-10000 ≤ 两数 ≤ 10000。",
+    "sampleExplanation": "输入 3 5 时，按题意计算后输出 8。",
+    "hint": "用 map(int, input().split()) 一次读入两个整数。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b = map(int, input().split())\nprint(a + b)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3 5\n",
+        "expectedOutput": "8\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0 0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-3 8\n",
+        "expectedOutput": "5\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000 -10000\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-046",
+    "title": "输入两个数求差",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "减法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入两个整数，输出第一个数减第二个数的结果。",
+    "inputDescription": "一行两个整数 a、b。",
+    "outputDescription": "输出 a-b。",
+    "constraints": "-10000 ≤ a,b ≤ 10000。",
+    "sampleExplanation": "输入 9 4 时，按题意计算后输出 5。",
+    "hint": "注意减法有先后顺序。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b = map(int, input().split())\nprint(a - b)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "9 4\n",
+        "expectedOutput": "5\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "4 9\n",
+        "expectedOutput": "-5\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "0 0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-2 -7\n",
+        "expectedOutput": "5\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-047",
+    "title": "输入两个数求积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入两个整数，输出它们的乘积。",
+    "inputDescription": "一行两个整数，中间用空格分隔。",
+    "outputDescription": "输出两数乘积。",
+    "constraints": "-1000 ≤ 两数 ≤ 1000。",
+    "sampleExplanation": "输入 6 7 时，按题意计算后输出 42。",
+    "hint": "乘法运算符是 *。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b = map(int, input().split())\nprint(a * b)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "6 7\n",
+        "expectedOutput": "42\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0 99\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-5 4\n",
+        "expectedOutput": "-20\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "-8 -9\n",
+        "expectedOutput": "72\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-048",
+    "title": "输入两个数求商",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "整数除法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入两个整数，输出第一个数整除第二个数的商。",
+    "inputDescription": "一行两个整数 a、b，b 不为 0。",
+    "outputDescription": "输出 a//b 的整数商。",
+    "constraints": "0 ≤ a ≤ 10000，1 ≤ b ≤ 100。",
+    "sampleExplanation": "输入 18 3 时，按题意计算后输出 6。",
+    "hint": "使用 //，输出中不会出现小数点。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b = map(int, input().split())\nprint(a // b)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "18 3\n",
+        "expectedOutput": "6\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "19 4\n",
+        "expectedOutput": "4\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "0 5\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "999 10\n",
+        "expectedOutput": "99\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-049",
+    "title": "输入姓名和学校",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "多行输入",
+      "格式化输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "第一行输入姓名，第二行输入学校，输出“姓名在学校学习”。",
+    "inputDescription": "第一行是姓名，第二行是学校名称。",
+    "outputDescription": "按“姓名在学校学习”的格式输出。",
+    "constraints": "姓名和学校名称均不超过 20 个字符。",
+    "sampleExplanation": "输入 小明、向阳小学 时，按题意计算后输出 小明在向阳小学学习。",
+    "hint": "连续使用两次 input() 读取两行。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "name = input()\nschool = input()\nprint(f\"{name}在{school}学习\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "小明\n向阳小学\n",
+        "expectedOutput": "小明在向阳小学学习\n",
+        "isPublic": true,
+        "scoreWeight": 34,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "小红\n实验小学\n",
+        "expectedOutput": "小红在实验小学学习\n",
+        "isPublic": false,
+        "scoreWeight": 33,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "李华\n未来学校\n",
+        "expectedOutput": "李华在未来学校学习\n",
+        "isPublic": false,
+        "scoreWeight": 33,
+        "orderNum": 3
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-050",
+    "title": "你喜欢什么颜色",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "字符串拼接"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一种颜色，输出“我喜欢颜色”。",
+    "inputDescription": "一行一个颜色名称。",
+    "outputDescription": "按“我喜欢颜色”的格式输出。",
+    "constraints": "颜色名称长度为 1～10 个字符。",
+    "sampleExplanation": "输入 蓝色 时，按题意计算后输出 我喜欢蓝色。",
+    "hint": "把输入的颜色拼接到“我喜欢”后面。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "color = input()\nprint(f\"我喜欢{color}\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "蓝色\n",
+        "expectedOutput": "我喜欢蓝色\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "红色\n",
+        "expectedOutput": "我喜欢红色\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "绿色\n",
+        "expectedOutput": "我喜欢绿色\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "橙色\n",
+        "expectedOutput": "我喜欢橙色\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-051",
+    "title": "输入三个数求和",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "加法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入三个整数，输出它们的总和。",
+    "inputDescription": "一行三个整数，中间用空格分隔。",
+    "outputDescription": "输出一行整数，表示三个数之和。",
+    "constraints": "-1000 ≤ 每个整数 ≤ 1000。",
+    "sampleExplanation": "输入 1 2 3 时，按题意计算后输出 6。",
+    "hint": "三个变量都要参与加法。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "a, b, c = map(int, input().split())\nprint(a + b + c)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "1 2 3\n",
+        "expectedOutput": "6\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0 0 0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "-1 5 6\n",
+        "expectedOutput": "10\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1000 1000 1000\n",
+        "expectedOutput": "3000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-052",
+    "title": "购买文具算总价",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入文具单价和购买数量，输出总价。",
+    "inputDescription": "一行两个非负整数，依次是单价和数量。",
+    "outputDescription": "输出单价乘数量的结果。",
+    "constraints": "0 ≤ 单价 ≤ 100，0 ≤ 数量 ≤ 100。",
+    "sampleExplanation": "输入 3 5 时，按题意计算后输出 15。",
+    "hint": "总价=单价×数量。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "price, count = map(int, input().split())\nprint(price * count)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "3 5\n",
+        "expectedOutput": "15\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0 8\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "12 1\n",
+        "expectedOutput": "12\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "100 100\n",
+        "expectedOutput": "10000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-053",
+    "title": "输入边长算周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法",
+      "正方形"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入正方形边长，输出它的周长。",
+    "inputDescription": "一行一个正整数，表示边长。",
+    "outputDescription": "输出边长的 4 倍。",
+    "constraints": "1 ≤ 边长 ≤ 10000。",
+    "sampleExplanation": "输入 7 时，按题意计算后输出 28。",
+    "hint": "正方形有四条相等的边。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "side = int(input())\nprint(side * 4)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "7\n",
+        "expectedOutput": "28\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "4\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "25\n",
+        "expectedOutput": "100\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000\n",
+        "expectedOutput": "40000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-054",
+    "title": "输入边长算面积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法",
+      "正方形"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入正方形边长，输出它的面积。",
+    "inputDescription": "一行一个正整数，表示边长。",
+    "outputDescription": "输出边长乘边长的结果。",
+    "constraints": "1 ≤ 边长 ≤ 10000。",
+    "sampleExplanation": "输入 7 时，按题意计算后输出 49。",
+    "hint": "面积不是边长乘 4，要用边长乘自己。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "side = int(input())\nprint(side * side)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "7\n",
+        "expectedOutput": "49\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "25\n",
+        "expectedOutput": "625\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000\n",
+        "expectedOutput": "100000000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-055",
+    "title": "输入长宽算周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "长方形",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入长方形的长和宽，输出周长。",
+    "inputDescription": "一行两个正整数，依次表示长和宽。",
+    "outputDescription": "输出长方形周长。",
+    "constraints": "1 ≤ 长、宽 ≤ 10000。",
+    "sampleExplanation": "输入 8 5 时，按题意计算后输出 26。",
+    "hint": "周长=(长+宽)×2。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "length, width = map(int, input().split())\nprint((length + width) * 2)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8 5\n",
+        "expectedOutput": "26\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1 1\n",
+        "expectedOutput": "4\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "20 3\n",
+        "expectedOutput": "46\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000 1\n",
+        "expectedOutput": "20002\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-056",
+    "title": "输入长宽算面积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "长方形",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入长方形的长和宽，输出面积。",
+    "inputDescription": "一行两个正整数，依次表示长和宽。",
+    "outputDescription": "输出长方形面积。",
+    "constraints": "1 ≤ 长、宽 ≤ 10000。",
+    "sampleExplanation": "输入 8 5 时，按题意计算后输出 40。",
+    "hint": "面积=长×宽。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "length, width = map(int, input().split())\nprint(length * width)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "8 5\n",
+        "expectedOutput": "40\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "1 1\n",
+        "expectedOutput": "1\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "20 3\n",
+        "expectedOutput": "60\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000 1\n",
+        "expectedOutput": "10000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-057",
+    "title": "厘米换算成米",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "单位换算",
+      "格式化输出"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入整数厘米数，换算成米并保留两位小数。",
+    "inputDescription": "一行一个非负整数，单位是厘米。",
+    "outputDescription": "输出米数，保留两位小数。",
+    "constraints": "0 ≤ 厘米数 ≤ 100000。",
+    "sampleExplanation": "输入 250 时，按题意计算后输出 2.50。",
+    "hint": "1 米等于 100 厘米。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "cm = int(input())\nprint(f\"{cm / 100:.2f}\")\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "250\n",
+        "expectedOutput": "2.50\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0.00\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "1\n",
+        "expectedOutput": "0.01\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "100000\n",
+        "expectedOutput": "1000.00\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-058",
+    "title": "分钟换算成秒",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "单位换算",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入分钟数，换算成秒。",
+    "inputDescription": "一行一个非负整数，表示分钟数。",
+    "outputDescription": "输出对应的秒数。",
+    "constraints": "0 ≤ 分钟数 ≤ 10000。",
+    "sampleExplanation": "输入 5 时，按题意计算后输出 300。",
+    "hint": "1 分钟等于 60 秒。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "minutes = int(input())\nprint(minutes * 60)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "5\n",
+        "expectedOutput": "300\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "1\n",
+        "expectedOutput": "60\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "10000\n",
+        "expectedOutput": "600000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-059",
+    "title": "小时换算成分钟",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "单位换算",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入小时数，换算成分钟。",
+    "inputDescription": "一行一个非负整数，表示小时数。",
+    "outputDescription": "输出对应的分钟数。",
+    "constraints": "0 ≤ 小时数 ≤ 1000。",
+    "sampleExplanation": "输入 2 时，按题意计算后输出 120。",
+    "hint": "1 小时等于 60 分钟。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "hours = int(input())\nprint(hours * 60)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "2\n",
+        "expectedOutput": "120\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "1\n",
+        "expectedOutput": "60\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "1000\n",
+        "expectedOutput": "60000\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYV3-060",
+    "title": "给考试成绩加五分",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "加法",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE",
+    "description": "输入一个不超过 95 的考试成绩，输出加 5 分后的成绩。",
+    "inputDescription": "一行一个整数成绩。",
+    "outputDescription": "输出成绩加 5 后的结果。",
+    "constraints": "0 ≤ 成绩 ≤ 95。",
+    "sampleExplanation": "输入 80 时，按题意计算后输出 85。",
+    "hint": "直接在原成绩基础上加 5。",
+    "noInput": false,
+    "starterCode": "# 请在这里编写程序\n",
+    "referenceCode": "score = int(input())\nprint(score + 5)\n",
+    "timeLimitSeconds": 2.0,
+    "memoryLimitKb": 131072,
+    "isPublic": true,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "80\n",
+        "expectedOutput": "85\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "5\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "90\n",
+        "expectedOutput": "95\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "95\n",
+        "expectedOutput": "100\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  }
+]

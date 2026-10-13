@@ -1,0 +1,1135 @@
+[
+  {
+    "externalId": "PYV3-001",
+    "title": "你好，Python",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-002",
+    "title": "输出数字 100",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "整数"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-003",
+    "title": "输出我的学校",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-004",
+    "title": "输出两行文字",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-005",
+    "title": "输出三行数字",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-006",
+    "title": "我爱信息科技",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-007",
+    "title": "输出一串星号",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-008",
+    "title": "输出两个英文单词",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "空格"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-009",
+    "title": "输出中文问候语",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-010",
+    "title": "输出今天星期五",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-011",
+    "title": "输出两次欢迎语",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "重复输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-012",
+    "title": "输出简单表情",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-013",
+    "title": "输出一个整数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "整数"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-014",
+    "title": "输出一段固定对话",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-015",
+    "title": "输出 Hello",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "英文字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-016",
+    "title": "输出一张固定成绩单",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-017",
+    "title": "用星号画小三角形",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "字符图形"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-018",
+    "title": "制作一张文字小名片",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "print输出",
+      "多行输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-019",
+    "title": "计算 1+2",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-020",
+    "title": "计算 10-3",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "减法",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-021",
+    "title": "计算 4×5",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "乘法",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-022",
+    "title": "计算 20÷4",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "整数除法",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-023",
+    "title": "三个数相加",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "变量"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-024",
+    "title": "记录小明的年龄",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "变量",
+      "赋值"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-025",
+    "title": "明年我几岁",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "变量",
+      "加法",
+      "输入"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-026",
+    "title": "两数相减",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "变量",
+      "减法",
+      "输入"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-027",
+    "title": "两数相乘",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "变量",
+      "乘法",
+      "输入"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-028",
+    "title": "求整数除法的商",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "整数除法",
+      "输入"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-029",
+    "title": "求除法的余数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "取余",
+      "输入"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-030",
+    "title": "买苹果花多少钱",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "乘法",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-031",
+    "title": "买铅笔花多少钱",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "乘法",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-032",
+    "title": "买书包花多少钱",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-033",
+    "title": "买东西找零钱",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "减法",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-034",
+    "title": "正方形的周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "乘法",
+      "几何应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-035",
+    "title": "正方形的面积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "乘法",
+      "几何应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-036",
+    "title": "长方形的周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "乘法",
+      "几何应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-037",
+    "title": "长方形的面积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "乘法",
+      "几何应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-038",
+    "title": "三角形的周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "几何应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-039",
+    "title": "温度升高一度",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "变量",
+      "加法",
+      "输入"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-040",
+    "title": "计算三个成绩的平均分",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "加法",
+      "除法",
+      "格式化输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-041",
+    "title": "我的第一个输入",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "字符串"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-042",
+    "title": "输入名字打招呼",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "字符串拼接"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-043",
+    "title": "输入数字再输出",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "整数"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-044",
+    "title": "输入年龄加一岁",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "变量更新"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-045",
+    "title": "输入两个数求和",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "加法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-046",
+    "title": "输入两个数求差",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "减法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-047",
+    "title": "输入两个数求积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-048",
+    "title": "输入两个数求商",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "整数除法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-049",
+    "title": "输入姓名和学校",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "多行输入",
+      "格式化输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-050",
+    "title": "你喜欢什么颜色",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "字符串拼接"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-051",
+    "title": "输入三个数求和",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "加法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-052",
+    "title": "购买文具算总价",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-053",
+    "title": "输入边长算周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法",
+      "正方形"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-054",
+    "title": "输入边长算面积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "乘法",
+      "正方形"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-055",
+    "title": "输入长宽算周长",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "长方形",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-056",
+    "title": "输入长宽算面积",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "长方形",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-057",
+    "title": "厘米换算成米",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "单位换算",
+      "格式化输出"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-058",
+    "title": "分钟换算成秒",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "单位换算",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-059",
+    "title": "小时换算成分钟",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "单位换算",
+      "乘法"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-060",
+    "title": "给考试成绩加五分",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "加法",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-061",
+    "title": "数字大于 10 吗",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-062",
+    "title": "判断是不是正数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "正数"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-063",
+    "title": "判断是不是零",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "相等判断"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-064",
+    "title": "判断是不是偶数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "取余",
+      "偶数"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-065",
+    "title": "判断是不是奇数",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "取余",
+      "奇数"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-066",
+    "title": "两个数谁更大",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-067",
+    "title": "两个数谁更小",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-068",
+    "title": "是不是满分",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-069",
+    "title": "考试及格了吗",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-070",
+    "title": "上学有没有迟到",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "时间"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-071",
+    "title": "年龄是否符合活动要求",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "逻辑与"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-072",
+    "title": "温度是否过高",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "温度"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-073",
+    "title": "自动开灯还是关灯",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "传感器"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-074",
+    "title": "判断输入的口令",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "字符串比较"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-075",
+    "title": "数字是否不超过 100",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "比较运算"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-076",
+    "title": "三个数谁最大",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "最大值"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-077",
+    "title": "下雨是否带伞",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "字符串比较",
+      "生活应用"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-078",
+    "title": "简单成绩等级判断",
+    "schoolStage": "小学五、六年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "if判断",
+      "多分支",
+      "成绩"
+    ],
+    "difficulty": "SIMPLE"
+  },
+  {
+    "externalId": "PYV3-079",
+    "title": "输出 1 到 5",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-080",
+    "title": "输出 1 到 10",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-081",
+    "title": "输出五次 Hello",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "重复输出"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-082",
+    "title": "输出 1 到 n",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-083",
+    "title": "输出 2 到 10 的偶数",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range",
+      "偶数"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-084",
+    "title": "输出 1 到 9 的奇数",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "range",
+      "奇数"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-085",
+    "title": "计算 1 到 5 的和",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "累加"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-086",
+    "title": "计算 1 到 n 的和",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "累加",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-087",
+    "title": "输出 n 次星号",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "重复输出",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-088",
+    "title": "小猫叫 n 声",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "重复输出",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-089",
+    "title": "从 5 倒数到 1",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "倒序range"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-090",
+    "title": "九九乘法表的一行",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "for循环",
+      "乘法表",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-091",
+    "title": "while 输出 1 到 5",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "计数变量"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-092",
+    "title": "while 输出 1 到 n",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "计数变量",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-093",
+    "title": "while 计算累加和",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "累加",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-094",
+    "title": "输入 0 结束统计",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "哨兵值",
+      "计数"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-095",
+    "title": "倒计时直到零",
+    "schoolStage": "小学六年级或初中一年级入门",
+    "learningTier": "简单进阶",
+    "knowledgePoints": [
+      "while循环",
+      "倒计时",
+      "输入"
+    ],
+    "difficulty": "MEDIUM"
+  },
+  {
+    "externalId": "PYV3-096",
+    "title": "猜数字第一关：判断是否猜对",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "if判断",
+      "猜数字"
+    ],
+    "difficulty": "HARD"
+  },
+  {
+    "externalId": "PYV3-097",
+    "title": "猜数字第二关：猜大了还是猜小了",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "多分支",
+      "猜数字"
+    ],
+    "difficulty": "HARD"
+  },
+  {
+    "externalId": "PYV3-098",
+    "title": "鸡兔同笼第一关：计算鸡兔总腿数",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "变量",
+      "乘法",
+      "鸡兔同笼"
+    ],
+    "difficulty": "HARD"
+  },
+  {
+    "externalId": "PYV3-099",
+    "title": "鸡兔同笼第二关：枚举鸡和兔的数量",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "for循环",
+      "枚举",
+      "鸡兔同笼"
+    ],
+    "difficulty": "HARD"
+  },
+  {
+    "externalId": "PYV3-100",
+    "title": "韩信点兵入门：在小范围内寻找符合余数条件的数字",
+    "schoolStage": "小学高年级拓展或初中入门",
+    "learningTier": "趣味挑战",
+    "knowledgePoints": [
+      "for循环",
+      "取余",
+      "枚举"
+    ],
+    "difficulty": "HARD"
+  }
+]

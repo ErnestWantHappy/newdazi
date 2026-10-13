@@ -123,14 +123,14 @@ erDiagram
 - 表、字段、索引和菜单的最终定义以根目录 `sql/` 以及相关 MyBatis XML 为准。
 - 所有迁移优先幂等，并带前检/后检；发布前必须对目标库备份，不能用本机结果替代。
 - Python 独立表以 `biz_python_practice_*` 为主；课程答案仍在既有答题域。
-- Python 专用题目标题、知识点、无输入标记、内容版本和验证状态保存在 `biz_programming_question_config`，不在统一题目表增加“适用场景”；课程用途由 `biz_lesson_question` 表达，刷题用途由题单版本关联表达。该配置表的可空唯一 `external_id` 只承载系统题稳定编号（如 `PYV2-001`），教师自建题为空。
+- Python 专用题目标题、知识点、无输入标记、内容版本和验证状态保存在 `biz_programming_question_config`，不在统一题目表增加“适用场景”；课程用途由 `biz_lesson_question` 表达，刷题用途由题单版本关联表达。该配置表的可空唯一 `external_id` 只承载系统题稳定编号（如 `PYV2-001`、`PYV3-001`），教师自建题为空。V3 继续复用现有三表，来源 `python-system-v3` 与统一题目中的真实教师署名分离，不新增结构。
 - `biz_python_practice_plan_class` 以题单版本关联学校、入学年份和班级；同一范围允许多份题单。`entry_year` 的展示语义是“级”，当前自然年级由 7 月 20 日学年切换点和学校学段计算，不能直接显示成“届”。已发布题单修改时复制成新草稿版本，旧版本和快照继续服务既有学生，直到新版本发布。
 - 题单删除一律物理清理完整依赖链，不保留 `ARCHIVED` 业务入口或恢复能力。旧 `biz_python_practice_extension*` 三表已退出查询链，正式库保留空表仅用于结构兼容。
 - `biz_python_practice_submission_case` 保存独立刷题逐测试点结果；公开测试点可保存输出与错误摘要，隐藏测试点只保存状态、耗时、内存等脱敏字段。自定义运行的输入保存在刷题提交表 `custom_input`，不写课程答案或进度。
 - 课程内 Python 自定义运行的输入保存在 `biz_programming_submission.custom_input`（仅 `submission_kind=CUSTOM_RUN` 使用）；逐点结果以测试点 ID 0 表达一次自定义执行。该记录不计分、不写 `biz_student_answer`，迁移脚本为 `sql/course_python_custom_run_v1.sql`。
 - 题单快照保存题目标题、难度、知识点和无输入标记，已发布内容不因题库后续编辑而漂移。
 - 普通 Python 题删除前必须检查课程、题单、快照、草稿、提交和进度依赖；无依赖时按“测试点 → 编程配置 → 统一题目”同事务删除。一次性 V1 退场使用经精确前检和整库备份的 `sql/python_practice_polish_v3.sql` 清理完整依赖链，不复用普通删除接口。
-- Python 题的统一题目记录不承载年级、学期和课次，三个字段保存为空；题目创建人保存真实人员“郑东旭”，系统题来源使用编程配置记录的 `create_by=python-system-v2` 标记，二者不可混用。
+- Python 题的统一题目记录不承载年级、学期和课次，三个字段保存为空；题目创建人保存真实人员“郑东旭”，系统题来源使用编程配置记录的 `create_by=python-system-v2` 或 `python-system-v3` 标记，二者不可混用。
 - IoT 以 `biz_iot_*` 保存实验、小组、设备、消息与诊断，Broker 管理凭据不入业务表。
 - 协作保留既有房间/版本资料，CryptPad 迁移只扩展 Provider 能力，不删除历史 WPS 回滚材料。2026-09-06 工作台迁移（`sql/collaboration_workspace_v2.sql`，正式已执行）：快照加 `round_no` 且唯一键改为一课一班一轮次；活动加 `request_id/request_hash` 去重并发保存；方案加 `scheme_scope` 区分固定组与历史协作来源（旧协作自动方案精确标记为 `COLLAB_LEGACY`，数据零删）。小组房间用负 `question_id` 命名空间避开旧全班房间的 `(lesson,question,dept,year,class)` 唯一键。
 - 学生实验工具两类：`biz_lesson_tool`（本节课工具，随 lesson 去留）与 `biz_student_tool`+`biz_student_tool_scope`（常驻工具，scope 按 入学年份+班级，class_code 空=整个年级生效，dept_id 隔离学校）。学生端匹配：lessonTools 取当前课程 + residentTools 按 学校+年级+班级 匹配启用项。
