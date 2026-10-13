@@ -1,7 +1,7 @@
 # 架构资料索引
 
 > 整理日期2026-10-05。接管先读 `AGENTS.md` 和 [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表进入专题。
-> 最新现场：130 **1.30.44**，后端 `20261013_lo_crashfix_v4`，助手0.2.1；连线题 1.30.45 候选尚未切换，见 [专题验收](../../contexts/connector-render-fix-20261013/verification.md)。123不能混用该基线。
+> 最新现场：130 **1.30.45**，后端 `20261013_connector_fix_v1`，前端仍 1.30.43，助手0.2.1；25 份连线题历史预览已重算，既有字体分页/未修正连接符显示边界见 [专题验收](../../contexts/connector-render-fix-20261013/verification.md)。123不能混用该基线。
 
 ## 按任务选择资料
 

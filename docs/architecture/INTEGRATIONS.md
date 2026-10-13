@@ -1,8 +1,8 @@
 # 外部协议与实时链路
 
-## 2026-10-13 连线题转换候选
+## 2026-10-13 连线题转换正式 1.30.45
 
-Office 六通道 → 公共 FileConversionUtils → 可确定环绕原点的 DOCX 临时副本（两分支页面坐标）→ 既有共享池/隔离进程 → PDF / page-jpeg-v3 版本目录。原件与毒文件身份仍使用原路径，临时副本在转换结束后清理；未知布局保留原转换。无新依赖或配置，57 项测试、49 份样本验证通过，正式切换与 25 份旧图重算待完成。规则、范围与回退见 [专题设计](../../contexts/connector-render-fix-20261013/design.md) 与 [验收](../../contexts/connector-render-fix-20261013/verification.md)；AOCI 未同步。
+Office 六通道 → 公共 FileConversionUtils → 可确定环绕原点的 DOCX 临时副本（两分支页面坐标）→ 既有共享池/隔离进程 → PDF / page-jpeg-v3 版本目录。原件与毒文件身份仍使用原路径，临时副本在转换结束后清理；未知布局保留原转换。无新依赖或配置，57 项测试、49 份本机样本验证通过；130 于 19:13:52 探活，25 份旧图全部重算成功，新页图 API 可读，原件/成绩/版本保持，真实教师可见 1.30.45。Linux 既有字体分页及未修正连接符显示差异仍存在，未通过本轮横坐标修复解决。规则、范围与回退见 [专题设计](../../contexts/connector-render-fix-20261013/design.md) 与 [验收](../../contexts/connector-render-fix-20261013/verification.md)；AOCI 未同步。
 
 > 当前正式1.30.27（2026-10-05）：客户端0.2.0学生直接运行自动读取IP，原网页登录确定学校，教师设置名称并确认。正式配对/DPAPI、重复关联、撤销及98秒Python续期通过；下面较早记录为历史。见 [自动关联验收](../../contexts/classroom-experience-20261002/seat-helper-auto-verification-20261005.md)。
 
