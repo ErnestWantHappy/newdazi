@@ -69,7 +69,7 @@ public class PracticalPageRenderer
             throw new ServiceException("规范化渲染源文件不存在");
         }
         File outputDir = new File(visualSource.getParentFile(),
-                "normalized-v1" + File.separator + ownerKey);
+                "normalized-v1" + File.separator + ownerKey + "-" + RENDERER_VERSION);
         if (!outputDir.exists() && !outputDir.mkdirs())
         {
             throw new ServiceException("无法创建规范化页图目录");
@@ -118,7 +118,8 @@ public class PracticalPageRenderer
     {
         String hash = attachment.getSha256() == null || attachment.getSha256().trim().isEmpty()
                 ? "nohash" : attachment.getSha256();
-        String cacheKey = hash + "-attachment-" + attachment.getAttachmentId();
+        // 版本升级使用新资源地址，避免浏览器仍显示旧页图，并保留旧文件供精确回退。
+        String cacheKey = hash + "-attachment-" + attachment.getAttachmentId() + "-" + RENDERER_VERSION;
         File outputDir = new File(visualSource.getParentFile(),
                 "normalized-v1" + File.separator + cacheKey);
         if (!outputDir.exists() && !outputDir.mkdirs())

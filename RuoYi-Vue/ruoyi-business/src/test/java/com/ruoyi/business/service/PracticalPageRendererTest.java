@@ -44,7 +44,7 @@ class PracticalPageRendererTest
         assertTrue(pages.get(0).endsWith("page-001.jpg"));
         File rendered = resourceFile(pages.get(0));
         assertTrue(rendered.isFile());
-        assertEquals(1800, ImageIO.read(rendered).getWidth());
+        assertEquals(2000, ImageIO.read(rendered).getWidth());
     }
 
     @Test
@@ -86,6 +86,22 @@ class PracticalPageRendererTest
         assertTrue(resourceFile(copied.get(0)).isFile());
         assertTrue(copied.get(0).contains("attachment-4"));
         assertTrue(!cached.get(0).equals(copied.get(0)));
+    }
+
+    @Test
+    void versionedPagesKeepLegacyFilesAndUseNewResourceAddresses() throws Exception
+    {
+        File source = tempDir.resolve("upload/work.png").toFile();
+        assertTrue(source.getParentFile().mkdirs());
+        ImageIO.write(new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB), "png", source);
+        File old = tempDir.resolve("upload/normalized-v1/same-attachment-7/page-001.jpg").toFile();
+        assertTrue(old.getParentFile().mkdirs());
+        java.nio.file.Files.write(old.toPath(), new byte[] {1, 2, 3});
+        List<String> pages = renderer.render(attachment(7L, "IMAGE", "same"), source);
+        assertTrue(pages.get(0).contains("attachment-7-" + PracticalPageRenderer.RENDERER_VERSION));
+        org.junit.jupiter.api.Assertions.assertArrayEquals(new byte[] {1, 2, 3}, java.nio.file.Files.readAllBytes(old.toPath()));
+        List<String> owner = renderer.renderForOwner("county-7", "IMAGE", source);
+        assertTrue(owner.get(0).contains("county-7-" + PracticalPageRenderer.RENDERER_VERSION));
     }
 
     private PracticalAttachment attachment(Long id, String kind, String sha)
