@@ -122,6 +122,9 @@ public class StudentHomeController extends BaseController
     @Autowired
     private ClassroomTaskStateService classroomTaskStateService;
 
+    @Autowired
+    private com.ruoyi.business.service.ExtensionClassService extensionClassService;
+
     /** 只向学生展示当前课程中被退回的操作题。 */
     @GetMapping("/returned-practical")
     public AjaxResult returnedPractical()
@@ -271,6 +274,9 @@ public class StudentHomeController extends BaseController
             info.put("answer", sa.getStudentAnswer());
             info.put("taskState", taskStates.get(sa.getQuestionId()));
             info.put("score", sa.getScore());
+            info.put("typingSpeed", sa.getTypingSpeed());
+            info.put("accuracyRate", sa.getAccuracyRate());
+            info.put("completionRate", sa.getCompletionRate());
             info.put("submitTime", sa.getSubmitTime());
             info.put("previewStatus", sa.getPreviewStatus());
             info.put("previewPath", sa.getPreviewPath());
@@ -323,6 +329,9 @@ public class StudentHomeController extends BaseController
                 .put("lessonMode", lessonMode)
                 // 课程级物联网开关：学生首页据此决定是否显示「物联实验」入口。
                 .put("iotEnabled", lesson != null && Boolean.TRUE.equals(lesson.getIotEnabled()))
+                // 本课绑定的电子教材；两者都为空时学生端不显示「电子教材」按钮。
+                .put("textbookBookId", lesson != null ? lesson.getTextbookBookId() : null)
+                .put("textbookSectionKey", lesson != null ? lesson.getTextbookSectionKey() : null)
                 .put("teacherNote", lesson != null ? lesson.getTeacherNote() : null)
                 .put("checkedIn", checkedIn)
                 .put("checkinTime", checkin == null ? null : checkin.getCheckinTime())
@@ -376,7 +385,8 @@ public class StudentHomeController extends BaseController
         Long deptId = loginUser.getDeptId();
         Long currentLessonId = lessonAssignmentMapper.selectCurrentLessonByClass(
                 student.getEntryYear(), student.getClassCode(), deptId);
-        if (!lessonId.equals(currentLessonId)) {
+        boolean extensionCheckin = extensionClassService.extensionCheckin(student, lessonId);
+        if (!extensionCheckin && !lessonId.equals(currentLessonId)) {
             return AjaxResult.error("只能签到当前指派课程");
         }
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
@@ -657,6 +667,8 @@ public class StudentHomeController extends BaseController
             } else if ("typing".equals(question.getQuestionType())) {
                 answer.setTypingSubmission(true);
                 answer.setTypingRevision(request.getTypingRevision());
+                // 即使空内容/空答案得0分也必须择优，不能走普通覆盖路径清掉最高分。
+                answer.setKeepBestScore(true);
                 String original = question.getQuestionContent();
                 if (original != null && !original.isEmpty() && studentAnswer != null) {
                     int completedCount = studentAnswer.length(); // 完成字数
@@ -706,7 +718,6 @@ public class StudentHomeController extends BaseController
                              && score >= question.getQuestionScore() * 0.6;
                     
                     // 打字题重复提交（含弱网重发）保留历史最高分，防止慢的一次覆盖快的一次
-                    answer.setKeepBestScore(true);
 
                     // 打字统计量由服务端按正文比重算并封顶落库，不采信客户端自报（防控制台伪造极端速度污染学情）。
                     com.ruoyi.business.util.TypingSpeedStats resolvedStats =
@@ -735,12 +746,20 @@ public class StudentHomeController extends BaseController
                 studentId, lessonId, answersToSave);
 
         // 打字题落库时保留最高分；接口必须返回实际保存的分数，避免重打低分后页面与成绩表不一致。
+        Map<Long, Map<String, Object>> typingResults = new java.util.HashMap<>();
         for (BizStudentAnswer savedAnswer : answersToSave) {
             if (!Boolean.TRUE.equals(savedAnswer.getTypingSubmission())) continue;
             BizStudentAnswer persisted = studentAnswerMapper.selectLatestByStudentLessonQuestion(
                     studentId, lessonId, savedAnswer.getQuestionId());
             if (persisted != null && persisted.getScore() != null) {
                 totalScore += persisted.getScore().intValue() - savedAnswer.getScore().intValue();
+                Map<String, Object> result = new java.util.HashMap<>();
+                result.put("score", persisted.getScore());
+                result.put("answer", persisted.getStudentAnswer());
+                result.put("typingSpeed", persisted.getTypingSpeed());
+                result.put("accuracyRate", persisted.getAccuracyRate());
+                result.put("completionRate", persisted.getCompletionRate());
+                typingResults.put(savedAnswer.getQuestionId(), result);
             }
         }
 
@@ -756,7 +775,7 @@ public class StudentHomeController extends BaseController
                 lessonId, loginUser.getDeptId(), student.getEntryYear(), student.getClassCode());
         log.info("【学生答题】学生 {} 提交课程 {} 答案，得分: {}", student.getStudentId(), lessonId, totalScore);
 
-        return AjaxResult.success("提交成功").put("totalScore", totalScore);
+        return AjaxResult.success("提交成功").put("totalScore", totalScore).put("typingResults", typingResults);
     }
 
     /**

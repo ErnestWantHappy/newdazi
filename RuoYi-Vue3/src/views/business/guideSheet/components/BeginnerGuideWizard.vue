@@ -57,6 +57,10 @@
           <el-form-item label="模板标题" prop="sheetTitle" class="span-two">
             <el-input v-model="draftMeta.sheetTitle" maxlength="100" show-word-limit placeholder="例如：第 6 课 网络安全课堂任务单" />
           </el-form-item>
+          <el-form-item label="本课主题（选填）" prop="teachingTopic" class="span-two">
+            <el-input v-model="draftMeta.teachingTopic" maxlength="60" show-word-limit placeholder="例如：算法的三种基本结构" />
+            <p class="field-help">填写后“智能内容建议”会更贴合本课；不填也能正常创建和保存。</p>
+          </el-form-item>
           <el-form-item label="年级" prop="grade">
             <el-select v-model="draftMeta.grade" placeholder="请选择年级" style="width:100%">
               <el-option v-for="item in gradeOptions" :key="item.value" :label="item.label" :value="Number(item.value)" />
@@ -69,6 +73,9 @@
           </el-form-item>
           <el-form-item label="第几课" prop="lessonNum">
             <el-input-number v-model="draftMeta.lessonNum" :min="1" :max="30" controls-position="right" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="预计课时（分钟）" prop="estimatedMinutes">
+            <el-input-number v-model="draftMeta.estimatedMinutes" :min="5" :max="120" :step="5" controls-position="right" style="width:100%" />
           </el-form-item>
           <el-form-item label="可见范围" prop="isPublic" class="span-two">
             <el-radio-group v-model="draftMeta.isPublic">

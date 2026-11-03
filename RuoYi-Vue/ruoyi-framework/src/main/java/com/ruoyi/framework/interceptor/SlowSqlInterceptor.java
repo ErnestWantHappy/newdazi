@@ -1,6 +1,8 @@
 package com.ruoyi.framework.interceptor;
 
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
+import org.apache.ibatis.cache.CacheKey;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
@@ -22,7 +24,9 @@ import com.ruoyi.system.service.ISysPerfEventService;
  */
 @Intercepts({
     @Signature(type = Executor.class, method = "update", args = { MappedStatement.class, Object.class }),
-    @Signature(type = Executor.class, method = "query", args = { MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class })
+    @Signature(type = Executor.class, method = "query", args = { MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class }),
+    // PageHelper 在外层直接调用 6 参 query，若不声明此签名，分页查询会绕过慢 SQL 拦截。
+    @Signature(type = Executor.class, method = "query", args = { MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class, CacheKey.class, BoundSql.class })
 })
 public class SlowSqlInterceptor implements Interceptor
 {
@@ -30,9 +34,24 @@ public class SlowSqlInterceptor implements Interceptor
 
     private static final long SLOW_SQL_THRESHOLD_MS = 1000L;
 
+    private static final AtomicLong INTERCEPT_COUNT = new AtomicLong();
+
+    private static final AtomicLong SLOW_DETECT_COUNT = new AtomicLong();
+
+    public static long getInterceptCount()
+    {
+        return INTERCEPT_COUNT.get();
+    }
+
+    public static long getSlowDetectCount()
+    {
+        return SLOW_DETECT_COUNT.get();
+    }
+
     @Override
     public Object intercept(Invocation invocation) throws Throwable
     {
+        INTERCEPT_COUNT.incrementAndGet();
         long start = System.currentTimeMillis();
         try
         {
@@ -43,6 +62,7 @@ public class SlowSqlInterceptor implements Interceptor
             long duration = System.currentTimeMillis() - start;
             if (duration >= SLOW_SQL_THRESHOLD_MS)
             {
+                SLOW_DETECT_COUNT.incrementAndGet();
                 recordSlowSql(invocation, duration);
             }
         }

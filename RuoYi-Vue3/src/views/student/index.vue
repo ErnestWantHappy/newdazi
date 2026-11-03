@@ -7,6 +7,7 @@
         <div class="header-left">
           <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
           <span class="platform-name">智慧课堂 - 学生端</span>
+          <StudentSpaceSwitch space="regular" />
           <div v-if="hasGuideSheet" class="view-toggle" role="tablist" aria-label="课程内容切换">
             <el-button
               size="small"
@@ -31,6 +32,14 @@
               icon="Cpu"
               @click="$router.push({ path: '/student/iot', query: { lessonId } })"
               >物联实验</el-button
+            >
+            <el-button
+              v-if="hasTextbook"
+              type="primary"
+              link
+              icon="Reading"
+              @click="openTextbook"
+              >电子教材</el-button
             >
             <el-button
               type="warning"
@@ -252,7 +261,7 @@
           >
             <!-- 左侧数据栏 -->
             <div class="typing-stats">
-              <!-- <div class="stat-line"></div> 移除旧的分数显示和分割线 -->
+              <div class="typing-stats-caption">练习统计</div>
 
               <div class="stat-item time">
                 <label>剩余时间</label>
@@ -299,8 +308,16 @@
                 <span>{{ typingStates[q.questionId]?.progress || 0 }}%</span>
               </div>
 
+              <div v-if="typingStates[q.questionId]?.bestScore != null" class="typing-best-note">
+                本轮最高：{{ typingStates[q.questionId].bestScore }}分
+                <span v-if="typingStates[q.questionId].bestSpeed != null">
+                  · 对应速度 {{ typingStates[q.questionId].bestSpeed }}字/分
+                  · 正确率 {{ typingStates[q.questionId].bestAccuracy }}%
+                  · 完成率 {{ typingStates[q.questionId].bestCompletion }}%
+                </span>
+              </div>
               <div class="action-buttons">
-                <!-- 开始/重新打字按钮 -->
+              <!-- 开始/重新打字按钮 -->
                 <el-button
                   v-if="!typingStates[q.questionId]?.started"
                   type="success"
@@ -357,7 +374,7 @@
                 v-else-if="typingStates[q.questionId]?.submitted"
               >
                 <el-alert
-                  :title="`成绩已提交！得分: ${
+                  :title="`成绩已提交！本轮最高: ${
                     typingStates[q.questionId]?.myScore || 0
                   }分`"
                   type="success"
@@ -369,21 +386,74 @@
 
               <!-- 原文展示区 -->
               <div class="original-text-box">
-                <div class="box-label">文章段落：</div>
-                <div 
+                <div class="box-label">
+                  <span>文章段落：</span>
+                  <button
+                    type="button"
+                    class="pinyin-toggle"
+                    :aria-expanded="typingPinyin.isVisible(q.questionId) ? 'true' : 'false'"
+                    :aria-controls="`typing-original-${q.questionId}`"
+                    @mousedown.prevent
+                    @click="typingPinyin.toggle(q)"
+                  >
+                    {{ typingPinyin.isVisible(q.questionId) ? "隐藏拼音" : "显示拼音" }}
+                  </button>
+                </div>
+                <div
+                  v-if="typingPinyin.isVisible(q.questionId) && typingPinyin.statusOf(q.questionId) === 'loading'"
+                  class="pinyin-hint"
+                  role="status"
+                >
+                  正在生成拼音…
+                </div>
+                <div
+                  v-else-if="typingPinyin.isVisible(q.questionId) && typingPinyin.statusOf(q.questionId) === 'error'"
+                  class="pinyin-hint pinyin-hint--error"
+                  role="status"
+                >
+                  拼音暂时无法显示，原文可以继续练习。
+                  <button
+                    type="button"
+                    class="pinyin-retry"
+                    @mousedown.prevent
+                    @click="typingPinyin.retry(q)"
+                  >重试</button>
+                </div>
+                <div
+                  :id="`typing-original-${q.questionId}`"
                   class="text-content"
-                  @copy.prevent 
-                  @paste.prevent 
-                  @cut.prevent 
-                  @dragstart.prevent 
+                  @copy.prevent
+                  @paste.prevent
+                  @cut.prevent
+                  @dragstart.prevent
                   @contextmenu.prevent
                 >
-                  <span
-                    v-for="(char, idx) in q.questionContent || ''"
-                    :key="idx"
-                    :class="getCharClass(q.questionId, idx)"
-                    >{{ char }}</span
-                  >
+                  <template v-if="typingPinyin.segmentsFor(q).length">
+                    <template
+                      v-for="(segment, segmentIndex) in typingPinyin.segmentsFor(q)"
+                      :key="`${q.questionId}-${segmentIndex}`"
+                    >
+                      <ruby v-if="segment.hasPinyin" class="typing-ruby">
+                        <span :class="getCharClass(q.questionId, segment.start)">{{ segment.origin }}</span>
+                        <rt>{{ segment.pinyin }}</rt>
+                      </ruby>
+                      <template v-else>
+                        <span
+                          v-for="(char, charIndex) in segment.origin"
+                          :key="`${segmentIndex}-${charIndex}`"
+                          :class="getCharClass(q.questionId, segment.start + charIndex)"
+                        >{{ char }}</span>
+                      </template>
+                    </template>
+                  </template>
+                  <template v-else>
+                    <span
+                      v-for="(char, idx) in q.questionContent || ''"
+                      :key="idx"
+                      :class="getCharClass(q.questionId, idx)"
+                      >{{ char }}</span
+                    >
+                  </template>
                 </div>
               </div>
 
@@ -585,7 +655,7 @@
                   class="work-uploader"
                   :ref="el => setPracticalUploader(q.questionId, el)"
                   v-model:file-list="practicalFileLists[q.questionId]"
-                  :disabled="!canUpdatePractical(q.questionId) || !!submittingPracticalQuestionId"
+                  :disabled="!!submittingPracticalQuestionId"
                   :action="uploadUrl"
                   :data="{ lessonId, questionId: q.questionId }"
                   :headers="uploadHeaders"
@@ -598,11 +668,11 @@
                   :show-file-list="false"
                   :accept="getPracticalAccept(q)"
                 >
-                  <el-button type="primary" icon="Upload" :disabled="!canUpdatePractical(q.questionId) || !!submittingPracticalQuestionId" :loading="submittingPracticalQuestionId === q.questionId">
-                    {{ practicalUploads[q.questionId] ? "选择并提交新版本" : "选择并提交作品" }}
+                  <el-button type="primary" icon="Upload" :disabled="!!submittingPracticalQuestionId" :loading="submittingPracticalQuestionId === q.questionId">
+                    {{ practicalUploads[q.questionId] ? "重新提交作业" : "选择并提交作品" }}
                   </el-button>
                 </el-upload>
-                <span v-if="!canUpdatePractical(q.questionId)" class="upload-tip">已批改，如需修改请联系老师退回重交</span>
+                <span v-if="practicalScores[q.questionId] != null" class="upload-tip">可以自行重做。新作品提交成功前保留原作品和分数，成功后等待老师重新批改。</span>
                 <p v-if="getPracticalAllowedExtensions(q).some(ext => ['html', 'htm', 'txt'].includes(ext))" class="upload-tip">网页请提交单个 HTML/HTM，推荐命名 index.html，CSS 和 JavaScript 写在文件内；无需用姓名或学号重命名。TXT 按文字查看。文本和网页不超过 2 MiB，均由老师人工评分。</p>
                 <p v-if="getPracticalAllowedExtensions(q).some(ext => ['zip', 'rar', '7z'].includes(ext))" class="upload-tip">压缩包由老师下载查看；希望直接预览时，请优先提交本题允许的原文件。</p>
 
@@ -656,10 +726,11 @@
                       >下载</el-button
                     >
                     <el-button
+                      v-if="practicalScores[q.questionId] == null"
                       type="danger"
                       size="small"
                       icon="Delete"
-                      :disabled="practicalScores[q.questionId] != null"
+                      :disabled="!!submittingPracticalQuestionId"
                       @click="deleteWork(q.questionId)"
                       >删除</el-button
                     >
@@ -1041,8 +1112,10 @@
 </template>
 
 <script setup name="StudentIndex">
+import StudentSpaceSwitch from "@/components/StudentSpaceSwitch"
 import { formatPracticalFileSize, practicalFileNameLimit } from '@/utils/practicalFileDisplay';
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from "vue";
+import { createTypingPinyinController } from "./typingPinyin";
 import {
   getCurrentLesson,
   getReturnedPractical,
@@ -1100,6 +1173,10 @@ const checkedIn = ref(false);
 const checkinTime = ref(null);
 const checkinLoading = ref(false);
 const iotEnabled = ref(false);
+// 本课绑定的电子教材：两个字段都到位才显示顶部入口，未绑定不打扰学生。
+const textbookBookId = ref(null);
+const textbookSectionKey = ref(null);
+const hasTextbook = computed(() => Boolean(textbookBookId.value && textbookSectionKey.value));
 const hasGuideSheet = ref(false);
 const guideSheetBindingId = ref(null);
 const activeLearningMode = ref("daily");
@@ -1121,6 +1198,16 @@ const studentClassLabel = computed(() => {
   return `${gradeLabel}${classCode}班`
 })
 const collaborationRooms = ref([]);
+
+function openTextbook() {
+  if (!hasTextbook.value) return;
+  // 电子教材独立新开标签，学生保留当前作答页面，返回时不需要重新加载课堂。
+  const target = router.resolve({
+    path: `/student/textbook/read/${textbookBookId.value}`,
+    query: { section: textbookSectionKey.value }
+  }).href;
+  window.open(target, '_blank', 'noopener');
+}
 
 function openCollaboration(room) {
   if (!room?.roomId) {
@@ -1446,6 +1533,8 @@ function retryWrongQuestion(questionId) {
 // 打字题状态管理
 const typingStates = ref({});
 const timerIntervals = {};
+// 拼音提示按题目独立保存，仅存在于当前页面内存；不写入答案、localStorage 或服务器。
+const typingPinyin = createTypingPinyinController();
 
 // 理论测试得分状态
 const theoryScore = ref(null); // null表示未提交
@@ -1458,6 +1547,16 @@ const theorySubmitting = ref(false);
 const typingQuestions = computed(() =>
   allQuestions.value.filter((q) => q.questionType === "typing")
 );
+
+// 切换课程或重新进入页面时回到默认隐藏；同一页面内重新打字不清除该题显示状态。
+watch(lessonId, () => typingPinyin.reset(), { flush: "sync" });
+onActivated(() => typingPinyin.reset());
+// 只在题目正文变化时重算已展开题目的注音；答案和计时变化不会触发。
+watch(
+  () => typingQuestions.value.map((q) => `${q.questionId}\u0000${q.questionContent || ""}`),
+  () => typingQuestions.value.forEach((q) => typingPinyin.sync(q))
+);
+
 // 理论题：老师课堂上开启后才显示（老师未开启时不渲染作答区）
 const theoryQuestions = computed(() =>
   theoryOpen.value
@@ -1637,8 +1736,8 @@ const courseMyScore = computed(() => {
   // 打字题得分
   typingQuestions.value.forEach((q) => {
     const state = typingStates.value[q.questionId];
-    if (state?.submitted && state?.myScore !== undefined) {
-      total += state.myScore;
+    if (state?.bestScore != null) {
+      total += state.bestScore;
       hasAnyScore = true;
     }
   });
@@ -1685,8 +1784,8 @@ const typingMyScore = computed(() => {
   let hasAnyScore = false;
   typingQuestions.value.forEach((q) => {
     const state = typingStates.value[q.questionId];
-    if (state?.submitted && state?.myScore !== undefined) {
-      total += state.myScore;
+    if (state?.bestScore != null) {
+      total += state.bestScore;
       hasAnyScore = true;
     }
   });
@@ -1739,6 +1838,8 @@ async function fetchData(opts = {}) {
     checkedIn.value = false;
     checkinTime.value = null;
     iotEnabled.value = false;
+    textbookBookId.value = null;
+    textbookSectionKey.value = null;
     if (res.hasLesson) {
       const theoryChanged = Number(res.theoryRevision || 0) !== theoryRevision.value || lessonId.value !== res.lessonId;
       const typingChanged = Number(res.typingRevision || 0) !== typingRevision.value || lessonId.value !== res.lessonId;
@@ -1767,6 +1868,8 @@ async function fetchData(opts = {}) {
       checkinTime.value = res.checkinTime || null;
       // 课程级物联网开关：只有教师开启后才显示「物联实验」入口。
       iotEnabled.value = Boolean(res.iotEnabled);
+      textbookBookId.value = res.textbookBookId || null;
+      textbookSectionKey.value = res.textbookSectionKey || null;
       guideSheetBindingId.value = res.guideSheetBindingId || res.guideSheetBinding?.bindingId || null;
       hasGuideSheet.value = Boolean(res.guideSheetEnabled && guideSheetBindingId.value);
       
@@ -1817,6 +1920,8 @@ async function fetchData(opts = {}) {
     checkedIn.value = false;
     checkinTime.value = null;
     iotEnabled.value = false;
+    textbookBookId.value = null;
+    textbookSectionKey.value = null;
     allQuestions.value = [];
     lessonTools.value = [];
     residentTools.value = [];
@@ -1961,6 +2066,9 @@ function initTypingStates() {
     // 检查是否已提交过答案
     const submitted = submittedAnswers.value[q.questionId];
     const hasSubmitted = !!submitted;
+    const completedCount = submitted?.answer?.length || 0;
+    const correctCount = (submitted?.answer || '').split('').reduce(
+      (count, char, index) => count + Number(char === q.questionContent?.[index]), 0);
 
     typingStates.value[q.questionId] = {
       started: hasSubmitted, // 如果已提交，则标记为已开始，显示"重新打字"按钮
@@ -1969,23 +2077,24 @@ function initTypingStates() {
       startTime: 0,
       timeLeft: hasSubmitted ? 0 : (q.typingDuration || 10) * 60,
       durationLimit: (q.typingDuration || 10) * 60,
-      completedCount: hasSubmitted && submitted.answer ? submitted.answer.length : 0,
-      errorCount: 0,
-      correctCount: 0,
-      accuracy: 100,
-      speed: 0,
-      progress: 0,
+      completedCount,
+      errorCount: completedCount - correctCount,
+      correctCount,
+      accuracy: submitted?.accuracyRate ?? 100,
+      speed: submitted?.typingSpeed ?? 0,
+      progress: submitted?.completionRate ?? 0,
       submitting: false,
       myScore: hasSubmitted ? (submitted.score || 0) : 0,
+      bestScore: hasSubmitted ? (submitted.score || 0) : null,
+      bestSpeed: submitted?.typingSpeed ?? null,
+      bestAccuracy: submitted?.accuracyRate ?? null,
+      bestCompletion: submitted?.completionRate ?? null,
     };
     
     // 如果已提交，恢复之前的文本
     if (hasSubmitted && submitted.answer) {
       answers.value[q.questionId] = submitted.answer;
-      // 简单计算一下统计数据（可选）
-      nextTick(() => {
-        updateTypingStats(q.questionId, submitted.answer);
-      });
+      // 已提交记录读取服务端保存的统计，不能拿题目时长重新推算历史速度。
     } else {
       answers.value[q.questionId] = "";
     }
@@ -2045,7 +2154,7 @@ function restartTyping(qid) {
   state.speed = 0;
   state.progress = 0;
   state.submitting = false;
-  state.myScore = 0;
+  // 只重置本次练习；已保存的本轮最高分继续计入课程总分。
 
   // 清空输入
   answers.value[qid] = "";
@@ -2143,6 +2252,8 @@ function autoSubmitTyping(qid) {
   if (timeSpent < 1) timeSpent = 1;
 
   const submitTimes = { [qid]: timeSpent };
+  const submittingLessonId = lessonId.value;
+  const submittingRevision = typingRevision.value;
 
   // 打字详情统计
   const typingStats = {
@@ -2161,10 +2272,21 @@ function autoSubmitTyping(qid) {
     typingRevision: typingRevision.value,
   })
     .then((res) => {
+      // 教师重置轮次或切课后，旧请求的迟到响应不能恢复旧分。
+      if (lessonId.value !== submittingLessonId || typingRevision.value !== submittingRevision
+          || typingStates.value[qid] !== state) return;
       state.submitted = true;
       state.submitting = false;
-      state.myScore = res.totalScore || 0;
-      ElMessage.success(`打字成绩已自动提交！得分: ${state.myScore}分`);
+      const best = res.typingResults?.[qid];
+      state.myScore = Number(best?.score ?? res.totalScore ?? 0);
+      state.bestScore = state.myScore;
+      if (best) {
+        state.bestSpeed = best.typingSpeed;
+        state.bestAccuracy = best.accuracyRate;
+        state.bestCompletion = best.completionRate;
+        submittedAnswers.value[qid] = best;
+      }
+      ElMessage.success(`打字成绩已提交！本轮最高: ${state.bestScore}分`);
     })
     .catch((error) => {
       state.submitting = false;
@@ -2328,7 +2450,7 @@ function getPracticalUploadLimit(question) {
 }
 
 function beforePracticalUpload(question, file) {
-  if (submittingPracticalQuestionId.value || !canUpdatePractical(question.questionId)) return false;
+  if (submittingPracticalQuestionId.value) return false;
   if (String(file?.name || '').length > practicalFileNameLimit) {
     ElMessage.error(`文件名不能超过${practicalFileNameLimit}个字符（含扩展名），请缩短文件名后重新上传`);
     return false;
@@ -2425,18 +2547,50 @@ async function commitPracticalArtifact(question) {
   const active = () => epoch === practicalUploadEpoch && submittedLesson === lessonId.value;
   submittingPracticalQuestionId.value = questionId;
   try {
-    await submitPracticalArtifact({
+    if (practicalScores.value[questionId] != null) {
+      try {
+        await ElMessageBox.confirm(
+          '新作品提交成功后，原分数将清除，等待老师重新批改；取消或提交失败会保留原作品和分数。',
+          '重新提交作业', { type: 'warning', confirmButtonText: '提交新作品', cancelButtonText: '保留原作业' }
+        );
+      } catch (action) {
+        if (action === 'cancel' || action === 'close') return;
+        throw action;
+      }
+      if (!active()) return;
+    }
+    const result = await submitPracticalArtifact({
       lessonId: lessonId.value,
       questionId,
       expectedVersionId: practicalArtifacts.value[questionId]?.versionId || null,
       uploadTokens: drafts.map((item) => item.uploadToken),
     });
     if (!active()) return;
+    // 提交已成功即清除页面旧分；预览或后续刷新失败不能把旧分留在新作品上。
+    const artifact = result.data;
+    const primary = artifact?.attachments?.[0];
+    const current = {
+      ...submittedAnswers.value[questionId], score: null, taskState: 'SUBMITTED',
+      artifact, answer: primary?.resourcePath,
+      previewStatus: primary?.previewStatus, previewPath: primary?.previewPath,
+    };
+    submittedAnswers.value[questionId] = current;
+    syncPracticalSubmission(questionId, current);
     const submittedUids = new Set(drafts.map(item => item.uid));
     practicalDrafts.value[questionId] = getPracticalDrafts(questionId).filter(item => !submittedUids.has(item.uid));
     practicalFileLists.value[questionId] = (practicalFileLists.value[questionId] || []).filter(item => !submittedUids.has(item.uid));
     uploadingQuestionId.value = questionId;
-    const submitted = await refreshPracticalSubmission(questionId);
+    let submitted;
+    try {
+      submitted = await refreshPracticalSubmission(questionId);
+    } catch {
+      if (active()) {
+        uploadingQuestionId.value = null;
+        ElMessage.warning('新作品已提交，等待老师重新批改；状态刷新失败，请稍后刷新页面查看。');
+        schedulePracticalPreviewPolling(questionId);
+      }
+      return;
+    }
     if (!active()) return;
     const previewStatus = submitted?.previewStatus || "";
     if (previewStatus === "unsupported") {
@@ -2970,6 +3124,19 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.typing-stats-caption {
+  font-size: 12px;
+  color: #909399;
+}
+
+.typing-best-note {
+  padding-top: 10px;
+  border-top: 1px solid #ebeef5;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #529b2e;
+}
+
 /* 分数显示 */
 .score-display {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -3073,10 +3240,65 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 .box-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-weight: bold;
   color: #909399;
   margin-bottom: 12px;
   font-size: 13px;
+}
+.pinyin-toggle {
+  flex-shrink: 0;
+  padding: 2px 0 2px 8px;
+  border: 0;
+  background: transparent;
+  color: #409eff;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.pinyin-toggle:hover {
+  color: #66b1ff;
+  text-decoration: underline;
+}
+.pinyin-toggle:focus-visible,
+.pinyin-retry:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #409eff;
+  outline-offset: 2px;
+}
+.pinyin-hint {
+  margin: -6px 0 8px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.pinyin-hint--error {
+  color: #b26a00;
+}
+.pinyin-retry {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #409eff;
+  font-family: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.typing-ruby {
+  ruby-position: over;
+}
+.text-content rt {
+  color: #8c8c8c;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.55em;
+  font-weight: normal;
+  letter-spacing: 0;
+  line-height: 1.15;
 }
 .text-content {
   font-size: 18px;
@@ -3702,6 +3924,18 @@ onUnmounted(() => {
   }
   .lesson-banner h1 {
     font-size: 22px;
+  }
+  /* 窄屏把统计栏移到原文上方，避免原文列过窄导致拼音和汉字挤在一起。 */
+  .typing-panel {
+    flex-direction: column;
+  }
+  .typing-stats {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #ebeef5;
+  }
+  .typing-area {
+    padding: 16px;
   }
 }
 

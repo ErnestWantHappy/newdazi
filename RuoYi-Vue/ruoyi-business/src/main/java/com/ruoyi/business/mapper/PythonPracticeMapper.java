@@ -22,6 +22,8 @@ public interface PythonPracticeMapper {
     List<Map<String, Object>> selectStudentQuestions(@Param("deptId") Long deptId,
                                                      @Param("entryYear") String entryYear,
                                                      @Param("classCode") String classCode);
+    List<Map<String, Object>> selectExtensionStudentQuestions(@Param("deptId") Long deptId,
+        @Param("entryYear") String entryYear, @Param("classCode") String classCode, @Param("extensionClassId") Long extensionClassId);
     Map<String, Object> selectQuestion(@Param("sourceType") String sourceType,
                                        @Param("sourceId") Long sourceId,
                                        @Param("questionId") Long questionId);

@@ -37,7 +37,7 @@ class LoginPreviewServiceTest
             started.countDown(); assertTrue(release.await(3, TimeUnit.SECONDS)); return Collections.emptyList();
         });
         LoginPreviewService service = new LoginPreviewService(mapper, clock);
-        List<Map<String, Object>> original = service.lessons(); now.set(40_000L);
+        List<Map<String, Object>> original = service.lessons(); now.set(3_500_000L);
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try
         {
@@ -78,10 +78,33 @@ class LoginPreviewServiceTest
         when(mapper.selectLessons()).thenReturn(Collections.singletonList(lesson()))
                 .thenThrow(new IllegalStateException("查询失败"));
         LoginPreviewService service = new LoginPreviewService(mapper, clock);
-        List<Map<String, Object>> original = service.lessons(); now.set(40_000L);
+        List<Map<String, Object>> original = service.lessons(); now.set(3_500_000L);
         service.refreshPreviews(); assertSame(original, service.lessons());
-        now.set(60_000L); assertThrows(IllegalStateException.class, service::lessons);
+        now.set(3_600_000L); assertThrows(IllegalStateException.class, service::lessons);
         verify(mapper, times(3)).selectLessons();
+    }
+
+    @Test void lessonsCacheLastsOneHourWhileActivitiesStayOneMinute()
+    {
+        LoginPreviewMapper mapper = mock(LoginPreviewMapper.class);
+        AtomicLong now = new AtomicLong(); Clock clock = mock(Clock.class);
+        when(clock.millis()).thenAnswer(call -> now.get());
+        when(mapper.selectActivities()).thenReturn(Collections.singletonList(activity()));
+        when(mapper.selectLessons()).thenReturn(Collections.singletonList(lesson()));
+        when(mapper.selectLatestPostImages()).thenReturn(Collections.emptyList());
+        LoginPreviewService service = new LoginPreviewService(mapper, clock);
+
+        service.lessons(); service.activities(); service.focusSlides();
+        verify(mapper, times(1)).selectLessons();
+
+        // 1 分钟后教研活动/焦点图过期刷新，但开课看板仍应复用 1 小时缓存。
+        now.set(61_000L); service.refreshPreviews();
+        verify(mapper, times(2)).selectActivities();
+        verify(mapper, times(1)).selectLessons();
+
+        // 距开课看板到期不足 5 分钟才重查，避免每小时 85 次的重聚合。
+        now.set(3_300_000L); service.refreshPreviews();
+        verify(mapper, times(2)).selectLessons();
     }
 
     @Test void concurrentColdRequestsShareOneDatabaseQuery() throws Exception

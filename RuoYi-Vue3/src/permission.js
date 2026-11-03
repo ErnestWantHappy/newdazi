@@ -10,6 +10,7 @@ import { isRelogin } from "@/utils/request";
 import useUserStore from "@/store/modules/user";
 import useSettingsStore from "@/store/modules/settings";
 import usePermissionStore from "@/store/modules/permission";
+import { ensureVForm, needsVForm } from '@/utils/vform';
 
 NProgress.configure({ showSpinner: false });
 
@@ -143,6 +144,15 @@ router.beforeEach((to, from, next) => {
       NProgress.done();
     }
   }
+});
+
+router.beforeResolve(async to => {
+  if (needsVForm(to.path)) await ensureVForm();
+});
+
+router.onError(() => {
+  NProgress.done();
+  document.documentElement.classList.remove('route-pending');
 });
 
 router.afterEach(() => {

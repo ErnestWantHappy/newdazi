@@ -39,10 +39,24 @@
             WHERE answer.lesson_id = #{lessonId}
             GROUP BY answer.student_id
         ),
+        first_practical AS (
+            SELECT answer.student_id, MIN(answer.submit_time) AS first_answer_time
+            FROM biz_student_answer answer
+            INNER JOIN active_student active ON active.student_id = answer.student_id
+            INNER JOIN biz_question question ON question.question_id = answer.question_id
+                AND question.question_type = 'practical'
+            WHERE answer.lesson_id = #{lessonId}
+              AND answer.student_answer IS NOT NULL
+              AND TRIM(answer.student_answer) &lt;&gt; ''
+              AND answer.submit_time IS NOT NULL
+              AND EXISTS (SELECT 1 FROM biz_lesson_question lq
+                          WHERE lq.lesson_id = answer.lesson_id AND lq.question_id = answer.question_id)
+            GROUP BY answer.student_id
+        ),
         ranked_answer AS (
             SELECT first_answer_time,
                    ROW_NUMBER() OVER (ORDER BY first_answer_time, student_id) AS answer_rank
-            FROM first_answer
+            FROM first_practical
         )
         SELECT
             EXISTS(
@@ -54,6 +68,7 @@
             ) AS hasPractical,
             (SELECT COUNT(*) FROM active_student) AS totalStudentCount,
             (SELECT COUNT(*) FROM first_answer) AS answeredStudentCount,
+            (SELECT COUNT(*) FROM first_practical) AS practicalSubmittedStudentCount,
             (SELECT first_answer_time
              FROM ranked_answer
              WHERE answer_rank = CEIL((SELECT COUNT(*) FROM active_student) / 2.0)

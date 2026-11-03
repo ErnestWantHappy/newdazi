@@ -29,7 +29,7 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="学期" prop="semester">
-                  <el-select v-model="form.semester" placeholder="请选择学期" style="width:100%" :disabled="isAddMode">
+                  <el-select v-model="form.semester" placeholder="请选择学期" style="width:100%" :disabled="isAddMode" @change="handleSemesterChange">
                     <el-option
                       v-for="dict in biz_semester"
                       :key="dict.value"
@@ -40,11 +40,31 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-form-item label="第几课" prop="lessonNum">
-              <el-input-number v-model="form.lessonNum" placeholder="课程序号" :min="1" :max="30" disabled />
-              <el-tooltip content="系统根据已创建课程自动计算" placement="top">
-                <span class="form-help-dot">?</span>
-              </el-tooltip>
+            <el-form-item label="本课对应教材第几课" label-width="150px">
+              <div class="textbook-select-row">
+                <el-select
+                  v-model="form.textbookSectionKey"
+                  :disabled="!textbookMatchBookId || textbookOptionsLoading"
+                  :loading="textbookOptionsLoading"
+                  placeholder="可不选"
+                  clearable
+                  filterable
+                  @change="handleTextbookSectionChange"
+                >
+                  <el-option-group v-for="unit in textbookUnits" :key="unit.unitNo" :label="unit.title">
+                    <el-option
+                      v-for="textbookLesson in unit.lessons"
+                      :key="textbookLesson.sectionKey"
+                      :label="textbookLesson.label || `第${textbookLesson.lessonNo}课 ${textbookLesson.title}`"
+                      :value="textbookLesson.sectionKey"
+                    />
+                  </el-option-group>
+                </el-select>
+                <el-tooltip content="非必选。选定后，教师首页的「教材」与学生端顶部「电子教材」都会直接打开这一课。" placement="top">
+                  <span class="form-help-dot">?</span>
+                </el-tooltip>
+              </div>
+              <div v-if="textbookHint" class="textbook-bind-hint">{{ textbookHint }}</div>
             </el-form-item>
 
             <el-form-item label="课程用途">
@@ -372,7 +392,7 @@
               </el-select>
             </el-form-item>
             <el-form-item label="课时" prop="lessonNum">
-              <el-select v-model="queryParams.lessonNum" placeholder="第几课" clearable style="width: 140px">
+              <el-select v-model="queryParams.lessonNum" placeholder="课次" clearable style="width: 140px">
                 <el-option v-for="n in 20" :key="n" :label="'第' + n + '课'" :value="n"/>
               </el-select>
             </el-form-item>
@@ -500,6 +520,7 @@ import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getDashboardData } from "@/api/business/teacher";
 import { getLessonDetails, saveAllLessonDetails } from "@/api/business/lesson";
+import { listTextbookBooks, getTextbookToc } from "@/api/business/textbook";
 import { getCollaborationLesson, saveCollaborationLesson } from '@/api/business/collaboration';
 import { listQuestion } from "@/api/business/question";
 import { previewProgrammingQuestion } from "@/api/business/programming";
@@ -534,6 +555,11 @@ const addingQuestionIds = ref(new Set());
 const collaborationForm = ref({ enabled: false });
 const lessonToolsExpanded = ref(false);
 const initialLessonTools = ref('[]');
+// 本课教材：下拉只列课程年级+学期对应册的课次；未匹配到册时禁用，不影响课程保存。
+const textbookUnits = ref([]);
+const textbookMatchBookId = ref(null);
+const textbookOptionsLoading = ref(false);
+const textbookHint = ref('');
 // 本节课工具：新增一行空工具（模板此前绑定了不存在的函数导致按钮无反应）
 function addLessonTool() {
   if ((form.value.lessonTools || []).length >= 20) {
@@ -563,6 +589,8 @@ const form = ref({
   shuffleMode: 0,      // 出题模式: 0=固定, 1=随机排序, 2=随机抽取
   randomChoiceCount: 0,   // 随机抽取选择题数
   randomJudgmentCount: 0, // 随机抽取判断题数
+  textbookBookId: null,
+  textbookSectionKey: null,
   lessonMode: 'assessment', // assessment 常规课 / attendance 课堂考勤
   // 课程级物联网实验开关：开启后教师/学生首页才显示物联入口（考勤课强制关闭）
   iotEnabled: false,
@@ -702,6 +730,106 @@ function handleGradeChange(newGrade) {
   }
 }
 
+// 已绑定的原册可能已下架（书架与目录接口只返回在架册）：保留原绑定，
+// 避免老师只是改课程标题就因“找不到原册”被静默清空教材。
+function keepBoundSelection(previousBookId) {
+  if (!previousBookId || !form.value.textbookSectionKey) return false;
+  textbookMatchBookId.value = previousBookId;
+  form.value.textbookBookId = previousBookId;
+  textbookUnits.value = [{
+    unitNo: 0,
+    title: '原绑定教材',
+    lessons: [{
+      sectionKey: form.value.textbookSectionKey,
+      label: '保留原教材课次（该教材当前不可用）',
+      kind: 'LESSON'
+    }]
+  }];
+  return true;
+}
+
+// 连续切换学期/重复打开设计器时，旧请求可能晚到；只接受最后一次请求的结果。
+let textbookLoadSeq = 0;
+
+// 教材课次只允许从本年级本学期的册里选；九年级教材为全一册，精确匹配不到时回退 semester=9。
+async function loadTextbookOptions() {
+  const seq = ++textbookLoadSeq;
+  textbookUnits.value = [];
+  textbookMatchBookId.value = null;
+  textbookHint.value = '';
+  const grade = Number(form.value.grade);
+  if (!grade) {
+    textbookHint.value = '请先选择年级，再选择对应教材';
+    return;
+  }
+  const previousBookId = form.value.textbookBookId;
+  const semester = form.value.semester === null || form.value.semester === undefined
+    ? ''
+    : String(form.value.semester);
+  textbookOptionsLoading.value = true;
+  try {
+    const res = await listTextbookBooks();
+    if (seq !== textbookLoadSeq) return;
+    const books = res.data || [];
+    const matched = books.find(book => Number(book.grade) === grade && String(book.semester) === semester)
+      || books.find(book => Number(book.grade) === grade && String(book.semester) === '9');
+    if (!matched) {
+      if (keepBoundSelection(previousBookId)) {
+        textbookHint.value = '原教材当前不可用，本次保存会保留原绑定；如需更换请联系管理员';
+      } else {
+        form.value.textbookSectionKey = null;
+        form.value.textbookBookId = null;
+        textbookHint.value = '本年级本学期暂无电子教材，可先不选';
+      }
+      return;
+    }
+    const tocRes = await getTextbookToc(matched.bookId);
+    if (seq !== textbookLoadSeq) return;
+    const units = (tocRes.data?.units || [])
+      .map(unit => ({
+        unitNo: unit.unitNo,
+        title: unit.title,
+        lessons: (unit.lessons || []).filter(lesson => lesson.kind === 'LESSON')
+      }))
+      .filter(unit => unit.lessons.length);
+    textbookUnits.value = units;
+    textbookMatchBookId.value = matched.bookId;
+    if (form.value.textbookSectionKey) {
+      const stillSelectable = units.some(unit => unit.lessons.some(lesson => lesson.sectionKey === form.value.textbookSectionKey));
+      const sameBook = previousBookId && Number(previousBookId) === Number(matched.bookId);
+      if (!stillSelectable && sameBook) {
+        keepBoundSelection(previousBookId);
+        textbookHint.value = '原教材课次已调整，本次保存会保留原绑定，请确认或重新选择';
+      } else if (!stillSelectable || (previousBookId && !sameBook)) {
+        form.value.textbookSectionKey = null;
+        form.value.textbookBookId = null;
+        textbookHint.value = '原教材选择与当前学期不一致，已清空，请重新选择';
+      } else {
+        form.value.textbookBookId = matched.bookId;
+      }
+    }
+  } catch (error) {
+    if (seq !== textbookLoadSeq) return;
+    textbookUnits.value = [];
+    textbookMatchBookId.value = null;
+    if (keepBoundSelection(previousBookId)) {
+      textbookHint.value = '教材目录加载失败，本次保存会保留原绑定，请稍后刷新重试';
+    } else {
+      textbookHint.value = '教材目录加载失败，可先不选，稍后刷新重试';
+    }
+  } finally {
+    if (seq === textbookLoadSeq) textbookOptionsLoading.value = false;
+  }
+}
+
+function handleSemesterChange() {
+  loadTextbookOptions();
+}
+
+function handleTextbookSectionChange(value) {
+  form.value.textbookBookId = value ? textbookMatchBookId.value : null;
+}
+
 // ... (省略中间代码)
 
 // 排序权重映射
@@ -805,6 +933,8 @@ function submitForm() {
       // 构造提交数据
       const data = {
         ...form.value,
+        // 新版设计器明确提交教材绑定；旧版缓存页面不带该标记，服务端不会误清空已有绑定。
+        textbookBindingTouched: true,
         autoAdvanceEnabled: isAttendanceSubmit ? false : Boolean(form.value.autoAdvanceEnabled),
         autoAdvanceThresholdPct: Number(form.value.autoAdvanceThresholdPct) || 50,
         autoAdvanceDelayHours: Number(form.value.autoAdvanceDelayHours) || 2,
@@ -872,6 +1002,8 @@ function initialize() {
         entryYear: detail.entryYear ? String(detail.entryYear) : null,
         semester: detail.semester ?? getDefaultSemester(),
         lessonNum: detail.lessonNum,
+        textbookBookId: detail.textbookBookId ?? null,
+        textbookSectionKey: detail.textbookSectionKey || null,
         assignedClasses: assignedClasses,
         // 该设置只应用于本次新增加的班级，已有班级状态由后端保留。
         initialTheoryOpen: true,
@@ -908,6 +1040,7 @@ function initialize() {
       }));
       sortQuestions(); // 加载详情后排序
       getQuestionList();
+      loadTextbookOptions();
     });
   } else {
     isAddMode.value = true;
@@ -924,6 +1057,8 @@ function initialize() {
       entryYear: entryYear ? String(entryYear) : calculateEntryYearFromGrade(initialGrade),
       semester: semester !== undefined ? String(semester) : getDefaultSemester(),
       lessonNum: route.query.nextNum ? parseInt(route.query.nextNum, 10) : 1,
+      textbookBookId: null,
+      textbookSectionKey: null,
       assignedClasses: [],
       initialTheoryOpen: true,
       initialPracticalOpen: true,
@@ -957,6 +1092,7 @@ function initialize() {
 
     selectedQuestions.value = [];
     getQuestionList();
+    loadTextbookOptions();
   }
 }
 
@@ -1364,6 +1500,21 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1;
   cursor: help;
+}
+.textbook-select-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.textbook-select-row :deep(.el-select) {
+  flex: 1;
+}
+.textbook-bind-hint {
+  flex-basis: 100%;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .feature-settings,

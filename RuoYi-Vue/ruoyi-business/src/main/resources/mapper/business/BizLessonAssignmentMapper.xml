@@ -130,7 +130,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectCurrentLessonByClass" resultType="java.lang.Long">
         SELECT la.lesson_id 
         FROM biz_lesson_assignment la
-        INNER JOIN biz_lesson l ON l.lesson_id = la.lesson_id AND IFNULL(l.status, '0') = '0'
+        INNER JOIN biz_lesson l ON l.lesson_id = la.lesson_id AND l.lesson_scope='regular' AND IFNULL(l.status, '0') = '0'
         WHERE la.entry_year = #{entryYear} 
           AND la.class_code = #{classCode}
           AND la.dept_id = #{deptId}
@@ -144,14 +144,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by entry_year, cast(class_code as unsigned), class_code
     </select>
 
-    <select id="selectCurrentAssignmentForUpdate" resultMap="BizLessonAssignmentResult">
+    <sql id="currentAssignmentQuery">
         <include refid="selectBizLessonAssignmentVo"/>
         where entry_year = #{entryYear}
           and class_code = #{classCode}
           and dept_id = #{deptId}
-          and exists (select 1 from biz_lesson l where l.lesson_id = biz_lesson_assignment.lesson_id and ifnull(l.status, '0') = '0')
+          and exists (select 1 from biz_lesson l where l.lesson_id = biz_lesson_assignment.lesson_id and ifnull(l.status, '0') = '0' and ifnull(l.lesson_scope, 'regular') = 'regular')
         order by assign_time desc, assignment_id desc
         limit 1
+    </sql>
+
+    <select id="selectCurrentAssignment" resultMap="BizLessonAssignmentResult">
+        <include refid="currentAssignmentQuery"/>
+    </select>
+
+    <select id="selectCurrentAssignmentForUpdate" resultMap="BizLessonAssignmentResult">
+        <include refid="currentAssignmentQuery"/>
         for update
     </select>
 

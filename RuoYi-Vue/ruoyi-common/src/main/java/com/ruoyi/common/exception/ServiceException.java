@@ -27,6 +27,11 @@ public final class ServiceException extends RuntimeException
     private String detailMessage;
 
     /**
+     * 可选的结构化错误明细（如题库导入逐行错误），由前端按表格展示。
+     */
+    private Object data;
+
+    /**
      * 空构造方法，避免反序列化问题
      */
     public ServiceException()
@@ -69,6 +74,17 @@ public final class ServiceException extends RuntimeException
     public ServiceException setDetailMessage(String detailMessage)
     {
         this.detailMessage = detailMessage;
+        return this;
+    }
+
+    public Object getData()
+    {
+        return data;
+    }
+
+    public ServiceException setData(Object data)
+    {
+        this.data = data;
         return this;
     }
 }

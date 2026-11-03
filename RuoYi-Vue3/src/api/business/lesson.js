@@ -92,6 +92,11 @@ export function manualAdvanceLesson(data) {
   })
 }
 
+/** 按真实当前课程只读核对各班推进条件和自动计时。 */
+export function previewAdvanceLesson(data) {
+  return request({ url: '/business/lesson/advance-preview', method: 'post', data })
+}
+
 /** 教师查看考勤课各班签到汇总 */
 export function getLessonCheckinSummary(params) {
   return request({

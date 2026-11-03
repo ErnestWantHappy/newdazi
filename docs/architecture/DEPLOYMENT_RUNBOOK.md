@@ -1,5 +1,96 @@
 # 部署与回滚约定
 
+## 2026-11-02 正式1.30.67（仅前端：学生打字拼音提示）
+
+130 前端切至 `/data/apps/xueyeceping/releases/20261102_typing_pinyin_v1/frontend`，首页 `95566dea3378776549920c19f47924b4a56b1ea08c6f8a00e2c50065058bad5d`；后端保持 1.30.66 JAR `a149fefa`、PID 2853051 未重启，助手/unit/env 保持。制品 `output/release-20261102-typing-pinyin/frontend.tar.gz` 43,241,613B / SHA-256 `a40deb88e2196c167b379de2a6a011bf773a4d3e493d739a833393afbf99f9a4`；源码相对 1.30.66 发布清单只改学生首页并新增拼音模块/单测。
+
+备份 `/data/backups/xueyeceping/20261102_typing_pinyin_v1`：整库 `database.sql.gz` 52,109,426B / SHA-256 `c0b3a0c3ec1378f142c6b4c3ecb874c95223a71fab24719ce9f35ade4f4188c9`，Dump completed/gzip 通过；含 nginx.before/service.before/index.before.html/env.sha256/SHA256SUMS。新 release 解包后合并 1.30.66 及 1.30.64/62 的旧 static/assets，`static` 2,505 个文件；旧入口、新入口和拼音分包均 200，拼音分包未被 index.html 预加载，代理接口 200，三服务 active，PID/NRestarts 不变。更新 `145 / 1.30.67 / PUBLISHED`（20:13:41），真实教师可见。
+
+正式学生首页浏览器冒烟通过（`2020710101`，0 pageerror，新学生分包含“显示拼音”）；真实教师平台概览页也 0 pageerror。该学生账号当前课只有选择题，未在生产点开拼音，真实打字课体验待观察。本机真实学生页桌面/390px、切换不误提交、粘贴拦截和失败重试已验收。
+
+回退：恢复备份 `nginx.before` 到站点配置，`nginx -t && systemctl reload nginx`，前端回 1.30.66 首页 `4ede5fc0`；无后端重启和数据库回灌；更新 145 转 DRAFT。旧 release/static 保留。
+
+## 2026-11-02 正式1.30.66（今日改动集中发布）
+
+130前后端统一到 `20261102_all_updates_v1`（JAR `a149fefa`，首页 `4ede5fc0`），助手0.2.6/外置配置/29项env保持。只更新5个业务class、今日Vue3界面和13张封面，不执行结构或业务迁移；发布登记 `sql/all_updates_release_20261102.sql` 已将144/1.30.66设PUBLISHED，真实教师可见。
+
+备份 `/data/backups/xueyeceping/20261102_all_updates_v1`：整库52,104,859B / `118839d5…cad4ef`、Dump completed/gzip通过，含旧unit/site/env/config/JAR/index与SHA256SUMS。最终18:23:58启动，PID2853051/NRestarts0，三服务active、启动期0 ERROR，真实师生、13封面、PDF和权限接口已复验。[完整证据及限制](../../contexts/release-20261102-all.md)。
+
+Nginx reload是平滑生效：第一次请求可能仍由旧worker返回；必须新连接等待HTTP首页哈希命中新制品（本轮最多30秒），失败回退而非假报上线。首次因该窗口已自动回退，第二次成功。
+
+回退：以0644恢复本次service.before/nginx.before到unit/站点配置，daemon-reload+重启后端、nginx -t+reload，回后端1.30.65/前端1.30.64，更新144转DRAFT。无需回灌业务库或删除封面；不能清理仍被引用的旧配置release。
+
+## 2026-10-30 正式1.30.63（机位助手 0.2.6 客户端热替换）
+
+已发布 `20261030_seat_helper_026_v1/seat-helper`：0.2.6 `SeatHelper.exe` 794,112B / SHA-256 `91EAC1198CDBEA7286B0C16CE875DBC25CB93024B906458C71F4C19E49034C5E`，默认安装 `C:\SchoolSeatHelper`，首次启动迁移 `D:\SchoolSeatHelper` 的配置与平台地址。活动下载路径 `.../20261028_fullstack_v1/seat-helper/SeatHelper.exe` 原子替换为 0.2.6，manifest/sha 同步；**未改 env、未重启后端、未改前端/库表**。
+
+备份 `/data/backups/xueyeceping/20261030_seat_helper_026_v1`：0.2.5 `SeatHelper.exe.before` 792,576B / SHA-256 `2ddc1d55bfff9d686cf1384ed79b00b6883f494b067b4bba3f13764f3a7f8aec`，含旧 manifest/sha 与 env.before。客户端回归 53/53；真实学生 `2020710101` 下载 HTTP 200、总 794,236B，去掉尾部站点块后 EXE 哈希一致且含 `0.2.6`/`C:\SchoolSeatHelper`，站点块平台地址与 allowedOrigins 正确。更新 141/1.30.63/PUBLISHED（08:56:16）且教师可见。
+
+使用：已装 0.2.5 的电脑需退出助手、重新下载安装 0.2.6 才会迁到 C 盘；网页端兼容 0.2.3+，无需再次更新网页。回退：把备份 `SeatHelper.exe.before`/`manifest.before.json`/`SeatHelper.exe.sha256.before` 安装回活动路径即可，无需重启或业务 SQL；更新 141 转 DRAFT。
+
+## 2026-10-30 正式1.30.62（仅前端：电子教材阅读缩放）
+
+已发布 `20261030_textbook_zoom_v1/frontend`：首页 `7d3730f481767333ef390e4d85a62d3faf0210517b6cce16243643537912c057`，`frontend.tar.gz` 43,341,838B / SHA-256 `19221634c496ee9a99f4237e4642e6e8ad38542f5b3a52118e31658f78a4e889`；后端保持 1.30.61 JAR `40a6e682`、PID 2784023，未重启；库表、教材图片、env、助手均未改。
+
+备份 `/data/backups/xueyeceping/20261030_textbook_zoom_v1`：整库 `database.sql.gz` 50,210,080B / SHA-256 `833fbaa9ac420043fe02c92c1d359811404327160002d0a106d18c1d64b12c29`（Dump completed），`nginx.before`、`index.before.html`（`cbefc947`）。上传解包到新 release 后，Nginx root 指向该前端，`nginx -t` 通过后平滑 reload，首页磁盘/HTTP 哈希一致、`/prod-api/captchaImage` 200。更新 140/1.30.62/PUBLISHED（08:33:24），真实教师可见。
+
+验收：130 Playwright 12/12 PASS——默认整页 465×679 完整落入 729px 视口；适应宽度 900px；125% 为 1125px；刷新记住 110%；打印仍 4 页；390px 页面 359×529 不横向溢出；0 pageerror / 0 4xx5xx。仅阅读器 chunk/CSS 与入口变化，未相关模块归一化内容一致。
+
+回退：恢复本次备份 `nginx.before` 到 `/etc/nginx/sites-available/xueyeceping-130`，`nginx -t && systemctl reload nginx`，前端退 1.30.61（`cbefc947`）；更新 140 转 DRAFT。仅新增一条更新记录，无业务回滚 SQL；后端/助手不受影响。
+
+## 2026-10-29 正式1.30.61（电子教材 + 机位识别）
+
+已发布 release `20261029_textbook_seat_v1`：后端 JAR 108,153,336B / SHA-256 `40a6e682c6c99baace799e40247bd43e47789af5b30c864d7d958c50aa69a912`（基于线上 1.30.60 `05c966cd` 仅替换 `ruoyi-business-3.9.0.jar` 与 `application.yml`），前端首页 `cbefc947fd66df27275b42da5e26058613ecd9249f0385d5f7f9dfaf4badc7cb`，机位助手仍 0.2.5。
+
+备份 `/data/backups/xueyeceping/20261029_textbook_seat_v1`：`database.sql.gz` 50,054,633B / SHA-256 `796d1117bcf8e48dfb628412c911549386adff8298cf28f24d2d036853e715d3`（Dump completed），含 service.before / nginx.before / env.before / config.before / jar.before / index.before。shared env 增 `TEXTBOOK_ROOT=/data/apps/xueyeceping/shared/textbook`（28→29 项，root:root 600）；教材 13 册 1301 张图片（255,685,333B）上传到该目录并逐张 `sha256sum -c` 通过。执行 `sql/textbook_v1.sql`、`sql/textbook_seed_20261029.sql`、`sql/textbook_release_20261029.sql`，复核 13 册 / 50 单元 / 334 条目 / 1301 页、`bad_range=0`、每册 1..N 连续、菜单 26100 三角色 3 行；后端 17:46:10 重启（MainPID 2784023 / NRestarts=0），Nginx root 切换后零停机 reload；更新 139/1.30.61/PUBLISHED，真实教师接口可见。
+
+验收：教师 `/business/textbook/books` 13 册、`toc/1` 88 页、`page/1/1` `image/jpeg` + `private, no-cache` + `Vary: Authorization` + ETag、304，越界页业务 500；学生 403；教研员 13 册；教师 Playwright 9 项全 PASS（书架、七上 125 页、第 1 课第 11 页、打印 4 页、滚动第 60 页、0 pageerror / 0 4xx5xx）；学生 390px 无教材入口、无 JS 异常。三服务 active，日志无 textbook/ERROR/Exception。
+
+回退：确认当前 release 后恢复本次备份 `service.before`/`nginx.before`/`env.before`，`daemon-reload`、重启后端、`nginx -t && systemctl reload nginx`，退 1.30.60（`05c966cd` / `3b1ecb12`）；更新 139 转 DRAFT。教材 4 表、菜单 26100 与图片为纯增量可保留；如需下线入口将菜单 `status=1`。助手路径未改，无需回退助手。**未验**：真实学生机器 + 实际助手 0.2.5 认领复验；0.2.6 助手包未发布；同传克隆共用指纹（B-1）仍为既有边界。
+
+## 2026-10-25当前正式1.30.55（仅后端）
+
+`20261025_practical_preview_perm_v1`已上线，前端仍`20261021_research_copy_fix_v1`、助手0.2.4及共享env保持。只替换`ruoyi-business-3.9.0.jar`内`PracticalAttachmentController.class`1个条目，修复无`student`角色学生本人HTML/TXT作品预览/下载403；教师/管理员保留，作品归属/班级校验不变。JAR 108,119,085B/SHA-256 `08DCE49FEEF2BB39BDCB19791833BEB73BC2AD3384CE0999EA4CF08C51A028AA`。
+
+整库备份487,635,797B，SHA-256 `30ae9c022b45b3ae9e39ffc88dffb9cd15a63c2b41f4d5807dc5b4ef5c645dc4`，目录`/data/backups/xueyeceping/20261025_practical_preview_perm_v1`（service/nginx/env/config/jar.before）。12:51:41→12:52:05恢复（24秒），MainPID2664495/NRestarts=0、三服务active；管理员真实附件文本接口HTML/200，真实教师确认更新133/1.30.55/PUBLISHED可见。无结构/业务迁移或测试写分；无角色学生真实浏览器复验待有效账号。
+
+回退：恢复备份`service.before`到`/etc/systemd/system/xueyeceping-130.service`，`systemctl daemon-reload && systemctl restart xueyeceping-130`，退至后端1.30.54；Nginx/env/config未改，旧release保留，撤更新133为DRAFT，不整库回灌。详细证据见[发布日志](../../contexts/RELEASE_LOG.md)。
+
+## 2026-10-20正式1.30.53
+
+双端`20261020_student_resubmit_v1`已上线，当前课文件作业支持有分自主重交、成功才清分。后端仅覆盖1.30.52作品服务2个class，前端仅学生页面；env、助手0.2.4及旧配置依赖保持。17:45:43→17:46:06恢复（23秒），三服务active，正式教师/教研员API及3组浏览器通过，学生真实重交待有效账号。更新131/PUBLISHED且教师可见，仅登记SQL，无结构/业务迁移。
+
+整库备份450,706,074B，SHA-256 `6ced8dbb50c14c8e188fb80425f606298ec08e1ba72639beb2f974d4932df75c`，目录`/data/backups/xueyeceping/20261020_student_resubmit_v1`。回退先检查当前release及课堂空闲，再恢复该目录service.before/nginx.before、daemon-reload、重启后台、nginx -t/reload并探活，回到1.30.52；env保持，撤更新131为DRAFT，不恢复整库或回滚新增学生作品/成绩。隔离、哈希及待验边界见[正式验收](../../contexts/student-file-resubmit-20261020/release-verification.md)。
+
+2026-10-17历史正式1.30.52，双端`20261017_seat_score_v1`、助手0.2.4，机位浏览器优先与成绩/打字修复合并发布。无结构迁移，期限/PPTX和页图v4保持；真实教师/教研员通过，学生及机房待验。制品隔离、备份、重启、更新130/PUBLISHED和回退见[正式验收](../../contexts/seat-score-release-20261017.md)。
+
+## 2026-10-15正式1.30.51
+
+130双端`20261015_practical_pptx_v1`，助手及外置env保持，72项测试/双端构建通过。首次首页门禁回滚后，增加平滑重载等待，第二次19:25:17→19:25:40成功，三服务active。期限1233已校正并写1条审计，40份PPTX精确重算成功，原件/成绩/版本保持，真实反馈教师验证及更新129/PUBLISHED可见。
+
+备份`/data/backups/xueyeceping/20261015_practical_pptx_v1`包含完整库、unit/Nginx/env/config、40份原件/派生预览及附件/期限快照。默认回退恢复`service.before`到`/etc/systemd/system/xueyeceping-130.service`、`nginx.before`到`/etc/nginx/sites-available/xueyeceping-130`，检查当前版本和课堂空闲后daemon-reload、重启后台、nginx -t/reload；回到1.30.50，撤更新129为DRAFT。保留已验证期限校正/正确缓存及新增成绩，无需回滚SQL或整库回灌。外置config/隔离env仍依赖20261008旧release，助手仍依赖20261014_seat_local_v1，均不可清理。详细哈希和特殊数据回退边界见[正式验收](../../contexts/zhu-teacher-feedback-20261015.md)。
+
+> **2026-10-15目录清理更新**：用户授权删除130的20个9月无引用release，释放3.67GiB；当前 `20261014_seat_local_v1`、依赖 `20261008_seat_install_v1`、10月近期release及既有备份均保留。三服务PID/当前JAR与首页哈希保持、HTTP探活通过，无重启/SQL/新产品发布。下文9月历史记录中的旧release已删除，不能直接套用回切步骤；须先核验既有备份并恢复所需制品。具体清单与边界见[维护验收](../../contexts/server-cleanup-20261015.md)。
+
+## 2026-10-14正式1.30.50
+
+130双端`20261014_seat_local_v1`、助手0.2.3，17:27:01→17:27:24恢复探活，PID2346831/NRestarts=0，三服务active。后端仅叠加6个机位class、原v4渲染器保持，前端排除未上线预览样式并保留登录优化。整库备份404,586,706B/SHA-256 `064fd77565b5442727ed00f1889f205848a822dc4e5ec50f465c8368e59d1fef`，`seat_helper_local_claim_v2.sql`迁移两可空列并复跑，111设备/42基准保持；更新128/PUBLISHED且真实教师可见。
+
+共享env只切助手路径，unit与Nginx切新release，外置config/隔离env仍依赖20261008旧release，不可删除。回退核对当前release及空闲后恢复本次备份service/nginx/env并重启后台/reload Nginx，保留新增列与已有新指纹/0.2.3客户端，不整库回灌；撤128为DRAFT。真实教师完整大屏/教研员首页通过；学生凭据失败、实际下载/认领与实体机房待验。完整哈希、门禁、旧指向及证据见[正式验收](../../contexts/seat-helper-local-20261014/release-verification.md)。
+
+## 2026-10-14正式1.30.49
+
+后端 `20261014_seat_logo_overflow_v2`、助手0.2.2，前端保持1.30.48。页框扩展与Logo已发布；反馈班级44份success/v4且原件成绩版本保持，但样本内部A4整页clip仍截断底部，尚未解决。常量升级必须同步两处编译期内联消费者，不能只换渲染器class；外置config与隔离env仍引用20261008旧release。制品差异、两次短暂重启、备份哈希、下载/教师验收与回滚见[正式记录](../../contexts/seat-logo-overflow-release-20261014.md)。
+
+
+## 2026-10-14 130正式1.30.48（仅前端）
+
+前端20261014_login_input_v1，后端仍20261013_python_v3_full_v1、PID2308320不变，仅Nginx reload。备份 `/data/backups/xueyeceping/20261014_login_input_v1`，整库403,011,220B、SHA-256 `cce4bc53999777fd77b7e55dfd23ee3f27d6b0675ddceb36b957be85426f5e34`；更新126/1.30.48 PUBLISHED且真实教师可见，无结构迁移。详见[验收](../../contexts/login-input-fix-20261014.md)。
+
+回滚：确认当前root，恢复本次nginx.before到 `/etc/nginx/sites-available/xueyeceping-130`，nginx -t后reload，退到保留的20261014_grading_ui_v5/frontend，更新1.30.48撤DRAFT，不回灌整库。助手0.2.1和启动环境仍引用20261008_seat_install_v1，不可删除；迁至共享目录配合正常后端发布。
+
+五个无引用旧release已归档到本轮备份obsolete-releases后删除；历史段落相应旧路径需先恢复归档，不能直接切换。当前/回滚/运行依赖及旧哈希静态资源分别保留。唯一源码入口是当前RuoYi-Vue3/src；npm run build:prod强制跑登录测试和资源检查，禁止从output/*/build直接覆盖或绕过检查发布。
+
 ## 2026-10-13 130正式1.30.46（Python V3与作业预览全量发布）
 
 前后端 release `20261013_python_v3_full_v1`，上一后端 `20261013_connector_fix_v1`、上一前端 `20261012_audit_fix_v1`。正式整库备份 `/data/backups/xueyeceping/20261013_python_v3_full_v1/database.sql` 为 397,887,415 bytes，SHA-256 `36f941f43c51b7312920dfbb6e5e5789f1b8b21754ff4739ffa674da52acb9fb`；同目录保留旧 unit、Nginx、env、Quartz env、config、JAR 与首页。JAR SHA-256 `e13e39e6720d8e1df772e5c2584d51524522ff9f99630aa5f63eaeb217ca4825`，首页 SHA-256 `b92c0b266c231be2b48d7d3154982a43db5e3939ffe4fe422d8dcee1ca36e5aa`。无结构迁移，题包不重复导入；更新124/1.30.46 PUBLISHED且真实教师可见。回滚恢复 `service.before` 与 `nginx-site.before`，重启后端并校验/reload Nginx，将 1.30.46 撤回 DRAFT；保留 V3 数据，不回灌整库。

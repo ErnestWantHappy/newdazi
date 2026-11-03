@@ -4,6 +4,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,10 @@ public class PracticalGradingDeadlineService
 {
     public static final String DEADLINE_DAYS_KEY = "business.practicalGrading.deadlineDays";
     private static final long DUE_SOON_MILLIS = 72L * 60L * 60L * 1000L;
+    private static final long DASHBOARD_CACHE_TTL_MS = 45_000L;
+    private static final int DASHBOARD_CACHE_MAX_SIZE = 5000;
+
+    private final Map<String, CachedStatus> dashboardCache = new ConcurrentHashMap<>();
 
     @Autowired
     private PracticalGradingDeadlineMapper deadlineMapper;
@@ -38,6 +43,52 @@ public class PracticalGradingDeadlineService
     public void checkAndCreateDeadline(Long lessonId, Long deptId, String entryYear, String classCode)
     {
         getStatus(lessonId, deptId, entryYear, classCode, true, "REALTIME");
+    }
+
+    /**
+     * 教师首页红点每 10 秒轮询全部课程 × 班级，相同班级在短窗口内重复计算；
+     * 只对 dashboard 读路径加 45 秒缓存，批改锁定判断仍走无缓存 getStatus。
+     */
+    public PracticalGradingStatusVo getStatusForDashboard(Long lessonId, Long deptId,
+                                                          String entryYear, String classCode)
+    {
+        String key = dashCacheKey(lessonId, deptId, entryYear, classCode);
+        long now = System.currentTimeMillis();
+        CachedStatus cached = dashboardCache.get(key);
+        if (cached != null && cached.expiresAt > now)
+        {
+            return cached.status;
+        }
+        PracticalGradingStatusVo status = getStatus(lessonId, deptId, entryYear, classCode, true);
+        if (dashboardCache.size() >= DASHBOARD_CACHE_MAX_SIZE)
+        {
+            dashboardCache.clear();
+        }
+        dashboardCache.put(key, new CachedStatus(status, now + DASHBOARD_CACHE_TTL_MS));
+        return status;
+    }
+
+    private String dashCacheKey(Long lessonId, Long deptId, String entryYear, String classCode)
+    {
+        String year = entryYear == null ? "" : entryYear.trim();
+        return lessonId + ":" + deptId + ":" + year + ":" + normalizeClassCode(classCode);
+    }
+
+    private void evictDashboardCache(Long lessonId, Long deptId, String entryYear, String classCode)
+    {
+        dashboardCache.remove(dashCacheKey(lessonId, deptId, entryYear, classCode));
+    }
+
+    private static final class CachedStatus
+    {
+        private final PracticalGradingStatusVo status;
+        private final long expiresAt;
+
+        private CachedStatus(PracticalGradingStatusVo status, long expiresAt)
+        {
+            this.status = status;
+            this.expiresAt = expiresAt;
+        }
     }
 
     public void assertCanGrade(Long answerId)
@@ -119,6 +170,8 @@ public class PracticalGradingDeadlineService
         }
         deadlineMapper.insertDeadlineAudit(deadline, actionType, oldDeadlineTime,
                 newDeadlineTime, reason.trim(), operatorId, operatorName);
+        evictDashboardCache(deadline.getLessonId(), deadline.getDeptId(),
+                deadline.getEntryYear(), deadline.getClassCode());
         return getStatus(deadline.getLessonId(), deadline.getDeptId(), deadline.getEntryYear(),
                 deadline.getClassCode(), false);
     }
@@ -187,10 +240,12 @@ public class PracticalGradingDeadlineService
         boolean hasPractical = boolValue(metrics, "hasPractical");
         int total = intValue(metrics, "totalStudentCount");
         int answered = intValue(metrics, "answeredStudentCount");
+        int submitted = intValue(metrics, "practicalSubmittedStudentCount");
 
         BizPracticalGradingDeadline deadline = deadlineMapper.selectDeadline(
                 lessonId, deptId, entryYear.trim(), normalizeClassCode(classCode));
-        if (ensureTrigger && deadline == null && hasPractical && total > 0 && answered * 2 >= total)
+        // 打字、理论等可能分课时先做，只有正式操作作品达到半班才启动批改倒计时。
+        if (ensureTrigger && deadline == null && hasPractical && total > 0 && submitted * 2 >= total)
         {
             Date thresholdTime = dateValue(metrics, "thresholdTime");
             if (thresholdTime == null)
@@ -198,7 +253,7 @@ public class PracticalGradingDeadlineService
                 thresholdTime = new Date();
             }
             createDeadline(lessonId, deptId, entryYear.trim(), normalizeClassCode(classCode),
-                    answered, total, thresholdTime, source);
+                    submitted, total, thresholdTime, source);
             deadline = deadlineMapper.selectDeadline(
                     lessonId, deptId, entryYear.trim(), normalizeClassCode(classCode));
         }
@@ -229,6 +284,7 @@ public class PracticalGradingDeadlineService
         deadline.setInitializationSource(source);
         deadline.setCreateBy("system");
         deadlineMapper.insertDeadlineIgnore(deadline);
+        evictDashboardCache(lessonId, deptId, entryYear, classCode);
     }
 
     private PracticalGradingStatusVo buildStatus(Long lessonId, Long deptId, String entryYear,
@@ -246,8 +302,10 @@ public class PracticalGradingDeadlineService
         status.setClassCode(classCode);
         status.setHasPractical(hasPractical);
         status.setAnsweredStudentCount(answered);
+        int submitted = intValue(metrics, "practicalSubmittedStudentCount");
+        status.setPracticalSubmittedStudentCount(submitted);
         status.setTotalStudentCount(total);
-        status.setRemainingStudentsToTrigger(Math.max(0, (total + 1) / 2 - answered));
+        status.setRemainingStudentsToTrigger(Math.max(0, (total + 1) / 2 - submitted));
         status.setDueCount(due);
         status.setGradedCount(graded);
         status.setUngradedCount(Math.max(0, due - graded));

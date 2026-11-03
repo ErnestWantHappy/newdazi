@@ -58,17 +58,18 @@
     ORDER BY q.sort_no,q.plan_question_id
   </select>
   <select id="selectPlanClasses" resultType="map">
-    SELECT plan_class_id,plan_version_id,dept_id,entry_year,class_code
-    FROM biz_python_practice_plan_class
-    WHERE plan_version_id=#{planVersionId}
-    ORDER BY entry_year,class_code
+    SELECT pc.*,e.extension_class_id,e.class_name,e.status extension_status
+    <!-- 投放名单与拓展班表排序规则不同（0900_ai_ci / general_ci），直接比较会 1267；统一转 BINARY 再比对。 -->
+    FROM biz_python_practice_plan_class pc LEFT JOIN biz_extension_class e ON e.dept_id=pc.dept_id AND CAST(e.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(e.class_code AS BINARY)=CAST(pc.class_code AS BINARY)
+    WHERE pc.plan_version_id=#{planVersionId}
+    ORDER BY pc.entry_year,pc.class_code
   </select>
   <select id="selectManagedClasses" resultType="map">
     <choose>
       <when test="privileged">
         SELECT s.entry_year,s.class_code,COUNT(*) student_count
         FROM biz_student s JOIN sys_user u ON u.user_id=s.user_id
-        WHERE u.dept_id=#{deptId} AND s.entry_year IS NOT NULL AND s.class_code IS NOT NULL
+        WHERE u.dept_id=#{deptId} AND s.entry_year IS NOT NULL AND s.class_code IS NOT NULL AND NOT EXISTS(SELECT 1 FROM biz_extension_class e WHERE e.dept_id=u.dept_id AND e.entry_year=s.entry_year AND e.class_code=s.class_code)
         GROUP BY s.entry_year,s.class_code ORDER BY s.entry_year DESC,s.class_code
       </when>
       <otherwise>
@@ -76,7 +77,7 @@
           (SELECT COUNT(*) FROM biz_student s JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=tc.dept_id
             WHERE CAST(s.entry_year AS BINARY)=CAST(tc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(tc.class_code AS BINARY)) student_count
         FROM biz_teacher_class tc
-        WHERE tc.user_id=#{userId} AND tc.dept_id=#{deptId}
+        WHERE tc.user_id=#{userId} AND tc.dept_id=#{deptId} AND NOT EXISTS(SELECT 1 FROM biz_extension_class e WHERE e.dept_id=tc.dept_id AND e.entry_year=tc.entry_year AND e.class_code=tc.class_code)
         ORDER BY tc.entry_year DESC,tc.class_code
       </otherwise>
     </choose>
@@ -106,7 +107,24 @@
     JOIN biz_python_practice_plan_question q ON q.plan_version_id=v.plan_version_id
     JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
     LEFT JOIN biz_data_lab_snapshot d ON d.snapshot_id=s.snapshot_id
-    WHERE p.dept_id=#{deptId} AND p.status='ACTIVE'
+    WHERE p.dept_id=#{deptId} AND p.status='ACTIVE' AND p.plan_scope='regular'
+    ORDER BY p.plan_id DESC,q.sort_no,q.plan_question_id
+  </select>
+  <select id="selectExtensionStudentQuestions" resultType="map">
+    SELECT 'BASE_VERSION' source_type,v.plan_version_id source_id,p.plan_id,p.plan_name,q.question_id,q.sort_no,
+      q.stage,q.required_flag,s.snapshot_id,s.question_title,s.difficulty,s.knowledge_points,s.no_input,
+      s.question_content,s.input_description,s.output_description,s.sample_explanation,s.constraints_text,
+      s.notes_text,s.starter_code,s.language_code,s.time_limit_seconds,s.memory_limit_kb,
+      CASE WHEN d.snapshot_id IS NULL THEN 'PYTHON' ELSE 'DATA_LAB' END practical_mode
+    FROM biz_python_practice_plan p
+    JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.status='PUBLISHED' AND v.version_no=p.current_version_no
+    JOIN biz_python_practice_plan_class pc ON pc.plan_version_id=v.plan_version_id AND pc.dept_id=#{deptId}
+      AND CAST(pc.entry_year AS BINARY)=CAST(#{entryYear} AS BINARY)
+      AND CAST(pc.class_code AS BINARY)=CAST(#{classCode} AS BINARY)
+    JOIN biz_python_practice_plan_question q ON q.plan_version_id=v.plan_version_id
+    JOIN biz_python_practice_question_snapshot s ON s.snapshot_id=q.snapshot_id
+    LEFT JOIN biz_data_lab_snapshot d ON d.snapshot_id=s.snapshot_id
+    WHERE p.dept_id=#{deptId} AND p.status='ACTIVE' AND p.plan_scope='extension' AND p.extension_class_id=#{extensionClassId}
     ORDER BY p.plan_id DESC,q.sort_no,q.plan_question_id
   </select>
   <select id="selectQuestion" resultType="map">SELECT s.*, CASE WHEN d.snapshot_id IS NULL THEN 'PYTHON' ELSE 'DATA_LAB' END practical_mode FROM biz_python_practice_question_snapshot s LEFT JOIN biz_data_lab_snapshot d ON d.snapshot_id=s.snapshot_id WHERE s.source_type=#{sourceType} AND s.source_id=#{sourceId} AND s.question_id=#{questionId} LIMIT 1</select>
@@ -188,7 +206,12 @@
       COALESCE(SUM(COALESCE(lab.revision,pr.submit_count)),0) submit_count,
       MAX(COALESCE(lab.submitted_at,pr.last_practice_time)) last_practice_time
     FROM biz_python_practice_plan_class pc
-    JOIN biz_student s ON CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)
+    JOIN biz_student s ON (
+      EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id
+        JOIN biz_extension_plan_member am ON am.plan_version_id=av.plan_version_id AND am.student_id=s.student_id
+        WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='extension')
+      OR (EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='regular')
+        AND CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)))
     JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=pc.dept_id
     JOIN biz_python_practice_plan_question q ON q.plan_version_id=pc.plan_version_id
     LEFT JOIN biz_python_practice_progress pr ON pr.student_id=s.student_id AND pr.source_type='BASE_VERSION' AND pr.source_id=pc.plan_version_id AND pr.question_id=q.question_id
@@ -210,7 +233,12 @@
     FROM biz_python_practice_plan_question q
     JOIN biz_python_practice_question_snapshot snap ON snap.snapshot_id=q.snapshot_id
     JOIN biz_python_practice_plan_class pc ON pc.plan_version_id=q.plan_version_id
-    JOIN biz_student s ON CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)
+    JOIN biz_student s ON (
+      EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id
+        JOIN biz_extension_plan_member am ON am.plan_version_id=av.plan_version_id AND am.student_id=s.student_id
+        WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='extension')
+      OR (EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='regular')
+        AND CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)))
     JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=pc.dept_id
     LEFT JOIN biz_python_practice_progress pr ON pr.student_id=s.student_id AND pr.source_type='BASE_VERSION' AND pr.source_id=q.plan_version_id AND pr.question_id=q.question_id
     LEFT JOIN biz_data_lab_submission lab ON lab.student_id=u.user_id AND lab.source_type='BASE_VERSION' AND lab.source_id=q.plan_version_id AND lab.question_id=q.question_id

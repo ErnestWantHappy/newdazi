@@ -4,6 +4,9 @@
     <div class="dashboard-header">
       <el-button icon="ArrowLeft" @click="goBack">{{ lockedContext ? '返回成绩查询' : '返回模板库' }}</el-button>
       <h2 class="dashboard-title">{{ sheetTitle || '导学单数据看板' }}</h2>
+      <el-tag v-if="pollStale" type="warning" effect="plain" size="small">
+        数据可能已过期，正在重试
+      </el-tag>
       <div class="dashboard-header-actions">
         <el-tag v-if="lockedContext" type="primary" effect="plain" size="large">
           {{ entryYear }}级 {{ classCode }}班
@@ -19,7 +22,7 @@
 
     <!-- 第一行：填写进度（左）+ 统计概览（右） -->
     <el-row :gutter="16" style="margin-top:16px">
-      <el-col :span="12">
+      <el-col :xs="24" :sm="12">
         <el-card shadow="hover" header="填写进度" class="chart-card">
           <div v-if="!classCode" class="chart-placeholder">
             <el-icon :size="48"><Warning /></el-icon>
@@ -28,7 +31,7 @@
           <div v-else ref="barChartRef" style="height:280px"></div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :xs="24" :sm="12">
         <el-card shadow="hover" header="统计概览">
           <div class="stat-cards-row">
             <div class="stat-card">
@@ -52,8 +55,10 @@
               <div class="stat-value">{{ computedCompletionRate }}%</div>
             </div>
             <div class="stat-card stat-card-accuracy">
-              <div class="stat-label">正确率</div>
-              <div class="stat-value">{{ computedAccuracyRate }}%</div>
+              <div class="stat-label">{{ hasScoreScale ? '正确率' : '平均分' }}</div>
+              <div class="stat-value">
+                {{ hasScoreScale ? `${computedAccuracyRate}%` : `${computedAvgScore} 分` }}
+              </div>
             </div>
           </div>
           <div class="pie-charts-row">
@@ -63,9 +68,11 @@
               <div class="pie-chart-title">完成率</div>
             </div>
             <div class="pie-chart-item">
-              <div v-if="computedActiveSubmitted === 0 || computedAvgScore === 0" class="chart-placeholder" style="height:220px"><p>暂无提交数据</p></div>
+              <div v-if="!hasScoreScale || computedActiveSubmitted === 0" class="chart-placeholder" style="height:220px">
+                <p>{{ hasScoreScale ? '暂无提交数据' : '该模板未设置分值' }}</p>
+              </div>
               <div v-else ref="accuracyPieRef" style="height:220px"></div>
-              <div class="pie-chart-title">正确率</div>
+              <div class="pie-chart-title">{{ hasScoreScale ? '正确率' : '平均分' }}</div>
             </div>
           </div>
         </el-card>
@@ -149,7 +156,7 @@
 
     <!-- 第二行：学生完成情况 + 填写进度详情 -->
     <el-row :gutter="16" style="margin-top:16px">
-      <el-col :span="12">
+      <el-col :xs="24" :sm="12">
         <el-card shadow="never" header="学生完成情况">
           <div v-if="!classCode" class="chart-placeholder">
             <el-icon :size="48"><Warning /></el-icon>
@@ -189,12 +196,12 @@
                         <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(filterPageGradingDetails(row.progressDetail, selectedPage).details, row)">详情</el-button>
                       </span>
                     </div>
-                    <!-- 自评 -->
-                    <div v-if="hasRateFields && getSelfScores(row.studentId).length > 0" class="self-assessment-inline">
+                    <!-- 自评：从评分明细里的 rate 题目还原，没有自评题就不占位 -->
+                    <div v-if="getSelfScores(row).length" class="self-assessment-inline">
                       <span class="self-assessment-label">自评：</span>
-                      <span v-for="(s, si) in getSelfScores(row.studentId)" :key="si" class="self-rate-item">
+                      <span v-for="(s, si) in getSelfScores(row)" :key="si" class="self-rate-item">
                         <span class="self-rate-item-label">{{ s.label }}</span>
-                        <el-rate v-model="s.value" disabled size="small" />
+                        <span class="self-rate-value">{{ s.score }} / {{ s.maxScore }}</span>
                       </span>
                     </div>
                   </template>
@@ -241,12 +248,12 @@
                         <el-button type="primary" size="small" link class="detail-btn" @click="openGradingDetail(parseGradingDetail(row.progressDetail).details, row)">详情</el-button>
                       </span>
                     </div>
-                    <!-- 自评 -->
-                    <div v-if="hasRateFields && getSelfScores(row.studentId).length > 0" class="self-assessment-inline">
+                    <!-- 自评：同上，取自评分明细的 rate 题目 -->
+                    <div v-if="getSelfScores(row).length" class="self-assessment-inline">
                       <span class="self-assessment-label">自评：</span>
-                      <span v-for="(s, si) in getSelfScores(row.studentId)" :key="si" class="self-rate-item">
+                      <span v-for="(s, si) in getSelfScores(row)" :key="si" class="self-rate-item">
                         <span class="self-rate-item-label">{{ s.label }}</span>
-                        <el-rate v-model="s.value" disabled size="small" />
+                        <span class="self-rate-value">{{ s.score }} / {{ s.maxScore }}</span>
                       </span>
                     </div>
                   </template>
@@ -265,7 +272,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :xs="24" :sm="12">
         <el-card shadow="never" header="填写进度详情">
           <div v-if="!classCode" class="chart-placeholder">
             <el-icon :size="48"><Warning /></el-icon>
@@ -329,14 +336,6 @@
 
   <!-- 批改详情弹窗 -->
   <el-dialog v-model="gradingDetailVisible" title="批改详情" width="620px" append-to-body>
-    <!-- 自评数据（置顶，固定不随滚动） -->
-    <div v-if="hasRateFields && getSelfScores(currentDetailStudentId).length > 0" class="self-assessment-detail self-assessment-sticky">
-      <div class="self-assessment-sticky-title">学生自评</div>
-      <div v-for="(s, si) in getSelfScores(currentDetailStudentId)" :key="si" class="self-assessment-row">
-        <span class="self-assessment-label">{{ s.label }}：</span>
-        <el-rate v-model="s.value" disabled show-score size="default" />
-      </div>
-    </div>
     <div class="grading-detail-dialog">
       <div class="detail-item"
         v-for="(item, idx) in currentGradingItems"
@@ -430,7 +429,7 @@
 <script setup name="GuideSheetDashboard">
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { saveAs } from 'file-saver'
 import { resolveBlobDownloadFilename } from '@/utils/downloadFilename'
 import {
@@ -460,11 +459,8 @@ const assignedClasses = ref([])
 const selectedClass = computed(() => assignedClasses.value.find(item => item.key === classKey.value) || null)
 const entryYear = computed(() => selectedClass.value?.entryYear || '')
 const classCode = computed(() => selectedClass.value?.classCode || '')
-const progressData = ref({ total: 0, submitted: 0, avgScore: 0, list: [] })
+const progressData = ref({ total: 0, submitted: 0, avgScore: 0, maxTotalScore: 0, list: [] })
 const loading = ref(false)
-
-// 自评数据
-const selfAssessment = ref({ rateFields: [], studentScores: {} })
 
 // 批改详情弹窗
 const gradingDetailVisible = ref(false)
@@ -494,6 +490,27 @@ async function loadStudentAnswer(row) {
   if (!data.hasAnswer) return null
   row.answerJson = data.answerJson || '{}'
   return row.answerJson
+}
+
+/**
+ * 学生自评：rate 类题目本身就在评分明细里，
+ * 但明细不带组件类型，需要回查 pageFields 判断哪些 fieldKey 是自评题。
+ */
+function getSelfScores(row) {
+  const details = parseGradingDetail(row?.progressDetail).details
+  const rateFields = new Set()
+  Object.values(pageFields.value).forEach(list => {
+    (list || []).forEach(f => {
+      if (f.type === 'rate') rateFields.add(f.name)
+    })
+  })
+  return details
+    .filter(item => rateFields.has(item.fieldKey))
+    .map(item => ({
+      label: item.fieldTitle || item.fieldKey,
+      score: Number(item.score || 0),
+      maxScore: Number(item.maxScore || 5)
+    }))
 }
 
 /** 打开批改详情弹窗 */
@@ -544,6 +561,16 @@ function hasManualGradingItems(row) {
 
 async function handleRescore(row) {
   if (!row.answerId) return
+  // 重评会用自动评分覆盖整份评分明细，已批过的人工分会被清零，必须先确认。
+  try {
+    await ElMessageBox.confirm(
+      '重新评分会用当前模板配置重算该生全部题目，已保存的人工评分会被清除且无法撤销。建议只在模板分值改动后使用。',
+      '重新评分',
+      { type: 'warning', confirmButtonText: '重新评分', cancelButtonText: '取消' }
+    )
+  } catch (_error) {
+    return
+  }
   rescoringAnswerId.value = row.answerId
   try {
     await rescoreGuideSheetAnswer(row.answerId, {
@@ -628,17 +655,6 @@ async function handleExport() {
   saveAs(blob, resolveBlobDownloadFilename(blob, `${sheetTitle.value || '导学单'}${suffix}_结果.xlsx`))
 }
 
-/** 获取学生自评数据 */
-function getSelfScores(studentId) {
-  const scores = selfAssessment.value.studentScores || {}
-  return scores[String(studentId)] || []
-}
-
-/** 是否有评分组件 */
-const hasRateFields = computed(() => {
-  return (selfAssessment.value.rateFields || []).length > 0
-})
-
 /** 标签页名称映射：pageIndex(1-based) → pageName */
 const pageNameMap = ref({})
 /** 标签页列表 */
@@ -690,8 +706,20 @@ const computedActiveInProgress = computed(() => {
   return computedActiveTotal.value - computedActiveSubmitted.value - computedActiveNotStarted.value
 })
 
-/** 平均分 */
+/** 平均分（原始分，仅已批改且已提交的答卷参与，来自后端 getAvgScore） */
 const computedAvgScore = computed(() => progressData.value.avgScore || 0)
+
+/** 本班满分：优先用后端下发的满分；拿不到时退回评分明细里的 maxScore 之和 */
+const computedMaxTotalScore = computed(() => {
+  const fromServer = Number(progressData.value.maxTotalScore || 0)
+  if (fromServer > 0) return fromServer
+  for (const row of activeList.value) {
+    const details = parseGradingDetail(row?.progressDetail).details
+    const sum = details.reduce((acc, item) => acc + Number(item.maxScore || 0), 0)
+    if (sum > 0) return sum
+  }
+  return 0
+})
 
 /** 完成率 */
 const computedCompletionRate = computed(() => {
@@ -699,11 +727,16 @@ const computedCompletionRate = computed(() => {
   return ((computedActiveSubmitted.value / computedActiveTotal.value) * 100).toFixed(1)
 })
 
-/** 正确率 */
+/**
+ * 正确率 = 平均得分 / 满分。
+ * 拿不到满分时不能把原始平均分当百分比（满分 45 会显示 45%），直接显示“—”并改标签。
+ */
+const hasScoreScale = computed(() => computedMaxTotalScore.value > 0)
+
 const computedAccuracyRate = computed(() => {
-  const avg = computedAvgScore.value
-  if (avg === 0) return '0.0'
-  return avg.toFixed(1)
+  if (!hasScoreScale.value) return null
+  const ratio = (computedAvgScore.value / computedMaxTotalScore.value) * 100
+  return Math.min(100, Math.max(0, ratio)).toFixed(1)
 })
 
 /**
@@ -822,6 +855,9 @@ let refreshSequence = 0
 let refreshInFlight = false
 let refreshQueued = false
 let pageActive = true
+let pollFailures = 0
+/** 连续两次取数失败就提示“数据可能过期”，避免每 5 秒弹全局错误 */
+const pollStale = ref(false)
 
 function goBack() {
   if (lockedContext.value) {
@@ -908,9 +944,9 @@ function collectFieldInfo(widgets, result, visited) {
       }
       continue
     }
-    const name = w.name || w.id
+    const name = w.options?.name || w.name || w.id
     if (name && type) {
-      result.push({ name, label: w.options?.label || w.label || name })
+      result.push({ name, label: w.options?.label || w.label || name, type })
     }
     for (const key of Object.keys(w)) {
       const v = w[key]
@@ -932,17 +968,34 @@ function onClassChange() {
 }
 
 function onPageChange(page) {
-  if (page > 0) websocketClient.send({ type: 'page_change', page })
+  if (page > 0 && !sendToClassroom({ type: 'page_change', page })) {
+    ElMessage.warning('未连接到本班课堂，学生页面未切换')
+  }
+}
+
+/** 统一发送入口：未连接时必须如实提示，绝不能让教师以为学生已收到。 */
+function sendToClassroom(payload) {
+  if (websocketClient.send(payload)) return true
+  return false
 }
 
 function sendBroadcast() {
-  if (!broadcastMessage.value.trim()) return
-  websocketClient.send({ type: 'message', content: broadcastMessage.value.trim() })
+  const content = broadcastMessage.value.trim()
+  if (!content) return
+  if (!sendToClassroom({ type: 'message', content })) {
+    ElMessage.warning('未连接到本班课堂，消息未发送，请确认学生页面在线后重试')
+    return
+  }
   broadcastMessage.value = ''
+  ElMessage.success('消息已发送到本班学生')
 }
 
 function sendRefresh() {
-  websocketClient.send({ type: 'refresh' })
+  if (!sendToClassroom({ type: 'refresh' })) {
+    ElMessage.warning('未连接到本班课堂，刷新指令未发送')
+    return
+  }
+  ElMessage.success('已通知本班学生刷新页面')
 }
 
 function disposeCharts() {
@@ -955,7 +1008,7 @@ function refresh() {
   const bindingId = route.params.bindingId
   const requestContext = `${bindingId || ''}:${entryYear.value}:${classCode.value}`
   if (!pageActive || !bindingId || !entryYear.value || !classCode.value) {
-    progressData.value = { total: 0, submitted: 0, avgScore: 0, list: [] }
+    progressData.value = { total: 0, submitted: 0, avgScore: 0, maxTotalScore: 0, list: [] }
     loading.value = false
     return
   }
@@ -972,7 +1025,7 @@ function refresh() {
     if (!pageActive || requestId !== refreshSequence || requestContext !== currentContext) return
     const data = res.data || res
     progressData.value = data
-    selfAssessment.value = data.selfAssessment || { rateFields: [], studentScores: {} }
+    pollFailures = 0
     const resolvedDeptId = data.list?.find(item => item?.deptId)?.deptId
     if (!deptId.value && resolvedDeptId) {
       deptId.value = resolvedDeptId
@@ -985,6 +1038,10 @@ function refresh() {
       updateCompletionPie()
       updateAccuracyPie()
     })
+  }).catch(() => {
+    // 轮询失败不清空已有数字（教师正在讲评），只在状态条提示“数据可能过期”。
+    pollFailures += 1
+    pollStale.value = pollFailures >= 2
   }).finally(() => {
     if (requestId === refreshSequence) loading.value = false
     refreshInFlight = false
@@ -1143,18 +1200,19 @@ function updateAccuracyPie() {
     accuracyPie = echarts.init(accuracyPieRef.value)
   }
   const avgScore = computedAvgScore.value
-  if (avgScore === 0) return
-
-  const correct = avgScore
-  const incorrect = parseFloat((100 - correct).toFixed(1))
+  const maxTotal = computedMaxTotalScore.value
+  // 没有满分刻度时不能画“正确率”饼（会把原始分当百分比），改为按得分占满分画。
+  if (maxTotal <= 0) return
+  const correct = Math.min(avgScore, maxTotal)
+  const incorrect = parseFloat((maxTotal - correct).toFixed(1))
   accuracyPie.setOption({
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {c}分 ({d}%)'
+      formatter: `{b}: {c}分（满分 ${maxTotal}）`
     },
     legend: { bottom: '0%' },
     series: [{
-      name: '正确率',
+      name: '得分率',
       type: 'pie',
       radius: ['35%', '52%'],
       center: ['50%', '45%'],
@@ -1162,8 +1220,8 @@ function updateAccuracyPie() {
       label: { show: true, formatter: '{b}\n{d}%' },
       emphasis: { label: { fontSize: 18, fontWeight: 'bold' } },
       data: [
-        { value: correct, name: '正确', itemStyle: { color: '#409EFF' } },
-        { value: incorrect, name: '错误', itemStyle: { color: '#F56C6C' } }
+        { value: correct, name: '已得分', itemStyle: { color: '#409EFF' } },
+        { value: incorrect, name: '失分', itemStyle: { color: '#F56C6C' } }
       ]
     }]
   })
@@ -1450,6 +1508,12 @@ onBeforeUnmount(() => {
 .self-rate-item-label {
   font-size: 11px;
   color: #606266;
+  white-space: nowrap;
+}
+.self-rate-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #26766f;
   white-space: nowrap;
 }
 .self-rate-inline {

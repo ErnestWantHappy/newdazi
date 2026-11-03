@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-3-1-2026",
+  "title": "信息科技 三年级下册",
+  "short_title": "三下",
+  "grade": 3,
+  "semester": "1",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 86,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 整理数字资源",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "多样的数字资源", "printed_start": 2, "printed_end": 4, "pdf_start": 8, "pdf_end": 10 },
+        { "no": 2, "title": "感知媒体编码", "printed_start": 5, "printed_end": 8, "pdf_start": 11, "pdf_end": 14 },
+        { "no": 3, "title": "媒体文件类型", "printed_start": 9, "printed_end": 12, "pdf_start": 15, "pdf_end": 18 },
+        { "no": 4, "title": "数字资源分类", "printed_start": 13, "printed_end": 16, "pdf_start": 19, "pdf_end": 22 },
+        { "no": 5, "title": "应用数字资源", "printed_start": 17, "printed_end": 20, "pdf_start": 23, "pdf_end": 26 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 创作数字作品",
+      "intro": { "title": "单元导入", "pdf_start": 27, "pdf_end": 27 },
+      "lessons": [
+        { "no": 6, "title": "数字作品面面观", "printed_start": 22, "printed_end": 25, "pdf_start": 28, "pdf_end": 31 },
+        { "no": 7, "title": "处理图像素材", "printed_start": 26, "printed_end": 29, "pdf_start": 32, "pdf_end": 35 },
+        { "no": 8, "title": "剪辑音频素材", "printed_start": 30, "printed_end": 33, "pdf_start": 36, "pdf_end": 39 },
+        { "no": 9, "title": "编辑视频素材", "printed_start": 34, "printed_end": 37, "pdf_start": 40, "pdf_end": 43 },
+        { "no": 10, "title": "创作发布作品", "printed_start": 38, "printed_end": 42, "pdf_start": 44, "pdf_end": 48 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 智能创作作品",
+      "intro": { "title": "单元导入", "pdf_start": 49, "pdf_end": 49 },
+      "lessons": [
+        { "no": 11, "title": "资源智能生成", "printed_start": 44, "printed_end": 48, "pdf_start": 50, "pdf_end": 54 },
+        { "no": 12, "title": "资源智能处理", "printed_start": 49, "printed_end": 52, "pdf_start": 55, "pdf_end": 58 },
+        { "no": 13, "title": "智能辅助创作", "printed_start": 53, "printed_end": 56, "pdf_start": 59, "pdf_end": 62 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 在线学习小能手",
+      "intro": { "title": "单元导入", "pdf_start": 63, "pdf_end": 63 },
+      "lessons": [
+        { "no": 14, "title": "在线学习工具", "printed_start": 58, "printed_end": 62, "pdf_start": 64, "pdf_end": 68 },
+        { "no": 15, "title": "描述主题学习", "printed_start": 63, "printed_end": 66, "pdf_start": 69, "pdf_end": 72 },
+        { "no": 16, "title": "资源收集途径", "printed_start": 67, "printed_end": 70, "pdf_start": 73, "pdf_end": 76 },
+        { "no": 17, "title": "资源整合加工", "printed_start": 71, "printed_end": 74, "pdf_start": 77, "pdf_end": 80 },
+        { "no": 18, "title": "成果分享交流", "printed_start": 75, "printed_end": 78, "pdf_start": 81, "pdf_end": 84 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 85, "pdf_end": 86 },
+  "notes": [
+    "本册为扫描 PDF，无文本层；课次页码取自目录页并经单元页/首页/末页渲染核对（目录 5–6 页，印刷页 1 = PDF 7，偏移 6）。"
+  ]
+}

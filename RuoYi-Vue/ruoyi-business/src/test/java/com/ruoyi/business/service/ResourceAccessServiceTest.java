@@ -74,7 +74,7 @@ class ResourceAccessServiceTest
         login(20L, 10L);
         String path = "/profile/upload/student-answer/a.docx";
         BizStudentAnswer answer = answer(30L, 5L);
-        when(resourceAccessMapper.selectStudentAnswerIdByResource(path)).thenReturn(8L);
+        when(resourceAccessMapper.selectAnswerIdByAnswerText(path)).thenReturn(8L);
         when(studentAnswerMapper.selectById(8L)).thenReturn(answer);
         when(studentMapper.selectBizStudentByUserId(20L)).thenReturn(student(30L, 10L, "2025", "1"));
 
@@ -95,7 +95,7 @@ class ResourceAccessServiceTest
     {
         login(40L, 10L);
         String path = "/profile/upload/student-answer/b.docx";
-        when(resourceAccessMapper.selectStudentAnswerIdByResource(path)).thenReturn(9L);
+        when(resourceAccessMapper.selectAnswerIdByAnswerText(path)).thenReturn(9L);
         when(studentAnswerMapper.selectById(9L)).thenReturn(answer(30L, 5L));
         when(studentMapper.selectBizStudentByStudentId(30L)).thenReturn(student(30L, 10L, "2025", "2"));
         BizLesson lesson = new BizLesson();
@@ -166,6 +166,34 @@ class ResourceAccessServiceTest
         login(1L, 10L);
         assertThrows(ServiceException.class,
                 () -> service.assertCanRead("/profile/upload/student-answer-artifact/paper-pending/abc/original.pdf"));
+    }
+
+    @Test
+    void resourceOwnershipTakesMaxAcrossIndexedBranches()
+    {
+        login(20L, 10L);
+        String path = "/profile/upload/student-answer/multi.docx";
+        when(resourceAccessMapper.selectAnswerIdByAnswerText(path)).thenReturn(8L);
+        when(resourceAccessMapper.selectAnswerIdByPreviewPath(path)).thenReturn(10L);
+        when(resourceAccessMapper.selectAttachmentAnswerIdByResourcePath(path)).thenReturn(9L);
+        when(studentAnswerMapper.selectById(10L)).thenReturn(answer(30L, 5L));
+        when(studentMapper.selectBizStudentByUserId(20L)).thenReturn(student(30L, 10L, "2025", "1"));
+
+        assertEquals(path, service.assertCanRead(path));
+        org.mockito.Mockito.verify(resourceAccessMapper, org.mockito.Mockito.never())
+                .selectStudentAnswerIdByResourceJson(path);
+    }
+
+    @Test
+    void resourceOwnershipFallsBackToJsonOnlyWhenIndexedBranchesMiss()
+    {
+        login(20L, 10L);
+        String path = "/profile/upload/student-answer/pages/page-2.jpg";
+        when(resourceAccessMapper.selectStudentAnswerIdByResourceJson(path)).thenReturn(11L);
+        when(studentAnswerMapper.selectById(11L)).thenReturn(answer(30L, 5L));
+        when(studentMapper.selectBizStudentByUserId(20L)).thenReturn(student(30L, 10L, "2025", "1"));
+
+        assertEquals(path, service.assertCanRead(path));
     }
 
     private void login(Long userId, Long deptId)

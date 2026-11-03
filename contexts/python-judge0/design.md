@@ -1,5 +1,9 @@
 # Python 在线编程与 Judge0 CE 设计
 
+## 2026-11-02 课堂交互运行（已发布130正式1.30.66）
+
+复用本站 Pyodide 基础库，在 Worker 内使用 JSPI/run_sync 实现同步 `input()` 等待；课堂运行与原 Judge0 SUBMIT 分离，不新增依赖、SQL或后端接口。详见[设计与兼容边界](../python-interactive-20261102/design.md)、[ADR-016](adr/ADR-016-course-browser-interactive-run.md)。
+
 ## 2026-09-23 实验题入口调整（本机）
 
 题库管理页复用现有 `DataLabExperiment/Editor.vue`，保存仍走既有题目与实验配置接口；列表增加 `DATA_LAB` 操作方式筛选，编辑同一题 ID 时直接打开该编辑器。Excel 上传与配置保存接受题库 add/edit 或原 Python 题单 edit 权限，配置读取接受 question:query 或原 pythonPractice:query；学生发布与评分权限不变。无需新表、依赖或题单发布语义变更。前端构建、教师入口弹窗及隔离库真实上传/创建/编辑/筛选已通过。当前本机源库含缺实验快照的旧题单，隔离库 `data_lab_v2.sql` 按设计阻断；题库入口验收只补 v1/上传表，不能视为完整迁移。

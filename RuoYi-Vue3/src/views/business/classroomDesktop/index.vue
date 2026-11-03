@@ -125,6 +125,7 @@
     <!-- 顶部状态栏：机位管理与全班看板横向融合 -->
     <div class="classroom-top-banner">
       <classroom-seat-panel
+        ref="seatPanel"
         :lesson-id="lessonId"
         :entry-year="entryYear"
         :class-code="classCode"
@@ -207,7 +208,7 @@
                 <!-- 默认常驻区：机位号、在线状态灯、姓名、IP与常驻备注 -->
                 <div class="card-main-visual">
                   <div class="card-top-bar">
-                    <div class="student-identity">
+                    <div class="student-identity" :title="getStudentIpTitle(student)">
                       <span
                         class="presence-beacon"
                         :class="student.online ? 'beacon-online' : 'beacon-offline'"
@@ -220,7 +221,7 @@
                         {{ student.studentName }}
                       </strong>
                     </div>
-                    <span class="student-ip-text" :class="{ 'is-offline': !student.online }" :title="getStudentIpTitle(student)">
+                    <span v-if="getStudentIpDisplay(student)" class="student-ip-text" :title="getStudentIpTitle(student)">
                       {{ getStudentIpDisplay(student) }}
                     </span>
                   </div>
@@ -240,6 +241,7 @@
                     <span v-if="getSeatAlertText(student)" class="remark-pill is-seat-alert" :title="seatObservationTitle(student.studentId)">
                       ⚠️ {{ getSeatAlertText(student) }}
                     </span>
+                    <el-button v-if="!historical && canUpdateSeat(student)" link type="warning" size="small" @click.stop="seatPanel?.confirmStudent(student.studentId)">更新为当前机位</el-button>
                     <span v-if="student.remark" class="remark-pill is-student-note" :title="student.remark">
                       📌 {{ student.remark }}
                     </span>
@@ -346,7 +348,7 @@
                 <!-- 默认常驻区：机位号、在线状态灯、姓名、IP与常驻备注 -->
                 <div class="card-main-visual">
                   <div class="card-top-bar">
-                    <div class="student-identity">
+                    <div class="student-identity" :title="getStudentIpTitle(student)">
                       <span
                         class="presence-beacon"
                         :class="student.online ? 'beacon-online' : 'beacon-offline'"
@@ -359,7 +361,7 @@
                         {{ student.studentName }}
                       </strong>
                     </div>
-                    <span class="student-ip-text" :class="{ 'is-offline': !student.online }" :title="getStudentIpTitle(student)">
+                    <span v-if="getStudentIpDisplay(student)" class="student-ip-text" :title="getStudentIpTitle(student)">
                       {{ getStudentIpDisplay(student) }}
                     </span>
                   </div>
@@ -379,6 +381,7 @@
                     <span v-if="getSeatAlertText(student)" class="remark-pill is-seat-alert" :title="seatObservationTitle(student.studentId)">
                       ⚠️ {{ getSeatAlertText(student) }}
                     </span>
+                    <el-button v-if="!historical && canUpdateSeat(student)" link type="warning" size="small" @click.stop="seatPanel?.confirmStudent(student.studentId)">更新为当前机位</el-button>
                     <span v-if="student.remark" class="remark-pill is-student-note" :title="student.remark">
                       📌 {{ student.remark }}
                     </span>
@@ -711,6 +714,8 @@ import PerformanceScoreStepper from '@/components/PerformanceScoreStepper/index.
 import ClassroomSeatPanel from '@/components/SeatHelper/ClassroomSeatPanel.vue'
 import { seatStateLabels, displaySeatName, classroomIp } from '@/utils/seatHelper'
 const seatObservations = ref({})
+const seatPanel = ref(null)
+function canUpdateSeat(student) { return ['CHANGED', 'IP_MISMATCH', 'UNBOUND'].includes(seatObservations.value[student.studentId]?.state) }
 function updateSeatObservations(rows) { seatObservations.value = Object.fromEntries(rows.map(row => [row.studentId, row])) }
 function seatObservationLabel(id) { const row = seatObservations.value[id]; return row ? `${displaySeatName(row.seatName) || '机位未命名'} · ${seatStateLabels[row.state] || ''}` : '' }
 function seatObservationTitle(id) { const row = seatObservations.value[id]; return row ? `${row.roomName || ''} ${displaySeatName(row.seatName) || '机位未命名'}；内网IP：${row.localIp || '未获取'}；常用机位：${displaySeatName(row.expectedSeat) || '未命名或未确认'}` : '' }
@@ -734,11 +739,10 @@ function getStudentSeatName(student) {
   return `#${student.studentNo || ''}`
 }
 
-// 内网地址优先，降级连接地址时明确标注来源。
+// 只显示助手物理地址；无地址时整块不渲染，机位与助手状态在卡片悬浮提示中说明。
 function getStudentIpDisplay(student) {
   const ip = classroomIp(student, seatObservations.value[student.studentId])
-  if (ip.value) return `${ip.source}：${formatIp(ip.value)}`
-  return student.online ? '已连入' : '离线'
+  return ip.value ? `${ip.source}：${formatIp(ip.value)}` : ''
 }
 
 function getStudentIpTitle(student) {
@@ -754,7 +758,7 @@ function hasCardRemarks(student) {
   if (student.remark) return true
   if (student.performance?.isAbsent) return true
   const obs = seatObservations.value[student.studentId]
-  if (obs && (obs.state === 'CHANGED' || obs.state === 'OTHER_ROOM' || obs.state === 'SHARED_DEVICE')) return true
+  if (canUpdateSeat(student) || obs?.state === 'SHARED_DEVICE') return true
   return false
 }
 
@@ -762,7 +766,7 @@ function hasCardRemarks(student) {
 function getSeatAlertText(student) {
   const obs = seatObservations.value[student.studentId]
   if (!obs) return ''
-  if (obs.state === 'CHANGED') return `换座(${displaySeatName(obs.seatName) || '新位'})`
+  if (['CHANGED', 'IP_MISMATCH'].includes(obs.state)) return `异机登录（${displaySeatName(obs.seatName) || obs.localIp || '新机位'}）`
   if (obs.state === 'OTHER_ROOM') return `跨机房(${obs.roomName || ''})`
   if (obs.state === 'SHARED_DEVICE') return '机位冲突'
   return ''
@@ -2417,11 +2421,6 @@ onBeforeUnmount(() => {
   background: rgba(16, 185, 129, 0.08);
   padding: 1px 5px;
   border-radius: 4px;
-}
-
-.student-ip-text.is-offline {
-  color: #94a3b8;
-  background: rgba(148, 163, 184, 0.1);
 }
 
 /* 【关键要求】：备注一开始就要显示的常驻标签 */

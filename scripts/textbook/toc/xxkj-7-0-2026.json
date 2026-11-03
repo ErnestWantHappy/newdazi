@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-7-0-2026",
+  "title": "信息科技与人工智能 七年级上册",
+  "short_title": "七上",
+  "grade": 7,
+  "semester": "0",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 125,
+  "page_offset": 5,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 8 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 认识互联网",
+      "intro": { "title": "单元导入", "pdf_start": 9, "pdf_end": 10 },
+      "lessons": [
+        { "no": 1, "title": "计算机网络", "printed_start": 6, "printed_end": 9, "pdf_start": 11, "pdf_end": 14 },
+        { "no": 2, "title": "演进中的中国互联网", "printed_start": 10, "printed_end": 14, "pdf_start": 15, "pdf_end": 19 },
+        { "no": 3, "title": "互联网应用体验", "printed_start": 15, "printed_end": 19, "pdf_start": 20, "pdf_end": 24 },
+        { "no": 4, "title": "互联网创新发展", "printed_start": 20, "printed_end": 23, "pdf_start": 25, "pdf_end": 28 },
+        { "no": 5, "title": "互联网与人工智能", "printed_start": 24, "printed_end": 28, "pdf_start": 29, "pdf_end": 33 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 29, "printed_end": 29, "pdf_start": 34, "pdf_end": 34 }
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 探秘互联网",
+      "intro": { "title": "单元导入", "pdf_start": 35, "pdf_end": 36 },
+      "lessons": [
+        { "no": 6, "title": "互联网接入", "printed_start": 32, "printed_end": 37, "pdf_start": 37, "pdf_end": 42 },
+        { "no": 7, "title": "网络服务", "printed_start": 38, "printed_end": 41, "pdf_start": 43, "pdf_end": 46 },
+        { "no": 8, "title": "互联网应用协议", "printed_start": 42, "printed_end": 46, "pdf_start": 47, "pdf_end": 51 },
+        { "no": 9, "title": "认识TCP/IP", "printed_start": 47, "printed_end": 51, "pdf_start": 52, "pdf_end": 56 },
+        { "no": 10, "title": "IP地址与DHCP", "printed_start": 52, "printed_end": 57, "pdf_start": 57, "pdf_end": 62 },
+        { "no": 11, "title": "小型网络的搭建", "printed_start": 58, "printed_end": 62, "pdf_start": 63, "pdf_end": 67 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 63, "printed_end": 63, "pdf_start": 68, "pdf_end": 68 }
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 畅游互联网",
+      "intro": { "title": "单元导入", "pdf_start": 69, "pdf_end": 70 },
+      "lessons": [
+        { "no": 12, "title": "获取互联网资源", "printed_start": 66, "printed_end": 71, "pdf_start": 71, "pdf_end": 76 },
+        { "no": 13, "title": "云计算", "printed_start": 72, "printed_end": 76, "pdf_start": 77, "pdf_end": 81 },
+        { "no": 14, "title": "云存储", "printed_start": 77, "printed_end": 81, "pdf_start": 82, "pdf_end": 86 },
+        { "no": 15, "title": "向世界介绍我的学校——规划与探究", "printed_start": 82, "printed_end": 87, "pdf_start": 87, "pdf_end": 92 },
+        { "no": 16, "title": "向世界介绍我的学校——创作与发布", "printed_start": 88, "printed_end": 94, "pdf_start": 93, "pdf_end": 99 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 95, "printed_end": 95, "pdf_start": 100, "pdf_end": 100 }
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 认识人工智能",
+      "intro": { "title": "单元导入", "pdf_start": 101, "pdf_end": 102 },
+      "lessons": [
+        { "no": 17, "title": "人工智能的发展", "printed_start": 98, "printed_end": 102, "pdf_start": 103, "pdf_end": 107 },
+        { "no": 18, "title": "生成式人工智能", "printed_start": 103, "printed_end": 106, "pdf_start": 108, "pdf_end": 111 },
+        { "no": 19, "title": "智能体的搭建与应用", "printed_start": 107, "printed_end": 112, "pdf_start": 112, "pdf_end": 117 },
+        { "no": 20, "title": "人工智能的影响", "printed_start": 113, "printed_end": 117, "pdf_start": 118, "pdf_end": 122 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 118, "printed_end": 118, "pdf_start": 123, "pdf_end": 123 }
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 124, "pdf_end": 125 },
+  "notes": []
+}

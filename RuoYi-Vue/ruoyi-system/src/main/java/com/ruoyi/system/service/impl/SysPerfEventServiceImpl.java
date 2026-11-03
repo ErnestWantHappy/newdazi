@@ -4,7 +4,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.common.utils.StringUtils;
@@ -24,6 +27,16 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
 {
     private static final long SLOW_API_THRESHOLD_MS = 1000L;
 
+    private static final long SELF_TEST_TIMEOUT_MS = 3000L;
+
+    private final AtomicLong slowSqlRecordCount = new AtomicLong();
+
+    private final AtomicLong insertFailCount = new AtomicLong();
+
+    private volatile String lastInsertError;
+
+    private volatile Date lastInsertFailTime;
+
     @Autowired
     private SysPerfEventMapper perfEventMapper;
 
@@ -34,6 +47,7 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         {
             return;
         }
+        slowSqlRecordCount.incrementAndGet();
         SqlBusinessDescriber.SqlDescription desc = SqlBusinessDescriber.describe(mapperId, sqlText);
         SysPerfEvent event = new SysPerfEvent();
         event.setEventType("slow_sql");
@@ -132,9 +146,12 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         {
             perfEventMapper.insertSysPerfEvent(event);
         }
-        catch (Exception ignored)
+        catch (Exception e)
         {
-            // 表未初始化或写入失败时不影响主流程
+            // 表未初始化或写入失败时不阻断主流程，但必须留下可观测计数，便于诊断页定位。
+            insertFailCount.incrementAndGet();
+            lastInsertError = truncate(e.getMessage(), 500);
+            lastInsertFailTime = new Date();
         }
     }
 
@@ -161,6 +178,86 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         {
             event.setAdvice("结合 SQL、发生时间和关联接口确认是否持续影响业务");
         }
+    }
+
+    @Override
+    public long getSlowSqlRecordCount()
+    {
+        return slowSqlRecordCount.get();
+    }
+
+    @Override
+    public long getInsertFailCount()
+    {
+        return insertFailCount.get();
+    }
+
+    @Override
+    public String getLastInsertError()
+    {
+        return lastInsertError;
+    }
+
+    @Override
+    public Date getLastInsertFailTime()
+    {
+        return lastInsertFailTime;
+    }
+
+    @Override
+    public Map<String, Object> runSlowSqlSelfTest()
+    {
+        long before = slowSqlRecordCount.get();
+        long start = System.currentTimeMillis();
+        Long eventId = null;
+        try
+        {
+            // 必须走 MyBatis，JdbcTemplate 不经过 SlowSqlInterceptor，无法验证持久化链路。
+            perfEventMapper.selfTestSlowQuery();
+            long deadline = start + SELF_TEST_TIMEOUT_MS;
+            while (System.currentTimeMillis() < deadline)
+            {
+                eventId = perfEventMapper.selectSelfTestEventId();
+                if (eventId != null)
+                {
+                    break;
+                }
+                Thread.sleep(100L);
+            }
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
+        catch (Exception e)
+        {
+            lastInsertError = truncate(e.getMessage(), 500);
+            lastInsertFailTime = new Date();
+        }
+        boolean intercepted = slowSqlRecordCount.get() > before;
+        boolean persisted = eventId != null;
+        // 事件已落库说明拦截器必然已经执行；异步计数存在毫秒级先后差，不能反过来否定 persisted。
+        intercepted = intercepted || persisted;
+        String hint;
+        if (persisted)
+        {
+            hint = "slow_sql 拦截、异步写入和入库链路正常";
+        }
+        else if (intercepted)
+        {
+            hint = "已进入拦截器但未写入 sys_perf_event：检查表结构、字段长度和异步线程日志";
+        }
+        else
+        {
+            hint = "未进入 SlowSqlInterceptor：确认部署 JAR 已注册 MyBatis 插件且 SQL 实际耗时至少 1000ms";
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("intercepted", intercepted);
+        result.put("persisted", persisted);
+        result.put("eventId", eventId);
+        result.put("elapsedMs", System.currentTimeMillis() - start);
+        result.put("hint", hint);
+        return result;
     }
 
     private String truncate(String value, int maxLength)

@@ -1,0 +1,59 @@
+{
+  "book_code": "xxkj-6-0-2026",
+  "title": "信息科技 六年级上册",
+  "short_title": "六上",
+  "grade": 6,
+  "semester": "0",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 92,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 算法的实现",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "算法与问题解决", "printed_start": 2, "printed_end": 6, "pdf_start": 8, "pdf_end": 12 },
+        { "no": 2, "title": "抽象与建模", "printed_start": 7, "printed_end": 9, "pdf_start": 13, "pdf_end": 15 },
+        { "no": 3, "title": "算法设计", "printed_start": 10, "printed_end": 13, "pdf_start": 16, "pdf_end": 19 },
+        { "no": 4, "title": "用程序设计语言描述算法", "printed_start": 14, "printed_end": 17, "pdf_start": 20, "pdf_end": 23 },
+        { "no": 5, "title": "算法的执行", "printed_start": 18, "printed_end": 23, "pdf_start": 24, "pdf_end": 29 },
+        { "no": 6, "title": "“猜数字”算法设计", "printed_start": 24, "printed_end": 27, "pdf_start": 30, "pdf_end": 33 },
+        { "no": 7, "title": "用人工智能辅助算法实现", "printed_start": 28, "printed_end": 32, "pdf_start": 34, "pdf_end": 38 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 算法的效率",
+      "intro": { "title": "单元导入", "pdf_start": 39, "pdf_end": 39 },
+      "lessons": [
+        { "no": 8, "title": "算法的多样性", "printed_start": 34, "printed_end": 40, "pdf_start": 40, "pdf_end": 46 },
+        { "no": 9, "title": "算法的评价方法", "printed_start": 41, "printed_end": 43, "pdf_start": 47, "pdf_end": 49 },
+        { "no": 10, "title": "“韩信点兵”枚举法的实现", "printed_start": 44, "printed_end": 47, "pdf_start": 50, "pdf_end": 53 },
+        { "no": 11, "title": "“韩信点兵”筛选法的实现", "printed_start": 48, "printed_end": 51, "pdf_start": 54, "pdf_end": 57 },
+        { "no": 12, "title": "用人工智能解决“韩信点兵”问题", "printed_start": 52, "printed_end": 56, "pdf_start": 58, "pdf_end": 62 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 算法的影响",
+      "intro": { "title": "单元导入", "pdf_start": 63, "pdf_end": 63 },
+      "lessons": [
+        { "no": 13, "title": "在线生活中的算法", "printed_start": 58, "printed_end": 61, "pdf_start": 64, "pdf_end": 67 },
+        { "no": 14, "title": "智能寻路中的搜索算法", "printed_start": 62, "printed_end": 65, "pdf_start": 68, "pdf_end": 71 },
+        { "no": 15, "title": "在线购物中的推荐算法", "printed_start": 66, "printed_end": 70, "pdf_start": 72, "pdf_end": 76 },
+        { "no": 16, "title": "算法对生活的影响", "printed_start": 71, "printed_end": 73, "pdf_start": 77, "pdf_end": 79 },
+        { "no": 17, "title": "人机对话的实现", "printed_start": 74, "printed_end": 75, "pdf_start": 80, "pdf_end": 81 },
+        { "no": 18, "title": "对话机器人", "printed_start": 76, "printed_end": 85, "pdf_start": 82, "pdf_end": 91 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 92, "pdf_end": 92 },
+  "notes": []
+}

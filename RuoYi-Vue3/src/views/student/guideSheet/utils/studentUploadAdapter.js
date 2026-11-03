@@ -100,6 +100,12 @@ export function configureStudentUploadWidget(widgetRef, context) {
       current.notifyError?.('登录状态已过期，请重新登录后再上传')
       return false
     }
+    // 渲染库内部的大小校验对图片分支会抛错（this.$ 未定义），这里提前拦一次并给人话提示。
+    const limitMb = Number(widgetRef.field?.options?.fileMaxSize || 0)
+    if (limitMb > 0 && file && Number(file.size || 0) > limitMb * 1024 * 1024) {
+      current.notifyError?.(`文件超过 ${limitMb}MB，请压缩后再上传`)
+      return false
+    }
     return originalBeforeUpload(file)
   }
   widgetRef[uploadSuccessMethod] = (result, file, fileList) => {

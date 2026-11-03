@@ -113,6 +113,11 @@ public interface BizLessonAssignmentMapper
                                                           @Param("classCode") String classCode,
                                                           @Param("deptId") Long deptId);
 
+    /** 推进预检只读当前指派，不获取写锁或修改达标计时。 */
+    BizLessonAssignment selectCurrentAssignment(@Param("entryYear") String entryYear,
+                                                @Param("classCode") String classCode,
+                                                @Param("deptId") Long deptId);
+
     /** 仅在仍指向预期课程时切到下一课，防止重复推进 */
     int advanceCurrentAssignment(@Param("assignmentId") Long assignmentId,
                                  @Param("currentLessonId") Long currentLessonId,

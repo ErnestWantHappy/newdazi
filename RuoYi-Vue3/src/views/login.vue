@@ -1,5 +1,6 @@
 <template>
   <div class="login-container">
+    <StudentSpaceSwitch ref="studentSpaceDialog" login />
     <!-- 背景已降级为静态柔和渐变，移除实时模糊DOM以释放云机房合成性能 -->
 
     <!-- 顶部导航栏：左上角放置统一Logo图与系统名称，带优雅偏距 -->
@@ -17,7 +18,7 @@
     <main class="login-main">
       <div class="login-layout-grid">
         <!-- 模块1（左上）：最新教研活动焦点图（5图图文结合走马灯轮播，支持现场实景大图） -->
-        <section class="grid-cell cell-focus module-card focus-card" aria-labelledby="focus-title">
+        <section v-memo="[researchSlides, inputBusy]" class="grid-cell cell-focus module-card focus-card" aria-labelledby="focus-title">
           <div class="card-header">
             <div class="header-title-box">
               <span class="pulse-dot" />
@@ -33,6 +34,7 @@
               indicator-position="outside"
               arrow="hover"
               :interval="4500"
+              :autoplay="!inputBusy"
               class="research-carousel"
             >
               <el-carousel-item v-for="(slide, index) in researchSlides" :key="index">
@@ -55,7 +57,9 @@
 
         <!-- 模块2（右上）：用户登录框（与焦点图等高对称） -->
         <section class="grid-cell cell-login module-card login-card" aria-label="用户登录">
-          <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-card-form">
+          <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-card-form"
+            @focusin="idleWork.interact" @keydown="idleWork.interact" @input="idleWork.interact"
+            @compositionstart="handleCompositionStart" @compositionend="handleCompositionEnd">
             <div class="form-header">
               <h2 class="form-title">用户登录</h2>
               <p class="form-subtitle">欢迎进入信息科技学业测评平台</p>
@@ -116,7 +120,7 @@
         </section>
 
         <!-- 模块3（左下）：区域学校开课动态与监管看板（移至左侧，享有充裕横向空间） -->
-        <section class="grid-cell cell-school module-card showroom-card school-showroom" aria-labelledby="school-title">
+        <section v-memo="[schoolLoading, schoolError, schoolPreviews]" class="grid-cell cell-school module-card showroom-card school-showroom" aria-labelledby="school-title">
           <div class="card-header">
             <div class="header-title-box">
               <span class="category-dot dot-cyan" />
@@ -173,7 +177,7 @@
         </section>
 
         <!-- 模块4（右下）：最新教研活动预览（移至右侧，登录框下方，紧凑精致） -->
-        <section class="grid-cell cell-research module-card showroom-card research-showroom" aria-labelledby="research-title">
+        <section v-memo="[researchLoading, researchError, researchPreviews]" class="grid-cell cell-research module-card showroom-card research-showroom" aria-labelledby="research-title">
           <div class="card-header">
             <div class="header-title-box">
               <span class="category-dot" />
@@ -259,6 +263,8 @@
 </template>
 
 <script setup>
+import StudentSpaceSwitch from "@/components/StudentSpaceSwitch"
+const studentSpaceDialog = ref(null)
 import { getCodeImg } from "@/api/login"
 import Cookies from "js-cookie"
 import { encrypt, decrypt } from "@/utils/jsencrypt"
@@ -266,10 +272,11 @@ import useUserStore from '@/store/modules/user'
 import { getToken, needsSchoolSelection } from '@/utils/auth'
 import { ElMessageBox } from 'element-plus'
 import { getLoginActivityPreviews, getLoginSchoolPreviews, getLoginFocusSlides } from '@/api/business/loginPreview'
-import logoImg from '@/assets/logo/logo.png'
-import slide1 from '@/assets/images/research/slide-1.jpg'
-import slide2 from '@/assets/images/research/slide-2.jpg'
-import slide3 from '@/assets/images/research/slide-3.jpg'
+import { createLoginIdleWork } from '@/utils/loginIdleWork'
+import logoImg from '@/assets/logo/logo.webp'
+import slide1 from '@/assets/images/research/slide-1.webp'
+import slide2 from '@/assets/images/research/slide-2.webp'
+import slide3 from '@/assets/images/research/slide-3.webp'
 import slide4 from '@/assets/images/research/slide-4.webp'
 import slide5 from '@/assets/images/research/slide-5.webp'
 
@@ -323,30 +330,28 @@ const focusSlides = ref([])
 const focusLoading = ref(false)
 const failedSlideImages = ref(new Set())
 const visibleSlideCount = ref(1)
-let showroomLoadTimer
-let showroomIdleCallback
-let delayedSlideTimer
+const inputBusy = ref(false)
+let composing = false
+const idleWork = createLoginIdleWork({
+  isBlocked: () => composing || document.visibilityState === 'hidden'
+    || loading.value || captchaDialogVisible.value || schoolDialogVisible.value,
+  onBusyChange: value => { inputBusy.value = value },
+})
+
+function handleCompositionStart() {
+  composing = true
+  idleWork.interact()
+}
+
+function handleCompositionEnd() {
+  composing = false
+  idleWork.interact()
+}
 
 function scheduleShowroomLoad() {
-  if (showroomLoadTimer) return
-  const load = () => {
-    showroomLoadTimer = undefined
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    loadFocusSlides()
-    loadResearchPreviews()
-    loadSchoolPreviews()
-  }
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    showroomLoadTimer = window.setTimeout(() => {
-      showroomLoadTimer = undefined
-      showroomIdleCallback = window.requestIdleCallback(() => {
-        showroomIdleCallback = undefined
-        load()
-      }, { timeout: 2500 })
-    }, 1200)
-  } else {
-    showroomLoadTimer = window.setTimeout(load, 1800)
-  }
+  idleWork.schedule('focus-fetch', loadFocusSlides, 1200)
+  loadResearchPreviews()
+  loadSchoolPreviews()
 }
 
 async function loadFocusSlides() {
@@ -355,25 +360,27 @@ async function loadFocusSlides() {
   try {
     const list = await getLoginFocusSlides(previewAbortController.signal)
     if (Array.isArray(list) && list.length > 0) {
-      focusSlides.value = list
-      scheduleDelayedSlides(list.length)
+      idleWork.schedule('focus-result', () => {
+        focusSlides.value = list
+        scheduleDelayedSlides(list.length)
+      })
     }
   } catch (error) {
     // 降级由 computed 处理
   } finally {
-    focusLoading.value = false
+    idleWork.schedule('focus-loading', () => { focusLoading.value = false })
   }
 }
 
 function scheduleDelayedSlides(total) {
-  if (delayedSlideTimer) window.clearTimeout(delayedSlideTimer)
   visibleSlideCount.value = 1
   if (total <= 1) return
-  // 首屏输入完成后再把其余轮播项放入 DOM，避免 el-carousel 初始化时并发下载所有真实图片。
-  delayedSlideTimer = window.setTimeout(() => {
-    delayedSlideTimer = undefined
-    visibleSlideCount.value = total
-  }, 15000)
+  const revealNext = () => {
+    visibleSlideCount.value++
+    if (visibleSlideCount.value < total) idleWork.schedule('more-slides', revealNext, 1500)
+  }
+  // 到了十五秒也要让位于正在输入的学生，并且每次只新增一张图片。
+  idleWork.schedule('more-slides', revealNext, 15000)
 }
 
 const apiBase = import.meta.env.VITE_APP_BASE_API || ''
@@ -392,7 +399,7 @@ function formatSlideImage(url) {
 function handleSlideImageError(slide, index) {
   const fallback = defaultResearchSlides[index % defaultResearchSlides.length]
   if (slide.image !== fallback.image) {
-    failedSlideImages.value.add(slide.image)
+    idleWork.schedule(`image-error-${index}`, () => { failedSlideImages.value.add(slide.image) })
   }
 }
 
@@ -447,29 +454,39 @@ const researchError = ref(false)
 const schoolError = ref(false)
 const previewAbortController = new AbortController()
 
-async function loadResearchPreviews() {
+function loadResearchPreviews() {
+  idleWork.schedule('research-fetch', fetchResearchPreviews, 1200)
+}
+
+async function fetchResearchPreviews() {
   if (researchLoading.value) return
   researchLoading.value = true
   researchError.value = false
   try {
-    researchPreviews.value = await getLoginActivityPreviews(previewAbortController.signal)
+    const list = await getLoginActivityPreviews(previewAbortController.signal)
+    idleWork.schedule('research-result', () => { researchPreviews.value = list })
   } catch (error) {
-    if (error.code !== 'ERR_CANCELED') researchError.value = true
+    if (error.code !== 'ERR_CANCELED') idleWork.schedule('research-error', () => { researchError.value = true })
   } finally {
-    researchLoading.value = false
+    idleWork.schedule('research-loading', () => { researchLoading.value = false })
   }
 }
 
-async function loadSchoolPreviews() {
+function loadSchoolPreviews() {
+  idleWork.schedule('school-fetch', fetchSchoolPreviews, 1200)
+}
+
+async function fetchSchoolPreviews() {
   if (schoolLoading.value) return
   schoolLoading.value = true
   schoolError.value = false
   try {
-    schoolPreviews.value = await getLoginSchoolPreviews(previewAbortController.signal)
+    const list = await getLoginSchoolPreviews(previewAbortController.signal)
+    idleWork.schedule('school-result', () => { schoolPreviews.value = list })
   } catch (error) {
-    if (error.code !== 'ERR_CANCELED') schoolError.value = true
+    if (error.code !== 'ERR_CANCELED') idleWork.schedule('school-error', () => { schoolError.value = true })
   } finally {
-    schoolLoading.value = false
+    idleWork.schedule('school-loading', () => { schoolLoading.value = false })
   }
 }
 
@@ -597,7 +614,7 @@ async function continueAfterLogin() {
     defaultPath = "/teacher-dashboard"
   }
 
-  const target = roles.includes('student') ? '/student/index' : (redirect.value || defaultPath)
+  const target = roles.includes('student') ? await studentSpaceDialog.value.selectAtLogin() : (redirect.value || defaultPath)
   try {
     await router.push({ path: target, query: otherQueryParams })
   } finally {
@@ -668,18 +685,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (showroomLoadTimer) {
-    window.clearTimeout(showroomLoadTimer)
-    showroomLoadTimer = undefined
-  }
-  if (showroomIdleCallback !== undefined && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(showroomIdleCallback)
-    showroomIdleCallback = undefined
-  }
-  if (delayedSlideTimer) {
-    window.clearTimeout(delayedSlideTimer)
-    delayedSlideTimer = undefined
-  }
+  idleWork.dispose()
   previewAbortController.abort()
 })
 

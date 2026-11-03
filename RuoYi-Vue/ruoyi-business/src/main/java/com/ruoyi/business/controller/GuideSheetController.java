@@ -297,15 +297,20 @@ public class GuideSheetController extends BaseController
     public AjaxResult getProgress(@RequestParam Long bindingId, @RequestParam String entryYear,
                                   @RequestParam String classCode)
     {
-        accessService.requireBindingClassAccess(bindingId, entryYear, classCode);
+        BizLessonGuideSheetBinding binding =
+                accessService.requireBindingClassAccess(bindingId, entryYear, classCode);
         String normalizedClass = normalizeClassCode(classCode);
         List<GuideSheetProgressVo> list = guideSheetService.getProgress(
                 bindingId, SecurityUtils.getDeptId(), entryYear, normalizedClass);
         long submitted = list.stream().filter(item -> "Y".equals(item.getIsSubmitted())).count();
         Double avgScore = answerService.getAvgScore(
                 bindingId, SecurityUtils.getDeptId(), entryYear, normalizedClass);
+        // avgScore 是原始平均分，前端必须同时拿到满分才能算正确率，否则会把 45 分显示成 45%。
+        int maxTotalScore = gradingService.totalMaxScore(binding.getSnapshotFormJson());
         return success().put("total", list.size()).put("submitted", submitted)
-                .put("avgScore", avgScore == null ? 0D : avgScore).put("list", list);
+                .put("avgScore", avgScore == null ? 0D : avgScore)
+                .put("maxTotalScore", maxTotalScore)
+                .put("list", list);
     }
 
     @PreAuthorize("@ss.hasAnyPermi('business:guideSheet:dashboard,business:guideSheet:edit')")
@@ -382,7 +387,8 @@ public class GuideSheetController extends BaseController
             row.setAutoScore(progress.getAutoScore());
             row.setManualAdjustment(progress.getManualAdjustment());
             row.setTotalScore(progress.getTotalScore());
-            row.setGradingStatus(progress.getGradingStatus());
+            // 导出给教师看，不能直接落英文状态码（partial/manual）；未知值原样保留便于排查。
+            row.setGradingStatus(convertGradingStatus(progress.getGradingStatus()));
             row.setSubmitTime(progress.getSubmitTime());
             rows.add(row);
         }
@@ -395,13 +401,16 @@ public class GuideSheetController extends BaseController
     public AjaxResult getStudentGrading(@PathVariable Long bindingId)
     {
         BizStudent student = accessService.requireCurrentStudent();
-        accessService.requireStudentBinding(student, bindingId);
+        BizLessonGuideSheetBinding binding = accessService.requireStudentBinding(student, bindingId);
         BizGuideSheetAnswer answer = answerService.getByStudentAndBinding(student.getStudentId(), bindingId);
         if (answer == null)
         {
             return success().put("hasResult", false);
         }
+        // 学生必须有分母和批改状态，否则满分 45 分会被前端按 >=60 判成“不及格”。
         return success().put("hasResult", true).put("totalScore", answer.getTotalScore())
+                .put("maxScore", gradingService.totalMaxScore(binding.getSnapshotFormJson()))
+                .put("gradingStatus", answer.getGradingStatus())
                 .put("gradingDetail", studentViewService.sanitizeGradingDetail(answer.getGradingDetail()))
                 .put("submitTime", answer.getSubmitTime());
     }
@@ -460,42 +469,6 @@ public class GuideSheetController extends BaseController
                 .put("totalScore", answer.getTotalScore())
                 .put("gradingStatus", answer.getGradingStatus())
                 .put("gradingDetail", answer.getGradingDetail());
-    }
-
-    @PreAuthorize("@ss.hasAnyPermi('business:guideSheet:dashboard,business:guideSheet:edit')")
-    @PutMapping("/grading/recore-all/{bindingId}")
-    public AjaxResult recoreAll(@PathVariable Long bindingId, @RequestParam String entryYear,
-                                @RequestParam String classCode)
-    {
-        BizLessonGuideSheetBinding binding = accessService.requireBindingClassAccess(
-                bindingId, entryYear, classCode);
-        List<BizGuideSheetAnswer> answers = answerService.getByBindingAndClass(
-                bindingId, SecurityUtils.getDeptId(), entryYear, normalizeClassCode(classCode));
-        int count = 0;
-        for (BizGuideSheetAnswer answer : answers)
-        {
-            if (!"2".equals(answer.getStatus()))
-            {
-                continue;
-            }
-            try
-            {
-                GuideSheetGradingService.GradingResult result = gradingService.grade(
-                        binding.getSnapshotFormJson(), answer.getAnswerJson(), answer.getStudentId(), bindingId);
-                answer.setAutoScore(result.totalScore);
-                answer.setManualAdjustment(0);
-                answer.setTotalScore(result.totalScore);
-                answer.setGradingStatus(result.gradingStatus);
-                answer.setGradingDetail(result.gradingDetail);
-                answerService.updateGrading(answer);
-                count++;
-            }
-            catch (Exception e)
-            {
-                log.error("批量重新评分失败 answerId={}", answer.getAnswerId(), e);
-            }
-        }
-        return success().put("count", count).put("total", answers.size());
     }
 
     private Map<String, Object> studentAnswerPayload(BizGuideSheetAnswer answer)
@@ -557,5 +530,23 @@ public class GuideSheetController extends BaseController
         if ("1".equals(status)) return "填写中";
         if ("2".equals(status)) return "已提交";
         return status;
+    }
+
+    /**
+     * 评分状态统一中文口径，避免导出表里出现 partial/manual/complete 这类英文码值。
+     * 五态来源见 GuideSheetAnswerServiceImpl#calculateGradingStatus，这里必须全部覆盖。
+     */
+    private String convertGradingStatus(String gradingStatus)
+    {
+        if (gradingStatus == null || gradingStatus.trim().isEmpty()) return "未评分";
+        switch (gradingStatus)
+        {
+            case "auto": return "自动评分完成";
+            case "manual": return "待人工批改";
+            case "partial": return "部分已批，仍有待批";
+            case "complete": return "人工批改完成";
+            case "pending": return "待评分";
+            default: return gradingStatus;
+        }
     }
 }

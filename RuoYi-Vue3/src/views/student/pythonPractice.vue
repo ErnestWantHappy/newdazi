@@ -2,7 +2,7 @@
   <div ref="workspace" class="oj-page">
     <header class="oj-header">
       <div class="header-left">
-        <el-button text class="list-button" @click="listVisible = true">☰ 题目列表</el-button>
+        <el-button text class="list-button" @click="listVisible = true">{{ practiceSpace === 'extension' ? 'Python 拓展练习' : '题目列表' }}</el-button>
         <span class="header-divider">/</span>
         <strong>{{ questionTitle }}</strong>
       </div>
@@ -14,7 +14,7 @@
       <div class="header-actions">
         <el-tag type="success" effect="plain">已完成 {{ passedCount }}/{{ questions.length }}</el-tag>
         <el-button text @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '全屏' }}</el-button>
-        <el-button text @click="$router.push('/student/index')">返回首页</el-button>
+        <el-button text @click="$router.push(practiceSpace === 'extension' ? '/student/extension' : '/student/index')">返回首页</el-button>
       </div>
     </header>
 
@@ -138,6 +138,9 @@
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router'
+const route = useRoute()
+const practiceSpace = computed(() => route.query.space === 'extension' ? 'extension' : 'regular')
 import { autocompletion, completeFromList } from '@codemirror/autocomplete'
 import { defaultKeymap, history as cmHistory, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
@@ -177,11 +180,12 @@ const CaseResults = defineComponent({
 })
 
 const workspace = ref(null); const questions = ref([]); const current = ref(null); const sourceCode = ref(''); const history = ref([]); const activeKey = ref(''); const filter = ref('ALL'); const saving = ref(false); const running = ref(false); const customRunning = ref(false); const submitting = ref(false); const overviewLoading = ref(false); const questionLoading = ref(false); const pageError = ref(''); const questionError = ref(''); const draftState = ref('草稿未保存'); const editorElement = ref(null); const listVisible = ref(false); const consoleTab = ref('custom'); const customInput = ref(''); const darkTheme = ref(false); const fullscreen = ref(false); const selectedHistory = ref(null); let editorView; let pollTimer; let pollAttempts = 0; let savePromise = Promise.resolve(); let selectionPending = false
+let overviewGeneration = 0
 const themeCompartment = new Compartment()
 const isDataLab = computed(() => current.value?.practical_mode === 'DATA_LAB')
 function isComplete(item) { return item.practical_mode === 'DATA_LAB' ? item.progress?.completed_flag === '1' : item.progress?.passed_flag === '1' }
 const passedCount = computed(() => questions.value.filter(isComplete).length)
-const questionTitle = computed(() => current.value ? titleOf(current.value) : 'Python 练习')
+const questionTitle = computed(() => current.value ? titleOf(current.value) : (practiceSpace.value === 'extension' ? 'Python 拓展练习' : 'Python 练习'))
 const knowledgeTags = computed(() => String(current.value?.knowledge_points || '').split(/[,，]/).map(item => item.trim()).filter(Boolean))
 const filteredQuestions = computed(() => questions.value.filter(item => { const progress = item.progress; if (filter.value === 'DONE') return isComplete(item); if (filter.value === 'WRONG') return progress && progress.passed_flag !== '1' && progress.submit_count > 0 && progress.pending_grading !== '1'; if (filter.value === 'TODO') return !isComplete(item); return true }))
 const sections = computed(() => {
@@ -255,7 +259,20 @@ function setCode(value) { sourceCode.value = value || ''; if (editorView && edit
 function refreshEditor() { requestAnimationFrame(() => editorView?.requestMeasure()) }
 watch(darkTheme, value => editorView?.dispatch({ effects: themeCompartment.reconfigure(value ? oneDark : []) }))
 
-async function loadOverview() { if (overviewLoading.value) return; overviewLoading.value = true; pageError.value = ''; try { const res = await getStudentPracticeOverview(); questions.value = res.data?.questions || []; if (questions.value.length) await selectQuestion(questions.value[0]) } catch (error) { pageError.value = '题单加载失败，请检查网络后重试'; ElMessage.error(pageError.value) } finally { overviewLoading.value = false } }
+async function loadOverview() {
+  const generation = ++overviewGeneration, space = practiceSpace.value
+  overviewLoading.value = true; pageError.value = ''
+  try {
+    const res = await getStudentPracticeOverview({ space })
+    if (generation !== overviewGeneration || space !== practiceSpace.value) return
+    questions.value = res.data?.questions || []
+    if (questions.value.length) await selectQuestion(questions.value[0])
+  } catch (error) {
+    if (generation !== overviewGeneration) return
+    pageError.value = error?.message || '题单加载失败，请重试'
+    ElMessage.error(pageError.value)
+  } finally { if (generation === overviewGeneration) overviewLoading.value = false }
+}
 async function selectQuestion(item) {
   if (!item || selectionPending || questionLoading.value || keyOf(item) === activeKey.value) return
   selectionPending = true
@@ -267,7 +284,9 @@ async function selectQuestion(item) {
   const previousSelection = selectedHistory.value
   clearTimeout(pollTimer); pollAttempts = 0; activeKey.value = keyOf(item); questionError.value = ''; selectedHistory.value = null
   try {
-    const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
+    const requestedSpace = practiceSpace.value
+    const res = await getStudentPracticeQuestion({ space: requestedSpace, sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
+    if (requestedSpace !== practiceSpace.value) return
     current.value = res.data || {}
     if (!isDataLab.value) {
       await nextTick(mountEditor)
@@ -291,7 +310,7 @@ async function saveDraft(item = current.value, code = sourceCode.value) {
     try { await previous } catch (error) { /* 前一次失败不阻止当前草稿重试。 */ }
     saving.value = true
     try {
-      await saveStudentPracticeDraft({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id, sourceCode: code })
+      await saveStudentPracticeDraft({ space: practiceSpace.value, sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id, sourceCode: code })
       if (activeKey.value === key && sourceCode.value === code) draftState.value = '草稿已保存'
     } catch (error) { ElMessage.error('草稿保存失败，请稍后重试'); throw error }
     finally { if (savePromise === pending) saving.value = false }
@@ -310,7 +329,7 @@ async function enqueue(type) {
   if (type === 'RUN') running.value = true; else if (type === 'CUSTOM_RUN') customRunning.value = true; else submitting.value = true
   try {
     await saveDraft(item, code)
-    const res = await submitStudentPractice({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id, sourceCode: code, submitType: type, customInput: type === 'CUSTOM_RUN' ? input : undefined })
+    const res = await submitStudentPractice({ space: practiceSpace.value, sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id, sourceCode: code, submitType: type, customInput: type === 'CUSTOM_RUN' ? input : undefined })
     if (activeKey.value !== key) return
     selectedHistory.value = normalizeSubmission(res.data || {})
     history.value = [selectedHistory.value, ...history.value.filter(row => row.submission_id !== selectedHistory.value.submission_id)]
@@ -330,12 +349,12 @@ async function poll() {
   pollTimer = setTimeout(async () => {
     if (activeKey.value !== key) return
     try {
-      const res = await getStudentPracticeQuestion({ sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
+      const res = await getStudentPracticeQuestion({ space: practiceSpace.value, sourceType: item.source_type, sourceId: item.source_id, questionId: item.question_id })
       if (activeKey.value !== key) return
       history.value = (res.data?.history || []).map(normalizeSubmission)
       selectedHistory.value = history.value[0] || selectedHistory.value
       if (selectedHistory.value?.status_code === 'WAITING' || selectedHistory.value?.status_code === 'JUDGING') poll()
-      else { const overview = await getStudentPracticeOverview(); questions.value = overview.data?.questions || questions.value }
+      else { const overview = await getStudentPracticeOverview({ space: practiceSpace.value }); questions.value = overview.data?.questions || questions.value }
     } catch (error) { if (activeKey.value === key) ElMessage.error('判题结果查询失败，可稍后在提交记录中查看') }
   }, 1000)
 }
@@ -343,6 +362,7 @@ async function goRelative(offset) { const item = currentPlanQuestions.value[curr
 function showHistoryResult(row) { selectedHistory.value = row; consoleTab.value = row.submit_type === 'SUBMIT' ? 'judge' : row.submit_type === 'RUN' ? 'samples' : 'custom' }
 async function toggleFullscreen() { if (!document.fullscreenElement) await workspace.value?.requestFullscreen(); else await document.exitFullscreen() }
 function onFullscreenChange() { fullscreen.value = !!document.fullscreenElement; refreshEditor() }
+watch(practiceSpace, () => { clearTimeout(pollTimer); overviewGeneration++; activeKey.value = ''; current.value = null; questions.value = []; history.value = []; sourceCode.value = ''; questionLoading.value = false; selectionPending = false; loadOverview() })
 onMounted(async () => { document.addEventListener('fullscreenchange', onFullscreenChange); await nextTick(mountEditor); await loadOverview() })
 onUnmounted(() => { document.removeEventListener('fullscreenchange', onFullscreenChange); clearTimeout(pollTimer); editorView?.destroy() })
 </script>

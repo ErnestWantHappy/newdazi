@@ -64,7 +64,13 @@ public class GlobalExceptionHandler
     {
         log.warn("请求地址'{}',业务异常:'{}'", request.getRequestURI(), e.getMessage());
         Integer code = e.getCode();
-        return StringUtils.isNotNull(code) ? AjaxResult.error(code, e.getMessage()) : AjaxResult.error(e.getMessage());
+        AjaxResult result = StringUtils.isNotNull(code) ? AjaxResult.error(code, e.getMessage()) : AjaxResult.error(e.getMessage());
+        // 题库导入等场景需要把逐行错误交给前端表格展示，msg 仍保持原文本兼容旧调用。
+        if (e.getData() != null)
+        {
+            result.put("details", e.getData());
+        }
+        return result;
     }
 
     /**

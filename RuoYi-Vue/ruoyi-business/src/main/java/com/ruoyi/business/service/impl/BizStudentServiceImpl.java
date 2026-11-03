@@ -15,6 +15,8 @@ import com.ruoyi.system.service.ISysUserService;
 import com.ruoyi.common.constant.CacheConstants;
 import com.ruoyi.common.core.redis.RedisCache;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -48,6 +50,8 @@ import org.slf4j.LoggerFactory;
 @Service
 public class BizStudentServiceImpl implements IBizStudentService
 {
+    @Autowired
+    private com.ruoyi.business.mapper.BizExtensionClassMapper extensionClassMapper;
     private static final Long STUDENT_ROLE_ID = 101L;
 
     private static final int IMPORT_BATCH_SIZE = 200;
@@ -74,6 +78,10 @@ public class BizStudentServiceImpl implements IBizStudentService
 
     @Autowired
     private RedisCache redisCache;
+
+    @Autowired(required = false)
+    @Qualifier("threadPoolTaskExecutor")
+    private ThreadPoolTaskExecutor cleanupExecutor;
 
     @Autowired
     private AnswerDeletionGuardService answerDeletionGuardService;
@@ -312,7 +320,10 @@ public class BizStudentServiceImpl implements IBizStudentService
         purgeMapper.deletePythonPracticeProgressByStudents(ids);
         purgeMapper.deleteFlowchartSubmissionsByStudents(ids);
         purgeMapper.deleteFlowchartDraftsByStudents(ids);
+        // 导学单除答卷外还有进度与作品记录，只删答卷会留下无主行。
+        purgeMapper.deleteGuideUploadsByStudents(ids);
         purgeMapper.deleteGuideAnswersByStudents(ids);
+        purgeMapper.deleteGuideProgressByStudents(ids);
         purgeMapper.deleteCountyAnswersByStudents(ids);
         purgeMapper.deleteCountyStudentsByStudents(ids);
         purgeMapper.deleteIotGroupStudents(ids);
@@ -328,6 +339,7 @@ public class BizStudentServiceImpl implements IBizStudentService
         }
         int rows = bizStudentMapper.deleteBizStudentByStudentIds(
                 ids.toArray(new Long[0]));
+        extensionClassMapper.clearInactiveMembers();
         if (rows != ids.size())
         {
             throw new ServiceException("部分学生已发生变化，删除已取消，请刷新后重试");
@@ -344,10 +356,27 @@ public class BizStudentServiceImpl implements IBizStudentService
             @Override
             public void afterCommit()
             {
-                try {
-                    purgeFileService.deleteUnreferenced(pendingFiles);
-                } catch (Exception ex) {
-                    log.warn("学生删除已提交，独占文件清理待重试", ex);
+                // 文件清理失败原本就只记日志、允许后续重试，放到异步线程避免阻塞删除接口响应。
+                Runnable cleanup = () -> {
+                    try {
+                        purgeFileService.deleteUnreferenced(pendingFiles);
+                    } catch (Exception ex) {
+                        log.warn("学生删除已提交，独占文件清理待重试", ex);
+                    }
+                };
+                if (cleanupExecutor == null)
+                {
+                    cleanup.run();
+                    return;
+                }
+                try
+                {
+                    cleanupExecutor.execute(cleanup);
+                }
+                catch (Exception ex)
+                {
+                    // 线程池拒绝时退回同步清理，保持原行为，不让文件静默残留。
+                    cleanup.run();
                 }
             }
         });
@@ -448,6 +477,7 @@ public class BizStudentServiceImpl implements IBizStudentService
                 autoAssignTeacherClass(loginUser.getUserId(), student.getDeptId(), student.getEntryYear(), student.getClassCode());
             }
         }
+        extensionClassMapper.clearInactiveMembers();
         recycleEmptyClasses(affectedClasses);
         evictStudentSessionsAfterCommit(userIds);
         return updated;

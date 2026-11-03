@@ -245,6 +245,11 @@ guide-sheet:
 paper-scan:
   enabled: ${PAPER_SCAN_ENABLED:true}
 
+# 电子教材页面图根目录。生产指向 release 之外的共享目录，避免发版覆盖教材数据；
+# 该目录不挂静态资源，图片必须经由 /business/textbook/page 鉴权后返回。
+textbook:
+  root: ${TEXTBOOK_ROOT:./textbook-data}
+
 # 初中物联网 MQTT 服务端接收器。默认关闭，正式环境由外置环境变量开启。
 iot:
   mqtt:

@@ -1,5 +1,8 @@
 <template>
   <div class="app-container teacher-class-page">
+    <el-tabs v-model="classTab"><el-tab-pane label="任教班级" name="regular" /><el-tab-pane v-if="canExtension" label="拓展班" name="extension" /></el-tabs>
+    <ExtensionClassPanel v-if="classTab === 'extension' && canExtension" />
+    <div v-show="classTab === 'regular'">
     <!-- 顶部产品经理视角看板：任教与班级数据概览 -->
     <div class="class-dashboard-banner">
       <div class="stat-card">
@@ -262,12 +265,15 @@
         </el-card>
       </el-col>
     </el-row>
+    </div>
   </div>
 </template>
 
 <script setup name="TeacherClass">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+import ExtensionClassPanel from '@/components/ExtensionClassPanel'
+const classTab = ref(useRoute().query.tab === 'extension' ? 'extension' : 'regular')
 import useUserStore from '@/store/modules/user'
 import { calculateYearsInSection } from '@/utils/academicYear'
 import {
@@ -287,6 +293,7 @@ import {
 
 const router = useRouter()
 const userStore = useUserStore()
+const canExtension = computed(() => userStore.roles.includes('admin') || userStore.roles.includes('teacher'))
 
 const loading = ref(false)
 const availableLoading = ref(false)

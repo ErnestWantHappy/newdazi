@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
 import com.ruoyi.business.mapper.LessonClassScopeMapper;
+import com.ruoyi.business.util.LessonScopeUtils;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.service.IBizLessonAssignmentService;
@@ -201,6 +202,8 @@ public class BizLessonAssignmentServiceImpl implements IBizLessonAssignmentServi
         {
             throw new ServiceException("课程不存在，不能创建指派");
         }
+        // 拓展课/历史课走各自的课程体系，不能通过通用指派接口挂到常规班。
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能通过课程指派管理");
         if (lesson.getDeptId() == null)
         {
             throw new ServiceException("课程未归属学校，不能创建指派");

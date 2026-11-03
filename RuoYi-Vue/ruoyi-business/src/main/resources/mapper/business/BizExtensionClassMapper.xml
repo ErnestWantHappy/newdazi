@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizExtensionClassMapper">
+ <select id="classes" resultType="map">
+  SELECT e.*,(SELECT COUNT(*) FROM biz_extension_class_member m JOIN biz_student s ON s.student_id=m.student_id JOIN sys_user u ON u.user_id=s.user_id AND u.status='0' AND u.del_flag='0' WHERE m.extension_class_id=e.extension_class_id) member_count
+  FROM biz_extension_class e WHERE e.dept_id=#{deptId}
+  <if test="ownerId != null">AND e.owner_user_id=#{ownerId}</if>
+  ORDER BY e.status,e.extension_class_id DESC
+ </select>
+ <select id="find" resultType="map">SELECT * FROM biz_extension_class WHERE extension_class_id=#{id}</select>
+ <select id="lock" resultType="map">SELECT * FROM biz_extension_class WHERE extension_class_id=#{id} FOR UPDATE</select>
+ <select id="lockSchool" resultType="long">SELECT dept_id FROM sys_dept WHERE dept_id=#{deptId} FOR UPDATE</select>
+ <select id="occupied" resultType="int">
+  SELECT (SELECT COUNT(*) FROM biz_extension_class WHERE dept_id=#{deptId} AND entry_year=#{year} AND class_code=#{code})+
+   (SELECT COUNT(*) FROM biz_student s JOIN sys_user u ON u.user_id=s.user_id WHERE u.dept_id=#{deptId} AND s.entry_year=#{year} AND s.class_code=#{code})+
+   (SELECT COUNT(*) FROM biz_lesson_assignment WHERE dept_id=#{deptId} AND entry_year=#{year} AND class_code=#{code})+
+   (SELECT COUNT(*) FROM biz_teacher_class WHERE dept_id=#{deptId} AND entry_year=#{year} AND class_code=#{code})
+ </select>
+ <!-- 负责人候选只列“纯教师”，避免把教研员身份的用户派成负责人；双角色教师本人建班由 ExtensionClassService.create 单独放行，管理权限只看 teacher 角色。 -->
+ <select id="teacher" resultType="int">SELECT COUNT(*) FROM sys_user u WHERE u.user_id=#{userId} AND u.dept_id=#{deptId} AND u.status='0' AND u.del_flag='0' AND EXISTS(SELECT 1 FROM sys_user_role ur JOIN sys_role r ON r.role_id=ur.role_id WHERE ur.user_id=u.user_id AND r.role_key='teacher') AND NOT EXISTS(SELECT 1 FROM sys_user_role ur2 JOIN sys_role r2 ON r2.role_id=ur2.role_id WHERE ur2.user_id=u.user_id AND r2.role_key='researcher')</select>
+ <select id="teachers" resultType="map">SELECT u.user_id,u.nick_name FROM sys_user u WHERE u.dept_id=#{deptId} AND u.status='0' AND u.del_flag='0' AND EXISTS(SELECT 1 FROM sys_user_role ur JOIN sys_role r ON r.role_id=ur.role_id WHERE ur.user_id=u.user_id AND r.role_key='teacher') AND NOT EXISTS(SELECT 1 FROM sys_user_role ur2 JOIN sys_role r2 ON r2.role_id=ur2.role_id WHERE ur2.user_id=u.user_id AND r2.role_key='researcher')</select>
+ <insert id="insert" useGeneratedKeys="true" keyProperty="extensionClassId">INSERT INTO biz_extension_class(dept_id,entry_year,class_code,class_name,owner_user_id,status,legacy_flag,remark,create_by,create_time) VALUES(#{deptId},#{entryYear},#{classCode},#{className},#{ownerUserId},'ACTIVE',0,#{remark},#{createBy},NOW())</insert>
+ <update id="rename">UPDATE biz_extension_class SET class_name=#{className},remark=#{remark},update_time=NOW() WHERE extension_class_id=#{extensionClassId}</update>
+ <update id="archive">UPDATE biz_extension_class SET status='ARCHIVED',update_time=NOW() WHERE extension_class_id=#{id}</update>
+ <delete id="clearMembers">DELETE FROM biz_extension_class_member WHERE extension_class_id=#{id}</delete>
+ <sql id="studentColumns">s.student_id,s.student_no,s.entry_year,s.class_code,u.user_id,u.nick_name student_name,u.dept_id</sql>
+ <select id="members" resultType="map">SELECT <include refid="studentColumns"/>,m.join_time FROM biz_extension_class_member m JOIN biz_student s ON s.student_id=m.student_id JOIN sys_user u ON u.user_id=s.user_id WHERE m.extension_class_id=#{id} AND u.status='0' AND u.del_flag='0' ORDER BY s.entry_year,s.class_code,s.student_no</select>
+ <!-- 学校类型随行返回，服务层不再逐行查 sys_dept；多取一行用于判断结果是否被截断。 -->
+ <select id="candidates" resultType="map">
+  SELECT <include refid="studentColumns"/>,d.school_type,e.extension_class_id,e.class_name extension_class_name
+  FROM biz_student s JOIN sys_user u ON u.user_id=s.user_id
+  JOIN sys_dept d ON d.dept_id=u.dept_id
+  LEFT JOIN biz_extension_class_member m ON m.student_id=s.student_id
+  LEFT JOIN biz_extension_class e ON e.extension_class_id=m.extension_class_id
+  WHERE u.dept_id=#{deptId} AND u.status='0' AND u.del_flag='0'
+  AND NOT EXISTS(SELECT 1 FROM biz_extension_class x WHERE x.dept_id=u.dept_id AND x.entry_year=s.entry_year AND x.class_code=s.class_code)
+  <if test="keyword != null and keyword != ''">AND (u.nick_name LIKE CONCAT('%',#{keyword},'%') OR s.student_no LIKE CONCAT('%',#{keyword},'%') OR CONCAT(s.entry_year,'级',s.class_code,'班') LIKE CONCAT('%',#{keyword},'%'))</if>
+  ORDER BY s.entry_year DESC,s.class_code,s.student_no LIMIT 201
+ </select>
+ <select id="lockStudent" resultType="map">SELECT <include refid="studentColumns"/>,u.status,u.del_flag FROM biz_student s JOIN sys_user u ON u.user_id=s.user_id WHERE s.student_id=#{studentId} FOR UPDATE</select>
+ <select id="membership" resultType="map">SELECT e.* FROM biz_extension_class_member m JOIN biz_extension_class e ON e.extension_class_id=m.extension_class_id AND e.status='ACTIVE' JOIN biz_student s ON s.student_id=m.student_id JOIN sys_user u ON u.user_id=s.user_id AND u.status='0' AND u.del_flag='0' WHERE m.student_id=#{studentId}</select>
+ <select id="lockMembership" resultType="map">SELECT e.* FROM biz_extension_class_member m JOIN biz_extension_class e ON e.extension_class_id=m.extension_class_id AND e.status='ACTIVE' JOIN biz_student s ON s.student_id=m.student_id JOIN sys_user u ON u.user_id=s.user_id AND u.status='0' AND u.del_flag='0' WHERE m.student_id=#{studentId} FOR UPDATE</select>
+ <select id="carrier" resultType="map">SELECT * FROM biz_extension_class WHERE dept_id=#{deptId} AND entry_year=#{year} AND class_code=#{code}</select>
+ <insert id="addMember">INSERT INTO biz_extension_class_member(extension_class_id,student_id,dept_id,join_time,create_by,create_time) VALUES(#{id},#{studentId},#{deptId},NOW(),#{createBy},NOW())</insert>
+ <delete id="removeMember">DELETE FROM biz_extension_class_member WHERE extension_class_id=#{id} AND student_id=#{studentId}</delete>
+ <delete id="clearInactiveMembers">DELETE m FROM biz_extension_class_member m LEFT JOIN biz_student s ON s.student_id=m.student_id LEFT JOIN sys_user u ON u.user_id=s.user_id WHERE s.student_id IS NULL OR u.user_id IS NULL OR u.status!='0' OR u.del_flag!='0'</delete>
+ <select id="preference" resultType="map">SELECT space_pref,space_selected FROM biz_student WHERE student_id=#{studentId}</select>
+ <update id="saveSpace">UPDATE biz_student SET space_pref=#{space},space_selected=1 WHERE student_id=#{studentId}</update>
+ <update id="resetSpace">UPDATE biz_student SET space_pref='regular',space_selected=0 WHERE student_id=#{studentId}</update>
+ <insert id="insertLesson" useGeneratedKeys="true" keyProperty="lessonId">INSERT INTO biz_lesson(lesson_title,entry_year,grade,semester,lesson_num,lesson_mode,lesson_scope,extension_class_id,lesson_date,creator_id,dept_id,teacher_note,create_by,create_time) VALUES(#{lessonTitle},#{entryYear},0,'0',0,'attendance','extension',#{id},#{lessonDate},#{ownerId},#{deptId},#{remark},#{createBy},NOW())</insert>
+ <insert id="snapshot">INSERT INTO biz_extension_lesson_member(lesson_id,student_id,dept_id,create_time) SELECT #{lessonId},m.student_id,m.dept_id,NOW() FROM biz_extension_class_member m JOIN biz_student s ON s.student_id=m.student_id JOIN sys_user u ON u.user_id=s.user_id AND u.status='0' AND u.del_flag='0' WHERE m.extension_class_id=#{id}</insert>
+ <insert id="assign">INSERT INTO biz_lesson_assignment(lesson_id,entry_year,class_code,assigner_id,dept_id,assign_time) VALUES(#{lessonId},#{entryYear},#{classCode},#{ownerId},#{deptId},NOW()) ON DUPLICATE KEY UPDATE lesson_id=VALUES(lesson_id),assigner_id=VALUES(assigner_id),assign_time=NOW(),auto_advance_ready_time=NULL</insert>
+ <!-- 读路径（教师看板、学生首页 15 秒轮询）不加锁；只有签到事务需要 currentLessonForUpdate 持有行锁。 -->
+ <select id="currentLesson" resultType="map">SELECT l.*,l.teacher_note remark FROM biz_extension_class e JOIN biz_lesson_assignment a ON a.dept_id=e.dept_id AND a.entry_year=e.entry_year AND a.class_code=e.class_code JOIN biz_lesson l ON l.lesson_id=a.lesson_id AND l.extension_class_id=e.extension_class_id AND l.lesson_scope='extension' WHERE e.extension_class_id=#{id} AND e.status='ACTIVE'</select>
+ <select id="currentLessonForUpdate" resultType="map">SELECT l.*,l.teacher_note remark FROM biz_extension_class e JOIN biz_lesson_assignment a ON a.dept_id=e.dept_id AND a.entry_year=e.entry_year AND a.class_code=e.class_code JOIN biz_lesson l ON l.lesson_id=a.lesson_id AND l.extension_class_id=e.extension_class_id AND l.lesson_scope='extension' WHERE e.extension_class_id=#{id} AND e.status='ACTIVE' FOR UPDATE</select>
+ <select id="lesson" resultType="map">SELECT lesson_id,lesson_scope,extension_class_id FROM biz_lesson WHERE lesson_id=#{lessonId}</select>
+ <select id="inSnapshot" resultType="int">SELECT COUNT(*) FROM biz_extension_lesson_member WHERE lesson_id=#{lessonId} AND student_id=#{studentId}</select>
+ <!-- 历史课与拓展课都只认建课时的冻结名单；旧 50 班须先用 sql/extension_legacy_snapshot_v1.sql 回填，班级调动不再改变历史考勤。 -->
+ <select id="roster" resultType="map">SELECT sm.student_id,s.student_no,u.nick_name student_name,c.checkin_time FROM biz_extension_lesson_member sm LEFT JOIN biz_student s ON s.student_id=sm.student_id LEFT JOIN sys_user u ON u.user_id=s.user_id LEFT JOIN biz_lesson_checkin c ON c.lesson_id=sm.lesson_id AND c.student_id=sm.student_id WHERE sm.lesson_id=#{lessonId} ORDER BY s.student_no,sm.student_id</select>
+ <select id="history" resultType="map">SELECT l.lesson_title,c.checkin_time FROM biz_lesson_checkin c JOIN biz_lesson l ON l.lesson_id=c.lesson_id WHERE c.student_id=#{studentId} AND l.extension_class_id=#{id} ORDER BY c.checkin_time DESC LIMIT 20</select>
+ <select id="lessons" resultType="map">SELECT lesson_id,lesson_title,lesson_date,lesson_scope FROM biz_lesson WHERE extension_class_id=#{id} ORDER BY lesson_id DESC</select>
+ <select id="plans" resultType="map">SELECT plan_id,plan_name,plan_scope FROM biz_python_practice_plan WHERE extension_class_id=#{id} ORDER BY plan_id DESC</select>
+ <update id="setPlanScope">UPDATE biz_python_practice_plan SET plan_scope=#{scope},extension_class_id=#{id} WHERE plan_id=#{planId}</update>
+ <insert id="snapshotPlan">INSERT IGNORE INTO biz_extension_plan_member(plan_version_id,student_id,dept_id,create_time) SELECT #{versionId},m.student_id,m.dept_id,NOW() FROM biz_extension_class_member m JOIN biz_student s ON s.student_id=m.student_id JOIN sys_user u ON u.user_id=s.user_id AND u.status='0' AND u.del_flag='0' WHERE m.extension_class_id=#{id}</insert>
+ <delete id="deletePlanMembers">DELETE m FROM biz_extension_plan_member m JOIN biz_python_practice_plan_version v ON v.plan_version_id=m.plan_version_id WHERE v.plan_id=#{planId}</delete>
+ <insert id="joinPublishedPlans">INSERT IGNORE INTO biz_extension_plan_member(plan_version_id,student_id,dept_id,create_time) SELECT v.plan_version_id,#{studentId},p.dept_id,NOW() FROM biz_python_practice_plan p JOIN biz_python_practice_plan_version v ON v.plan_id=p.plan_id AND v.status='PUBLISHED' AND v.version_no=p.current_version_no WHERE p.extension_class_id=#{id} AND p.plan_scope='extension' AND p.status='ACTIVE'</insert>
+</mapper>

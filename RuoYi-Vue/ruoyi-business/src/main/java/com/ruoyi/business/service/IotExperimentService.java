@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.config.IotMqttProperties;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.util.LessonScopeUtils;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.IotClassConfig;
 import com.ruoyi.business.domain.IotDevice;
@@ -76,6 +77,7 @@ public class IotExperimentService
         {
             throw new ServiceException("课程不存在或不属于当前学校");
         }
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能使用物联网实验");
         IotExperiment result = new IotExperiment();
         result.setLessonId(lesson.getLessonId());
         result.setDeptId(lesson.getDeptId());

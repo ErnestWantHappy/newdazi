@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.business.mapper.BizTextbookMapper">
+
+    <resultMap type="BizTextbookBook" id="BizTextbookBookResult">
+        <id     property="bookId"       column="book_id"       />
+        <result property="bookCode"     column="book_code"     />
+        <result property="title"        column="title"         />
+        <result property="shortTitle"   column="short_title"   />
+        <result property="grade"        column="grade"         />
+        <result property="semester"     column="semester"      />
+        <result property="publisher"    column="publisher"     />
+        <result property="edition"      column="edition"       />
+        <result property="totalPages"   column="total_pages"   />
+        <result property="pageOffset"   column="page_offset"   />
+        <result property="status"       column="status"        />
+        <result property="sortNo"       column="sort_no"       />
+        <result property="sourceFile"   column="source_file"   />
+        <result property="sourceSha256" column="source_sha256" />
+        <result property="importedAt"   column="imported_at"   />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateTime"   column="update_time"   />
+        <result property="unitCount"    column="unit_count"    />
+        <result property="lessonCount"  column="lesson_count"  />
+    </resultMap>
+
+    <resultMap type="BizTextbookUnit" id="BizTextbookUnitResult">
+        <id     property="unitId"     column="unit_id"     />
+        <result property="bookId"     column="book_id"     />
+        <result property="unitNo"     column="unit_no"     />
+        <result property="title"      column="title"       />
+        <result property="sortNo"     column="sort_no"     />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <resultMap type="BizTextbookSection" id="BizTextbookSectionResult">
+        <id     property="sectionId"    column="section_id"    />
+        <result property="bookId"       column="book_id"       />
+        <result property="unitId"       column="unit_id"       />
+        <result property="sectionKey"   column="section_key"   />
+        <result property="kind"         column="kind"          />
+        <result property="lessonNo"     column="lesson_no"     />
+        <result property="title"        column="title"         />
+        <result property="printedStart" column="printed_start" />
+        <result property="printedEnd"   column="printed_end"   />
+        <result property="pdfStart"     column="pdf_start"     />
+        <result property="pdfEnd"       column="pdf_end"       />
+        <result property="sortNo"       column="sort_no"       />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateTime"   column="update_time"   />
+    </resultMap>
+
+    <resultMap type="BizTextbookPage" id="BizTextbookPageResult">
+        <id     property="pageId"     column="page_id"     />
+        <result property="bookId"     column="book_id"     />
+        <result property="pageNo"     column="page_no"     />
+        <result property="printedNo"  column="printed_no"  />
+        <result property="imagePath"  column="image_path"  />
+        <result property="width"      column="width"       />
+        <result property="height"     column="height"      />
+        <result property="bytes"      column="bytes"       />
+        <result property="sha256"     column="sha256"      />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <sql id="bookColumns">
+        b.book_id, b.book_code, b.title, b.short_title, b.grade, b.semester, b.publisher, b.edition,
+        b.total_pages, b.page_offset, b.status, b.sort_no, b.source_file, b.source_sha256,
+        b.imported_at, b.create_time, b.update_time
+    </sql>
+
+    <select id="selectBookList" resultMap="BizTextbookBookResult">
+        SELECT <include refid="bookColumns"/>,
+               (SELECT COUNT(1) FROM biz_textbook_unit u WHERE u.book_id = b.book_id) AS unit_count,
+               (SELECT COUNT(1) FROM biz_textbook_section s
+                 WHERE s.book_id = b.book_id AND s.kind = 'LESSON') AS lesson_count
+        FROM biz_textbook_book b
+        WHERE b.status = '0'
+        ORDER BY b.sort_no, b.grade, b.semester
+    </select>
+
+    <select id="selectBookById" resultMap="BizTextbookBookResult">
+        SELECT <include refid="bookColumns"/>,
+               (SELECT COUNT(1) FROM biz_textbook_unit u WHERE u.book_id = b.book_id) AS unit_count,
+               (SELECT COUNT(1) FROM biz_textbook_section s
+                 WHERE s.book_id = b.book_id AND s.kind = 'LESSON') AS lesson_count
+        FROM biz_textbook_book b
+        WHERE b.book_id = #{bookId} AND b.status = '0'
+    </select>
+
+    <select id="selectUnitsByBookId" resultMap="BizTextbookUnitResult">
+        SELECT unit_id, book_id, unit_no, title, sort_no, create_time, update_time
+        FROM biz_textbook_unit
+        WHERE book_id = #{bookId}
+        ORDER BY sort_no, unit_no
+    </select>
+
+    <select id="selectSectionsByBookId" resultMap="BizTextbookSectionResult">
+        SELECT section_id, book_id, unit_id, section_key, kind, lesson_no, title,
+               printed_start, printed_end, pdf_start, pdf_end, sort_no, create_time, update_time
+        FROM biz_textbook_section
+        WHERE book_id = #{bookId}
+        ORDER BY sort_no, pdf_start, section_id
+    </select>
+
+    <select id="selectPagesByBookId" resultMap="BizTextbookPageResult">
+        SELECT page_id, book_id, page_no, printed_no, image_path, width, height, bytes, sha256, create_time
+        FROM biz_textbook_page
+        WHERE book_id = #{bookId}
+        <if test="from != null">
+            AND page_no &gt;= #{from}
+        </if>
+        <if test="to != null">
+            AND page_no &lt;= #{to}
+        </if>
+        ORDER BY page_no
+    </select>
+
+    <select id="selectPage" resultMap="BizTextbookPageResult">
+        SELECT page_id, book_id, page_no, printed_no, image_path, width, height, bytes, sha256, create_time
+        FROM biz_textbook_page
+        WHERE book_id = #{bookId} AND page_no = #{pageNo}
+    </select>
+
+</mapper>

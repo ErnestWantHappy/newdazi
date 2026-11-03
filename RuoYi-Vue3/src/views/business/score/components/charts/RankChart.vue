@@ -28,6 +28,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue';
 import * as echarts from 'echarts';
+import { buildRankData } from './rankData';
 import { FullScreen, Back } from '@element-plus/icons-vue';
 
 const props = defineProps({
@@ -89,23 +90,23 @@ function renderChart() {
   if (!chartInstance) initChart();
   if (!chartInstance) return;
 
-  const getCourseTotal = (student) => Math.round(student.finalTotal ?? student.filteredTotal ?? 0);
-  const sorted = [...props.data].sort((a, b) => getCourseTotal(b) - getCourseTotal(a));
+  const sorted = buildRankData(props.data);
+  const getCourseTotal = (student) => student.chartScore == null ? null : Math.round(student.chartScore);
   const names = sorted.map(s => s.studentName);
   
-  const detailMap = {};
-  sorted.forEach((s) => {
-      detailMap[s.studentName] = {
+  const details = sorted.map((s) => ({
           total: getCourseTotal(s),
           theory: Math.round(s.avgTheory || 0),
-          practical: Math.round(s.avgPractical || 0),
+          practical: s.avgPractical == null ? '待批改' : Math.round(s.avgPractical),
           typing: Math.round(s.avgTyping || 0),
           studentNo: s.studentNo,
-          remark: s.remark
-      };
-  });
+          remark: s.remark,
+          status: s.scoreStatus,
+          name: s.studentName
+  }));
   
-  const scores = sorted.map(s => getCourseTotal(s));
+  const scores = sorted.map(s => getCourseTotal(s) ?? 0);
+  const escape = value => echarts.format.encodeHTML(String(value ?? ''));
   
   const option = {
     tooltip: { 
@@ -116,14 +117,15 @@ function renderChart() {
         formatter: function(params) {
             const name = params[0].name;
             const score = params[0].value;
-            const detail = detailMap[name] || {};
+            const detail = details[params[0].dataIndex] || {};
             
-            let html = `<div style="font-weight:bold; margin-bottom:5px;">${name} (${detail.studentNo}号)</div>`;
+            let html = `<div style="font-weight:bold; margin-bottom:5px;">${escape(name)} (${escape(detail.studentNo)}号)</div>`;
             if (detail.remark) {
-               html += `<div style="color: #F56C6C; margin-bottom:5px;"><b>状态/备注：${detail.remark}</b></div>`;
+               html += `<div style="color: #F56C6C; margin-bottom:5px;"><b>状态/备注：${escape(detail.remark)}</b></div>`;
             }
             html += `
-                <div>总分：<b>${score}</b></div>
+                <div>总分：<b>${detail.total == null ? escape(detail.status || '未提交') : score}</b></div>
+                <div>${escape(detail.status || '')}</div>
                 <hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;">
                 <div>⌨️ 打字：${detail.typing}</div>
                 <div>📝 理论：${detail.theory}</div>
@@ -136,11 +138,12 @@ function renderChart() {
       type: 'category',
       data: names,
       axisLabel: { 
+          interval: 0,
           rotate: 45, 
           fontSize: isFullscreen.value ? 14 : 11,
           fontFamily: '"Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif',
-          color: (value) => {
-              const detail = detailMap[value] || {};
+          color: (value, index) => {
+              const detail = details[index] || {};
               // 备注学生改为橙色，避免红色过于刺眼或误导
               return detail.remark ? '#E6A23C' : '#1a1a1a';
           }
@@ -159,7 +162,7 @@ function renderChart() {
         type: 'slider',
         show: names.length > 25,
         start: 0,
-        end: names.length > 25 ? Math.min(100, 25 / names.length * 100) : 100,
+        end: 100,
         height: 20,
         bottom: isFullscreen.value ? 30 : 5
       }
@@ -169,9 +172,9 @@ function renderChart() {
       data: scores,
       itemStyle: {
         color: (params) => {
-          const detail = detailMap[params.name] || {};
+          const detail = details[params.dataIndex] || {};
           // 如果分数为 0 且存在备注，变灰
-          if (params.value === 0 && detail.remark) {
+          if (detail.total == null || (params.value === 0 && detail.remark)) {
               return '#C0C4CC';
           }
           const colors = ['#F56C6C', '#E6A23C', '#67C23A'];
@@ -180,6 +183,8 @@ function renderChart() {
         }
       },
       label: { 
+        formatter: params => details[params.dataIndex]?.total == null
+          ? (details[params.dataIndex]?.status || '未提交').split('').join('\n') : params.value,
         show: true, 
         position: 'top', 
         fontSize: isFullscreen.value ? 12 : 11,

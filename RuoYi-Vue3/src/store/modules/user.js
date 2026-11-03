@@ -1,6 +1,7 @@
 import router from '@/router'
 import { clearSeatHelperToken } from '@/utils/seatHelper'
 import usePermissionStore from '@/store/modules/permission'
+import useStudentSpace from '@/store/modules/studentSpace'
 import { ElMessageBox, } from 'element-plus'
 import { login, logout, getInfo, selectSchool as selectSchoolApi } from '@/api/login'
 import { getToken, setToken, removeToken, needsSchoolSelection, setSchoolSelectionPending } from '@/utils/auth'
@@ -105,6 +106,7 @@ const useUserStore = defineStore(
             this.currentDeptId = null
             this.needsSchoolSelection = false
             this.needChangePwd = false
+            useStudentSpace().reset()
             usePermissionStore().routesReady = false
             removeToken()
             resolve()

@@ -14,16 +14,17 @@
         <el-table-column prop="question_count" label="题数" width="72" align="center" />
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <el-tag v-if="row.version_status === 'DRAFT' && row.published_version_id" type="warning">有待发布修改</el-tag>
+            <el-tag v-if="row.plan_scope === 'legacy'" type="info">历史只读</el-tag>
+            <el-tag v-else-if="row.version_status === 'DRAFT' && row.published_version_id" type="warning">有待发布修改</el-tag>
             <el-tag v-else-if="row.version_status === 'PUBLISHED'" type="success">已发布</el-tag>
             <el-tag v-else type="info">草稿</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canManage" link type="primary" @click="openDesigner(row)">设计题单</el-button>
+            <el-button v-if="canManage && row.plan_scope !== 'legacy'" link type="primary" @click="openDesigner(row)">设计题单</el-button>
             <el-button v-if="canViewAnalytics && row.published_version_id" link type="primary" @click="openAnalytics(row)">查看学情</el-button>
-            <el-button v-if="canManage" link type="danger" @click="removePlan(row)">删除</el-button>
+            <el-button v-if="canManage && row.plan_scope !== 'legacy'" link type="danger" @click="removePlan(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -34,9 +35,9 @@
         <el-form-item label="题单名称"><el-input v-model="createForm.planName" maxlength="128" show-word-limit placeholder="例如：循环结构第 1 次练习" /></el-form-item>
         <el-form-item label="目标班级">
           <el-select v-model="createForm.classKeys" multiple filterable collapse-tags collapse-tags-tooltip placeholder="至少选择一个班级" style="width:100%">
-            <el-option v-for="item in managedClasses" :key="classKey(item)" :value="classKey(item)" :label="classLabel(item)" />
+            <el-option v-for="item in managedClasses" :key="classKey(item)" :value="classKey(item)" :label="classLabel(item)" :disabled="!canSelectClass(item,createForm.classKeys)" />
           </el-select>
-          <div class="field-tip"><el-button link type="primary" @click="selectAllClasses(createForm)">选择全部管理班级</el-button>“全年级”就是把该届班级全部选中。</div>
+          <div class="field-tip"><el-button link type="primary" @click="selectAllClasses(createForm)">选择全部管理班级</el-button>常规班与拓展班请分开建题单；拓展班只支持 Python 题。</div>
         </el-form-item>
       </el-form>
       <template #footer><el-button @click="createVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="createPlan">创建并选题</el-button></template>
@@ -51,7 +52,7 @@
         <section class="settings-bar">
           <el-input v-model="editForm.planName" maxlength="128" placeholder="题单名称" />
           <el-select v-model="editForm.classKeys" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择目标班级">
-            <el-option v-for="item in managedClasses" :key="classKey(item)" :value="classKey(item)" :label="classLabel(item)" />
+            <el-option v-for="item in managedClasses" :key="classKey(item)" :value="classKey(item)" :label="classLabel(item)" :disabled="!canSelectClass(item,editForm.classKeys)" />
           </el-select>
           <el-button @click="selectAllClasses(editForm)">全选管理班级</el-button>
           <span class="draft-tip">已发布题单的修改先保存为草稿，重新发布后学生才看到变化。</span>
@@ -190,6 +191,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listQuestion } from '@/api/business/question'
 import { previewProgrammingQuestion } from '@/api/business/programming'
+import { useRoute } from 'vue-router'
+const extensionRoute = useRoute()
 import { addTeacherQuestions, createTeacherPlan, deleteTeacherPlan, getTeacherAnalytics, getTeacherManagedClasses, getTeacherPlan, getTeacherPlans, publishTeacherPlan, recommendTeacherQuestions, removeTeacherQuestion, reorderTeacherQuestions, updateTeacherPlan } from '@/api/business/pythonPractice'
 import { getDataLabConfig, getDataLabSubmissions, scoreDataLabSubmission } from '@/api/business/dataLab'
 import useUserStore from '@/store/modules/user'
@@ -207,14 +210,21 @@ const selectedQuestions=computed(()=>currentPlan.value?.questions||[]), selected
 // 批改抽屉状态
 const gradingVisible=ref(false),gradingLoading=ref(false),gradingQuestion=ref(null),submissionsList=ref([]),selectedSub=ref(null),subDetailTab=ref('chart'),gradingScore=ref(100),gradingComment=ref(''),savingScore=ref(false)
 
-async function loadPlans(){loading.value=true;try{plans.value=(await getTeacherPlans()).data||[]}finally{loading.value=false}}
+async function loadPlans(){loading.value=true;try{plans.value=((await getTeacherPlans()).data||[]).filter(p=>!extensionRoute.query.extensionClassId || String(p.extension_class_id)===String(extensionRoute.query.extensionClassId))}finally{loading.value=false}}
+function canSelectClass(item,keys){
+  if(keys.includes(classKey(item)))return true
+  const selected=managedClasses.value.filter(c=>keys.includes(classKey(c)))
+  if(!selected.length)return true
+  if(item.extension_class_id)return false
+  return selected.every(c=>!c.extension_class_id)
+}
 function classKey(item){return `${item.entry_year??item.entryYear}::${item.class_code??item.classCode}`}
 function classObject(key){const [entryYear,classCode]=String(key).split('::');return{entryYear,classCode}}
 function classLabel(item){return `${item.class_label??item.classLabel??`${item.entry_year??item.entryYear}级${item.class_code??item.classCode}班`}${item.student_count!=null?`（${item.student_count}人）`:''}`}
 function selectedClassObjects(keys){return(keys||[]).map(classObject)}
-function selectAllClasses(target){target.classKeys=managedClasses.value.map(classKey)}
+function selectAllClasses(target){target.classKeys=managedClasses.value.filter(c=>!c.extension_class_id).map(classKey)}
 function difficultyLabel(v){return v==='SIMPLE'?'简单':v==='HARD'?'困难':'中等'}
-function openCreate(){Object.assign(createForm,{planName:'',classKeys:[]});createVisible.value=true}
+function openCreate(){Object.assign(createForm,{planName:'',classKeys:managedClasses.value.filter(c=>String(c.extension_class_id)===String(extensionRoute.query.extensionClassId)).map(classKey)});createVisible.value=true}
 async function createPlan(){if(!createForm.planName.trim()||!createForm.classKeys.length)return ElMessage.warning('请填写题单名称并选择班级');saving.value=true;try{const res=await createTeacherPlan({planName:createForm.planName.trim(),classes:selectedClassObjects(createForm.classKeys)});createVisible.value=false;await loadPlans();await openDesigner({plan_id:res.data.planId});ElMessage.success('题单已创建，请从右侧选择题目')}finally{saving.value=false}}
 async function openDesigner(row){currentPlan.value=(await getTeacherPlan(row.plan_id)).data||{};Object.assign(editForm,{planName:currentPlan.value.plan_name,classKeys:(currentPlan.value.classes||[]).map(classKey)});designerVisible.value=true;await loadQuestionOptions()}
 async function refreshPlan(){if(!currentPlan.value)return;currentPlan.value=(await getTeacherPlan(currentPlan.value.plan_id)).data||{};Object.assign(editForm,{planName:currentPlan.value.plan_name,classKeys:(currentPlan.value.classes||[]).map(classKey)})}
@@ -318,6 +328,11 @@ onMounted(async()=>{
         ElMessage.warning('班级列表暂时无法加载，题单和学情仍可继续查看')
       })
   ])
+  if(extensionRoute.query.legacyPlanId){
+    const plan=plans.value.find(p=>String(p.plan_id)===String(extensionRoute.query.legacyPlanId))
+    if(plan?.published_version_id)await openAnalytics(plan)
+    else ElMessage.info('该历史题单尚无发布版本')
+  }
 })
 </script>
 

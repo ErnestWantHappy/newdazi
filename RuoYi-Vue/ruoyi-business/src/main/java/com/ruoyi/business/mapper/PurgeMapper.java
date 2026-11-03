@@ -63,6 +63,12 @@ public interface PurgeMapper
 
     int deleteGuideBindingsByLessons(@Param("lessonIds") List<Long> lessonIds);
 
+    /** 删课前清理导学单进度行，避免遗留无绑定归属的孤儿数据 */
+    int deleteGuideProgressByLessons(@Param("lessonIds") List<Long> lessonIds);
+
+    /** 删课前清理导学单作品记录行（磁盘文件仍由运维按目录清理） */
+    int deleteGuideUploadsByLessons(@Param("lessonIds") List<Long> lessonIds);
+
     int deleteLessonToolsByLessons(@Param("lessonIds") List<Long> lessonIds);
 
     int deleteCollabTicketsByRooms(@Param("roomIds") List<Long> roomIds);
@@ -132,6 +138,12 @@ public interface PurgeMapper
     int deleteFlowchartDraftsByStudents(@Param("studentIds") List<Long> studentIds);
 
     int deleteGuideAnswersByStudents(@Param("studentIds") List<Long> studentIds);
+
+    /** 删学生时清理导学单进度行，避免遗留无学生归属的孤儿数据 */
+    int deleteGuideProgressByStudents(@Param("studentIds") List<Long> studentIds);
+
+    /** 删学生时清理导学单作品记录行（磁盘文件由运维按目录清理） */
+    int deleteGuideUploadsByStudents(@Param("studentIds") List<Long> studentIds);
 
     int deleteCountyAnswersByStudents(@Param("studentIds") List<Long> studentIds);
 

@@ -23,6 +23,10 @@ public class LoginPreviewService
     private static final Logger log = LoggerFactory.getLogger(LoginPreviewService.class);
     private static final long CACHE_TTL = 60_000L;
     private static final long REFRESH_AHEAD = 30_000L;
+    // 开课看板要扫 90 天答题/签到/表现数据，单次约 2.5 秒；课堂动态按小时变化即可，
+    // 因此单独延长到 1 小时，避免后台每 40 秒重复聚合。教研活动与焦点图查询很轻，仍保持 60 秒。
+    private static final long LESSONS_CACHE_TTL = 3_600_000L;
+    private static final long LESSONS_REFRESH_AHEAD = 300_000L;
     private final Clock clock;
     private final Object activitiesLock = new Object();
     private final Object lessonsLock = new Object();
@@ -234,7 +238,7 @@ public class LoginPreviewService
             row.put("className", className(source));
             result.add(row);
         }
-        return new PreviewCache(result, clock.millis() + CACHE_TTL);
+        return new PreviewCache(result, clock.millis() + LESSONS_CACHE_TTL);
     }
 
     // 使用现有调度器预热并提前刷新；请求直接读有效快照，不等后台查询释放锁。
@@ -253,7 +257,7 @@ public class LoginPreviewService
         {
             synchronized (lessonsLock)
             {
-                if (refreshDue(lessonsCache)) lessonsCache = loadLessons();
+                if (refreshDue(lessonsCache, LESSONS_REFRESH_AHEAD)) lessonsCache = loadLessons();
             }
         }
         catch (RuntimeException ex) { log.warn("开课概览预刷新失败，保留仍有效的缓存"); }
@@ -275,7 +279,12 @@ public class LoginPreviewService
 
     private boolean refreshDue(PreviewCache cached)
     {
-        return cached == null || cached.expiresAt - clock.millis() <= REFRESH_AHEAD;
+        return refreshDue(cached, REFRESH_AHEAD);
+    }
+
+    private boolean refreshDue(PreviewCache cached, long refreshAhead)
+    {
+        return cached == null || cached.expiresAt - clock.millis() <= refreshAhead;
     }
 
     private static final class PreviewCache

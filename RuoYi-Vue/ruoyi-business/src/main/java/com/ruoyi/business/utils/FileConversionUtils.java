@@ -405,9 +405,10 @@ public class FileConversionUtils {
             return null;
         }
 
-        try (DocxConnectorNormalizer.PreparedInput prepared = DocxConnectorNormalizer.prepare(officeFile)) {
+        try (DocxConnectorNormalizer.PreparedInput prepared = DocxConnectorNormalizer.prepare(officeFile);
+             PptxPreviewNormalizer.PreparedInput ppt = PptxPreviewNormalizer.prepare(prepared.getFile())) {
             // 隔离判定继续使用原路径，临时副本不能改变毒文件身份与重试规则。
-            return convertPreparedOffice(prepared.getFile(), officeFilePath, outputDir);
+            return convertPreparedOffice(ppt.getFile(), officeFilePath, outputDir);
         }
     }
 

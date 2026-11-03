@@ -31,9 +31,9 @@ public class GuideSheetStudentViewService
     private static final Set<String> SAFE_WIDGET_TYPES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "grid", "grid-col", "table", "table-cell", "tab", "tab-pane", "card",
             "input", "textarea", "number", "radio", "checkbox", "select", "time", "time-range",
-            "date", "date-range", "switch", "rate", "color", "slider", "cascader", "tree-select",
-            "static-text", "html-text", "divider", "picture", "image", "picture-upload", "file-upload",
-            "rich-editor", "signature", "image-add")));
+            "date", "date-range", "switch", "rate", "color", "slider", "cascader",
+            "static-text", "html-text", "divider", "picture-upload", "file-upload",
+            "rich-editor", "image-add")));
 
     private static final Set<String> SAFE_WIDGET_KEYS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "key", "type", "category", "icon", "formItemFlag", "id", "internal", "displayType",

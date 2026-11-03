@@ -104,7 +104,8 @@ service.interceptors.response.use(async res => {
     const msg = parseResponseMessage(rspObj, code)
     if (isSessionExpiredCode(code)) {
       handleSessionExpired(msg)
-    } else {
+    } else if (!res.config.silentError) {
+      // 页面图等高频 blob 请求由调用方自己显示行内错误，否则一册多页缺失会连续弹窗
       ElMessage.error(msg)
     }
     return Promise.reject(responseError(msg, code))
@@ -117,16 +118,16 @@ service.interceptors.response.use(async res => {
     return Promise.reject(responseError(msg, code))
   }
   if (code === 500) {
-    ElMessage({ message: msg, type: 'error' })
+    if (!res.config.silentError) ElMessage({ message: msg, type: 'error' })
     return Promise.reject(Object.assign(new Error(msg), { notified: true }))
   }
   if (code === 601) {
-    ElMessage({ message: msg, type: 'warning' })
+    if (!res.config.silentError) ElMessage({ message: msg, type: 'warning' })
     return Promise.reject(Object.assign(new Error(msg), { notified: true }))
   }
   if (code !== 200) {
-    ElNotification.error({ title: msg })
-    return Promise.reject(Object.assign(new Error(msg), { notified: true }))
+    if (!res.config.silentError) ElNotification.error({ title: msg })
+    return Promise.reject(Object.assign(new Error(msg), { notified: true, code }))
   }
   return res.data
 }, error => {
@@ -138,6 +139,8 @@ service.interceptors.response.use(async res => {
     handleSessionExpired(error?.response?.data?.msg || error?.message)
     return Promise.reject(error)
   }
+  // 可选助手后台轮询只在状态栏提示；登录失效仍保留统一处理。
+  if (error.config?.silentError) return Promise.reject(error)
 
   let message = error?.message || ''
   if (message === 'Network Error') {

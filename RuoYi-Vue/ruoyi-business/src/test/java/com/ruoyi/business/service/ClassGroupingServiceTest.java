@@ -25,7 +25,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.mapper.BizClassroomPerformanceMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.ClassGroupingMapper;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.core.domain.model.LoginUser;
@@ -36,6 +38,9 @@ class ClassGroupingServiceTest
     private ClassGroupingService service;
     private ClassGroupingMapper mapper;
     private BizLessonMapper lessonMapper;
+    private BizLessonQuestionMapper lessonQuestionMapper;
+    private BizClassroomPerformanceMapper performanceMapper;
+    private ClassroomTaskStateService taskStateService;
 
     @BeforeEach
     void setUp()
@@ -43,13 +48,26 @@ class ClassGroupingServiceTest
         service = new ClassGroupingService();
         mapper = mock(ClassGroupingMapper.class);
         lessonMapper = mock(BizLessonMapper.class);
+        lessonQuestionMapper = mock(BizLessonQuestionMapper.class);
+        performanceMapper = mock(BizClassroomPerformanceMapper.class);
+        taskStateService = mock(ClassroomTaskStateService.class);
         ReflectionTestUtils.setField(service, "mapper", mapper);
         ReflectionTestUtils.setField(service, "lessonMapper", lessonMapper);
+        ReflectionTestUtils.setField(service, "lessonQuestionMapper", lessonQuestionMapper);
+        ReflectionTestUtils.setField(service, "performanceMapper", performanceMapper);
+        ReflectionTestUtils.setField(service, "taskStateService", taskStateService);
         StudentPresenceService presenceService = mock(StudentPresenceService.class);
         ReflectionTestUtils.setField(service, "presenceService", presenceService);
         when(mapper.countManagedClass(200L, 9L, "2025", "1")).thenReturn(1);
         when(mapper.selectManagedClassDeptIds(200L, "2025", "1")).thenReturn(Collections.singletonList(9L));
         when(presenceService.summary(anyList())).thenReturn(Collections.<Long, Map<String, Object>>emptyMap());
+        when(lessonQuestionMapper.selectDetailsByLessonId(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(Collections.emptyList());
+        when(performanceMapper.selectByStudentIdsAndLessons(anyList(), anyList(),
+                org.mockito.ArgumentMatchers.anyLong())).thenReturn(Collections.emptyList());
+        when(taskStateService.listClassSummary(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(Collections.emptyList());
 
         SysUser user = new SysUser();
         user.setUserId(200L);
@@ -152,14 +170,62 @@ class ClassGroupingServiceTest
     }
 
     @Test
-    void shouldRejectAmbiguousCrossSchoolClass()
+    void shouldUseCurrentDepartmentForAmbiguousClass()
+    {
+        when(mapper.selectManagedClassDeptIds(200L, "2025", "1")).thenReturn(java.util.Arrays.asList(9L, 169L));
+        when(mapper.selectDesktopStudents(9L, "2025", "1", null))
+                .thenReturn(Collections.singletonList(student(101L)));
+
+        Map<String, Object> desktop = service.desktop(200L, 9L, "2025", "1");
+
+        assertEquals(1, ((List<?>) desktop.get("students")).size());
+        verify(mapper).selectDesktopStudents(9L, "2025", "1", null);
+        verify(mapper, never()).selectDesktopStudents(169L, "2025", "1", null);
+    }
+
+    @Test
+    void shouldRejectAmbiguousClassWhenCurrentDepartmentOutsideManagedSchools()
     {
         when(mapper.selectManagedClassDeptIds(200L, "2025", "1")).thenReturn(java.util.Arrays.asList(9L, 169L));
 
         ServiceException error = assertThrows(ServiceException.class,
-                () -> service.desktop(200L, 9L, "2025", "1"));
+                () -> service.desktop(200L, 5L, "2025", "1"));
 
         assertEquals("该年级班号在多个学校存在，请从具体课程或班级入口进入", error.getMessage());
+        verify(mapper, never()).selectDesktopStudents(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldResolveAmbiguousOverviewByCurrentDepartment()
+    {
+        when(lessonMapper.selectBizLessonByLessonId(300L)).thenReturn(ownedLesson());
+        when(mapper.selectManagedClassDeptIds(200L, "2025", "1")).thenReturn(java.util.Arrays.asList(9L, 169L));
+        when(mapper.selectDesktopStudents(9L, "2025", "1", null))
+                .thenReturn(Collections.singletonList(student(101L)));
+        when(mapper.selectDesktopAnswerOverview(300L, Collections.singletonList(101L)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, Object> overview = service.desktopOverview(200L, 9L, 300L, "2025", "1");
+
+        assertEquals(1, ((List<?>) overview.get("students")).size());
+        verify(mapper).selectDesktopStudents(9L, "2025", "1", null);
+        verify(mapper, never()).selectDesktopStudents(169L, "2025", "1", null);
+    }
+
+    @Test
+    void shouldRejectOverviewWhenLessonBelongsToAnotherSchool()
+    {
+        BizLesson lesson = ownedLesson();
+        lesson.setDeptId(169L);
+        when(lessonMapper.selectBizLessonByLessonId(300L)).thenReturn(lesson);
+        when(mapper.selectManagedClassDeptIds(200L, "2025", "1")).thenReturn(java.util.Arrays.asList(9L, 169L));
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.desktopOverview(200L, 9L, 300L, "2025", "1"));
+
+        assertEquals("课程不存在或不属于当前学校", error.getMessage());
         verify(mapper, never()).selectDesktopStudents(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any());

@@ -1,5 +1,15 @@
 # 登录展厅设计
 
+## 当前增量：2026-11-02（已发布1.30.66）
+
+`LoginPreviewService`为lessons单独使用 `LESSONS_CACHE_TTL=3_600_000` 与 `LESSONS_REFRESH_AHEAD=300_000`；复用原调度器、锁与有效快照降级，活动/焦点沿用60秒。`PreviewCache`没有新增业务字段，公开摘要不参与私人课堂状态或成绩判断。正式匿名接口200、师生登录和现有输入优先测试通过；未做一小时持续观测。[集中验收](../release-20261102-all.md)。
+
+## 当前增量：2026-10-14
+
+loginIdleWork按最后一次交互等待至少1.2秒；组合态、隐藏页面及登录/验证码/选校期间不执行辅助工作。空闲回调再次检查，每次一个任务，迟到响应与图片扩展同样排队；卸载清理。输入暂停轮播，展厅子树缓存避开表单更新。VForm在相关路由确认前按需注册，兼容生产命名空间，覆盖学生首页/课程面板内嵌入口。
+
+构建先执行登录回归，再检查入口gzip小于650KB和WebP引用。本轮仅前端1.30.48，不改API/权限/配置/结构，不需后端重启；下文旧双端要求仅代表历史。见[ADR-003](ADR-003-input-priority-and-lazy-vform.md)。
+
 - 页面：`RuoYi-Vue3/src/views/login.vue`；使用原Vue3、Element Plus及CSS磨砂效果。大屏上部导语/登录、下部双栏；小屏纵向排列。学校表格在面板内滚动，底部版权位于正常文档流。
 - API：`GET /business/login-preview/activities`、`GET /business/login-preview/lessons`。无分页、筛选、ID参数；只对这两个方法使用`@Anonymous`，不改SecurityConfig。
 - 查询独立`LoginPreviewMapper.xml`，不复用会返回正文或学生成绩的内部VO；Service第二次投影白名单并固定上限3/6。分别保留60秒有效快照，使用独立锁；同厅冷请求同步合并，命中直接读快照。现有调度器启动3秒后预热、每20秒检查，剩余TTL≤30秒时提前刷新；失败不缓存、不延长旧TTL，过期仍同步回源。前端两个请求独立，不携带Authorization，不触发全局会话过期处理，离开页面取消请求。

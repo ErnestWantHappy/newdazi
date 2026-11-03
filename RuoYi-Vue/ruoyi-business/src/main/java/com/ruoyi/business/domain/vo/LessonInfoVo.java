@@ -16,6 +16,15 @@ public class LessonInfoVo {
     /** 课程创建时确定的开设年级，用于届别内的当前/历史课程分栏。 */
     private Long grade;
 
+    /** 课程学期：0上册 1下册。教师首页用它把课程卡直接指向对应册的电子教材。 */
+    private String semester;
+
+    /** 本课对应教材册ID；为空表示未绑定。 */
+    private Long textbookBookId;
+
+    /** 本课对应教材课次稳定键；为空表示未绑定。 */
+    private String textbookSectionKey;
+
     /** 课程永久所属入学年份，前端跳转成绩时以课程自身值为准。 */
     private String entryYear;
 
@@ -60,6 +69,30 @@ public class LessonInfoVo {
 
     public void setGrade(Long grade) {
         this.grade = grade;
+    }
+
+    public String getSemester() {
+        return semester;
+    }
+
+    public void setSemester(String semester) {
+        this.semester = semester;
+    }
+
+    public Long getTextbookBookId() {
+        return textbookBookId;
+    }
+
+    public void setTextbookBookId(Long textbookBookId) {
+        this.textbookBookId = textbookBookId;
+    }
+
+    public String getTextbookSectionKey() {
+        return textbookSectionKey;
+    }
+
+    public void setTextbookSectionKey(String textbookSectionKey) {
+        this.textbookSectionKey = textbookSectionKey;
     }
 
     public String getEntryYear() {

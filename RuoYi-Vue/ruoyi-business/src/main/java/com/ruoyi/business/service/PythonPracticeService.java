@@ -42,6 +42,8 @@ import com.ruoyi.business.judge.OutputComparator;
 @Service
 public class PythonPracticeService {
     @Autowired private PythonPracticeMapper mapper;
+    @Autowired private com.ruoyi.business.mapper.BizExtensionClassMapper extensionMapper;
+    @Autowired private ExtensionClassService extensionService;
     @Autowired private com.ruoyi.business.mapper.DataLabMapper dataLabMapper;
     @Autowired private IDataLabService dataLabService;
     @Autowired private BizQuestionMapper questionMapper;
@@ -55,6 +57,11 @@ public class PythonPracticeService {
 
     public List<Map<String, Object>> teacherPlans(Long deptId, String entryYear) {
         List<Map<String, Object>> plans = mapper.selectPlans(deptId, entryYear);
+        plans.removeIf(plan -> {
+            if (!"extension".equals(plan.get("plan_scope")) && !"legacy".equals(plan.get("plan_scope"))) return false;
+            try { extensionService.authorized(number(plan.get("extension_class_id")),false); return false; }
+            catch (ServiceException ex) { return true; }
+        });
         String schoolType = resolveSchoolType(deptId);
         for (Map<String, Object> plan : plans) {
             Long versionId = number(plan.get("plan_version_id"));
@@ -69,12 +76,20 @@ public class PythonPracticeService {
     public List<Map<String, Object>> managedClasses(Long userId, Long deptId) {
         List<Map<String, Object>> classes = mapper.selectManagedClasses(userId, deptId,
             SecurityUtils.isAdmin(userId) || SecurityUtils.hasRole("researcher"));
+        if (SecurityUtils.isAdmin(userId) || SecurityUtils.hasRole("admin") ||
+            (!SecurityUtils.hasRole("researcher") && SecurityUtils.hasRole("teacher"))) {
+            for (Map<String,Object> group : extensionMapper.classes(deptId, extensionService.admin() ? null : userId)) {
+                if (!"ACTIVE".equals(group.get("status"))) continue;
+                group.put("student_count",group.get("member_count")); classes.add(group);
+            }
+        }
         return decorateCurrentClasses(classes, resolveSchoolType(deptId));
     }
 
     public Map<String, Object> planDetail(Long planId, Long deptId) {
         Map<String, Object> plan = mapper.selectPlan(planId);
         requirePlanDept(plan, deptId);
+        if (plan.get("extension_class_id")!=null) extensionService.authorized(number(plan.get("extension_class_id")),false);
         Long versionId = number(plan.get("plan_version_id"));
         plan.put("questions", versionId == null ? Collections.emptyList() : mapper.selectPlanQuestions(versionId));
         String schoolType = resolveSchoolType(deptId);
@@ -100,7 +115,10 @@ public class PythonPracticeService {
         plan.put("deptId", deptId);
         plan.put("creatorId", userId);
         plan.put("createBy", username);
+        Map<String,Object> target = extensionTarget(classes, userId, deptId);
         mapper.insertPlan(plan);
+        extensionMapper.setPlanScope(number(plan.get("planId")), target == null ? "regular" : "extension",
+            target == null ? null : number(target.get("extension_class_id")));
         Map<String, Object> version = new HashMap<String, Object>();
         version.put("planId", plan.get("planId")); version.put("versionNo", 1); version.put("creatorId", userId); version.put("createBy", username);
         mapper.insertPlanVersion(version);
@@ -130,6 +148,7 @@ public class PythonPracticeService {
         mapper.deleteExtensionClasses(planId);
         mapper.deletePlanSnapshotCases(planId);
         mapper.deletePlanSnapshots(planId);
+        if ("extension".equals(plan.get("plan_scope"))) extensionMapper.deletePlanMembers(planId);
         mapper.deletePlanVersions(planId);
         mapper.deleteExtensions(planId);
         mapper.deletePlan(planId);
@@ -153,6 +172,10 @@ public class PythonPracticeService {
         List<Map<String, String>> classes = parseClasses(request.get("classes"));
         if (classes.isEmpty()) throw new ServiceException("请至少选择一个目标班级");
         validateManagedClasses(classes, userId, deptId);
+        Map<String,Object> target = extensionTarget(classes,userId,deptId);
+        Long targetId = target == null ? null : number(target.get("extension_class_id"));
+        if (!java.util.Objects.equals(targetId,number(plan.get("extension_class_id"))))
+            throw new ServiceException("题单不能更换学习空间或拓展班，请新建题单");
         Long editableVersionId = ensureEditableVersion(number(plan.get("plan_version_id")), userId, username, deptId);
         mapper.updatePlanName(planId, String.valueOf(request.get("planName")).trim(), username);
         replacePlanClasses(editableVersionId, classes, userId, deptId, username);
@@ -395,7 +418,8 @@ public class PythonPracticeService {
         if (entryYear == null || entryYear.trim().isEmpty() || classCode == null || classCode.trim().isEmpty()) {
             throw new ServiceException("请选择题单中的一个班级查看学情");
         }
-        ensureManagedClass(userId, deptId, entryYear.trim(), classCode.trim());
+        if (plan.get("extension_class_id")!=null) extensionService.authorized(number(plan.get("extension_class_id")),false);
+        else ensureManagedClass(userId, deptId, entryYear.trim(), classCode.trim());
         if (mapper.countPlanClass(planVersionId, deptId, entryYear.trim(), classCode.trim()) == 0) {
             throw new ServiceException("该班级不属于当前题单");
         }
@@ -441,10 +465,16 @@ public class PythonPracticeService {
         for (Map<String, Object> question : mapper.selectPlanQuestions(planVersionId)) {
             if ("DATA_LAB".equals(question.get("practical_mode"))) labCount++;
         }
+        if ("extension".equals(plan.get("plan_scope"))) {
+            extensionService.authorized(number(plan.get("extension_class_id")),true);
+            extensionMapper.lock(number(plan.get("extension_class_id")));
+            if (labCount > 0) throw new ServiceException("拓展班只支持纯 Python 题单，请移除数据实验题");
+        }
         if (questionCount == 0 || mapper.selectSnapshotPublicCaseCount(planVersionId, true) < questionCount - labCount || mapper.selectSnapshotPublicCaseCount(planVersionId, false) < questionCount - labCount) {
             throw new ServiceException("发布前必须为每道题配置公开和隐藏测试点");
         }
         if (mapper.countPlanClasses(planVersionId) == 0) throw new ServiceException("发布前必须至少选择一个目标班级");
+        if ("extension".equals(plan.get("plan_scope")) && !"PUBLISHED".equals(version.get("version_status"))) extensionMapper.snapshotPlan(number(plan.get("extension_class_id")),planVersionId);
         mapper.retractPublishedVersions(planId, planVersionId);
         if (mapper.publishVersion(planId, planVersionId) != 1) throw new ServiceException("题单版本不存在或不属于当前题单");
         Integer versionNo = mapper.selectVersionNo(planVersionId);
@@ -453,12 +483,14 @@ public class PythonPracticeService {
         return mapper.selectPlan(planId);
     }
 
-    public Map<String, Object> studentOverview(Long userId, Long deptId) {
+    public Map<String, Object> studentOverview(Long userId, Long deptId) { return studentOverview(userId,deptId,"regular"); }
+
+    public Map<String, Object> studentOverview(Long userId, Long deptId, String space) {
         BizStudent student = studentMapper.selectBizStudentByUserId(userId);
         if (student == null) throw new ServiceException("当前账号不是学生");
         Map<String, Object> result = new HashMap<String, Object>();
         result.put("student", student);
-        List<Map<String, Object>> questions = mapper.selectStudentQuestions(student.getDeptId(), student.getEntryYear(), student.getClassCode());
+        List<Map<String, Object>> questions = questionsForSpace(student,space);
         Map<String, Map<String, Object>> progress = new HashMap<String, Map<String, Object>>();
         for (Map<String, Object> item : mapper.selectStudentProgress(student.getStudentId())) progress.put(progressKey(item), item);
         for (Map<String, Object> item : dataLabMapper.selectStudentProgress(userId)) progress.put(progressKey(item), item);
@@ -610,11 +642,43 @@ public class PythonPracticeService {
     private void assertStudentScope(BizStudent student, Long deptId, String sourceType, Long sourceId, Long questionId) {
         Long actualDept = deptId == null ? student.getDeptId() : deptId;
         boolean allowed = false;
-        for (Map<String, Object> item : mapper.selectStudentQuestions(actualDept, student.getEntryYear(), student.getClassCode())) {
+        List<Map<String,Object>> visible = new ArrayList<>(mapper.selectStudentQuestions(actualDept, student.getEntryYear(), student.getClassCode()));
+        Map<String,Object> group=extensionService.membership(student);
+        if (group!=null) visible.addAll(questionsForSpace(student,"extension"));
+        for (Map<String, Object> item : visible) {
             if (sourceType.equals(item.get("source_type")) && sourceId != null && sourceId.equals(number(item.get("source_id"))) && questionId != null && questionId.equals(number(item.get("question_id")))) { allowed = true; break; }
         }
         if (!allowed) throw forbidden("题目不属于当前学生可练习范围");
     }
+    private Map<String,Object> extensionTarget(List<Map<String,String>> classes,Long userId,Long deptId) {
+        Map<String,Object> target=null; boolean regular=false;
+        for (Map<String,String> item:classes) {
+            Map<String,Object> group=extensionMapper.carrier(deptId,item.get("entryYear"),item.get("classCode"));
+            if (group==null) regular=true;
+            else {
+                extensionService.authorized(number(group.get("extension_class_id")),true);
+                if (target!=null && !target.get("extension_class_id").equals(group.get("extension_class_id")))
+                    throw new ServiceException("一个拓展题单只能投给一个拓展班");
+                target=group;
+            }
+        }
+        if (regular && target!=null) throw new ServiceException("常规班与拓展班不能混投同一题单");
+        return target;
+    }
+    private List<Map<String,Object>> questionsForSpace(BizStudent student,String space) {
+        if ("regular".equals(space)) return mapper.selectStudentQuestions(student.getDeptId(),student.getEntryYear(),student.getClassCode());
+        if (!"extension".equals(space)) throw new ServiceException("学习空间无效");
+        Map<String,Object> group=extensionService.membership(student);
+        if (group==null) throw forbidden("你已不在该拓展班");
+        return mapper.selectExtensionStudentQuestions(student.getDeptId(),String.valueOf(group.get("entry_year")),String.valueOf(group.get("class_code")),number(group.get("extension_class_id")));
+    }
+    public void assertStudentSpace(Long userId,String space,String sourceType,Long sourceId,Long questionId) {
+        for (Map<String,Object> item : questionsForSpace(requireStudent(userId),space)) {
+            if (sourceType.equals(item.get("source_type")) && sourceId.equals(number(item.get("source_id"))) && questionId.equals(number(item.get("question_id")))) return;
+        }
+        throw forbidden("题目不属于当前学习空间");
+    }
+
     private static void require(Map<String, Object> request, String... keys) { for (String key : keys) if (request.get(key) == null || String.valueOf(request.get(key)).trim().isEmpty()) throw new ServiceException("缺少参数：" + key); }
     private static Long number(Object value) { return value == null ? null : Long.valueOf(String.valueOf(value)); }
     private void validateTestCases(Long questionId) {
@@ -629,8 +693,13 @@ public class PythonPracticeService {
         if (deptId != null && !deptId.equals(number(plan.get("dept_id")))) throw forbidden("无权访问该题单");
     }
 
-    private static void requirePlanOwner(Map<String, Object> plan, Long userId) {
+    private void requirePlanOwner(Map<String, Object> plan, Long userId) {
         if (plan == null) throw new ServiceException("题单不存在");
+        if ("legacy".equals(plan.get("plan_scope"))) throw new ServiceException("历史题单仅可查看");
+        if ("extension".equals(plan.get("plan_scope"))) {
+            extensionService.authorized(number(plan.get("extension_class_id")),true);
+            return;
+        }
         if (userId == null) return;
         Long creatorId = number(plan.get("creator_id"));
         if (creatorId == null) return;
@@ -685,6 +754,8 @@ public class PythonPracticeService {
         return result;
     }
     private void ensureManagedClass(Long userId, Long deptId, String entryYear, String classCode) {
+        Map<String,Object> extension=extensionMapper.carrier(deptId,entryYear,classCode);
+        if (extension!=null) { extensionService.authorized(number(extension.get("extension_class_id")),true); return; }
         if (SecurityUtils.isAdmin(userId) || SecurityUtils.hasRole("researcher")) return;
         BizTeacherClass query = new BizTeacherClass(); query.setUserId(userId); query.setDeptId(deptId); query.setEntryYear(entryYear); query.setClassCode(classCode);
         if (teacherClassMapper.checkTeacherClassExists(query) <= 0) throw forbidden("当前教师无权管理该班级");
@@ -695,6 +766,13 @@ public class PythonPracticeService {
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         LocalDate today = LocalDate.now();
         if (source == null) return result;
+        List<Map<String,Object>> extensions=new ArrayList<>();
+        for (Map<String,Object> row : source) {
+            if (row.get("extension_class_id")!=null) {
+                row.put("class_label","拓展班 · "+row.get("class_name")); extensions.add(row);
+            }
+        }
+        source=new ArrayList<>(source); source.removeAll(extensions); result.addAll(extensions);
         if (schoolType == null) {
             for (Map<String, Object> row : source) {
                 String entryYear = stringOrNull(row.get("entry_year"));

@@ -25,3 +25,11 @@ export function cleanupLibreOffice() {
     method: 'post'
   })
 }
+
+// 主动验证慢 SQL 拦截、异步写入和落库链路
+export function perfEventSelfTest() {
+  return request({
+    url: '/monitor/diagnosis/perf-event/self-test',
+    method: 'post'
+  })
+}

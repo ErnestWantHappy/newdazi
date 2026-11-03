@@ -140,6 +140,21 @@ DELETE FROM biz_flowchart_lesson_snapshot WHERE lesson_id IN
 DELETE FROM biz_guide_sheet_answer WHERE lesson_id IN
         <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
+
+    <!-- 进度与作品记录都靠 binding_id 关联，必须在删除绑定之前清理，否则会留下无主行。 -->
+    <delete id="deleteGuideProgressByLessons">
+DELETE p FROM biz_guide_sheet_progress p
+        INNER JOIN biz_lesson_guide_sheet_binding b ON b.binding_id = p.binding_id
+        WHERE b.lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+    <delete id="deleteGuideUploadsByLessons">
+DELETE u FROM biz_guide_sheet_upload u
+        INNER JOIN biz_lesson_guide_sheet_binding b ON b.binding_id = u.binding_id
+        WHERE b.lesson_id IN
+        <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
     <delete id="deleteGuideBindingsByLessons">
 DELETE FROM biz_lesson_guide_sheet_binding WHERE lesson_id IN
         <foreach collection="lessonIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -338,6 +353,16 @@ DELETE FROM biz_flowchart_draft WHERE student_id IN
 
     <delete id="deleteGuideAnswersByStudents">
         DELETE FROM biz_guide_sheet_answer WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteGuideProgressByStudents">
+        DELETE FROM biz_guide_sheet_progress WHERE student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteGuideUploadsByStudents">
+        DELETE FROM biz_guide_sheet_upload WHERE student_id IN
         <foreach collection="studentIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
 

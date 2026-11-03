@@ -14,6 +14,7 @@ public class PracticalGradingStatusVo
     private String classCode;
     private boolean hasPractical;
     private int answeredStudentCount;
+    private int practicalSubmittedStudentCount;
     private int totalStudentCount;
     private int remainingStudentsToTrigger;
     private int dueCount;
@@ -40,6 +41,8 @@ public class PracticalGradingStatusVo
     public void setHasPractical(boolean hasPractical) { this.hasPractical = hasPractical; }
     public int getAnsweredStudentCount() { return answeredStudentCount; }
     public void setAnsweredStudentCount(int answeredStudentCount) { this.answeredStudentCount = answeredStudentCount; }
+    public int getPracticalSubmittedStudentCount() { return practicalSubmittedStudentCount; }
+    public void setPracticalSubmittedStudentCount(int count) { this.practicalSubmittedStudentCount = count; }
     public int getTotalStudentCount() { return totalStudentCount; }
     public void setTotalStudentCount(int totalStudentCount) { this.totalStudentCount = totalStudentCount; }
     public int getRemainingStudentsToTrigger() { return remainingStudentsToTrigger; }

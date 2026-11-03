@@ -431,12 +431,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
-                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
-                 THEN 1 ELSE 0 END AS practicalPending,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
-                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
-                 THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
+            MAX(CASE WHEN q.question_type = 'practical' AND a.score IS NULL
+                          AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL)
+                     THEN 1 ELSE 0 END) AS practicalPending,
+            SUM(IFNULL(a.score, 0)) AS totalScore,
             -- 打字统计（只取打字题的平均值）
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
@@ -469,12 +467,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             END AS practicalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND IFNULL(q.practical_mode, 'FILE') = 'FILE' THEN IFNULL(a.score, 0) ELSE 0 END) AS filePracticalScore,
             SUM(CASE WHEN q.question_type = 'practical' AND q.practical_mode = 'PYTHON' THEN IFNULL(a.score, 0) ELSE 0 END) AS pythonPracticalScore,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
-                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
-                 THEN 1 ELSE 0 END AS practicalPending,
-            CASE WHEN COUNT(CASE WHEN q.question_type = 'practical' AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.score IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL) THEN 1 END) > 0
-                      AND COUNT(CASE WHEN q.question_type = 'practical' AND a.score IS NOT NULL THEN 1 END) = 0
-                 THEN NULL ELSE SUM(IFNULL(a.score, 0)) END AS totalScore,
+            MAX(CASE WHEN q.question_type = 'practical' AND a.score IS NULL
+                          AND (NULLIF(TRIM(a.student_answer), '') IS NOT NULL OR a.practical_version_id IS NOT NULL OR a.practical_artifact_id IS NOT NULL)
+                     THEN 1 ELSE 0 END) AS practicalPending,
+            SUM(IFNULL(a.score, 0)) AS totalScore,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.typing_speed ELSE NULL END), 0) AS avgTypingSpeed,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.accuracy_rate ELSE NULL END), 1) AS avgAccuracyRate,
             ROUND(AVG(CASE WHEN q.question_type = 'typing' THEN a.completion_rate ELSE NULL END), 1) AS avgCompletionRate
@@ -633,6 +629,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <select id="selectClassStatusByLesson" resultType="java.util.HashMap">
+        WITH latest_answer AS (
+            SELECT MAX(answer_id) AS answer_id
+            FROM biz_student_answer
+            WHERE lesson_id = #{lessonId}
+            GROUP BY student_id, lesson_id, question_id
+        )
         SELECT
             class_scope.classCode AS classCode,
             class_scope.entryYear AS entryYear,
@@ -673,12 +675,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 s.class_code AS classCode,
                 s.entry_year AS entryYear
             FROM biz_student_answer a
-            INNER JOIN (
-                SELECT MAX(answer_id) AS answer_id
-                FROM biz_student_answer
-                WHERE lesson_id = #{lessonId}
-                GROUP BY student_id, lesson_id, question_id
-            ) latest ON latest.answer_id = a.answer_id
+            INNER JOIN latest_answer latest ON latest.answer_id = a.answer_id
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a.lesson_id
                AND current_lq.question_id = a.question_id
@@ -707,12 +704,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         LEFT JOIN (
             SELECT a1.*
             FROM biz_student_answer a1
-            INNER JOIN (
-                SELECT MAX(answer_id) AS answer_id
-                FROM biz_student_answer
-                WHERE lesson_id = #{lessonId}
-                GROUP BY student_id, lesson_id, question_id
-            ) latest ON latest.answer_id = a1.answer_id
+            INNER JOIN latest_answer latest ON latest.answer_id = a1.answer_id
             INNER JOIN biz_lesson_question current_lq
                 ON current_lq.lesson_id = a1.lesson_id
                AND current_lq.question_id = a1.question_id

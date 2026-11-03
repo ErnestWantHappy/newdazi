@@ -8,7 +8,7 @@
       </div>
       <el-button type="primary" icon="Right">进入评卷</el-button>
     </div>
-    <el-card class="box-card">
+    <el-card class="box-card" :class="{ 'has-extension': extensionAllowed }">
       <template #header>
         <div class="card-header">
           <span>课程设置</span>
@@ -16,7 +16,7 @@
             <el-button type="success" plain icon="Document" @click="goToExemption">
               免抽测申请
             </el-button>
-            <el-button type="primary" plain icon="DArrowRight" :loading="advanceLoading" @click="handleOneClickAdvance">
+            <el-button type="primary" plain icon="DArrowRight" @click="advanceDialogVisible = true">
               手动一键课堂推进
             </el-button>
             <el-button icon="Setting" @click="openCourseSettings">设置</el-button>
@@ -86,6 +86,17 @@
                     {{ lesson.lessonTitle }}
                   </div>
                   <div class="folder-info">
+                    <button
+                      type="button"
+                      class="textbook-chip"
+                      :title="lesson.textbookBookId && lesson.textbookSectionKey
+                        ? '打开本课对应教材'
+                        : '打开本年级电子教材（课次在阅读器里手动选择）'"
+                      @click.stop="openTextbook(lesson)"
+                    >
+                      <el-icon><Reading /></el-icon>
+                      <span>教材</span>
+                    </button>
                     <div v-if="lesson.courseType === 'shared'" class="shared-course-meta">
                       <span class="shared-tag">共享课程</span>
                       <span class="shared-creator" :title="`创建教师：${lesson.creatorName || '本校教师'}`">
@@ -94,9 +105,6 @@
                     </div>
                     <div v-if="lesson.assignedClasses?.length" class="assigned-classes">
                       <span v-for="cls in lesson.assignedClasses" :key="cls" class="assigned-tag">{{ cls }}</span>
-                    </div>
-                    <div class="lesson-count-tag">
-                      第{{ lesson.lessonNum }}课
                     </div>
                     <div v-if="lesson.lessonMode === 'attendance'" class="attendance-mode-tag">考勤</div>
                   </div>
@@ -216,6 +224,8 @@
       </div>
     </el-card>
 
+    <ExtensionClassPanel v-if="extensionAllowed" collapsible />
+
     <!-- 班级选择弹窗 -->
     <ClassSelectionDialog ref="classDialogRef" />
 
@@ -233,93 +243,15 @@
       </template>
     </el-dialog>
 
-    <!-- 手动一键课堂推进向导：带课程前后对比预览与防误触确认开关 -->
-    <el-dialog v-model="advanceDialogVisible" title="手动一键课堂推进向导" width="620px" destroy-on-close @closed="advanceConfirmed = false">
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        title="课堂推进机制说明"
-        description="推进后，所选班级的当前授课将切换到下一课。已完成作业的学生数据会自动归档，未达标班级会跳过并提示。"
-        style="margin-bottom: 16px;"
-      />
-      <el-form label-width="70px">
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="年级">
-              <el-select v-model="advanceForm.entryYear" placeholder="请选择年级" style="width: 100%" @change="onAdvanceGradeChange">
-                <el-option
-                  v-for="g in advanceGradeOptions"
-                  :key="g.entryYear"
-                  :label="`${g.entryYear}级（${g.gradeName}）`"
-                  :value="g.entryYear"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="班级">
-              <el-select
-                v-model="advanceForm.classCodes"
-                multiple
-                collapse-tags
-                collapse-tags-tooltip
-                placeholder="请选择班级"
-                style="width: 100%"
-                :disabled="!advanceForm.entryYear"
-              >
-                <el-option
-                  v-for="cls in advanceClassOptions"
-                  :key="cls"
-                  :label="formatClassLabel(cls)"
-                  :value="normalizeClassCode(cls)"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-
-      <div class="advance-preview-section" style="margin-top: 8px;">
-        <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #303133; display: flex; justify-content: space-between; align-items: center;">
-          <span>📋 推进前后对比预览（已选 {{ advancePreviewList.length }} 个班级）</span>
-          <span style="font-size: 12px; color: #909399; font-weight: normal;">需有成绩人数达到 {{ policyForm.autoAdvanceThresholdPct || 50 }}%</span>
-        </div>
-        <el-table :data="advancePreviewList" size="small" border stripe max-height="240" empty-text="请选择年级与班级查看对比">
-          <el-table-column prop="classLabel" label="班级" width="90" align="center" />
-          <el-table-column prop="currentLessonTitle" label="当前课程" min-width="160" show-overflow-tooltip />
-          <el-table-column label="➔" width="40" align="center">
-            <template #default><el-icon color="#409EFF"><Right /></el-icon></template>
-          </el-table-column>
-          <el-table-column prop="nextLessonTitle" label="推进后下一课" min-width="160" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span style="color: #67C23A; font-weight: 500;">{{ row.nextLessonTitle }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <div style="margin-top: 16px; padding: 10px 12px; background: #fdf6ec; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-size: 12px; color: #e6a23c;">
-          ⚠️ 推进操作将切换学生端当前课程，请先开启右侧确认开关
-        </span>
-        <el-switch v-model="advanceConfirmed" active-text="已知悉并确认" size="small" />
-      </div>
-
-      <template #footer>
-        <el-button @click="advanceDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="advanceLoading" :disabled="!advanceConfirmed || !advancePreviewList.length" @click="confirmOneClickAdvance">
-          确认执行推进
-        </el-button>
-      </template>
-    </el-dialog>
+    <LessonAdvanceDialog v-model="advanceDialogVisible" :grade-groups="gradeGroups" @advanced="fetchDashboardData" />
 
     <!-- 统一课程推进设置（全校常规课共用一套） -->
     <el-dialog v-model="settingsVisible" title="课程推进设置" width="480px" destroy-on-close>
       <p class="settings-intro">
-        以下设置对您的<strong>全部常规课</strong>统一生效。开启后，班级有成绩达到比例并等待指定时间，会自动切到下一课；也可随时用右上角「手动一键课堂推进」立即切换。
+        以下设置对您的<strong>全部常规课</strong>统一生效。开启后，班级有成绩达到比例并等待指定时间，会自动切到下一课；达到相同比例后，也可用右上角「手动一键课堂推进」立即切换，无需等待。
       </p>
-      <el-form v-loading="policyLoading" label-width="120px" class="policy-form">
+      <el-alert v-if="policyError" title="未能读取真实设置，请关闭后重试；本次不会覆盖已有设置。" type="error" :closable="false" />
+      <el-form v-else v-loading="policyLoading" label-width="120px" class="policy-form">
         <el-form-item label="自动推进">
           <el-switch v-model="policyForm.autoAdvanceEnabled" active-text="开启" inactive-text="关闭" />
         </el-form-item>
@@ -350,7 +282,7 @@
       </el-form>
       <template #footer>
         <el-button @click="settingsVisible = false">取消</el-button>
-        <el-button type="primary" :loading="policySaving" @click="saveAdvancePolicy">保存</el-button>
+        <el-button type="primary" :loading="policySaving" :disabled="policyError || policyLoading" @click="saveAdvancePolicy">保存</el-button>
       </template>
     </el-dialog>
 
@@ -503,23 +435,27 @@
 </template>
 
 <script setup name="TeacherDashboard">
+import ExtensionClassPanel from '@/components/ExtensionClassPanel'
+import useExtensionUser from '@/store/modules/user'
+const extensionAllowed = computed(() => { const roles = useExtensionUser().roles; return roles.includes('admin') || roles.includes('teacher') })
 import ResearchNotificationBar from '@/views/business/researchActivity/components/ResearchNotificationBar.vue'
 import { computed, ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getDashboardData, getDashboardPracticalStatus } from '@/api/business/teacher';
 import { getCountyExamGradingEntry } from '@/api/business/countyExam';
+import { listTextbookBooks } from '@/api/business/textbook';
 import {
   delLesson,
   getLessonDetails,
   getLessonCheckinRoster,
   getLessonCheckinSummary,
   getAdvancePolicy,
-  updateAdvancePolicy,
-  manualAdvanceLesson
+  updateAdvancePolicy
 } from '@/api/business/lesson';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, Monitor, MoreFilled, DArrowRight, Setting, View } from '@element-plus/icons-vue';
+import { Plus, Close, Edit, Check, DataLine, Connection, Cpu, Monitor, MoreFilled, DArrowRight, Setting, View, Reading } from '@element-plus/icons-vue';
 import ClassSelectionDialog from './components/ClassSelectionDialog.vue';
+import LessonAdvanceDialog from './components/LessonAdvanceDialog.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -611,6 +547,7 @@ const iotEntry = ref({ lesson: null, entryYear: '', classes: [], classCode: '' }
 // 统一推进设置
 const settingsVisible = ref(false);
 const policyLoading = ref(false);
+const policyError = ref(false);
 const policySaving = ref(false);
 const policyForm = ref({
   autoAdvanceEnabled: false,
@@ -618,67 +555,7 @@ const policyForm = ref({
   autoAdvanceDelayHours: 2
 });
 
-// 手动一键课堂推进（多选班级，默认全选当前为常规课的班级）
 const advanceDialogVisible = ref(false);
-const advanceLoading = ref(false);
-const advanceConfirmed = ref(false);
-const advanceForm = ref({ entryYear: '', classCodes: [] });
-
-function getAdvanceClassesForGroup(group) {
-  const managedClasses = new Set((group?.allClassesInGrade || []).map(normalizeClassCode).filter(Boolean));
-  const classCodes = (group?.lessons || [])
-    .filter(lesson => lesson.lessonMode !== 'attendance' && Number(lesson.grade) === Number(group.gradeId))
-    .flatMap(lesson => lesson.assignedClasses || [])
-    .map(normalizeClassCode)
-    .filter(classCode => classCode && managedClasses.has(classCode));
-  return [...new Set(classCodes)].sort((left, right) => Number(left) - Number(right));
-}
-
-const advanceGradeOptions = computed(() =>
-  (gradeGroups.value || []).filter(group => getAdvanceClassesForGroup(group).length > 0)
-);
-
-const advanceClassOptions = computed(() => {
-  const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
-  return getAdvanceClassesForGroup(group);
-});
-
-/** 推进前后对比预览计算属性：清晰计算各选中班级当前课程与下一课 */
-const advancePreviewList = computed(() => {
-  const group = (gradeGroups.value || []).find(g => String(g.entryYear) === String(advanceForm.value.entryYear));
-  if (!group) return [];
-  const selectedCodes = new Set((advanceForm.value.classCodes || []).map(normalizeClassCode).filter(Boolean));
-  if (!selectedCodes.size) return [];
-
-  const gradeLessons = (group.lessons || []).filter(l => l.lessonMode !== 'attendance' && Number(l.grade) === Number(group.gradeId));
-
-  return [...selectedCodes].sort((a, b) => Number(a) - Number(b)).map(clsCode => {
-    // 找到该班级当前指派的课程（取 lessonNum 最大的常规课）
-    const assignedLessons = gradeLessons.filter(l => (l.assignedClasses || []).map(normalizeClassCode).includes(clsCode));
-    assignedLessons.sort((a, b) => (b.lessonNum || 0) - (a.lessonNum || 0));
-    const currentLesson = assignedLessons[0] || null;
-
-    let nextTip = '';
-    if (currentLesson) {
-      const nextNum = (currentLesson.lessonNum || 0) + 1;
-      const nextLesson = gradeLessons.find(l => Number(l.lessonNum) === nextNum) || null;
-      if (nextLesson) {
-        nextTip = `第${nextLesson.lessonNum}课 ${nextLesson.lessonTitle}`;
-      } else {
-        nextTip = `第${nextNum}课（待备课）`;
-      }
-    } else {
-      nextTip = '未开始第一课';
-    }
-
-    return {
-      classCode: clsCode,
-      classLabel: `${clsCode}班`,
-      currentLessonTitle: currentLesson ? `第${currentLesson.lessonNum}课 ${currentLesson.lessonTitle}` : '暂无课程',
-      nextLessonTitle: nextTip
-    };
-  });
-});
 
 function normalizeClassCode(cls) {
   return String(cls || '').replace('班', '').trim();
@@ -687,11 +564,6 @@ function normalizeClassCode(cls) {
 function formatClassLabel(cls) {
   const code = normalizeClassCode(cls);
   return code ? `${code}班` : String(cls || '');
-}
-
-/** 默认选中当前年级所有当前为常规课的班级，考勤班级不进入请求。 */
-function selectAllAdvanceClasses() {
-  advanceForm.value.classCodes = advanceClassOptions.value.map(normalizeClassCode).filter(Boolean);
 }
 
 function compareLessonsByLatest(a, b) {
@@ -878,6 +750,7 @@ async function handleAddNewLesson(group, section) {
 async function openCourseSettings() {
   settingsVisible.value = true;
   policyLoading.value = true;
+  policyError.value = false;
   try {
     const res = await getAdvancePolicy();
     const data = res.data || res || {};
@@ -887,11 +760,7 @@ async function openCourseSettings() {
       autoAdvanceDelayHours: Number(data.autoAdvanceDelayHours) || 2
     };
   } catch (e) {
-    policyForm.value = {
-      autoAdvanceEnabled: false,
-      autoAdvanceThresholdPct: 50,
-      autoAdvanceDelayHours: 2
-    };
+    policyError.value = true;
   } finally {
     policyLoading.value = false;
   }
@@ -911,83 +780,6 @@ async function saveAdvancePolicy() {
     // 全局拦截器提示
   } finally {
     policySaving.value = false;
-  }
-}
-
-/** 右上角：手动一键课堂推进（默认多选当前年级全部常规课班级） */
-async function handleOneClickAdvance() {
-  if (!advanceGradeOptions.value.length) {
-    ElMessage.warning('暂无可推进的常规课班级');
-    return;
-  }
-  // 带出统一阈值，便于确认文案准确
-  try {
-    const res = await getAdvancePolicy();
-    const data = res.data || res || {};
-    policyForm.value.autoAdvanceThresholdPct = Number(data.autoAdvanceThresholdPct) || 50;
-  } catch (e) {
-    policyForm.value.autoAdvanceThresholdPct = 50;
-  }
-  const first = advanceGradeOptions.value[0];
-  advanceForm.value = {
-    entryYear: first.entryYear || '',
-    classCodes: []
-  };
-  advanceConfirmed.value = false;
-  // 等 options 就绪后默认全选当前年级的常规课班级
-  advanceDialogVisible.value = true;
-  selectAllAdvanceClasses();
-}
-
-function onAdvanceGradeChange() {
-  advanceConfirmed.value = false;
-  // 切换年级后默认全选该年级当前为常规课的班级
-  selectAllAdvanceClasses();
-}
-
-async function confirmOneClickAdvance() {
-  const entryYear = advanceForm.value.entryYear;
-  const classCodes = (advanceForm.value.classCodes || []).map(normalizeClassCode).filter(Boolean);
-  if (!entryYear) {
-    ElMessage.warning('请选择年级');
-    return;
-  }
-  if (!classCodes.length) {
-    ElMessage.warning('请至少选择一个班级');
-    return;
-  }
-  const threshold = Number(policyForm.value.autoAdvanceThresholdPct) || 50;
-  const classLabel = classCodes.length === advanceClassOptions.value.length
-    ? `全部 ${classCodes.length} 个班`
-    : `${classCodes.length} 个班（${classCodes.map(c => c + '班').join('、')}）`;
-  try {
-    await ElMessageBox.confirm(
-      `确认将 ${classLabel} 的当前课程推进到下一课？\n需各班有成绩人数达到 ${threshold}%。未达标的班级会跳过并提示。`,
-      '手动一键课堂推进',
-      { type: 'warning', confirmButtonText: '确认推进', cancelButtonText: '取消' }
-    );
-  } catch {
-    return;
-  }
-  advanceLoading.value = true;
-  try {
-    const res = await manualAdvanceLesson({
-      entryYear,
-      classCodes
-    });
-    const msg = res.msg || res.data?.message || '推进完成';
-    const failed = Number(res.data?.failed || 0);
-    if (failed > 0) {
-      ElMessage.warning(msg);
-    } else {
-      ElMessage.success(msg);
-    }
-    advanceDialogVisible.value = false;
-    fetchDashboardData();
-  } catch (e) {
-    // 全局拦截器已提示业务错误
-  } finally {
-    advanceLoading.value = false;
   }
 }
 
@@ -1173,6 +965,43 @@ function isLessonDeleting(lessonId) {
   return deletingLessonIds.value.includes(Number(lessonId));
 }
 
+/**
+ * 课程卡上的「教材」胶囊：课程绑定过教材课次时直达该课；
+ * 未绑定时仍按年级 + 学期定位册次，课次在阅读器手动选择。
+ * 九年级教材是"全一册"（semester=9），因此精确未命中时回退到全年册。
+ */
+async function openTextbook(lesson) {
+  if (lesson.textbookBookId && lesson.textbookSectionKey) {
+    router.push({
+      path: `/business/textbook/read/${lesson.textbookBookId}`,
+      query: { section: lesson.textbookSectionKey }
+    });
+    return;
+  }
+  const grade = Number(lesson.grade);
+  const semester = lesson.semester === null || lesson.semester === undefined ? '' : String(lesson.semester);
+  if (!grade) {
+    ElMessage.warning('该课程没有年级信息，请到书架选择教材');
+    router.push('/textbook');
+    return;
+  }
+  try {
+    const res = await listTextbookBooks();
+    const books = res.data || [];
+    const matched =
+      books.find(book => Number(book.grade) === grade && String(book.semester) === semester) ||
+      books.find(book => Number(book.grade) === grade && String(book.semester) === '9');
+    if (!matched) {
+      ElMessage.warning('该年级的教材还未上架，先到书架看看其他册次');
+      router.push('/textbook');
+      return;
+    }
+    router.push(`/business/textbook/read/${matched.bookId}`);
+  } catch (error) {
+    ElMessage.error('教材打开失败，请稍后重试');
+  }
+}
+
 function removeLessonFromDashboard(lessonId) {
   const targetId = Number(lessonId);
   gradeGroups.value = gradeGroups.value.map(group => ({
@@ -1226,7 +1055,7 @@ function startDashboardStatusCalibration() {
     if (document.visibilityState === 'visible' && gradeGroups.value.length) {
       fetchPracticalStatuses(gradeGroups.value, dashboardRequestSeq);
     }
-  }, 10000);
+  }, 60000);
 }
 
 function stopDashboardStatusCalibration() {
@@ -1268,6 +1097,10 @@ onBeforeUnmount(stopDashboardStatusCalibration);
 .teacher-dashboard {
   .box-card {
     min-height: calc(100vh - 84px);
+  }
+
+  .box-card.has-extension {
+    min-height: auto;
   }
 }
 
@@ -1448,6 +1281,35 @@ onBeforeUnmount(stopDashboardStatusCalibration);
   overflow: hidden; /* 防止溢出 */
 }
 
+/* 课程卡顶部的教材入口：卡片底部已被课堂入口占满，只能收成小胶囊放在信息区左上 */
+.textbook-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px;
+  margin-bottom: 2px;
+  border: 1px solid #b3d8ff;
+  border-radius: 9px;
+  background: #ecf5ff;
+  color: #409eff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.textbook-chip:hover {
+  background: #409eff;
+  border-color: #409eff;
+  color: #fff;
+}
+
+.textbook-chip .el-icon {
+  font-size: 11px;
+}
+
 .lesson-entry-footer {
   height: 32px;
   flex: 0 0 32px;
@@ -1537,12 +1399,6 @@ onBeforeUnmount(stopDashboardStatusCalibration);
   margin-left: auto;
   color: #909399;
   font-size: 12px;
-}
-.lesson-count-tag {
-  font-size: 12px; 
-  color: #909399;
-  text-align: right; /* 页码右对齐好看些 */
-  margin-top: 4px;
 }
 
 .grading-red-dot {

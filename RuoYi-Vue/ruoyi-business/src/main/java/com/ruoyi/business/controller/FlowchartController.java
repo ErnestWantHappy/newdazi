@@ -9,8 +9,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.business.domain.FlowchartQuestionConfig;
+import com.ruoyi.business.service.FlowchartAiAnswerService;
 import com.ruoyi.business.service.FlowchartService;
 import com.ruoyi.business.service.ClassroomTaskStateService;
 import com.ruoyi.business.mapper.BizStudentMapper;
@@ -29,6 +32,7 @@ public class FlowchartController extends BaseController {
 
     @Autowired private ClassroomTaskStateService taskStateService;
     @Autowired private BizStudentMapper studentMapper;
+    @Autowired private FlowchartAiAnswerService flowchartAiAnswerService;
 
     public FlowchartController(FlowchartService service) { this.service = service; }
 
@@ -65,6 +69,20 @@ public class FlowchartController extends BaseController {
         if (answerJson == null) throw new ServiceException("标准答案不能为空");
         // BaseController 同时存在 success(String message)，显式按数据返回，避免规则 JSON 被误放进 msg。
         return success((Object) service.generateRules(String.valueOf(answerJson)));
+    }
+
+    /**
+     * 拍照 + AI 生成流程图标准答案草稿：只返回规范化后的 answerJson，不写库，由老师核对后走现有保存接口落库。
+     */
+    @PreAuthorize("@ss.hasPermi('business:question:edit') or @ss.hasPermi('business:question:add')")
+    @PostMapping(value = "/question/ai-generate-answer", consumes = "multipart/form-data")
+    public AjaxResult aiGenerateAnswer(@RequestPart("file") MultipartFile file,
+                                       @RequestParam(required = false) String title,
+                                       @RequestParam(required = false) String gradeText,
+                                       @RequestParam(required = false) String semesterText,
+                                       @RequestParam(required = false) Integer lessonNum) {
+        return success(flowchartAiAnswerService.generate(file, title, gradeText, semesterText,
+                lessonNum, SecurityUtils.getUserId()));
     }
 
     @PreAuthorize("@studentSs.isStudent()")

@@ -32,6 +32,7 @@ class UnifiedDeletionTest {
     @Mock LessonClassScopeMapper lessonClassScopeMapper;
     @Mock IotMapper iotMapper;
     @Mock BizStudentMapper bizStudentMapper;
+    @Mock BizExtensionClassMapper extensionClassMapper;
     @Mock SysUserMapper userMapper;
     @Mock SysUserRoleMapper userRoleMapper;
     @Mock IBizTeacherClassService teacherClassService;
@@ -73,6 +74,9 @@ class UnifiedDeletionTest {
         assertEquals(1, lessons.deleteBizLessonByLessonId(7L));
         verify(purgeMapper).deleteAnswersByLessons(Collections.singletonList(7L));
         verify(purgeMapper).deleteGuideAnswersByLessons(Collections.singletonList(7L));
+        // 导学单进度与作品记录也必须随课清理，否则会留下无主行。
+        verify(purgeMapper).deleteGuideProgressByLessons(Collections.singletonList(7L));
+        verify(purgeMapper).deleteGuideUploadsByLessons(Collections.singletonList(7L));
         verifyNoInteractions(answerDeletionGuardService, purgeFileService);
         TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
         verify(purgeFileService).deleteUnreferenced(anyList());

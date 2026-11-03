@@ -10,6 +10,7 @@ function harness() {
   const reads = [], writes = []
   const c = vm.createContext({
     watch, gateContext: ref(null), gateSaving: ref(''), loading: ref(false),
+    analysisData: ref([]), matrixData: ref([]), analysisLoading: ref(false), matrixLoading: ref(false),
     selectedLessonIds: ref([239]), queryParams: ref({ entryYear: '2025', classCode: '1' }),
     getLessonGate: () => new Promise(resolve => reads.push(resolve)),
     setLessonGate: () => new Promise(resolve => writes.push(resolve)),

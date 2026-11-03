@@ -24,4 +24,11 @@ public interface LessonAutoAdvanceService
      * @return advanced / failed / details / message 等
      */
     Map<String, Object> manualAdvanceClasses(String entryYear, java.util.List<String> classCodes);
+
+    /** 逐班只读预检，复用执行时的权限、人数和下一课规则。 */
+    Map<String, Object> previewAdvanceClasses(String entryYear, java.util.List<String> classCodes);
+
+    /** 新页面携带预览时的当前课，拒绝课程变化后误推下一课；旧客户端保持兼容。 */
+    Map<String, Object> manualAdvanceClasses(String entryYear, java.util.List<String> classCodes,
+                                           Map<String, Long> expectedLessonIds);
 }

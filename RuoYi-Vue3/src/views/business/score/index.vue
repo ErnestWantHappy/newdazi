@@ -133,7 +133,7 @@
          <el-row :gutter="15" class="chart-row">
           <!-- 单选课程或无选择时，显示总分分布 -->
           <el-col :span="24" v-if="selectedLessonIds.length <= 1">
-            <rank-chart :data="gradedTableData" />
+            <rank-chart :data="tableData" />
           </el-col>
           <!-- 多选课程时，显示课程对比图 -->
           <el-col :span="24" v-else>
@@ -387,11 +387,11 @@
                       <el-tag v-else-if="getLessonScoreObj(scope.row, lessonId)?.unsubmitted" size="small" type="info">未提交</el-tag>
                       <!-- 缺考状态：橙色 Tag（有课表无记录，后端已显式标记） -->
                       <el-tag v-else-if="isLessonMissing(scope.row, lessonId)" size="small" type="warning" effect="plain" class="score-tag-absent">缺考</el-tag>
-                      <el-tag v-else-if="getLessonScoreObj(scope.row, lessonId)?.pendingGrading" size="small" type="warning">待批改</el-tag>
                       <!-- 未交状态：灰色斜杠 -（兼容无行旧数据） -->
                       <span v-else-if="!hasLessonSubmission(scope.row, lessonId)" class="score-unsubmitted" title="未提交/未作答">-</span>
                       <!-- 正常已提交打分状态 -->
                       <div v-else class="score-content-box">
+                        <small v-if="getLessonScoreObj(scope.row, lessonId)?.practicalPending" class="score-perf-hint">操作待批</small>
                         <span class="score-final" :class="{ 'is-perfect': isLessonScorePerfect(scope.row, lessonId) }">
                           {{ getLessonFinalScore(scope.row, lessonId) }}分
                         </span>
@@ -430,23 +430,24 @@
                       size="small"
                       :class="{ 'selected-tag': selectedLessonIds.includes(score.lessonId) }"
                       class="score-num"
-                    >{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.unsubmitted ? '未提交' : (score.pendingGrading ? '待批改' : (score.finalScore ?? score.totalScore)))) }}</el-tag>
+                    >{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.unsubmitted ? '未提交' : (score.finalScore ?? score.totalScore))) }}</el-tag>
                   </template>
                   <div class="score-detail">
+                    <p v-if="score.practicalPending" class="gray-text">操作题尚有待批，已评分部分先计入总分。</p>
                     <p><b>打字：</b><span class="score-num">{{ score.typingScore }}</span> 分</p>
                     <p><b>理论：</b><span class="score-num">{{ score.theoryScore }}</span> 分</p>
-                    <p><b>操作：</b><span class="score-num">{{ score.practicalPending ? '待批改' : score.practicalScore }}</span> 分</p>
+                    <p><b>操作：</b><span class="score-num">{{ score.practicalScore == null ? '待批改' : score.practicalScore }}</span> 分</p>
                     <p v-if="!score.practicalPending && (score.filePracticalScore !== undefined || score.pythonPracticalScore !== undefined)" class="score-subdetail">
                       <b>其中：</b>文件作品 <span class="score-num">{{ score.filePracticalScore || 0 }}</span> 分，Python 编程 <span class="score-num">{{ score.pythonPracticalScore || 0 }}</span> 分
                     </p>
                     <p>
-                      <b>作业分：</b><span class="score-num">{{ score.unsubmitted ? '未提交' : (score.pendingGrading ? '待批改' : score.totalScore) }}</span> 分
+                      <b>作业分：</b><span class="score-num">{{ score.unsubmitted ? '未提交' : score.totalScore }}</span> 分
                       <el-tag v-if="score.manualAdjusted" size="small" type="danger" effect="plain" class="manual-score-mark">修</el-tag>
                     </p>
-                    <p v-if="score.manualAdjusted"><b>原始作业分：</b><span class="score-num">{{ score.practicalPending ? '待批改' : score.originalTotalScore }}</span> 分</p>
+                    <p v-if="score.manualAdjusted"><b>原始作业分：</b><span class="score-num">{{ score.originalTotalScore }}</span> 分</p>
                     <p v-if="score.manualAdjusted"><b>修正原因：</b>{{ score.adjustmentReason || '-' }}</p>
                     <p><b>课堂表现：</b><span class="score-num">{{ (score.performanceScore || 0) > 0 ? '+' : '' }}{{ score.performanceScore || 0 }}</span> 分</p>
-                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.unsubmitted ? '未提交' : (score.pendingGrading ? '待批改' : (score.finalScore ?? score.totalScore)))) }}</span></p>
+                    <p><b>课程总分：</b><span class="score-num">{{ score.isAbsent ? '请假' : (score.isMissing ? '缺考' : (score.unsubmitted ? '未提交' : (score.finalScore ?? score.totalScore))) }}</span></p>
                     <el-divider v-if="score.avgTypingSpeed" style="margin: 8px 0" />
                     <template v-if="score.avgTypingSpeed">
                       <p><b>打字速度：</b><span class="score-num">{{ score.avgTypingSpeed }}</span> <small>字/分</small></p>
@@ -497,7 +498,7 @@
 
         <el-table-column v-if="visibleColumns.avgPractical" prop="avgPractical" label="操作平均" width="95" align="center" sortable>
           <template #default="scope">
-            <span class="gray-text score-num">{{ formatScoreDisplay(scope.row.avgPractical) }}</span>
+            <span class="gray-text score-num">{{ scope.row.finalTotal == null ? scope.row.scoreStatus : formatScoreDisplay(scope.row.avgPractical) }}</span>
           </template>
         </el-table-column>
         
@@ -506,7 +507,7 @@
           <template #default="scope">
             <div class="data-bar-cell">
               <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredTotal, maxTotal) + '%' }"></div>
-              <span class="data-bar-value total-score score-num">{{ formatScoreDisplay(scope.row.filteredTotal, isMultiScoreMode) }}</span>
+              <span class="data-bar-value total-score score-num">{{ scope.row.filteredTotal == null ? scope.row.scoreStatus : formatScoreDisplay(scope.row.filteredTotal, isMultiScoreMode) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -527,7 +528,7 @@
         <!-- 课程总分 -->
         <el-table-column v-if="visibleColumns.finalTotal" prop="finalTotal" :label="scoreLabels.finalTotal" width="110" align="center" sortable>
           <template #default="scope">
-            <span class="score-num" style="font-weight: bold; color: #409EFF;">{{ formatScoreDisplay(scope.row.finalTotal, isMultiScoreMode) }}</span>
+            <span class="score-num" style="font-weight: bold; color: #409EFF;">{{ scope.row.finalTotal == null ? scope.row.scoreStatus : formatScoreDisplay(scope.row.finalTotal, isMultiScoreMode) }}</span>
           </template>
         </el-table-column>
         
@@ -535,7 +536,7 @@
           <template #default="scope">
             <div class="data-bar-cell avg-bar">
               <div class="data-bar" :style="{ width: getBarWidth(scope.row.filteredAverage, 100) + '%' }"></div>
-              <span class="data-bar-value avg-score score-num">{{ formatScoreDisplay(scope.row.filteredAverage, isMultiScoreMode) }}</span>
+              <span class="data-bar-value avg-score score-num">{{ scope.row.filteredAverage == null ? scope.row.scoreStatus : formatScoreDisplay(scope.row.filteredAverage, isMultiScoreMode) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -1239,7 +1240,7 @@ function handlePerformanceSaved({ lessonId, performances }) {
       score.performanceScore = Number(item.score || 0);
       score.finalScore = clampClientScore(Number(score.totalScore || 0) + score.performanceScore);
       student.totalPerformance = score.performanceScore;
-      if (!score.pendingGrading && !score.isAbsent && !score.isMissing && !score.unsubmitted) {
+      if (!score.isAbsent && !score.isMissing && !score.unsubmitted) {
         student.filteredAverage = score.finalScore;
         student.finalTotal = score.finalScore;
       }
@@ -1350,7 +1351,7 @@ function processData() {
     let sumTyping = 0, sumTheory = 0, sumPractical = 0, sumTotal = 0;
     let sumPerformance = 0, sumFinal = 0; // 课堂表现分和课程总分
     let practicalCount = 0, gradedCount = 0;
-    let hasPending = false, hasPracticalPending = false;
+    let hasPracticalPending = false;
     let validScoreCount = 0; // 有效（非请假、非缺考）课次数
 
     // 打字统计：累加有效记录
@@ -1362,17 +1363,14 @@ function processData() {
       validScoreCount++;
       sumTyping += (s.typingScore || 0);
       sumTheory += (s.theoryScore || 0);
-      hasPending ||= !!s.pendingGrading;
       hasPracticalPending ||= !!s.practicalPending;
-      if (!s.practicalPending) {
+      if (s.practicalScore != null) {
         sumPractical += Number(s.practicalScore || 0);
         practicalCount++;
       }
-      if (!s.pendingGrading) {
-        sumTotal += Number(s.totalScore || 0);
-        sumFinal += Number(s.finalScore ?? s.totalScore ?? 0);
-        gradedCount++;
-      }
+      sumTotal += Number(s.totalScore || 0);
+      sumFinal += Number(s.finalScore ?? s.totalScore ?? 0);
+      gradedCount++;
       sumPerformance += (s.performanceScore || 0);
       
       // 累加打字统计（只统计有数据的记录）
@@ -1387,9 +1385,9 @@ function processData() {
     const avgTyping = validScoreCount > 0 ? Math.round(sumTyping / validScoreCount) : 0;
     const avgTheory = validScoreCount > 0 ? Math.round(sumTheory / validScoreCount) : 0;
     const avgPractical = practicalCount > 0 ? Math.round(sumPractical / practicalCount) : (hasPracticalPending ? null : 0);
-    const avgHomework = gradedCount > 0 ? roundOne(sumTotal / gradedCount) : (hasPending ? null : 0);
+    const avgHomework = gradedCount > 0 ? roundOne(sumTotal / gradedCount) : null;
     const avgPerformance = validScoreCount > 0 ? roundOne(sumPerformance / validScoreCount) : 0;
-    const filteredAverage = gradedCount > 0 ? roundOne(sumFinal / gradedCount) : (hasPending ? null : 0);
+    const filteredAverage = gradedCount > 0 ? roundOne(sumFinal / gradedCount) : null;
     
     // 计算整体打字指标
     const overallTypingSpeed = typingCount > 0 ? Math.round(typingSpeedSum / typingCount) : null;
@@ -1402,7 +1400,7 @@ function processData() {
       studentNo: student.studentNo == null ? '' : String(student.studentNo),
       // 班级号同样可能非纯数字（如 9A），Number() 会 NaN
       className: className == null || className === '' ? '' : String(className),
-      filteredTotal: multiMode ? avgHomework : (hasPending && !gradedCount ? null : Math.round(sumTotal)), // 多课模式展示均分，避免总分口径混乱
+      filteredTotal: multiMode ? avgHomework : (gradedCount ? Math.round(sumTotal) : null), // 多课模式展示均分，避免总分口径混乱
       filteredAverage: filteredAverage,
       avgTyping: avgTyping,
       avgTheory: avgTheory,
@@ -1411,7 +1409,10 @@ function processData() {
       overallAccuracy,
       overallCompletion,
       totalPerformance: multiMode ? avgPerformance : sumPerformance,
-      finalTotal: filteredAverage
+      finalTotal: filteredAverage,
+      scoreStatus: validScoreCount > 0 ? (hasPracticalPending ? '操作待批' : '')
+        : (filteredScores.some(s => s.isAbsent) ? '请假'
+          : filteredScores.some(s => s.isMissing) ? '缺考' : '未提交')
     };
   }).sort((a, b) => naturalCodeCompare(a.studentNo, b.studentNo));
 }
@@ -1828,11 +1829,11 @@ function getLessonScoreDisplay(student, lessonId) {
     if (s && s.isAbsent) return '请假';
     if (s && s.isMissing) return '缺考';
     if (s?.unsubmitted) return '未提交';
-    if (s?.pendingGrading) return '待批改';
+    if (!s) return '未提交';
     const performance = s.performanceScore || 0;
     const performanceText = performance > 0 ? `+${performance}` : String(performance);
     const manualText = s.manualAdjusted ? '修' : '';
-    return `${manualText}${s.totalScore || 0}/${performanceText}/${s.finalScore ?? s.totalScore ?? 0}`;
+    return `${manualText}${s.totalScore || 0}/${performanceText}/${s.finalScore ?? s.totalScore ?? 0}${s.practicalPending ? '（操作待批）' : ''}`;
 }
 
 function isLessonAbsent(student, lessonId) {

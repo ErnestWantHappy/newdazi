@@ -13,6 +13,10 @@ import org.apache.commons.lang3.builder.ToStringStyle;
  */
 public class BizLesson extends BaseEntity
 {
+    private String lessonScope;
+    public String getLessonScope() { return lessonScope; }
+    public void setLessonScope(String value) { lessonScope=value; }
+
     private static final long serialVersionUID = 1L;
 
     /** 课程ID */
@@ -81,6 +85,12 @@ public class BizLesson extends BaseEntity
      * 开启后教师首页课程卡片与学生首页才显示物联入口；实验与分组仍在物联页配置。
      */
     private Boolean iotEnabled;
+
+    /** 本课对应教材册ID；为空表示老师未指定教材课次。 */
+    private Long textbookBookId;
+
+    /** 本课对应教材课次稳定键，如 lesson-6；为空表示未绑定。 */
+    private String textbookSectionKey;
 
     /** 课程包含的题目列表 (非数据库字段) */
     private List<BizLessonQuestion> questions;
@@ -239,6 +249,22 @@ public class BizLesson extends BaseEntity
         this.iotEnabled = iotEnabled;
     }
 
+    public Long getTextbookBookId() {
+        return textbookBookId;
+    }
+
+    public void setTextbookBookId(Long textbookBookId) {
+        this.textbookBookId = textbookBookId;
+    }
+
+    public String getTextbookSectionKey() {
+        return textbookSectionKey;
+    }
+
+    public void setTextbookSectionKey(String textbookSectionKey) {
+        this.textbookSectionKey = textbookSectionKey;
+    }
+
     public List<BizLessonQuestion> getQuestions()
     {
         return questions;
@@ -259,6 +285,8 @@ public class BizLesson extends BaseEntity
                 .append("status", getStatus())
                 .append("semester", getSemester())
                 .append("lessonNum", getLessonNum())
+                .append("textbookBookId", getTextbookBookId())
+                .append("textbookSectionKey", getTextbookSectionKey())
                 .append("lessonMode", getLessonMode())
                 .append("teacherNote", getTeacherNote())
                 .append("creatorId", getCreatorId())

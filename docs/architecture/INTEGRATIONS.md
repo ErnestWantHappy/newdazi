@@ -1,8 +1,37 @@
 # 外部协议与实时链路
 
+## 2026-10-15PPTX临时副本兼容（130正式1.30.51）
+
+公共FileConversionUtils在既有DOCX预处理后调用PptxPreviewNormalizer；已知PPTX直线/二至五段折线按保存几何展开成只读普通路径，保留负调整值和变换，避免Impress重新布线。短单行输入输出框在严格条件下禁止自动折行。未知形状保持原转换，原件身份/毒文件/隔离进程保持；PDF继续交既有页图v4，无新依赖、配置或渲染器版本变化。反馈四班40份已备份后重算成功，其他缓存不自动刷新，见[设计与边界](../../contexts/pptx-preview-fix-20261015/design.md)。
+
+2026-10-20按授权完成朱仁敏2022级2班三题108份旧PPTX预览重算（首批37份、补批71份），以正式渲染器逐份从新PDF生成新页图地址，避开旧哈希/浏览器缓存；原件、分数与版本保持，无部署/重启。各批鉴权接口及真实教师样本浏览器通过，三班未处理，判断框换行及浅色连线仍有差异，见[验收与回退](../../contexts/ppt-connector-diagnosis-20261020.md)。
+
+## 2026-10-29机位助手0.2.6与网页版本兼容（已随1.30.61/1.30.63发布）
+
+正式1.30.60前端 `probeLocalSeatHelper` 写死只接受助手 `0.2.3/0.2.4`，而配套发布的助手已是0.2.5，导致已装0.2.5的电脑网页一律显示“机位未关联”（塔山教师反馈）。修复：前端改为按最低版本0.2.3比较（`helperVersionAtLeast`），新增`npm run test:seat-helper`并纳入`build:prod`；助手0.2.6默认安装目录改为`C:\SchoolSeatHelper`（同传/还原通常只覆盖C盘），不可写时回退当前用户LocalAppData，同机首次运行会把旧D盘或用户目录的`seat-helper.dat`/`platform-url.txt`迁移到新目录并保留原目录；回环探测版本号统一取`AppVersion`常量。本机前端构建与发布校验通过、产物已无写死白名单；客户端53项回归通过。前端最低版本修复已随1.30.61发布，助手0.2.6已随1.30.63热替换下载文件（默认C盘，真实学生下载哈希与站点块已验）；真实学生认领复验仍待。
+
+## 2026-10-28机位最新登录优先（本机修复、未发布）
+
+教师反馈换账号后学生卡片仍显示旧电脑内网 IP。新增 `latest:{studentId}`（最新登录标记，TTL 7200）：只有最新登录能写/清 `student:{id}` 与认领设备，旧登录返回 `superseded` 且不消费票据；最新会话退出后立即让位。`liveStudentDevice` 要求 `latest` 与 `owner` 均匹配本次登录，`owner==null` 不再放行。大屏无 IP 时不再显示「未连助手」，状态保留在悬浮提示。单测与双端构建通过，未发布、未做真实助手换账号复验；详见[专题](../../contexts/seat-ip-login-order-20261028.md)。
+
+## 2026-10-17机位静默与默认浏览器优先（130正式1.30.52）
+
+助手0.2.4通过回环TCP所属进程识别浏览器、Windows HTTP默认程序优先。设备认证的open票据携带浏览器归属/75秒优先权，学生只提交单次token；后端学校行锁串行仲裁，status不回写owner，非默认浏览器不反抢。安装包允许明确的域名/IP清单，普通启动默认静默。无结构SQL或新依赖，三端已配套发布并重启；旧版须退出后安装一次。正式证据及回退见[验收](../../contexts/seat-score-release-20261017.md)，协议边界见[专题](../../contexts/seat-helper-browser-20261016/tasks.md)，不影响作品/成绩权限。
+
+## 2026-10-14机位回环认领（130正式1.30.50）
+
+助手0.2.3以127.0.0.1:28123/identity提供精确Origin允许的短期单次凭证，HttpListener因URLACL拒绝时同端口TcpListener兼容，不要求学生提升权限。浏览器不取得设备secret/proof；/student/claim-local复用当前学生/学校/撤销与凭证消费校验，网页自报IP/deviceId不作为认证。新MAC指纹由持旧密钥的/device/upgrade-identity升级并保留设备ID。学生800ms探测、10秒续期/未关联2秒重试，大屏5秒REST校准；服务端75/90秒TTL保持，Presence连接IP只留诊断，不显示为机位地址。
+
+新浏览器LNA权限与HTTP安全上下文仍需机房验证，CORS不能保证零浏览器权限框。130已迁移两列并发布0.2.3，教师/教研员通过，真实学生认领仍待有效正式凭据；协议、真实测试边界及回退见[专题设计](../../contexts/seat-helper-local-20261014/design.md)、[验收](../../contexts/seat-helper-local-20261014/verification.md)。
+
+## 2026-10-14正式1.30.49
+
+后端 `20261014_seat_logo_overflow_v2`、助手0.2.2，前端保持1.30.48。页框扩展与Logo已发布；反馈班级44份success/v4且原件成绩版本保持，但样本内部A4整页clip仍截断底部，尚未解决。常量升级必须同步两处编译期内联消费者，不能只换渲染器class；外置config与隔离env仍引用20261008旧release。制品差异、两次短暂重启、备份哈希、下载/教师验收与回滚见[正式记录](../../contexts/seat-logo-overflow-release-20261014.md)。
+
+
 ## 2026-10-13 连线题转换正式 1.30.45
 
-Office 六通道 → 公共 FileConversionUtils → 可确定环绕原点的 DOCX 临时副本（两分支页面坐标）→ 既有共享池/隔离进程 → PDF / page-jpeg-v3 版本目录。原件与毒文件身份仍使用原路径，临时副本在转换结束后清理；未知布局保留原转换。无新依赖或配置，57 项测试、49 份本机样本验证通过；130 于 19:13:52 探活，25 份旧图全部重算成功，新页图 API 可读，原件/成绩/版本保持，真实教师可见 1.30.45。Linux 既有字体分页及未修正连接符显示差异仍存在，未通过本轮横坐标修复解决。规则、范围与回退见 [专题设计](../../contexts/connector-render-fix-20261013/design.md) 与 [验收](../../contexts/connector-render-fix-20261013/verification.md)；AOCI 未同步。
+Office 六通道 → 公共 FileConversionUtils → 可确定环绕原点的 DOCX 临时副本（两分支页面坐标）→ 既有共享池/隔离进程 → PDF / page-jpeg-v3 版本目录。原件与毒文件身份仍使用原路径，临时副本在转换结束后清理；未知布局保留原转换。无新依赖或配置，57 项测试、49 份本机样本验证通过；130 于 19:13:52 探活，25 份旧图全部重算成功，新页图 API 可读，原件/成绩/版本保持，真实教师可见 1.30.45。Linux 既有字体分页及未修正连接符显示差异仍存在，未通过本轮横坐标修复解决。规则、范围与回退见 [专题设计](../../contexts/connector-render-fix-20261013/design.md) 与 [验收](../../contexts/connector-render-fix-20261013/verification.md)
 
 > 当前正式1.30.27（2026-10-05）：客户端0.2.0学生直接运行自动读取IP，原网页登录确定学校，教师设置名称并确认。正式配对/DPAPI、重复关联、撤销及98秒Python续期通过；下面较早记录为历史。见 [自动关联验收](../../contexts/classroom-experience-20261002/seat-helper-auto-verification-20261005.md)。
 
@@ -53,6 +82,16 @@ sequenceDiagram
 
 
 ## Judge0
+
+2026-11-02课堂交互运行（已随1.30.66发布130）：课堂“运行”改用已有本站Pyodide基础库，在独占Worker内用JSPI/run_sync等待`input()`；“交作业”仍经原后台Judge0计分，浏览器不直连Judge0、不持有服务凭据。独立Python题单、DATA_LAB及旧RUN/CUSTOM_RUN接口保持。执行/输入/加载超时分离，切题和停止销毁线程。需新版浏览器JSPI能力；Worker不等于安全沙箱，本机输出不作计分依据。无SQL、配置、新依赖或后端重启，前端回滚可恢复原界面。见[设计及风险](../../contexts/python-interactive-20261102/design.md)。
+
+```mermaid
+flowchart LR
+  Editor[课堂编辑器] -->|运行| Worker[独占Worker / 本站Pyodide]
+  Worker <-->|提示 / 输入并回车| Terminal[学生终端]
+  Editor -->|交作业| API[原鉴权提交接口]
+  API --> Judge0[Judge0 / 原成绩写回]
+```
 
 - 调用方向：平台后端 → Judge0，浏览器不直接请求 Judge0。
 - 配置：`JUDGE0_*` 环境变量；令牌只在私密部署配置。

@@ -113,8 +113,8 @@ public class TeacherDashboardController extends BaseController
             {
                 String entryYear = String.valueOf(classRow.get("entryYear"));
                 String classCode = String.valueOf(classRow.get("classCode"));
-                classStatuses.add(deadlineService.getStatus(
-                        lessonId, deptId, entryYear, classCode, true));
+                classStatuses.add(deadlineService.getStatusForDashboard(
+                        lessonId, deptId, entryYear, classCode));
             }
             statusByLesson.put(lessonId, classStatuses);
         }

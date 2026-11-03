@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.util.LessonScopeUtils;
 import com.ruoyi.business.domain.BizClassroomPerformance;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.ClassroomStudentTaskSummaryVo;
@@ -45,7 +46,8 @@ public class ClassGroupingService {
 
     /**
      * 班级事实以任课关系为准，不能把教师当前主部门误当成其实际负责班级的学校。
-     * 同一教师在多个学校拥有同一年级同一班号时，不猜测目标学校，避免跨校读取。
+     * 同一教师在多个学校拥有同一年级同一班号时，用当前学校消歧；
+     * 当前学校不在其任课学校内时不猜测目标学校，避免跨校读取。
      */
     private Long resolveManagedClassDept(Long userId, Long currentDeptId, String entryYear, String classCode) {
         if (entryYear == null || entryYear.trim().isEmpty() || classCode == null || classCode.trim().isEmpty()) {
@@ -57,8 +59,9 @@ public class ClassGroupingService {
         }
         List<Long> deptIds = mapper.selectManagedClassDeptIds(userId, entryYear, classCode);
         if (deptIds == null || deptIds.isEmpty()) throw new ServiceException("您没有该班级的管理权限");
-        if (deptIds.size() > 1) throw new ServiceException("该年级班号在多个学校存在，请从具体课程或班级入口进入");
-        return deptIds.get(0);
+        if (deptIds.size() == 1) return deptIds.get(0);
+        if (currentDeptId != null && deptIds.contains(currentDeptId)) return currentDeptId;
+        throw new ServiceException("该年级班号在多个学校存在，请从具体课程或班级入口进入");
     }
 
     public Map<String, Object> listSchemes(Long userId, Long deptId, String entryYear, String classCode) {
@@ -185,6 +188,7 @@ public class ClassGroupingService {
     public Map<String,Object> generateSnapshot(Long userId, Long lessonId, String entryYear, String classCode, Long schemeId) {
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null || !lesson.getDeptId().equals(com.ruoyi.common.utils.SecurityUtils.getDeptId())) throw new ServiceException("课程不存在或不属于当前学校");
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能使用课堂分组");
         requireLessonOwner(userId, lesson);
         requireClass(userId, lesson.getDeptId(), entryYear, classCode);
         if (mapper.countLessonAssignment(lessonId, lesson.getDeptId(), entryYear, classCode) == 0)
@@ -212,6 +216,7 @@ public class ClassGroupingService {
     public Map<String,Object> generateSnapshotAuto(Long userId, Long lessonId, String entryYear, String classCode, Map<String,Object> request) {
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null || !lesson.getDeptId().equals(com.ruoyi.common.utils.SecurityUtils.getDeptId())) throw new ServiceException("课程不存在或不属于当前学校");
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能使用课堂分组");
         requireLessonOwner(userId, lesson);
         requireClass(userId, lesson.getDeptId(), entryYear, classCode);
         if (mapper.countLessonAssignment(lessonId, lesson.getDeptId(), entryYear, classCode) == 0)

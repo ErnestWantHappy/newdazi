@@ -1,0 +1,75 @@
+{
+  "book_code": "xxkj-7-1-2026",
+  "title": "信息科技 七年级下册",
+  "short_title": "七下",
+  "grade": 7,
+  "semester": "1",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 123,
+  "page_offset": 5,
+  "offset_breaks": [],
+  "source_page_start": 126,
+  "source_page_end": 248,
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 8 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 认识物联网",
+      "intro": { "title": "单元导入", "pdf_start": 9, "pdf_end": 10 },
+      "lessons": [
+        { "no": 1, "title": "互联网和物联网", "printed_start": 6, "printed_end": 10, "pdf_start": 11, "pdf_end": 15 },
+        { "no": 2, "title": "走进物联网", "printed_start": 11, "printed_end": 14, "pdf_start": 16, "pdf_end": 19 },
+        { "no": 3, "title": "物联网与生活", "printed_start": 15, "printed_end": 19, "pdf_start": 20, "pdf_end": 24 },
+        { "no": 4, "title": "物联网展望", "printed_start": 20, "printed_end": 24, "pdf_start": 25, "pdf_end": 29 },
+        { "no": 5, "title": "人工智能物联网", "printed_start": 25, "printed_end": 28, "pdf_start": 30, "pdf_end": 33 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 29, "printed_end": 29, "pdf_start": 34, "pdf_end": 34 }
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 探秘物联网",
+      "intro": { "title": "单元导入", "pdf_start": 35, "pdf_end": 36 },
+      "lessons": [
+        { "no": 6, "title": "感知与识别", "printed_start": 32, "printed_end": 37, "pdf_start": 37, "pdf_end": 42 },
+        { "no": 7, "title": "常见的传感器", "printed_start": 38, "printed_end": 42, "pdf_start": 43, "pdf_end": 47 },
+        { "no": 8, "title": "传感器的应用", "printed_start": 43, "printed_end": 48, "pdf_start": 48, "pdf_end": 53 },
+        { "no": 9, "title": "无线通信技术", "printed_start": 49, "printed_end": 53, "pdf_start": 54, "pdf_end": 58 },
+        { "no": 10, "title": "物联网协议", "printed_start": 54, "printed_end": 58, "pdf_start": 59, "pdf_end": 63 },
+        { "no": 11, "title": "物联系统原型搭建", "printed_start": 59, "printed_end": 64, "pdf_start": 64, "pdf_end": 69 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 65, "printed_end": 65, "pdf_start": 70, "pdf_end": 70 }
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 物联网实践",
+      "intro": { "title": "单元导入", "pdf_start": 71, "pdf_end": 72 },
+      "lessons": [
+        { "no": 12, "title": "物联网数据的获取", "printed_start": 68, "printed_end": 72, "pdf_start": 73, "pdf_end": 77 },
+        { "no": 13, "title": "物联网数据的汇集与使用", "printed_start": 73, "printed_end": 77, "pdf_start": 78, "pdf_end": 82 },
+        { "no": 14, "title": "物联网控制与反馈", "printed_start": 78, "printed_end": 83, "pdf_start": 83, "pdf_end": 88 },
+        { "no": 15, "title": "物联系统原型的程序编写", "printed_start": 84, "printed_end": 88, "pdf_start": 89, "pdf_end": 93 },
+        { "no": 16, "title": "物联系统原型的运行与调试", "printed_start": 89, "printed_end": 94, "pdf_start": 94, "pdf_end": 99 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 95, "printed_end": 95, "pdf_start": 100, "pdf_end": 100 }
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 算法与人工智能",
+      "intro": { "title": "单元导入", "pdf_start": 101, "pdf_end": 102 },
+      "lessons": [
+        { "no": 17, "title": "二分搜索算法", "printed_start": 98, "printed_end": 102, "pdf_start": 103, "pdf_end": 107 },
+        { "no": 18, "title": "深度优先搜索算法", "printed_start": 103, "printed_end": 107, "pdf_start": 108, "pdf_end": 112 },
+        { "no": 19, "title": "人工智能的技术基础", "printed_start": 108, "printed_end": 112, "pdf_start": 113, "pdf_end": 117 },
+        { "no": 20, "title": "人工智能中的神经网络", "printed_start": 113, "printed_end": 117, "pdf_start": 118, "pdf_end": 122 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 118, "printed_end": 118, "pdf_start": 123, "pdf_end": 123 }
+    }
+  ],
+  "appendix": null,
+  "notes": [
+    "源文件《七年级下册.pdf》实为「七上 + 七下」合并扫描件：第 1–125 页是七年级上册，第 126–248 页才是下册；本册只取 126–248，重新编号为 1–123。",
+    "有文本层，20 课起始页逐页按「第N课 课名」文本核对通过；印刷页偏移 5（印刷页 1 = 本册 PDF 6，即原文件第 131 页目录）。",
+    "原文件末页即第四单元小结，无版权页/封底，故不设 appendix。"
+  ]
+}

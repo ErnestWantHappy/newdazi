@@ -117,11 +117,19 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
     @Override
     public Map<String, Object> manualAdvanceClasses(String entryYear, List<String> classCodes)
     {
+        return manualAdvanceClasses(entryYear, classCodes, null);
+    }
+
+    @Override
+    public Map<String, Object> manualAdvanceClasses(String entryYear, List<String> classCodes,
+                                                   Map<String, Long> expectedLessonIds)
+    {
         Map<String, Object> result = new HashMap<>();
         int advanced = 0;
         int failed = 0;
         List<String> successMsgs = new java.util.ArrayList<>();
         List<String> failMsgs = new java.util.ArrayList<>();
+        List<Map<String, Object>> details = new java.util.ArrayList<>();
         if (StringUtils.isBlank(entryYear))
         {
             throw new ServiceException("请选择年级");
@@ -144,34 +152,65 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         {
             throw new ServiceException("请至少选择一个班级");
         }
+        boolean systemFailed = false;
         for (String pureClass : pureClasses)
         {
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("classCode", pureClass);
+            if (systemFailed)
+            {
+                failed++;
+                String message = pureClass + "班未执行：前一班级发生异常，请刷新状态后重试";
+                failMsgs.add(message);
+                detail.put("success", false);
+                detail.put("message", message);
+                details.add(detail);
+                continue;
+            }
             try
             {
                 // 经代理调用，保证单班推进事务生效
-                Map<String, Object> one = self.manualAdvanceOneClassTx(entryYear.trim(), pureClass);
+                if (expectedLessonIds != null && expectedLessonIds.get(pureClass) == null)
+                {
+                    throw new ServiceException("预检信息已失效，请刷新状态后重试");
+                }
+                Map<String, Object> one = expectedLessonIds == null
+                        ? self.manualAdvanceOneClassTx(entryYear.trim(), pureClass)
+                        : self.manualAdvanceOneClassTx(entryYear.trim(), pureClass, expectedLessonIds.get(pureClass));
                 advanced += one.get("advanced") instanceof Number ? ((Number) one.get("advanced")).intValue() : 0;
                 if (one.get("message") != null)
                 {
                     successMsgs.add(String.valueOf(one.get("message")));
                 }
+                detail.putAll(one);
+                detail.put("success", true);
             }
             catch (ServiceException ex)
             {
                 failed++;
                 failMsgs.add(pureClass + "班：" + ex.getMessage());
+                detail.put("success", false);
+                detail.put("message", ex.getMessage());
             }
             catch (Exception ex)
             {
-                // 未达条件由 ServiceException 分支汇总；未知异常必须继续上抛，不能伪装成普通跳过。
+                // 未知异常记录完整堆栈并停止后续班级，已提交班级仍须如实返回。
                 log.error("手动推进班级发生系统异常 class={}", pureClass, ex);
-                throw new ServiceException(pureClass + "班推进时发生系统异常，请稍后重试");
+                // 前面班级可能已经提交，保留结果，避免用户误认为整批失败而重复推进。
+                failed++;
+                String error = pureClass + "班推进时发生系统异常，请刷新状态后重试";
+                failMsgs.add(error);
+                detail.put("success", false);
+                detail.put("message", error);
+                systemFailed = true;
             }
+            details.add(detail);
         }
         result.put("advanced", advanced);
         result.put("failed", failed);
         result.put("successMessages", successMsgs);
         result.put("failMessages", failMsgs);
+        result.put("details", details);
         StringBuilder msg = new StringBuilder();
         msg.append("成功推进 ").append(advanced).append(" 个班级");
         if (failed > 0)
@@ -192,8 +231,55 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> manualAdvanceOneClassTx(String entryYear, String pureClass)
     {
+        return manualAdvanceOneClassTx(entryYear, pureClass, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> manualAdvanceOneClassTx(String entryYear, String pureClass, Long expectedLessonId)
+    {
         Map<String, Object> result = new HashMap<>();
         result.put("advanced", 0);
+        Long deptId = SecurityUtils.getDeptId();
+        Long userId = SecurityUtils.getUserId();
+        requireManagedClass(entryYear, pureClass);
+        // 锁定班级当前指派；手动推进与 Quartz 同时发生时只允许一个事务成功。
+        BizLessonAssignment target = assignmentMapper.selectCurrentAssignmentForUpdate(entryYear, pureClass, deptId);
+        if (target == null || target.getLessonId() == null)
+        {
+            throw new ServiceException("当前没有指派课程");
+        }
+        Long lessonId = target.getLessonId();
+        if (expectedLessonId != null && !expectedLessonId.equals(lessonId))
+        {
+            throw new ServiceException("当前课程已变化，本次未推进；请刷新状态后核对");
+        }
+        BizLesson lesson = authorizedLesson(target);
+        Map<String, Object> check = classReadiness(lesson, target);
+        if (!Boolean.TRUE.equals(check.get("ready")))
+        {
+            throw new ServiceException(String.valueOf(check.get("reason")));
+        }
+        BizLesson next = findNextLesson(lesson);
+        if (next == null || next.getLessonId() == null)
+        {
+            throw new ServiceException("没有可推进的下一课，请先备好同年级下一课");
+        }
+        int moved = advanceOneClass(lesson, next, target, "MANUAL", userId);
+        if (moved != 1)
+        {
+            throw new ServiceException("课程已被其他操作推进，请刷新后重试");
+        }
+        result.put("advanced", moved);
+        result.put("currentLessonId", lessonId);
+        result.put("nextLessonId", next.getLessonId());
+        result.put("message", String.format("%s班：从「%s」→「%s」", pureClass,
+                lesson.getLessonTitle() != null ? lesson.getLessonTitle() : ("第" + lesson.getLessonNum() + "课"),
+                next.getLessonTitle() != null ? next.getLessonTitle() : ("第" + next.getLessonNum() + "课")));
+        return result;
+    }
+
+    private void requireManagedClass(String entryYear, String pureClass)
+    {
         Long deptId = SecurityUtils.getDeptId();
         Long userId = SecurityUtils.getUserId();
         if (!SecurityUtils.isAdmin(userId))
@@ -208,13 +294,17 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
                 throw new ServiceException("只能推进自己管理的班级");
             }
         }
-        // 锁定班级当前指派；手动推进与 Quartz 同时发生时只允许一个事务成功。
-        BizLessonAssignment target = assignmentMapper.selectCurrentAssignmentForUpdate(entryYear, pureClass, deptId);
+    }
+
+    private BizLesson authorizedLesson(BizLessonAssignment target)
+    {
         if (target == null || target.getLessonId() == null)
         {
             throw new ServiceException("当前没有指派课程");
         }
         Long lessonId = target.getLessonId();
+        Long deptId = SecurityUtils.getDeptId();
+        Long userId = SecurityUtils.getUserId();
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
         if (lesson == null)
         {
@@ -236,41 +326,128 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         {
             throw new ServiceException("只能推进自己创建的课程");
         }
-        // 使用教师统一阈值；默认 50%
-        int threshold = lesson.getAutoAdvanceThresholdPct() != null ? lesson.getAutoAdvanceThresholdPct() : 50;
-        if (threshold < 30)
+        return lesson;
+    }
+
+    private int threshold(BizLesson lesson)
+    {
+        return Math.max(30, Math.min(100, lesson.getAutoAdvanceThresholdPct() == null
+                ? 50 : lesson.getAutoAdvanceThresholdPct()));
+    }
+
+    private long delayMillis(BizLesson lesson)
+    {
+        BigDecimal hours = lesson.getAutoAdvanceDelayHours() == null
+                ? new BigDecimal("2.0") : lesson.getAutoAdvanceDelayHours();
+        return hours.multiply(BigDecimal.valueOf(TimeUnit.HOURS.toMillis(1)))
+                .setScale(0, RoundingMode.HALF_UP).longValue();
+    }
+
+    private Map<String, Object> classReadiness(BizLesson lesson, BizLessonAssignment assignment)
+    {
+        int pct = threshold(lesson);
+        int scored = studentAnswerMapper.countScoredStudentsByLessonAndClass(lesson.getLessonId(),
+                assignment.getClassCode(), assignment.getEntryYear(), assignment.getDeptId());
+        int total = studentMapper.countByDeptIdAndClass(assignment.getDeptId(),
+                assignment.getEntryYear(), assignment.getClassCode());
+        boolean ready = total > 0 && Math.floor(scored * 100.0 / total) >= pct;
+        Map<String, Object> row = new HashMap<>();
+        row.put("readyCount", scored);
+        row.put("totalCount", total);
+        row.put("requiredCount", (int) Math.ceil(total * pct / 100.0));
+        row.put("thresholdPct", pct);
+        row.put("ready", ready);
+        row.put("reason", ready ? "可手动推进" : total <= 0 ? "班级暂无学生，无法推进"
+                : String.format("有成绩 %s/%s 人，需达到 %s%%（至少%s人）", scored, total, pct,
+                        row.get("requiredCount")));
+        return row;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> previewAdvanceClasses(String entryYear, List<String> classCodes)
+    {
+        if (StringUtils.isBlank(entryYear) || classCodes == null || classCodes.isEmpty())
         {
-            threshold = 30;
+            throw new ServiceException("请选择年级与班级");
         }
-        if (threshold > 100)
+        java.util.LinkedHashSet<String> codes = new java.util.LinkedHashSet<>();
+        for (String code : classCodes)
         {
-            threshold = 100;
+            if (StringUtils.isNotBlank(code) && StringUtils.isNotBlank(code.replace("班", "").trim()))
+            {
+                codes.add(code.replace("班", "").trim());
+            }
         }
-        if (!isClassReady(lessonId, target, threshold))
+        if (codes.isEmpty())
         {
-            int scored = studentAnswerMapper.countScoredStudentsByLessonAndClass(
-                    lessonId, target.getClassCode(), target.getEntryYear(), target.getDeptId());
-            int total = studentMapper.countByDeptIdAndClass(target.getDeptId(), target.getEntryYear(), target.getClassCode());
-            throw new ServiceException(String.format(
-                    "「%s」有成绩 %s/%s 人，需达到 %s%%",
-                    lesson.getLessonTitle() != null ? lesson.getLessonTitle() : ("第" + lesson.getLessonNum() + "课"),
-                    scored, total, threshold));
+            throw new ServiceException("请至少选择一个班级");
         }
-        BizLesson next = findNextLesson(lesson);
-        if (next == null || next.getLessonId() == null)
+        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (String code : codes)
         {
-            throw new ServiceException("没有可推进的下一课");
+            Map<String, Object> row = new HashMap<>();
+            row.put("classCode", code);
+            row.put("canAdvance", false);
+            try
+            {
+                requireManagedClass(entryYear.trim(), code);
+                BizLessonAssignment assignment = assignmentMapper.selectCurrentAssignment(
+                        entryYear.trim(), code, SecurityUtils.getDeptId());
+                BizLesson lesson = authorizedLesson(assignment);
+                row.putAll(classReadiness(lesson, assignment));
+                row.put("currentLessonId", lesson.getLessonId());
+                row.put("currentLessonTitle", lessonLabel(lesson));
+                BizLesson next = findNextLesson(lesson);
+                boolean hasNext = next != null && next.getLessonId() != null;
+                row.put("nextLessonId", hasNext ? next.getLessonId() : null);
+                row.put("nextLessonTitle", hasNext ? lessonLabel(next) : "暂无下一课，请先备课");
+                row.put("canAdvance", hasNext && Boolean.TRUE.equals(row.get("ready")));
+                if (!hasNext)
+                {
+                    row.put("reason", "没有可推进的下一课，请先备好同年级下一课");
+                }
+                boolean enabled = Boolean.TRUE.equals(lesson.getAutoAdvanceEnabled());
+                row.put("autoEnabled", enabled);
+                String autoStatus;
+                if (!enabled)
+                {
+                    autoStatus = "已关闭，不会自动推进";
+                }
+                else if (!Boolean.TRUE.equals(row.get("canAdvance")))
+                {
+                    autoStatus = "已开启，" + row.get("reason");
+                }
+                else if (assignment.getAutoAdvanceReadyTime() == null)
+                {
+                    autoStatus = "已达标，等待定时扫描开始计时（每5分钟扫描）";
+                }
+                else
+                {
+                    long due = assignment.getAutoAdvanceReadyTime().getTime() + delayMillis(lesson);
+                    row.put("autoDueTime", due);
+                    autoStatus = due <= now ? "等待下一次扫描推进（每5分钟扫描）" : "已达标，正在等待";
+                }
+                row.put("autoStatus", autoStatus);
+            }
+            catch (ServiceException ex)
+            {
+                row.put("reason", ex.getMessage());
+                row.put("autoStatus", "当前无法推进");
+            }
+            rows.add(row);
         }
-        int moved = advanceOneClass(lesson, next, target, "MANUAL", userId);
-        if (moved != 1)
-        {
-            throw new ServiceException("课程已被其他操作推进，请刷新后重试");
-        }
-        result.put("advanced", moved);
-        result.put("message", String.format("%s班：从「%s」→「%s」", pureClass,
-                lesson.getLessonTitle() != null ? lesson.getLessonTitle() : ("第" + lesson.getLessonNum() + "课"),
-                next.getLessonTitle() != null ? next.getLessonTitle() : ("第" + next.getLessonNum() + "课")));
+        Map<String, Object> result = new HashMap<>();
+        result.put("rows", rows);
+        result.put("serverTime", now);
         return result;
+    }
+
+    private String lessonLabel(BizLesson lesson)
+    {
+        return "第" + lesson.getLessonNum() + "课 "
+                + (lesson.getLessonTitle() == null ? "" : lesson.getLessonTitle());
     }
 
     /**
@@ -289,20 +466,8 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         {
             return 0;
         }
-        int threshold = lesson.getAutoAdvanceThresholdPct() != null ? lesson.getAutoAdvanceThresholdPct() : 50;
-        if (threshold < 30)
-        {
-            threshold = 30;
-        }
-        if (threshold > 100)
-        {
-            threshold = 100;
-        }
-        BigDecimal delayHours = lesson.getAutoAdvanceDelayHours() != null
-                ? lesson.getAutoAdvanceDelayHours()
-                : new BigDecimal("2.0");
-        long delayMs = delayHours.multiply(BigDecimal.valueOf(TimeUnit.HOURS.toMillis(1)))
-                .setScale(0, RoundingMode.HALF_UP).longValue();
+        int threshold = threshold(lesson);
+        long delayMs = delayMillis(lesson);
 
         BizLesson next = findNextLesson(lesson);
         if (next == null || next.getLessonId() == null)

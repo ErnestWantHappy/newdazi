@@ -30,7 +30,7 @@ public class MimeTypeUtils
             // 图片
             "bmp", "gif", "jpg", "jpeg", "png",
             // word excel powerpoint
-            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "html", "htm", "txt",
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "html", "htm", "css", "txt",
             // 压缩文件
             "rar", "zip", "7z", "gz", "bz2",
             // 视频格式

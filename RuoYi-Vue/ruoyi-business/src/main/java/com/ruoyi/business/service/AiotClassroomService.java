@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.IotExperiment;
+import com.ruoyi.business.util.LessonScopeUtils;
 import com.ruoyi.business.domain.IotGroup;
 import com.ruoyi.business.domain.IotGroupStudent;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
@@ -91,6 +92,7 @@ public class AiotClassroomService
             throw new ServiceException("只能访问本班当前课程的课堂");
         }
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能使用物联网实验");
         data.put("lessonName", lesson != null ? lesson.getLessonTitle() : null);
 
         List<IotExperiment> experiments = mapper.selectExperimentsByLesson(lessonId, deptId);
@@ -225,6 +227,7 @@ public class AiotClassroomService
         {
             throw new ServiceException("无权访问该课程");
         }
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能使用物联网实验");
 
         // 班级缺省时取该课程指派的第一个班级
         List<Map<String, Object>> assigned = mapper.selectAssignedClassesByLesson(lessonId, deptId);

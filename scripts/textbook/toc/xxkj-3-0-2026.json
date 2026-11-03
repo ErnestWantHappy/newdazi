@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-3-0-2026",
+  "title": "信息科技 三年级上册",
+  "short_title": "三上",
+  "grade": 3,
+  "semester": "0",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 88,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 感受智能社会",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "感知智能生活", "printed_start": 2, "printed_end": 5, "pdf_start": 8, "pdf_end": 11 },
+        { "no": 2, "title": "了解智能工具", "printed_start": 6, "printed_end": 9, "pdf_start": 12, "pdf_end": 15 },
+        { "no": 3, "title": "寻找智能“小眼睛”", "printed_start": 10, "printed_end": 13, "pdf_start": 16, "pdf_end": 19 },
+        { "no": 4, "title": "触摸智能“小耳朵”", "printed_start": 14, "printed_end": 17, "pdf_start": 20, "pdf_end": 23 },
+        { "no": 5, "title": "对话智能“小搭档”", "printed_start": 18, "printed_end": 22, "pdf_start": 24, "pdf_end": 28 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 获取在线资源",
+      "intro": { "title": "单元导入", "pdf_start": 29, "pdf_end": 29 },
+      "lessons": [
+        { "no": 6, "title": "进入在线平台", "printed_start": 24, "printed_end": 28, "pdf_start": 30, "pdf_end": 34 },
+        { "no": 7, "title": "下载平台资源", "printed_start": 29, "printed_end": 32, "pdf_start": 35, "pdf_end": 38 },
+        { "no": 8, "title": "查看资源与文件", "printed_start": 33, "printed_end": 36, "pdf_start": 39, "pdf_end": 42 },
+        { "no": 9, "title": "分类整理资源", "printed_start": 37, "printed_end": 40, "pdf_start": 43, "pdf_end": 46 },
+        { "no": 10, "title": "共享资源途径", "printed_start": 41, "printed_end": 44, "pdf_start": 47, "pdf_end": 50 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 体验在线生活",
+      "intro": { "title": "单元导入", "pdf_start": 51, "pdf_end": 51 },
+      "lessons": [
+        { "no": 11, "title": "认识在线社会", "printed_start": 46, "printed_end": 49, "pdf_start": 52, "pdf_end": 55 },
+        { "no": 12, "title": "体验在线应用", "printed_start": 50, "printed_end": 53, "pdf_start": 56, "pdf_end": 59 },
+        { "no": 13, "title": "绘制在线生活", "printed_start": 54, "printed_end": 58, "pdf_start": 60, "pdf_end": 64 },
+        { "no": 14, "title": "关注网络痕迹", "printed_start": 59, "printed_end": 62, "pdf_start": 65, "pdf_end": 68 },
+        { "no": 15, "title": "保护数字身份", "printed_start": 63, "printed_end": 66, "pdf_start": 69, "pdf_end": 72 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 开展在线学习",
+      "intro": { "title": "单元导入", "pdf_start": 73, "pdf_end": 73 },
+      "lessons": [
+        { "no": 16, "title": "分解问题步骤", "printed_start": 68, "printed_end": 71, "pdf_start": 74, "pdf_end": 77 },
+        { "no": 17, "title": "在线协作学习", "printed_start": 72, "printed_end": 76, "pdf_start": 78, "pdf_end": 82 },
+        { "no": 18, "title": "分享学习成果", "printed_start": 77, "printed_end": 80, "pdf_start": 83, "pdf_end": 86 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 87, "pdf_end": 88 },
+  "notes": [
+    "本册为矢量排版 PDF，无文本层，课次页码来自原站映射并经首页/单元页渲染核对。"
+  ]
+}

@@ -14,7 +14,7 @@ export function removeTeacherQuestion(planVersionId, questionId) { return reques
 export function publishTeacherPlan(planId, planVersionId) { return request({ url: `/business/python-practice/teacher/plans/${planId}/versions/${planVersionId}/publish`, method: 'post' }) }
 export function getTeacherAnalytics(params) { return request({ url: '/business/python-practice/teacher/analytics', method: 'get', params }) }
 
-export function getStudentPracticeOverview() { return request({ url: '/business/python-practice/student/overview', method: 'get' }) }
+export function getStudentPracticeOverview(params = {}) { return request({ url: '/business/python-practice/student/overview', method: 'get', params, silentError: params.space === 'extension' }) }
 export function getStudentPracticeQuestion(params) { return request({ url: '/business/python-practice/student/question', method: 'get', params }) }
 export function saveStudentPracticeDraft(data) { return request({ url: '/business/python-practice/student/draft', method: 'post', data }) }
 export function submitStudentPractice(data) { return request({ url: '/business/python-practice/student/submit', method: 'post', data }) }

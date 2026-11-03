@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-4-1-2026",
+  "title": "信息科技 四年级下册",
+  "short_title": "四下",
+  "grade": 4,
+  "semester": "1",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 86,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 数字世界",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "初探数字化", "printed_start": 2, "printed_end": 5, "pdf_start": 8, "pdf_end": 11 },
+        { "no": 2, "title": "图像编码", "printed_start": 6, "printed_end": 10, "pdf_start": 12, "pdf_end": 16 },
+        { "no": 3, "title": "字符编码", "printed_start": 11, "printed_end": 14, "pdf_start": 17, "pdf_end": 20 },
+        { "no": 4, "title": "声音编码", "printed_start": 15, "printed_end": 19, "pdf_start": 21, "pdf_end": 25 },
+        { "no": 5, "title": "视频编码", "printed_start": 20, "printed_end": 24, "pdf_start": 26, "pdf_end": 30 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 解码与校验",
+      "intro": { "title": "单元导入", "pdf_start": 31, "pdf_end": 31 },
+      "lessons": [
+        { "no": 6, "title": "数据解码", "printed_start": 26, "printed_end": 28, "pdf_start": 32, "pdf_end": 34 },
+        { "no": 7, "title": "数据校验", "printed_start": 29, "printed_end": 32, "pdf_start": 35, "pdf_end": 38 },
+        { "no": 8, "title": "数据需要保护", "printed_start": 33, "printed_end": 36, "pdf_start": 39, "pdf_end": 42 },
+        { "no": 9, "title": "人机编码有差异", "printed_start": 37, "printed_end": 40, "pdf_start": 43, "pdf_end": 46 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 用数据讲故事",
+      "intro": { "title": "单元导入", "pdf_start": 47, "pdf_end": 47 },
+      "lessons": [
+        { "no": 10, "title": "记录身边的数据", "printed_start": 42, "printed_end": 44, "pdf_start": 48, "pdf_end": 50 },
+        { "no": 11, "title": "设计统计表", "printed_start": 45, "printed_end": 48, "pdf_start": 51, "pdf_end": 54 },
+        { "no": 12, "title": "数据可视化", "printed_start": 49, "printed_end": 52, "pdf_start": 55, "pdf_end": 58 },
+        { "no": 13, "title": "规律与预测", "printed_start": 53, "printed_end": 56, "pdf_start": 59, "pdf_end": 62 },
+        { "no": 14, "title": "数据分析报告", "printed_start": 57, "printed_end": 61, "pdf_start": 63, "pdf_end": 67 },
+        { "no": 15, "title": "分享数据故事", "printed_start": 62, "printed_end": 64, "pdf_start": 68, "pdf_end": 70 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 手写数字与人工智能",
+      "intro": { "title": "单元导入", "pdf_start": 71, "pdf_end": 71 },
+      "lessons": [
+        { "no": 16, "title": "手写数字的收集与标注", "printed_start": 66, "printed_end": 70, "pdf_start": 72, "pdf_end": 76 },
+        { "no": 17, "title": "手写数字的识别与应用", "printed_start": 71, "printed_end": 75, "pdf_start": 77, "pdf_end": 81 },
+        { "no": 18, "title": "人工智能中的数据问题", "printed_start": 76, "printed_end": 79, "pdf_start": 82, "pdf_end": 85 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页", "pdf_start": 86, "pdf_end": 86 },
+  "notes": [
+    "本册为扫描 PDF，无文本层；课次页码取自目录页并经单元页/首页/末页渲染核对（目录 5–6 页，印刷页 1 = PDF 7，偏移 6）。末页为版权页，无封底空白页。"
+  ]
+}

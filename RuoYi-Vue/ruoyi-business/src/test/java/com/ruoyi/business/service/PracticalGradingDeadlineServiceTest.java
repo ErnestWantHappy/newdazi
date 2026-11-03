@@ -43,6 +43,33 @@ class PracticalGradingDeadlineServiceTest
     }
 
     @Test
+    void typingParticipationCannotStartPracticalDeadline()
+    {
+        Map<String, Object> values = metrics(true, 45, 45, 0, 0);
+        values.put("practicalSubmittedStudentCount", 0);
+        when(deadlineMapper.selectClassMetrics(1L, 10L, "2025", "1")).thenReturn(values);
+        PracticalGradingStatusVo status = service.getStatus(1L, 10L, "2025", "1", true);
+        assertEquals("NOT_TRIGGERED", status.getStatusCode());
+        assertEquals(45, status.getAnsweredStudentCount());
+        assertEquals(0, status.getPracticalSubmittedStudentCount());
+        assertEquals(23, status.getRemainingStudentsToTrigger());
+        verify(deadlineMapper, never()).insertDeadlineIgnore(any());
+    }
+
+    @Test
+    void dashboardStatusIsCachedForShortWindow()
+    {
+        Map<String, Object> values = metrics(true, 45, 45, 0, 0);
+        when(deadlineMapper.selectClassMetrics(1L, 10L, "2025", "1")).thenReturn(values);
+
+        PracticalGradingStatusVo first = service.getStatusForDashboard(1L, 10L, "2025", "1");
+        PracticalGradingStatusVo second = service.getStatusForDashboard(1L, 10L, "2025", "1");
+
+        org.junit.jupiter.api.Assertions.assertSame(first, second);
+        verify(deadlineMapper, org.mockito.Mockito.times(1)).selectClassMetrics(1L, 10L, "2025", "1");
+    }
+
+    @Test
     void zeroDenominatorDoesNotTrigger()
     {
         when(deadlineMapper.selectClassMetrics(1L, 10L, "2025", "1"))
@@ -236,6 +263,7 @@ class PracticalGradingDeadlineServiceTest
         map.put("hasPractical", practical ? 1 : 0);
         map.put("totalStudentCount", total);
         map.put("answeredStudentCount", answered);
+        map.put("practicalSubmittedStudentCount", answered);
         map.put("dueCount", due);
         map.put("gradedCount", graded);
         return map;

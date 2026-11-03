@@ -80,6 +80,8 @@ export function getProgress(bindingId, entryYear, classCode) {
   return request({
     url: '/business/guide-sheet/progress',
     method: 'get',
+    // 看板 5 秒轮询：失败由页面状态条提示，不能每 5 秒弹一次全局红条。
+    silentError: true,
     params: { bindingId, entryYear, classCode }
   })
 }
@@ -122,6 +124,8 @@ export function submitGuideSheet(data, signal) {
     method: 'post',
     data,
     signal,
+    // 学生端每 30 秒自动保存：失败由页面“保存失败”状态处理，避免反复全局弹窗。
+    silentError: true,
     headers: { repeatSubmit: false }
   })
 }
@@ -142,7 +146,9 @@ export function sendHeartbeat(data) {
   return request({
     url: '/business/guide-sheet/progress/heartbeat',
     method: 'put',
-    data
+    data,
+    // 30 秒心跳属后台任务，失败不能打断学生作答。
+    silentError: true
   })
 }
 
@@ -181,7 +187,9 @@ export function saveGuideSheetManualGrades(bindingId, studentId, data) {
 export function getStudentGrading(bindingId) {
   return request({
     url: '/business/guide-sheet/student/grading/' + bindingId,
-    method: 'get'
+    method: 'get',
+    // 评分卡自己会显示“正在获取评分/暂无评分”，不需要全局报错打断阅读。
+    silentError: true
   })
 }
 

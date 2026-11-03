@@ -31,7 +31,10 @@ import javax.imageio.stream.ImageOutputStream;
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.business.constant.ResearchActivityConstants;
@@ -48,6 +51,10 @@ public class ResearchActivityUploadService
     private static final Map<String, Set<String>> PACKAGE_MIMES;
     private static final Set<String> IMAGE_MIMES = new HashSet<>(
             Arrays.asList("image/jpeg", "image/jpg", "image/png", "image/webp"));
+
+    @Autowired(required = false)
+    @Qualifier("threadPoolTaskExecutor")
+    private ThreadPoolTaskExecutor previewExecutor;
 
     static
     {
@@ -135,8 +142,30 @@ public class ResearchActivityUploadService
         if (!target.startsWith(root)) throw new ServiceException("图片存储路径非法");
         copy(file, target);
         // 原图用于教研正文和下载，登录展厅固定读取独立展示图，避免把高分辨率原图带入登录链路。
-        resolveLoginPreviewImage(target);
+        generateLoginPreviewAsync(target);
         return "/profile/upload/research-activity/images/" + relative.toString().replace('\\', '/');
+    }
+
+    /**
+     * 展示图生成是上传链路里最耗时的一步；读路径已有按需补生成，上传后异步预热即可。
+     */
+    private void generateLoginPreviewAsync(Path source)
+    {
+        Runnable task = () -> resolveLoginPreviewImage(source);
+        if (previewExecutor == null)
+        {
+            task.run();
+            return;
+        }
+        try
+        {
+            previewExecutor.execute(task);
+        }
+        catch (Exception e)
+        {
+            // 线程池拒绝时退回同步，保持原上传行为，不让展示图静默缺失。
+            task.run();
+        }
     }
 
     /**

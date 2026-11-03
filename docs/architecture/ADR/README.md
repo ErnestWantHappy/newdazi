@@ -7,4 +7,6 @@
 ## 当前 ADR
 
 - `ADR-001-versioned-classroom-task-state.md`：课堂任务六态、版本号、事务提交后 WebSocket 推送及 REST 校准。
-- [ADR-002-aoci-project-memory.md](ADR-002-aoci-project-memory.md)：本机AOCI索引与现有操作规则、当前事实、历史证据的分工及回退边界。
+- [ADR-002-aoci-project-memory.md](ADR-002-aoci-project-memory.md)：核心上下文、架构专题与源码证据分工；原AOCI接入方案已于2026-10-15停用。
+- [ADR-003-slow-sql-interceptor-six-arg.md](ADR-003-slow-sql-interceptor-six-arg.md)：慢 SQL 拦截必须同时覆盖 PageHelper 的 6 参数 `Executor.query`，否则分页查询绕过持久化。
+- [ADR-004-textbook-page-images-outside-release.md](ADR-004-textbook-page-images-outside-release.md)：电子教材页图存于 release 之外，经鉴权接口 + ETag 回图，不落无鉴权的 `/profile/`，不建课程绑定表。

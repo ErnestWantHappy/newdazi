@@ -17,6 +17,8 @@ import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizLessonGuideSheetBinding;
 import com.ruoyi.business.domain.BizLessonQuestion;
 import com.ruoyi.business.domain.BizStudent;
+import com.ruoyi.business.domain.BizTextbookBook;
+import com.ruoyi.business.domain.BizTextbookSection;
 import com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo;
 import com.ruoyi.business.domain.vo.GradeGroupVo;
 import com.ruoyi.business.domain.vo.LessonDetailVo;
@@ -26,6 +28,7 @@ import com.ruoyi.business.mapper.CollaborationMapper;
 import com.ruoyi.business.mapper.BizLessonQuestionMapper;
 import com.ruoyi.business.mapper.BizStudentMapper;
 import com.ruoyi.business.mapper.BizTeacherClassMapper;
+import com.ruoyi.business.mapper.BizTextbookMapper;
 import com.ruoyi.business.mapper.GuideSheetBindingMapper;
 import com.ruoyi.business.mapper.LessonClassScopeMapper;
 import com.ruoyi.business.mapper.ProgrammingJudgeMapper;
@@ -50,6 +53,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.business.mapper.BizLessonMapper;
+import com.ruoyi.business.util.LessonScopeUtils;
 import com.ruoyi.business.mapper.IotMapper;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.service.IBizLessonService;
@@ -125,6 +129,9 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     @Autowired
     private StudentAnswerArchiveService studentAnswerArchiveService;
+
+    @Autowired
+    private BizTextbookMapper textbookMapper;
 
     @Override
     public BizLesson selectBizLessonByLessonId(Long lessonId)
@@ -274,7 +281,10 @@ public class BizLessonServiceImpl implements IBizLessonService
         purgeMapper.deleteFlowchartSubmissionsByLessons(ids);
         purgeMapper.deleteFlowchartDraftsByLessons(ids);
         purgeMapper.deleteFlowchartSnapshotsByLessons(ids);
+        // 导学单四张表都要清：作品记录与进度靠 binding_id 关联，必须先于绑定删除。
+        purgeMapper.deleteGuideUploadsByLessons(ids);
         purgeMapper.deleteGuideAnswersByLessons(ids);
+        purgeMapper.deleteGuideProgressByLessons(ids);
         purgeMapper.deleteGuideBindingsByLessons(ids);
         purgeMapper.deleteLessonToolsByLessons(ids);
         if (!roomIds.isEmpty())
@@ -529,6 +539,8 @@ public class BizLessonServiceImpl implements IBizLessonService
                 ? lesson.getAutoAdvanceDelayHours() : new java.math.BigDecimal("2.0"));
         // 物联网开关：考勤课一律按关闭返回，前端仅对常规课显示入口。
         detailVo.setIotEnabled(!attendanceDetail && Boolean.TRUE.equals(lesson.getIotEnabled()));
+        detailVo.setTextbookBookId(lesson.getTextbookBookId());
+        detailVo.setTextbookSectionKey(lesson.getTextbookSectionKey());
         detailVo.setQuestions(questions);
         detailVo.setAssignedClassCodes(assignedClassCodes);
         detailVo.setAllClassesInGrade(allClassesInGrade);
@@ -557,6 +569,8 @@ public class BizLessonServiceImpl implements IBizLessonService
         {
             existingLesson = bizLessonMapper.selectBizLessonByLessonId(lessonDetailVo.getLessonId());
             assertCanManageLesson(existingLesson);
+            // 常规设计器只维护常规课：拓展课由拓展班模块创建，历史课只读。
+            LessonScopeUtils.requireRegular(existingLesson, "拓展课和历史课不能通过课程设计器修改");
         }
         validateLessonContent(lessonDetailVo);
 
@@ -574,6 +588,61 @@ public class BizLessonServiceImpl implements IBizLessonService
         }
         validateEntryYear(entryYear);
         lessonDetailVo.setEntryYear(entryYear);
+
+        // 教材绑定：旧版前端不提交 touched，跳过写入，避免缓存页面保存时静默清空已选教材。
+        Long textbookBookId = null;
+        String textbookSectionKey = null;
+        if (Boolean.TRUE.equals(lessonDetailVo.getTextbookBindingTouched()))
+        {
+            textbookBookId = lessonDetailVo.getTextbookBookId();
+            textbookSectionKey = StringUtils.trimToNull(lessonDetailVo.getTextbookSectionKey());
+            // 提交的绑定与库内完全一致时不再校验教材上下架与目录：原册下架后老师仍要能改课程标题等其它字段，
+            // 不能因为“教材不可用”整节课都保存不了。只有实际改动绑定才重新校验。
+            boolean bindingUnchanged = existingLesson != null
+                    && Objects.equals(existingLesson.getTextbookBookId(), textbookBookId)
+                    && Objects.equals(StringUtils.trimToNull(existingLesson.getTextbookSectionKey()), textbookSectionKey);
+            if ((textbookBookId != null || textbookSectionKey != null) && !bindingUnchanged)
+            {
+                if (textbookBookId == null || textbookSectionKey == null)
+                {
+                    throw new ServiceException("教材选择不完整，请重新选择本课对应教材");
+                }
+                BizTextbookBook textbookBook = textbookMapper.selectBookById(textbookBookId);
+                if (textbookBook == null)
+                {
+                    throw new ServiceException("所选教材未上架或不存在，请重新选择");
+                }
+                if (lessonDetailVo.getGrade() == null || textbookBook.getGrade() == null
+                        || textbookBook.getGrade().longValue() != lessonDetailVo.getGrade().longValue())
+                {
+                    throw new ServiceException("所选教材与课程年级不一致，请重新选择");
+                }
+                String textbookSemester = StringUtils.trimToNull(lessonDetailVo.getSemester());
+                if (!"9".equals(textbookBook.getSemester())
+                        && !Objects.equals(textbookBook.getSemester(), textbookSemester))
+                {
+                    throw new ServiceException("所选教材与课程学期不一致，请重新选择");
+                }
+                boolean sectionMatched = false;
+                List<BizTextbookSection> sections = textbookMapper.selectSectionsByBookId(textbookBookId);
+                if (sections != null)
+                {
+                    for (BizTextbookSection section : sections)
+                    {
+                        if (textbookSectionKey.equals(section.getSectionKey())
+                                && "LESSON".equals(section.getKind()))
+                        {
+                            sectionMatched = true;
+                            break;
+                        }
+                    }
+                }
+                if (!sectionMatched)
+                {
+                    throw new ServiceException("所选教材课次不存在，请重新选择");
+                }
+            }
+        }
 
         BizLesson lessonToSave = new BizLesson();
         lessonToSave.setLessonId(lessonDetailVo.getLessonId());
@@ -619,6 +688,10 @@ public class BizLessonServiceImpl implements IBizLessonService
         }
         Long lessonId = lessonToSave.getLessonId();
         lessonDetailVo.setLessonId(lessonId);
+        if (Boolean.TRUE.equals(lessonDetailVo.getTextbookBindingTouched()))
+        {
+            bizLessonMapper.updateTextbookBinding(lessonId, textbookBookId, textbookSectionKey);
+        }
 
         // 调分不再拦截：历史答题的 score 与客观题对错保持落库原状，仅新提交按新分值与最新评分快照计分。
         List<Long> previousQuestionIds = lessonQuestionMapper.selectQuestionIdsByLessonId(lessonId);
@@ -1062,6 +1135,8 @@ public class BizLessonServiceImpl implements IBizLessonService
 
     private void assertCanManageLesson(BizLesson lesson)
     {
+        if (lesson!=null && lesson.getLessonScope()!=null && !"regular".equals(lesson.getLessonScope()))
+            throw new ServiceException("拓展签到课请从拓展班入口管理，历史课程仅可查看");
         if (lesson == null)
         {
             throw new ServiceException("课程不存在");

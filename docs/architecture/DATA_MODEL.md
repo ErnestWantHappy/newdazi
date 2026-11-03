@@ -1,5 +1,37 @@
 # 数据模型与迁移约定
 
+## 2026-10-30拓展课双空间（本机，未发布）
+
+`sql/extension_class_v1.sql` 新增 `biz_extension_class`、活跃成员、课时名单、题单投放名单四表；学生档案不复制。载体为建班年份与同校同届未占用51–99班号，按学校锁分配，展示使用班名。学生唯一成员索引在移出/归档时释放。课时名单创建后不变；题单发布记录投放名单，新成员获得已发布题单时补记，移出/归档不删旧记录。新增lesson_scope/extension_class_id/lesson_date、plan_scope/extension_class_id、space_pref/space_selected共7列。新增表显式general_ci匹配旧业务表。迁移仅本机执行；130旧班逐人核验及历史登记/冻结未执行。[设计与备份](../../contexts/extension-class/tasks.md)。
+
+## 2026-10-29教师端电子教材（130正式1.30.61）
+
+新增 4 张独立表，不改既有表：`biz_textbook_book`（册，`book_code` 唯一，`grade`+`semester`，`total_pages`/`page_offset`）、`biz_textbook_unit`（单元，`book_id+unit_no` 唯一）、`biz_textbook_section`（条目，`kind` 为 FRONT/UNIT_INTRO/LESSON/SUMMARY/APPENDIX，`section_key` 册内稳定，`lesson_no` 仅 LESSON）、`biz_textbook_page`（页，`book_id+page_no` 唯一，`image_path` 为教材根目录相对路径，`sha256` 作 ETag）。
+
+菜单 `menu_id=26100`（`path=textbook`，`component=business/textbook/index`）授权 `admin/teacher/researcher`。DDL 与种子均在 `sql/textbook_v1.sql`、`sql/textbook_seed_20261029.sql`，幂等；130 已执行 **13 册 / 50 单元 / 334 条目 / 1301 页**，每册页号 1..total_pages 连续、越界页由 `requirePage` 拒绝。不建课程↔教材绑定表，课次由教师手选。[设计](../../contexts/textbook-module/design.md)、[ADR-004](ADR/ADR-004-textbook-page-images-outside-release.md)。
+
+## 2026-10-20文件自主重交（130正式1.30.53）
+
+无表结构迁移。文件作业已有正式成绩可自主提交；旧版本保留score_snapshot/scoring_details_json，新版本对应答案score=NULL、状态SUBMITTED，仅成功事务切换。暂存/取消/失败保持原数据；缺当前版本的有分记录拒绝覆盖。其他题型和删除规则保持；[设计](../../contexts/student-file-resubmit-20261020/design.md)。
+
+## 2026-10-17机位浏览器优先（130正式1.30.52）
+
+0.2.4无表结构迁移。设备认证open票据与Redis owner新增browserKey/preferredBrowser/browserUntil，成功消费有效票据续75秒；学校行锁串行仲裁，状态查询不回写owner，防旧快照覆盖。长期机位表/设备凭据/学生身份保持，产品发布记录SQL只在正式成功后执行。130新备份427,255,471B，124设备/42基准保持，三端已发布并重启；[正式证据与回退](../../contexts/seat-score-release-20261017.md)。
+
+## 2026-10-17普通课成绩汇总与打字响应（130正式1.30.52）
+
+无表结构迁移。当前题目答案的非NULL正式score累计为作业分，未批操作的NULL保持；有效作品任一未批则`practicalPending=true`，部分已批操作仍可返回数值合计。空占位不产生有效提交。`pendingGrading`保留提示事实，不再令总分为空或排除课程均分；请假/缺考/未提交继续排除。交卷新增`typingResults[questionId]`返回本人已保存最高分对应文本及三项指标，当前课程已交答案同步返回三项指标。打字独立历史表、教师轮次和原子择优SQL保持；无历史分批量回填。详细图与契约见[设计](../../contexts/score-partial-20261016/design.md)。
+
+## 2026-10-15操作题期限修复（130正式1.30.51）
+
+复用原课程班级期限和审计表，无结构迁移。状态DTO新增`practicalSubmittedStudentCount`，全题型`answeredStudentCount`语义保持；阈值时间及剩余起算人数基于当前有效操作提交。备份后已执行`sql/practical_deadline_zhu_20261015.sql`，只校正期限1233，旧值/无人工审计保护、锁行、1行更新+1条审计，复跑0变化。其他历史期限和成绩不改；四班40份PPTX仅重算派生预览，原件/成绩/版本保持，见[正式验收](../../contexts/zhu-teacher-feedback-20261015.md)。
+
+## 2026-10-14机位确认快照（130正式1.30.50）
+
+`sql/seat_helper_local_claim_v2.sql`在v1的`biz_seat_helper_binding`新增可空`local_ip`与`seat_name`，由教师当前课堂确认写快照，学生身份沿用原学生表，不猜填历史IP。旧空IP基准仍按device_id比较；新基准同时检查IP，设备当前命名改变不回写快照。最近confirmed_at的机房作为该学校/入学年/班号默认机房。确认锁当前指派、学校和基准，并复核最新deviceId/IP，重复IP及缺席/保留占用冲突不覆盖。设备MAC升级只修改经旧密钥认证的fingerprint，device_id与原基准保持；查询包含撤销记录，避免同指纹重配绕过撤销。
+
+130已整库备份、迁移两列/复跑及后检，111设备/42旧基准保持，双端/0.2.3发布重启完成；教师真实接口通过，学生真实认领待有效账号，本机库未迁移。新增列与基准数据在回退时保留，不整库回灌。详见[设计](../../contexts/seat-helper-local-20261014/design.md)。
+
 > 2026-10-03正式1.30.26无表结构变更；`seat_helper_enable_http_20261003.sql`仅启用当前61所有效学校并为新配置填写HTTP根地址，已有地址不覆盖，设备与基准不自动生成。验收数据仅独立学校，已停用/撤销，真实成绩不变；详见 [助手验收](../../contexts/classroom-experience-20261002/seat-helper-release-verification-20261003.md)。
 
 > 2026-10-03正式1.30.24已上线（v4.02），先前本机候选描述转为历史；四份课堂SQL及厂商密钥依赖已迁移，正式API13组/浏览器9组通过。118条历史状态未治理，助手保持关闭、机房待验。见 [正式验收](../../contexts/classroom-experience-20261002/release-verification-20261003.md)。
@@ -145,6 +177,7 @@ erDiagram
 - 一次学生导入中的 `sys_user`、`sys_user_role`、`biz_student` 和新增 `biz_teacher_class` 必须处于同一事务，按最多 200 条分批写入并核对影响行数；任何一段失败都必须回滚，禁止继续返回“部分成功”。允许在写库前排除格式错误、Excel 内重复和已有有效账号，并在结构化结果中分别计数。
 - 学生安全处理复用既有状态字段：`sys_user.status` 为 `0=正常、1=停用`，停用不改 `biz_student` 及历史成绩；只有经 `StudentBusinessRecordMapper` 确认无答题及其他业务记录的学生才允许硬删除。批量纠错以 `student_id` 定位并原地更新 `user_id` 对应账号和档案，禁止删除重建。
 - `biz_lesson.status` 为 `0=正常、1=已归档`，归档课程仍保留指派、答案和成绩，仅从日常课程查询中过滤；恢复通过课程状态接口完成。迁移脚本为 `sql/lesson_archive_status_v1.sql`，回滚脚本为 `sql/lesson_archive_status_v1_rollback.sql`。
+- `biz_lesson.textbook_book_id` / `textbook_section_key`（2026-10-30，本机已执行 `sql/lesson_textbook_binding_v1.sql`，130 未执行）保存本课对应的一个教材课次，均可空；`textbook_section_key` 对应 `biz_textbook_section.section_key`，服务端校验册上架、课程年级/学期匹配且 `kind='LESSON'`。不建独立绑定表；旧前端不提交 `textbookBindingTouched` 时不改写绑定，专用 update 才允许置空。
 
 ## 2026-09-03 多功能改造数据模型状态
 
@@ -173,3 +206,15 @@ erDiagram
 ## 2026-10-07 查询修复（无结构迁移）
 
 推进和班级成绩人数对操作题复用成绩汇总事实：非空答案、已有成绩或有效版本指针；空占位不计入。理论/打字和独立课堂表现规则保留。图片SQL同时约束主题、学校、作者有效性。机位候选机房并集包含本班历史已确认基准，设备改归属不自动搬移基准；管理员注册码在学校锁内拒绝同指纹有效设备重复注册。未治理历史重复设备与空作品状态。见 [复核记录](../../contexts/bug-review-20261007.md)。
+
+## 2026-10-28 诊断性能索引
+
+`sql/diagnosis_perf_indexes_20261028.sql` 新增 5 条二级索引，均为幂等、可在线执行，不修改业务数据；本机 `xueyeceping_server_20260729` 与 130 均已执行（130 于 1.30.60 发布时在线建索引，43 秒）。
+
+- `biz_student_answer.idx_answer_text_prefix (student_answer(191))`：资源鉴权按答案路径等值查询。
+- `biz_student_answer.idx_answer_preview_path (preview_path(191))`：资源鉴权按预览路径等值查询。
+- `biz_practical_attachment.idx_attachment_preview_path (preview_path(191))`：资源鉴权按附件预览路径等值查询；`resource_path(191)` 原已存在。
+- `biz_student_answer.idx_answer_lesson_student_submit (lesson_id, student_id, submit_time)`：`selectClassMetrics` 的 `MIN(submit_time)` 分组。
+- `biz_student_answer.idx_answer_lesson_student_question_answer (lesson_id, student_id, question_id, answer_id)`：`selectClassStatusByLesson` 的 `MAX(answer_id)` 分组。
+
+前检：`information_schema.statistics` 同名索引；执行后 `EXPLAIN` 资源查询应为 `ref`，班级分组应为覆盖索引。回滚：逐条 `DROP INDEX`（在线）；索引向后兼容，回退代码时可不删。`biz_student.user_id_unique`、`biz_practical_grading_deadline.uk_practical_deadline_class` 已存在，不重复新增。

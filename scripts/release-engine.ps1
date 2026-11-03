@@ -167,7 +167,7 @@ try {
         Test-Artifacts $dir $manifest
         if($live.directory -eq $dir -and $live.indexHash -eq $manifest.indexSha256){Health $manifest.indexSha256 30;Save-State 'succeeded' 'already_active_no_restart';exit 0}
         if($live.jarHash -ne $manifest.baselineSha256 -or $live.indexHash -ne $manifest.baselineIndexSha256){throw 'baseline_drift'}
-        if(@((Get-ItemProperty $reg).AppEnvironmentExtra).Count -ne 20){throw 'unexpected_environment_count'}
+        if(@((Get-ItemProperty $reg).AppEnvironmentExtra).Count -ne 18){throw 'unexpected_environment_count'}
         Health $live.indexHash 30
         foreach($s in @('NewDaziBackend3009','UnifiedNginx')){if((Get-Service $s).Status -ne 'Running'){throw 'baseline_service_not_running'}}
         $candidate=Join-Path $job 'nginx.candidate.conf'

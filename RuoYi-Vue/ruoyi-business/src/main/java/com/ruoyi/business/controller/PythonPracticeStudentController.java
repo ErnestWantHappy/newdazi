@@ -24,11 +24,11 @@ public class PythonPracticeStudentController extends BaseController {
 
     @PreAuthorize("@studentSs.isStudent()")
     @GetMapping("/overview")
-    public AjaxResult overview() { return success(service.studentOverview(SecurityUtils.getUserId(), SecurityUtils.getDeptId())); }
+    public AjaxResult overview(@RequestParam(defaultValue="regular") String space) { return success(service.studentOverview(SecurityUtils.getUserId(), SecurityUtils.getDeptId(),space)); }
 
     @PreAuthorize("@studentSs.isStudent()")
     @GetMapping("/question")
-    public AjaxResult question(@RequestParam String sourceType, @RequestParam Long sourceId, @RequestParam Long questionId) { return success(service.studentQuestion(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), sourceType, sourceId, questionId)); }
+    public AjaxResult question(@RequestParam String sourceType, @RequestParam Long sourceId, @RequestParam Long questionId, @RequestParam(defaultValue="regular") String space) { service.assertStudentSpace(SecurityUtils.getUserId(),space,sourceType,sourceId,questionId); return success(service.studentQuestion(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), sourceType, sourceId, questionId)); }
 
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/draft")
@@ -39,6 +39,7 @@ public class PythonPracticeStudentController extends BaseController {
         if (sourceId == null || questionId == null || sourceType == null) {
             return error("参数不完整：sourceType/sourceId/questionId 必须为有效值");
         }
+        service.assertStudentSpace(SecurityUtils.getUserId(),String.valueOf(request.getOrDefault("space","regular")),sourceType,sourceId,questionId);
         return success(service.saveDraft(SecurityUtils.getUserId(), sourceType, sourceId, questionId, strOrNull(request.get("sourceCode"))));
     }
 
@@ -51,6 +52,7 @@ public class PythonPracticeStudentController extends BaseController {
         if (sourceId == null || questionId == null || sourceType == null) {
             return error("参数不完整：sourceType/sourceId/questionId 必须为有效值");
         }
+        service.assertStudentSpace(SecurityUtils.getUserId(),String.valueOf(request.getOrDefault("space","regular")),sourceType,sourceId,questionId);
         return success(service.submit(SecurityUtils.getUserId(), sourceType, sourceId, questionId,
             strOrNull(request.get("sourceCode")), strOrNull(request.get("submitType")),
             strOrNull(request.get("customInput")), submissionWorker));

@@ -34,6 +34,8 @@ public class SeatHelperService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final DefaultRedisScript<String> CONSUME = new DefaultRedisScript<>("local v=redis.call('GET',KEYS[1]); if v then redis.call('DEL',KEYS[1]); end; return v",String.class);
     private static final String PREFIX="seat-helper:";
+    // 覆盖一次课堂（登录 token 120 分钟）；会话退出后由 mayOwnSeat 立即释放，不靠 TTL 兜底。
+    private static final long LATEST_TTL = 7200L;
 
     public boolean isEnabled(Long dept) {
         if (!enabled) return false;
@@ -86,6 +88,20 @@ public class SeatHelperService {
         String secret=randomToken(); device.credentialHash=hash(secret); mapper.register(device);
         return map("deviceId",device.deviceId,"secret",secret,"roomName",room,"seatName",seat,"platformUrl",mapper.school(dept).get("platformUrl"));
     }
+    @Transactional(rollbackFor=Exception.class)
+    public Map<String,Object> upgradeIdentity(Map<String,Object> request) {
+        SeatHelperDevice device=authenticate(request);
+        String fingerprint=string(request,"nextFingerprint");
+        if (!fingerprint.matches("[a-f0-9]{64}")) throw new ServiceException("新机器指纹无效");
+        if (!schoolEnabled(mapper.lockSchool(device.deptId))) throw new ServiceException("学校尚未启用机位助手");
+        // 同传克隆可能同时持有旧凭据；锁内重验，已被另一台电脑升级的旧指纹不能再次迁移。
+        device=authenticate(request);
+        SeatHelperDevice existing=mapper.fingerprintForUpdate(device.deptId,fingerprint);
+        if (existing!=null && !Objects.equals(existing.deviceId,device.deviceId)) throw new ServiceException("机器身份冲突，请联系管理员");
+        // 升级必须持有旧设备密钥，保留设备ID、撤销状态和教师原基准。
+        mapper.updateFingerprint(device.deviceId,fingerprint);
+        return map("ok",true);
+    }
     public SeatHelperDevice authenticate(Map<String,Object> request) {
         if (!enabled) throw new ServiceException("机位助手未启用");
         String id=string(request,"deviceId"),secret=string(request,"secret"),fingerprint=string(request,"fingerprint");
@@ -101,28 +117,77 @@ public class SeatHelperService {
         if (!isPrivateIpv4(ip)) ip="";
         save("live:"+device.deviceId,map("localIp",ip,"at",System.currentTimeMillis()),75);
         if (!open) return map("ok",true);
-        String token=randomToken(); save("open:"+hash(token),map("deviceId",device.deviceId),60);
+        Map<String,Object> ticket=map("deviceId",device.deviceId);
+        String browser=string(request,"browserKey");
+        // 浏览器归属由已认证的本机助手确认，不接受学生认领接口自报优先级。
+        if(browser.matches("[a-f0-9]{64}")) {
+            ticket.put("browserKey",browser);
+            ticket.put("preferredBrowser",Boolean.TRUE.equals(request.get("preferredBrowser")));
+            ticket.put("browserUntil",System.currentTimeMillis()+75000);
+        }
+        String token=randomToken(); save("open:"+hash(token),ticket,60);
         return map("url",mapper.school(device.deptId).get("platformUrl")+"/student/index#seat-helper="+token,"expiresIn",60);
     }
+    @Transactional(rollbackFor=Exception.class)
     public Map<String,Object> associate(String token) throws Exception {
         BizStudent student=access.requireCurrentStudent(); requireEnabled(student.getDeptId());
         if (token==null || !token.matches("[a-f0-9]{64}")) throw new ServiceException("关联凭证无效");
+        LoginUser login=SecurityUtils.getLoginUser();
+        // 过期页面不得消费新票据，也不能把旧电脑重新挂到该学生卡片。
+        if(!mayOwnSeat(student.getStudentId(),login)) return superseded();
         Map<String,Object> opened=consume("open:"+hash(token));
         if (opened==null) throw new ServiceException("关联凭证已使用或过期，请重新打开桌面快捷方式");
         SeatHelperDevice device=opened.get("pairToken")!=null ? pairing.registerForStudent((String)opened.get("pairToken"),student.getDeptId()) : mapper.device((String)opened.get("deviceId"));
         if (device==null || !device.active || !student.getDeptId().equals(device.deptId)) throw new ServiceException("设备与账号不属于同一学校");
-        LoginUser login=SecurityUtils.getLoginUser();
+        // 与已有学校锁共用数据库串行化边界，多实例部署也不能同时抢占。
+        if(!schoolEnabled(mapper.lockSchool(device.deptId))) throw new ServiceException("学校尚未启用机位助手");
+        // 锁内复判，避免同一学生两条登录并发时旧登录覆盖新登录的归属。
+        if(!mayOwnSeat(student.getStudentId(),login)) return superseded();
+        Map<String,Object> owner=read("owner:"+device.deviceId);
+        if(browserBlocked(owner,opened,System.currentTimeMillis()))
+            return map("enabled",true,"associated",false,"browserDeferred",true,"preferredBrowser",Boolean.TRUE.equals(owner.get("preferredBrowser")));
         save("session:"+hash(login.getToken()),map("deviceId",device.deviceId),3600);
+        Map<String,Object> next=map("studentId",student.getStudentId(),"session",login.getToken());
+        if(opened.get("browserKey")!=null) {
+            next.put("browserKey",opened.get("browserKey"));next.put("preferredBrowser",opened.get("preferredBrowser"));
+            Object issuedUntil=opened.get("browserUntil");
+            // 本地票据会预取；从实际成功认领起续期，避免缓存票据缩短后台标签页的容错时间。
+            next.put("browserUntil",issuedUntil instanceof Number && ((Number)issuedUntil).longValue()>System.currentTimeMillis()
+                    ? System.currentTimeMillis()+75000 : issuedUntil);
+        }
+        save("owner:"+device.deviceId,next,3600);
         return studentStatus();
+    }
+    static boolean browserBlocked(Map<String,Object> owner,Map<String,Object> incoming,long now) {
+        if(owner==null || owner.get("browserKey")==null || !(owner.get("browserUntil") instanceof Number)
+                || ((Number)owner.get("browserUntil")).longValue()<=now || Objects.equals(owner.get("browserKey"),incoming.get("browserKey")))return false;
+        // 默认浏览器可立即接管；同优先级保持先到者，停止检测75秒后允许其他浏览器接替。
+        return Boolean.TRUE.equals(owner.get("preferredBrowser")) || !Boolean.TRUE.equals(incoming.get("preferredBrowser"));
     }
     public Map<String,Object> studentStatus() throws Exception {
         BizStudent student=access.requireCurrentStudent();
         if (!isEnabled(student.getDeptId())) return map("enabled",false);
         LoginUser login=SecurityUtils.getLoginUser();
+        // 学生卡片只认最新一次登录；旧页面即使 token 仍有效也不能续期或改写。
+        if(!mayOwnSeat(student.getStudentId(),login)) return superseded();
         Map<String,Object> link=read("session:"+hash(login.getToken()));
-        if (link==null) return map("enabled",true,"associated",false);
+        if (link==null) {
+            // 最新登录尚未认领设备时，旧登录留下的观测必须立即失效。
+            adoptLatest(student.getStudentId(),login);
+            redis.delete(PREFIX+"student:"+student.getStudentId());
+            return map("enabled",true,"associated",false);
+        }
         SeatHelperDevice device=mapper.device((String)link.get("deviceId"));
-        if (device==null || !device.active || !student.getDeptId().equals(device.deptId)) return map("enabled",true,"associated",false);
+        if (device==null || !device.active || !student.getDeptId().equals(device.deptId)) {
+            adoptLatest(student.getStudentId(),login);
+            redis.delete(PREFIX+"student:"+student.getStudentId());
+            return map("enabled",true,"associated",false);
+        }
+        Map<String,Object> owner=read("owner:"+device.deviceId);
+        // 设备必须仍有主人且就是本次登录；空主人视为状态过期，不再反推学生机位。
+        if (owner==null || !Objects.equals(owner.get("session"),login.getToken()))
+            return map("enabled",true,"associated",false,"browserDeferred",owner!=null && owner.get("browserKey")!=null,"preferredBrowser",owner!=null && Boolean.TRUE.equals(owner.get("preferredBrowser")));
+        adoptLatest(student.getStudentId(),login);
         save("session:"+hash(login.getToken()),link,3600);
         save("student:"+student.getStudentId(),map("deviceId",device.deviceId,"session",login.getToken(),"userId",login.getUserId()),90);
         Map<String,Object> live=read("live:"+device.deviceId);
@@ -135,20 +200,24 @@ public class SeatHelperService {
         List<BizStudent> roster=students.selectPaperImportRoster(dept,year,clazz);
         // 移动设备不能使原机房已确认的长期基准从界面消失。
         List<String> rooms=mapper.classroomRooms(dept,year,clazz);
-        if (room==null || room.isEmpty()) room=rooms.isEmpty()?"":rooms.get(0);
-        Map<Long,String> baseline=new HashMap<>();
-        for(Map<String,Object> b:mapper.bindings(dept,room,year,clazz)) baseline.put(number(b.get("studentId")),(String)b.get("deviceId"));
+        if (room==null || room.isEmpty()) room=Optional.ofNullable(mapper.recentClassroom(dept,year,clazz)).orElse("");
+        Map<Long,Map<String,Object>> baseline=new HashMap<>();
+        for(Map<String,Object> b:mapper.bindings(dept,room,year,clazz)) baseline.put(number(b.get("studentId")),b);
         List<Map<String,Object>> rows=new ArrayList<>(); Map<String,Integer> counts=new HashMap<>();
         for(BizStudent student:roster) {
             SeatHelperDevice device=liveStudentDevice(student);
             if (device!=null) counts.put(device.deviceId,counts.getOrDefault(device.deviceId,0)+1);
-            SeatHelperDevice expected=baseline.containsKey(student.getStudentId())?mapper.device(baseline.get(student.getStudentId())):null;
+            Map<String,Object> binding=baseline.get(student.getStudentId());
+            SeatHelperDevice expected=binding==null?null:mapper.device((String)binding.get("deviceId"));
             Map<String,Object> live=device==null?null:read("live:"+device.deviceId);
-            String state=device==null?"UNIDENTIFIED":!room.equals(device.roomName)?"OTHER_ROOM":expected==null?"UNBOUND":expected.deviceId.equals(device.deviceId)?"NORMAL":"CHANGED";
+            String ip=live==null?null:(String)live.get("localIp");
+            String state=observationState(device,binding,ip);
             rows.add(map("studentId",student.getStudentId(),"studentName",student.getStudentName(),"deviceId",device==null?null:device.deviceId,"roomName",device==null?null:device.roomName,"seatName",device==null?null:device.seatName,
-                    "localIp",live==null?null:live.get("localIp"),"expectedSeat",expected==null?null:expected.seatName,"state",state));
+                    "localIp",isPrivateIpv4(ip)?ip:null,"expectedIp",binding==null?null:binding.get("localIp"),"expectedSeat",binding!=null && binding.get("seatName")!=null?binding.get("seatName"):expected==null?null:expected.seatName,"state",state));
         }
-        for(Map<String,Object> row:rows) if(counts.getOrDefault(row.get("deviceId"),0)>1) row.put("state","SHARED_DEVICE");
+        Map<String,Integer> ipCounts=new HashMap<>();
+        for(Map<String,Object> row:rows) if(row.get("localIp")!=null) ipCounts.merge((String)row.get("localIp"),1,Integer::sum);
+        for(Map<String,Object> row:rows) if(counts.getOrDefault(row.get("deviceId"),0)>1 || ipCounts.getOrDefault(row.get("localIp"),0)>1) row.put("state","SHARED_DEVICE");
         return map("enabled",true,"roomName",room,"rooms",rooms,"rows",rows);
     }
     @Transactional(rollbackFor=Exception.class)
@@ -160,21 +229,34 @@ public class SeatHelperService {
         if (!schoolEnabled(mapper.lockSchool(dept))) throw new ServiceException("学校尚未启用机位助手");
         List<Map<String,Object>> bindings=mapper.bindingsForUpdate(dept,room,year,clazz);
         Map<String,Object> context=classroom(lesson,year,clazz,room);
-        Map<Long,String> requested=new HashMap<>();
-        for(Map<String,Object> item:expected) requested.put(number(item.get("studentId")),(String)item.get("deviceId"));
+        Map<Long,String> requested=new HashMap<>(); Map<Long,String> requestedIps=new HashMap<>();
+        for(Map<String,Object> item:expected) {requested.put(number(item.get("studentId")),(String)item.get("deviceId"));requestedIps.put(number(item.get("studentId")),(String)item.get("localIp"));}
         List<Map<String,Object>> candidates=new ArrayList<>();
         for(Map<String,Object> row:(List<Map<String,Object>>)context.get("rows")) {
             if (!requested.containsKey(number(row.get("studentId")))) continue;
             if (!Objects.equals(requested.get(number(row.get("studentId"))),row.get("deviceId"))) throw new ServiceException("机位信息已变化，请刷新后重新确认");
-            if (Arrays.asList("NORMAL","UNBOUND","CHANGED").contains(row.get("state"))) candidates.add(row);
+            String requestedIp=requestedIps.get(number(row.get("studentId")));
+            if (requestedIp!=null && !Objects.equals(requestedIp,row.get("localIp"))) throw new ServiceException("内网IP已变化，请刷新后重新保存");
+            if (Arrays.asList("NORMAL","UNBOUND","CHANGED","IP_MISMATCH").contains(row.get("state"))) candidates.add(row);
         }
         // 无法识别、重复登录和缺席学生保留原绑定，不能被当前观测覆盖。
         candidates=preserveOccupiedBindings(candidates,bindings);
         int count=0;
         for(Map<String,Object> row:candidates) {
-            mapper.bind(dept,room,year,clazz,number(row.get("studentId")),(String)row.get("deviceId"),SecurityUtils.getUserId()); count++;
+            String id=(String)row.get("deviceId"),ip=(String)row.get("localIp");
+            SeatHelperDevice device=mapper.device(id);
+            // 无人工命名时按IPv4末段编号，避免每班重新编号使物理电脑名称漂移。
+            String seat=device.roomName.equals(room) && !device.seatName.startsWith("电脑-")?device.seatName:String.format("%02d机",Integer.parseInt(ip.substring(ip.lastIndexOf('.')+1)));
+            rename(id,room,seat);
+            mapper.bind(dept,room,year,clazz,number(row.get("studentId")),id,ip,seat,SecurityUtils.getUserId()); count++;
         }
         return map("confirmed",count,"preserved",requested.size()-count);
+    }
+    static String observationState(SeatHelperDevice device,Map<String,Object> binding,String ip) {
+        if (device==null || !isPrivateIpv4(ip)) return "UNIDENTIFIED";
+        if (binding==null) return "UNBOUND";
+        if (isPrivateIpv4((String)binding.get("localIp")) && !Objects.equals(binding.get("localIp"),ip)) return "IP_MISMATCH";
+        return Objects.equals(binding.get("deviceId"),device.deviceId)?"NORMAL":"CHANGED";
     }
     static List<Map<String,Object>> preserveOccupiedBindings(List<Map<String,Object>> observed,List<Map<String,Object>> bindings) {
         List<Map<String,Object>> valid=new ArrayList<>(observed);
@@ -182,9 +264,13 @@ public class SeatHelperService {
         do {
             Set<Long> changing=valid.stream().map(r -> Long.valueOf(r.get("studentId").toString())).collect(java.util.stream.Collectors.toSet());
             Set<String> reserved=new HashSet<>();
-            for(Map<String,Object> b:bindings) if(!changing.contains(Long.valueOf(b.get("studentId").toString()))) reserved.add((String)b.get("deviceId"));
+            Set<String> reservedIps=new HashSet<>();
+            for(Map<String,Object> b:bindings) if(!changing.contains(Long.valueOf(b.get("studentId").toString()))) {
+                reserved.add((String)b.get("deviceId"));
+                if(isPrivateIpv4((String)b.get("localIp"))) reservedIps.add((String)b.get("localIp"));
+            }
             // 一个调整被保留后，其原机位也要保留；反复检查，避免链式换位产生重复基准。
-            changed=valid.removeIf(row -> reserved.contains(row.get("deviceId")));
+            changed=valid.removeIf(row -> reserved.contains(row.get("deviceId")) || reservedIps.contains(row.get("localIp")));
         } while(changed);
         return valid;
     }
@@ -208,12 +294,34 @@ public class SeatHelperService {
         if(!observed)throw new ServiceException("该电脑不在当前班级的在线机位中，请刷新后再设置");
         rename(id,room,seat);
     }
+    private long loginStamp(LoginUser login) { return login.getLoginTime()==null?0L:login.getLoginTime(); }
+    // 只有最新登录可以占用该学生的机位卡片；最新会话已退出时立即让位给仍在线的登录。
+    private boolean mayOwnSeat(Long studentId,LoginUser login) throws Exception {
+        Map<String,Object> latest=read("latest:"+studentId);
+        if (latest==null || Objects.equals(latest.get("session"),login.getToken())) return true;
+        Object session=latest.get("session");
+        if (session==null || sessionCache.getCacheObject(CacheConstants.LOGIN_TOKEN_KEY+session)==null) return true;
+        Object at=latest.get("at");
+        return !(at instanceof Number) || loginStamp(login)>((Number)at).longValue();
+    }
+    private void adoptLatest(Long studentId,LoginUser login) throws Exception {
+        Map<String,Object> latest=read("latest:"+studentId);
+        if (latest!=null && Objects.equals(latest.get("session"),login.getToken())) return;
+        save("latest:"+studentId,map("session",login.getToken(),"at",loginStamp(login)),LATEST_TTL);
+    }
+    private Map<String,Object> superseded() { return map("enabled",true,"associated",false,"superseded",true); }
     private SeatHelperDevice liveStudentDevice(BizStudent student) throws Exception {
         Map<String,Object> link=read("student:"+student.getStudentId()); if(link==null) return null;
+        // 旧登录残留的观测不允许挂到卡片上，只认最新登录。
+        Map<String,Object> latest=read("latest:"+student.getStudentId());
+        if(latest==null || !Objects.equals(latest.get("session"),link.get("session"))) return null;
         LoginUser login=sessionCache.getCacheObject(CacheConstants.LOGIN_TOKEN_KEY+link.get("session"));
         if(login==null || !Objects.equals(login.getUserId(),number(link.get("userId")))) return null;
         SeatHelperDevice device=mapper.device((String)link.get("deviceId"));
-        return device!=null && device.active && student.getDeptId().equals(device.deptId) && read("live:"+device.deviceId)!=null?device:null;
+        if(device==null || !device.active || !student.getDeptId().equals(device.deptId)) return null;
+        Map<String,Object> owner=read("owner:"+device.deviceId);
+        if(owner==null || !Objects.equals(owner.get("session"),link.get("session"))) return null;
+        return read("live:"+device.deviceId)!=null?device:null;
     }
     private Map<String,Object> read(String key) throws Exception { String value=redis.opsForValue().get(PREFIX+key); return value==null?null:json.readValue(value,Map.class); }
     private Map<String,Object> consume(String key) throws Exception { String value=redis.execute(CONSUME,Collections.singletonList(PREFIX+key)); return value==null?null:json.readValue(value,Map.class); }

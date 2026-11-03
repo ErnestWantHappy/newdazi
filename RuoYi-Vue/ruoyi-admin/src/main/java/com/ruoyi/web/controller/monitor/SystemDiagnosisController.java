@@ -1,18 +1,23 @@
 package com.ruoyi.web.controller.monitor;
 
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 import com.alibaba.druid.stat.DruidStatManagerFacade;
 import com.ruoyi.business.utils.FileConversionUtils;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,6 +34,7 @@ import com.ruoyi.common.utils.diagnosis.DiagnosisAdvisor;
 import com.ruoyi.common.utils.diagnosis.DiagnosisAdvice;
 import com.ruoyi.common.utils.diagnosis.JobBusinessDescriber;
 import com.ruoyi.common.utils.sql.SqlBusinessDescriber;
+import com.ruoyi.framework.interceptor.SlowSqlInterceptor;
 import com.ruoyi.framework.web.domain.Server;
 import com.ruoyi.system.domain.SysPerfEvent;
 import com.ruoyi.system.service.ISysPerfEventService;
@@ -63,6 +69,9 @@ public class SystemDiagnosisController
 
     @Autowired
     private ISysPerfEventService perfEventService;
+
+    @Autowired(required = false)
+    private SqlSessionFactory sqlSessionFactory;
 
     /**
      * 单个探针超时预算：collectServer 内含固定 1 秒 OSHI tick 差分采样，
@@ -134,19 +143,23 @@ public class SystemDiagnosisController
         }
         Map<String, Object> cache = await(cacheF, degradedCache());
         List<Map<String, Object>> slowSql = await(slowSqlF, new ArrayList<>());
-        List<Map<String, Object>> errors = await(errorsF, new ArrayList<>());
+        List<Map<String, Object>> allErrors = await(errorsF, new ArrayList<>());
         List<Map<String, Object>> slowOperations = await(slowOperationsF, new ArrayList<>());
         List<Map<String, Object>> jobs = await(jobsF, new ArrayList<>());
         Map<String, Object> conversion = await(conversionF, new LinkedHashMap<>());
         List<SysPerfEvent> perfEvents = await(perfEventsF, new ArrayList<>());
 
-        enrichErrors(errors);
+        enrichErrors(allErrors);
+        // 业务校验失败（如题库导入格式错误）与真正的系统异常分开，避免 info 把 critical 挤出前 10。
+        List<Map<String, Object>> errors = filterActionableErrors(allErrors);
+        List<Map<String, Object>> businessTips = summarizeBusinessTips(allErrors);
         enrichSlowOperations(slowOperations);
         enrichSlowSql(slowSql);
         jobs.forEach(JobBusinessDescriber::enrichJobRow);
 
         double memUsage = server.getMem() == null ? 0D : server.getMem().getUsage();
-        double jvmUsage = server.getJvm() == null ? 0D : server.getJvm().getUsage();
+        // committed 会随 GC 波动，健康判断改用“已用/最大上限”，committed 仅作展示。
+        double jvmUsage = jvmMaxUsage(server);
         boolean redisAvailable = (Boolean) cache.getOrDefault("available", false);
         List<Map<String, Object>> adviceSummary = DiagnosisAdvisor.buildAdviceSummary(
                 diagnosisHours, memUsage, jvmUsage, redisAvailable, errors, slowOperations, slowSql);
@@ -161,7 +174,10 @@ public class SystemDiagnosisController
         data.put("onlineCount", await(onlineCountF, 0L));
         data.put("dataSources", await(dataSourcesF, new ArrayList<>()));
         data.put("slowSql", slowSql);
+        data.put("sqlStatScope", buildSqlStatScope());
         data.put("recentErrors", errors);
+        data.put("businessTips", businessTips);
+        data.put("perfEventPipeline", collectPerfEventPipeline(diagnosisHours));
         data.put("slowOperations", slowOperations);
         data.put("topInterfaces", await(topInterfacesF, new ArrayList<>()));
         data.put("jobs", jobs);
@@ -302,6 +318,28 @@ public class SystemDiagnosisController
         return AjaxResult.success(result);
     }
 
+    /**
+     * 主动验证“慢 SQL 拦截器 → 异步写入 → sys_perf_event”整条链路。
+     * Druid 有慢 SQL 而时间线没有记录时，用这个接口直接定位断点。
+     */
+    @PreAuthorize("@ss.hasAnyRoles('admin,researcher')")
+    @PostMapping("/perf-event/self-test")
+    public AjaxResult perfEventSelfTest()
+    {
+        long interceptBefore = SlowSqlInterceptor.getInterceptCount();
+        long slowBefore = SlowSqlInterceptor.getSlowDetectCount();
+        Map<String, Object> result = perfEventService.runSlowSqlSelfTest();
+        result.put("interceptorInvocations", SlowSqlInterceptor.getInterceptCount() - interceptBefore);
+        result.put("slowDetections", SlowSqlInterceptor.getSlowDetectCount() - slowBefore);
+        if (sqlSessionFactory != null)
+        {
+            result.put("interceptors", sqlSessionFactory.getConfiguration().getInterceptors().stream()
+                    .map(interceptor -> interceptor.getClass().getName())
+                    .collect(Collectors.toList()));
+        }
+        return AjaxResult.success(result);
+    }
+
     private int normalizeHours(int hours)
     {
         return Math.min(Math.max(hours, 1), 168);
@@ -309,11 +347,146 @@ public class SystemDiagnosisController
 
     private List<Map<String, Object>> queryRecentErrors(int hours)
     {
-        // oper_time 已建索引：范围扫描天然按时间序输出，无全表 Filesort
+        // 先取窗口内最近 200 条，再在 Java 侧按等级拆分和聚合并业务提示；
+        // 只取 10 条会让 info 级业务提示把真正的 critical 挤出列表。
         return queryList(
                 "select oper_id, title, oper_name, dept_name, oper_url, request_method, oper_time, cost_time, error_msg "
                         + "from sys_oper_log where status = 1 and oper_time >= date_sub(now(), interval "
-                        + hours + " hour) order by oper_id desc limit 10");
+                        + hours + " hour) order by oper_id desc limit 200");
+    }
+
+    private List<Map<String, Object>> filterActionableErrors(List<Map<String, Object>> rows)
+    {
+        if (rows == null || rows.isEmpty())
+        {
+            return new ArrayList<>();
+        }
+        List<Map<String, Object>> actionable = rows.stream()
+                .filter(row -> !"info".equals(String.valueOf(row.get("severity"))))
+                .collect(Collectors.toList());
+        actionable.sort((left, right) -> {
+            int rankCompare = Integer.compare(severityRank(String.valueOf(right.get("severity"))),
+                    severityRank(String.valueOf(left.get("severity"))));
+            if (rankCompare != 0)
+            {
+                return rankCompare;
+            }
+            return String.valueOf(value(right, "oper_time")).compareTo(String.valueOf(value(left, "oper_time")));
+        });
+        return actionable.stream().limit(10).collect(Collectors.toList());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> summarizeBusinessTips(List<Map<String, Object>> rows)
+    {
+        if (rows == null || rows.isEmpty())
+        {
+            return new ArrayList<>();
+        }
+        Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows)
+        {
+            if (!"info".equals(String.valueOf(row.get("severity"))))
+            {
+                continue;
+            }
+            String error = String.valueOf(value(row, "error_msg"));
+            String key = value(row, "title") + "|" + value(row, "oper_url") + "|" + truncate(error, 80);
+            Map<String, Object> item = grouped.get(key);
+            if (item == null)
+            {
+                item = new LinkedHashMap<>();
+                item.put("title", value(row, "title"));
+                item.put("oper_url", value(row, "oper_url"));
+                item.put("severity", row.get("severity"));
+                item.put("category", row.get("category"));
+                item.put("advice", row.get("advice"));
+                item.put("error_msg", truncate(error, 500));
+                item.put("occurCount", 0);
+                item.put("lastTime", value(row, "oper_time"));
+                item.put("firstTime", value(row, "oper_time"));
+                item.put("users", new LinkedHashSet<String>());
+                grouped.put(key, item);
+            }
+            item.put("occurCount", ((Number) item.get("occurCount")).intValue() + 1);
+            // 查询按 oper_id 倒序，第一次出现即最近一次，后续覆盖为更早时间。
+            item.put("firstTime", value(row, "oper_time"));
+            String user = String.valueOf(value(row, "oper_name"));
+            if (!user.isEmpty())
+            {
+                ((Set<String>) item.get("users")).add(user);
+            }
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> item : grouped.values())
+        {
+            item.put("userCount", ((Set<String>) item.remove("users")).size());
+            result.add(item);
+        }
+        result.sort((left, right) -> String.valueOf(value(right, "lastTime"))
+                .compareTo(String.valueOf(value(left, "lastTime"))));
+        return result.stream().limit(10).collect(Collectors.toList());
+    }
+
+    private int severityRank(String severity)
+    {
+        if ("critical".equals(severity))
+        {
+            return 3;
+        }
+        if ("warning".equals(severity))
+        {
+            return 2;
+        }
+        if ("info".equals(severity))
+        {
+            return 1;
+        }
+        return 0;
+    }
+
+    private Map<String, Object> buildSqlStatScope()
+    {
+        long startTime = ManagementFactory.getRuntimeMXBean().getStartTime();
+        Map<String, Object> scope = new LinkedHashMap<>();
+        scope.put("sinceRestart", true);
+        scope.put("startTime", new Date(startTime));
+        scope.put("uptimeHours", Math.max(0L, (System.currentTimeMillis() - startTime) / 3600000L));
+        return scope;
+    }
+
+    private Map<String, Object> collectPerfEventPipeline(int hours)
+    {
+        Map<String, Object> data = new LinkedHashMap<>();
+        String window = "occur_time >= date_sub(now(), interval " + hours + " hour)";
+        data.put("slowSqlCount", countBySql(
+                "select count(1) from sys_perf_event where event_type = 'slow_sql' and " + window));
+        data.put("slowApiCount", countBySql(
+                "select count(1) from sys_perf_event where event_type = 'slow_api' and " + window));
+        data.put("errorApiCount", countBySql(
+                "select count(1) from sys_perf_event where event_type = 'error_api' and " + window));
+        data.put("lastSlowSqlTime", firstValue(queryList(
+                "select max(occur_time) as lastTime from sys_perf_event where event_type = 'slow_sql' and " + window),
+                "lastTime"));
+        data.put("slowSqlRecordCount", perfEventService.getSlowSqlRecordCount());
+        data.put("insertFailCount", perfEventService.getInsertFailCount());
+        data.put("lastInsertError", perfEventService.getLastInsertError());
+        data.put("lastInsertFailTime", perfEventService.getLastInsertFailTime());
+        return data;
+    }
+
+    private Object firstValue(List<Map<String, Object>> rows, String key)
+    {
+        return rows == null || rows.isEmpty() ? null : rows.get(0).get(key);
+    }
+
+    private double jvmMaxUsage(Server server)
+    {
+        if (server == null || server.getJvm() == null || server.getJvm().getMax() <= 0)
+        {
+            return 0D;
+        }
+        return server.getJvm().getUsed() / server.getJvm().getMax() * 100D;
     }
 
     private List<Map<String, Object>> querySlowOperations(int hours)
@@ -479,10 +652,23 @@ public class SystemDiagnosisController
                 "select count(1) from biz_student_answer where preview_status in ('pending','converting')"));
         data.put("dailyFailedCount", countBySql(
                 "select count(1) from biz_student_answer where preview_status = 'failed'"));
+        data.put("dailyFailedRecent7d", countBySql(
+                "select count(1) from biz_student_answer where preview_status = 'failed' "
+                        + "and coalesce(preview_last_retry_time, submit_time) >= date_sub(now(), interval 7 day)"));
         data.put("countyWaitingCount", countBySql(
                 "select count(1) from biz_county_exam_answer where preview_status in ('pending','converting')"));
         data.put("countyFailedCount", countBySql(
                 "select count(1) from biz_county_exam_answer where preview_status = 'failed'"));
+        data.put("countyFailedRecent7d", countBySql(
+                "select count(1) from biz_county_exam_answer where preview_status = 'failed' "
+                        + "and coalesce(preview_last_retry_time, submit_time) >= date_sub(now(), interval 7 day)"));
+        // 失败原因是累计值，先按原因分组，避免把 321 条历史失败误读成近 7 天新增。
+        data.put("previewErrorTop5", queryList(
+                "select coalesce(nullif(trim(preview_error_message), ''), '未记录原因') as errorMessage, "
+                        + "count(1) as total, max(coalesce(preview_last_retry_time, submit_time)) as lastTime "
+                        + "from biz_student_answer where preview_status = 'failed' "
+                        + "group by coalesce(nullif(trim(preview_error_message), ''), '未记录原因') "
+                        + "order by total desc limit 5"));
         return data;
     }
 
@@ -492,9 +678,14 @@ public class SystemDiagnosisController
         {
             List<Map<String, Object>> sqlList = DruidStatManagerFacade.getInstance().getSqlStatDataList((Integer) null);
             return sqlList.stream()
-                    .sorted(Comparator.comparingLong(this::sqlSortValue).reversed())
-                    .limit(10)
                     .map(this::normalizeSqlStat)
+                    // 慢 SQL 先看单次峰值，不能再用累计耗时把高频快查询顶到真慢 SQL 前面。
+                    .filter(item -> number(item.get("maxTimespan")) >= 100
+                            || number(item.get("executeCount")) >= 1_000_000L)
+                    .sorted(Comparator.comparingLong((Map<String, Object> item) -> number(item.get("maxTimespan")))
+                            .thenComparingLong(item -> number(item.get("avgTime")))
+                            .reversed())
+                    .limit(10)
                     .collect(Collectors.toList());
         }
         catch (Exception e)
@@ -529,11 +720,13 @@ public class SystemDiagnosisController
         item.put("description", desc.getDescription());
         item.put("executeCount", executeCount);
         item.put("totalTime", totalTime);
+        item.put("totalTimeMs", totalTime);
         item.put("maxTimespan", maxTimespan);
         item.put("runningCount", runningCount);
         item.put("errorCount", number(source.get("ErrorCount")));
         item.put("lastTime", source.get("LastTime"));
         item.put("avgTime", executeCount > 0 ? Math.round((double) totalTime / executeCount) : 0);
+        item.put("highFrequency", executeCount >= 1_000_000L);
         item.put("severity", maxTimespan >= 3000 || runningCount > 0 ? "critical" : "warning");
         return item;
     }
@@ -544,9 +737,10 @@ public class SystemDiagnosisController
             int diagnosisHours)
     {
         List<String> risks = new ArrayList<>();
-        if (server.getJvm() != null && server.getJvm().getUsage() >= 80)
+        double jvmUsageOfMax = jvmMaxUsage(server);
+        if (jvmUsageOfMax >= 80)
         {
-            risks.add("JVM 内存使用率超过 80%，优先排查大文件预览、导出或批量查询。");
+            risks.add("JVM 已用内存达到最大上限的 " + Math.round(jvmUsageOfMax) + "%，优先排查大文件预览、导出或批量查询。");
         }
         if (server.getMem() != null && server.getMem().getUsage() >= 85)
         {
@@ -631,9 +825,9 @@ public class SystemDiagnosisController
         {
             builder.append("服务器内存 ").append(Math.round(server.getMem().getUsage())).append("%，需关注\n");
         }
-        else if (server.getJvm() != null && server.getJvm().getUsage() >= 80)
+        else if (jvmMaxUsage(server) >= 80)
         {
-            builder.append("JVM 内存 ").append(Math.round(server.getJvm().getUsage())).append("%，需关注\n");
+            builder.append("JVM 已用内存达到上限的 ").append(Math.round(jvmMaxUsage(server))).append("%，需关注\n");
         }
         else
         {
@@ -819,13 +1013,6 @@ public class SystemDiagnosisController
         {
             return 0L;
         }
-    }
-
-    private long sqlSortValue(Map<String, Object> source)
-    {
-        long maxTimespan = number(source.get("MaxTimespan"));
-        long totalTime = number(source.get("TotalTime"));
-        return Math.max(maxTimespan, totalTime);
     }
 
     private long number(Object value)

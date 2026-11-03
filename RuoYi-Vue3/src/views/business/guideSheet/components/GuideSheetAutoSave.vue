@@ -1,5 +1,12 @@
 <template>
-  <div class="autosave-status" :class="`is-${state}`" role="status" aria-live="polite">
+  <div
+    class="autosave-status"
+    :class="`is-${state}`"
+    role="status"
+    aria-live="polite"
+    :title="canRetry ? '点击重新保存草稿' : ''"
+    @click="canRetry && retry()"
+  >
     <el-icon v-if="state === 'saving'" class="is-loading"><Loading /></el-icon>
     <el-icon v-else-if="state === 'saved'"><CircleCheck /></el-icon>
     <el-icon v-else><Clock /></el-icon>
@@ -30,6 +37,8 @@ let debounceTimer = null
 const localKey = computed(() => `guide-sheet-draft:${props.draftKey}`)
 const statusText = computed(() => {
   if (state.value === 'saving') return '正在保存草稿'
+  if (state.value === 'conflict') return '草稿在别处也被修改，已暂存本机（点此重试）'
+  if (state.value === 'failed') return '保存失败，草稿已留在本机'
   if (state.value === 'local') return '云端暂不可用，草稿已保存在本机'
   if (lastSavedAt.value) return `草稿已保存 ${formatTime(lastSavedAt.value)}`
   return '草稿将在编辑后自动保存'
@@ -150,14 +159,69 @@ async function persistDraftContent(content) {
       lastSavedAt.value = localRecord.updateTime
       state.value = 'local'
     }
-  } catch {
+  } catch (error) {
+    // 并发冲突（“草稿已在其他页面更新”）不是网络故障，必须把 CAS 版本重新对齐，
+    // 否则之后每次自动保存都会用旧 revision，永远失败。
+    if (isRevisionConflict(error)) {
+      const resynced = await resyncRevision()
+      if (resynced) {
+        try {
+          const retried = unwrapDraft(await saveGuideSheetDraft({
+            draftKey: props.draftKey,
+            sheetId: props.sheetId,
+            revision: revision.value,
+            content
+          }))
+          if (retried) {
+            revision.value = Number(retried.revision ?? revision.value)
+            lastSavedAt.value = retried.updateTime || localRecord.updateTime
+            writeLocalDraft({ ...localRecord, ...retried })
+            state.value = 'saved'
+            emitStatus()
+            return
+          }
+        } catch (_retryError) {
+          // 仍失败时退回“已存本机 + 冲突”状态，让教师决定。
+        }
+      }
+      // 取不到服务器版本时同样按冲突展示：这仍不是“云端不可用”，不能误导教师。
+      state.value = 'conflict'
+      lastSavedAt.value = localRecord.updateTime
+      emitStatus()
+      return
+    }
     lastSavedAt.value = localRecord.updateTime
     state.value = 'local'
   }
   emitStatus()
 }
 
+function isRevisionConflict(error) {
+  const message = String(error?.message || error || '')
+  return message.includes('其他页面') || message.includes('草稿已在')
+}
+
+/** 冲突时拉一次服务器当前版本，只对齐 revision，不覆盖教师正在编辑的内容。 */
+async function resyncRevision() {
+  try {
+    const serverDraft = unwrapDraft(await getGuideSheetDraft(props.draftKey))
+    if (!serverDraft) return false
+    revision.value = Number(serverDraft.revision ?? revision.value)
+    return true
+  } catch (_error) {
+    return false
+  }
+}
+
 const saveQueue = createLatestValueQueue(persistDraftContent)
+
+/** 只有“云端没存住”的状态才允许点状态条重试，避免误触发无谓请求 */
+const canRetry = computed(() => ['local', 'conflict', 'failed'].includes(state.value))
+
+function retry() {
+  if (!canRetry.value) return
+  saveQueue.enqueue(JSON.stringify(props.payload))
+}
 
 watch(() => props.payload, scheduleSave, { deep: true })
 watch(
@@ -199,5 +263,7 @@ defineExpose({
 .autosave-status { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; color: #76898f; font-size: 12px; white-space: nowrap; }
 .autosave-status.is-saving { color: #9b6c1c; }
 .autosave-status.is-saved { color: #26766f; }
-.autosave-status.is-local { color: #9b6c1c; }
+.autosave-status.is-local { color: #9b6c1c; cursor: pointer; }
+.autosave-status.is-conflict { color: #c45656; cursor: pointer; }
+.autosave-status.is-failed { color: #c45656; cursor: pointer; }
 </style>

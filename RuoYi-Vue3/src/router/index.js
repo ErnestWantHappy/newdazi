@@ -129,6 +129,19 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/business/textbook',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'read/:bookId(\\d+)',
+        component: () => import('@/views/business/textbook/reader'),
+        name: 'TextbookReader',
+        meta: { title: '电子教材', activeMenu: '/textbook', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/business/score',
     component: Layout,
     hidden: true,
@@ -292,7 +305,13 @@ export const dynamicRoutes = [
         meta: { title: '学生首页', icon: 'dashboard' }
       },
       {
-        path: 'county-exam',
+          path: 'extension',
+          component: () => import('@/views/student/extension/index'),
+          name: 'StudentExtension',
+          meta: { title: '拓展课', noCache: true }
+        },
+        {
+          path: 'county-exam',
         component: () => import('@/views/student/countyExam'),
         name: 'StudentCountyExam',
         meta: { title: '区域抽测', icon: 'education' }
@@ -314,6 +333,13 @@ export const dynamicRoutes = [
         component: () => import('@/views/student/iot'),
         name: 'StudentIot',
         meta: { title: '物联实验', icon: 'component' }
+      },
+      {
+        // 学生端复用教师阅读器；入口只从已绑定教材的当前课出现。
+        path: 'textbook/read/:bookId(\\d+)',
+        component: () => import('@/views/business/textbook/reader'),
+        name: 'StudentTextbookReader',
+        meta: { title: '电子教材', noCache: true }
       }
     ]
   },

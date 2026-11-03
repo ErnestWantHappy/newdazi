@@ -49,6 +49,11 @@ public interface BizLessonMapper
                            @Param("status") String status,
                            @Param("updateBy") String updateBy);
 
+    /** 写入或清空课程对应的教材课次；两个参数同为 null 表示解除绑定。 */
+    int updateTextbookBinding(@Param("lessonId") Long lessonId,
+                              @Param("textbookBookId") Long textbookBookId,
+                              @Param("textbookSectionKey") String textbookSectionKey);
+
     /**
      * 删除课程/作业信息
      * 

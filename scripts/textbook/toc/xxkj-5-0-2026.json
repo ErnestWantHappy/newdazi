@@ -1,0 +1,59 @@
+{
+  "book_code": "xxkj-5-0-2026",
+  "title": "信息科技 五年级上册",
+  "short_title": "五上",
+  "grade": 5,
+  "semester": "0",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 84,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 算法与算法表示",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "身边的算法", "printed_start": 2, "printed_end": 5, "pdf_start": 8, "pdf_end": 11 },
+        { "no": 2, "title": "自然语言描述算法", "printed_start": 6, "printed_end": 9, "pdf_start": 12, "pdf_end": 15 },
+        { "no": 3, "title": "流程图描述算法", "printed_start": 10, "printed_end": 14, "pdf_start": 16, "pdf_end": 20 },
+        { "no": 4, "title": "算法中的数据", "printed_start": 15, "printed_end": 19, "pdf_start": 21, "pdf_end": 25 },
+        { "no": 5, "title": "算法的特征", "printed_start": 20, "printed_end": 22, "pdf_start": 26, "pdf_end": 28 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 算法的控制结构",
+      "intro": { "title": "单元导入", "pdf_start": 29, "pdf_end": 29 },
+      "lessons": [
+        { "no": 6, "title": "顺序结构", "printed_start": 24, "printed_end": 27, "pdf_start": 30, "pdf_end": 33 },
+        { "no": 7, "title": "分支结构", "printed_start": 28, "printed_end": 30, "pdf_start": 34, "pdf_end": 36 },
+        { "no": 8, "title": "双分支结构", "printed_start": 31, "printed_end": 34, "pdf_start": 37, "pdf_end": 40 },
+        { "no": 9, "title": "体验算法控制", "printed_start": 35, "printed_end": 38, "pdf_start": 41, "pdf_end": 44 },
+        { "no": 10, "title": "生活中的决策", "printed_start": 39, "printed_end": 41, "pdf_start": 45, "pdf_end": 47 },
+        { "no": 11, "title": "认识决策树", "printed_start": 42, "printed_end": 46, "pdf_start": 48, "pdf_end": 52 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 用算法解决问题",
+      "intro": { "title": "单元导入", "pdf_start": 53, "pdf_end": 53 },
+      "lessons": [
+        { "no": 12, "title": "问题的分解", "printed_start": 48, "printed_end": 51, "pdf_start": 54, "pdf_end": 57 },
+        { "no": 13, "title": "问题的抽象", "printed_start": 52, "printed_end": 56, "pdf_start": 58, "pdf_end": 62 },
+        { "no": 14, "title": "模型的建立", "printed_start": 57, "printed_end": 60, "pdf_start": 63, "pdf_end": 66 },
+        { "no": 15, "title": "算法的设计", "printed_start": 61, "printed_end": 64, "pdf_start": 67, "pdf_end": 70 },
+        { "no": 16, "title": "算法的一般验证", "printed_start": 65, "printed_end": 68, "pdf_start": 71, "pdf_end": 74 },
+        { "no": 17, "title": "算法的智能验证", "printed_start": 69, "printed_end": 73, "pdf_start": 75, "pdf_end": 79 },
+        { "no": 18, "title": "算法的应用", "printed_start": 74, "printed_end": 78, "pdf_start": 80, "pdf_end": 84 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": null,
+  "notes": []
+}

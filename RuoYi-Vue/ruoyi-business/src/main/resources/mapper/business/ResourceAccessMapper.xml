@@ -2,23 +2,39 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.ResourceAccessMapper">
 
-    <select id="selectStudentAnswerIdByResource" resultType="java.lang.Long">
-        select answer_id from (
-            select sa.answer_id
-            from biz_student_answer sa
-            where sa.student_answer = #{resource} or sa.preview_path = #{resource}
-            union all
-            select v.source_answer_id as answer_id
-            from biz_practical_attachment attachment
-            inner join biz_practical_submission_version v on v.version_id = attachment.version_id
-            where v.source_answer_id is not null
-              and (attachment.resource_path = #{resource}
-                   or attachment.preview_path = #{resource}
-                   or JSON_CONTAINS(attachment.normalized_pages_json, JSON_QUOTE(#{resource}), '$'))
-        ) resource_owner
-        where answer_id is not null
-        order by answer_id desc
-        limit 1
+    <!-- 资源归属按“答案正文 / 预览路径 / 附件原文件 / 附件预览”四条索引路径分别查，
+         避免 OR + JSON_CONTAINS 导致 biz_student_answer 与附件表全表扫描。 -->
+    <select id="selectAnswerIdByAnswerText" resultType="java.lang.Long">
+        select max(sa.answer_id) from biz_student_answer sa where sa.student_answer = #{resource}
+    </select>
+
+    <select id="selectAnswerIdByPreviewPath" resultType="java.lang.Long">
+        select max(sa.answer_id) from biz_student_answer sa where sa.preview_path = #{resource}
+    </select>
+
+    <select id="selectAttachmentAnswerIdByResourcePath" resultType="java.lang.Long">
+        select max(v.source_answer_id)
+        from biz_practical_attachment attachment
+        inner join biz_practical_submission_version v on v.version_id = attachment.version_id
+        where v.source_answer_id is not null
+          and attachment.resource_path = #{resource}
+    </select>
+
+    <select id="selectAttachmentAnswerIdByPreviewPath" resultType="java.lang.Long">
+        select max(v.source_answer_id)
+        from biz_practical_attachment attachment
+        inner join biz_practical_submission_version v on v.version_id = attachment.version_id
+        where v.source_answer_id is not null
+          and attachment.preview_path = #{resource}
+    </select>
+
+    <!-- 多页作品的页图路径只存在 JSON 中；仅当前四条索引查询都未命中时才走这里。 -->
+    <select id="selectStudentAnswerIdByResourceJson" resultType="java.lang.Long">
+        select max(v.source_answer_id)
+        from biz_practical_attachment attachment
+        inner join biz_practical_submission_version v on v.version_id = attachment.version_id
+        where v.source_answer_id is not null
+          and JSON_CONTAINS(attachment.normalized_pages_json, JSON_QUOTE(#{resource}), '$')
     </select>
 
     <select id="selectReferenceQuestionIdByResource" resultType="java.lang.Long">

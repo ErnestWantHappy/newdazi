@@ -105,10 +105,18 @@ function reconnectWithGeneration(url, generation) {
   }
 }
 
+/** 发送失败必须让调用方能感知：课堂广播“看起来发了其实没发”比报错更糟。 */
 function send(data) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(typeof data === 'string' ? data : JSON.stringify(data))
+    return true
   }
+  return false
+}
+
+/** 连接是否可用（教师端在发送前应据此提示，而不是清空输入框装作已发送） */
+function isOpen() {
+  return Boolean(ws && ws.readyState === WebSocket.OPEN)
 }
 
 function subscribe(key) {
@@ -200,6 +208,7 @@ export default {
   connect,
   connectClassroom,
   send,
+  isOpen,
   on,
   off,
   subscribe,

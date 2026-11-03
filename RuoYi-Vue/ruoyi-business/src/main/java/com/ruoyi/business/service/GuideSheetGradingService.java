@@ -81,6 +81,58 @@ public class GuideSheetGradingService {
     }
 
     /**
+     * 统计模板满分（所有已配置评分的组件分值之和）。
+     * 看板“正确率”必须用这个分母，不能把原始平均分直接当百分比。
+     * 解析失败返回 0，由调用方降级为“平均分”展示。
+     */
+    @SuppressWarnings("unchecked")
+    public int totalMaxScore(String formJson) {
+        if (formJson == null || formJson.trim().isEmpty()) {
+            return 0;
+        }
+        try {
+            Map<String, Object> formObj = objectMapper.readValue(formJson,
+                    new TypeReference<Map<String, Object>>() {});
+            List<Map<String, Object>> widgetList = (List<Map<String, Object>>) formObj.get("widgetList");
+            if (widgetList == null || widgetList.isEmpty()) {
+                return 0;
+            }
+            Map<String, Map<String, Object>> scoringSnapshot =
+                    (Map<String, Map<String, Object>>) formObj.get("_scoringConfig");
+            boolean hasSnapshot = scoringSnapshot != null && !scoringSnapshot.isEmpty();
+            List<Map<String, Object>> flatWidgets = new ArrayList<>();
+            Map<String, Integer> fieldTabIndexMap = new LinkedHashMap<>();
+            flattenWidgetsWithTabIndex(widgetList, flatWidgets, fieldTabIndexMap, -1);
+
+            int total = 0;
+            for (Map<String, Object> widget : flatWidgets) {
+                String fieldKey = getWidgetFieldKey(widget);
+                if (fieldKey == null) {
+                    continue;
+                }
+                Integer score = null;
+                Map<String, Object> scoring = (Map<String, Object>) widget.get("scoring");
+                if (scoring != null && scoring.containsKey("score")) {
+                    score = toInt(scoring.get("score"), 0);
+                }
+                if (score == null && hasSnapshot) {
+                    Map<String, Object> snapCfg = scoringSnapshot.get(getWidgetLabel(widget));
+                    if (snapCfg != null) {
+                        score = toInt(snapCfg.get("score"), 0);
+                    }
+                }
+                if (score != null && score > 0) {
+                    total += score;
+                }
+            }
+            return total;
+        } catch (Exception e) {
+            log.warn("统计导学单满分失败，按未配置分值处理", e);
+            return 0;
+        }
+    }
+
+    /**
      * 分页评分：仅评分指定 tab-pane 索引的字段（null = 全部页）
      *
      * @param targetTabIndex 目标标签页索引（0-based），null 表示评分全部页

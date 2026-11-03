@@ -26,10 +26,10 @@ internal static class SeatHelperRegression {
             string preferred=Path.Combine(root,"preferred"), fallbackHome=Path.Combine(root,"fallback");
             Action<string> writable=delegate(string directory) { Directory.CreateDirectory(directory); };
             object[] homeArgs={preferred,fallbackHome,writable,null};
-            Check((string)Client.GetMethod("SelectHome",Flags).Invoke(null,homeArgs)==preferred && (string)homeArgs[3]=="", "优先使用可写D盘候选目录");
+            Check((string)Client.GetMethod("SelectHome",Flags).Invoke(null,homeArgs)==preferred && (string)homeArgs[3]=="", "优先使用可写首选目录");
             Action<string> deniedPreferred=delegate(string directory) { if(directory==preferred)throw new UnauthorizedAccessException(); Directory.CreateDirectory(directory); };
             homeArgs=new object[]{preferred,fallbackHome,deniedPreferred,null};
-            Check((string)Client.GetMethod("SelectHome",Flags).Invoke(null,homeArgs)==fallbackHome && ((string)homeArgs[3]).Contains("已改用"),"D盘不可写时明确告知回退目录");
+            Check((string)Client.GetMethod("SelectHome",Flags).Invoke(null,homeArgs)==fallbackHome && ((string)homeArgs[3]).Contains("已改用"),"首选目录不可写时明确告知回退目录");
             Action<string> deniedAll=delegate(string directory) {throw new UnauthorizedAccessException();};
             bool noHome=false;try{Client.GetMethod("SelectHome",Flags).Invoke(null,new object[]{preferred,fallbackHome,deniedAll,null});}catch(TargetInvocationException){noHome=true;}
             Check(noHome,"两个位置都不可写时停止安装，不报成功");
@@ -126,8 +126,68 @@ internal static class SeatHelperRegression {
             Check(Resolve()==Fallback,"损坏配置仍能使用独立网页地址");
             File.WriteAllText(Path.Combine(root,"platform-url.txt"),"file:///C:/Windows/notepad.exe",Encoding.UTF8);
             Check((string)Invoke("ReadFallback")=="","不接受文件地址降级");
+            Set("Site",new Dictionary<string,object>{{"platformUrl",Fallback}});
+            Check((bool)Invoke("AllowedOrigin",Fallback),"允许下载包指定的平台来源");
+            Check(!(bool)Invoke("AllowedOrigin","http://evil.example") && !(bool)Invoke("AllowedOrigin",new object[]{null}),"拒绝任意网页和无来源请求");
+            Check(!(bool)Invoke("AllowedOrigin",Fallback+".evil.example"),"来源比较不能被域名后缀绕过");
+            Set("Site",new Dictionary<string,object>{{"platformUrl",Fallback},{"allowedOrigins",new object[]{"http://xxkj.xsedu.net.cn"}}});
+            Check((bool)Invoke("AllowedOrigin","http://xxkj.xsedu.net.cn"),"同一安装包支持已配置的域名与IP");
+            Check(!(bool)Invoke("AllowedOrigin","http://xxkj.xsedu.net.cn.evil.example"),"别名清单仍使用精确来源匹配");
+            Check((bool)Invoke("IsDefaultBrowser",@"C:\Browser\browser.exe",@"c:\browser\BROWSER.exe"),"默认浏览器按实际程序完整路径识别");
+            Check(!(bool)Invoke("IsDefaultBrowser",@"C:\Other\browser.exe",@"C:\Browser\browser.exe") && !(bool)Invoke("IsDefaultBrowser","",""),"同名程序或识别失败不冒充默认浏览器");
+            Check((int)Invoke("TcpPort",(uint)0xDB6D)==28123,"正确解析Windows TCP表的网络字节序端口");
+            var sockets=new TcpListener(IPAddress.Loopback,28123);
+            try {
+                sockets.Start();
+                using(var caller=new TcpClient()) {
+                    caller.Connect(IPAddress.Loopback,28123);
+                    using(var accepted=sockets.AcceptTcpClient()) {
+                        object[] connectionArgs={accepted.Client.RemoteEndPoint,""};
+                        int pid=(int)Client.GetMethod("ConnectionProcess",Flags).Invoke(null,connectionArgs);
+                        Check(pid==System.Diagnostics.Process.GetCurrentProcess().Id && ((string)connectionArgs[1]).EndsWith("SeatHelperRegression.exe",StringComparison.OrdinalIgnoreCase),"真实TCP连接识别请求方PID及程序路径");
+                    }
+                }
+            } finally {sockets.Stop();}
+            Set("Config",config);
+            Check(!((string)Invoke("BrowserBody","browser-a",false)).Contains("token"),"新浏览器先登记且不挪用其他浏览器的凭证");
+            Invoke("BrowserBody","browser-b",true);
+            var browserTickets=(System.Collections.IDictionary)Client.GetField("BrowserTickets",Flags).GetValue(null);
+            var ticketA=browserTickets["browser-a"];var ticketB=browserTickets["browser-b"];
+            ticketA.GetType().GetField("Token").SetValue(ticketA,new string('a',64));ticketA.GetType().GetField("Until").SetValue(ticketA,DateTime.UtcNow.AddSeconds(30));
+            ticketB.GetType().GetField("Token").SetValue(ticketB,new string('b',64));ticketB.GetType().GetField("Until").SetValue(ticketB,DateTime.UtcNow.AddSeconds(30));
+            Check(((string)Invoke("BrowserBody","browser-b",true)).Contains(new string('b',64)),"默认浏览器只领取自己的单次凭证");
+            Check(((string)Invoke("BrowserBody","browser-a",false)).Contains(new string('a',64)),"另一个浏览器凭证独立且不会被默认浏览器消耗");
+            Check(!((string)Invoke("BrowserBody","browser-a",false)).Contains("token"),"浏览器专属凭证也只能领取一次");
+            ticketA.GetType().GetField("Token").SetValue(ticketA,new string('c',64));
+            Check(!((string)Invoke("BrowserBody","browser-a",true)).Contains("token"),"更换系统默认浏览器后丢弃旧优先级凭证");
+            // 旧配对通道仍须保持一次性消费。
+            Set("Config",null);
+            foreach(var start in new[]{"StartLocalListener","StartTcpLoopback"}) {
+                Invoke(start);
+                Set("LocalIdentity",new Dictionary<string,object>{{"installed",true},{"version","0.2.3"},{"token",new string('a',64)}});
+                Set("IdentityUntil",DateTime.UtcNow.AddSeconds(30));
+                Check(LocalRequest("GET",Fallback).Contains(new string('a',64)),start+"真实回环接口返回单次凭证");
+                Check(!LocalRequest("GET",Fallback).Contains(new string('a',64)),start+"本地凭证读取后不重复返回");
+                Check(LocalRequest("OPTIONS",Fallback)=="",start+"支持浏览器跨域预检");
+                bool forbidden=false;try {LocalRequest("GET","http://evil.example");}catch(WebException e) {forbidden=((HttpWebResponse)e.Response).StatusCode==HttpStatusCode.Forbidden;e.Response.Close();}
+                Check(forbidden,start+"拒绝非平台网页");
+                Invoke("StopLocalListener");
+            }
+            // 网页探测按版本号判断助手是否可用，这里验证回报值与构建版本一致。
+            Set("LocalIdentity",null);
+            string appVersion=(string)Client.GetField("AppVersion",Flags).GetValue(null);
+            string versionBody=(string)Invoke("IdentityBody");
+            Check(versionBody.Contains("\"version\":\""+appVersion+"\"") && System.Text.RegularExpressions.Regex.IsMatch(appVersion,@"^\d+\.\d+\.\d+$"),"回环探测回报当前助手版本");
             Console.WriteLine("客户端回归通过："+Passed);
         } catch(Exception e) { Console.Error.WriteLine(e.GetBaseException().Message); Environment.ExitCode=1; }
+    }
+    static string LocalRequest(string method,string origin) {
+        var request=(HttpWebRequest)WebRequest.Create("http://127.0.0.1:28123/identity");
+        request.Proxy=null;request.Timeout=2000;request.Method=method;request.Headers["Origin"]=origin;
+        using(var response=(HttpWebResponse)request.GetResponse()) {
+            if(response.Headers["Access-Control-Allow-Origin"]!=origin || response.Headers["Access-Control-Allow-Private-Network"]!="true")throw new Exception("跨域响应未限制到平台来源");
+            using(var reader=new StreamReader(response.GetResponseStream()))return reader.ReadToEnd();
+        }
     }
 }
 

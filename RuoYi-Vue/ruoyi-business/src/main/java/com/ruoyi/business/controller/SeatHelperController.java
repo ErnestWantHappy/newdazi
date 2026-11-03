@@ -20,6 +20,7 @@ public class SeatHelperController {
     @Autowired private com.ruoyi.business.service.SeatHelperPairService pairing;
     @Autowired private GuideSheetAccessService access;
     @Value("${seat-helper.client-path:clients/seat-helper/dist/SeatHelper.exe}") private String clientPath;
+    @Value("${seat-helper.allowed-origins:http://10.52.1.130,http://xxkj.xsedu.net.cn}") private String allowedOrigins="http://10.52.1.130,http://xxkj.xsedu.net.cn";
     @PreAuthorize("@ss.hasRole('admin')")
     @GetMapping("/admin") public AjaxResult admin(@RequestParam Long deptId) { return AjaxResult.success(service.admin(deptId)); }
     @PreAuthorize("@ss.hasRole('admin')")
@@ -39,11 +40,18 @@ public class SeatHelperController {
     @Anonymous
     @PostMapping("/device/register") public AjaxResult register(@RequestBody Map<String,String> request) throws Exception { return AjaxResult.success(service.register(request.get("code"),request.get("fingerprint"))); }
     @Anonymous
+    @PostMapping("/device/upgrade-identity") public AjaxResult upgradeIdentity(@RequestBody Map<String,Object> request) {return AjaxResult.success(service.upgradeIdentity(request));}
+    @Anonymous
     @PostMapping("/device/heartbeat") public AjaxResult heartbeat(@RequestBody Map<String,Object> request) throws Exception { return AjaxResult.success(service.heartbeat(request,false)); }
     @Anonymous
     @PostMapping("/device/open") public AjaxResult open(@RequestBody Map<String,Object> request) throws Exception { return AjaxResult.success(service.heartbeat(request,true)); }
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/student/associate") public AjaxResult associate(@RequestBody Map<String,String> request) throws Exception { return AjaxResult.success(service.associate(request.get("token"))); }
+    @PreAuthorize("@studentSs.isStudent()")
+    @PostMapping("/student/claim-local") public AjaxResult claimLocal(@RequestBody Map<String,String> request) throws Exception {
+        // 只接受助手经设备认证取得的单次凭证，不信任网页自报IP和设备ID。
+        return AjaxResult.success(service.associate(request.get("token")));
+    }
     @PreAuthorize("@studentSs.isStudent()")
     @GetMapping("/student/status") public AjaxResult status() throws Exception { return AjaxResult.success(service.studentStatus()); }
     @PreAuthorize("@studentSs.isStudent()")
@@ -53,10 +61,18 @@ public class SeatHelperController {
         String site=service.platformUrl(dept);
         Path path=Paths.get(clientPath).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path)) throw new ServiceException("客户端安装包尚未配置，请联系管理员");
+        // PE尾部只附带公开站点信息，不含学生密码、登录Token或设备注册码。
+        Map<String,Object> bootstrapInfo=new LinkedHashMap<>();bootstrapInfo.put("platformUrl",site);
+        Set<String> origins=new LinkedHashSet<>();origins.add(site.replaceAll("/+$",""));
+        for(String entry:allowedOrigins.split(",")) {
+            if(entry.trim().isEmpty())continue;
+            SeatHelperService.validatePlatformUrl(entry.trim());origins.add(entry.trim().replaceAll("/+$",""));
+        }
+        bootstrapInfo.put("allowedOrigins",origins);
+        byte[] bootstrap=new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(bootstrapInfo);
+        if(bootstrap.length>4096) throw new ServiceException("助手可信地址清单过长，请联系管理员");
         response.setContentType("application/octet-stream"); response.setHeader("X-Content-Type-Options","nosniff");
         FileUtils.setAttachmentResponseHeader(response,"SeatHelper.exe"); Files.copy(path,response.getOutputStream());
-        // PE尾部只附带公开站点信息，不含学生密码、登录Token或设备注册码。
-        byte[] bootstrap=new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(Collections.singletonMap("platformUrl",site));
         response.getOutputStream().write(bootstrap);
         response.getOutputStream().write(java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(bootstrap.length).array());
         response.getOutputStream().write("SEATHELPER-SITE01".getBytes(java.nio.charset.StandardCharsets.US_ASCII));

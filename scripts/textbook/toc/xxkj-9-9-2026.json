@@ -1,0 +1,70 @@
+{
+  "book_code": "xxkj-9-9-2026",
+  "title": "信息科技 九年级全一册",
+  "short_title": "九年级",
+  "grade": 9,
+  "semester": "9",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 111,
+  "page_offset": 5,
+  "offset_breaks": [{ "from_pdf": 36, "offset": 1 }],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 8 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 互联网与物联网安全技术",
+      "intro": { "title": "单元导入", "pdf_start": 9, "pdf_end": 10 },
+      "lessons": [
+        { "no": 1, "title": "网络安全探究", "printed_start": 6, "printed_end": 11, "pdf_start": 11, "pdf_end": 16 },
+        { "no": 2, "title": "数据安全技术", "printed_start": 12, "printed_end": 16, "pdf_start": 17, "pdf_end": 21 },
+        { "no": 3, "title": "互联网传输安全技术", "printed_start": 17, "printed_end": 21, "pdf_start": 22, "pdf_end": 26 },
+        { "no": 4, "title": "服务器安全技术", "printed_start": 22, "printed_end": 26, "pdf_start": 27, "pdf_end": 31 },
+        { "no": 5, "title": "物联网安全技术", "printed_start": 27, "printed_end": 30, "pdf_start": 32, "pdf_end": 35 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 人工智能安全与发展",
+      "intro": null,
+      "lessons": [
+        { "no": 6, "title": "智慧社会", "printed_start": 35, "printed_end": 37, "pdf_start": 36, "pdf_end": 38 },
+        { "no": 7, "title": "人工智能伦理", "printed_start": 38, "printed_end": 42, "pdf_start": 39, "pdf_end": 43 },
+        { "no": 8, "title": "人工智能安全", "printed_start": 43, "printed_end": 48, "pdf_start": 44, "pdf_end": 49 },
+        { "no": 9, "title": "具身智能的发展", "printed_start": 49, "printed_end": 54, "pdf_start": 50, "pdf_end": 55 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 55, "printed_end": 55, "pdf_start": 56, "pdf_end": 56 }
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 智能预测与智能推荐",
+      "intro": { "title": "单元导入", "pdf_start": 57, "pdf_end": 58 },
+      "lessons": [
+        { "no": 10, "title": "预测原理探究", "printed_start": 58, "printed_end": 61, "pdf_start": 59, "pdf_end": 62 },
+        { "no": 11, "title": "预测模型构建", "printed_start": 62, "printed_end": 65, "pdf_start": 63, "pdf_end": 66 },
+        { "no": 12, "title": "预测算法实践", "printed_start": 66, "printed_end": 70, "pdf_start": 67, "pdf_end": 71 },
+        { "no": 13, "title": "推荐系统探究", "printed_start": 71, "printed_end": 75, "pdf_start": 72, "pdf_end": 76 },
+        { "no": 14, "title": "推荐系统实践", "printed_start": 76, "printed_end": 80, "pdf_start": 77, "pdf_end": 81 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 81, "printed_end": 81, "pdf_start": 82, "pdf_end": 82 }
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 无人机飞行",
+      "intro": { "title": "单元导入", "pdf_start": 83, "pdf_end": 84 },
+      "lessons": [
+        { "no": 15, "title": "认识无人机", "printed_start": 84, "printed_end": 88, "pdf_start": 85, "pdf_end": 89 },
+        { "no": 16, "title": "无人机飞行", "printed_start": 89, "printed_end": 94, "pdf_start": 90, "pdf_end": 95 },
+        { "no": 17, "title": "无人机编队飞行", "printed_start": 95, "printed_end": 100, "pdf_start": 96, "pdf_end": 101 },
+        { "no": 18, "title": "无人机智能飞行", "printed_start": 101, "printed_end": 105, "pdf_start": 102, "pdf_end": 106 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 106, "printed_end": 106, "pdf_start": 107, "pdf_end": 107 }
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 108, "pdf_end": 111 },
+  "notes": [
+    "原始 PDF 缺印刷页 31–34：第一单元「单元小结与反思」、第二单元「单元导入」及第 6 课《智慧社会》首页均不在文件中，因此第 6 课从 PDF 第 36 页（印刷第 35 页）开始。",
+    "本册印刷页码在 PDF 第 36 页处从“PDF-5”跳为“PDF-1”，已按页脚实测配置 offset_breaks。"
+  ]
+}

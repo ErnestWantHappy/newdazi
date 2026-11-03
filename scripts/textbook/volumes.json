@@ -1,0 +1,102 @@
+{
+  "pack_version": "20261029",
+  "render": {
+    "width": 1400,
+    "quality": 75,
+    "format": "jpeg"
+  },
+  "books": [
+    {
+      "code": "xxkj-3-0-2026",
+      "stage": "primary",
+      "sort_no": 10,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\三年级上.pdf",
+      "toc": "toc/xxkj-3-0-2026.json"
+    },
+    {
+      "code": "xxkj-3-1-2026",
+      "stage": "primary",
+      "sort_no": 11,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\三年级下.pdf",
+      "toc": "toc/xxkj-3-1-2026.json"
+    },
+    {
+      "code": "xxkj-4-0-2026",
+      "stage": "primary",
+      "sort_no": 20,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\四年级上.pdf",
+      "toc": "toc/xxkj-4-0-2026.json"
+    },
+    {
+      "code": "xxkj-4-1-2026",
+      "stage": "primary",
+      "sort_no": 21,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\四年级下.pdf",
+      "toc": "toc/xxkj-4-1-2026.json"
+    },
+    {
+      "code": "xxkj-5-0-2026",
+      "stage": "primary",
+      "sort_no": 30,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\五年级上 9-26(1).pdf",
+      "toc": "toc/xxkj-5-0-2026.json"
+    },
+    {
+      "code": "xxkj-5-1-2026",
+      "stage": "primary",
+      "sort_no": 31,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\义务教育教科书 信息科技 五年级下（送审加内容）水印 2026-3-30(1).pdf",
+      "toc": "toc/xxkj-5-1-2026.json"
+    },
+    {
+      "code": "xxkj-6-0-2026",
+      "stage": "primary",
+      "sort_no": 40,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\六年级上 9-29(1).pdf",
+      "toc": "toc/xxkj-6-0-2026.json"
+    },
+    {
+      "code": "xxkj-6-1-2026",
+      "stage": "primary",
+      "sort_no": 41,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026小学新教材\\义务教育教科书 信息科技 六年级下20260626(1).pdf",
+      "toc": "toc/xxkj-6-1-2026.json"
+    },
+    {
+      "code": "xxkj-7-0-2026",
+      "stage": "junior",
+      "sort_no": 50,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026初中信息科技新教材\\七年级上册.pdf",
+      "toc": "toc/xxkj-7-0-2026.json"
+    },
+    {
+      "code": "xxkj-7-1-2026",
+      "stage": "junior",
+      "sort_no": 51,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026初中信息科技新教材\\七年级下册.pdf",
+      "toc": "toc/xxkj-7-1-2026.json"
+    },
+    {
+      "code": "xxkj-8-0-2026",
+      "stage": "junior",
+      "sort_no": 60,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026初中信息科技新教材\\八年级上册.pdf",
+      "toc": "toc/xxkj-8-0-2026.json"
+    },
+    {
+      "code": "xxkj-8-1-2026",
+      "stage": "junior",
+      "sort_no": 61,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026初中信息科技新教材\\八年级下册.pdf",
+      "toc": "toc/xxkj-8-1-2026.json"
+    },
+    {
+      "code": "xxkj-9-9-2026",
+      "stage": "junior",
+      "sort_no": 70,
+      "source": "G:\\教师工作资料\\信息科技新教材的pdf\\2026初中信息科技新教材\\九年级.pdf",
+      "toc": "toc/xxkj-9-9-2026.json"
+    }
+  ],
+  "missing": []
+}

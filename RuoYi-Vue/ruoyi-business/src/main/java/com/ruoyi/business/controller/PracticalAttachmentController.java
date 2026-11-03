@@ -22,7 +22,8 @@ import com.ruoyi.common.utils.file.DownloadFileNameUtils;
 /** 作品附件按业务归属读取，网页源码只以 JSON 返回，原件只以附件下载。 */
 @RestController
 @RequestMapping("/business/practical-attachment")
-@PreAuthorize("@ss.hasRole('student') or @ss.hasRole('teacher') or @ss.hasRole('admin')")
+// 历史导入的学生可能没有 sys_role 学生角色，必须与其它学生接口一样按学生档案兜底。
+@PreAuthorize("@studentSs.isStudent() or @ss.hasRole('teacher') or @ss.hasRole('admin')")
 public class PracticalAttachmentController {
     @Autowired private PracticalArtifactMapper mapper;
     @Autowired private ResourceAccessService accessService;

@@ -23,22 +23,22 @@ import static org.mockito.ArgumentMatchers.*;
 class ScorePendingExportTest
 {
     @Test
-    void pendingOnlyExportContainsLabelInsteadOfZero() throws Exception
+    void pendingPracticalExportKeepsKnownHomeworkAndFinalScores() throws Exception
     {
         try (Workbook book = export(null)) {
             assertEquals("待批改", cell(book, "操作平均").getStringCellValue());
-            assertEquals("待批改", cell(book, "作业分").getStringCellValue());
-            assertEquals("待批改", cell(book, "课程总分").getStringCellValue());
+            assertEquals(35D, cell(book, "作业分").getNumericCellValue());
+            assertEquals(35D, cell(book, "课程总分").getNumericCellValue());
         }
     }
 
     @Test
-    void pendingLessonDoesNotHalveGradedAverage() throws Exception
+    void pendingLessonIncludesKnownScoresInHomeworkAverage() throws Exception
     {
         try (Workbook book = export(80)) {
             assertEquals(80D, cell(book, "操作平均").getNumericCellValue());
-            assertEquals(80D, cell(book, "作业平均").getNumericCellValue());
-            assertEquals(80D, cell(book, "课程平均分").getNumericCellValue());
+            assertEquals(57.5D, cell(book, "作业平均").getNumericCellValue());
+            assertEquals(57.5D, cell(book, "课程平均分").getNumericCellValue());
         }
     }
 
@@ -47,7 +47,7 @@ class ScorePendingExportTest
     {
         try (Workbook book = export(0)) {
             assertEquals(0D, cell(book, "操作平均").getNumericCellValue());
-            assertEquals(0D, cell(book, "课程平均分").getNumericCellValue());
+            assertEquals(17.5D, cell(book, "课程平均分").getNumericCellValue());
         }
     }
 
@@ -92,7 +92,7 @@ class ScorePendingExportTest
             LessonInfoVo lesson = new LessonInfoVo(); lesson.setLessonId((long) i); lesson.setLessonNum(i); lesson.setLessonTitle("测试课" + i); visible.add(lesson);
             Map<String, Object> row = new HashMap<>();
             row.put("studentId", 1L); row.put("lessonId", (long) i); row.put("lessonNum", i);
-            row.put("totalScore", i == 1 ? null : graded); row.put("practicalScore", i == 1 ? null : graded);
+            row.put("totalScore", i == 1 ? (deleted ? 0 : 35) : graded); row.put("practicalScore", i == 1 ? null : graded);
             row.put("practicalPending", i == 1 && !deleted ? 1 : 0);
             row.put("submittedAnswerCount", i == 1 && deleted ? 0 : 1); rows.add(row);
         }

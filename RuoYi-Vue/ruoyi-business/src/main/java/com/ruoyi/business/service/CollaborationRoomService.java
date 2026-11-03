@@ -32,6 +32,7 @@ import com.ruoyi.business.config.WpsWebOfficeProperties;
 import com.ruoyi.business.provider.CryptPadAdapter;
 import com.ruoyi.business.provider.MockCollaborationProvider;
 import com.ruoyi.business.domain.BizLesson;
+import com.ruoyi.business.util.LessonScopeUtils;
 import com.ruoyi.business.domain.BizLessonAssignment;
 import com.ruoyi.business.domain.BizStudent;
 import com.ruoyi.business.domain.CollaborationRoom;
@@ -477,6 +478,7 @@ public class CollaborationRoomService
         Long userId = SecurityUtils.getUserId();
         if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(SecurityUtils.getDeptId()))
             throw new ServiceException("课程不存在或不属于当前学校");
+        LessonScopeUtils.requireRegular(lesson, "拓展课和历史课不能使用在线协作");
         if (!SecurityUtils.isAdmin(userId) && !userId.equals(lesson.getCreatorId()))
             throw new ServiceException("只能配置自己创建的课程");
         return lesson;

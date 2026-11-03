@@ -282,6 +282,8 @@
                 <el-option label="精确匹配" value="exact" />
                 <el-option label="包含匹配" value="contains" />
                 <el-option label="AI评分" value="ai" />
+                <!-- 新手模板默认写 manual，高级模式必须能显示与回选，否则教师一改就被静默转成精确匹配 -->
+                <el-option label="人工批改" value="manual" />
               </el-select>
               <div class="scoring-type-hint">{{ scoringTypeHint(scoringConfig[row.id].type) }}</div>
             </template>
@@ -675,9 +677,14 @@ function onFormJsonChange(formJson) {
         return
       }
 
-      form.maxPages = (formJson.widgetList && Array.isArray(formJson.widgetList))
-        ? formJson.widgetList.length || 1
-        : 1
+      // maxPages 语义是“学生端页签数”，必须数与新手模式一致（HomeTab.tabs.length），
+      // 不能再拿顶层 widgetList.length 冒充，否则加一个图片组件就会把页数改错。
+      const homeTab = (formJson.widgetList || []).find(
+        widget => widget?.type === 'tab' && widget?.options?.name === 'HomeTab'
+      )
+      form.maxPages = homeTab?.tabs?.length
+        ? homeTab.tabs.length
+        : ((formJson.widgetList && formJson.widgetList.length) || 1)
       // 为新增字段设置中文标签 + 拼音唯一名称
       autoRenameWidgets(formJson)
       // 同步评分配置字段列表 - 不覆盖已恢复的 scoringConfig（防止 setFormJson 触发后丢失已加载的参考答案）
@@ -1027,7 +1034,8 @@ function scoringTypeHint(type) {
   const hints = {
     exact: '学生答案与参考答案完全一致才得分',
     contains: '按匹配关键词数量比例计分',
-    ai: 'AI根据参考答案对学生答案智能评分'
+    ai: 'AI根据参考答案对学生答案智能评分',
+    manual: '提交后进入待批改，由老师逐题给分'
   }
   return hints[type] || ''
 }

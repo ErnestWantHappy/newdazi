@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-8-0-2026",
+  "title": "信息科技 八年级上册",
+  "short_title": "八上",
+  "grade": 8,
+  "semester": "0",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 118,
+  "page_offset": 5,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 8 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 互联网应用",
+      "intro": { "title": "单元导入", "pdf_start": 9, "pdf_end": 10 },
+      "lessons": [
+        { "no": 1, "title": "在线学习", "printed_start": 6, "printed_end": 9, "pdf_start": 11, "pdf_end": 14 },
+        { "no": 2, "title": "电子支付", "printed_start": 10, "printed_end": 13, "pdf_start": 15, "pdf_end": 18 },
+        { "no": 3, "title": "在线交流", "printed_start": 14, "printed_end": 17, "pdf_start": 19, "pdf_end": 22 },
+        { "no": 4, "title": "在线协同", "printed_start": 18, "printed_end": 21, "pdf_start": 23, "pdf_end": 26 },
+        { "no": 5, "title": "在线应用的实践", "printed_start": 22, "printed_end": 26, "pdf_start": 27, "pdf_end": 31 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 27, "printed_end": 27, "pdf_start": 32, "pdf_end": 32 }
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 互联网数据",
+      "intro": { "title": "单元导入", "pdf_start": 33, "pdf_end": 34 },
+      "lessons": [
+        { "no": 6, "title": "互联网应用中的数据", "printed_start": 30, "printed_end": 33, "pdf_start": 35, "pdf_end": 38 },
+        { "no": 7, "title": "网页的数据组织", "printed_start": 34, "printed_end": 39, "pdf_start": 39, "pdf_end": 44 },
+        { "no": 8, "title": "网页的数据呈现", "printed_start": 40, "printed_end": 44, "pdf_start": 45, "pdf_end": 49 },
+        { "no": 9, "title": "网页的数据编码", "printed_start": 45, "printed_end": 48, "pdf_start": 50, "pdf_end": 53 },
+        { "no": 10, "title": "网页的编辑与发布", "printed_start": 49, "printed_end": 52, "pdf_start": 54, "pdf_end": 57 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 53, "printed_end": 53, "pdf_start": 58, "pdf_end": 58 }
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 互联网与物联网的安全",
+      "intro": { "title": "单元导入", "pdf_start": 59, "pdf_end": 60 },
+      "lessons": [
+        { "no": 11, "title": "数据备份与加密", "printed_start": 56, "printed_end": 61, "pdf_start": 61, "pdf_end": 66 },
+        { "no": 12, "title": "数据解密", "printed_start": 62, "printed_end": 66, "pdf_start": 67, "pdf_end": 71 },
+        { "no": 13, "title": "网络安全防范", "printed_start": 67, "printed_end": 71, "pdf_start": 72, "pdf_end": 76 },
+        { "no": 14, "title": "网络身份认证", "printed_start": 72, "printed_end": 77, "pdf_start": 77, "pdf_end": 82 },
+        { "no": 15, "title": "个人数据安全宣传", "printed_start": 78, "printed_end": 82, "pdf_start": 83, "pdf_end": 87 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 83, "printed_end": 83, "pdf_start": 88, "pdf_end": 88 }
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 人工智能的创新应用",
+      "intro": { "title": "单元导入", "pdf_start": 89, "pdf_end": 90 },
+      "lessons": [
+        { "no": 16, "title": "中国人工智能发展", "printed_start": 86, "printed_end": 89, "pdf_start": 91, "pdf_end": 94 },
+        { "no": 17, "title": "智能生活", "printed_start": 90, "printed_end": 94, "pdf_start": 95, "pdf_end": 99 },
+        { "no": 18, "title": "智能制造", "printed_start": 95, "printed_end": 99, "pdf_start": 100, "pdf_end": 104 },
+        { "no": 19, "title": "智能教育", "printed_start": 100, "printed_end": 104, "pdf_start": 105, "pdf_end": 109 },
+        { "no": 20, "title": "智能创意", "printed_start": 105, "printed_end": 109, "pdf_start": 110, "pdf_end": 114 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 110, "printed_end": 110, "pdf_start": 115, "pdf_end": 115 }
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 116, "pdf_end": 118 },
+  "notes": []
+}

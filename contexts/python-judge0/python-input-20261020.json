@@ -1,0 +1,282 @@
+[
+  {
+    "externalId": "PYIO-001",
+    "title": "输入入门1：文字原样输出",
+    "description": "输入一行文字，把这一行文字原样输出。\n\n操作提示：代码写在代码编辑区；测试时，在“输入”区域填写要读取的内容，再运行程序。输入内容不要加引号，程序也不要输出“请输入”等额外提示。",
+    "schoolStage": "小学高年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "noInput": false,
+    "starterCode": "# 用 input() 读取输入，用 print() 输出\n",
+    "referenceCode": "text = input()\nprint(text)\n",
+    "inputDescription": "输入一行内容，长度1～100个字符，可包含中文、英文或空格。",
+    "outputDescription": "原样输出输入的这一行，不要添加其他文字。",
+    "constraints": "只练习输入和输出，无需计算、判断或循环；保留行内空格和数字开头的0。",
+    "sampleExplanation": "公开样例左侧是输入的内容，右侧是程序应输出的内容；两者完全相同。",
+    "hint": "input() 每次读取一行，print() 输出一行。可以先写 text = input()，再写 print(text)。",
+    "timeLimitSeconds": 2,
+    "memoryLimitKb": 131072,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "Hello\n",
+        "expectedOutput": "Hello\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "Python\n",
+        "expectedOutput": "Python\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "你好\n",
+        "expectedOutput": "你好\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "Good morning\n",
+        "expectedOutput": "Good morning\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYIO-002",
+    "title": "输入入门2：姓名原样输出",
+    "description": "输入一个姓名，把姓名原样输出，不需要添加问候语。\n\n操作提示：代码写在代码编辑区；测试时，在“输入”区域填写要读取的内容，再运行程序。输入内容不要加引号，程序也不要输出“请输入”等额外提示。",
+    "schoolStage": "小学高年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "noInput": false,
+    "starterCode": "# 用 input() 读取输入，用 print() 输出\n",
+    "referenceCode": "text = input()\nprint(text)\n",
+    "inputDescription": "输入一行内容，长度1～100个字符，可包含中文、英文或空格。",
+    "outputDescription": "原样输出输入的这一行，不要添加其他文字。",
+    "constraints": "只练习输入和输出，无需计算、判断或循环；保留行内空格和数字开头的0。",
+    "sampleExplanation": "公开样例左侧是输入的内容，右侧是程序应输出的内容；两者完全相同。",
+    "hint": "input() 每次读取一行，print() 输出一行。可以先写 text = input()，再写 print(text)。",
+    "timeLimitSeconds": 2,
+    "memoryLimitKb": 131072,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "小明\n",
+        "expectedOutput": "小明\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "张小雨\n",
+        "expectedOutput": "张小雨\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "Alice\n",
+        "expectedOutput": "Alice\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "李华\n",
+        "expectedOutput": "李华\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYIO-003",
+    "title": "输入入门3：数字原样输出",
+    "description": "输入一行数字，把它原样输出，不需要计算。\n\n操作提示：代码写在代码编辑区；测试时，在“输入”区域填写要读取的内容，再运行程序。输入内容不要加引号，程序也不要输出“请输入”等额外提示。",
+    "schoolStage": "小学高年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "noInput": false,
+    "starterCode": "# 用 input() 读取输入，用 print() 输出\n",
+    "referenceCode": "text = input()\nprint(text)\n",
+    "inputDescription": "输入一行数字，长度1～100，可能包含开头的0，不需要转换成整数。",
+    "outputDescription": "原样输出输入的这一行，不要添加其他文字。",
+    "constraints": "只练习输入和输出，无需计算、判断或循环；保留行内空格和数字开头的0。",
+    "sampleExplanation": "公开样例左侧是输入的内容，右侧是程序应输出的内容；两者完全相同。",
+    "hint": "input() 每次读取一行，print() 输出一行。可以先写 text = input()，再写 print(text)。",
+    "timeLimitSeconds": 2,
+    "memoryLimitKb": 131072,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "123\n",
+        "expectedOutput": "123\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "0\n",
+        "expectedOutput": "0\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "2026\n",
+        "expectedOutput": "2026\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "007\n",
+        "expectedOutput": "007\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYIO-004",
+    "title": "输入入门4：一句话原样输出",
+    "description": "输入一句话，把整句话原样输出，保留句子中间的空格。\n\n操作提示：代码写在代码编辑区；测试时，在“输入”区域填写要读取的内容，再运行程序。输入内容不要加引号，程序也不要输出“请输入”等额外提示。",
+    "schoolStage": "小学高年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "noInput": false,
+    "starterCode": "# 用 input() 读取输入，用 print() 输出\n",
+    "referenceCode": "text = input()\nprint(text)\n",
+    "inputDescription": "输入一行内容，长度1～100个字符，可包含中文、英文或空格。",
+    "outputDescription": "原样输出输入的这一行，不要添加其他文字。",
+    "constraints": "只练习输入和输出，无需计算、判断或循环；保留行内空格和数字开头的0。",
+    "sampleExplanation": "公开样例左侧是输入的内容，右侧是程序应输出的内容；两者完全相同。",
+    "hint": "input() 每次读取一行，print() 输出一行。可以先写 text = input()，再写 print(text)。",
+    "timeLimitSeconds": 2,
+    "memoryLimitKb": 131072,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "I love Python\n",
+        "expectedOutput": "I love Python\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "我爱信息科技\n",
+        "expectedOutput": "我爱信息科技\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "Hello  Python!\n",
+        "expectedOutput": "Hello  Python!\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "Today is a good day.\n",
+        "expectedOutput": "Today is a good day.\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  },
+  {
+    "externalId": "PYIO-005",
+    "title": "输入入门5：两行原样输出",
+    "description": "输入两行内容，按原来的顺序输出两行。第一行对应第一行，第二行对应第二行。\n\n操作提示：代码写在代码编辑区；测试时，在“输入”区域填写要读取的内容，再运行程序。输入内容不要加引号，程序也不要输出“请输入”等额外提示。",
+    "schoolStage": "小学高年级零基础",
+    "learningTier": "非常简单",
+    "knowledgePoints": [
+      "input输入",
+      "print输出"
+    ],
+    "difficulty": "SIMPLE",
+    "noInput": false,
+    "starterCode": "# 用 input() 读取输入，用 print() 输出\n",
+    "referenceCode": "first = input()\nsecond = input()\nprint(first)\nprint(second)\n",
+    "inputDescription": "输入两行内容，每行1～100个字符。",
+    "outputDescription": "原样输出两行内容，顺序不变。",
+    "constraints": "只练习输入和输出，无需计算、判断或循环；保留行内空格和数字开头的0。",
+    "sampleExplanation": "公开样例左侧是输入的内容，右侧是程序应输出的内容；两者完全相同。两行输入之间按一次回车。",
+    "hint": "input() 每次读取一行，print() 输出一行。连续使用两次 input()，分别保存两行内容，再依次输出。",
+    "timeLimitSeconds": 2,
+    "memoryLimitKb": 131072,
+    "testCases": [
+      {
+        "caseName": "公开样例",
+        "inputText": "Hello\nPython\n",
+        "expectedOutput": "Hello\nPython\n",
+        "isPublic": true,
+        "scoreWeight": 25,
+        "orderNum": 1
+      },
+      {
+        "caseName": "隐藏测试点 1",
+        "inputText": "小明\n五年级\n",
+        "expectedOutput": "小明\n五年级\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 2
+      },
+      {
+        "caseName": "隐藏测试点 2",
+        "inputText": "007\n2026\n",
+        "expectedOutput": "007\n2026\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 3
+      },
+      {
+        "caseName": "隐藏测试点 3",
+        "inputText": "I love Python\n我爱信息科技\n",
+        "expectedOutput": "I love Python\n我爱信息科技\n",
+        "isPublic": false,
+        "scoreWeight": 25,
+        "orderNum": 4
+      }
+    ]
+  }
+]

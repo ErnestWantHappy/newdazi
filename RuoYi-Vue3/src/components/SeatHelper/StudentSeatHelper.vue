@@ -1,15 +1,16 @@
 <template>
-  <div v-if="status.enabled || message" class="student-seat-helper">
+  <div v-if="status.enabled || message || localRunning" class="student-seat-helper">
     <template v-if="status.associated">
       <el-tooltip :content="message || `已关联当前电脑。机位：${seatLabel}；内网IP：${status.localIp || '获取中'}。仅用于课堂机位管理。`" placement="bottom">
         <div class="seat-status-pill" :class="status.online && !message ? 'is-online' : 'is-offline'">
           <span class="presence-dot" />
-          <span class="seat-text">{{ seatLabel }}</span>
+          <span class="seat-text">机位：{{ seatLabel }}</span>
           <span v-if="status.localIp" class="ip-text">{{ status.localIp }}</span>
           <el-tag v-if="message || !status.online" size="small" type="warning" effect="dark" class="offline-tag">{{ message ? '状态待核对' : '助手离线' }}</el-tag>
         </div>
       </el-tooltip>
     </template>
+    <span v-else-if="probing || localRunning" class="seat-unbound-pill">{{ message || '助手已运行，正在自动关联机位…' }}</span>
     <template v-else>
       <div class="seat-unbound-pill">
         <span class="unbound-hint">{{ message || '机位未关联' }}</span>
@@ -33,9 +34,9 @@ import Download from '@/plugins/download'
 import { displaySeatName } from '@/utils/seatHelper'
 
 // 首页仅显示状态，续期由学生布局维护，不受子页面卸载影响
-const { status, message } = inject('student-seat-helper', {
+const { status, message, probing, localRunning } = inject('student-seat-helper', {
   status: ref({ enabled: false }),
-  message: ref('')
+  message: ref(''), probing: ref(false), localRunning: ref(false)
 })
 const seatLabel = computed(() => {
   const seat = displaySeatName(status.value.seatName)

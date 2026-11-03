@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-4-0-2026",
+  "title": "信息科技 四年级上册",
+  "short_title": "四上",
+  "grade": 4,
+  "semester": "0",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 88,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 泛在的数据",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "身边的数据", "printed_start": 2, "printed_end": 4, "pdf_start": 8, "pdf_end": 10 },
+        { "no": 2, "title": "多样的数据", "printed_start": 5, "printed_end": 8, "pdf_start": 11, "pdf_end": 14 },
+        { "no": 3, "title": "数据的价值", "printed_start": 9, "printed_end": 12, "pdf_start": 15, "pdf_end": 18 },
+        { "no": 4, "title": "数据的安全", "printed_start": 13, "printed_end": 16, "pdf_start": 19, "pdf_end": 22 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 数据证明观点",
+      "intro": { "title": "单元导入", "pdf_start": 23, "pdf_end": 23 },
+      "lessons": [
+        { "no": 5, "title": "数据获取", "printed_start": 18, "printed_end": 21, "pdf_start": 24, "pdf_end": 27 },
+        { "no": 6, "title": "数据整理", "printed_start": 22, "printed_end": 25, "pdf_start": 28, "pdf_end": 31 },
+        { "no": 7, "title": "数据计算", "printed_start": 26, "printed_end": 29, "pdf_start": 32, "pdf_end": 35 },
+        { "no": 8, "title": "图表呈现", "printed_start": 30, "printed_end": 33, "pdf_start": 36, "pdf_end": 39 },
+        { "no": 9, "title": "数据解读与分析", "printed_start": 34, "printed_end": 38, "pdf_start": 40, "pdf_end": 44 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 身边的编码",
+      "intro": { "title": "单元导入", "pdf_start": 45, "pdf_end": 45 },
+      "lessons": [
+        { "no": 10, "title": "从数据到编码", "printed_start": 40, "printed_end": 43, "pdf_start": 46, "pdf_end": 49 },
+        { "no": 11, "title": "有序的世界", "printed_start": 44, "printed_end": 47, "pdf_start": 50, "pdf_end": 53 },
+        { "no": 12, "title": "编码长度与信息量", "printed_start": 48, "printed_end": 51, "pdf_start": 54, "pdf_end": 57 },
+        { "no": 13, "title": "数据有关联", "printed_start": 52, "printed_end": 56, "pdf_start": 58, "pdf_end": 62 },
+        { "no": 14, "title": "编码的规则制订", "printed_start": 57, "printed_end": 60, "pdf_start": 63, "pdf_end": 66 },
+        { "no": 15, "title": "编码的验证优化", "printed_start": 61, "printed_end": 64, "pdf_start": 67, "pdf_end": 70 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 数据与人工智能",
+      "intro": { "title": "单元导入", "pdf_start": 71, "pdf_end": 71 },
+      "lessons": [
+        { "no": 16, "title": "数据驱动识花", "printed_start": 66, "printed_end": 70, "pdf_start": 72, "pdf_end": 76 },
+        { "no": 17, "title": "返回成语现场", "printed_start": 71, "printed_end": 75, "pdf_start": 77, "pdf_end": 81 },
+        { "no": 18, "title": "点阵数字智能识别", "printed_start": 76, "printed_end": 80, "pdf_start": 82, "pdf_end": 86 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 87, "pdf_end": 88 },
+  "notes": [
+    "本册为扫描 PDF，无文本层；课次页码取自目录页并经单元页/首页/末页渲染核对（目录 5–6 页，印刷页 1 = PDF 7，偏移 6）。"
+  ]
+}

@@ -103,10 +103,7 @@ public class PracticalArtifactService
                                                   MultipartFile file) throws Exception
     {
         requireFileQuestion(question);
-        BizStudentAnswer current = studentAnswerMapper.selectLatestByStudentLessonQuestion(
-                studentId, lessonId, question.getQuestionId());
-        PracticalSubmissionPolicy.assertCanUpdate(current, current != null && current.getScore() != null
-                && taskStateService.isReturned(studentId, lessonId, question.getQuestionId()));
+        // 已评分文件也可暂存新作品；暂存不改动当前作品和成绩。
         return stageFile(studentId, lessonId, question, file, "student-answer-artifact/");
     }
 
@@ -214,9 +211,11 @@ public class PracticalArtifactService
         {
             existingAnswer = studentAnswerMapper.selectByIdForUpdate(existingAnswer.getAnswerId());
         }
-        if (!teacherPaper) {
-            PracticalSubmissionPolicy.assertCanUpdate(existingAnswer,
-                    taskStateService.isReturnedForUpdate(studentId, lessonId, question.getQuestionId()));
+        // 学生可自主重交当前课文件，旧成绩在同一事务中随旧版本归档，失败由事务回滚。
+        if (!teacherPaper && existingAnswer != null && existingAnswer.getScore() != null
+                && artifact.getCurrentVersionId() == null)
+        {
+            throw new ServiceException("原作品版本信息缺失，请联系老师核对后再重交");
         }
         // 在版本锁和答案锁内再次核对，防止识别期间学生补交或另一位教师完成评分后被覆盖。
         if (teacherPaper && existingAnswer != null)

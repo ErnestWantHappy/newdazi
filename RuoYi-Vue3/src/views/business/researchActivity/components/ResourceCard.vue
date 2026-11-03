@@ -30,8 +30,12 @@
           <small v-if="resource.description">{{ resource.description }}</small>
         </div>
         <div class="resource-actions">
-            <el-button link type="primary" @click="openLink(resource)">打开</el-button>
-            <el-button v-if="resource.extractCode" link @click="copyCode(resource.extractCode)">复制提取码</el-button>
+          <span v-if="resource.extractCode" class="extract-code-badge" title="双击可选中提取码">
+            <span class="extract-code-label">提取码：</span>
+            <span class="extract-code-text">{{ resource.extractCode }}</span>
+          </span>
+          <el-button link type="primary" @click="openLink(resource)">打开</el-button>
+          <el-button v-if="resource.extractCode" link type="primary" @click="copyCode(resource.extractCode)">复制提取码</el-button>
         </div>
       </div>
     </div>
@@ -46,6 +50,7 @@
 import AttachmentList from './AttachmentList.vue'
 import { ElMessage } from 'element-plus'
 import { accessResearchLink } from '@/api/business/researchActivity.js'
+import { copyToClipboard } from '@/utils/clipboard.js'
 import { SCHOOL_TYPES, SEMESTERS, gradeLabel, lessonLabel, linkStatus, optionLabel } from '../utils/researchActivityFormat.js'
 
 defineProps({ post: { type: Object, required: true }, manager: { type: Boolean, default: false }, showTopic: { type: Boolean, default: false } })
@@ -58,8 +63,13 @@ async function openLink(resource) {
   if (url) window.open(url, '_blank', 'noopener,noreferrer')
 }
 async function copyCode(code) {
-  await navigator.clipboard.writeText(code)
-  ElMessage.success('提取码已复制')
+  // 使用通用剪贴板工具，兼容 HTTP 非安全上下文的 execCommand 降级
+  const ok = await copyToClipboard(code)
+  if (ok) {
+    ElMessage.success(`提取码 [${code}] 已复制`)
+  } else {
+    ElMessage.warning(`复制失败，请手动选择提取码：${code}`)
+  }
 }
 </script>
 
@@ -77,5 +87,38 @@ async function copyCode(code) {
 .resource-item { padding: 10px 0; border-bottom: 1px solid var(--el-border-color-lighter); }
 .resource-item > div:first-child { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .resource-item small { width: 100%; color: var(--el-text-color-secondary); }
+.resource-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.extract-code-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  background-color: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  padding: 1px 7px;
+  user-select: all;
+}
+.extract-code-label {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.extract-code-text {
+  color: var(--el-color-primary);
+  font-weight: 600;
+  font-family: Monaco, Menlo, Consolas, "Courier New", monospace;
+  margin-left: 2px;
+}
 .resource-card__meta { margin-top: 12px; color: var(--el-text-color-secondary); font-size: 13px; flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .resource-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .resource-actions {
+    width: 100%;
+    margin-top: 6px;
+    justify-content: flex-start;
+  }
+}
 </style>

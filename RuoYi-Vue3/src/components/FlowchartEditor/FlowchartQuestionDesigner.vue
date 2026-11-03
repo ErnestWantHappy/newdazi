@@ -3,6 +3,13 @@
     <el-alert title="画程已内置在平台中：标准答案用于结构检查，基础图才会发给学生。" type="info" :closable="false" show-icon />
     <el-tabs v-model="activeTab" class="designer-tabs">
       <el-tab-pane label="① 标准答案" name="answer">
+        <div class="answer-actions">
+          <el-upload :auto-upload="false" accept="image/png,image/jpeg" :show-file-list="false" :on-change="handleAnswerPhoto">
+            <el-button type="primary" :loading="aiGenerating">拍照或选图 · AI 生成标准答案</el-button>
+          </el-upload>
+          <span class="ai-tip">上传一张流程图照片，AI 会依据本题“操作题名称、年级、学期、第几课”自动生成标准答案草稿。此操作会调用视觉模型，需先在 AI 设置中配置并启用 Key，可能产生费用；生成后请核对再点底部“确定”正式保存。</span>
+        </div>
+        <el-alert v-if="aiAnswerHint" class="ai-banner" :title="aiAnswerHint" type="warning" show-icon :closable="true" @close="aiAnswerHint = ''" />
         <flowchart-editor v-model="state.answerJson" mode="AUTHOR_ANSWER" :height="480" />
       </el-tab-pane>
       <el-tab-pane label="② 学生基础图" name="starter">
@@ -61,12 +68,14 @@ import {
   EMPTY_FLOWCHART, DEFAULT_FLOWCHART_PERMISSIONS,
   parseFlowchartDocument, stringifyFlowchartDocument
 } from './schema'
-import { generateFlowchartRules } from '@/api/business/flowchart'
+import { generateFlowchartRules, aiGenerateFlowchartAnswer } from '@/api/business/flowchart'
 
-const props = defineProps({ modelValue: { type: Object, default: () => ({}) } })
+const props = defineProps({ modelValue: { type: Object, default: () => ({}) }, questionMeta: { type: Object, default: () => ({}) } })
 const emit = defineEmits(['update:modelValue'])
 const activeTab = ref('answer')
 const generating = ref(false)
+const aiGenerating = ref(false)
+const aiAnswerHint = ref('')
 const permissions = reactive({ ...DEFAULT_FLOWCHART_PERMISSIONS })
 const state = reactive({
   questionId: null,
@@ -139,6 +148,51 @@ async function copyAnswerToStarter() {
   ElMessage.success('已复制为学生基础图，可继续删减和锁定元素')
 }
 
+// 选图或拍照后，把题目元数据连同照片交给后端视觉模型；只回填画布，不直接保存。
+async function handleAnswerPhoto(uploadFile) {
+  if (aiGenerating.value) return
+  const raw = uploadFile && (uploadFile.raw || uploadFile)
+  if (!raw) return
+  if (raw.type !== 'image/jpeg' && raw.type !== 'image/png') {
+    ElMessage.warning('请选择 jpg 或 png 格式的流程图照片')
+    return
+  }
+  const existing = parseFlowchartDocument(state.answerJson)
+  if (existing.nodes.length > 0) {
+    try {
+      await ElMessageBox.confirm('AI 结果会覆盖当前标准答案，是否继续？', 'AI 生成标准答案', { confirmButtonText: '继续生成', cancelButtonText: '取消', type: 'warning' })
+    } catch (_) {
+      // 教师取消覆盖属于正常操作。
+      return
+    }
+  }
+  const meta = props.questionMeta || {}
+  const data = new FormData()
+  data.append('file', raw)
+  if (meta.title) data.append('title', meta.title)
+  if (meta.gradeText) data.append('gradeText', meta.gradeText)
+  if (meta.semesterText) data.append('semesterText', meta.semesterText)
+  if (meta.lessonNum != null && meta.lessonNum !== '') data.append('lessonNum', meta.lessonNum)
+  aiGenerating.value = true
+  try {
+    const response = await aiGenerateFlowchartAnswer(data)
+    const payload = response.data || {}
+    if (payload.answerJson) {
+      state.answerJson = payload.answerJson
+      activeTab.value = 'answer'
+      aiAnswerHint.value = 'AI 已生成标准答案草稿，请在画布上核对节点、文字和连线，调整无误后点底部“确定”才会正式保存。'
+      ElMessage.success(`已生成 ${payload.nodeCount || 0} 个节点的标准答案草稿，请核对`)
+      ;(payload.warnings || []).slice(0, 3).forEach(item => ElMessage.warning(item))
+    } else {
+      ElMessage.error('AI 未返回有效流程结构，请更换更清晰的照片或改用手动绘制')
+    }
+  } catch (_) {
+    // 具体错误（如未配置 Key、照片无法识别、模型限流）已由请求拦截器统一提示。
+  } finally {
+    aiGenerating.value = false
+  }
+}
+
 function parseRules(value) {
   try {
     const source = typeof value === 'string' ? JSON.parse(value) : value
@@ -167,6 +221,9 @@ function ruleTarget(rule) {
 .tab-tip, .rule-actions span, .starter-actions span { color: #66788a; font-size: 13px; }
 .tab-tip { margin-top: 8px; }
 .starter-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.answer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 10px; }
+.answer-actions .ai-tip { color: #909399; font-size: 12px; line-height: 1.5; max-width: 720px; }
+.ai-banner { margin-bottom: 10px; }
 .permission-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 18px; padding: 24px; border: 1px solid #e4edf5; border-radius: 10px; background: #f8fbfd; }
 .permission-grid :deep(.el-checkbox__label) { font-size: 15px; }
 .rule-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

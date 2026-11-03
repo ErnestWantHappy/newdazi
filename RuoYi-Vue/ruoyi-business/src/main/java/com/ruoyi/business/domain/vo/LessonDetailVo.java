@@ -46,6 +46,18 @@ public class LessonDetailVo extends BaseEntity {
     /** 课程级物联网实验开关（考勤课强制关闭） */
     private Boolean iotEnabled;
 
+    /** 本课对应教材册ID；为空表示未绑定。 */
+    private Long textbookBookId;
+
+    /** 本课对应教材课次稳定键；为空表示未绑定。 */
+    private String textbookSectionKey;
+
+    /**
+     * 本次保存是否改动过教材绑定。
+     * 旧版前端不会提交该字段，服务端此时不写绑定，避免缓存页面保存时静默清空。
+     */
+    private Boolean textbookBindingTouched;
+
     /** 关闭时保留当前绑定和历史答卷，仅停止学生访问。 */
     private Boolean guideSheetEnabled;
 
@@ -203,6 +215,31 @@ public class LessonDetailVo extends BaseEntity {
 
     public void setIotEnabled(Boolean iotEnabled) {
         this.iotEnabled = iotEnabled;
+    }
+
+    public Long getTextbookBookId() {
+        return textbookBookId;
+    }
+
+    public void setTextbookBookId(Long textbookBookId) {
+        this.textbookBookId = textbookBookId;
+    }
+
+    public String getTextbookSectionKey() {
+        return textbookSectionKey;
+    }
+
+    public void setTextbookSectionKey(String textbookSectionKey) {
+        this.textbookSectionKey = textbookSectionKey;
+    }
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    public Boolean getTextbookBindingTouched() {
+        return textbookBindingTouched;
+    }
+
+    public void setTextbookBindingTouched(Boolean textbookBindingTouched) {
+        this.textbookBindingTouched = textbookBindingTouched;
     }
 
     public Boolean getGuideSheetEnabled() {

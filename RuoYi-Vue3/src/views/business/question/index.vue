@@ -627,11 +627,11 @@
           <el-form-item label="补充资源">
             <file-upload
               v-model="form.practicalResourceFiles"
-              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'txt', 'html', 'htm', 'zip', 'rar', '7z']"
+              :file-type="['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'txt', 'html', 'htm', 'css', 'zip', 'rar', '7z']"
               :file-size="50"
               :limit="5"
             />
-            <div style="color: #909399; font-size: 12px; margin-top: 6px;">学生可见，可包含 ZIP/RAR/7Z 资源包；不作为学生提交格式。</div>
+            <div style="color: #909399; font-size: 12px; margin-top: 6px;">学生可见，可包含 CSS、ZIP/RAR/7Z 资源包；不作为学生提交格式。</div>
           </el-form-item>
           <el-form-item label="教师参考答案">
             <file-upload
@@ -720,7 +720,7 @@
           </el-form-item>
           </template>
           <el-form-item v-else-if="form.practicalMode === 'FLOWCHART'" label-width="0">
-            <flowchart-question-designer v-model="form.flowchartConfig" />
+            <flowchart-question-designer v-model="form.flowchartConfig" :question-meta="flowchartAiMeta" />
           </el-form-item>
         </div>
       </el-form>
@@ -791,9 +791,21 @@
       </el-upload>
       <template #footer>
         <div class="dialog-footer">
-          <el-button type="primary" @click="submitFileForm">确 定</el-button>
+          <el-button type="primary" :loading="upload.isUploading" :disabled="upload.isUploading" @click="submitFileForm">确 定</el-button>
           <el-button @click="cancelUpload">取 消</el-button>
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="importErrorVisible" title="题库导入校验未通过" width="min(760px, 94vw)" append-to-body>
+      <p class="import-error-summary">共 {{ importErrors.length }} 处错误，整批未导入。请按行号修正后重新上传。</p>
+      <el-table :data="importErrors" size="small" max-height="420" border>
+        <el-table-column prop="row" label="Excel 行" width="90" />
+        <el-table-column prop="reason" label="错误原因" min-width="280" show-overflow-tooltip />
+      </el-table>
+      <template #footer>
+        <el-button @click="downloadImportErrors">下载错误清单</el-button>
+        <el-button type="primary" @click="importErrorVisible = false">关 闭</el-button>
       </template>
     </el-dialog>
 
@@ -814,8 +826,9 @@
         <el-empty v-else-if="!detailLoading" description="题目读取失败，请关闭后重试" />
       </div>
     </el-dialog>
+    <!-- 路由切页动画要求单一根节点，弹窗组件也须保留在页面根节点内。 -->
+    <DataLabEditor ref="dataLabEditor" @saved="getList" />
   </div>
-  <DataLabEditor ref="dataLabEditor" @saved="getList" />
 </template>
 
 <script setup name="Question">
@@ -964,6 +977,8 @@ const upload = reactive({
   headers: refreshAuthorizationHeader(),
   url: import.meta.env.VITE_APP_BASE_API + "/business/question/importData",
 });
+const importErrors = ref([]);
+const importErrorVisible = ref(false);
 
 function refreshUploadHeaders() {
   upload.headers = refreshAuthorizationHeader(upload.headers);
@@ -1284,6 +1299,18 @@ function practicalModeLabel(mode) {
   if (mode === "FLOWCHART") return "画程流程图";
   return "文件作品";
 }
+
+// 供“拍照 + AI 生成流程图标准答案”使用：把题目名称、年级/学期标签和第几课传给设计器，全部取本题已填字段。
+const flowchartAiMeta = computed(() => {
+  const gradeDict = (biz_grade.value || []).find(item => parseInt(item.value, 10) === Number(form.value.grade))
+  const semesterDict = (biz_semester.value || []).find(item => item.value === form.value.semester)
+  return {
+    title: form.value.questionContent,
+    gradeText: gradeDict ? gradeDict.label : '',
+    semesterText: semesterDict ? semesterDict.label : '',
+    lessonNum: form.value.lessonNum
+  }
+})
 
 function defaultFlowchartConfig() {
   return {
@@ -1758,6 +1785,12 @@ const handleFileSuccess = (response, file, fileList) => {
   if (uploadLoadingInstance) {
     uploadLoadingInstance.close();
   }
+  const details = Array.isArray(response?.details) ? response.details : [];
+  if (details.length) {
+    importErrors.value = details;
+    importErrorVisible.value = true;
+    return;
+  }
   proxy.$alert(
     "<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" +
       response.msg +
@@ -1783,8 +1816,32 @@ const handleFileError = (err, file, fileList) => {
 
 /** 提交上传文件 */
 function submitFileForm() {
+  if (upload.isUploading) return;
+  const uploadRef = proxy.$refs["uploadRef"];
+  // Element Plus 未暴露 uploadFiles，按已渲染的文件项判断是否选了文件。
+  const hasFile = !!uploadRef?.$el?.querySelector(".el-upload-list__item");
+  if (!hasFile) {
+    proxy.$modal.msgWarning("请先选择要导入的 Excel 文件");
+    return;
+  }
   refreshUploadHeaders();
-  proxy.$refs["uploadRef"].submit();
+  upload.isUploading = true;
+  uploadRef.submit();
+}
+
+/** 导出题库导入错误清单，便于老师按行号批量修正 */
+function downloadImportErrors() {
+  const rows = [["Excel 行", "错误原因"], ...importErrors.value.map(item => [item.row, item.reason])];
+  const csv = "\ufeff" + rows
+    .map(row => row.map(value => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `题库导入错误_${new Date().getTime()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 /** 预览操作题附件 */
@@ -1810,5 +1867,6 @@ getList();
 <style scoped>
 .detail-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 .question-detail { min-height: 120px; }
+.import-error-summary { margin: 0 0 12px; color: #b42318; font-weight: 700; }
 .bank-view-tabs{margin-bottom:16px}.python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
 </style>

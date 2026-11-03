@@ -4,6 +4,7 @@ import java.util.List;
 import javax.servlet.http.HttpServletResponse;
 
 import com.ruoyi.business.domain.vo.LessonDetailVo;
+import com.ruoyi.business.domain.vo.LessonAdvanceRequestVo;
 import com.ruoyi.business.domain.BizLessonCheckin;
 import com.ruoyi.business.domain.BizTeacherClass;
 import com.ruoyi.business.mapper.BizLessonCheckinMapper;
@@ -223,32 +224,23 @@ public class BizLessonController extends BaseController
     @PreAuthorize("@ss.hasPermi('business:lesson:edit')")
     @Log(title = "手动一键课堂推进", businessType = BusinessType.UPDATE)
     @PostMapping("/manual-advance")
-    public AjaxResult manualAdvance(@RequestBody Map<String, Object> body)
+    public AjaxResult manualAdvance(@RequestBody LessonAdvanceRequestVo body)
     {
-        if (body == null)
+        Map<String, Object> data = lessonAutoAdvanceService.manualAdvanceClasses(
+                body.getEntryYear(), body.selectedClasses(), body.getExpectedLessonIds());
+        if (((Number) data.get("advanced")).intValue() > 0)
         {
-            return error("参数不能为空");
+            dashboardCacheService.evictDepartment(SecurityUtils.getDeptId());
         }
-        String entryYear = body.get("entryYear") == null ? null : String.valueOf(body.get("entryYear"));
-        java.util.List<String> classCodes = new java.util.ArrayList<>();
-        Object codes = body.get("classCodes");
-        if (codes instanceof java.util.List)
-        {
-            for (Object item : (java.util.List<?>) codes)
-            {
-                if (item != null && StringUtils.isNotBlank(String.valueOf(item)))
-                {
-                    classCodes.add(String.valueOf(item));
-                }
-            }
-        }
-        // 兼容旧参数：单个 classCode
-        if (classCodes.isEmpty() && body.get("classCode") != null)
-        {
-            classCodes.add(String.valueOf(body.get("classCode")));
-        }
-        Map<String, Object> data = lessonAutoAdvanceService.manualAdvanceClasses(entryYear, classCodes);
         return success(data).put("msg", data.get("message"));
+    }
+
+    /** 只读预检；不启动达标计时、不切换课程。 */
+    @PreAuthorize("@ss.hasPermi('business:lesson:edit')")
+    @PostMapping("/advance-preview")
+    public AjaxResult previewAdvance(@RequestBody LessonAdvanceRequestVo body)
+    {
+        return success(lessonAutoAdvanceService.previewAdvanceClasses(body.getEntryYear(), body.selectedClasses()));
     }
 
 

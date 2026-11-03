@@ -1,0 +1,67 @@
+{
+  "book_code": "xxkj-5-1-2026",
+  "title": "信息科技 五年级下册",
+  "short_title": "五下",
+  "grade": 5,
+  "semester": "1",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 88,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 生活中的系统",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "身边的系统", "printed_start": 2, "printed_end": 6, "pdf_start": 8, "pdf_end": 12 },
+        { "no": 2, "title": "系统的构成", "printed_start": 7, "printed_end": 10, "pdf_start": 13, "pdf_end": 16 },
+        { "no": 3, "title": "观察系统", "printed_start": 11, "printed_end": 14, "pdf_start": 17, "pdf_end": 20 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 控制系统",
+      "intro": { "title": "单元导入", "pdf_start": 21, "pdf_end": 21 },
+      "lessons": [
+        { "no": 4, "title": "生活中的控制系统", "printed_start": 16, "printed_end": 19, "pdf_start": 22, "pdf_end": 25 },
+        { "no": 5, "title": "控制系统的三个环节", "printed_start": 20, "printed_end": 22, "pdf_start": 26, "pdf_end": 28 },
+        { "no": 6, "title": "控制系统的输入", "printed_start": 23, "printed_end": 26, "pdf_start": 29, "pdf_end": 32 },
+        { "no": 7, "title": "控制系统的输出", "printed_start": 27, "printed_end": 30, "pdf_start": 33, "pdf_end": 36 },
+        { "no": 8, "title": "体验控制系统", "printed_start": 31, "printed_end": 34, "pdf_start": 37, "pdf_end": 40 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 控制系统中的计算",
+      "intro": { "title": "单元导入", "pdf_start": 41, "pdf_end": 41 },
+      "lessons": [
+        { "no": 9, "title": "控制系统中的计算", "printed_start": 36, "printed_end": 38, "pdf_start": 42, "pdf_end": 44 },
+        { "no": 10, "title": "计算机在控制系统中的作用", "printed_start": 39, "printed_end": 41, "pdf_start": 45, "pdf_end": 47 },
+        { "no": 11, "title": "查表计算", "printed_start": 42, "printed_end": 46, "pdf_start": 48, "pdf_end": 52 },
+        { "no": 12, "title": "条件计算", "printed_start": 47, "printed_end": 50, "pdf_start": 53, "pdf_end": 56 },
+        { "no": 13, "title": "循环结构（一）", "printed_start": 51, "printed_end": 54, "pdf_start": 57, "pdf_end": 60 },
+        { "no": 14, "title": "循环结构（二）", "printed_start": 55, "printed_end": 58, "pdf_start": 61, "pdf_end": 64 },
+        { "no": 15, "title": "恒温箱实验", "printed_start": 59, "printed_end": 64, "pdf_start": 65, "pdf_end": 70 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 初识神经网络",
+      "intro": { "title": "单元导入", "pdf_start": 71, "pdf_end": 71 },
+      "lessons": [
+        { "no": 16, "title": "认识神经网络", "printed_start": 66, "printed_end": 71, "pdf_start": 72, "pdf_end": 77 },
+        { "no": 17, "title": "用神经网络进行分类", "printed_start": 72, "printed_end": 76, "pdf_start": 78, "pdf_end": 82 },
+        { "no": 18, "title": "用神经网络进行预测", "printed_start": 77, "printed_end": 81, "pdf_start": 83, "pdf_end": 87 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 88, "pdf_end": 88 },
+  "notes": []
+}

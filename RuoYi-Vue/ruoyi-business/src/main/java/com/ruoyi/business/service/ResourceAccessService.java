@@ -78,7 +78,7 @@ public class ResourceAccessService
             throw new ServiceException("导学单作品只能通过专用接口读取");
         }
 
-        Long answerId = resourceAccessMapper.selectStudentAnswerIdByResource(resource);
+        Long answerId = resolveStudentAnswerId(resource);
         if (answerId != null && answerId > 0)
         {
             assertStudentAnswerAccess(studentAnswerMapper.selectById(answerId), loginUser);
@@ -133,6 +133,36 @@ public class ResourceAccessService
             return resource;
         }
         throw new ServiceException("无权访问该文件");
+    }
+
+    /**
+     * 四条索引查询分别取最大 answer_id，保持原 UNION ALL 的“取最新归属”语义；
+     * JSON 页图只在四条全部未命中时兜底，避免每次资源请求都做全表扫描。
+     */
+    private Long resolveStudentAnswerId(String resource)
+    {
+        Long answerId = resourceAccessMapper.selectAnswerIdByAnswerText(resource);
+        answerId = maxAnswerId(answerId, resourceAccessMapper.selectAnswerIdByPreviewPath(resource));
+        answerId = maxAnswerId(answerId, resourceAccessMapper.selectAttachmentAnswerIdByResourcePath(resource));
+        answerId = maxAnswerId(answerId, resourceAccessMapper.selectAttachmentAnswerIdByPreviewPath(resource));
+        if (answerId == null || answerId <= 0L)
+        {
+            answerId = resourceAccessMapper.selectStudentAnswerIdByResourceJson(resource);
+        }
+        return answerId;
+    }
+
+    private Long maxAnswerId(Long left, Long right)
+    {
+        if (left == null || left <= 0L)
+        {
+            return right;
+        }
+        if (right == null || right <= 0L)
+        {
+            return left;
+        }
+        return Math.max(left, right);
     }
 
     private void assertExemptionAttachmentAccess(Map<String, Object> owner, LoginUser loginUser)

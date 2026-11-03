@@ -26,15 +26,19 @@ class ScoreQueryControllerTest
     }
 
     @Test
-    void pendingPracticalKeepsFinalScoreEmptyButRealZeroIsGraded()
+    void pendingPracticalKeepsKnownScoresAndPerformanceWhileRealZeroIsGraded()
     {
         ScoreQueryController controller = new ScoreQueryController();
         Map<String, Object> pending = new HashMap<>();
         pending.put("practicalPending", 1);
+        pending.put("totalScore", 35);
+        com.ruoyi.business.domain.BizClassroomPerformance performance = new com.ruoyi.business.domain.BizClassroomPerformance();
+        performance.setScore(5);
         org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyHomeworkAdjustment", pending, null);
-        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", pending, null);
-        assertNull(pending.get("finalScore"));
-        assertTrue(ScoreQueryController.isExcludedFromAverage(pending));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", pending, performance);
+        assertEquals(40, pending.get("finalScore"));
+        assertTrue(Boolean.TRUE.equals(pending.get("pendingGrading")));
+        assertFalse(ScoreQueryController.isExcludedFromAverage(pending));
 
         Map<String, Object> zero = new HashMap<>();
         zero.put("practicalPending", 0);
@@ -57,7 +61,7 @@ class ScoreQueryControllerTest
         org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyHomeworkAdjustment", score, adjustment);
         org.springframework.test.util.ReflectionTestUtils.invokeMethod(controller, "applyPerformanceToScore", score, null);
         assertTrue(Boolean.TRUE.equals(score.get("practicalPending")));
-        assertNull(score.get("originalTotalScore"));
+        assertEquals(0, score.get("originalTotalScore"));
         assertEquals(0, score.get("finalScore"));
         assertFalse(ScoreQueryController.isExcludedFromAverage(score));
     }

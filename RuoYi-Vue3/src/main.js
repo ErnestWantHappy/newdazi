@@ -46,10 +46,10 @@ import ImagePreview from "@/components/ImagePreview"
 import DictTag from '@/components/DictTag'
 import ImageDisplay from '@/components/ImageDisplay/index.vue'
 import ImageAddWidget from '@/components/ImageAddWidget/index.vue'
-import VForm3 from 'vform3-builds'
-import 'vform3-builds/dist/designer.style.css'
+import { setVFormApp } from '@/utils/vform'
 
 const app = createApp(App)
+setVFormApp(app)
 
 // 全局方法挂载
 app.config.globalProperties.useDict = useDict
@@ -87,7 +87,6 @@ app.use(ElementPlus, {
   // 支持 large、default、small
   size: Cookies.get('size') || 'default'
 })
-app.use(VForm3)
 
 startSessionHeartbeat()
 

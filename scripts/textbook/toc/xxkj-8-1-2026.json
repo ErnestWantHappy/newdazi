@@ -1,0 +1,69 @@
+{
+  "book_code": "xxkj-8-1-2026",
+  "title": "信息科技 八年级下册",
+  "short_title": "八下",
+  "grade": 8,
+  "semester": "1",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 128,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 9 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 人工智能的应用技术",
+      "intro": { "title": "单元导入", "pdf_start": 10, "pdf_end": 11 },
+      "lessons": [
+        { "no": 1, "title": "语音识别技术", "printed_start": 6, "printed_end": 10, "pdf_start": 12, "pdf_end": 16 },
+        { "no": 2, "title": "语音合成技术", "printed_start": 11, "printed_end": 15, "pdf_start": 17, "pdf_end": 21 },
+        { "no": 3, "title": "图像识别技术", "printed_start": 16, "printed_end": 20, "pdf_start": 22, "pdf_end": 26 },
+        { "no": 4, "title": "自然语言处理技术", "printed_start": 21, "printed_end": 25, "pdf_start": 27, "pdf_end": 31 },
+        { "no": 5, "title": "多模态融合技术", "printed_start": 26, "printed_end": 30, "pdf_start": 32, "pdf_end": 36 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 31, "printed_end": 31, "pdf_start": 37, "pdf_end": 37 }
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 人工智能中的机器学习",
+      "intro": { "title": "单元导入", "pdf_start": 38, "pdf_end": 39 },
+      "lessons": [
+        { "no": 6, "title": "认识机器学习", "printed_start": 34, "printed_end": 38, "pdf_start": 40, "pdf_end": 44 },
+        { "no": 7, "title": "监督学习", "printed_start": 39, "printed_end": 42, "pdf_start": 45, "pdf_end": 48 },
+        { "no": 8, "title": "无监督学习", "printed_start": 43, "printed_end": 47, "pdf_start": 49, "pdf_end": 53 },
+        { "no": 9, "title": "K近邻算法", "printed_start": 48, "printed_end": 53, "pdf_start": 54, "pdf_end": 59 },
+        { "no": 10, "title": "机器学习的实践", "printed_start": 54, "printed_end": 60, "pdf_start": 60, "pdf_end": 66 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 61, "printed_end": 61, "pdf_start": 67, "pdf_end": 67 }
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 人工神经网络",
+      "intro": { "title": "单元导入", "pdf_start": 68, "pdf_end": 69 },
+      "lessons": [
+        { "no": 11, "title": "神经网络的发展", "printed_start": 64, "printed_end": 68, "pdf_start": 70, "pdf_end": 74 },
+        { "no": 12, "title": "神经网络的基本结构", "printed_start": 69, "printed_end": 72, "pdf_start": 75, "pdf_end": 78 },
+        { "no": 13, "title": "神经网络的计算", "printed_start": 73, "printed_end": 78, "pdf_start": 79, "pdf_end": 84 },
+        { "no": 14, "title": "卷积神经网络", "printed_start": 79, "printed_end": 83, "pdf_start": 85, "pdf_end": 89 },
+        { "no": 15, "title": "神经网络的实践", "printed_start": 84, "printed_end": 90, "pdf_start": 90, "pdf_end": 96 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 91, "printed_end": 91, "pdf_start": 97, "pdf_end": 97 }
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 智能物联系统实践",
+      "intro": { "title": "单元导入", "pdf_start": 98, "pdf_end": 99 },
+      "lessons": [
+        { "no": 16, "title": "物联网数据的特点", "printed_start": 94, "printed_end": 99, "pdf_start": 100, "pdf_end": 105 },
+        { "no": 17, "title": "智能物联系统的设计", "printed_start": 100, "printed_end": 103, "pdf_start": 106, "pdf_end": 109 },
+        { "no": 18, "title": "智能物联系统的硬件搭建", "printed_start": 104, "printed_end": 108, "pdf_start": 110, "pdf_end": 114 },
+        { "no": 19, "title": "智能物联系统的软件设计", "printed_start": 109, "printed_end": 113, "pdf_start": 115, "pdf_end": 119 },
+        { "no": 20, "title": "智能物联系统的调试与完善", "printed_start": 114, "printed_end": 118, "pdf_start": 120, "pdf_end": 124 }
+      ],
+      "summary": { "title": "单元小结与反思", "printed_start": 119, "printed_end": 119, "pdf_start": 125, "pdf_end": 125 }
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 126, "pdf_end": 128 },
+  "notes": []
+}

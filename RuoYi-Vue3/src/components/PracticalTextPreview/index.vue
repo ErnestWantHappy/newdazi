@@ -60,12 +60,15 @@ watch(() => props.attachmentId, async (id) => {
 </script>
 <style scoped>
 /* 预览区撑满父容器，源码/网页在内部滚动，避免被祖先 overflow:hidden 裁掉。
-   min-height 保留兜底值，使本组件在非 flex 父容器（如学生端弹窗）中也不会塌陷。 */
-.text-work-preview { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.text-work-preview.is-expanded { position: fixed; inset: 16px; z-index: 4000; min-height: 0; padding: 16px; background: #f5f7fa; box-sizing: border-box; }
-.text-work-preview:fullscreen { position: static; width: 100%; height: 100%; min-height: 100vh; padding: 16px; background: #f5f7fa; box-sizing: border-box; }
+   min-height 保留兜底值，使本组件在非 flex 父容器（如学生端弹窗）中也不会塌陷。
+   批改页里上方还有表单、提示条和工具栏，窄屏下剩余高度可能低于 iframe 自身的
+   320px 下限；此时外层改为纵向滚动，保证网页效果和源码始终可见，不再只有放大
+   或全屏才能看到内容。 */
+.text-work-preview { width: 100%; flex: 1; min-height: 280px; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+.text-work-preview.is-expanded { position: fixed; inset: 16px; z-index: 4000; min-height: 0; padding: 16px; background: #f5f7fa; box-sizing: border-box; overflow: hidden; }
+.text-work-preview:fullscreen { position: static; width: 100%; height: 100%; min-height: 100vh; padding: 16px; background: #f5f7fa; box-sizing: border-box; overflow: hidden; }
 .preview-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0; flex: none; }
 .preview-modes { flex: none; }
-.html-work { flex: 1; width: 100%; min-height: 320px; border: 1px solid #dcdfe6; background: white; }
-.source-work { flex: 1; min-height: 320px; white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.6 Consolas, monospace; color: #000; background: #fff; padding: 16px; overflow: auto; }
+.html-work { flex: 1 1 auto; min-height: 320px; width: 100%; border: 1px solid #dcdfe6; background: white; }
+.source-work { flex: 1 1 auto; min-height: 320px; white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.6 Consolas, monospace; color: #000; background: #fff; padding: 16px; overflow: auto; }
 </style>

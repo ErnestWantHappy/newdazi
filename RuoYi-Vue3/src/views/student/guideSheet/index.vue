@@ -47,19 +47,23 @@
           <div class="left-info">
             <div class="sheet-heading">
               <span class="sheet-title">{{ sheetTitle }}</span>
-              <span v-if="lastSavedAt" class="save-time">最近保存 {{ lastSavedAt }}</span>
+              <span v-if="pageIndicator" class="page-indicator">{{ pageIndicator }}</span>
+              <span v-if="saveStateText" class="save-time" :class="`save-state-${saveState}`">
+                {{ saveStateText }}
+                <el-button v-if="saveState === 'failed'" link type="primary" size="small" @click="handleSave()">重试</el-button>
+              </span>
             </div>
             <el-tag v-if="submitted" type="success" size="large">
-              <el-icon><CircleCheckFilled /></el-icon> 已提交（可重新提交）
+              <el-icon><CircleCheckFilled /></el-icon> 已提交
             </el-tag>
             <el-tag v-else type="warning" size="large">待完成</el-tag>
           </div>
           <div class="right-actions">
-            <el-button icon="Refresh" size="large" @click="handleSave()" :loading="saving" :disabled="submitted || !formReady">
+            <el-button v-if="!submitted" icon="Refresh" size="large" @click="handleSave()" :loading="saving" :disabled="!formReady">
               保存草稿
             </el-button>
             <el-button icon="Check" type="primary" size="large" @click="handleSubmit" :loading="submitting" :disabled="!formReady">
-              提交导学单
+              {{ submitted ? '重新提交' : '提交导学单' }}
             </el-button>
           </div>
         </div>
@@ -83,7 +87,7 @@
             :form-json="formJsonObj"
             :form-data="answerData"
             :option-data="optionData"
-            @field-change="handleFieldChange"
+            @formChange="handleFieldChange"
           />
         </div>
       </div>
@@ -94,20 +98,16 @@
           <template #header>
             <div class="grading-card-header">
               <span class="grading-card-title">评分结果</span>
-              <el-tag
-                v-if="gradingResult"
-                :type="gradingResult.totalScore >= 60 ? 'success' : 'danger'"
-                size="large"
-              >
-                累计得分：{{ gradingResult.totalScore }} 分
+              <el-tag v-if="gradingResult" :type="gradingTagType" size="large">
+                {{ gradingSummaryText }}
               </el-tag>
-              <span v-else class="grading-tab-hint">尚未提交</span>
+              <span v-else class="grading-tab-hint">{{ submitted ? '正在获取评分…' : '尚未提交' }}</span>
               <span v-if="currentTabName && gradingResult" class="grading-tab-hint">
                 {{ currentTabName }}
                 <template v-if="filteredGradingDetails.length > 0">
                   {{ filteredTabScore }}/{{ filteredTabMaxScore }} 分
                 </template>
-                <template v-else>（未提交评分）</template>
+                <template v-else>（本页暂无评分）</template>
               </span>
             </div>
           </template>
@@ -124,7 +124,9 @@
                 <span :class="scoreClass(row)">{{ row.score }} / {{ row.maxScore }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="desc" label="评语" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="desc" label="评语" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ scoreDescText(row) }}</template>
+            </el-table-column>
           </el-table>
         </el-card>
       </div>
@@ -166,6 +168,8 @@ const answerData = ref({})
 const optionData = ref({})
 const maxPages = ref(0)
 const submitted = ref(false)
+/** 进入页面时就是已提交状态：用于区分「首次提交」与「重新提交」的提示文案 */
+const submittedPreviously = ref(false)
 const submitting = ref(false)
 const saving = ref(false)
 const teacherMsg = ref('')
@@ -173,9 +177,13 @@ const renderRef = ref(null)
 const gradingResult = ref(null)  // BUG-08：评分结果
 const lastSavedAt = ref('')
 const hasUnsavedChanges = ref(false)
+/** 草稿保存状态：idle 未改动 / saving 保存中 / saved 已保存 / failed 保存失败（可重试） */
+const saveState = ref('idle')
 
 const studentName = ref('')
 const uploadEndpoint = `${import.meta.env.VITE_APP_BASE_API || ''}/business/guide-sheet/student/upload`
+/** API 前缀：历史附件地址补前缀时复用，避免刷新后打到前端静态目录 */
+const accessBase = String(import.meta.env.VITE_APP_BASE_API || '').replace(/\/$/, '')
 
 let heartbeatTimer = null
 let autoSaveTimer = null
@@ -306,6 +314,42 @@ function createFingerprint(formData, currentPage) {
   return JSON.stringify({ formData, currentPage })
 }
 
+/** 本机草稿兜底：服务端未确认时把答卷留在浏览器，学生切走/断网后可恢复。 */
+function localDraftStorageKey() {
+  return `guide-sheet-local-draft:${bindingId.value}`
+}
+
+function writeLocalDraftSnapshot(payload) {
+  if (!bindingId.value) return
+  try {
+    localStorage.setItem(localDraftStorageKey(), JSON.stringify({
+      answerJson: payload.answerJson,
+      currentPage: payload.currentPage,
+      clientRevision: payload.clientRevision,
+      savedAt: Date.now()
+    }))
+  } catch (_error) {
+    // 隐私模式/配额不足时静默失败，不能影响正常保存流程。
+  }
+}
+
+function readLocalDraftSnapshot() {
+  try {
+    const raw = localStorage.getItem(localDraftStorageKey())
+    return raw ? JSON.parse(raw) : null
+  } catch (_error) {
+    return null
+  }
+}
+
+function clearLocalDraftSnapshot() {
+  try {
+    localStorage.removeItem(localDraftStorageKey())
+  } catch (_error) {
+    // 同上，清理失败不影响业务。
+  }
+}
+
 function buildDraftTask(options = {}) {
   const currentPage = getCurrentTabIndex() + 1
   const formData = snapshotCurrentFormData()
@@ -331,6 +375,7 @@ async function flushSaveQueue() {
   saveLoopPromise = (async () => {
     let successful = true
     saving.value = true
+    saveState.value = 'saving'
     while (pendingSave) {
       const task = pendingSave
       pendingSave = null
@@ -346,10 +391,15 @@ async function flushSaveQueue() {
           minute: '2-digit',
           second: '2-digit'
         })
+        saveState.value = 'saved'
+        clearLocalDraftSnapshot()
         if (task.notify && !pendingSave) ElMessage.success('草稿已保存')
       } catch (_error) {
         successful = false
-        if (task.notify) ElMessage.error('草稿暂未保存，请稍后重试')
+        // 服务端未确认时必须先在本机留一份，断网/500/切走后还能找回。
+        writeLocalDraftSnapshot(task.payload)
+        saveState.value = 'failed'
+        if (task.notify) ElMessage.error('草稿未保存，已暂存在本机，可点击“重试”')
         if (!pendingSave) break
       }
     }
@@ -416,16 +466,63 @@ async function handleSubmit() {
     submitted.value = true
     hasUnsavedChanges.value = false
     pendingSave = null
+    saveState.value = 'saved'
+    clearLocalDraftSnapshot()
     lastSavedFingerprint = createFingerprint(formData, pageIndex)
-    ElMessage.success('导学单已提交并批改')
+    ElMessage.success(submittedPreviously.value ? '已重新提交并重新评分' : '导学单已提交并批改')
     fetchGradingResult()
   } catch (error) {
     hasUnsavedChanges.value = true
     const message = typeof error === 'string' ? error : error?.message
-    ElMessage.error(message || '请检查必答内容后再提交')
+    // 必答未填时第三方库只给“表单数据校验失败”，这里必须把学生送到出错的那道题。
+    const located = focusFirstInvalidField()
+    if (located) {
+      ElMessage.error(located)
+    } else {
+      ElMessage.error(message || '请检查必答内容后再提交')
+    }
   } finally {
     submitting.value = false
   }
+}
+
+/** 定位第一个校验失败的字段：先切到它所在页签，再滚动并聚焦。返回给学生看的提示文案。 */
+function focusFirstInvalidField() {
+  const formEl = renderRef.value?.$el
+  if (!formEl) return ''
+  const errorEl = formEl.querySelector(
+    '.is-error, .el-form-item.is-error, .el-form-item__error, [class*="invalid"]'
+  )
+  if (!errorEl) return ''
+  // 出错字段可能不在当前页签：切过去之后再报页码，否则会告诉学生“第 1 页”却在第 2 页。
+  let targetPage = currentTabIndex.value
+  try {
+    const pane = errorEl.closest('.el-tab-pane')
+    if (pane) {
+      const panes = Array.from(formEl.querySelectorAll('.el-tab-pane'))
+      const paneIndex = panes.indexOf(pane)
+      const tabs = formEl.querySelectorAll('.el-tabs__item')
+      if (paneIndex >= 0 && tabs[paneIndex]) {
+        tabs[paneIndex].click()
+        targetPage = paneIndex
+        updateCurrentTabIndex()
+      }
+    }
+    nextTick(() => {
+      errorEl.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      const input = errorEl.closest('.el-form-item')
+        ?.querySelector('input, textarea, .el-select__wrapper, .el-radio')
+      if (input && typeof input.focus === 'function') input.focus()
+    })
+  } catch (_error) {
+    // 定位失败时至少让上面的文案兜住，不阻断提交流程。
+  }
+  const label = errorEl.closest('.el-form-item')
+    ?.querySelector('.el-form-item__label')?.innerText?.trim()
+  const pageText = tabLabels.value.length > 1 ? `第 ${targetPage + 1} 页` : '本页'
+  return label
+    ? `${pageText}的“${label}”还没填完，已为你定位到那一题`
+    : `${pageText}还有必答内容没填完，已为你定位到那一题`
 }
 
 function handleFieldChange() {
@@ -471,6 +568,55 @@ const currentTabName = computed(() => {
   return ''
 })
 
+/** 分页提示：学生必须知道“我在第几页、共几页”；单页不显示避免噪音 */
+const pageIndicator = computed(() => {
+  const total = tabLabels.value.length || maxPages.value || 0
+  if (total <= 1) return ''
+  const current = Math.min(currentTabIndex.value + 1, total)
+  return `第 ${current} / ${total} 页`
+})
+
+/** 保存状态文案：未改动时不占位，避免长期挂一行灰字 */
+const saveStateText = computed(() => {
+  if (saveState.value === 'saving') return '正在保存…'
+  if (saveState.value === 'failed') return '保存失败，内容已暂存在本机'
+  if (saveState.value === 'saved' && lastSavedAt.value) return `已保存 ${lastSavedAt.value}`
+  return ''
+})
+
+/** 评分汇总：用真实满分作分母，不再用 60 分硬阈值 */
+const gradingTotalMax = computed(() => {
+  return parseGradingDetail(gradingResult.value?.gradingDetail)
+    .reduce((sum, item) => sum + Number(item.maxScore || 0), 0)
+})
+
+const gradingSummaryText = computed(() => {
+  const total = gradingResult.value?.totalScore
+  if (total === null || total === undefined) return '评分处理中，请稍后刷新'
+  // 优先用后端下发的满分；老接口没给时退回明细求和，最后才只报得分。
+  const max = Number(gradingResult.value?.maxScore || 0) || gradingTotalMax.value
+  return max > 0 ? `已得 ${total} / ${max} 分` : `已得 ${total} 分`
+})
+
+/** 红绿只在“有分母且确实批完”时使用；待批、处理中一律中性色 */
+const gradingTagType = computed(() => {
+  const result = gradingResult.value
+  if (!result) return 'info'
+  const status = result.gradingStatus
+  if (status === 'manual' || status === 'partial' || status === 'pending') return 'warning'
+  const total = result.totalScore
+  const max = Number(result.maxScore || 0) || gradingTotalMax.value
+  if (total === null || total === undefined) return 'info'
+  if (max <= 0) return 'info'
+  return total >= max ? 'success' : 'info'
+})
+
+/** 评分明细里每条的中文状态，避免把“没写”显示成“写错了” */
+function scoreDescText(row) {
+  if (isPendingManual(row)) return '待老师批改'
+  return row?.desc || ''
+}
+
 /** 解析评分详情 JSON */
 function parseGradingDetail(detail) {
   if (!detail) return []
@@ -504,8 +650,15 @@ const filteredTabMaxScore = computed(() => {
   return filteredGradingDetails.value.reduce((sum, d) => sum + (d.maxScore || 0), 0)
 })
 
-/** 评分样式类 */
+/** 待批改判定：服务端只放行 desc，所以按后端固定文案识别，不再依赖被剥离的 matchType */
+function isPendingManual(row) {
+  const desc = String(row?.desc || '')
+  return desc.includes('待人工批改') || desc.includes('待老师批改')
+}
+
+/** 评分样式类：待批改不用红色，避免把“没写/没批”显示成“写错了” */
 function scoreClass(row) {
+  if (isPendingManual(row)) return 'score-pending'
   if (row.score === row.maxScore) return 'score-full'
   if (row.score === 0) return 'score-zero'
   return 'score-partial'
@@ -578,6 +731,9 @@ function prepareStudentFormJson(source) {
         ? ['jpg', 'jpeg', 'png', 'gif', 'webp']
         : ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'jpg', 'jpeg', 'png', 'mp4', 'zip']
     }
+    // 服务端上限 50MB；不写这里前端会走渲染库默认 5MB，出现“服务端能收、学生选不了”的口径错位。
+    const maxSize = Number(widget.options.fileMaxSize || 0)
+    if (!maxSize || maxSize > 50) widget.options.fileMaxSize = 50
   })
   return source
 }
@@ -618,7 +774,20 @@ function bindFormInteractions() {
   formClickTarget = renderRef.value?.$el || null
   if (!formClickTarget) return
   formClickTarget.addEventListener('click', handleFormClick)
+  // 文本类组件只在失焦/回车时 emit formChange；补一个输入监听，
+  // 让学生边打边存（打字过程中不再出现“其实没存上”）。
+  formClickTarget.addEventListener('input', handleFormInput, true)
+  formClickTarget.addEventListener('change', handleFormInput, true)
   configureSecureUploads()
+}
+
+/** 输入/选择变化时按 2 秒防抖保存；submit 期间由 handleFieldChange 自行忽略。 */
+function handleFormInput(event) {
+  const target = event.target
+  if (!target || typeof target.matches !== 'function') return
+  if (!target.matches('input, textarea')) return
+  if (target.type === 'file') return
+  handleFieldChange()
 }
 
 function handleFormClick(event) {
@@ -637,6 +806,46 @@ function parseAnswerJson(value) {
   } catch (_error) {
     return {}
   }
+}
+
+/**
+ * 服务端没有、但本机留着草稿时提示恢复。
+ * 只有本机有明显更新的内容才打扰学生，避免每次进页面都弹窗。
+ */
+function offerLocalDraftRestore(serverAnswer) {
+  const local = readLocalDraftSnapshot()
+  if (!local?.answerJson) return
+  const localAnswer = parseAnswerJson(local.answerJson)
+  const localKeys = Object.keys(localAnswer)
+  if (!localKeys.length) {
+    clearLocalDraftSnapshot()
+    return
+  }
+  // 服务端已有同样内容说明上次其实存成功了，直接清掉本机副本。
+  const sameAsServer = localKeys.every(key => (
+    JSON.stringify(localAnswer[key]) === JSON.stringify(serverAnswer?.[key])
+  ))
+  if (sameAsServer) {
+    clearLocalDraftSnapshot()
+    return
+  }
+  saveState.value = 'failed'
+  ElMessageBox.confirm(
+    '上次有内容没能保存到服务器，本机还留着。要恢复这些内容吗？',
+    '发现未保存的内容',
+    { confirmButtonText: '恢复', cancelButtonText: '丢弃', type: 'warning' }
+  ).then(() => {
+    answerData.value = normalizeStudentFormData(formJsonObj.value, localAnswer, { accessBase })
+    if (local.currentPage) {
+      currentTabIndex.value = Math.max(0, Number(local.currentPage) - 1)
+      activateTab(local.currentPage)
+    }
+    saveState.value = 'failed'
+    ElMessage.success('已恢复本机内容，请确认后重新保存')
+  }).catch(() => {
+    clearLocalDraftSnapshot()
+    saveState.value = 'idle'
+  })
 }
 
 onMounted(async () => {
@@ -684,15 +893,15 @@ onMounted(async () => {
         })
       }
       const existing = res.existingAnswer
-      answerData.value = normalizeStudentFormData(
-        formJsonObj.value,
-        parseAnswerJson(existing?.answerJson)
-      )
+      const serverAnswer = parseAnswerJson(existing?.answerJson)
+      answerData.value = normalizeStudentFormData(formJsonObj.value, serverAnswer, { accessBase })
       submitted.value = existing?.status === '2'
+      submittedPreviously.value = submitted.value
       restoreClientRevision(existing?.draftRevision)
       currentTabIndex.value = Math.max(0, Number(existing?.currentPage || 1) - 1)
       lastSavedFingerprint = createFingerprint(answerData.value, currentTabIndex.value + 1)
       if (submitted.value) fetchGradingResult()
+      else offerLocalDraftRestore(serverAnswer)
 
       heartbeatTimer = setInterval(() => {
         const pageIndex = getCurrentTabIndex() + 1
@@ -732,6 +941,8 @@ function onBeforeUnload(event) {
       clientRevision: nextClientRevision(),
       action: 'save'
     }
+    // 关页时服务端可能收不到，先落本机；下次进入会提示恢复。
+    writeLocalDraftSnapshot(data)
     fetch(guideSheetSubmitUrl, {
       method: 'POST',
       headers: {
@@ -748,12 +959,34 @@ function onBeforeUnload(event) {
 
 onBeforeUnmount(() => {
   if (websocketUnsubscribe) websocketUnsubscribe()
+  // 只关闭本页自己建立的连接，避免把同课堂其它模块（批改/课堂监控）的通道一起断掉。
   websocketClient.disconnect()
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (autoSaveTimer) clearInterval(autoSaveTimer)
   if (autoSaveDebounceTimer) clearTimeout(autoSaveDebounceTimer)
-  if (formClickTarget) formClickTarget.removeEventListener('click', handleFormClick)
+  if (formClickTarget) {
+    formClickTarget.removeEventListener('click', handleFormClick)
+    formClickTarget.removeEventListener('input', handleFormInput, true)
+    formClickTarget.removeEventListener('change', handleFormInput, true)
+  }
   window.removeEventListener('beforeunload', onBeforeUnload)
+  // 卸载前把未成功的编辑留在本机；首页 60s 轮询会卸载内嵌组件，这里不能静默丢内容。
+  if (!submitted.value && bindingId.value && renderRef.value) {
+    try {
+      const currentData = snapshotCurrentFormData()
+      const pageIndex = getCurrentTabIndex() + 1
+      const fingerprint = createFingerprint(currentData, pageIndex)
+      if (hasUnsavedChanges.value || fingerprint !== lastSavedFingerprint) {
+        writeLocalDraftSnapshot({
+          answerJson: JSON.stringify(currentData),
+          currentPage: pageIndex,
+          clientRevision
+        })
+      }
+    } catch (_error) {
+      // 卸载期的容错不能反向影响页面退出。
+    }
+  }
 })
 
 defineExpose({ ensureCanLeave })
@@ -857,7 +1090,8 @@ defineExpose({ ensureCanLeave })
   flex: 1;
   width: 100%;
   padding: 24px;
-  overflow-y: auto;
+  /* 页面由 window 滚动：这里不能再建滚动容器，否则上面的 sticky 操作条会失效。 */
+  overflow: visible;
   box-sizing: border-box;
 }
 .sheet-container {
@@ -877,6 +1111,11 @@ defineExpose({ ensureCanLeave })
   margin-bottom: 20px;
   padding-bottom: 16px;
   border-bottom: 2px solid #409EFF;
+  /* 长表单滚到底后学生找不到“提交”，把操作条固定在顶部。 */
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: #fff;
 }
 .left-info {
   display: flex;
@@ -943,6 +1182,15 @@ defineExpose({ ensureCanLeave })
 .score-full { color: #67C23A; font-weight: 600; }
 .score-zero { color: #F56C6C; font-weight: 600; }
 .score-partial { color: #E6A23C; font-weight: 600; }
+/* 待老师批改：既不是“写错”也不是“零分”，用中性色避免误导 */
+.score-pending { color: #909399; font-weight: 600; }
+.page-indicator {
+  color: #606266;
+  font-size: 12px;
+}
+.save-state-failed { color: #c45656; }
+.save-state-saving { color: #9b6c1c; }
+.save-state-saved { color: #7b8492; }
 @media (max-width: 768px) {
   .dashboard-header {
     height: auto;

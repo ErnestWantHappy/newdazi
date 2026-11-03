@@ -29,7 +29,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -251,7 +253,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             throw new ServiceException("导入题目数据不能为空！");
         }
 
-        List<String> errorList = new ArrayList<>();
+        List<Map<String, Object>> errorList = new ArrayList<>();
         int rowNum = 1;
 
         // 阶段一：前置静态全量校验（任何一行格式不正确，整批拒绝落库）
@@ -260,7 +262,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             rowNum++; // 对应 Excel 第 rowNum 行（表头占用 1 行）
             if (question == null)
             {
-                errorList.add("第 " + rowNum + " 行：数据为空");
+                addImportError(errorList, rowNum, "数据为空");
                 continue;
             }
 
@@ -279,7 +281,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
 
             if (StringUtils.isEmpty(type) || !VALID_QUESTION_TYPES.contains(type))
             {
-                errorList.add("第 " + rowNum + " 行：题型无效（支持：选择题/判断题/操作题/打字题）");
+                addImportError(errorList, rowNum, "题型无效（支持：选择题/判断题/操作题/打字题）");
                 continue;
             }
 
@@ -287,7 +289,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             String content = question.getQuestionContent();
             if (StringUtils.isEmpty(content) || StringUtils.isEmpty(content.replaceAll("<[^>]*>", "").trim()))
             {
-                errorList.add("第 " + rowNum + " 行：题干内容不能为空");
+                addImportError(errorList, rowNum, "题干内容不能为空");
                 continue;
             }
 
@@ -297,26 +299,26 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 String ans = StringUtils.trimToEmpty(question.getAnswer()).toUpperCase();
                 if (StringUtils.isEmpty(ans))
                 {
-                    errorList.add("第 " + rowNum + " 行：选择题正确答案不能为空");
+                    addImportError(errorList, rowNum, "选择题正确答案不能为空");
                 }
                 else
                 {
                     question.setAnswer(ans);
                     if (!ans.matches("[A-D]"))
                     {
-                        errorList.add("第 " + rowNum + " 行：选择题答案只能填写 A、B、C 或 D");
+                        addImportError(errorList, rowNum, "选择题答案只能填写 A、B、C 或 D");
                     }
                     else if (("A".equals(ans) && StringUtils.isEmpty(question.getOptionA()))
                             || ("B".equals(ans) && StringUtils.isEmpty(question.getOptionB()))
                             || ("C".equals(ans) && StringUtils.isEmpty(question.getOptionC()))
                             || ("D".equals(ans) && StringUtils.isEmpty(question.getOptionD())))
                     {
-                        errorList.add("第 " + rowNum + " 行：正确答案 " + ans + " 对应的选项内容不能为空");
+                        addImportError(errorList, rowNum, "正确答案 " + ans + " 对应的选项内容不能为空");
                     }
                 }
                 if (StringUtils.isEmpty(question.getOptionA()) || StringUtils.isEmpty(question.getOptionB()))
                 {
-                    errorList.add("第 " + rowNum + " 行：选择题必须提供选项 A 和选项 B");
+                    addImportError(errorList, rowNum, "选择题必须提供选项 A 和选项 B");
                 }
             }
             else if ("judgment".equals(type))
@@ -324,7 +326,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 String ans = StringUtils.trimToEmpty(question.getAnswer());
                 if (StringUtils.isEmpty(ans))
                 {
-                    errorList.add("第 " + rowNum + " 行：判断题答案不能为空");
+                    addImportError(errorList, rowNum, "判断题答案不能为空");
                 }
                 else if ("正确".equals(ans) || "对".equals(ans) || "1".equals(ans) || "T".equalsIgnoreCase(ans))
                 {
@@ -336,7 +338,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 }
                 else
                 {
-                    errorList.add("第 " + rowNum + " 行：判断题答案格式不正确（请填 正确/错误 或 T/F）");
+                    addImportError(errorList, rowNum, "判断题答案格式不正确（请填 正确/错误 或 T/F）");
                 }
             }
         }
@@ -344,18 +346,20 @@ public class BizQuestionServiceImpl implements IBizQuestionService
         // 若存在任何校验错误，整批终止，返回脱敏友好的行号错误摘要
         if (!errorList.isEmpty())
         {
-            int maxShow = 8;
+            // 页面用 details 表格展示全部错误；msg 保留前 200 条，避免日志和弹窗被超长文本撑爆。
+            int maxShow = 200;
             StringBuilder msg = new StringBuilder();
             msg.append("题库导入前置校验未通过，共发现 ").append(errorList.size()).append(" 处格式错误，整批未导入：<br/>");
             for (int i = 0; i < Math.min(errorList.size(), maxShow); i++)
             {
-                msg.append(errorList.get(i)).append("<br/>");
+                Map<String, Object> error = errorList.get(i);
+                msg.append("第 ").append(error.get("row")).append(" 行：").append(error.get("reason")).append("<br/>");
             }
             if (errorList.size() > maxShow)
             {
-                msg.append("... 其余 ").append(errorList.size() - maxShow).append(" 条错误已省略，请核对模板后重新上传");
+                msg.append("... 其余 ").append(errorList.size() - maxShow).append(" 条错误已省略，请下载错误清单核对");
             }
-            throw new ServiceException(msg.toString());
+            throw new ServiceException(msg.toString()).setData(errorList);
         }
 
         // 阶段二：前置校验全部通过，执行事务落库写入
@@ -383,6 +387,14 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             log.error("题库批量导入写库异常", e);
             throw new ServiceException("题库写入数据库失败，整批数据已自动回滚。请检查是否包含特殊不合规字符后重试。");
         }
+    }
+
+    private void addImportError(List<Map<String, Object>> errorList, int row, String reason)
+    {
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("row", row);
+        error.put("reason", reason);
+        errorList.add(error);
     }
 
     /**

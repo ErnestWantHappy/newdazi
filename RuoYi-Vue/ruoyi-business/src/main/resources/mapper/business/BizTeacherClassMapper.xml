@@ -22,7 +22,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectBizTeacherClassList" parameterType="BizTeacherClass" resultMap="BizTeacherClassResult">
         <include refid="selectBizTeacherClassVo"/>
-        <where>  
+        <where>
+            AND NOT EXISTS(SELECT 1 FROM biz_extension_class e WHERE e.dept_id=biz_teacher_class.dept_id AND e.entry_year=biz_teacher_class.entry_year AND e.class_code=biz_teacher_class.class_code)  
             <if test="userId != null "> and user_id = #{userId}</if>
             <if test="deptId != null "> and dept_id = #{deptId}</if>
             <if test="entryYear != null  and entryYear != ''"> and entry_year = #{entryYear}</if>
@@ -62,7 +63,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           on student_stats.dept_id = tc.dept_id
          and student_stats.entry_year = tc.entry_year
          and student_stats.class_code = tc.class_code
-        where tc.user_id = #{userId} and tc.dept_id = #{deptId}
+        where tc.user_id = #{userId} and tc.dept_id = #{deptId} AND NOT EXISTS(SELECT 1 FROM biz_extension_class e WHERE e.dept_id=tc.dept_id AND e.entry_year=tc.entry_year AND e.class_code=tc.class_code)
         order by tc.entry_year desc, cast(tc.class_code as unsigned) asc, tc.class_code asc
     </select>
 
@@ -79,6 +80,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from biz_student s
         inner join sys_user u on s.user_id = u.user_id
         where u.dept_id = #{deptId}
+          AND NOT EXISTS(SELECT 1 FROM biz_extension_class e WHERE e.dept_id=u.dept_id AND e.entry_year=s.entry_year AND e.class_code=s.class_code)
           and u.status = '0'
           and u.del_flag = '0'
         group by s.entry_year, s.class_code

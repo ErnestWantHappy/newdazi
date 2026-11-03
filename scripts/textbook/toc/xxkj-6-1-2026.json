@@ -1,0 +1,67 @@
+{
+  "book_code": "xxkj-6-1-2026",
+  "title": "信息科技 六年级下册",
+  "short_title": "六下",
+  "grade": 6,
+  "semester": "1",
+  "publisher": "浙江教育出版社",
+  "edition": "2026",
+  "total_pages": 84,
+  "page_offset": 6,
+  "offset_breaks": [],
+  "front": { "title": "封面 · 编者的话 · 目录", "pdf_start": 1, "pdf_end": 6 },
+  "units": [
+    {
+      "unit_no": 1,
+      "title": "第一单元 控制系统中的反馈",
+      "intro": { "title": "单元导入", "pdf_start": 7, "pdf_end": 7 },
+      "lessons": [
+        { "no": 1, "title": "自动控制系统", "printed_start": 2, "printed_end": 5, "pdf_start": 8, "pdf_end": 11 },
+        { "no": 2, "title": "控制的形态", "printed_start": 6, "printed_end": 9, "pdf_start": 12, "pdf_end": 15 },
+        { "no": 3, "title": "反馈与控制", "printed_start": 10, "printed_end": 12, "pdf_start": 16, "pdf_end": 18 },
+        { "no": 4, "title": "反馈的实现", "printed_start": 13, "printed_end": 16, "pdf_start": 19, "pdf_end": 22 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 2,
+      "title": "第二单元 控制系统中的运算",
+      "intro": { "title": "单元导入", "pdf_start": 23, "pdf_end": 23 },
+      "lessons": [
+        { "no": 5, "title": "控制系统中的数据", "printed_start": 18, "printed_end": 21, "pdf_start": 24, "pdf_end": 27 },
+        { "no": 6, "title": "连续量与开关量", "printed_start": 22, "printed_end": 25, "pdf_start": 28, "pdf_end": 31 },
+        { "no": 7, "title": "开关量的生成", "printed_start": 26, "printed_end": 29, "pdf_start": 32, "pdf_end": 35 },
+        { "no": 8, "title": "开关量的与运算", "printed_start": 30, "printed_end": 33, "pdf_start": 36, "pdf_end": 39 },
+        { "no": 9, "title": "开关量的或运算", "printed_start": 34, "printed_end": 37, "pdf_start": 40, "pdf_end": 43 },
+        { "no": 10, "title": "开关量与控制", "printed_start": 38, "printed_end": 42, "pdf_start": 44, "pdf_end": 48 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 3,
+      "title": "第三单元 扩音系统",
+      "intro": { "title": "单元导入", "pdf_start": 49, "pdf_end": 49 },
+      "lessons": [
+        { "no": 11, "title": "身边的扩音系统", "printed_start": 44, "printed_end": 47, "pdf_start": 50, "pdf_end": 53 },
+        { "no": 12, "title": "计算机控制的扩音系统", "printed_start": 48, "printed_end": 52, "pdf_start": 54, "pdf_end": 58 },
+        { "no": 13, "title": "扩音系统的控制", "printed_start": 53, "printed_end": 56, "pdf_start": 59, "pdf_end": 62 },
+        { "no": 14, "title": "扩音系统的优化", "printed_start": 57, "printed_end": 60, "pdf_start": 63, "pdf_end": 66 },
+        { "no": 15, "title": "控制系统的安全", "printed_start": 61, "printed_end": 64, "pdf_start": 67, "pdf_end": 70 }
+      ],
+      "summary": null
+    },
+    {
+      "unit_no": 4,
+      "title": "第四单元 智能控制系统",
+      "intro": { "title": "单元导入", "pdf_start": 71, "pdf_end": 71 },
+      "lessons": [
+        { "no": 16, "title": "认识智能控制系统", "printed_start": 66, "printed_end": 69, "pdf_start": 72, "pdf_end": 75 },
+        { "no": 17, "title": "智能控制系统的应用", "printed_start": 70, "printed_end": 73, "pdf_start": 76, "pdf_end": 79 },
+        { "no": 18, "title": "认识智能体", "printed_start": 74, "printed_end": 77, "pdf_start": 80, "pdf_end": 83 }
+      ],
+      "summary": null
+    }
+  ],
+  "appendix": { "title": "版权页 · 封底", "pdf_start": 84, "pdf_end": 84 },
+  "notes": []
+}

@@ -2,7 +2,20 @@
   <div class="app-container grading-page" ref="gradingPageRef">
     <!-- 顶部控制栏 -->
     <div class="grading-header" v-show="!isFullscreen || (selectedClassCode && (deadlineStatus || deadlineLoadError))">
-      <div class="grading-toolbar" v-show="!isFullscreen">
+      <!-- 折叠开关常驻：收起后仍要能看到当前选了哪门课/哪个班，否则老师会失去上下文。 -->
+      <div class="header-collapse-bar" v-show="!isFullscreen">
+        <div class="collapse-summary" v-show="headerCollapsed">
+          <span class="collapse-title">{{ selectedLessonTitle }}</span>
+          <span v-if="selectedClassCode" class="collapse-class">{{ selectedClassCode }}班</span>
+          <span v-if="selectedQuestion" class="collapse-question">{{ selectedQuestion.questionContent }}</span>
+        </div>
+        <span v-show="!headerCollapsed" class="collapse-hint">筛选与进度</span>
+        <el-button link type="primary" class="collapse-toggle" @click="toggleHeaderCollapsed">
+          <el-icon><component :is="headerCollapsed ? ArrowDown : ArrowUp" /></el-icon>
+          {{ headerCollapsed ? '展开筛选与进度' : '收起筛选与进度' }}
+        </el-button>
+      </div>
+      <div class="grading-toolbar" v-show="!isFullscreen && !headerCollapsed">
        <div class="left-filters">
         <span class="filter-label">课程：</span>
         <el-select v-model="selectedLessonId" placeholder="请选择课程" @change="onLessonChange" :disabled="submitting" style="width: 200px">
@@ -80,7 +93,7 @@
       </div>
 
       <div
-        v-if="selectedClassCode && deadlineStatus"
+        v-if="selectedClassCode && deadlineStatus && (!headerCollapsed || isFullscreen)"
         class="deadline-status-panel"
         :class="`is-${String(deadlineStatus.statusCode || '').toLowerCase()}`"
       >
@@ -92,6 +105,7 @@
             {{ deadlineStatusMeta(deadlineStatus.statusCode).label }}
           </el-tag>
           <span title="含打字、理论等本课全部题型的作答人数；下方“本操作题已交”仅统计当前所选操作题">已有答题（本课全题型）：{{ deadlineStatus.answeredStudentCount }}/{{ deadlineStatus.totalStudentCount }}</span>
+          <span title="本课有效操作作品提交人数达到班级人数一半后，整班起算批改期限；同一学生只计一次">已交操作作品：{{ deadlineStatus.practicalSubmittedStudentCount ?? '—' }}/{{ deadlineStatus.totalStudentCount }}</span>
           <span title="本课全部操作题的有内容答案份数，一名学生可有多份">本课操作题应批/已批/未批（份）：{{ deadlineStatus.dueCount }}/{{ deadlineStatus.gradedCount }}/{{ deadlineStatus.ungradedCount }}</span>
           <span v-if="questions.length > 1" class="current-question-progress">当前题已批 {{ gradedCount }}/{{ submittedCount }}（仅统计所选操作题，多操作题课程请逐题切换批改）</span>
         </div>
@@ -203,7 +217,10 @@
              </div>
              <el-alert v-if="['TEXT', 'HTML', 'ARCHIVE'].includes(currentAttachment?.fileKind)" title="此格式由老师人工评分，本期不支持 AI 批改，不会参与 AI 评分队列。" type="info" :closable="false" />
              <practical-text-preview v-if="['TEXT', 'HTML'].includes(currentAttachment?.fileKind)" :attachment-id="currentAttachment.attachmentId" />
-             <el-alert v-else-if="currentAttachment?.fileKind === 'ARCHIVE'" title="压缩包已提交，请下载后查看并手动评分。" description="平台不解压压缩包，也不对其中的文件进行 AI 批改。" type="info" :closable="false" />
+             <!-- TEXT/HTML 已由文本预览组件接管；其余格式才走页图/图片/PDF 链，
+                  否则两条链各自独立求值，会让「未提交文件」空状态和预览同时出现并挤掉预览高度。 -->
+             <template v-else>
+             <el-alert v-if="currentAttachment?.fileKind === 'ARCHIVE'" title="压缩包已提交，请下载后查看并手动评分。" description="平台不解压压缩包，也不对其中的文件进行 AI 批改。" type="info" :closable="false" />
              <div v-if="currentNormalizedPages.length && previewUrl" class="page-view-switch">
                 <el-radio-group v-model="preferPdfOriginal" size="small">
                    <el-radio-button :value="false">页图</el-radio-button>
@@ -257,6 +274,7 @@
                 show-icon
              />
              <el-empty v-else description="该生未提交文件或文件不可预览" />
+             </template>
              </template>
          </div>
          <el-empty v-else description="请从左侧选择一名学生开始批改" />
@@ -346,8 +364,6 @@
                       :model-value="overallStarCount"
                       :disabled="submitting || !deadlineStatus?.canGrade"
                       clearable
-                      show-text
-                      :texts="starScoreTexts(currentStudent.maxScore)"
                       @change="onOverallRateChange"
                    />
                    <span class="star-hint">{{ starSelectionText(currentStudent.maxScore, overallStarCount) }}</span>
@@ -366,8 +382,6 @@
                             :model-value="itemStarCounts[item.itemId] || 0"
                             :disabled="submitting || !deadlineStatus?.canGrade"
                             clearable
-                            show-text
-                            :texts="starScoreTexts(item.maxScore)"
                             @change="val => onItemRateChange(item, val)"
                          />
                         <el-input-number
@@ -626,7 +640,7 @@ import { getAiConfig, saveAiConfig, deleteAiConfig, deleteAiProviderKey, testAiC
     getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
     pauseAiJob, resumeAiJob, cancelAiJob, retryFailedAiJob, getAiModelPrices, updateAiModelPrice } from '@/api/business/practicalAiGrading';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { FullScreen } from '@element-plus/icons-vue';
+import { FullScreen, ArrowUp, ArrowDown } from '@element-plus/icons-vue';
 import { deadlineStatusMeta, formatDeadlineRemaining, formatDeadlineTime } from '@/utils/practicalDeadline';
 import useUserStore from '@/store/modules/user';
 import FlowchartGradingPanel from '@/components/FlowchartEditor/FlowchartGradingPanel.vue';
@@ -716,6 +730,13 @@ let scoringDetailsRequestId = 0;
 
 const isFullscreen = ref(false);
 const gradingPageRef = ref(null);
+// 小屏批改时把筛选和进度收起来给预览让位；偏好记本地，默认展开。
+// 全屏批改不折叠：全屏本身就是为了看作品，进度面板仍需可见。
+const headerCollapsed = ref(localStorage.getItem('grading-header-collapsed') === '1');
+function toggleHeaderCollapsed() {
+  headerCollapsed.value = !headerCollapsed.value;
+  localStorage.setItem('grading-header-collapsed', headerCollapsed.value ? '1' : '0');
+}
 // 数字/五星二选一：默认键盘数字（批量批改快），偏好记本地
 const starInputEnabled = ref(localStorage.getItem('grading-star-mode') === '1');
 function onStarModeChange(value) {
@@ -1144,19 +1165,6 @@ function calculateStarScore(maxScore, stars) {
     const max = Number(maxScore || 0);
     const count = Number(stars || 0);
     return max > 0 ? Math.round(max * count / 5) : 0;
-}
-
-// 星级文案数组按满分缓存：轮询刷新会重建组件数据，若每次返回新数组，
-// el-rate 会把 texts 变化当作配置变更而重绘，肉眼表现为星级频闪。
-const starTextsCache = new Map();
-function starScoreTexts(maxScore) {
-    const key = Number(maxScore || 0);
-    let texts = starTextsCache.get(key);
-    if (!texts) {
-        texts = [1, 2, 3, 4, 5].map(stars => `${stars}星 = ${calculateStarScore(key, stars)}分`);
-        starTextsCache.set(key, texts);
-    }
-    return texts;
 }
 
 function starSelectionText(maxScore, stars) {
@@ -2461,6 +2469,43 @@ function autoFocusItem() {
   align-items: stretch;
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 
+  // 收起后只剩这一行，把「当前选的哪门课/哪个班/哪道题」留在原位，
+  // 避免老师收起筛选后失去上下文。
+  .header-collapse-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+
+    .collapse-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-size: 13px;
+      color: #606266;
+    }
+
+    .collapse-title { font-weight: bold; color: #303133; }
+    .collapse-class { color: #409EFF; }
+
+    .collapse-question {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 360px;
+    }
+
+    .collapse-hint {
+      font-size: 13px;
+      color: #303133;
+      font-weight: bold;
+    }
+
+    .collapse-toggle { flex: none; }
+  }
+
   .grading-toolbar {
     width: 100%;
     display: flex;
@@ -2625,6 +2670,7 @@ function autoFocusItem() {
 
 .preview-panel {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   background: #fff;
   border-radius: 4px;
@@ -2633,9 +2679,16 @@ function autoFocusItem() {
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
   
   .preview-content {
-     height: 100%;
+     flex: 1;
+     min-height: 0;
      display: flex;
      flex-direction: column;
+     overflow: hidden;
+  }
+
+  // 工具栏不能被长页图挤小，否则滚动区底部会超出工作区并被裁掉。
+  .preview-header, .attachment-tabs, .page-view-switch {
+     flex-shrink: 0;
   }
   
   .preview-header {
@@ -2726,6 +2779,8 @@ function autoFocusItem() {
 
 .scoring-panel {
   width: 300px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   min-height: 0;
   overflow-y: auto;
   background: #fff;
@@ -2809,6 +2864,7 @@ function autoFocusItem() {
      
      .item-row {
         display: flex;
+           flex-direction: column;
         justify-content: space-between;
         align-items: center;
         padding: 8px 0;
@@ -2820,6 +2876,8 @@ function autoFocusItem() {
         }
         .item-input {
            display: flex;
+           width: 100%;
+           flex-wrap: wrap;
            align-items: center;
            gap: 5px;
            
@@ -2882,6 +2940,7 @@ function autoFocusItem() {
 
 .star-rating-helper {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
   margin-top: 10px;
@@ -2898,7 +2957,17 @@ function autoFocusItem() {
 }
 
 .item-star-rate {
+  flex: 0 0 100%;
   margin-right: 6px;
+}
+
+// 悬浮星标会放大，但命中区域必须保持固定，避免第五颗星在边界反复触发进出。
+.star-rating-helper :deep(.el-rate), .item-star-rate {
+  white-space: nowrap;
+}
+.star-rating-helper :deep(.el-rate__icon), .item-star-rate :deep(.el-rate__icon) {
+  transform: none;
+  transition: none;
 }
 
 .shortcut-tip-badge {

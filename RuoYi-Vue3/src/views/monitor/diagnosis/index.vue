@@ -60,6 +60,7 @@
             <span>CPU、JVM、系统内存</span>
           </div>
           <div ref="resourceChartRef" class="chart"></div>
+          <p class="resource-note">{{ jvmDetailText }}</p>
         </section>
       </el-col>
       <el-col :xs="24" :lg="15">
@@ -186,9 +187,11 @@
               <em>日常 {{ conversionInfo.dailyWaitingCount || 0 }}，区域抽测 {{ conversionInfo.countyWaitingCount || 0 }}</em>
             </div>
             <div class="conversion-card">
-              <span>最近失败</span>
-              <strong>{{ conversionBacklog.failed }}</strong>
-              <em>日常 {{ conversionInfo.dailyFailedCount || 0 }}，区域抽测 {{ conversionInfo.countyFailedCount || 0 }}</em>
+              <span>预览失败</span>
+              <el-tooltip :content="previewErrorSummary" placement="top">
+                <strong>{{ conversionBacklog.failed }}</strong>
+              </el-tooltip>
+              <em>累计；近 7 天 {{ conversionRecent7d }} 条</em>
             </div>
           </div>
         </section>
@@ -250,10 +253,10 @@
       <el-col :xs="24" :lg="12">
         <section class="panel">
           <div class="panel-head">
-            <h2>最近异常与业务提示</h2>
-            <span>{{ scopeLabel }}内的业务拦截与系统错误，按等级区分</span>
+            <h2>最近系统异常</h2>
+            <span>{{ scopeLabel }}内需处理的系统错误；业务校验提示已折叠到下方</span>
           </div>
-          <el-table :data="data.recentErrors || []" height="330" :empty-text="`${scopeLabel}内暂无错误`">
+          <el-table :data="data.recentErrors || []" height="330" :empty-text="`${scopeLabel}内暂无系统异常`">
             <el-table-column prop="oper_time" label="时间" width="170" />
             <el-table-column prop="title" label="模块" width="100" show-overflow-tooltip />
             <el-table-column prop="severity" label="等级" width="76">
@@ -261,7 +264,9 @@
                 <el-tag :type="severityTagType(row.severity)" size="small">{{ severityLabel(row.severity) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="error_msg" label="错误信息" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="error_msg" label="错误信息" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ plainText(row.error_msg) }}</template>
+            </el-table-column>
             <el-table-column prop="advice" label="处置建议" min-width="180" show-overflow-tooltip />
             <el-table-column prop="oper_name" label="用户" width="100" />
             <el-table-column label="操作" width="86" fixed="right">
@@ -296,12 +301,43 @@
       </el-col>
     </el-row>
 
+    <el-row v-if="businessTips.length" :gutter="16" class="diagnosis-grid">
+      <el-col :span="24">
+        <section class="panel">
+          <el-collapse v-model="businessTipsOpen">
+            <el-collapse-item name="tips">
+              <template #title>
+                <span class="business-tip-title">业务提示（{{ scopeLabel }}内 {{ businessTips.length }} 类 / {{ businessTipsTotal }} 次，已折叠）</span>
+              </template>
+              <el-table :data="businessTips" size="small" max-height="320">
+                <el-table-column prop="occurCount" label="次数" width="70" />
+                <el-table-column prop="lastTime" label="最近时间" width="170" />
+                <el-table-column prop="title" label="模块" width="100" show-overflow-tooltip />
+                <el-table-column prop="oper_url" label="接口" min-width="170" show-overflow-tooltip />
+                <el-table-column prop="userCount" label="用户数" width="80" />
+                <el-table-column prop="error_msg" label="错误信息" min-width="260" show-overflow-tooltip>
+                  <template #default="{ row }">{{ plainText(row.error_msg) }}</template>
+                </el-table-column>
+                <el-table-column prop="advice" label="处置建议" min-width="200" show-overflow-tooltip />
+                <el-table-column label="操作" width="86" fixed="right">
+                  <template #default="{ row }">
+                    <el-button link type="primary" @click="copyRow(row)">复制</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+        </section>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :xs="24" :lg="14">
         <section class="panel">
           <div class="panel-head">
             <h2>Druid 慢 SQL</h2>
-            <span>数据库层面最值得关注的 SQL</span>
+            <span>{{ sqlStatScopeLabel }}</span>
+            <el-button size="small" :loading="selfTestLoading" @click="handlePerfEventSelfTest">链路自检</el-button>
           </div>
           <el-table :data="data.slowSql || []" height="360" empty-text="暂无 Druid SQL 统计">
             <el-table-column prop="maxTimespan" label="最大耗时" width="100">
@@ -312,7 +348,15 @@
             <el-table-column prop="avgTime" label="平均耗时" width="92">
               <template #default="{ row }">{{ row.avgTime || 0 }} ms</template>
             </el-table-column>
-            <el-table-column prop="executeCount" label="执行次数" width="92" />
+            <el-table-column prop="executeCount" label="执行次数" width="100">
+              <template #default="{ row }">
+                <el-tag v-if="row.highFrequency" size="small" type="info">高频</el-tag>
+                {{ row.executeCount }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="totalTimeMs" label="累计耗时" width="110">
+              <template #default="{ row }">{{ formatDurationMs(row.totalTimeMs) }}</template>
+            </el-table-column>
             <el-table-column prop="runningCount" label="当前并发" width="92" />
             <el-table-column prop="lastTime" label="最近执行" width="170" />
             <el-table-column label="业务说明" min-width="160">
@@ -366,13 +410,15 @@
 <script setup name="SystemDiagnosis">
 import * as echarts from 'echarts'
 import { DocumentCopy, Refresh } from '@element-plus/icons-vue'
-import { cleanupLibreOffice, getDiagnosisSummary, getDiagnosisEvents } from '@/api/monitor/diagnosis'
+import { cleanupLibreOffice, getDiagnosisSummary, getDiagnosisEvents, perfEventSelfTest } from '@/api/monitor/diagnosis'
 
 const { proxy } = getCurrentInstance()
 const data = ref({})
 const perfEvents = ref([])
 const diagnosisHours = ref(24)
 const eventType = ref('')
+const businessTipsOpen = ref([])
+const selfTestLoading = ref(false)
 const resourceChartRef = ref(null)
 const cleanupLoading = ref(false)
 let resourceChart = null
@@ -396,6 +442,49 @@ const conversionBacklog = computed(() => ({
   waiting: Number(conversionInfo.value.dailyWaitingCount || 0) + Number(conversionInfo.value.countyWaitingCount || 0),
   failed: Number(conversionInfo.value.dailyFailedCount || 0) + Number(conversionInfo.value.countyFailedCount || 0)
 }))
+const conversionRecent7d = computed(() =>
+  Number(conversionInfo.value.dailyFailedRecent7d || 0) + Number(conversionInfo.value.countyFailedRecent7d || 0))
+const previewErrorSummary = computed(() => {
+  const rows = conversionInfo.value.previewErrorTop5 || []
+  if (!rows.length) return '暂无失败原因统计'
+  return rows.map(item => `${item.errorMessage || '未记录原因'}：${item.total} 条`).join('；')
+})
+const businessTips = computed(() => data.value.businessTips || [])
+const businessTipsTotal = computed(() =>
+  businessTips.value.reduce((sum, item) => sum + Number(item.occurCount || 0), 0))
+const jvmUsageOfMax = computed(() => {
+  const jvm = data.value.server?.jvm || {}
+  const used = Number(jvm.used || 0)
+  const max = Number(jvm.max || 0)
+  return max > 0 ? (used / max) * 100 : 0
+})
+const jvmDetailText = computed(() => {
+  const jvm = data.value.server?.jvm || {}
+  return `JVM 已用 ${formatMb(jvm.used)} / 已提交 ${formatMb(jvm.total)} / 上限 ${formatMb(jvm.max)}（占上限 ${Math.round(jvmUsageOfMax.value)}%）`
+})
+const sqlStatScopeLabel = computed(() => {
+  const scope = data.value.sqlStatScope || {}
+  if (scope.startTime) {
+    return `进程内统计，自 ${scope.startTime} 起，约 ${scope.uptimeHours || 0} 小时（重启清零）`
+  }
+  return '进程内统计，自后端启动起（重启清零）'
+})
+
+function formatMb(value) {
+  const num = Number(value || 0)
+  return num > 0 ? `${num.toFixed(1)} MB` : '—'
+}
+
+function formatDurationMs(value) {
+  const num = Number(value || 0)
+  if (num >= 3600000) return `${(num / 3600000).toFixed(1)} h`
+  if (num >= 60000) return `${(num / 60000).toFixed(1)} min`
+  return `${Math.round(num)} ms`
+}
+
+function plainText(value) {
+  return String(value || '').replace(/<br\s*\/?>/gi, '；').replace(/<[^>]+>/g, '').trim()
+}
 
 function fmtGb(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
@@ -462,7 +551,7 @@ function renderResourceChart() {
     tooltip: { formatter: '{b}: {c}%' },
     series: [
       gaugeItem('CPU', Number(server.cpu?.used || 0), ['16%', '55%']),
-      gaugeItem('JVM', Number(server.jvm?.usage || 0), ['50%', '55%']),
+      gaugeItem('JVM', jvmUsageOfMax.value, ['50%', '55%']),
       gaugeItem('内存', Number(server.mem?.usage || 0), ['84%', '55%'])
     ]
   })
@@ -499,6 +588,24 @@ function handleLibreOfficeCleanup() {
     loadData()
   }).finally(() => {
     cleanupLoading.value = false
+  })
+}
+
+function handlePerfEventSelfTest() {
+  selfTestLoading.value = true
+  perfEventSelfTest().then(res => {
+    const result = res.data || {}
+    if (result.persisted) {
+      proxy.$modal.msgSuccess('链路正常：慢 SQL 已拦截并写入事件表')
+    } else {
+      proxy.$modal.msgWarning(result.hint || '链路自检未通过，请查看后端日志')
+    }
+    loadEvents()
+    loadData()
+  }).catch(() => {
+    proxy.$modal.msgError('链路自检请求失败，请查看后端日志')
+  }).finally(() => {
+    selfTestLoading.value = false
   })
 }
 
@@ -652,7 +759,19 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
-  align-items: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.resource-note {
+  margin: 8px 0 0;
+  color: #647080;
+  font-size: 12px;
+}
+
+.business-tip-title {
+  font-weight: 700;
+  color: #52616f;
 }
 
 .panel-actions {

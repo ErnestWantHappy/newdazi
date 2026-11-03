@@ -3,8 +3,7 @@
     <div class="preview-header">
       <el-button icon="ArrowLeft" @click="goBack">返回</el-button>
       <h2 style="margin:0 16px">{{ sheetTitle || '导学单预览' }}</h2>
-      <el-tag v-if="status === '0'" type="info">草稿</el-tag>
-      <el-tag v-else-if="status === '1'" type="success">已发布</el-tag>
+      <el-tag type="info" effect="plain">学生可见内容</el-tag>
     </div>
 
     <div v-if="loading" style="text-align:center;padding:60px 0">
@@ -30,14 +29,13 @@
 <script setup name="GuideSheetPreview">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getGuideSheet } from '@/api/business/guideSheet'
+import { getGuideSheetPreview } from '@/api/business/guideSheet'
 import { Loading } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const sheetTitle = ref('')
-const status = ref('0')
 const formJsonObj = ref(null)
 const formData = ref({})
 const optionData = ref({})
@@ -51,12 +49,16 @@ function goBack() {
 onMounted(() => {
   const sheetId = route.params.sheetId
   if (sheetId) {
-    getGuideSheet(sheetId).then(res => {
-      sheetTitle.value = res.data.sheetTitle || ''
-      status.value = res.data.status || '0'
-      if (res.data.formJson) {
+    // 必须走服务端脱敏接口：模板库预览与课程面板预览共用同一份“学生可见内容”，
+    // 避免同县他人公共模板里的 onCreated / functions 在本教师浏览器执行。
+    getGuideSheetPreview(sheetId).then(res => {
+      const data = res.data || res
+      sheetTitle.value = data.title || data.sheetTitle || ''
+      if (data.formJson) {
         try {
-          formJsonObj.value = JSON.parse(res.data.formJson)
+          formJsonObj.value = typeof data.formJson === 'string'
+            ? JSON.parse(data.formJson)
+            : data.formJson
         } catch (e) {
           console.warn('表单JSON解析失败', e)
         }

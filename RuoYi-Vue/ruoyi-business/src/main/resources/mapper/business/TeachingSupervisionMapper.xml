@@ -43,7 +43,7 @@
     </sql>
 
     <sql id="baseLessonFilters">
-        l.dept_id IS NOT NULL
+        l.lesson_scope='regular' AND l.dept_id IS NOT NULL
         AND <include refid="lessonPeriodFilter"/>
         <if test="q.deptId != null">AND l.dept_id = #{q.deptId}</if>
         <if test="q.teacherId != null">AND l.creator_id = #{q.teacherId}</if>

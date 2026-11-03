@@ -10,7 +10,15 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ResourceAccessMapper
 {
-    Long selectStudentAnswerIdByResource(@Param("resource") String resource);
+    Long selectAnswerIdByAnswerText(@Param("resource") String resource);
+
+    Long selectAnswerIdByPreviewPath(@Param("resource") String resource);
+
+    Long selectAttachmentAnswerIdByResourcePath(@Param("resource") String resource);
+
+    Long selectAttachmentAnswerIdByPreviewPath(@Param("resource") String resource);
+
+    Long selectStudentAnswerIdByResourceJson(@Param("resource") String resource);
 
     Long selectCountyAnswerIdByResource(@Param("resource") String resource);
 

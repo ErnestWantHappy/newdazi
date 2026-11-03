@@ -154,6 +154,127 @@ class PracticalPageRendererTest
         }
     }
 
+    /**
+     * 内容画到页框外（LibreOffice 字体度量偏大时浮动图形的真实表现）时，
+     * 页图必须把越界部分一并算进去，否则教师只能看到被裁掉一半的作品。
+     */
+    @Test
+    void shouldIncludeContentDrawnOutsidePageBox() throws Exception
+    {
+        File source = tempDir.resolve("upload/overflow.pdf").toFile();
+        assertTrue(source.getParentFile().mkdirs());
+        writeA4WithRect(source, -40F);
+
+        byte[] before = java.nio.file.Files.readAllBytes(source.toPath());
+        List<String> pages = renderer.render(attachment(9L, "PDF", "overflow"), source);
+
+        BufferedImage image = ImageIO.read(resourceFile(pages.get(0)));
+        // A4 在 150 DPI 下高约 1754px；越界 40pt 加余量后应明显更高。
+        assertTrue(image.getHeight() > 1800, "越界内容应纳入页图，实际高度 " + image.getHeight());
+        // 学生原始 PDF 是缓存身份的一部分，渲染不得改动它。
+        org.junit.jupiter.api.Assertions.assertArrayEquals(before,
+                java.nio.file.Files.readAllBytes(source.toPath()), "学生原件不得被改写");
+    }
+
+    /** 内容全在页框内时必须与旧行为一致，不能因为新增探测而缩放或偏移正常文档。 */
+    @Test
+    void shouldKeepInBoxPageImageUnchanged() throws Exception
+    {
+        File source = tempDir.resolve("upload/normal.pdf").toFile();
+        assertTrue(source.getParentFile().mkdirs());
+        writeA4WithRect(source, 50F);
+
+        List<String> pages = renderer.render(attachment(10L, "PDF", "normal"), source);
+
+        BufferedImage image = ImageIO.read(resourceFile(pages.get(0)));
+        assertEquals(1240, image.getWidth());
+        assertTrue(image.getHeight() >= 1750 && image.getHeight() <= 1755,
+                "正常 A4 页高应保持约 1754px，实际 " + image.getHeight());
+    }
+
+    /** 只有平台生成的转换副本才回写页框，让「PDF 原图」视图与页图看到同一范围。 */
+    @Test
+    void shouldRewriteFrameOnlyForDerivedPreview() throws Exception
+    {
+        File source = tempDir.resolve("upload/derived.pdf").toFile();
+        assertTrue(source.getParentFile().mkdirs());
+        writeA4WithRect(source, -40F);
+        byte[] before = java.nio.file.Files.readAllBytes(source.toPath());
+
+        PracticalAttachment attachment = attachment(11L, "OFFICE", "derived");
+        attachment.setPreviewPath("/profile/upload/derived.pdf");
+        renderer.render(attachment, source);
+
+        assertTrue(!java.util.Arrays.equals(before, java.nio.file.Files.readAllBytes(source.toPath())),
+                "转换副本页框应被回写");
+        try (PDDocument reloaded = PDDocument.load(source))
+        {
+            assertTrue(reloaded.getPage(0).getCropBox().getHeight() > 850F,
+                    "回写后的取景框应覆盖越界内容，实际 " + reloaded.getPage(0).getCropBox().getHeight());
+        }
+    }
+
+    /** 区域抽测走 renderForOwner，同样不得回写源文件。 */
+    @Test
+    void shouldNotRewriteSourceWhenRenderingForOwner() throws Exception
+    {
+        File source = tempDir.resolve("upload/owner.pdf").toFile();
+        assertTrue(source.getParentFile().mkdirs());
+        writeA4WithRect(source, -40F);
+        byte[] before = java.nio.file.Files.readAllBytes(source.toPath());
+
+        List<String> pages = renderer.renderForOwner("county-overflow", "PDF", source);
+
+        assertTrue(ImageIO.read(resourceFile(pages.get(0))).getHeight() > 1800, "抽测页图也应看到越界内容");
+        org.junit.jupiter.api.Assertions.assertArrayEquals(before,
+                java.nio.file.Files.readAllBytes(source.toPath()), "抽测渲染不得改写源文件");
+    }
+
+    /** 路径回调已变换坐标，二次平移会把本来在页内的矩形和曲线误判为越界。 */
+    @Test
+    void shouldNotTransformPathCoordinatesTwice() throws Exception
+    {
+        File source = tempDir.resolve("upload/transformed.pdf").toFile();
+        assertTrue(source.getParentFile().mkdirs());
+        try (PDDocument document = new PDDocument())
+        {
+            PDPage page = new PDPage(org.apache.pdfbox.pdmodel.common.PDRectangle.A4);
+            document.addPage(page);
+            try (org.apache.pdfbox.pdmodel.PDPageContentStream content = new org.apache.pdfbox.pdmodel.PDPageContentStream(document, page))
+            {
+                content.transform(org.apache.pdfbox.util.Matrix.getTranslateInstance(400F, 600F));
+                content.addRect(0F, 0F, 50F, 50F);
+                content.fill();
+                content.moveTo(0F, 60F);
+                content.lineTo(50F, 60F);
+                content.curveTo(60F, 70F, 70F, 80F, 80F, 90F);
+                content.stroke();
+            }
+            document.save(source);
+        }
+        BufferedImage image = ImageIO.read(resourceFile(renderer.render(attachment(12L, "PDF", "transformed"), source).get(0)));
+        assertEquals(1240, image.getWidth());
+        assertTrue(image.getHeight() >= 1750 && image.getHeight() <= 1755,
+                "正常平移图形不得触发页框扩大");
+    }
+
+    /** 生成一页 A4，在 x=50 处画一个 100×100 的方块；bottomY 为负即模拟内容溢出页框。 */
+    private void writeA4WithRect(File target, float bottomY) throws Exception
+    {
+        try (PDDocument document = new PDDocument())
+        {
+            PDPage page = new PDPage(org.apache.pdfbox.pdmodel.common.PDRectangle.A4);
+            document.addPage(page);
+            try (org.apache.pdfbox.pdmodel.PDPageContentStream content = new org.apache.pdfbox.pdmodel.PDPageContentStream(document, page))
+            {
+                content.setNonStrokingColor(Color.RED);
+                content.addRect(50F, bottomY, 100F, 100F);
+                content.fill();
+            }
+            document.save(target);
+        }
+    }
+
     private File resourceFile(String resource)
     {
         return new File(RuoYiConfig.getProfile() + resource.replaceFirst("/profile", ""));
