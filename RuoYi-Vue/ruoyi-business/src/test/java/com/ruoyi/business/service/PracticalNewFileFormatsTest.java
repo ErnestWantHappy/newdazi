@@ -8,6 +8,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PracticalNewFileFormatsTest {
     private final PracticalFilePolicyService policy = new PracticalFilePolicyService();
+    @Test void pythonIsTextAndStillRequiresQuestionPermission() {
+        MockMultipartFile file = text("作业.PY", "text/x-python", "name=input('姓名：')\nprint(name)");
+        assertEquals("TEXT", policy.inspect(file, "py").getFileKind());
+        assertEquals("py", policy.inspect(file, ".invalid,py").getFileExtension());
+        assertThrows(ServiceException.class, () -> policy.inspect(file, null));
+        assertThrows(ServiceException.class, () -> policy.inspect(file, "txt"));
+        assertThrows(ServiceException.class, () -> policy.inspect(
+                new MockMultipartFile("file", "fake.py", "text/plain", new byte[] {0,1,2}), "py"));
+        assertThrows(ServiceException.class, () -> policy.inspect(
+                new MockMultipartFile("file", "large.py", "text/plain", new byte[PracticalTextCodec.MAX_BYTES + 1]), "py"));
+        assertThrows(ServiceException.class, () -> policy.inspect(text("fake.py", "image/png", "print(1)"), "py"));
+    }
     @Test void fileNameBoundaryMatchesStorageAndExplainsHowToRecover() {
         String name = new String(new char[96]).replace('\0', 'a') + ".txt";
         assertEquals(100, name.length());

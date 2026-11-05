@@ -85,6 +85,8 @@ const saving = ref(false)
 const gradeGroups = ref([])
 const classes = ref([])
 const studentList = ref([])
+// 请求序号：切换课程/班级较快时，只保留最新一次名单，避免旧响应覆盖新名单。
+let listReqSeq = 0
 
 const selectedLessonId = ref(null)
 const selectedClassCode = ref(null)
@@ -129,9 +131,11 @@ function onClassChange(val) {
 function loadStudentList() {
   if (!selectedLessonId.value || !selectedClassCode.value || !selectedEntryYear.value) return
   
+  const reqSeq = ++listReqSeq
   loading.value = true
   getPerformanceList(selectedLessonId.value, selectedClassCode.value, selectedEntryYear.value)
     .then(res => {
+      if (reqSeq !== listReqSeq) return
       studentList.value = (res.data || []).map(item => ({
         ...item,
         score: item.score || 0,
@@ -140,7 +144,7 @@ function loadStudentList() {
       }))
     })
     .finally(() => {
-      loading.value = false
+      if (reqSeq === listReqSeq) loading.value = false
     })
 }
 
@@ -178,6 +182,8 @@ function batchSave() {
       item.modified = false
       item.performanceId = true // 标记为已有记录
     })
+  }).catch(() => {
+    ElMessage.error('保存失败，请稍后重试')
   }).finally(() => {
     saving.value = false
   })

@@ -8,6 +8,7 @@
       <div class="book-title" :title="book?.title">{{ book?.title || '电子教材' }}</div>
 
       <div class="bar-right">
+        <el-button v-if="!isStudentView && caseCounts[selectedKey]" size="small" type="primary" plain @click="casePanelVisible = !casePanelVisible">优秀课例 {{ caseCounts[selectedKey] }}</el-button>
         <el-select
           v-model="selectedKey"
           class="section-select"
@@ -105,6 +106,7 @@
 
     <div v-else class="reader-body">
       <aside v-show="tocVisible" class="toc">
+        <div v-if="!isStudentView" class="case-legend"><el-icon><Collection /></el-icon> 优秀课例 <el-button v-if="caseSummaryError" link type="primary" @click="loadCaseSummary">加载失败，重试</el-button></div>
         <div
           v-if="frontSection"
           class="toc-item is-muted"
@@ -131,6 +133,7 @@
           >
             <span class="toc-no">第{{ lesson.lessonNo }}课</span>
             <span class="toc-text">{{ lesson.title }}</span>
+            <button v-if="!isStudentView && caseCounts[lesson.sectionKey]" class="case-badge" :aria-label="`第${lesson.lessonNo}课，查看${caseCounts[lesson.sectionKey]}份优秀课例`" :title="`${caseCounts[lesson.sectionKey]}份优秀课例`" @click.stop="openCases(lesson)"><el-icon><Collection /></el-icon> {{ caseCounts[lesson.sectionKey] }}</button>
           </div>
           <div
             v-if="unit.summary"
@@ -174,6 +177,7 @@
           </div>
         </div>
       </main>
+      <CasePanel v-if="!isStudentView && casePanelVisible && caseCounts[selectedKey]" :key="`${bookId}/${selectedKey}`" :book-id="bookId" :section-key="selectedKey" @close="casePanelVisible = false" />
     </div>
 
     <footer v-if="!loading && !errorText" class="reader-foot">
@@ -198,7 +202,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
-import { ArrowLeft, Download, Printer } from '@element-plus/icons-vue'
+import { ArrowLeft, Download, Printer, Collection } from '@element-plus/icons-vue'
+import { getCaseSummary } from '@/api/business/textbookCase'
+import CasePanel from './components/CasePanel.vue'
 import {
   getTextbookToc,
   loadTextbookPage,
@@ -228,6 +234,34 @@ const scrollEl = ref(null)
 // 窄屏默认收起目录，避免目录挤占正文；桌面端保持展开
 const tocVisible = ref(typeof window === 'undefined' || window.innerWidth >= 900)
 const selectedKey = ref('')
+const caseCounts = ref({})
+const caseSummaryError = ref(false)
+const casePanelVisible = ref(false)
+let caseSummarySequence = 0
+
+async function loadCaseSummary() {
+  const ticket = ++caseSummarySequence
+  caseCounts.value = {}
+  caseSummaryError.value = false
+  if (isStudentView.value) return
+  try {
+    const res = await getCaseSummary()
+    if (ticket !== caseSummarySequence) return
+    caseCounts.value = Object.fromEntries((res.data || []).filter(row => Number(row.bookId) === bookId.value).map(row => [row.sectionKey, Number(row.total)]))
+    casePanelVisible.value = Boolean(caseCounts.value[selectedKey.value])
+  } catch {
+    if (ticket === caseSummarySequence) caseSummaryError.value = true
+  }
+}
+
+function openCases(lesson) {
+  selectAndGo(lesson)
+  casePanelVisible.value = true
+  if (window.innerWidth < 900) tocVisible.value = false
+}
+
+watch(selectedKey, key => { casePanelVisible.value = Boolean(caseCounts.value[key]) })
+watch([bookId, isStudentView], loadCaseSummary, { immediate: true })
 const jumpPage = ref(1)
 const currentPage = ref(1)
 
@@ -643,10 +677,16 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.case-legend { padding: 4px 12px 10px; color: #606266; font-size: 12px; }
+.case-badge { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; padding: 5px; border: 0; border-radius: 4px; background: #ecf5ff; color: #1676c9; cursor: pointer; }
+.toc-item .toc-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reader {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 84px);
+  height: calc(100dvh - 84px);
+  min-width: 0;
+  min-height: 0;
   background: #eef1f5;
   border-radius: 6px;
   overflow: hidden;
@@ -655,6 +695,7 @@ onBeforeUnmount(() => {
 /* 学生布局没有教师端 navbar + tags-view，阅读器直接占满视口。 */
 .reader.is-student-reader {
   height: 100vh;
+  height: 100dvh;
   border-radius: 0;
 }
 
@@ -675,6 +716,7 @@ onBeforeUnmount(() => {
 }
 
 .book-title {
+  flex: 1 1 160px;
   font-size: 15px;
   font-weight: 600;
   color: #303133;
@@ -685,6 +727,7 @@ onBeforeUnmount(() => {
 }
 
 .bar-right {
+  min-width: 0;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -754,6 +797,8 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* 窄屏目录改为浮层，展开时不再把正文挤成一条 */
@@ -769,8 +814,10 @@ onBeforeUnmount(() => {
 }
 
 .toc {
-  width: 250px;
-  flex: 0 0 250px;
+  width: clamp(210px, 18vw, 260px);
+  flex: 0 0 clamp(210px, 18vw, 260px);
+  box-sizing: border-box;
+  min-height: 0;
   background: #fff;
   border-right: 1px solid #e4e7ed;
   overflow-y: auto;
@@ -836,6 +883,8 @@ onBeforeUnmount(() => {
 
 .pages {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 18px 0 40px;
   scroll-behavior: smooth;
@@ -886,7 +935,25 @@ onBeforeUnmount(() => {
 }
 
 .foot-info {
-  min-width: 260px;
+  min-width: 0;
   text-align: center;
+}
+
+@media (max-width: 1200px) {
+  .bar-right { flex: 1 1 100%; justify-content: flex-start; margin-left: 0; }
+  .reader-bar { gap: 6px; padding: 8px; }
+  .book-title { max-width: none; }
+}
+@media (max-width: 600px) {
+  .bar-right { gap: 4px; }
+  .bar-right .el-button { margin-left: 0; padding-left: 6px; padding-right: 6px; }
+  .section-select { width: min(210px, 60vw); }
+  .page-jump { width: 48px; }
+  .reader-foot { gap: 8px; padding: 0 6px; font-size: 11px; }
+  .page-fail-banner { align-items: flex-start; padding: 6px; }
+}
+@media (max-height: 600px) and (min-width: 601px) {
+  .reader-bar { padding-top: 4px; padding-bottom: 4px; }
+  .pages { padding-top: 8px; }
 }
 </style>

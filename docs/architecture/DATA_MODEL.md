@@ -1,5 +1,13 @@
 # 数据模型与迁移约定
 
+## 2026-11-04 2025宁波课例批次（130正式1.30.71）
+
+无表结构变更。课例/资源仍用 `biz_textbook_case`、`biz_textbook_case_resource`：本批 `source_key = sha256("ningbo-2025:"+来源相对路径)[:32]`，资源键 `sha256("ningbo-2025:<课例来源>::<课例内路径>")`，与旧批次命名空间隔离。`book_id` 由 `book_code + section_key + kind='LESSON'` 解析（本机与130 book_id 不同，不得混用）。SQL `sql/textbook_cases_ningbo2025_v1.sql` 仅 `INSERT … ON DUPLICATE KEY UPDATE`，无 DELETE；导入后本机与130均 142 课例/693 资源，孤儿0、重复0，旧52条`case_id`/196资源/2条评价未变。`resources()` 查询新增计算列 `htmlPreview`（按 `original_path` 后缀），不落库、不影响PDF预览。[迁移与回退](../../contexts/textbook-cases-2025/migration-report.md)。
+
+## 2026-11-03 课例评价（130正式1.30.69）
+
+新增biz_textbook_case_feedback：主键(case_id,user_id)，vote取1/-1/0，reason可空varchar(500)、last_invited_at、updated_at；未评价/撤销/邀请占位行不计赞踩，汇总本人态度的CASE非本人分支用NULL。biz_textbook_case_invitation按user_id主键保存抽样尝试/邀请时间。写入先以upsert取得教师行排他锁，事务READ_COMMITTED，避免锁升级和无变化更新读取旧快照；邀请读取本人记录用FOR UPDATE。省略/null理由保留、空串清空、撤销清空。已在130迁移，课例元数据52/196，菜单SQL及审核清单导入已执行；不修改成绩/账号角色。[发布与回退](../../contexts/textbook-cases/release-feedback-fix-20261103.md)。
+
 ## 2026-10-30拓展课双空间（本机，未发布）
 
 `sql/extension_class_v1.sql` 新增 `biz_extension_class`、活跃成员、课时名单、题单投放名单四表；学生档案不复制。载体为建班年份与同校同届未占用51–99班号，按学校锁分配，展示使用班名。学生唯一成员索引在移出/归档时释放。课时名单创建后不变；题单发布记录投放名单，新成员获得已发布题单时补记，移出/归档不删旧记录。新增lesson_scope/extension_class_id/lesson_date、plan_scope/extension_class_id、space_pref/space_selected共7列。新增表显式general_ci匹配旧业务表。迁移仅本机执行；130旧班逐人核验及历史登记/冻结未执行。[设计与备份](../../contexts/extension-class/tasks.md)。

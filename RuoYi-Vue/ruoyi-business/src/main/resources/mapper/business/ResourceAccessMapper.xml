@@ -78,6 +78,17 @@
         limit 1
     </select>
 
+    <!-- 参考答案等未落业务表的通用上传，按路径反查题目创建者与学校 -->
+    <select id="selectQuestionOwnerByResource" resultType="java.util.LinkedHashMap">
+        select question.question_id as questionId,
+               question.creator_id as creatorId,
+               question.dept_id as deptId
+        from biz_practical_question_material material
+        inner join biz_question question on question.question_id = material.question_id
+        where material.resource_path = #{resource}
+        limit 1
+    </select>
+
     <select id="countCurrentLessonQuestionForStudent" resultType="int">
         select count(1)
         from biz_student s

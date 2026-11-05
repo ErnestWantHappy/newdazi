@@ -61,10 +61,16 @@ public class PracticalAiSuggestionApplyService
             throw new ServiceException("AI 建议尚未生成完成");
 
         int applied = 0, filledUngraded = 0, overwritten = 0;
-        int skippedManual = 0, skippedVersion = 0, failed = 0;
+        int skippedManual = 0, skippedVersion = 0, skippedApplied = 0, failed = 0;
         for (PracticalAiResult result : aiMapper.selectResultsByJob(jobId))
         {
             if (!"SUCCESS".equals(result.getResultStatus())) continue;
+            // 同一结果已采用过：再点一次“采用”不能重复写分和审计，直接计为跳过。
+            if ("APPLIED".equals(result.getApplyStatus()) || "APPLIED_OVERWRITE".equals(result.getApplyStatus()))
+            {
+                skippedApplied++;
+                continue;
+            }
             // 待复核是教师确认提示，不阻断主动批量采用；证据矛盾已在生成阶段拦截。
             BizStudentAnswer answer = answerMapper.selectByIdForUpdate(result.getAnswerId());
             boolean flowchart = PracticalAiJobService.isFlowchartJob(job.getReferenceAnswerJson());
@@ -156,7 +162,8 @@ public class PracticalAiSuggestionApplyService
         summary.put("applyMode", applyMode); summary.put("appliedCount", applied);
         summary.put("filledUngradedCount", filledUngraded); summary.put("overwrittenCount", overwritten);
         summary.put("skippedManualCount", skippedManual);
-        summary.put("skippedVersionCount", skippedVersion); summary.put("failedCount", failed);
+        summary.put("skippedVersionCount", skippedVersion);
+        summary.put("skippedAppliedCount", skippedApplied); summary.put("failedCount", failed);
         summary.put("skippedReviewCount", 0);
         return summary;
     }

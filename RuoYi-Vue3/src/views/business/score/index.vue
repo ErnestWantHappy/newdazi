@@ -661,6 +661,7 @@ import StudentProfileDialog from './components/StudentProfileDialog.vue';
 import AnalysisMatrix from './components/AnalysisMatrix.vue';
 import GradeRatioDialog from './components/GradeRatioDialog.vue';
 import ExportDialog from './components/ExportDialog.vue';
+import { buildGradeMaps } from '@/utils/gradeRanking';
 import PerformanceSection from './components/PerformanceSection.vue';
 
 
@@ -793,61 +794,13 @@ const displayDataWithGrade = computed(() => {
   const data = displayData.value;
   if (data.length === 0) return [];
   
-  // 等级与赋分按课程总分口径计算，避免多课时被作业分带偏。
   const getRankScore = (student) => Number(student.finalTotal ?? student.filteredAverage ?? 0);
-  const validStudents = data.filter(s => getRankScore(s) > 0);
   const zeroStudents = data.filter(s => getRankScore(s) <= 0);
-  
-  // 按课程总分/课程平均分排名计算等级
-  const sortedByTotal = [...validStudents].sort((a, b) => getRankScore(b) - getRankScore(a));
-  const totalCount = sortedByTotal.length;
-  
-  const gradeMap = new Map();
-  const scoreMap = new Map();
-  
-  if (totalCount > 0) {
-    // 计算各等级的人数边界
-    const excellentCount = Math.ceil(totalCount * gradeRatios.value.excellent / 100);
-    const goodCount = Math.ceil(totalCount * gradeRatios.value.good / 100);
-    const passCount = Math.ceil(totalCount * gradeRatios.value.pass / 100);
-    
-    // 为每个学生分配等级
-    sortedByTotal.forEach((student, index) => {
-      let grade;
-      if (index < excellentCount) {
-        grade = '优秀';
-      } else if (index < excellentCount + goodCount) {
-        grade = '良好';
-      } else if (index < excellentCount + goodCount + passCount) {
-        grade = '及格';
-      } else {
-        grade = '不及格';
-      }
-      gradeMap.set(student.studentId, grade);
-    });
-    
-    // 按平均分排名计算赋分（并列名次赋相同分数）
-    const sortedByAvg = [...validStudents].sort((a, b) => getRankScore(b) - getRankScore(a));
-    
-    if (totalCount === 1) {
-      scoreMap.set(sortedByAvg[0].studentId, 100);
-    } else {
-      let currentRank = 0;
-      let prevAvg = null;
-      
-      sortedByAvg.forEach((student, index) => {
-        const currentScore = getRankScore(student);
-        if (prevAvg === null || currentScore !== prevAvg) {
-          currentRank = index;
-        }
-        prevAvg = currentScore;
-        
-        const scaledScore = Math.round(100 - (currentRank / (totalCount - 1)) * 45);
-        scoreMap.set(student.studentId, scaledScore);
-      });
-    }
-  }
-  
+
+  // 等级与赋分排名与导出 Excel 共用 gradeRanking 工具，保证页面和导出结果一致
+  const { grades: gradeMap, scores: scoreMap } = buildGradeMaps(
+    data.filter(s => getRankScore(s) > 0), gradeRatios.value, getRankScore);
+
   // 0分学生标记为未评级
   zeroStudents.forEach(student => {
     gradeMap.set(student.studentId, '-');
@@ -1053,10 +1006,11 @@ const isMultiScoreMode = computed(() => selectedLessonIds.value.length !== 1);
 const scoreLabels = computed(() => {
   const multiMode = isMultiScoreMode.value;
   return {
-    filteredTotal: multiMode ? '作业平均' : '作业分',
+    // 多课模式下“作业分/课程总分”也只显示合计，平均分单独放在“平均分”列，避免同一列两种口径
+    filteredTotal: '作业分',
     totalPerformance: multiMode ? '课堂表现平均' : '课堂表现分',
-    finalTotal: multiMode ? '课程平均分' : '课程总分',
-    filteredAverage: multiMode ? '平均分' : '平均分'
+    finalTotal: '课程总分',
+    filteredAverage: '平均分'
   };
 });
 
@@ -1400,7 +1354,8 @@ function processData() {
       studentNo: student.studentNo == null ? '' : String(student.studentNo),
       // 班级号同样可能非纯数字（如 9A），Number() 会 NaN
       className: className == null || className === '' ? '' : String(className),
-      filteredTotal: multiMode ? avgHomework : (gradedCount ? Math.round(sumTotal) : null), // 多课模式展示均分，避免总分口径混乱
+      // 多课模式也展示合计：等级/赋分与导出 Excel 都按合计排名，展示均分会让总分与等级对不上
+      filteredTotal: gradedCount ? Math.round(sumTotal) : null,
       filteredAverage: filteredAverage,
       avgTyping: avgTyping,
       avgTheory: avgTheory,
@@ -1409,7 +1364,7 @@ function processData() {
       overallAccuracy,
       overallCompletion,
       totalPerformance: multiMode ? avgPerformance : sumPerformance,
-      finalTotal: filteredAverage,
+      finalTotal: validScoreCount > 0 ? sumFinal : null,
       scoreStatus: validScoreCount > 0 ? (hasPracticalPending ? '操作待批' : '')
         : (filteredScores.some(s => s.isAbsent) ? '请假'
           : filteredScores.some(s => s.isMissing) ? '缺考' : '未提交')
@@ -1497,7 +1452,8 @@ function handleExport(selectedColumns) {
     queryParams.value.classCode, 
     selectedLessonIds.value,
     searchKeyword.value.trim() || null,
-    selectedColumns
+    selectedColumns,
+    gradeRatios.value
   ).then(res => {
     const blob = res instanceof Blob ? res : new Blob([res]);
     const link = document.createElement('a');

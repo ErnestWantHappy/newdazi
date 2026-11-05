@@ -150,7 +150,12 @@
             </span>
          </div>
          <div class="student-list-scroll">
-            <div 
+            <!-- 网络抖动时保留已加载名单和正在批改的学生，只给可见的重试入口，不把整页清空 -->
+            <div v-if="loadFailed" class="submissions-load-failed">
+               <span>名单加载失败，已保留当前批改内容</span>
+               <el-button link type="primary" :loading="loading" @click="loadSubmissions()">重新加载</el-button>
+            </div>
+            <div
                v-for="(s, index) in submissions" 
                :key="s.studentId" 
                class="student-item"
@@ -216,7 +221,7 @@
                 </el-button>
              </div>
              <el-alert v-if="['TEXT', 'HTML', 'ARCHIVE'].includes(currentAttachment?.fileKind)" title="此格式由老师人工评分，本期不支持 AI 批改，不会参与 AI 评分队列。" type="info" :closable="false" />
-             <practical-text-preview v-if="['TEXT', 'HTML'].includes(currentAttachment?.fileKind)" :attachment-id="currentAttachment.attachmentId" />
+             <practical-text-preview v-if="['TEXT', 'HTML'].includes(currentAttachment?.fileKind)" :attachment-id="currentAttachment.attachmentId" allow-python-run />
              <!-- TEXT/HTML 已由文本预览组件接管；其余格式才走页图/图片/PDF 链，
                   否则两条链各自独立求值，会让「未提交文件」空状态和预览同时出现并挤掉预览高度。 -->
              <template v-else>
@@ -653,6 +658,8 @@ import Download from '@/plugins/download';
 const route = useRoute();
 const userStore = useUserStore();
 const loading = ref(false);
+// 名单加载失败标记：失败时只提示并保留页面，不让一次网络抖动清掉已录入的分数
+const loadFailed = ref(false);
 let submissionsRequestSeq = 0;
 let lessonContextRequestSeq = 0;
 const STUCK_PREVIEW_TIMEOUT_MS = 10 * 60 * 1000;
@@ -1284,8 +1291,11 @@ function loadSubmissions(options = {}) {
     const requestId = ++submissionsRequestSeq;
     
     if (!silent) loading.value = true;
+    // 每次真正发起加载都先清掉上一次的失败提示，避免按钮一直显示“重新加载”
+    if (!silent) loadFailed.value = false;
     return getPracticalSubmissions(selectedLessonId.value, selectedQuestionId.value, selectedClassCode.value, entryYear).then(res => {
         if (requestId !== submissionsRequestSeq) return;
+        loadFailed.value = false;
         submissions.value = [...(res.data || [])].sort((left, right) => {
             const submittedDiff = Number(Boolean(right.submitted)) - Number(Boolean(left.submitted));
             if (submittedDiff !== 0) return submittedDiff;
@@ -1324,14 +1334,10 @@ function loadSubmissions(options = {}) {
         previewUrl.value = '';
     }).catch(() => {
         if (requestId !== submissionsRequestSeq) return;
-        if (silent) return;
         if (!silent) loading.value = false;
-        submissions.value = [];
-        currentStudent.value = null;
-        currentIndex.value = -1;
-        currentScore.value = undefined;
-        previewUrl.value = '';
-        if (!silent) ElMessage.error('加载学生提交记录失败');
+        // 失败只标记并在左侧显示重试入口；已加载的名单、当前学生和已录入分数全部保留。
+        loadFailed.value = true;
+        if (!silent) ElMessage.error('加载学生提交记录失败，请点击重新加载');
     });
 }
 
@@ -1620,11 +1626,11 @@ async function applyAiSuggestionsInBatch() {
         const res = await batchApplyAiSuggestions(aiJob.value.jobId, applyMode);
         const summary = res.data || {};
         if (!Number(summary.appliedCount)) {
-            ElMessage.warning(`本次未写入任何成绩：已有成绩 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人，待核对跳过 ${summary.skippedReviewCount || 0} 人，失败 ${summary.failedCount || 0} 人。请刷新后核对任务状态。`);
+            ElMessage.warning(`本次未写入任何成绩：已有成绩 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人，已采用过 ${summary.skippedAppliedCount || 0} 人，待核对跳过 ${summary.skippedReviewCount || 0} 人，失败 ${summary.failedCount || 0} 人。请刷新后核对任务状态。`);
         } else if (applyMode === 'OVERWRITE_ALL') {
-            ElMessage.success(`已采用 ${summary.appliedCount || 0} 人：覆盖已有成绩 ${summary.overwrittenCount || 0} 人，补齐未评分 ${summary.filledUngradedCount || 0} 人；版本变化 ${summary.skippedVersionCount || 0} 人，失败 ${summary.failedCount || 0} 人`);
+            ElMessage.success(`已采用 ${summary.appliedCount || 0} 人：覆盖已有成绩 ${summary.overwrittenCount || 0} 人，补齐未评分 ${summary.filledUngradedCount || 0} 人；版本变化 ${summary.skippedVersionCount || 0} 人，已采用过 ${summary.skippedAppliedCount || 0} 人，失败 ${summary.failedCount || 0} 人`);
         } else {
-            ElMessage.success(`已补齐未评分 ${summary.filledUngradedCount || 0} 人；跳过已有成绩 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人，失败 ${summary.failedCount || 0} 人`);
+            ElMessage.success(`已补齐未评分 ${summary.filledUngradedCount || 0} 人；跳过已有成绩 ${summary.skippedManualCount || 0} 人，版本变化 ${summary.skippedVersionCount || 0} 人，已采用过 ${summary.skippedAppliedCount || 0} 人，失败 ${summary.failedCount || 0} 人`);
         }
         await loadSubmissions();
         await loadDeadlineStatus();
@@ -2593,6 +2599,18 @@ function autoFocusItem() {
   .student-list-scroll {
     flex: 1;
     overflow-y: auto;
+  }
+
+  .submissions-load-failed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #E6A23C;
+    background: #fdf6ec;
+    border-bottom: 1px solid #faecd8;
   }
   
   .student-item {

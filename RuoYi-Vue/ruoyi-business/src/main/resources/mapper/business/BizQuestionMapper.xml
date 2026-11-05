@@ -52,7 +52,16 @@
         <include refid="selectBizQuestionVo"/>
         <where>
             <if test="questionType != null  and questionType != ''"> and q.question_type = #{questionType}</if>
-            <if test="practicalMode != null and practicalMode != ''"> and q.practical_mode = #{practicalMode}</if>
+            <if test="practicalMode != null and practicalMode != ''">
+                <choose>
+                    <!-- 历史空方式只归入文件作品，不能用全操作题查询代替分类。 -->
+                    <when test="practicalMode == 'FILE'">
+                        and q.question_type = 'practical'
+                        and (q.practical_mode = 'FILE' or q.practical_mode is null or q.practical_mode = '')
+                    </when>
+                    <otherwise>and q.practical_mode = #{practicalMode}</otherwise>
+                </choose>
+            </if>
             <if test="difficulty != null and difficulty != ''"> and q.difficulty = #{difficulty}</if>
             <if test="knowledgePoints != null and knowledgePoints != ''"> and pc.knowledge_points like concat('%', #{knowledgePoints}, '%')</if>
             <if test="validationStatus != null and validationStatus != ''"> and pc.validation_status = #{validationStatus}</if>

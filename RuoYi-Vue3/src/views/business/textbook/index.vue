@@ -34,7 +34,7 @@
                   eager
                 />
               </div>
-              <div class="book-name" :title="book.title">{{ book.shortTitle }}</div>
+              <div class="book-name" :title="book.title">{{ book.shortTitle }} <el-tag v-if="caseBookIds.has(Number(book.bookId))" size="small">优秀课例</el-tag></div>
               <div class="book-meta">{{ book.unitCount }} 单元 · {{ book.lessonCount }} 课</div>
               <div class="book-actions">
                 <span class="book-open">打开阅读</span>
@@ -66,6 +66,7 @@
       <el-empty v-if="!loading && !visibleGroups.length" description="没有匹配的教材" />
     </div>
 
+    <p v-if="caseSummaryError" class="shelf-tip">课例标记加载失败。<el-button link type="primary" @click="loadCaseSummary">重试</el-button></p>
     <p class="shelf-tip">
       整册 PDF 和本课 PDF 仅供教师课堂教学使用，请勿外传。
     </p>
@@ -80,10 +81,24 @@ import { saveAs } from 'file-saver'
 import { Document, Search } from '@element-plus/icons-vue'
 import { listTextbookBooks, downloadTextbookBookPdf, TEXTBOOK_PENDING_VOLUMES } from '@/api/business/textbook'
 import LazyPageImage from './components/LazyPageImage.vue'
+import { getCaseSummary } from '@/api/business/textbookCase'
 
 const router = useRouter()
 const loading = ref(false)
 const books = ref([])
+const caseBookIds = ref(new Set())
+const caseSummaryError = ref(false)
+
+async function loadCaseSummary() {
+  caseSummaryError.value = false
+  try {
+    const res = await getCaseSummary()
+    caseBookIds.value = new Set((res.data || []).map(row => Number(row.bookId)))
+  } catch {
+    caseSummaryError.value = true
+  }
+}
+onMounted(loadCaseSummary)
 const keyword = ref('')
 const downloadingBookId = ref(null)
 
@@ -193,11 +208,12 @@ onMounted(load)
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(168px, 100%), 1fr));
   gap: 18px;
 }
 
 .book-card {
+  min-width: 0;
   background: #fff;
   border: 1px solid #ebeef5;
   border-radius: 8px;
@@ -265,6 +281,7 @@ onMounted(load)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
   margin-top: 8px;
 }
 .book-open {

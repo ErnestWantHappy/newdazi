@@ -1,10 +1,23 @@
 # 架构资料索引
 
-> 整理日期 **2026-11-02**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
+2026-11-05 题库工作台本机审查修复：保存回调、查看全部事件参数、FILE分类/计数、通配权限、批量动作5项修复；前端24项/Mapper2项/隔离浏览器10组及构建通过。含后端FILE历史空值筛选，需前后端同步发布并重启后端，无迁移SQL；真实库写链待验，未发布。详见[需求](../../contexts/question-workbench/requirements.md)、[设计](../../contexts/question-workbench/design.md)、[验证与待办](../../contexts/question-workbench/tasks.md)。
+
+2026-11-04 本机在研操作题 PY 上传、源码预览与教师 Judge0 隔离运行，尚未发布。详见[需求](../../contexts/practical-python-upload/requirements.md)、[设计](../../contexts/practical-python-upload/design.md)、[验证与待办](../../contexts/practical-python-upload/tasks.md)。
+
+> 整理日期 **2026-11-04**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
 >
-> 最新正式：130 **1.30.67**（仅前端 `20261102_typing_pinyin_v1`，首页 `95566dea`；后端仍 1.30.66 JAR `a149fefa`），助手0.2.6。今日拓展双空间、教材绑定/PDF、Python交互终端、跨校监控消歧、拓展入口、封面/公开概览和学生打字拼音提示均已上线；更新142/143/144/145均PUBLISHED且教师可见。[1.30.66集中验收](../../contexts/release-20261102-all.md)、[发布登记](../../contexts/RELEASE_LOG.md)。未验边界与下一步以核心文档为准。
+> 最新正式：130 **1.30.72**，`20261105_review_py_workbench_v2`，后端JAR`f072a021`、首页`06837bea`，助手0.2.6。本版含审查 P0/P1 修复、题库工作台改版、操作题 PY 运行、成绩页与导出等级口径统一（按合计排名）、概览/登录慢查询；更新150/PUBLISHED教师可见。2025宁波课例90份/497资源与旧52/196、评价、连续滚动保持。[发布登记](../../contexts/RELEASE_LOG.md)、[迁移与回退](../../contexts/textbook-cases-2025/migration-report.md)。
 
 ## 按任务选择资料
+
+2025宁波优秀课例批次：2026-11-04 已整理并上线 90 课例 / 497 资源，覆盖三上至八下 12 册；含独立网页在线预览沙箱、视频 100,000,000 字节上限与录课排除规则。规则/设计/闭环/验收/迁移/复查见[专题](../../contexts/textbook-cases-2025/requirements.md)。3 份「人工智能中的算法」教材归属待确认（PENDING），2 个 WMV 未转码。
+
+2026-11-03 · 1.30.70课例预览改为连续上下滚动：可见窗口与邻页加载、页码/缩略图/跳页/缩放同步，后端与资源保持；正式四尺寸实测通过。[本轮证据](../../contexts/textbook-cases/release-scroll-20261103.md)。
+
+2026-11-03晚间课例功能及独立复核缺陷已随1.30.69正式收口：教师唯一评价与双角色规则、44包及使用条件、菜单实际顺序、多尺寸预览；并发锁/快照问题已实测修复。[本轮事实与限制](../../contexts/textbook-cases/release-feedback-fix-20261103.md)。下方旧记录保留为历史。
+
+2026-11-03教师优秀课例已按18:00安排发布，312文件校验、52/201导入、真实师生与桌面/390px验收通过；更新146/PUBLISHED教师可见。现场基线、隔离制品、迁移/切换及回退见[发布准备](../../contexts/textbook-cases/release-20261103.md)。
+2026-11-03教师优秀课例本机52课例/201资源，全量接口0失败。已补齐具名HTML遗漏：新增34包95入口，合计覆盖125非重复HTML/HTM入口；34包下载哈希、五个关键工程与教师桌面/390px验证通过。原作者自愿共享模型Key按用户确认保留，失效可换自己的。正式1.30.68已上线、工具未机房实测。[收口清单](../../contexts/textbook-cases/resource-closure.md)、[设计](../../contexts/textbook-cases/design.md)、[验证](../../contexts/textbook-cases/tasks.md)、[接力提示词](../../contexts/textbook-cases/handoff.md)。
 
 2026-11-02学生打字拼音提示已随**1.30.67仅前端发布**：默认隐藏、按题独立切换、首次展开懒加载、正文变化重算、失败可重试；不进入答案/字数/评分。本机真实学生页桌面/390px验收通过；正式测试学生当前课无打字题，未在生产点开拼音。[发布登记](../../contexts/RELEASE_LOG.md)、[核心事实](../../contexts/PROJECT_CORE.md)。
 
@@ -26,6 +39,7 @@
 
 | 任务类型 | 必读资料 | 需要时继续读 |
 | --- | --- | --- |
+| 题库浏览、新增入口与按钮权限（本机未发布） | `BUSINESS_BOUNDARIES.md` | `contexts/question-workbench/requirements.md`、`design.md`、`tasks.md`；题型按模块新增与动态按钮的边界见该专题 |
 | 任何开发接管 | `SYSTEM_ARCHITECTURE.md`、`BUSINESS_BOUNDARIES.md` | 对应专题 `contexts/<专题>/` |
 | 自动/手动课堂推进、逐班预检和结果 | `BUSINESS_BOUNDARIES.md` | `contexts/course-advance-20261020/requirements.md`、`design.md`、`tasks.md`、`ADR-001-authoritative-preview.md`；历史下一课年级规则见`contexts/teacher-dashboard-grade-history/` |
 | 普通课成绩、操作待批汇总、全体分布与自主重打最高分 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/score-partial-20261016/requirements.md`、`design.md`、`tasks.md`、`verification.md`、`ADR-001-known-scores-and-typing-best.md`；教师重做规则见`contexts/theory-redo/` |

@@ -351,6 +351,14 @@ public class ProgrammingSubmissionService {
     private void completeInTransaction(ProgrammingSubmission submission, ProgrammingQuestionConfig config, List<ProgrammingTestCase> testCases, List<ProgrammingSubmissionCase> results, String forcedStatus) {
         ProgrammingSubmission finalRow = programmingMapper.selectSubmissionById(submission.getSubmissionId());
         if (finalRow == null || STATUS_CANCELLED.equals(finalRow.getStatusCode())) return;
+        // 判题是异步线程回写：提交时已做当前课校验，但推进可能发生在判题完成前。
+        // 这里按事务内加锁的当前指派再核一次，旧课只保留判题记录，不回写答案。
+        BizStudent answerStudent = studentMapper.selectBizStudentByStudentId(finalRow.getStudentId());
+        if (answerStudent != null) {
+            BizLessonAssignment currentAssignment = lessonAssignmentMapper.selectCurrentAssignmentForUpdate(
+                    answerStudent.getEntryYear(), answerStudent.getClassCode(), answerStudent.getDeptId());
+            if (currentAssignment == null || !finalRow.getLessonId().equals(currentAssignment.getLessonId())) return;
+        }
         int passed = 0; double totalWeight = 0D; double passedWeight = 0D; double maxTime = 0D; int maxMemory = 0;
         Map<Long, ProgrammingTestCase> casesById = new HashMap<Long, ProgrammingTestCase>();
         for (ProgrammingTestCase testCase : testCases) { casesById.put(testCase.getTestCaseId(), testCase); totalWeight += testCase.getScoreWeight() == null ? 1D : testCase.getScoreWeight(); }

@@ -1,5 +1,25 @@
 # 部署与回滚约定
 
+## 2026-11-05 1.30.72后端整包+前端全量
+
+release `20261105_review_py_workbench_v2`：本机 clean 构建的业务 JAR 嵌入线上外层（仅内层 JAR 变化），前端首页 `06837bea`；三服务 active、NRestarts 0、env 未变。无结构 SQL，仅登记更新 150/PUBLISHED。备份 `/data/backups/xueyeceping/20261105_review_py_workbench_v2`，整库 gzip SHA256 `0350dfda788208a86aa6afb83c2c97248c2f59b7dc04bb38a9da39f03fb4e306`。回退入口 `python output/release-20261105/rollback.py`：确认当前仍为 v2 后恢复 unit/site、daemon-reload、重启后端、`nginx -t` + reload，更新 150 转 DRAFT，无全库回灌。[证据](../../contexts/RELEASE_LOG.md)。首发 v1 曾因成绩页与导出等级口径不一致在登记前回退，教训：**页面与导出的一致性必须在正式库真实数据上逐人比对**，本机或模拟数据通过不算数。
+
+## 2026-11-03 1.30.70仅前端连续预览
+
+前端20261103_case_scroll_v1，后端仍case_feedback_v2/PID2885391未重启；无业务迁移，仅登记更新148/PUBLISHED。备份/data/backups/xueyeceping/20261103_case_scroll_v1，数据库gzip SHA256 ef07bc1d3ff3d014ad74f8fab8ef51b53ae85060e00ba4eb26f91f4dff95cdc2。回退入口output/release-20261103-case-scroll/scroll_release.py rollback，仅恢复Nginx根并转DRAFT，无全库回灌。[证据](../../contexts/textbook-cases/release-scroll-20261103.md)。
+
+## 2026-11-03 1.30.69课例评价与体验优化
+
+后端20261103_case_feedback_v2、前端20261103_case_feedback_menu_v4；52/196、44包、307文件哈希通过，评价/菜单SQL和审核清单已执行，PUBLISHED且教师可见。备份/data/backups/xueyeceping/20261103_case_feedback_v2，数据库gzip SHA256 0b4091f264fbe7d5fced78776bcf0a7aa1c9d5609cbf719a0662af434b5a9f25。回退入口output/release-20261103-feedback/release.py rollback，恢复旧程序/元数据/菜单/软链并将更新转DRAFT；保留反馈，不回灌全库。[详细证据](../../contexts/textbook-cases/release-feedback-fix-20261103.md)。
+
+## 2026-11-03 正式1.30.68：教师优秀课例
+
+前后端已切`20261103_teacher_cases_v1`（JAR4fffdfb6、首页194b1af1），18:02:31后端启动/PID2882774，三服务active、env保持；52课例201资源、312文件校验、真实师生桌面/390px通过。更新146/PUBLISHED教师可见。旧版本/备份保留，回退不回灌业务库。[完整证据/回退](../../contexts/textbook-cases/release-20261103.md)。下方18:00候选段落为历史准备记录。
+
+## 2026-11-03 教师优秀课例18:00候选准备（尚未上线）
+
+用户已授权18:00切换，当前仅完成隔离制品、整库/配置备份、资源上传与312文件哈希核验。正式unit/site/env/首页/进程保持，SQL未执行。候选、迁移顺序、晚间复检与回退见[发布准备](../../contexts/textbook-cases/release-20261103.md)。不得将候选准备记为正式版本。
+
 ## 2026-11-02 正式1.30.67（仅前端：学生打字拼音提示）
 
 130 前端切至 `/data/apps/xueyeceping/releases/20261102_typing_pinyin_v1/frontend`，首页 `95566dea3378776549920c19f47924b4a56b1ea08c6f8a00e2c50065058bad5d`；后端保持 1.30.66 JAR `a149fefa`、PID 2853051 未重启，助手/unit/env 保持。制品 `output/release-20261102-typing-pinyin/frontend.tar.gz` 43,241,613B / SHA-256 `a40deb88e2196c167b379de2a6a011bf773a4d3e493d739a833393afbf99f9a4`；源码相对 1.30.66 发布清单只改学生首页并新增拼音模块/单测。

@@ -11,7 +11,7 @@ public final class PracticalTextCodec {
     private PracticalTextCodec() { }
 
     public static String decode(byte[] bytes) {
-        if (bytes.length > MAX_BYTES) throw new ServiceException("TXT/HTML 文件不能超过2 MiB");
+        if (bytes.length > MAX_BYTES) throw new ServiceException("文本、网页和 Python 文件不能超过2 MiB");
         int offset = 0;
         String charset = "UTF-8";
         if (bytes.length >= 3 && bytes[0] == (byte)0xef && bytes[1] == (byte)0xbb && bytes[2] == (byte)0xbf) offset = 3;

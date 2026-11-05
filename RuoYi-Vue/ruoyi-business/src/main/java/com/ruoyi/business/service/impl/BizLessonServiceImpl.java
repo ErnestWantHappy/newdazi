@@ -734,9 +734,19 @@ public class BizLessonServiceImpl implements IBizLessonService
             }).collect(Collectors.toList());
             lessonQuestionMapper.batchInsert(questionToInsert);
             
-            // 同步更新打字题的自定义时长到 biz_question 表
+            // 同步更新打字题的自定义时长到 biz_question 表。
+            // 课程可能是其他教师共享的，不能直接改题目：只有管理员或题目创建者才同步；
+            // 其他教师的题只允许“提交值与库中一致”（设计器总会带上时长），真正改时长时中断整课保存，避免静默丢改动。
             for (BizLessonQuestionDetailVo q : questions) {
                 if ("typing".equals(q.getQuestionType()) && q.getTypingDuration() != null) {
+                    com.ruoyi.business.domain.BizQuestion existingQ = bizQuestionMapper.selectBizQuestionByQuestionId(q.getQuestionId());
+                    if (existingQ != null && !SecurityUtils.isAdmin(userId)
+                            && !userId.equals(existingQ.getCreatorId())) {
+                        if (q.getTypingDuration().equals(existingQ.getTypingDuration())) {
+                            continue;
+                        }
+                        throw new ServiceException("课程包含其他教师创建的打字题，不能修改其打字时长；请先复制为自己的题目再调整");
+                    }
                     com.ruoyi.business.domain.BizQuestion updateQ = new com.ruoyi.business.domain.BizQuestion();
                     updateQ.setQuestionId(q.getQuestionId());
                     updateQ.setTypingDuration(q.getTypingDuration());

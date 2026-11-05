@@ -673,7 +673,7 @@
                   </el-button>
                 </el-upload>
                 <span v-if="practicalScores[q.questionId] != null" class="upload-tip">可以自行重做。新作品提交成功前保留原作品和分数，成功后等待老师重新批改。</span>
-                <p v-if="getPracticalAllowedExtensions(q).some(ext => ['html', 'htm', 'txt'].includes(ext))" class="upload-tip">网页请提交单个 HTML/HTM，推荐命名 index.html，CSS 和 JavaScript 写在文件内；无需用姓名或学号重命名。TXT 按文字查看。文本和网页不超过 2 MiB，均由老师人工评分。</p>
+                <p v-if="getPracticalAllowedExtensions(q).some(ext => ['html', 'htm', 'txt', 'py'].includes(ext))" class="upload-tip">网页请提交单个 HTML/HTM，CSS 和 JavaScript 写在文件内；TXT 按文字查看，PY 可查看源码和运行控制台程序。以上文件不超过 2 MiB，由老师人工评分。</p>
                 <p v-if="getPracticalAllowedExtensions(q).some(ext => ['zip', 'rar', '7z'].includes(ext))" class="upload-tip">压缩包由老师下载查看；希望直接预览时，请优先提交本题允许的原文件。</p>
 
                 <div v-if="getPracticalDrafts(q.questionId).length" class="practical-draft-list">
@@ -2461,6 +2461,10 @@ function beforePracticalUpload(question, file) {
     ElMessage.error(`当前题目不允许上传 .${extension || "未知"} 文件`);
     return false;
   }
+  if (['txt', 'html', 'htm', 'py'].includes(extension) && file.size > 2 * 1024 * 1024) {
+    ElMessage.error("文本、网页和 Python 文件不能超过 2 MiB");
+    return false;
+  }
   if (file.size > 50 * 1024 * 1024) {
     ElMessage.error("单个文件不能超过 50MB");
     return false;
@@ -3295,10 +3299,10 @@ onUnmounted(() => {
 .text-content rt {
   color: #8c8c8c;
   font-family: "Microsoft YaHei", sans-serif;
-  font-size: 0.55em;
+  font-size: 1em;
   font-weight: normal;
   letter-spacing: 0;
-  line-height: 1.15;
+  line-height: 1.5;
 }
 .text-content {
   font-size: 18px;

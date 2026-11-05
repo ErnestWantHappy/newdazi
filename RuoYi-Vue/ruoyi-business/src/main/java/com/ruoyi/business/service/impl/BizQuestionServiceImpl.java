@@ -216,6 +216,15 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int deleteBizQuestionByQuestionId(Long questionId) {
+        // 单删与批量删保持同一归属口径：非管理员只能删自己创建的题。
+        Long currentUserId = SecurityUtils.getUserId();
+        boolean isAdmin = SecurityUtils.isAdmin(currentUserId);
+        if (!isAdmin) {
+            BizQuestion existing = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
+            if (existing != null && !currentUserId.equals(existing.getCreatorId())) {
+                return -1;
+            }
+        }
         answerDeletionGuardService.assertQuestionsDeletable(new Long[] { questionId });
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
         if (question != null && "DATA_LAB".equals(question.getPracticalMode())) assertPythonQuestionDeletable(questionId);

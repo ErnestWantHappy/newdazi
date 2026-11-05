@@ -1,5 +1,85 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-05 · 1.30.72 · 审查修复 + 题库工作台 + 操作题 PY 运行（后端整包 + 前端全量）
+
+130 release `20261105_review_py_workbench_v2`：后端本机 `mvn -pl ruoyi-admin -am clean package` 的全新业务 JAR 嵌入线上外层（外层 292+ 条目逐字节一致，仅 `BOOT-INF/lib/ruoyi-business-3.9.0.jar` 变化；外层 JAR `f072a021d8ea9ab3185e9a7955be7f536fc76521593dd475a9040549def0d533`，108,204,442B），前端首页 `06837bea879a93c33e3e663b6d0ddc12f331b918858d131057cb05a8e4e1c859`，三服务 active、PID 2938625、NRestarts 0、启动期 0 ERROR、env 29 项未变。更新 `150	1.30.72	PUBLISHED`，真实教师 `/business/platform-update/list` 可见。
+
+本版内容：①按 bug-review 审查修 4 处 + 第二轮 3 处（异步判题回写前复核当前课；导出等级比例同源透传；单题删除本人/管理员校验；学生首页不返回他校课程；打字时长同步仅创建者/管理员；AI 建议二次采用跳过；附件兜底按题目归属校验）；②成绩导出/名单 `selectScoreStudents` 排除停用与软删账号；③批改页名单加载失败保留已填分数并可重试；④题库工作台按题型分区、批量动作分名鉴权；⑤操作题 PY 上传与批改时 Judge0 运行（不写成绩）；⑥学生打字拼音字号调大；⑦概览/登录慢查询与跨校展厅修正。
+
+**首发 v1 曾回退**：`20261105_review_py_workbench_v1`（首页 `537208e7`）上线后线上逐人比对发现页面仍按均分排名、导出按合计，2020级1班 42 人中 8 人等级不同、33 人赋分不同；未登记平台更新即恢复 unit/site 回退至 1.30.71（哈希核对一致、0 ERROR）。按用户确认"页面也改成合计排名"修改 `score/index.vue`：多课 `filteredTotal`/`finalTotal` 取合计，列名改为"作业分/课程总分"，平均分单列；导出逻辑不变。
+
+验证：前端 `npm run build:prod` 通过（登录 7、机位 9、工作台 24、gradeRanking 4 项，发布门禁"入口 gzip 560855B"）；构建产物核对不含多课分支；线上 2020级1班页面与导出 Excel 逐人 0 差异（优秀 11/良好 17/及格 13，1 人 0 分不评级）；接口 11 项通过；教师成绩页、题库工作台、学生首页浏览器冒烟 0 JS 错误。真实 PY 上传→Judge0 运行链、批改页真实填分保存未实测。
+
+备份 `/data/backups/xueyeceping/20261105_review_py_workbench_v2`：整库 gzip 54,363,821 字节，SHA-256 `0350dfda788208a86aa6afb83c2c97248c2f59b7dc04bb38a9da39f03fb4e306`，含 unit/site/env/JAR/index/config 与 SHA256SUMS；v1 备份 `7bc84a0cc643efe1cc2b620f4b1104218e1cad9d0ad1d05fc2d0376c738a453a` 与两个 release 目录均保留。
+
+无结构 SQL，仅执行 `sql/review_workbench_release_20261105.sql` 登记更新。回退：`python output/release-20261105/rollback.py`（确认当前仍为 v2 后恢复 service.before/nginx.before、daemon-reload、重启后端、nginx -t + reload，更新 150 转 DRAFT），无需回灌整库。
+
+证据：`output/release-20261105/`（probe.json、precheck、prepare.py、deploy.py、backup/stage/switch/rollback/final、manifest、api-verification.json、publish_update.py、published-1.30.72.json）；浏览器产物 `output/playwright/release-20261105/`（score-with-grade.png、score-page-rows.json、score-export.xlsx、score-compare-result.json、teacher-question.png、student-home.png）。
+
+## 2026-11-04 · 1.30.71 · 2025 宁波优秀课例 90 份（后端课例模块 + 前端 + 资源）
+
+130 release `20261104_ningbo2025_cases_v1`：后端 JAR `18d735a19dfb17407db5ae53b8b79f89035b3a76dee5ab50bb2133fa1eff0bb3`（以 1.30.70 生产 JAR 为基线，只替换业务 jar 内 `TextbookCaseController`/`TextbookCaseMapper` 两个 class，其余 291 条目逐字节一致），前端首页 `f9347b300db4cc7859f9b9b3efc976c4913734146bbbdfe07e355980bbecec20`。资源软链切到新 release，旧 307 文件硬链接复用，新增 823 文件逐个 SHA256 核对。更新 `149	1.30.71	PUBLISHED	2026-11-04 03:28:53`，真实教师 `/business/platform-update/list` 可见。
+
+本批上架 90 课例 / 497 资源（355 文档、59 视频、19 独立网页、64 配套材料包），覆盖三上至八下 12 册；3 份「人工智能中的算法」因现行八下无对应课次保留 PENDING，1 份王蕙兰八下目录与三上目录同内容按重复处理。视频统一上限 100,000,000 字节，课堂实录一律不收录（排出 6 个录课、3 个超限、5 个实名学生视频）；2 个 WMV 只提供下载，未转码。
+
+新增能力：作者独立网页可「打开网页」在线预览，后端 `/business/textbook/cases/html/{id}` 以 `CSP sandbox allow-scripts`（无 allow-same-origin）+ `no-referrer` + 教师 Cookie 鉴权返回，作者页读不到平台 Cookie；资源列表新增 `htmlPreview` 计算列，不影响 PDF 预览链路。
+
+验证：后端 `TextbookCaseControllerTest` 11 项；本机接口 25 项、浏览器 13 项（桌面/390/320、PDF 连续页图、视频播放拖动、HTML 沙箱、材料包）；130 线上 18 项（首页哈希、教师登录、三册抽样、PDF/页图、视频 206、HTML 沙箱与匿名 401、Cookie 下载字节、旧课例仍可读），启动期无 ERROR。本机与 130 均为 142 课例 / 693 资源，孤儿 0、重复 0，旧 52/196 与 2 条评价未变。
+
+备份 `/data/backups/xueyeceping/20261104_ningbo2025_cases_v1`：整库 gzip 597,425,809 字节，SHA-256 `9defe7afbcbaee1ff1787d7e36cdbc63a1af960c49e430b7e0d92bb4bb1ecb00`；含 unit/site/env/jar/index、课例元数据、旧软链目标与 SHA256SUMS。回退：`python output/textbook-cases-2025/release-130/deploy.py rollback`，恢复旧 unit/site/软链并重启，更新 149 转 DRAFT，不回灌整库。
+
+证据：`output/textbook-cases-2025/`（清单、决定、catalog、manifest、release-130 的 baseline/backup/upload/stage/migrate/switch/production-verification/published）；浏览器产物 `output/playwright/textbook-cases-2025/`；专题 `contexts/textbook-cases-2025/`。
+
+## 2026-11-03 · 1.30.70 · 优秀课例上下连续滚动预览（仅前端）
+
+130前端切换至`20261103_case_scroll_v1/frontend`，首页SHA256 `7d8e056a9e32112307841d17b8799298d79c67100de4b20053889711348331d7`。后端仍为`20261103_case_feedback_v2`、PID `2885391`，unit/env/JAR未变，三服务active，无后端重启。更新`148	1.30.70	PUBLISHED	2026-11-03 22:37:23`，真实教师更新列表可见。
+
+课件、教学设计及其他PDF页图预览改为连续上下阅读，鼠标滚轮/手机触摸自然衔接下一页；当前页码和缩略图高亮同步，保留前后页、输入页码跳转与缩放。只渲染可见窗口及邻近页，退出窗口撤销图片URL；缩略图缓存最多24项，正文优先串行调度。横竖页按实际图片尺寸校准，缩放/尺寸变化保留阅读锚点，避免长文档全量加载及跳页中间态错误请求。单页失败就地重试，加载/失败状态继续与评价邀请计时联动。
+
+涉及源码：`RuoYi-Vue3/src/views/business/textbook/components/CasePreview.vue`、`src/utils/casePreviewScroll.js`及4项数学/窗口测试。未增加依赖，不改业务接口/评价/权限/成绩/资源材料，不混入概览/登录等后端本机未发布改动。
+
+验证：连续布局/跳页/混合横竖尺寸/空文档4项通过；前端生产构建含7+9项既有测试及发布门禁通过。本机真实滚轮/触摸与正式1500×900、1366×600、390×844、320×568通过，页码/缩略图/跳页正确且无页面JS错误。本机另用200页模拟数据验证直接跳到150页、混合方向、失败重试与缩放保位，未加载全部页面；实测正文图片常驻约3–5张（随视口/缩放变化，不是固定页数限制）。学校旧浏览器和低配机房未实测。
+
+备份`/data/backups/xueyeceping/20261103_case_scroll_v1`：整库gzip 52900220字节，SHA256 `ef07bc1d3ff3d014ad74f8fab8ef51b53ae85060e00ba4eb26f91f4dff95cdc2`，gzip和完成标记已核；含旧Nginx、unit/env/JAR/config、首页及SHA256SUMS。旧static/assets并入新前端，旧release保留。
+
+无业务结构SQL。仅验收后执行`sql/textbook_case_scroll_release_20261103.sql`登记产品更新。回退先确认活动前端仍为本release，再执行`python output/release-20261103-case-scroll/scroll_release.py rollback`：恢复旧Nginx根至1.30.69、nginx -t/reload，更新1.30.70转DRAFT；无需后端重启或业务库回灌。
+
+证据：`output/release-20261103-case-scroll/`中的baseline/manifest/backup/switch/publish及verification.log；`output/playwright/textbook-case-scroll/`中的local-result.json、production-result.json和各尺寸截图；本机scroll-unit.log、scroll-ui.log、scroll-build.log。
+
+## 2026-11-03 · 1.30.69 · 课例评价、材料合包与响应式修复（已正式上线）
+
+130后端`20261103_case_feedback_v2`、前端`20261103_case_feedback_menu_v4`，JAR`755207824e4cb788fb1004909858921c48748a7b597f4d9a3613ab2e8b591603`、首页`e29d4d2c54514bd8dba064fa9e3f8715cede24d1a5b15115a4f03c2bcc8a4e4a`。52课例196资源（44份配套材料包），307个资源文件逐一哈希通过。更新`147	1.30.69	PUBLISHED	2026-11-03 21:55:22`，真实教师更新列表可见。
+
+完成推荐/不推荐、改票/撤销、匿名文字理由与低频自愿邀请；教师兼教研员按teacher角色放行。修复多人踩票返回0、撤销后理由复活、理由不能清空、失败预览仍邀请、联网条件漏报、保存失败丢草稿、手机偏移。真实并发发现的共享锁升级死锁和旧快照返回旧票一并修复：教师行排他锁、评价/邀请事务使用READ_COMMITTED、本人状态用当前读。
+
+菜单数据库与前端角色排序同时调整；排除同名隐藏阅读器/成绩详情路由，实际侧边栏验证教材紧随题库、成绩紧随导学单、教研活动紧靠学生管理之前。手机390/320宽预览均x/y=0、视口全高。
+
+验证：Java定向20项；真实MySQL Mapper回归；真实本机API 12次并发成功且单行、清空/撤销/501字拒绝通过，测试状态已恢复；联网识别3项；前端生产构建含7+9项既有测试和发布门禁，额外菜单6项；本机异常UI与正式1500×900/1366×600/390×844/320×568通过。正式师生基础页、匿名401/学生403、设计/课件首末页、最小包下载、52/196及44包通过；正式未生成测试评价。
+
+后端PID2885391、NRestarts=0，三服务active，env未变，非预期ERROR为0。真实验收教师roles为teacher+researcher，双角色登录、教材、菜单及写入口角色准入已验；没有代写生产有效评价。正式确有3个双角色账号，其余账号未逐人操作；学校机房工具/共享Key有效性未逐一验证。
+
+SQL：已执行`sql/textbook_case_feedback_v1.sql`、`sql/menu_order_textbook_v1.sql`、本轮审核清单生成的事务导入SQL，以及验收后的`sql/textbook_feedback_release_20261103.sql`。新增评价/邀请表，不改成绩/权限分配；材料仍离线维护。后端基于实际1.30.68定向替换4个课例class，未带入概览/登录慢查询等无关修改。
+
+备份：`/data/backups/xueyeceping/20261103_case_feedback_v2`，整库gzip SHA256 `0b4091f264fbe7d5fced78776bcf0a7aa1c9d5609cbf719a0662af434b5a9f25`，gzip与完成标记已核验；同时保存旧unit/site/env/JAR/config、两课例表元数据、菜单顺序、资源软链目标和SHA256SUMS。
+
+回退：确认当前仍为本次后端后执行`output/release-20261103-feedback/release.py rollback`。恢复旧程序至1.30.68、旧课例元数据/菜单及资源软链，更新1.30.69转DRAFT；保留新评价表与评价，不回灌整库，不覆盖新学生成绩。旧release与备份均保留。
+
+详细证据：`output/release-20261103-feedback/`的manifest、backup、stage、migration、switch、backend-refresh、frontend-menu-switch、production-verification、published及正式截图；本机日志`output/textbook-cases/fix-*.log`。最初线上验收脚本误用了本机bookId及未展开路由，后已按正式summary动态取课并验证；菜单隐藏路由定位问题已真实修正，未将初次失败当成功。
+
+## 2026-11-03 · 1.30.68 · 电子教材优秀课例（已正式上线）
+
+130前后端已切至`20261103_teacher_cases_v1`；后端18:02:31启动，PID2882774、NRestarts0，xueyeceping-130/nginx/aiot-lamp均active，启动后ERROR为0，env保持。新增52课例201资源、目录常驻图标、分作者资源面板、预览/下载及实验包用途与运行条件说明。原作者自愿共享Key按用户要求保留，未调用核验有效性。
+
+后端以1.30.66正式JAR为基线，只加TextbookCaseController/TextbookCaseMapper两个class，其他条目保持；概览/登录查询等本机改动未发布。JAR SHA256 `4fffdfb64b1fad16b54360f48da1b4a6668a2d4988dfeeb14c5a92e448faaf86`，business `e9471726`，首页 `194b1af1a78c35f6ac054c4fd0924243f3b52b518c0d7b7e87fd7261a25d93f4`；旧static/assets保留，原1.30.67拼音功能保持。
+
+晚间追加整库备份`/data/backups/xueyeceping/20261103_teacher_cases_v1/cutover-1800`：63,698,678字节，SHA256 `b39f8d6ef2f08867a35c28723c02e6e678e5aa133f77db110b6aac94bc065cac`，gzip与Dump completed通过。下午备份含旧JAR/unit/site/env/config，保持不动。执行`sql/textbook_cases_v1.sql`和审核生成的事务导入SQL，52/201、孤儿及重复0；312资源文件逐一哈希通过。TEXTBOOK_ROOT/cases链接至新release/resources/cases，Nginx没有公开映射资源目录。
+
+正式验收：201资源首末页/媒体接口最终失败0；首次并行全量检查与浏览器检查叠加触发预览并发保护，1资源单独重查通过，浏览器独立重验通过，保留初始失败和重试证据。真实教师书架、目录资源图标、课次面板、设计预览/原件下载、桌面/390px弹窗反馈及学生基础页通过，0页面JS错误；学生读教师资源403、匿名401。未代交学生作业或修改成绩。更新146/1.30.68/PUBLISHED（18:05:39），真实教师更新列表可见。
+
+证据`output/release-20261103-cases/`的evening-*.json、migration-verification.json、catalog-api-verification.json、live-verification.json、final-inspect.json、published.json及生产截图。完整步骤见[专题发布](textbook-cases/release-20261103.md)。学校机房全部工具与共享Key有效性仍未逐一实测。
+
+回退：核对当前仍为本release后运行`output/release-20261103-cases/deploy_evening.py rollback`，使用下午备份service.before/nginx.before恢复后端1.30.66/前端1.30.67并探活，将更新146改DRAFT。保留新增课例表/资源，不回灌整库或覆盖发布期间学生数据。
+
 ## 2026-11-02 · 1.30.67 · 学生打字拼音提示（仅前端）
 
 130 前端切至 `/data/apps/xueyeceping/releases/20261102_typing_pinyin_v1/frontend`，首页 SHA-256 `95566dea3378776549920c19f47924b4a56b1ea08c6f8a00e2c50065058bad5d`；后端保持 1.30.66 JAR `a149fefa`、PID 2853051 未重启，助手、unit、env 均保持。

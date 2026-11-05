@@ -55,3 +55,8 @@ tools/tests/__pycache__/
 /.websculpt/
 /.workbuddy-ai/
 /work/
+
+# 2026-11-05 增补：前端历史构建目录（发布制品由 output/ 归档）与脚本缓存
+/RuoYi-Vue3/dist-*/
+scripts/*/__pycache__/
+/work/

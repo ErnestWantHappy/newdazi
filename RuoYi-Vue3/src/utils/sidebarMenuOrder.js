@@ -67,11 +67,26 @@ export function sortSidebarRoutes(routes, roles = []) {
       : []
   const weights = buildWeights(order)
 
-  return routes
+  const sorted = routes
     .map((route, index) => ({ route, index }))
     .sort((left, right) => {
       const difference = routeWeight(left.route, weights, left.index) - routeWeight(right.route, weights, right.index)
       return difference || left.index - right.index
     })
     .map(item => item.route)
+
+  // 角色高频顺序仍保留，但明确的相邻菜单要求不能被旧权重覆盖。
+  const placeNextTo = (targets, anchors, before = false) => {
+    const matches = (route, aliases) => aliases.some(alias => collectRouteKeys(route).has(alias))
+    // 阅读器/成绩详情等隐藏路由有相同标题，只移动真正显示的菜单。
+    const target = sorted.find(route => !route.hidden && matches(route, targets))
+    const anchor = sorted.find(route => !route.hidden && matches(route, anchors))
+    if (!target || !anchor || target === anchor) return
+    sorted.splice(sorted.indexOf(target), 1)
+    sorted.splice(sorted.indexOf(anchor) + (before ? 0 : 1), 0, target)
+  }
+  placeNextTo(['电子教材与优秀课例', '电子教材', '/textbook'], ['题库管理', '/question'])
+  placeNextTo(['成绩查询', '/score'], ['导学单管理', '/business/guide-sheet-list'])
+  placeNextTo(['教研活动', '/research-activity'], ['学生管理', '/studentguanli'], true)
+  return sorted
 }

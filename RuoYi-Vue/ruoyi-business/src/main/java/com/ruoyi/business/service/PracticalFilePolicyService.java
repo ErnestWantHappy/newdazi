@@ -32,7 +32,7 @@ public class PracticalFilePolicyService
 
     private static final Set<String> SUPPORTED_EXTENSIONS = Collections.unmodifiableSet(
             new LinkedHashSet<String>(Arrays.asList(
-                    "doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "zip", "rar", "7z")));
+                    "doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "py", "zip", "rar", "7z")));
 
     private static final Set<String> IMAGE_EXTENSIONS = Collections.unmodifiableSet(
             new HashSet<String>(Arrays.asList("jpg", "jpeg", "png")));
@@ -130,8 +130,8 @@ public class PracticalFilePolicyService
     {
         try
         {
-            if ("txt".equals(extension) || "html".equals(extension) || "htm".equals(extension)) {
-                if (file.getSize() > PracticalTextCodec.MAX_BYTES) throw new ServiceException("TXT/HTML 文件不能超过2 MiB");
+            if ("txt".equals(extension) || "html".equals(extension) || "htm".equals(extension) || "py".equals(extension)) {
+                if (file.getSize() > PracticalTextCodec.MAX_BYTES) throw new ServiceException("文本、网页和 Python 文件不能超过2 MiB");
                 PracticalTextCodec.decode(file.getBytes());
                 return;
             }
@@ -277,7 +277,7 @@ public class PracticalFilePolicyService
     {
         if (IMAGE_EXTENSIONS.contains(extension)) return "IMAGE";
         if ("pdf".equals(extension)) return "PDF";
-        if ("txt".equals(extension)) return "TEXT";
+        if ("txt".equals(extension) || "py".equals(extension)) return "TEXT";
         if ("html".equals(extension) || "htm".equals(extension)) return "HTML";
         if ("zip".equals(extension) || "rar".equals(extension) || "7z".equals(extension)) return "ARCHIVE";
         return "OFFICE";
@@ -305,6 +305,7 @@ public class PracticalFilePolicyService
         result.put("jpeg", mimeSet("image/jpeg", "image/jpg"));
         result.put("png", mimeSet("image/png"));
         result.put("txt", mimeSet("text/plain", "application/octet-stream"));
+        result.put("py", mimeSet("text/plain", "text/x-python", "text/x-python-script", "application/x-python", "application/octet-stream"));
         result.put("html", mimeSet("text/html", "text/plain", "application/octet-stream"));
         result.put("htm", result.get("html"));
         result.put("zip", mimeSet("application/zip", "application/x-zip-compressed", "application/octet-stream"));

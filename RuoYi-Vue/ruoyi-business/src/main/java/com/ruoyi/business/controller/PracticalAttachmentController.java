@@ -13,6 +13,7 @@ import com.ruoyi.business.domain.PracticalAttachment;
 import com.ruoyi.business.mapper.PracticalArtifactMapper;
 import com.ruoyi.business.service.ResourceAccessService;
 import com.ruoyi.business.service.PracticalTextCodec;
+import com.ruoyi.business.service.PracticalPythonRunService;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.exception.ServiceException;
@@ -27,6 +28,19 @@ import com.ruoyi.common.utils.file.DownloadFileNameUtils;
 public class PracticalAttachmentController {
     @Autowired private PracticalArtifactMapper mapper;
     @Autowired private ResourceAccessService accessService;
+    @Autowired private PracticalPythonRunService pythonRunService;
+
+    @PostMapping("/{id}/run")
+    @PreAuthorize("@ss.hasRole('teacher') or @ss.hasRole('admin')")
+    public AjaxResult run(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) throws Exception {
+        PracticalAttachment attachment = authorized(id);
+        if (!"TEXT".equals(attachment.getFileKind()) || !"py".equalsIgnoreCase(attachment.getFileExtension()))
+            throw new ServiceException("仅支持运行 Python 文件");
+        Path path = resolve(attachment);
+        if (Files.size(path) > 65536) throw new ServiceException("在线运行的代码不能超过64 KiB，请下载后运行");
+        return AjaxResult.success(pythonRunService.run(PracticalTextCodec.decode(Files.readAllBytes(path)),
+                body == null ? null : body.get("stdin")));
+    }
 
     @GetMapping("/{id}/text")
     public AjaxResult text(@PathVariable Long id) throws Exception {

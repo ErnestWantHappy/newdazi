@@ -939,7 +939,7 @@ public class ScoreQueryController extends BaseController {
         }
     }
 
-    private Map<Long, ExportRankInfo> buildExportRankInfo(List<Map<String, Object>> students, Set<Long> targetLessonIds) {
+    private Map<Long, ExportRankInfo> buildExportRankInfo(List<Map<String, Object>> students, Set<Long> targetLessonIds, double excellentRatio, double goodRatio, double passRatio) {
         Map<Long, ExportRankInfo> rankInfoMap = new HashMap<>();
         List<ExportRankInfo> validInfos = new ArrayList<>();
 
@@ -950,7 +950,9 @@ public class ScoreQueryController extends BaseController {
             }
 
             Long studentId = ((Number) studentIdValue).longValue();
-            double finalTotal = 0D;
+            // 与成绩页面同源：页面等级/赋分按课程有效课次的 finalTotal 合计排序，这里不能再按均值排序，
+            // 否则课次数不同的学生导出排名会与页面相反。
+            double rankTotal = 0D;
             int count = 0;
             for (Map<String, Object> score : getScoreRows(student)) {
                 Object lessonIdValue = score.get("lessonId");
@@ -964,11 +966,11 @@ public class ScoreQueryController extends BaseController {
                 if (isExcludedFromAverage(score)) {
                     continue;
                 }
-                finalTotal += numberToInt(score.get("finalScore"));
+                rankTotal += numberToInt(score.get("finalScore"));
                 count++;
             }
 
-            ExportRankInfo info = new ExportRankInfo(studentId, count > 0 ? roundOne(finalTotal / count) : 0D);
+            ExportRankInfo info = new ExportRankInfo(studentId, count > 0 ? roundOne(rankTotal) : 0D);
             rankInfoMap.put(studentId, info);
             if (info.getRankScore() > 0) {
                 validInfos.add(info);
@@ -981,9 +983,9 @@ public class ScoreQueryController extends BaseController {
             return rankInfoMap;
         }
 
-        int excellentCount = (int) Math.ceil(totalCount * 25D / 100D);
-        int goodCount = (int) Math.ceil(totalCount * 40D / 100D);
-        int passCount = (int) Math.ceil(totalCount * 30D / 100D);
+        int excellentCount = (int) Math.ceil(totalCount * excellentRatio / 100D);
+        int goodCount = (int) Math.ceil(totalCount * goodRatio / 100D);
+        int passCount = (int) Math.ceil(totalCount * passRatio / 100D);
         for (int i = 0; i < validInfos.size(); i++) {
             ExportRankInfo info = validInfos.get(i);
             if (i < excellentCount) {
@@ -1027,6 +1029,9 @@ public class ScoreQueryController extends BaseController {
             @RequestParam(required = false) String lessonIds,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String columns,
+            @RequestParam(required = false, defaultValue = "25") double excellentRatio,
+            @RequestParam(required = false, defaultValue = "40") double goodRatio,
+            @RequestParam(required = false, defaultValue = "30") double passRatio,
             HttpServletResponse response) throws IOException {
         
         Long deptId = SecurityUtils.getDeptId();
@@ -1069,7 +1074,7 @@ public class ScoreQueryController extends BaseController {
         Set<Long> targetLessonIdSet = targetLessons.stream()
                 .map(LessonInfoVo::getLessonId)
                 .collect(java.util.stream.Collectors.toSet());
-        Map<Long, ExportRankInfo> rankInfoMap = buildExportRankInfo(students, targetLessonIdSet);
+        Map<Long, ExportRankInfo> rankInfoMap = buildExportRankInfo(students, targetLessonIdSet, excellentRatio, goodRatio, passRatio);
 
         // 4. 创建 Excel
         org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();

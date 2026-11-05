@@ -44,3 +44,25 @@ test('未配置角色时保持原有顺序', () => {
   const result = sortSidebarRoutes(routes(['/alpha', '/help-center', '/beta']), ['admin'])
   assert.deepEqual(paths(result), ['/alpha', '/help-center', '/beta'])
 })
+
+test('教师、双角色和教研员均保持教材、成绩、教研活动的指定相邻顺序', () => {
+  const values = ['/score', '/studentguanli', '/textbook', '/teacher-tools', '/question', '/research-activity', '/business/guide-sheet-list']
+  for (const roles of [['teacher'], ['researcher', 'teacher'], ['researcher'], ['admin']]) {
+    const result = paths(sortSidebarRoutes(routes(values), roles))
+    assert.equal(result.indexOf('/textbook'), result.indexOf('/question') + 1)
+    assert.equal(result.indexOf('/score'), result.indexOf('/business/guide-sheet-list') + 1)
+    assert.equal(result.indexOf('/research-activity'), result.indexOf('/studentguanli') - 1)
+  }
+})
+
+test('同名隐藏阅读器和成绩详情不能抢占实际菜单定位', () => {
+  const hidden = [
+    { path: '/business/textbook/read/:id', hidden: true, meta: { title: '电子教材' } },
+    { path: '/business/teacher/detail', hidden: true, meta: { title: '成绩查询' } }
+  ]
+  const visible = routes(['/studentguanli', '/question', '/textbook', '/score', '/business/guide-sheet-list', '/research-activity'])
+  const result = paths(sortSidebarRoutes([...hidden, ...visible], ['researcher', 'teacher']).filter(route => !route.hidden))
+  assert.equal(result.indexOf('/textbook'), result.indexOf('/question') + 1)
+  assert.equal(result.indexOf('/score'), result.indexOf('/business/guide-sheet-list') + 1)
+  assert.equal(result.indexOf('/research-activity'), result.indexOf('/studentguanli') - 1)
+})

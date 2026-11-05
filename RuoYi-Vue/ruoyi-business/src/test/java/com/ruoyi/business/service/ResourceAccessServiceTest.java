@@ -153,6 +153,41 @@ class ResourceAccessServiceTest
     }
 
     @Test
+    void genericUploadFallsBackToQuestionOwnerInsteadOfAllTeachers()
+    {
+        String path = "/profile/upload/reference/answer.docx";
+        // 这两次查询在管理员、创建者与普通教师分支都会先执行，必须桩成空返回，按默认空 Map 会被当成豁免附件归属。
+        when(resourceAccessMapper.selectCountyAnswerIdByResource(path)).thenReturn(null);
+        when(resourceAccessMapper.selectExemptionAttachmentOwner(path)).thenReturn(null);
+        java.util.Map<String, Object> owner = new java.util.HashMap<>();
+        owner.put("questionId", 7L);
+        owner.put("creatorId", 40L);
+        when(resourceAccessMapper.selectQuestionOwnerByResource(path)).thenReturn(owner);
+
+        // 题目创建者本人可以读取
+        login(40L, 10L);
+        assertEquals(path, service.assertCanRead(path));
+
+        // 其他学校的教师、学生都不能凭“是教师”放行
+        BizQuestion privateQuestion = new BizQuestion();
+        privateQuestion.setQuestionId(7L);
+        privateQuestion.setIsPublic("N");
+        privateQuestion.setCreatorId(40L);
+        login(20L, 10L);
+        when(questionMapper.selectBizQuestionByQuestionId(7L)).thenReturn(privateQuestion);
+        when(studentMapper.selectBizStudentByUserId(20L)).thenReturn(null);
+        assertThrows(ServiceException.class, () -> service.assertCanRead(path));
+    }
+
+    @Test
+    void unownedGenericUploadIsOnlyReadableByAdmin()
+    {
+        String path = "/profile/upload/2026/07/orphan.docx";
+        login(20L, 10L);
+        assertThrows(ServiceException.class, () -> service.assertCanRead(path));
+    }
+
+    @Test
     void guideSheetFilesCannotBypassDedicatedEndpoint()
     {
         login(40L, 10L);

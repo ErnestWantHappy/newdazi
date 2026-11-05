@@ -28,6 +28,11 @@ public interface ResourceAccessMapper
 
     Map<String, Object> selectExemptionAttachmentOwner(@Param("resource") String resource);
 
+    /**
+     * 未落业务表的通用上传：按路径反查题目归属，用于收紧教师草稿文件的读取范围。
+     */
+    Map<String, Object> selectQuestionOwnerByResource(@Param("resource") String resource);
+
     int countCurrentLessonQuestionForStudent(@Param("studentId") Long studentId,
                                              @Param("questionId") Long questionId);
 

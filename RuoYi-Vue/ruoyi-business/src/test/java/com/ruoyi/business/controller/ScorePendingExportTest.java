@@ -104,7 +104,7 @@ class ScorePendingExportTest
         try {
             MockHttpServletResponse response = new MockHttpServletResponse();
             controller.exportScoreExcel("2025", "1", graded == null ? "1" : "1,2", null,
-                    "studentName,lessonDetails,avgPractical,filteredTotal,finalTotal", response);
+                    "studentName,lessonDetails,avgPractical,filteredTotal,finalTotal", 25, 40, 30, response);
             return new XSSFWorkbook(new ByteArrayInputStream(response.getContentAsByteArray()));
         } finally {
             SecurityContextHolder.clearContext();

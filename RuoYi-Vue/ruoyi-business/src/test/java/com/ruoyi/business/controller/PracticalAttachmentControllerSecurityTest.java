@@ -8,6 +8,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 class PracticalAttachmentControllerSecurityTest
 {
     @Test
+    void runningUploadedCodeRequiresTeacherRole() throws Exception
+    {
+        PreAuthorize authorization = PracticalAttachmentController.class
+                .getMethod("run", Long.class, java.util.Map.class).getAnnotation(PreAuthorize.class);
+        assertEquals("@ss.hasRole('teacher') or @ss.hasRole('admin')", authorization.value());
+    }
+    @Test
     void attachmentEndpointsUseStudentProfileFallback()
     {
         PreAuthorize authorization = PracticalAttachmentController.class.getAnnotation(PreAuthorize.class);

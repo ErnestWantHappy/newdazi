@@ -233,6 +233,13 @@ public class StudentHomeController extends BaseController
 
         // 3. 查询课程基本信息
         BizLesson lesson = lessonMapper.selectBizLessonByLessonId(lessonId);
+        // 首页与签到/提交入口保持同一学校口径：课程归属与当前学校不一致时不返回他校课程。
+        if (lesson == null || lesson.getDeptId() == null || !lesson.getDeptId().equals(deptId)) {
+            return AjaxResult.success()
+                    .put("hasLesson", false)
+                    .put("message", "暂无课程")
+                    .put("studentInfo", studentInfo);
+        }
         BizLessonGuideSheetBinding guideSheetBinding = guideSheetAccessService.requireCurrentStudentBinding(student);
 
         // 4. 查询课程题目列表

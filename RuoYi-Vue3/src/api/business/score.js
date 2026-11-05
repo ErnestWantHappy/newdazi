@@ -43,8 +43,8 @@ export function getScoreSummary(entryYear, classCode, lessonIds, keyword) {
   })
 }
 
-// 导出 Excel
-export function exportScoreExcel(entryYear, classCode, lessonIds, keyword, columns) {
+// 导出 Excel：ratios 与页面等级比例同一来源，避免导出与页面两套比例。
+export function exportScoreExcel(entryYear, classCode, lessonIds, keyword, columns, ratios) {
   return request({
     url: '/business/score/export',
     method: 'get',
@@ -53,7 +53,10 @@ export function exportScoreExcel(entryYear, classCode, lessonIds, keyword, colum
       classCode,
       lessonIds: lessonIds?.join(','),
       keyword,
-      columns: Array.isArray(columns) ? columns.join(',') : columns
+      columns: Array.isArray(columns) ? columns.join(',') : columns,
+      excellentRatio: ratios?.excellent,
+      goodRatio: ratios?.good,
+      passRatio: ratios?.pass
     }, // 支持多选、当前搜索条件和导出列选择
     responseType: 'blob'
   })

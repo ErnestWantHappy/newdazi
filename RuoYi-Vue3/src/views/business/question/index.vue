@@ -1,355 +1,221 @@
 <template>
-  <div class="app-container">
-    <el-radio-group v-model="bankView" class="bank-view-tabs" @change="changeBankView">
-      <el-radio-button label="ALL">全部题目</el-radio-button>
-      <el-radio-button label="COMMON">常规题库</el-radio-button>
-      <el-radio-button label="PYTHON">Python 编程题库</el-radio-button>
-    </el-radio-group>
-    <!-- 搜索区域 -->
-    <el-form
-      :model="queryParams"
-      ref="queryRef"
-      :inline="true"
-      v-show="showSearch"
-      label-width="68px"
-    >
-      <el-form-item v-if="bankView !== 'PYTHON'" label="年级" prop="grade">
-        <el-select
-          v-model="queryParams.grade"
-          placeholder="请选择年级"
-          clearable
-          style="width: 200px"
-        >
-          <el-option
-            v-for="dict in biz_grade"
-            :key="dict.value"
-            :label="dict.label"
-            :value="dict.value"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item v-if="bankView !== 'PYTHON'" label="学期" prop="semester">
-        <el-select
-          v-model="queryParams.semester"
-          placeholder="请选择学期"
-          clearable
-          style="width: 200px"
-        >
-          <el-option
-            v-for="dict in biz_semester"
-            :key="dict.value"
-            :label="dict.label"
-            :value="dict.value"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item v-if="bankView !== 'PYTHON'" label="第几课" prop="lessonNum">
-        <el-select
-          v-model="queryParams.lessonNum"
-          placeholder="请选择"
-          clearable
-          style="width: 120px"
-        >
-          <el-option
-            v-for="n in 20"
-            :key="n"
-            :label="'第' + n + '课'"
-            :value="n"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item v-if="bankView !== 'PYTHON'" label="题目类型" prop="questionType">
-        <el-select
-          v-model="queryParams.questionType"
-          placeholder="请选择类型"
-          clearable
-          style="width: 200px"
-        >
-          <el-option
-            v-for="dict in biz_question_type"
-            :key="dict.value"
-            :label="dict.label"
-            :value="dict.value"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item v-if="bankView !== 'PYTHON'" label="操作方式" prop="practicalMode">
-        <el-select v-model="queryParams.practicalMode" placeholder="请选择操作方式" clearable style="width: 200px">
-          <el-option label="Python 在线编程" value="PYTHON" />
-          <el-option label="数据分析实验" value="DATA_LAB" />
-          <el-option label="画程流程图" value="FLOWCHART" />
-          <el-option label="文件作品" value="FILE" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="难度" prop="difficulty">
-        <el-select v-model="queryParams.difficulty" placeholder="请选择难度" clearable style="width: 160px">
-          <el-option label="简单" value="SIMPLE" />
-          <el-option label="中等" value="MEDIUM" />
-          <el-option label="困难" value="HARD" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="是否公开" prop="isPublic">
-        <el-select
-          v-model="queryParams.isPublic"
-          placeholder="请选择"
-          clearable
-          style="width: 200px"
-        >
-          <el-option
-            v-for="dict in sys_yes_no"
-            :key="dict.value"
-            :label="dict.label"
-            :value="dict.value"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="题目内容" prop="questionContent">
-        <el-input
-          v-model="queryParams.questionContent"
-          placeholder="请输入题目内容关键字"
-          clearable
-          style="width: 240px"
-          @keyup.enter="handleQuery"
+  <div class="app-container qw">
+    <!-- 顶部：标题、次要操作、默认展开的筛选区 -->
+    <header class="qw__head">
+      <div class="qw__title">
+        <h2>题库工作台</h2>
+        <p>按题型整理题目，从这里直接开始出题</p>
+      </div>
+      <div class="qw__head-ops">
+        <el-dropdown v-if="canImport || canExport" trigger="click" @command="handleMoreCommand">
+          <el-button>导入导出<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-if="canImport" command="import-common">导入常规题（Excel）</el-dropdown-item>
+              <el-dropdown-item v-if="canImport" command="import-python">导入 Python 题（双 Sheet）</el-dropdown-item>
+              <el-dropdown-item v-if="canExport" command="export" divided>导出当前题型（操作题不可导出）</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+    </header>
+
+    <!-- 筛选默认展开：第一排搜索/年级/学期/课次，第二排公开、创建人、难度与搜索操作 -->
+    <section class="qw__filters" :class="{ 'is-collapsed': !filtersOpen }">
+      <el-form v-show="filtersOpen" ref="queryRef" :model="filters" :inline="true" class="qw__filter-form" @submit.prevent="handleQuery">
+        <div class="qw__filter-row">
+          <el-form-item label="题目搜索">
+            <el-input v-model="filters.questionContent" placeholder="搜索题干、Python 标题" clearable style="width: 220px" @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item label="年级">
+            <el-select v-model="filters.grade" placeholder="全部年级" clearable style="width: 140px">
+              <el-option v-for="dict in biz_grade" :key="dict.value" :label="dict.label" :value="dict.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="学期">
+            <el-select v-model="filters.semester" placeholder="全部学期" clearable style="width: 130px">
+              <el-option v-for="dict in biz_semester" :key="dict.value" :label="dict.label" :value="dict.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="课次">
+            <el-select v-model="filters.lessonNum" placeholder="全部课次" clearable style="width: 120px">
+              <el-option v-for="n in 20" :key="n" :label="'第' + n + '课'" :value="n" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="qw__filter-row">
+          <el-form-item label="公开状态">
+            <el-select v-model="filters.isPublic" placeholder="全部" clearable style="width: 120px">
+              <el-option v-for="dict in sys_yes_no" :key="dict.value" :label="dict.label" :value="dict.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="创建人">
+            <el-input v-model="filters.createBy" placeholder="姓名或账号" clearable style="width: 150px" @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item label="Python 难度">
+            <el-select v-model="filters.difficulty" placeholder="全部" clearable style="width: 110px">
+              <el-option label="简单" value="SIMPLE" />
+              <el-option label="中等" value="MEDIUM" />
+              <el-option label="困难" value="HARD" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+            <el-button link type="primary" @click="filtersOpen = false">收起筛选<el-icon><ArrowUp /></el-icon></el-button>
+          </el-form-item>
+        </div>
+      </el-form>
+      <div v-if="!filtersOpen" class="qw__filter-collapsed">
+        <span>筛选条件已收起</span>
+        <el-button link type="primary" @click="filtersOpen = true">展开筛选<el-icon><ArrowDown /></el-icon></el-button>
+      </div>
+      <p class="qw__scope-note">
+        年级、学期、课次只作用于选择/判断/打字/文件作品/流程图；Python 题按难度筛选；数据分析实验不绑定这些字段。
+      </p>
+    </section>
+
+    <template v-if="!viewingAll">
+      <!-- 第一行：打字题独占整行 -->
+      <workbench-section
+        title="打字题"
+        icon="Grid"
+        tone="typing"
+        :state="sections.typing"
+        :can-add="canAdd"
+        :grade-dict="biz_grade"
+        :semester-dict="biz_semester"
+        :actions-of="actionsOf"
+        @add="handleAddFrom('typing')"
+        @view-all="openAll(scopeOf('typing'))"
+        @retry="loadModule('typing')"
+        @load-more="loadMore('typing')"
+        @view="handleDetail"
+        @edit="handleUpdate"
+        @remove="handleDelete"
+        @primary="handleDetail"
+      />
+
+      <!-- 第二行：选择题左、判断题右 -->
+      <div class="qw__pair">
+        <workbench-section
+          class="qw__half"
+          title="选择题"
+          icon="List"
+          tone="choice simple"
+          :state="sections.choice"
+          :can-add="canAdd"
+          :grade-dict="biz_grade"
+          :semester-dict="biz_semester"
+          :actions-of="actionsOf"
+          @add="handleAddFrom('choice')"
+          @view-all="openAll(scopeOf('choice'))"
+          @retry="loadModule('choice')"
+          @load-more="loadMore('choice')"
+          @view="handleDetail"
+          @edit="handleUpdate"
+          @remove="handleDelete"
+          @primary="handleDetail"
         />
-      </el-form-item>
-      <el-form-item label="创建人" prop="createBy">
-        <el-input
-          v-model="queryParams.createBy"
-          placeholder="请输入创建人"
-          clearable
-          style="width: 160px"
-          @keyup.enter="handleQuery"
+        <workbench-section
+          class="qw__half"
+          title="判断题"
+          icon="Check"
+          tone="judgment simple"
+          :state="sections.judgment"
+          :can-add="canAdd"
+          :grade-dict="biz_grade"
+          :semester-dict="biz_semester"
+          :actions-of="actionsOf"
+          @add="handleAddFrom('judgment')"
+          @view-all="openAll(scopeOf('judgment'))"
+          @retry="loadModule('judgment')"
+          @load-more="loadMore('judgment')"
+          @view="handleDetail"
+          @edit="handleUpdate"
+          @remove="handleDelete"
+          @primary="handleDetail"
         />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" icon="Search" @click="handleQuery"
-          >搜索</el-button
-        >
-        <el-button icon="Refresh" @click="resetQuery">重置</el-button>
-      </el-form-item>
-    </el-form>
+      </div>
 
-    <!-- 操作按钮 -->
-    <el-row :gutter="10" class="mb8">
-      <el-col :span="1.5">
-        <el-button
-          type="primary"
-          plain
-          icon="Plus"
-          @click="handleAdd"
-          v-hasPermi="['business:question:add']"
-          >新增</el-button
-        >
-      </el-col>
-      <el-col :span="1.5">
-        <el-button type="primary" plain icon="Plus" @click="dataLabEditor.open()"
-          v-hasPermi="['business:question:add']">新建数据分析实验题</el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          v-if="bankView !== 'PYTHON'"
-          type="info"
-          plain
-          icon="Upload"
-          @click="handleImport"
-          v-hasPermi="['business:question:import']"
-          >批量导入</el-button
-        >
-      </el-col>
-      <el-col v-if="bankView === 'PYTHON'" :span="1.5">
-        <el-button type="info" plain icon="Upload" @click="openPythonImport" v-hasPermi="['business:question:import']">Python 双 Sheet 导入</el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="success"
-          plain
-          icon="Edit"
-          :disabled="single || !canManageSelectedQuestions"
-          @click="handleUpdate"
-          v-hasPermi="['business:question:edit']"
-          >修改</el-button
-        >
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="danger"
-          plain
-          icon="Delete"
-          :disabled="multiple || !canManageSelectedQuestions"
-          @click="handleDelete"
-          v-hasPermi="['business:question:remove']"
-          >删除</el-button
-        >
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="warning"
-          plain
-          icon="Download"
-          @click="handleExport"
-          v-hasPermi="['business:question:export']"
-          >导出</el-button
-        >
-      </el-col>
-      <right-toolbar
-        v-model:showSearch="showSearch"
-        @queryTable="getList"
-      ></right-toolbar>
-    </el-row>
+      <!-- 第三行：操作题整行，四种作答方式 + 当前方式题目 -->
+      <workbench-section
+        title="操作题"
+        icon="Document"
+        tone="practical"
+        hint="选择作答方式，下方列出该方式的题目"
+        :state="sections.practical"
+        :can-add="false"
+        :show-all="false"
+        :grade-dict="biz_grade"
+        :semester-dict="biz_semester"
+        :actions-of="actionsOf"
+        @retry="loadModule('practical')"
+        @load-more="loadMore('practical')"
+        @view="handleDetail"
+        @preview="handlePreview"
+        @edit="handleUpdate"
+        @remove="handleDelete"
+        @primary="handlePrimary"
+      >
+        <practical-mode-picker
+          :model-value="practicalMode"
+          :counts="practicalCounts"
+          :can-add="canAdd"
+          @update:model-value="changePracticalMode"
+          @add="handleAddFromPractical"
+          @view-all="openAll(practicalScope())"
+        />
+      </workbench-section>
+    </template>
 
-    <!-- 表格 -->
-    <el-table
-      v-loading="loading"
-      :data="questionList"
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="55" align="center" />
-      <el-table-column
-        label="题目ID"
-        align="center"
-        prop="questionId"
-        width="80"
-      />
-      <el-table-column
-        v-if="bankView !== 'PYTHON'"
-        label="题目类型"
-        align="center"
-        prop="questionType"
-        width="100"
-      >
-        <template #default="scope"
-          ><dict-tag
-            :options="biz_question_type"
-            :value="scope.row.questionType"
-        /></template>
-      </el-table-column>
-      <el-table-column v-if="bankView !== 'PYTHON'" label="操作方式" align="center" prop="practicalMode" width="140">
-        <template #default="scope">
-          <span v-if="scope.row.questionType === 'practical'">
-            {{ practicalModeLabel(scope.row.practicalMode) }}
-          </span>
-          <span v-else>-</span>
-        </template>
-      </el-table-column>
-      <el-table-column v-if="bankView === 'PYTHON'" label="题目标题" align="left" prop="programmingTitle" min-width="180" show-overflow-tooltip />
-      <el-table-column
-        :label="bankView === 'PYTHON' ? '题目描述' : '题目内容'"
-        align="left"
-        prop="questionContent"
-        :show-overflow-tooltip="true"
-        min-width="260"
-      />
-      <el-table-column v-if="bankView !== 'PYTHON'"
-        label="总字数"
-        align="center"
-        prop="wordCount"
-        width="100"
-      />
-      <el-table-column v-if="bankView !== 'PYTHON'"
-        label="打字时长(分)"
-        align="center"
-        prop="typingDuration"
-        width="120"
-      />
-      <el-table-column v-if="bankView !== 'PYTHON'" label="年级" align="center" prop="grade" width="100">
-        <template #default="scope"><span v-if="scope.row.practicalMode === 'PYTHON'">-</span><dict-tag v-else :options="biz_grade" :value="String(scope.row.grade)" /></template>
-      </el-table-column>
-      <el-table-column label="难度" align="center" prop="difficulty" width="90">
-        <template #default="scope">
-          <span v-if="scope.row.practicalMode === 'PYTHON'">{{ difficultyLabel(scope.row.difficulty) }}</span>
-          <span v-else>-</span>
-        </template>
-      </el-table-column>
-      <el-table-column v-if="bankView !== 'PYTHON'" label="学期" align="center" prop="semester" width="100">
-        <template #default="scope"><span v-if="scope.row.practicalMode === 'PYTHON'">-</span><dict-tag v-else :options="biz_semester" :value="String(scope.row.semester)" /></template>
-      </el-table-column>
-      <el-table-column v-if="bankView !== 'PYTHON'"
-        label="第几课"
-        align="center"
-        prop="lessonNum"
-        width="80"
-      >
-        <template #default="scope">
-          <span v-if="scope.row.lessonNum">第{{ scope.row.lessonNum }}课</span>
-          <span v-else>-</span>
-        </template>
-      </el-table-column>
-      <el-table-column v-if="bankView === 'PYTHON'" label="知识点" align="left" prop="knowledgePoints" min-width="150" show-overflow-tooltip />
-      <el-table-column v-if="bankView === 'PYTHON'" label="测试点" align="center" prop="testCaseCount" width="80" />
-      <el-table-column v-if="bankView === 'PYTHON'" label="验证状态" align="center" prop="validationStatus" width="110">
-        <template #default="scope"><el-tag :type="validationTagType(scope.row.validationStatus)">{{ validationLabel(scope.row.validationStatus) }}</el-tag></template>
-      </el-table-column>
-      <el-table-column
-        label="是否公开"
-        align="center"
-        prop="isPublic"
-        width="100"
-      >
-        <template #default="scope"
-          ><dict-tag :options="sys_yes_no" :value="scope.row.isPublic"
-        /></template>
-      </el-table-column>
-      <el-table-column
-        label="创建人"
-        align="center"
-        width="120"
-      >
-        <template #default="scope">
-          {{ scope.row.nickName || scope.row.createBy }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="操作"
-        align="center"
-        class-name="small-padding fixed-width"
-        width="200"
-        fixed="right"
-      >
-        <template #default="scope">
-          <el-button
-            v-if="scope.row.questionType !== 'practical'"
-            v-hasPermi="['business:question:query']"
-            link type="primary" icon="View" @click="handleDetail(scope.row)"
-          >详情</el-button>
-          <el-button
-            v-if="isFlowchartPracticalQuestion(scope.row) || (scope.row.questionType === 'practical' && scope.row.previewPath)"
-            link
-            type="success"
-            icon="View"
-            @click="handlePreview(scope.row)"
-            >预览</el-button
-          >
-          <el-button
-            v-if="canManageQuestion(scope.row)"
-            link
-            type="primary"
-            icon="Edit"
-            @click="handleUpdate(scope.row)"
-            v-hasPermi="['business:question:edit']"
-            >修改</el-button
-          >
-          <el-button
-            v-if="canManageQuestion(scope.row)"
-            link
-            type="primary"
-            icon="Delete"
-            @click="handleDelete(scope.row)"
-            v-hasPermi="['business:question:remove']"
-            >删除</el-button
-          >
-        </template>
-      </el-table-column>
-    </el-table>
+    <!-- 查看全部：完整卡片列表、真实分页与筛选，返回保留工作台状态 -->
+    <section v-else class="qw__all">
+      <header class="qw__all-head">
+        <div>
+          <h3>{{ allViewTitle }}<span v-if="allState.error" class="qw__total">题量未知</span><span v-else-if="allState.loaded" class="qw__total">{{ allState.total }} 题</span></h3>
+          <p>按当前筛选显示该范围的完整题目，可翻页后继续查看。</p>
+        </div>
+        <div class="qw__ops">
+          <el-button v-if="canBulkManage && !selectionMode" @click="enterSelection">批量管理</el-button>
+          <el-button icon="Back" @click="closeAll">返回工作台</el-button>
+          <el-button v-if="canAdd" type="primary" plain @click="handleAddFromScope"><el-icon><Plus /></el-icon>新增{{ activeScope.title }}</el-button>
+        </div>
+      </header>
+      <div v-if="selectionMode" class="qw__bulk">
+        <el-checkbox v-model="allChecked" :indeterminate="someChecked" @change="toggleAllChecked">全选本页</el-checkbox>
+        <span>已选 {{ selectedIds.length }} 题<template v-if="selectedIds.length && !canManageSelected">，其中包含他人题目，不能批量处理</template></span>
+        <el-button v-if="hasPermi('business:question:edit')" size="small" :disabled="selectedIds.length !== 1 || !canManageSelected" @click="editSelected">编辑选中题目</el-button>
+        <el-button v-if="hasPermi('business:question:remove')" size="small" type="danger" plain :disabled="!selectedIds.length || !canManageSelected" @click="deleteSelected">删除选中题目</el-button>
+        <el-button size="small" @click="exitSelection">退出批量管理</el-button>
+      </div>
+      <div v-if="allState.loading && !allState.loaded" class="qw__state">正在加载题目…</div>
+      <div v-else-if="allState.error" class="qw__state qw__state--error">
+        加载失败，请重试。<el-button link type="primary" @click="loadAllList">重试</el-button>
+      </div>
+      <template v-else>
+        <div v-if="!allState.items.length" class="qw__state">该题型下暂无符合条件的题目。</div>
+        <div v-else class="qw__all-grid" :class="`qw__all-grid--${activeScope.grid}`">
+          <div v-for="row in allState.items" :key="row.questionId" class="qw__all-item">
+            <el-checkbox v-if="selectionMode" :model-value="selectedIds.includes(row.questionId)" :disabled="!canManageQuestion(row)" @change="toggleSelected(row, $event)" />
+            <question-card
+              :question="row"
+              :actions="actionsOf(row)"
+              :grade-dict="biz_grade"
+              :semester-dict="biz_semester"
+              @view="handleDetail(row)"
+              @preview="handlePreview(row)"
+              @edit="handleUpdate(row)"
+              @remove="handleDelete(row)"
+              @primary="handlePrimary(row)"
+            />
+          </div>
+        </div>
+        <pagination v-show="allState.total > 0" :total="allState.total" v-model:page="allQuery.pageNum" v-model:limit="allQuery.pageSize" @pagination="loadAllList" />
+      </template>
+    </section>
 
-    <pagination
-      v-show="total > 0"
-      :total="total"
-      v-model:page="queryParams.pageNum"
-      v-model:limit="queryParams.pageSize"
-      @pagination="getList"
-    />
-
-    <!-- 添加或修改对话框 -->
+    <!-- 以下弹窗与编辑器保持原有实现，确保复杂编辑能力不丢失 -->
     <el-dialog :title="title" v-model="open" :width="isFlowchartPracticalQuestion(form) ? '96%' : '980px'" append-to-body>
       <el-form
         ref="questionRef"
@@ -618,7 +484,7 @@
             <el-checkbox-group v-model="form.practicalAllowedExtensionList">
               <el-checkbox v-for="item in practicalExtensionOptions" :key="item" :value="item">{{ item.toUpperCase() }}</el-checkbox>
             </el-checkbox-group>
-            <div class="el-form-item__tip">TXT 以文本预览；HTML/HTM 请提交单个网页（内联 CSS/JS）；ZIP/RAR/7Z 仅下载查看。新增格式由老师手动评分，不支持 AI 批改。</div>
+            <div class="el-form-item__tip">PY 可查看源码和运行控制台程序；TXT 以文本预览；HTML/HTM 请提交单个网页（内联 CSS/JS）；ZIP/RAR/7Z 仅下载查看。这些格式由老师手动评分。PY/TXT/HTML 不超过 2 MiB。</div>
           </el-form-item>
           <el-form-item label="图片上限">
             <el-input-number v-model="form.practicalImageMaxCount" :min="1" :max="10" />
@@ -726,12 +592,12 @@
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button v-if="!isPythonPracticalQuestion(form)" type="primary" @click="submitForm(false)">确 定</el-button>
+          <el-button v-if="!isPythonPracticalQuestion(form)" type="primary" :loading="submitting" :disabled="submitting" @click="submitForm(false)">确 定</el-button>
           <template v-else>
-            <el-button @click="submitForm(false)">保存草稿</el-button>
-            <el-button type="primary" :loading="validating" @click="submitForm(true)">保存并验证全部测试点</el-button>
+            <el-button :loading="submitting && !validating" :disabled="submitting" @click="submitForm(false)">保存草稿</el-button>
+            <el-button type="primary" :loading="submitting || validating" :disabled="submitting" @click="submitForm(true)">保存并验证全部测试点</el-button>
           </template>
-          <el-button @click="cancel">取 消</el-button>
+          <el-button :disabled="submitting" @click="cancel">取 消</el-button>
         </div>
       </template>
     </el-dialog>
@@ -827,7 +693,7 @@
       </div>
     </el-dialog>
     <!-- 路由切页动画要求单一根节点，弹窗组件也须保留在页面根节点内。 -->
-    <DataLabEditor ref="dataLabEditor" @saved="getList" />
+    <DataLabEditor ref="dataLabEditor" @saved="onSaved" />
   </div>
 </template>
 
@@ -844,8 +710,23 @@ import { getFlowchartQuestion, saveFlowchartQuestion } from "@/api/business/flow
 import FlowchartQuestionDesigner from "@/components/FlowchartEditor/FlowchartQuestionDesigner.vue";
 import FlowchartQuestionPreviewDialog from "@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue";
 import DataLabEditor from "@/components/DataLabExperiment/Editor.vue";
+import WorkbenchSection from "./components/WorkbenchSection.vue";
+import QuestionCard from "./components/QuestionCard.vue";
+import PracticalModePicker from "./components/PracticalModePicker.vue";
 import { EMPTY_FLOWCHART, DEFAULT_FLOWCHART_PERMISSIONS, parseFlowchartDocument } from "@/components/FlowchartEditor/schema";
-import { computed, getCurrentInstance, reactive, ref, watch } from "vue";
+import {
+  WORKBENCH_DEFAULTS,
+  buildAllListQuery,
+  buildModuleQuery,
+  cardActions,
+  createModuleState,
+  hasMoreAfter,
+  mergeQuestionPage,
+  practicalModeMeta,
+  scopeOf,
+  supportsGradeScope,
+} from "@/utils/questionWorkbench";
+import { computed, getCurrentInstance, nextTick, reactive, ref, toRefs, watch } from "vue";
 import { ElLoading, ElMessage } from "element-plus"; // P6 import
 import * as XLSX from "xlsx";
 import {
@@ -862,11 +743,267 @@ const dataLabEditor = ref(null);
 const { biz_question_type, sys_yes_no, biz_grade, biz_semester } =
   proxy.useDict("biz_question_type", "sys_yes_no", "biz_grade", "biz_semester");
 
-const questionList = ref([]);
+// --- 按钮级权限：沿用 v-hasPermi 同一份权限码，这里读出来决定是否渲染，不留禁用占位 ---
+const permissions = ref(Array.isArray(userStore.permissions) ? userStore.permissions : []);
+const isAdmin = computed(() => (userStore.roles || []).includes("admin"));
+const hasPermi = code => permissions.value.includes("*:*:*") || permissions.value.includes(code);
+const canAdd = computed(() => hasPermi("business:question:add"));
+const canImport = computed(() => hasPermi("business:question:import"));
+const canExport = computed(() => hasPermi("business:question:export"));
+
+// --- 工作台状态 ---
+// 筛选输入与“已应用筛选”分开：只有点搜索或回车才刷新，避免每敲一个字就请求所有模块。
+function emptyFilters() {
+  return { questionContent: null, grade: null, semester: null, lessonNum: null, isPublic: null, createBy: null, difficulty: null };
+}
+const filters = ref(emptyFilters());
+const appliedFilters = ref(emptyFilters());
+const filtersOpen = ref(true);
+const practicalMode = ref("FILE");
+const sections = reactive({
+  typing: createModuleState("typing"),
+  choice: createModuleState("choice"),
+  judgment: createModuleState("judgment"),
+  practical: createModuleState("practical"),
+});
+const viewingAll = ref(false);
+const allState = reactive({ items: [], total: 0, loaded: false, loading: false, error: false, requestId: 0 });
+const allQuery = reactive({ pageNum: 1, pageSize: 10 });
+const selectionMode = ref(false);
+const selectedIds = ref([]);
+const selectedQuestions = ref([]);
+const allChecked = ref(false);
+
+// 工作台滚动位置按账号隔离保存在内存，返回时恢复；不写 URL，也不写持久缓存。
+const workbenchScroll = ref(0);
+const activeScopeKey = ref("typing");
+
+const activeScope = computed(() => scopeOf(activeScopeKey.value));
+const allViewTitle = computed(() =>
+  activeScope.value.title === "操作题" ? `操作题 · ${practicalModeMeta(practicalMode.value).label}` : activeScope.value.title
+);
+
+function actionsOf(row) {
+  return cardActions(row, {
+    permissions: permissions.value,
+    userId: userStore.id,
+    isAdmin: isAdmin.value,
+  });
+}
+
+function canManageQuestion(question) {
+  return isAdmin.value || String(question?.creatorId || "") === String(userStore.id || "");
+}
+
+const canManageSelected = computed(() => selectedQuestions.value.length > 0 && selectedQuestions.value.every(canManageQuestion));
+// 查看全部里的批量管理入口：只有具备对应权限时才出现，不把批量当隐藏功能也不留空入口。
+const canBulkManage = computed(() => hasPermi("business:question:edit") || hasPermi("business:question:remove"));
+const someChecked = computed(() => allState.items.some(row => selectedIds.value.includes(row.questionId)));
+
+// 模态框状态（沿用原实现）
+const open = ref(false);
+const showSearch = ref(true);
+const ids = ref([]);
+const single = ref(true);
+const multiple = ref(true);
+const title = ref("");
+const pythonStep = ref(0);
+const validating = ref(false);
+const submitting = ref(false);
+// 新增过程中是否已经建成主记录：失败重试只补配置，不重复建题。
+const createdQuestionId = ref(null);
+const modifyStartQuestionId = ref(null);
+// 新增/修改开始时的题型与操作方式：修改题型后旧分类也要刷新。
+const startQuestionType = ref(null);
+const startPracticalMode = ref(null);
+const pythonImportOpen = ref(false);
+const pythonImportLoading = ref(false);
+const pythonImportConfirming = ref(false);
+const pythonImportReport = ref(null);
+// 最近一次解析出的导入载荷，用于“平均分配权重”后重新预检（用户主动点击才改权重）。
+const lastPythonPayload = ref(null);
+const flowchartPreviewVisible = ref(false);
+const flowchartPreviewQuestion = ref(null);
+const originalFlowchartConfig = ref(null);
 const detailVisible = ref(false);
 const detailLoading = ref(false);
 const detailQuestion = ref(null);
 let detailRequestId = 0;
+
+const data = reactive({
+  form: {},
+});
+
+const { form } = toRefs(data);
+
+function moduleState(key) {
+  if (key === "practical") return sections.practical;
+  return sections[key];
+}
+
+/**
+ * 加载或刷新某个模块。
+ * 每类用自己的查询范围与条数有界加载；requestId 丢弃过期响应，避免慢请求覆盖新筛选结果。
+ */
+async function loadModule(key, { append = false } = {}) {
+  const state = moduleState(key);
+  const scope = key === "practical" ? practicalScope() : scopeOf(key);
+  const pageSize = key === "practical" ? WORKBENCH_DEFAULTS.practical : WORKBENCH_DEFAULTS[key];
+  if (append) {
+    if (state.loadingMore || !state.hasMore) return;
+    state.loadingMore = true;
+    state.loadMoreError = false;
+  } else {
+    state.requestId += 1;
+    state.loading = true;
+    state.error = false;
+    state.loadMoreError = false;
+    state.hasMore = false;
+    state.items = [];
+    state.pageNum = 1;
+  }
+  const requestId = state.requestId;
+  const pageNum = append ? state.pageNum + 1 : 1;
+  try {
+    const response = await listQuestion(buildModuleQuery(appliedFilters.value, scope, pageNum, pageSize));
+    if (requestId !== state.requestId) return;
+    const rows = response.rows || [];
+    if (append) {
+      const merged = mergeQuestionPage(state.items, rows, response.total);
+      state.items = merged.items;
+      state.hasMore = merged.hasMore;
+      state.pageNum = pageNum;
+    } else {
+      state.items = rows;
+      state.total = Number(response.total || 0);
+      state.hasMore = hasMoreAfter({ total: state.total }, rows.length);
+    }
+    state.total = Number(response.total || state.total || 0);
+    state.loaded = true;
+  } catch (error) {
+    if (requestId !== state.requestId) return;
+    // 追加失败保留已有列表；首次加载失败只标记本模块，其余模块照常显示。
+    if (append) state.loadMoreError = true;
+    else state.error = true;
+  } finally {
+    if (requestId === state.requestId) {
+      state.loading = false;
+      state.loadingMore = false;
+    }
+  }
+}
+
+function loadMore(key) {
+  return loadModule(key, { append: true });
+}
+
+/** 刷新全部模块；保存、删除、导入后统一走这里，避免旧请求把旧题或旧数量写回来。 */
+function refreshAll() {
+  loadPracticalModeTotals();
+  return Promise.all([loadModule("typing"), loadModule("choice"), loadModule("judgment"), loadModule("practical")]);
+}
+
+function handleQuery() {
+  appliedFilters.value = { ...filters.value, grade: filters.value.grade || null };
+  refreshAll();
+  if (viewingAll.value) loadAllList();
+}
+
+function resetQuery() {
+  filters.value = emptyFilters();
+  proxy.resetForm("queryRef");
+  appliedFilters.value = emptyFilters();
+  refreshAll();
+  if (viewingAll.value) loadAllList();
+}
+
+// 操作题列表按“当前方式”查询：未选方式时中文案是 total，必须显式传方式，否则会退回整类操作题。
+function changePracticalMode(mode) {
+  if (!mode || mode === practicalMode.value) return;
+  practicalMode.value = mode;
+  loadModule("practical");
+}
+
+/** 操作题模块的查询范围 = 操作题 + 当前作答方式。 */
+function practicalScope() {
+  return scopeOf(practicalMode.value);
+}
+
+// 每种方式仅查询一条以取得真实 total，不拉取整类数据，也不重复累计全操作题。
+// 查询失败时为 null，入口显示“题量未知”，不能把失败或局部条数当成 0。
+const PRACTICAL_MODE_KEYS = ["FILE", "PYTHON", "DATA_LAB", "FLOWCHART"];
+const modeTotals = reactive({ counts: null, error: false, requestId: 0 });
+
+async function loadPracticalModeTotals() {
+  const requestId = ++modeTotals.requestId;
+  try {
+    const results = await Promise.all(PRACTICAL_MODE_KEYS.map(mode => listQuestion({
+      ...buildModuleQuery(appliedFilters.value, scopeOf(mode), 1, 1),
+    })));
+    if (requestId !== modeTotals.requestId) return;
+    const counts = {};
+    PRACTICAL_MODE_KEYS.forEach((mode, index) => { counts[mode] = Number(results[index].total || 0); });
+    modeTotals.counts = counts;
+    modeTotals.error = false;
+  } catch (_) {
+    if (requestId === modeTotals.requestId) {
+      modeTotals.counts = null;
+      modeTotals.error = true;
+    }
+  }
+}
+
+const practicalCounts = computed(() => (modeTotals.counts && !modeTotals.error ? modeTotals.counts : null));
+
+/** “查看全部”：在当前页切换视图，不新增菜单和路由。 */
+function openAll(scope) {
+  activeScopeKey.value = scope.key;
+  allQuery.pageNum = 1;
+  selectionMode.value = false;
+  selectedIds.value = [];
+  selectedQuestions.value = [];
+  viewingAll.value = true;
+  if (typeof window !== "undefined") workbenchScroll.value = window.scrollY;
+  loadAllList();
+  nextTick(() => window.scrollTo({ top: 0 }));
+}
+
+function closeAll() {
+  viewingAll.value = false;
+  nextTick(() => window.scrollTo({ top: workbenchScroll.value || 0 }));
+}
+
+async function loadAllList() {
+  clearSelection();
+  allState.requestId += 1;
+  const requestId = allState.requestId;
+  allState.loading = true;
+  allState.error = false;
+  try {
+    const response = await listQuestion(buildAllListQuery(appliedFilters.value, activeScope.value, allQuery.pageNum, allQuery.pageSize));
+    if (requestId !== allState.requestId) return;
+    allState.items = response.rows || [];
+    allState.total = Number(response.total || 0);
+    allState.loaded = true;
+    // 删除最后一条后回退到有效页，避免停在空页。
+    if (!allState.items.length && allState.total > 0 && allQuery.pageNum > 1) {
+      allQuery.pageNum = Math.ceil(allState.total / allQuery.pageSize);
+      return loadAllList();
+    }
+  } catch (error) {
+    if (requestId === allState.requestId) allState.error = true;
+  } finally {
+    if (requestId === allState.requestId) allState.loading = false;
+  }
+}
+
+async function handlePrimary(row) {
+  const action = actionsOf(row).find(item => item === "preview") || (actionsOf(row).includes("view") ? "view" : "");
+  if (action === "preview") return handlePreview(row);
+  if (action === "view") return handleDetail(row);
+}
+
+// --- 详情 ---
 async function handleDetail(row) {
   const requestId = ++detailRequestId;
   detailVisible.value = true;
@@ -881,159 +1018,18 @@ async function handleDetail(row) {
     if (requestId === detailRequestId) detailLoading.value = false;
   }
 }
-const open = ref(false);
-const loading = ref(true);
-const showSearch = ref(true);
-const ids = ref([]);
-const selectedQuestions = ref([]);
-const single = ref(true);
-const multiple = ref(true);
-const total = ref(0);
-const title = ref("");
-const bankView = ref("ALL");
-const pythonStep = ref(0);
-const validating = ref(false);
-const pythonImportOpen = ref(false);
-const pythonImportLoading = ref(false);
-const pythonImportConfirming = ref(false);
-const pythonImportReport = ref(null);
-// 最近一次解析出的导入载荷，用于“平均分配权重”后重新预检（用户主动点击才改权重）。
-const lastPythonPayload = ref(null);
-const flowchartPreviewVisible = ref(false);
-const flowchartPreviewQuestion = ref(null);
-const originalFlowchartConfig = ref(null);
-
-const data = reactive({
-  form: {},
-  queryParams: {
-    pageNum: 1,
-    pageSize: 10,
-    questionType: null,
-    practicalMode: null,
-    difficulty: null,
-    questionContent: null,
-    isPublic: null,
-    grade: null,
-    semester: null,
-    lessonNum: null,
-    bankView: "ALL",
-    createBy: null,
-  },
-});
-
-const { queryParams, form } = toRefs(data);
-const canManageSelectedQuestions = computed(() => selectedQuestions.value.length > 0 && selectedQuestions.value.every(canManageQuestion));
-
-// --- 动态校验规则 ---
-const rules = computed(() => {
-  const pythonQuestion = isPythonPracticalQuestion(form.value);
-  const baseRules = {
-    questionType: [{ required: true, message: "题目类型不能为空" }],
-    questionContent: [{ required: true, message: "题目内容不能为空" }],
-    isPublic: [{ required: true, message: "是否公开不能为空" }],
-    ...(pythonQuestion ? {} : {
-      grade: [{ required: true, message: "年级不能为空" }],
-      semester: [{ required: true, message: "学期不能为空" }],
-    }),
-  };
-
-  if (form.value.questionType === "choice") {
-    return {
-      ...baseRules,
-      optionA: [{ required: true, message: "选项A不能为空" }],
-      optionB: [{ required: true, message: "选项B不能为空" }],
-      optionC: [{ required: true, message: "选项C不能为空" }],
-      optionD: [{ required: true, message: "选项D不能为空" }],
-      answer: [{ required: true, message: "标准答案不能为空" }],
-    };
-  } else if (form.value.questionType === "judgment") {
-    return {
-      ...baseRules,
-      answer: [{ required: true, message: "标准答案不能为空" }],
-    };
-  } else if (form.value.questionType === "practical") {
-    return {
-      ...baseRules,
-      ...(pythonQuestion ? {
-        difficulty: [{ required: true, message: "难度不能为空" }],
-        answer: [{ required: true, message: "参考代码不能为空" }],
-      } : {}),
-    };
-  } else if (form.value.questionType === "typing") {
-    return {
-      ...baseRules,
-      typingDuration: [{ required: true, message: "打字时长不能为空" }],
-    };
-  }
-  return baseRules;
-});
-
-/*** 题目导入参数 */
-const upload = reactive({
-  open: false,
-  title: "",
-  isUploading: false,
-  updateSupport: 0,
-  headers: refreshAuthorizationHeader(),
-  url: import.meta.env.VITE_APP_BASE_API + "/business/question/importData",
-});
-const importErrors = ref([]);
-const importErrorVisible = ref(false);
-
-function refreshUploadHeaders() {
-  upload.headers = refreshAuthorizationHeader(upload.headers);
-}
-
-const questionContentLabel = computed(() => {
-  switch (form.value.questionType) {
-    case "typing":
-      return "打字题内容";
-    case "practical":
-      return "操作题名称";
-    default:
-      return "题目内容";
-  }
-});
-
-const questionContentRows = computed(() => {
-  return form.value.questionType === "typing" ? 8 : 3;
-});
-
-/** 查询题库管理列表 */
-function getList() {
-  loading.value = true;
-  listQuestion(queryParams.value).then((response) => {
-    questionList.value = response.rows;
-    total.value = response.total;
-    loading.value = false;
-  });
-}
-
-function difficultyLabel(value) {
-  return value === "SIMPLE" ? "简单" : value === "HARD" ? "困难" : "中等";
-}
-
-function validationLabel(value) {
-  return ({ VALID: "已验证", INVALID: "验证失败", VALIDATING: "验证中", DRAFT: "待验证" })[value] || "待验证";
-}
-
-function validationTagType(value) {
-  return value === "VALID" ? "success" : value === "INVALID" ? "danger" : value === "VALIDATING" ? "warning" : "info";
-}
-
-function changeBankView(value) {
-  queryParams.value.bankView = value;
-  queryParams.value.pageNum = 1;
-  if (value === "PYTHON") {
-    Object.assign(queryParams.value, { questionType: null, practicalMode: null, grade: null, semester: null, lessonNum: null });
-  }
-  getList();
-}
 
 function openPythonImport() {
   pythonImportReport.value = null;
   lastPythonPayload.value = null;
   pythonImportOpen.value = true;
+}
+
+/** 导出能力收敛到顶部下拉，操作题仍明确提示无法导出 Excel。 */
+function handleMoreCommand(command) {
+  if (command === "import-common") return handleImport();
+  if (command === "import-python") return openPythonImport();
+  if (command === "export") return handleExport();
 }
 
 function cell(row, ...names) {
@@ -1113,7 +1109,6 @@ async function averageImportWeights() {
 }
 
 // 模板列名必须与 handlePythonWorkbook 的取值列名完全一致，否则导入读不到数据。
-// 模板列名必须与 handlePythonWorkbook 的取值列名完全一致，否则导入读不到数据。
 function downloadPythonTemplate() {
   const templateQuestions = [{
     "外部题号": "PY001", "标题": "两数之和", "难度": "easy", "知识点": "输入输出",
@@ -1143,7 +1138,7 @@ async function confirmPythonWorkbook() {
   try {
     const result = (await confirmProgrammingImport(token)).data || {};
     ElMessage.success(`已成功导入 ${result.importedCount || 0} 道已验证 Python 题`);
-    pythonImportOpen.value = false; pythonImportReport.value = null; getList();
+    pythonImportOpen.value = false; pythonImportReport.value = null; refreshAll();
   } finally {
     pythonImportConfirming.value = false;
   }
@@ -1165,6 +1160,8 @@ function cancelUpload() {
 function reset() {
   pythonStep.value = 0;
   originalFlowchartConfig.value = null;
+  createdQuestionId.value = null;
+  modifyStartQuestionId.value = null;
   form.value = {
     questionId: null,
     questionType: null,
@@ -1190,9 +1187,9 @@ function reset() {
     updateTime: null,
     scoringItems: [], // P6
     // 新建题默认勾选全部可提交格式，减少逐项勾选；编辑已有题时由后端值覆盖
-    practicalAllowedExtensions: "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png,txt,html,htm,zip,rar,7z",
+    practicalAllowedExtensions: "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png,txt,html,htm,py,zip,rar,7z",
     practicalMode: "FILE",
-    practicalAllowedExtensionList: ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "zip", "rar", "7z"],
+    practicalAllowedExtensionList: ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "py", "zip", "rar", "7z"],
     practicalImageMaxCount: 10,
     practicalMaterials: [],
     practicalResourceFiles: "",
@@ -1229,7 +1226,7 @@ const recommendedDuration = computed(() => {
   return Math.ceil(wordCount / typingBaseSpeed.value);
 });
 
-const practicalExtensionOptions = ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "zip", "rar", "7z"];
+const practicalExtensionOptions = ["doc", "docx", "pdf", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "txt", "html", "htm", "py", "zip", "rar", "7z"];
 
 function materialPaths(materials, type) {
   return (materials || [])
@@ -1291,13 +1288,6 @@ function isPythonPracticalQuestion(question) {
 
 function isFlowchartPracticalQuestion(question) {
   return question?.questionType === "practical" && question?.practicalMode === "FLOWCHART";
-}
-
-function practicalModeLabel(mode) {
-  if (mode === "PYTHON") return "Python 在线编程";
-  if (mode === "DATA_LAB") return "数据分析实验";
-  if (mode === "FLOWCHART") return "画程流程图";
-  return "文件作品";
 }
 
 // 供“拍照 + AI 生成流程图标准答案”使用：把题目名称、年级/学期标签和第几课传给设计器，全部取本题已填字段。
@@ -1512,19 +1502,7 @@ function removeScoringItem(index) {
   form.value.scoringItems.splice(index, 1);
 }
 
-/** 搜索按钮操作 */
-function handleQuery() {
-  queryParams.value.pageNum = 1;
-  getList();
-}
-
-/** 重置按钮操作 */
-function resetQuery() {
-  proxy.resetForm("queryRef");
-  handleQuery();
-}
-
-// 多选框选中数据
+// 多选框选中数据（查看全部内的批量管理）
 function handleSelectionChange(selection) {
   selectedQuestions.value = selection;
   ids.value = selection.map((item) => item.questionId);
@@ -1532,27 +1510,113 @@ function handleSelectionChange(selection) {
   multiple.value = !selection.length;
 }
 
-/** 新增按钮操作 */
-function handleAdd() {
+function toggleAllChecked(checked) {
+  const manageable = allState.items.filter(canManageQuestion);
+  selectedIds.value = checked ? manageable.map(row => row.questionId) : [];
+  selectedQuestions.value = allState.items.filter(row => selectedIds.value.includes(row.questionId));
+  allChecked.value = checked;
+}
+
+function toggleSelected(row, checked) {
+  if (checked) {
+    if (!canManageQuestion(row)) return;
+    selectedIds.value = [...selectedIds.value, row.questionId];
+  } else {
+    selectedIds.value = selectedIds.value.filter(id => id !== row.questionId);
+  }
+  selectedQuestions.value = allState.items.filter(item => selectedIds.value.includes(item.questionId));
+}
+
+function exitSelection() {
+  clearSelection();
+  selectionMode.value = false;
+}
+
+function clearSelection() {
+  selectedIds.value = [];
+  selectedQuestions.value = [];
+  allChecked.value = false;
+}
+
+function editSelected() {
+  if (!hasPermi('business:question:edit') || !canManageSelected.value || selectedIds.value.length !== 1) return;
+  const target = allState.items.find(row => row.questionId === selectedIds.value[0]);
+  if (target && canManageQuestion(target)) return handleUpdate(target);
+}
+
+function deleteSelected() {
+  if (!hasPermi('business:question:remove') || !canManageSelected.value || !selectedIds.value.length) return;
+  // 只处理当前可见页的选择，分页或重新筛选后不携带隐藏题目。
+  const targets = allState.items.filter(row => selectedIds.value.includes(row.questionId));
+  if (targets.length !== selectedIds.value.length || !targets.every(canManageQuestion)) return;
+  return handleDelete({ questionIds: targets.map(row => row.questionId) });
+}
+
+function enterSelection() {
+  selectionMode.value = true;
+}
+
+/**
+ * 按模块新增：重置表单后直接带入题型与操作方式，教师不必再选一遍。
+ * 年级/学期/课次只在当前筛选明确选择时带入，未选择时不猜测。
+ */
+function handleAddFrom(key) {
+  const scope = scopeOf(key);
+  beginAdd(scope.questionType, scope.practicalMode || null);
+}
+
+function handleAddFromPractical(mode) {
+  beginAdd("practical", mode);
+}
+
+function handleAddFromScope() {
+  const scope = activeScope.value;
+  beginAdd(scope.questionType, scope.practicalMode || null);
+}
+
+const QUESTION_TYPE_NAMES = { typing: "打字题", choice: "选择题", judgment: "判断题", practical: "操作题" };
+
+function addTitle(questionType, practicalMode) {
+  if (questionType === "practical") return `新增${practicalModeMeta(practicalMode || "FILE").label}题`;
+  return `新增${QUESTION_TYPE_NAMES[questionType] || "题目"}`;
+}
+
+function beginAdd(questionType, practicalMode = null) {
+  // DATA_LAB 使用独立编辑器：直接打开，不塞进普通操作题表单。
+  if (questionType === "practical" && practicalMode === "DATA_LAB") {
+    dataLabEditor.value?.open();
+    return;
+  }
   reset();
   typingDurationCustomized.value = false;
+  form.value.questionType = questionType;
+  if (questionType === "practical") form.value.practicalMode = practicalMode || "FILE";
+  const scope = practicalMode ? practicalModeMeta(practicalMode) : null;
+  if (supportsGradeScope({ questionType, practicalMode })) {
+    const applied = appliedFilters.value;
+    if (applied.grade) form.value.grade = Number(applied.grade);
+    if (applied.semester) form.value.semester = applied.semester;
+    if (applied.lessonNum) form.value.lessonNum = Number(applied.lessonNum);
+  }
+  title.value = addTitle(questionType, practicalMode);
+  startQuestionType.value = questionType;
+  startPracticalMode.value = practicalMode;
   open.value = true;
-  title.value = "添加题目";
-  proxy.$nextTick(() => {
-    proxy.$refs["questionRef"].clearValidate();
-  });
+  nextTick(() => proxy.$refs.questionRef?.clearValidate());
 }
 
 /** 修改按钮操作 */
 function handleUpdate(row) {
   reset();
   const _questionId = row.questionId || ids.value[0];
+  if (!_questionId) return ElMessage.warning("请选择要编辑的题目");
   getQuestion(_questionId).then((response) => {
     if (response.data?.practicalMode === 'DATA_LAB') {
       dataLabEditor.value?.open(_questionId);
       return;
     }
     form.value = response.data;
+    modifyStartQuestionId.value = form.value.questionId;
     form.value.programming = defaultProgrammingConfig();
     form.value.practicalAllowedExtensionList = String(
       form.value.practicalAllowedExtensions || "doc,docx,pdf,ppt,pptx,xls,xlsx,jpg,jpeg,png"
@@ -1561,8 +1625,10 @@ function handleUpdate(row) {
     form.value.practicalReferenceFiles = materialPaths(form.value.practicalMaterials, "REFERENCE");
     typingDurationCustomized.value = form.value.questionType === "typing" && form.value.typingDuration != null;
     const showEditor = () => {
+      startQuestionType.value = form.value.questionType;
+      startPracticalMode.value = form.value.practicalMode || null;
       open.value = true;
-      title.value = "修改题目";
+      title.value = `编辑${form.value.questionType === "practical" ? practicalModeMeta(form.value.practicalMode).label : QUESTION_TYPE_NAMES[form.value.questionType] || ""}题`;
     };
     if (isPythonPracticalQuestion(form.value)) {
       getProgrammingQuestion(_questionId).then((programmingResponse) => {
@@ -1591,14 +1657,41 @@ function handleUpdate(row) {
   });
 }
 
-function canManageQuestion(question) {
-  return userStore.roles.includes("admin") || String(question?.creatorId || "") === String(userStore.id || "");
+/**
+ * 保存后定位新题：切到对应模块并刷新；若当前筛选可能看不到它，明确提示，不硬插进列表。
+ * 四个模块始终一起刷新，因此修改题型后旧分类与新分类的题目和计数都会更新。
+ */
+function afterQuestionSaved(questionType, savedMode) {
+  if (savedMode && ["FILE", "PYTHON", "DATA_LAB", "FLOWCHART"].includes(savedMode)) {
+    practicalMode.value = savedMode;
+  }
+  const scopeKey = questionType === "practical" ? (savedMode || "FILE") : questionType;
+  if (viewingAll.value) {
+    activeScopeKey.value = scopeOf(scopeKey).key;
+    allQuery.pageNum = 1;
+  }
+  open.value = false;
+  refreshAll();
+  if (viewingAll.value) loadAllList();
+}
+
+function newQuestionFilterHint(questionType, practicalMode) {
+  const scoped = supportsGradeScope({ questionType, practicalMode });
+  const hidden = Boolean(
+    appliedFilters.value.questionContent
+    || appliedFilters.value.createBy
+    || appliedFilters.value.isPublic
+    || (scoped && (appliedFilters.value.grade || appliedFilters.value.semester || appliedFilters.value.lessonNum))
+    || (practicalMode === "PYTHON" && appliedFilters.value.difficulty)
+  );
+  return hidden ? "已保存，但当前筛选条件下可能看不到这道新题，可清除筛选后查看。" : "";
 }
 
 /** 保存普通题，或保存 Python 题后用参考代码验证全部测试点。 */
 function submitForm(validateAfterSave = false) {
+  if (submitting.value) return;
   proxy.$refs["questionRef"].validate(async (valid) => {
-    if (valid) {
+    if (!valid) return;
       // P6.1: 操作题必须配置评分项，且比例值合计必须为100
       if (form.value.questionType === "practical" && form.value.practicalMode === "FILE") {
         if (!form.value.practicalAllowedExtensionList?.length) {
@@ -1658,15 +1751,27 @@ function submitForm(validateAfterSave = false) {
         background: "rgba(0, 0, 0, 0.7)",
       });
 
+      submitting.value = true;
       validating.value = validateAfterSave;
+      let savedQuestionId = null;
+      const questionType = form.value.questionType;
+      const practicalMode = questionType === "practical" ? (form.value.practicalMode || "FILE") : null;
+      const isNew = form.value.questionId == null;
       try {
         let questionId = form.value.questionId;
         if (questionId != null) {
+          // 编辑：失败时保留原记录，下次重试仍是更新，不会重复建题。
           await updateQuestion(form.value);
+        } else if (createdQuestionId.value != null) {
+          // 上一步已建好主记录但配置保存失败：只更新，不重复新增。
+          form.value.questionId = createdQuestionId.value;
+          await updateQuestion(form.value);
+          questionId = createdQuestionId.value;
         } else {
           const response = await addQuestion(form.value);
           questionId = response.questionId || response.data?.questionId;
           form.value.questionId = questionId;
+          createdQuestionId.value = questionId;
         }
         if (isPythonPracticalQuestion(form.value)) {
           if (!questionId) throw new Error("保存题目后未返回题目 ID");
@@ -1678,13 +1783,15 @@ function submitForm(validateAfterSave = false) {
             const totalCases = validation.data?.totalCount || 0;
             if (!validation.data?.valid) {
               pythonStep.value = 2;
-              ElMessage.error(`验证未通过：${passed}/${totalCases} 个测试点通过`);
+              ElMessage.error(`未通过验证：${passed}/${totalCases} 个测试点通过，题目已保存为草稿`);
+              // 题目本身已写入，列表与计数必须刷新，否则教师会以为没有保存。
+              afterQuestionSaved(questionType, practicalMode);
+              open.value = true;
+              title.value = addTitle(questionType, practicalMode).replace("新增", "编辑");
               return;
             }
-            proxy.$modal.msgSuccess(`验证通过：${passed}/${totalCases} 个测试点全部通过`);
-          } else {
-            proxy.$modal.msgSuccess("Python 题已保存，验证状态已重置为待验证");
           }
+          afterQuestionSaved(questionType, practicalMode);
         } else if (isFlowchartPracticalQuestion(form.value)) {
           if (!questionId) throw new Error("保存题目后未返回题目 ID");
           if (flowchartConfigChanged(form.value.flowchartConfig)) {
@@ -1694,36 +1801,57 @@ function submitForm(validateAfterSave = false) {
             });
             form.value.flowchartConfig = saved.data || form.value.flowchartConfig;
             originalFlowchartConfig.value = comparableFlowchartConfig(form.value.flowchartConfig);
-            proxy.$modal.msgSuccess("画程流程图题已保存");
-          } else {
-            proxy.$modal.msgSuccess("题目已保存");
           }
+          afterQuestionSaved(questionType, practicalMode);
         } else {
-          proxy.$modal.msgSuccess(questionId === form.value.questionId ? "保存成功" : "新增成功");
+          afterQuestionSaved(questionType, practicalMode);
         }
-        open.value = false;
-        getList();
+        savedQuestionId = questionId;
+        createdQuestionId.value = null;
+        const savedType = form.value.questionType;
+        const savedMode = savedType === "practical" ? (form.value.practicalMode || "FILE") : null;
+        if (!isPythonPracticalQuestion(form.value) || !validateAfterSave || form.value.programming.validationStatus === "VALID") {
+          if (isNew) {
+            const hint = newQuestionFilterHint(savedType, savedMode);
+            if (hint) ElMessage.warning(hint);
+            else ElMessage.success("新增成功，已显示在对应题型中");
+          } else {
+            ElMessage.success(questionType !== savedType || practicalMode !== savedMode ? "已保存，题型已更新" : "保存成功");
+          }
+        }
       } catch (error) {
+        // 失败保留表单、附件与已建记录：再次点击保存只会补写配置。
         if (validateAfterSave) pythonStep.value = 2;
+        if (!error?.__messageShown) {
+          ElMessage.error(isNew && createdQuestionId.value ? "题目已建立，后续配置保存失败，可直接重试" : "保存失败，表单内容已保留，可重试");
+        }
       } finally {
         validating.value = false;
+        submitting.value = false;
         loadingInstance.close();
       }
-    }
+      return savedQuestionId;
   });
 }
 
-/** 删除按钮操作 */
+/** 删除按钮操作：单条与批量共用确认文案 */
 function handleDelete(row) {
-  const _questionIds = row.questionId || ids.value;
+  const _questionIds = row?.questionIds?.length ? row.questionIds : (row?.questionId || ids.value);
+  const label = Array.isArray(_questionIds) || String(_questionIds).includes(",")
+    ? `所选 ${String(_questionIds).split(",").length} 道题目`
+    : `题目「${(row?.programmingTitle || row?.questionContent || _questionIds).toString().slice(0, 24)}」`;
   proxy.$modal
-    .confirm('是否确认删除题库管理编号为"' + _questionIds + '"的数据项？')
+    .confirm(`确认删除${label}？删除后无法恢复。`)
     .then(function () {
       return delQuestion(_questionIds);
     })
     .then(() => {
-      getList();
       proxy.$modal.msgSuccess("删除成功");
+      refreshAll();
+      if (viewingAll.value) loadAllList();
+      selectedIds.value = [];
+      selectedQuestions.value = [];
+      selectionMode.value = false;
     })
     .catch(() => {});
 }
@@ -1731,14 +1859,14 @@ function handleDelete(row) {
 /** 导出按钮操作 */
 function handleExport() {
   // 检查是否筛选了操作题
-  if (queryParams.value.questionType === 'practical') {
-    proxy.$modal.msgWarning("操作题包含附件文件，无法导出到Excel。请选择其他题型进行导出。");
+  if (activeScope.value.questionType === 'practical') {
+    proxy.$modal.msgWarning("操作题包含附件文件，无法导出到Excel。请切换到其他题型再导出。");
     return;
   }
   proxy.download(
     "business/question/export",
     {
-      ...queryParams.value,
+      ...buildAllListQuery(appliedFilters.value, activeScope.value, 1, 10000),
     },
     `question_${new Date().getTime()}.xlsx`
   );
@@ -1747,7 +1875,7 @@ function handleExport() {
 /** 导入按钮操作 */
 function handleImport() {
   refreshUploadHeaders();
-  upload.title = "题目导入";
+  upload.title = "导入常规题（Excel）";
   upload.open = true;
 }
 
@@ -1761,6 +1889,86 @@ function importTemplate() {
 }
 
 let uploadLoadingInstance;
+
+/*** 题目导入参数 */
+const upload = reactive({
+  open: false,
+  title: "",
+  isUploading: false,
+  updateSupport: 0,
+  headers: refreshAuthorizationHeader(),
+  url: import.meta.env.VITE_APP_BASE_API + "/business/question/importData",
+});
+const importErrors = ref([]);
+const importErrorVisible = ref(false);
+
+function refreshUploadHeaders() {
+  upload.headers = refreshAuthorizationHeader(upload.headers);
+}
+
+const questionContentLabel = computed(() => {
+  switch (form.value.questionType) {
+    case "typing":
+      return "打字题内容";
+    case "practical":
+      return "操作题名称";
+    default:
+      return "题目内容";
+  }
+});
+
+const questionContentRows = computed(() => {
+  return form.value.questionType === "typing" ? 8 : 3;
+});
+
+const rules = computed(() => {
+  const pythonQuestion = isPythonPracticalQuestion(form.value);
+  const baseRules = {
+    questionType: [{ required: true, message: "题目类型不能为空" }],
+    questionContent: [{ required: true, message: "题目内容不能为空" }],
+    isPublic: [{ required: true, message: "是否公开不能为空" }],
+    ...(pythonQuestion ? {} : {
+      grade: [{ required: true, message: "年级不能为空" }],
+      semester: [{ required: true, message: "学期不能为空" }],
+    }),
+  };
+
+  if (form.value.questionType === "choice") {
+    return {
+      ...baseRules,
+      optionA: [{ required: true, message: "选项A不能为空" }],
+      optionB: [{ required: true, message: "选项B不能为空" }],
+      optionC: [{ required: true, message: "选项C不能为空" }],
+      optionD: [{ required: true, message: "选项D不能为空" }],
+      answer: [{ required: true, message: "标准答案不能为空" }],
+    };
+  } else if (form.value.questionType === "judgment") {
+    return {
+      ...baseRules,
+      answer: [{ required: true, message: "标准答案不能为空" }],
+    };
+  } else if (form.value.questionType === "practical") {
+    return {
+      ...baseRules,
+      ...(pythonQuestion ? {
+        difficulty: [{ required: true, message: "难度不能为空" }],
+        answer: [{ required: true, message: "参考代码不能为空" }],
+      } : {}),
+    };
+  } else if (form.value.questionType === "typing") {
+    return {
+      ...baseRules,
+      typingDuration: [{ required: true, message: "打字时长不能为空" }],
+    };
+  }
+  return baseRules;
+});
+
+// 数据分析实验题保存后由编辑器自行提示，这里只刷新工作台。
+function onSaved() {
+  refreshAll();
+  if (viewingAll.value) loadAllList();
+}
 
 /**文件上传中处理 */
 const handleFileUploadProgress = (event, file, fileList) => {
@@ -1798,8 +2006,8 @@ const handleFileSuccess = (response, file, fileList) => {
     "导入结果",
     { dangerouslyUseHTMLString: true }
   );
-  getList();
-};
+  refreshAll();
+}
 
 /** 文件上传失败处理 */
 const handleFileError = (err, file, fileList) => {
@@ -1832,7 +2040,7 @@ function submitFileForm() {
 /** 导出题库导入错误清单，便于老师按行号批量修正 */
 function downloadImportErrors() {
   const rows = [["Excel 行", "错误原因"], ...importErrors.value.map(item => [item.row, item.reason])];
-  const csv = "\ufeff" + rows
+  const csv = "﻿" + rows
     .map(row => row.map(value => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1861,12 +2069,50 @@ function handlePreview(row) {
   }
 }
 
-getList();
+// 首次进入：筛选默认展开，四个模块各自有界加载。
+refreshAll();
 </script>
 
 <style scoped>
+/* 工作台：浅灰底、白色模块、细边框；题目与操作优先，不做装饰性视觉。 */
+.qw { padding-bottom: 24px; background: #f5f6f8; }
+.qw__head { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 16px 18px 4px; }
+.qw__title h2 { margin: 0; font-size: 22px; color: #1f2329; }
+.qw__title p { margin: 4px 0 0; color: #6b7280; font-size: 13px; }
+.qw__head-ops { display: flex; gap: 8px; }
+.qw__filters { margin: 12px 0; padding: 14px 16px; border: 1px solid #e6e9ef; border-radius: 12px; background: #fff; }
+.qw__filter-form :deep(.el-form-item) { margin-bottom: 10px; margin-right: 14px; }
+.qw__filter-row { display: flex; flex-wrap: wrap; align-items: center; }
+.qw__scope-note { margin: 2px 0 0; color: #8a9099; font-size: 12px; line-height: 1.6; }
+.qw__filter-collapsed { display: flex; gap: 10px; align-items: center; color: #6b7280; font-size: 13px; }
+.qw__pair { display: grid; gap: 12px; margin: 12px 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.qw__half { min-width: 0; }
+.qw__all { padding: 14px 16px 20px; border: 1px solid #e6e9ef; border-radius: 12px; background: #fff; }
+.qw__all-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.qw__all-head h3 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 18px; color: #1f2329; }
+.qw__all-head p { margin: 4px 0 0; color: #8a9099; font-size: 12px; }
+.qw__total { padding: 1px 8px; border-radius: 10px; background: #f2f4f7; color: #5b6472; font-size: 12px; font-weight: 400; }
+.qw__ops { display: flex; flex-wrap: wrap; gap: 8px; }
+.qw__bulk { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: #f5f8ff; color: #5b6472; font-size: 12px; }
+.qw__all-grid { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 1fr); }
+.qw__all-item { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.qw__all-item > .qcard { flex: 1; min-width: 0; }
+.qw__state { margin-top: 12px; padding: 24px; border: 1px dashed #e6e9ef; border-radius: 8px; color: #8a9099; text-align: center; }
+.qw__state--error { color: #c45656; }
+@media (min-width: 1200px) {
+  .qw__all-grid--simple { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .qw__all-grid--practical { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .qw__head { padding: 12px; }
+  .qw__filters { padding: 10px 12px; }
+  /* 窄屏：打字题→选择题→判断题→操作题顺序转单列 */
+  .qw__pair { grid-template-columns: minmax(0, 1fr); }
+  .qw__filter-form :deep(.el-form-item) { margin-right: 8px; }
+}
+/* 保留原有编辑器辅助样式 */
 .detail-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 .question-detail { min-height: 120px; }
 .import-error-summary { margin: 0 0 12px; color: #b42318; font-weight: 700; }
-.bank-view-tabs{margin-bottom:16px}.python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
+.python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
 </style>

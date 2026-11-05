@@ -83,6 +83,8 @@ sequenceDiagram
 
 ## Judge0
 
+2026-11-04 操作题 PY 批改运行已在本机接入同一 judge0HttpClient，浏览器提交附件ID与stdin，后端读取已鉴权原文件，禁网络、3秒CPU/128 MiB/32 KiB输出、实例并发2，不写成绩或判题提交。该功能尚未发布，需后端与前端同步上线。见[设计](../../contexts/practical-python-upload/design.md)。
+
 2026-11-02课堂交互运行（已随1.30.66发布130）：课堂“运行”改用已有本站Pyodide基础库，在独占Worker内用JSPI/run_sync等待`input()`；“交作业”仍经原后台Judge0计分，浏览器不直连Judge0、不持有服务凭据。独立Python题单、DATA_LAB及旧RUN/CUSTOM_RUN接口保持。执行/输入/加载超时分离，切题和停止销毁线程。需新版浏览器JSPI能力；Worker不等于安全沙箱，本机输出不作计分依据。无SQL、配置、新依赖或后端重启，前端回滚可恢复原界面。见[设计及风险](../../contexts/python-interactive-20261102/design.md)。
 
 ```mermaid

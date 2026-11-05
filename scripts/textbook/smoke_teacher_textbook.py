@@ -1,3 +1,4 @@
+import os
 # -*- coding: utf-8 -*-
 """电子教材教师端冒烟：登录 -> 首页课程卡胶囊 -> 书架 -> 阅读器 -> 手选课次 -> 打印预览。
 
@@ -31,7 +32,7 @@ def main():
 
         # 登录
         page.fill("input[placeholder='请输入您的账号']", "19157727791")
-        page.fill("input[placeholder='请输入您的密码']", "zdx5201ZDX!")
+        page.fill("input[placeholder='请输入您的密码']", os.environ.get("TEACHER_PASSWORD",""))
         page.click("button:has-text('登 录')")
         page.wait_for_timeout(2500)
 

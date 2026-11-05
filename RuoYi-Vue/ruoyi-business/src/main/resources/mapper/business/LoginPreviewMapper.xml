@@ -50,30 +50,46 @@
 
     <!-- 使用时间取真实答题/签到/课堂表现的最近活动；不将建课、指派时间冒充开课。 -->
     <select id="selectLessons" resultType="java.util.LinkedHashMap">
-        WITH raw_activity AS (
-            SELECT lesson_id, student_id, submit_time AS used_at FROM biz_student_answer
-            WHERE submit_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY)
-              AND submit_time &lt;= NOW() AND student_answer IS NOT NULL AND TRIM(student_answer) &lt;&gt; ''
-            UNION ALL
-            SELECT lesson_id, student_id, checkin_time FROM biz_lesson_checkin
-            WHERE checkin_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND checkin_time &lt;= NOW()
-            UNION ALL
-            SELECT lesson_id, student_id, create_time FROM biz_classroom_performance
-            WHERE create_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND create_time &lt;= NOW()
-        ), activity AS (
-            <!-- 一名学生每题都会产生记录，先按课/学生去重，避免与班级事实反复关联。 -->
-            SELECT lesson_id, student_id, MAX(used_at) AS used_at
-            FROM raw_activity GROUP BY lesson_id, student_id
+        WITH activity AS (
+            <!--
+              每个来源先按课/学生聚合再合并：一名学生每题一行，90 天窗口下答题表会产生十几万行，
+              先聚合可把 UNION 的中间结果压到几万行，避免后面统一 GROUP BY 时写大临时表。
+              这里只认提交时间，不再逐行读取 TEXT 答案列做 TRIM 判断——那是本查询最大的回表开销，
+              而 submit_time 非空本身已代表学生完成过一次提交。空答案的严格口径只在下方 practical 保留。
+            -->
+            SELECT lesson_id, student_id, MAX(used_at) AS used_at FROM (
+                SELECT lesson_id, student_id, MAX(submit_time) AS used_at FROM biz_student_answer
+                WHERE submit_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND submit_time &lt;= NOW()
+                GROUP BY lesson_id, student_id
+                UNION ALL
+                SELECT lesson_id, student_id, MAX(checkin_time) FROM biz_lesson_checkin
+                WHERE checkin_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND checkin_time &lt;= NOW()
+                GROUP BY lesson_id, student_id
+                UNION ALL
+                SELECT lesson_id, student_id, MAX(create_time) FROM biz_classroom_performance
+                WHERE create_time &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY) AND create_time &lt;= NOW()
+                GROUP BY lesson_id, student_id
+            ) merged GROUP BY lesson_id, student_id
+        ), recent_lesson AS (
+            <!--
+              只需要最近 6 个班级，先把候选课程收窄再展开到班级：班级时间不会晚于所属课程，
+              因此最近 6 个班一定落在最近若干门课内。取 200 门覆盖「有活动但班级已撤销」的课程，
+              活动课程总数本就不大，这一步分组后只有几百行，成本可以忽略。
+            -->
+            SELECT lesson_id FROM activity GROUP BY lesson_id ORDER BY MAX(used_at) DESC LIMIT 200
         ), recent_class AS (
             SELECT scope.scope_id, scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code,
                    MAX(a.used_at) AS used_at, COUNT(DISTINCT a.student_id) AS participant_count
-            FROM activity a
+            FROM recent_lesson rl
+            STRAIGHT_JOIN activity a ON a.lesson_id = rl.lesson_id
             <!-- 从已去重活动匹配学生班级，避免按每个课程班级重复扫描该课所有学生。 -->
             STRAIGHT_JOIN biz_student s ON s.student_id = a.student_id
             STRAIGHT_JOIN sys_user u ON u.user_id = s.user_id AND u.del_flag = '0' AND u.status = '0'
+            <!-- 班级归属学校由 scope 决定，课程只按 lesson_id 关联：一名教师可跨多校任课，
+                 课程记录的 dept_id 只是创建校，不能拿来限制班级校，否则跨校课次会整条消失。 -->
             STRAIGHT_JOIN biz_lesson_class_scope scope ON scope.lesson_id = a.lesson_id AND scope.dept_id = u.dept_id
                   AND scope.entry_year = s.entry_year AND scope.class_code = s.class_code
-            STRAIGHT_JOIN biz_lesson l ON l.lesson_id = scope.lesson_id AND l.dept_id = scope.dept_id
+            STRAIGHT_JOIN biz_lesson l ON l.lesson_id = scope.lesson_id
             STRAIGHT_JOIN sys_dept d ON d.dept_id = scope.dept_id AND d.del_flag = '0' AND d.status = '0'
             GROUP BY scope.scope_id, scope.lesson_id, scope.dept_id, scope.entry_year, scope.class_code
             ORDER BY used_at DESC, scope.scope_id DESC LIMIT 6

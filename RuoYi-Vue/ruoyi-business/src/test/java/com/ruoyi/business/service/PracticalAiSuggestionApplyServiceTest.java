@@ -56,6 +56,33 @@ class PracticalAiSuggestionApplyServiceTest
     }
 
     @Test
+    void alreadyAppliedResultIsSkippedWithoutWritingAgain()
+    {
+        PracticalAiResult applied = result();
+        applied.setApplyStatus("APPLIED");
+        when(aiMapper.selectJob(1L, 7L)).thenReturn(job());
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(applied));
+        Map<String,Object> summary=service.apply(1L,7L,9L,PracticalAiSuggestionApplyService.OVERWRITE_ALL);
+        assertEquals(0,summary.get("appliedCount"));
+        assertEquals(1,summary.get("skippedAppliedCount"));
+        verify(answerMapper,never()).updateScore(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyInt());
+        verify(answerMapper,never()).selectByIdForUpdate(org.mockito.ArgumentMatchers.anyLong());
+        verify(aiMapper,never()).insertApplyAudit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void alreadyOverwrittenResultIsSkippedToo()
+    {
+        PracticalAiResult applied = result();
+        applied.setApplyStatus("APPLIED_OVERWRITE");
+        when(aiMapper.selectJob(1L, 7L)).thenReturn(job());
+        when(aiMapper.selectResultsByJob(1L)).thenReturn(Collections.singletonList(applied));
+        Map<String,Object> summary=service.apply(1L,7L,9L,PracticalAiSuggestionApplyService.OVERWRITE_ALL);
+        assertEquals(1,summary.get("skippedAppliedCount"));
+        verify(aiMapper,never()).insertApplyAudit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void returnedWorkCannotBeOverwrittenByOldAiSuggestion()
     {
         BizStudentAnswer answer = answer(); answer.setScore(0);

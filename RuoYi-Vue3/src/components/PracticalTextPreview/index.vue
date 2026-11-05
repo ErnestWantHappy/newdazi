@@ -13,6 +13,7 @@
       </div>
       <iframe v-if="data.fileKind === 'HTML' && mode === 'effect'" :srcdoc="previewDocument" sandbox="allow-scripts" referrerpolicy="no-referrer" title="学生网页作品效果" class="html-work" />
       <pre v-else class="source-work">{{ data.text }}</pre>
+      <PracticalPythonRun v-if="isPython && allowPythonRun" :key="attachmentId" :attachment-id="attachmentId" />
     </template>
   </div>
 </template>
@@ -20,9 +21,14 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import request from '@/utils/request';
 import { buildPracticalHtmlPreview } from '@/utils/practicalHtmlPreview';
-const props = defineProps({ attachmentId: { type: [Number, String], required: true } });
+import PracticalPythonRun from './PracticalPythonRun.vue';
+const props = defineProps({
+  attachmentId: { type: [Number, String], required: true },
+  allowPythonRun: { type: Boolean, default: false }
+});
 const loading = ref(false), error = ref(''), data = ref(null), mode = ref('effect');
 const previewRoot = ref(null), expanded = ref(false);
+const isPython = computed(() => data.value?.fileKind === 'TEXT' && /\.py$/i.test(data.value?.originalFileName || ''));
 let sequence = 0;
 const previewDocument = computed(() => buildPracticalHtmlPreview(data.value?.text));
 function handleFullscreenChange() {

@@ -127,8 +127,21 @@ public class ResourceAccessService
             return resource;
         }
 
-        // 通用上传没有独立归属表。只给课程内容维护角色读取未落业务表的草稿文件，学生一律拒绝。
-        if (isAdmin(loginUser) || hasRole(loginUser, "teacher") || hasRole(loginUser, "researcher"))
+        // 通用上传没有独立归属表：先按路径反查题目归属，创建者和同校管理员可读；
+        // 仍查不到归属（如旧草稿无任何业务记录）时，只有管理员放行，学生和其他教师一律拒绝。
+        Map<String, Object> questionOwner = resourceAccessMapper.selectQuestionOwnerByResource(resource);
+        if (questionOwner != null)
+        {
+            Long creatorId = numberAsLong(questionOwner.get("creatorId"));
+            if (loginUser.getUserId().equals(creatorId))
+            {
+                return resource;
+            }
+            assertQuestionAccess(questionMapper.selectBizQuestionByQuestionId(
+                    numberAsLong(questionOwner.get("questionId"))), loginUser);
+            return resource;
+        }
+        if (isAdmin(loginUser))
         {
             return resource;
         }
