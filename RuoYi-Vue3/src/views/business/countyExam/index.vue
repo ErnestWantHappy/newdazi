@@ -384,6 +384,7 @@
               <template #default="{ row }">
                 <div class="question-cell">
                   <div class="question-title">{{ row.questionContent || '-' }}</div>
+                  <QuestionMedia :question="row" :context="{ examId:detailDrawer.exam?.examId }" />
                   <div v-if="row.questionType === 'choice'" class="question-extra">
                     <div class="option-grid">
                       <div
@@ -393,7 +394,8 @@
                         :class="{ correct: option.label === row.answer }"
                       >
                         <span class="option-label">{{ option.label }}</span>
-                        <span class="option-content">{{ option.content || '未配置' }}</span>
+                        <span class="option-content">{{ option.content || (slotImages(row,option.label).length ? '' : '未配置') }}</span>
+                        <QuestionMedia :question="row" :slot="option.label" :context="{ examId:detailDrawer.exam?.examId }" />
                       </div>
                     </div>
                     <div class="answer-line">正确答案：<el-tag size="small" type="success">{{ formatQuestionAnswer(row) }}</el-tag></div>
@@ -439,6 +441,8 @@
 </template>
 
 <script setup name="CountyExam">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue'
+import { slotImages } from '@/utils/questionMedia'
 import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { saveAs } from 'file-saver'

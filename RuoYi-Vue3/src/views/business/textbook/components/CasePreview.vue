@@ -42,11 +42,26 @@
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { getCasePreviewInfo, getCasePreviewPage } from '@/api/business/textbookCase'
+import { getGuidePreviewInfo, getGuidePreviewPage, getGuideLessonPreviewInfo, getGuideLessonPreviewPage, getBookResourcePreviewInfo, getBookResourcePreviewPage } from '@/api/business/textbookResource'
 import { buildPreviewLayout, currentScrollPage, visiblePreviewPages } from '@/utils/casePreviewScroll'
 
-const props = defineProps({ resourceId: { type: Number, required: true }, title: String })
-const emit = defineEmits(['ready', 'pending', 'failed'])
-const pageNo = ref(1), jumpPage = ref(1), total = ref(0), loading = ref(false), error = ref('')
+const props = defineProps({
+  resourceId: { type: Number, required: true },
+  title: String,
+  // case=课例资源，guide=整本指南 PDF，guideLesson=指南课件，book=册级教学设计汇编
+  source: { type: String, default: 'case' },
+  // 同一汇编关闭再打开时由父层记住最后阅读页；不写入浏览器或服务器。
+  initialPage: { type: Number, default: 1 }
+})
+const previewApi = computed(() => ({
+  case: { info: getCasePreviewInfo, page: getCasePreviewPage },
+  guide: { info: getGuidePreviewInfo, page: getGuidePreviewPage },
+  guideLesson: { info: getGuideLessonPreviewInfo, page: getGuideLessonPreviewPage },
+  book: { info: getBookResourcePreviewInfo, page: getBookResourcePreviewPage }
+}[props.source] || { info: getCasePreviewInfo, page: getCasePreviewPage }))
+const emit = defineEmits(['ready', 'pending', 'failed', 'page-change'])
+const initialPage = Math.max(1, Math.trunc(Number(props.initialPage) || 1))
+const pageNo = ref(initialPage), jumpPage = ref(initialPage), total = ref(0), loading = ref(false), error = ref('')
 const zoom = ref('page'), canvas = ref(null), scrollTop = ref(0), thumbnailRail = ref(null)
 const thumbnailsVisible = ref(false), thumbnails = ref({}), images = ref({}), sizes = ref({})
 const fallback = ref({ width: 1200, height: 1600 }), baseKnown = ref(false)
@@ -99,7 +114,7 @@ async function loadImage(page) {
   images.value[page] = { loading: true }
   let url = ''
   try {
-    const blob = await getCasePreviewPage(props.resourceId, page)
+    const blob = await previewApi.value.page(props.resourceId, page)
     if (disposed) return
     url = URL.createObjectURL(blob)
     const size = await new Promise((resolve, reject) => {
@@ -136,7 +151,7 @@ async function pump() {
       const thumbnail = thumbnailsVisible.value && [...visibleThumbnails].find(value => !thumbnails.value[value])
       if (!thumbnail) break
       try {
-        const blob = await getCasePreviewPage(props.resourceId, thumbnail, true)
+        const blob = await previewApi.value.page(props.resourceId, thumbnail, true)
         if (disposed) break
         thumbnails.value[thumbnail] = URL.createObjectURL(blob)
         // 已滚离的缩略图不长期占内存，回看时可重新按需加载。
@@ -153,10 +168,15 @@ async function load() {
   const ticket = ++infoSequence
   loading.value = true; error.value = ''; setReadingState()
   try {
-    const res = await getCasePreviewInfo(props.resourceId)
+    const res = await previewApi.value.info(props.resourceId)
     if (disposed || ticket !== infoSequence) return
     total.value = Number(res.data.pages)
     if (!Number.isInteger(total.value) || total.value < 1) throw new Error('文件没有可预览页面')
+    await nextTick()
+    if (disposed || ticket !== infoSequence) return
+    const targetPage = Math.max(1, Math.min(total.value, Math.trunc(Number(props.initialPage) || 1)))
+    if (targetPage > 1) goToPage(targetPage)
+    else { pageNo.value = 1; jumpPage.value = 1 }
   } catch (failure) {
     if (!disposed && ticket === infoSequence) error.value = failure?.message || '读取预览失败，可重试或下载原件'
   } finally {
@@ -196,6 +216,7 @@ watch(layout, (next, previous) => {
   })
 }, { flush: 'sync' })
 watch(pageNo, async page => {
+  emit('page-change', page)
   await nextTick()
   const rail = thumbnailRail.value, selected = rail?.querySelector(`[data-page="${page}"]`)
   if (!rail || !selected) return

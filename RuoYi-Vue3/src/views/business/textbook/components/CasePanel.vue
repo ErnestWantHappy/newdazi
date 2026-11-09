@@ -1,22 +1,25 @@
 <template>
-  <aside class="case-panel" aria-label="本课优秀课例">
-    <header><strong>本课优秀课例</strong><el-button text @click="$emit('close')">收起</el-button></header>
+  <aside class="case-panel" aria-label="本课教学资源">
+    <header><strong>本课教学资源</strong><el-button text @click="$emit('close')">收起</el-button></header>
     <p v-if="downloadHint" class="download-hint" :class="{ 'is-error': downloadHintError }" role="status">{{ downloadHint }}</p>
     <p v-if="loading">正在加载课例…</p>
     <div v-else-if="error">课例加载失败 <el-button link type="primary" @click="load">重试</el-button></div>
-    <el-empty v-else-if="!cases.length" description="本课暂无已发布课例" :image-size="50" />
+    <el-empty v-else-if="!cases.length" description="本课暂无已发布教学资源" :image-size="50" />
     <el-collapse v-else v-model="expanded" class="case-list">
       <el-collapse-item v-for="item in cases" :key="item.caseId" :name="item.caseId">
-        <template #title><div class="case-heading"><div><strong>{{ item.title }}</strong><div class="muted">{{ [item.school, item.author].filter(Boolean).join(' · ') }}</div></div><CaseVotes :item="item" :can-vote="canVote" :busy="voting !== null" @vote="vote" /></div></template>
+        <template #title><div class="case-heading"><div><strong>{{ caseTitle(item) }}</strong><el-tag size="small" :type="isLegacy(item) ? 'success' : 'info'" effect="plain">{{ originLabel(item) }}</el-tag><div v-if="item.school || item.author" class="muted">{{ [item.school, item.author].filter(Boolean).join(' · ') }}</div></div><CaseVotes v-if="isLegacy(item)" :item="item" :can-vote="canVote" :busy="voting !== null" @vote="vote" /></div></template>
         <p v-if="voteHints[item.caseId]" role="status" class="vote-hint">{{ voteHints[item.caseId] }}</p>
         <section v-for="resource in item.resources" :key="resource.resourceId" class="resource">
-          <strong>{{ resource.title }}</strong>
+          <strong v-if="resource.title !== item.title">{{ resource.title }}</strong>
           <div class="muted">{{ categoryNames[resource.category] || '配套资源' }} · {{ formatBytes(resource.bytes) }} · {{ resource.filename.split('.').pop().toUpperCase() }}</div>
-          <p v-if="resource.description">{{ resource.description }}</p>
-          <p v-if="resource.requirements"><b>使用条件</b><br>{{ resource.requirements }}</p>
+          <details v-if="resource.requirements" class="resource-usage">
+            <summary>使用说明</summary>
+            <p>{{ resource.requirements }}</p>
+          </details>
           <el-button v-if="Number(resource.previewable)" size="small" type="primary" plain @click="preview(resource)">预览</el-button>
           <el-button v-if="Number(resource.htmlPreview)" size="small" type="success" plain @click="openHtml(resource)">打开网页</el-button>
           <el-button size="small" :loading="downloading === resource.resourceId" :disabled="downloading !== null" @click="download(resource)">{{ downloadLabel(resource) }}</el-button>
+          <el-button v-if="resource.extraFilename" size="small" :loading="downloading === `extra-${resource.resourceId}`" :disabled="downloading !== null" @click="downloadExtra(resource)">下载 {{ resource.extraFilename.split('.').pop().toUpperCase() }} 版</el-button>
         </section>
       </el-collapse-item>
     </el-collapse>
@@ -26,12 +29,11 @@
           <el-option v-for="resource in previewSiblings" :key="resource.resourceId" :label="resource.title" :value="resource.resourceId" />
         </el-select>
         <el-button :loading="downloading === previewResource.resourceId" :disabled="downloading !== null" @click="download(previewResource)">{{ downloadLabel(previewResource) }}</el-button>
-        <CaseVotes v-if="previewOwner" :item="previewOwner" :can-vote="canVote" :busy="voting !== null" @vote="vote" />
+        <CaseVotes v-if="previewOwner && isLegacy(previewOwner)" :item="previewOwner" :can-vote="canVote" :busy="voting !== null" @vote="vote" />
         <el-button v-if="previewTools.length" text @click="toolsVisible = !toolsVisible">{{ toolsVisible ? '收起配套材料' : '配套材料' }}</el-button>
       </div>
       <p v-if="previewOwner && voteHints[previewOwner.caseId]" role="status" class="vote-hint">{{ voteHints[previewOwner.caseId] }}</p>
       <p v-if="downloadHint" class="download-hint" :class="{ 'is-error': downloadHintError }" role="status">{{ downloadHint }}</p>
-      <p v-if="previewResource && /\.(pptx|ppt)$/i.test(previewResource.filename)" class="muted">此处为静态预览，完整动画和音视频可下载原课件查看。</p>
       <div v-if="previewResource" class="preview-layout">
         <div v-if="previewMediaType" class="media-preview">
           <p v-if="mediaError" role="alert">预览加载失败，可以关闭后重新预览或下载原件。</p>
@@ -47,7 +49,10 @@
           <div class="tools-heading"><h3>配套材料</h3><el-button text @click="toolsVisible = false">收起</el-button></div>
           <section v-for="tool in previewTools" :key="tool.resourceId" class="resource">
             <strong>{{ tool.title }}</strong><div class="muted">{{ formatBytes(tool.bytes) }}</div>
-            <p>{{ tool.description }}</p><p v-if="tool.requirements"><b>使用条件</b><br>{{ tool.requirements }}</p>
+            <details v-if="tool.requirements" class="resource-usage">
+              <summary>使用说明</summary>
+              <p>{{ tool.requirements }}</p>
+            </details>
             <el-button type="primary" :loading="downloading === tool.resourceId" :disabled="downloading !== null" @click="download(tool)">{{ downloadLabel(tool) }}</el-button>
           </section>
         </aside>
@@ -58,7 +63,6 @@
         <p>{{ invitationOwner.title }} · {{ invitationOwner.author }}</p>
         <CaseVotes :item="invitationOwner" :can-vote="canVote" :busy="voting !== null" @vote="vote" />
         <p v-if="voteHints[invitationOwner.caseId]" role="status">{{ voteHints[invitationOwner.caseId] }}</p>
-        <p class="muted">可以直接关闭，稍后也能在课例右上角评价。</p>
       </template>
     </el-dialog>
   </aside>
@@ -66,7 +70,7 @@
 
 <script setup>
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
-import { getSectionCases, caseDownloadUrl, caseMediaUrl, caseHtmlUrl, saveCaseFeedback, requestCaseInvitation } from '@/api/business/textbookCase'
+import { getSectionCases, caseDownloadUrl, caseExtraDownloadUrl, caseMediaUrl, caseHtmlUrl, saveCaseFeedback, requestCaseInvitation } from '@/api/business/textbookCase'
 import useUserStore from '@/store/modules/user'
 import CasePreview from './CasePreview.vue'
 import CaseVotes from './CaseVotes.vue'
@@ -107,7 +111,7 @@ const previewSiblings = computed(() => {
   const owner = cases.value.find(item => item.resources.some(resource => resource.resourceId === previewResource.value?.resourceId))
   return (owner?.resources || []).filter(resource => Number(resource.previewable))
 })
-const categoryNames = { DESIGN: '教学设计', SLIDES: '教学课件', WORKSHEET: '任务单', TOOL: '实验工具', MATERIAL: '配套素材' }
+const categoryNames = { DESIGN: '教学设计', SLIDES: '教学课件', WORKSHEET: '任务单', TOOL: '实验工具', MATERIAL: '配套素材', ARCHIVE: '配套材料' }
 let sequence = 0
 
 function formatBytes(value) {
@@ -151,7 +155,23 @@ function preview(resource) {
 function openHtml(resource) {
   const opened = window.open(caseHtmlUrl(resource.resourceId), '_blank', 'noopener,noreferrer')
   if (!opened) showHint('浏览器拦截了新标签，请允许本站弹窗后重试', true)
-  else showHint(`已在新标签打开《${resource.title}》，网页在隔离沙箱中运行`)
+  else showHint(`已在新标签打开《${resource.title}》`)
+}
+
+function isLegacy(item) {
+  return !item.origin || item.origin === 'LEGACY'
+}
+
+function originLabel(item) {
+  return isLegacy(item) ? '优秀课例' : item.origin === 'NINGBO2023' ? '宁波版 2023 参考' : '宁波版 2026'
+}
+
+function caseTitle(item) {
+  return item.origin === 'NINGBO2023' ? item.title.replace(/\s*[（(]2023版参考[）)]\s*$/, '') : item.title
+}
+
+function downloadExtra(resource) {
+  return download(resource, true)
 }
 
 function downloadLabel(resource) {
@@ -211,7 +231,7 @@ async function vote(item, value, reason = undefined, complete = () => {}) {
 }
 
 async function invite(item) {
-  if (!alive || !item || !canVote.value || Number(item.myVote) || invitationPending || invitationVisible.value) return
+  if (!alive || !item || !isLegacy(item) || !canVote.value || Number(item.myVote) || invitationPending || invitationVisible.value) return
   const ticket = sequence
   invitationPending = true
   try {
@@ -231,20 +251,21 @@ function flushDownloadInvitations() {
   if (item) invite(item)
 }
 
-async function download(resource) {
+async function download(resource, extra = false) {
   if (downloading.value !== null) return
-  downloading.value = resource.resourceId
+  downloading.value = extra ? `extra-${resource.resourceId}` : resource.resourceId
   try {
     const link = document.createElement('a')
-    link.href = caseDownloadUrl(resource.resourceId)
-    link.download = resource.filename
+    link.href = extra ? caseExtraDownloadUrl(resource.resourceId) : caseDownloadUrl(resource.resourceId)
+    link.download = extra ? resource.extraFilename : resource.filename
     link.target = '_blank'
     link.rel = 'noopener'
     document.body.appendChild(link)
     link.click()
     link.remove()
     showHint(`已发起下载《${resource.title}》，可在浏览器下载记录中查看进度`)
-    downloadInvitations.add(cases.value.find(item => item.resources.some(entry => entry.resourceId === resource.resourceId)))
+    const owner = cases.value.find(item => item.resources.some(entry => entry.resourceId === resource.resourceId))
+    if (isLegacy(owner || {})) downloadInvitations.add(owner)
     await new Promise(resolve => window.setTimeout(resolve, 1000))
     flushDownloadInvitations()
   } catch {
@@ -324,6 +345,9 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .muted { color: #909399; font-size: 12px; line-height: 1.7; }
 .resource { padding: 12px 0; border-top: 1px solid #ebeef5; }
 .resource p { white-space: pre-line; overflow-wrap: anywhere; }
+.resource > .muted { margin: 4px 0 10px; }
+.resource-usage { margin: 8px 0 12px; color: #606266; font-size: 13px; line-height: 1.6; }
+.resource-usage summary { cursor: pointer; width: fit-content; }
 .preview-layout { display: flex; gap: 16px; flex: 1; min-height: 0; min-width: 0; position: relative; }
 .media-preview { flex: 1; min-width: 0; min-height: 0; overflow: auto; display: grid; place-items: center; background: #eef1f5; }
 .media-preview video, .media-preview img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; margin: auto; }

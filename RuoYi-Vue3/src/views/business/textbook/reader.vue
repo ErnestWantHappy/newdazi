@@ -8,7 +8,7 @@
       <div class="book-title" :title="book?.title">{{ book?.title || '电子教材' }}</div>
 
       <div class="bar-right">
-        <el-button v-if="!isStudentView && caseCounts[selectedKey]" size="small" type="primary" plain @click="casePanelVisible = !casePanelVisible">优秀课例 {{ caseCounts[selectedKey] }}</el-button>
+        <el-button v-if="!isStudentView && caseCounts[selectedKey]" size="small" type="primary" plain @click="casePanelVisible = !casePanelVisible">本课教学资源 {{ caseCounts[selectedKey] }}</el-button>
         <el-select
           v-model="selectedKey"
           class="section-select"
@@ -64,12 +64,23 @@
           size="small"
           text
           :loading="bookPdfLoading"
-          title="下载整册 PDF"
+          title="下载整册教材 PDF"
           @click="downloadWholeBook"
         >
           <el-icon><Download /></el-icon>
           <span>下载整册</span>
         </el-button>
+        <el-button
+          v-if="!isStudentView && bookCompilation"
+          size="small"
+          text
+          :title="bookCompilation.description"
+          @click="compilationVisible = true"
+        >
+          <el-icon><Document /></el-icon>
+          <span>教学设计汇编</span>
+        </el-button>
+        <el-button v-if="!isStudentView && compilationError" size="small" text @click="loadBookCompilation">汇编加载失败，重试</el-button>
         <el-button size="small" type="primary" plain :disabled="!currentSection" @click="printSection">
           <el-icon><Printer /></el-icon>
           <span>打印本课</span>
@@ -106,7 +117,7 @@
 
     <div v-else class="reader-body">
       <aside v-show="tocVisible" class="toc">
-        <div v-if="!isStudentView" class="case-legend"><el-icon><Collection /></el-icon> 优秀课例 <el-button v-if="caseSummaryError" link type="primary" @click="loadCaseSummary">加载失败，重试</el-button></div>
+        <div v-if="!isStudentView" class="case-legend"><el-icon><Collection /></el-icon> 本课教学资源 <el-button v-if="caseSummaryError" link type="primary" @click="loadCaseSummary">加载失败，重试</el-button></div>
         <div
           v-if="frontSection"
           class="toc-item is-muted"
@@ -133,7 +144,7 @@
           >
             <span class="toc-no">第{{ lesson.lessonNo }}课</span>
             <span class="toc-text">{{ lesson.title }}</span>
-            <button v-if="!isStudentView && caseCounts[lesson.sectionKey]" class="case-badge" :aria-label="`第${lesson.lessonNo}课，查看${caseCounts[lesson.sectionKey]}份优秀课例`" :title="`${caseCounts[lesson.sectionKey]}份优秀课例`" @click.stop="openCases(lesson)"><el-icon><Collection /></el-icon> {{ caseCounts[lesson.sectionKey] }}</button>
+            <button v-if="!isStudentView && caseCounts[lesson.sectionKey]" class="case-badge" :aria-label="`第${lesson.lessonNo}课，查看${caseCounts[lesson.sectionKey]}份教学资源`" :title="`${caseCounts[lesson.sectionKey]}份教学资源`" @click.stop="openCases(lesson)"><el-icon><Collection /></el-icon> {{ caseCounts[lesson.sectionKey] }}</button>
           </div>
           <div
             v-if="unit.summary"
@@ -180,6 +191,7 @@
       <CasePanel v-if="!isStudentView && casePanelVisible && caseCounts[selectedKey]" :key="`${bookId}/${selectedKey}`" :book-id="bookId" :section-key="selectedKey" @close="casePanelVisible = false" />
     </div>
 
+    <CompilationPreview v-model="compilationVisible" :resource="bookCompilation" />
     <footer v-if="!loading && !errorText" class="reader-foot">
       <el-button text size="small" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
         上一页
@@ -202,8 +214,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
-import { ArrowLeft, Download, Printer, Collection } from '@element-plus/icons-vue'
+import { ArrowLeft, Download, Printer, Collection, Document } from '@element-plus/icons-vue'
 import { getCaseSummary } from '@/api/business/textbookCase'
+import { getBookResources } from '@/api/business/textbookResource'
+import CompilationPreview from './components/CompilationPreview.vue'
 import CasePanel from './components/CasePanel.vue'
 import {
   getTextbookToc,
@@ -237,6 +251,10 @@ const selectedKey = ref('')
 const caseCounts = ref({})
 const caseSummaryError = ref(false)
 const casePanelVisible = ref(false)
+const bookCompilation = ref(null)
+const compilationVisible = ref(false)
+const compilationError = ref(false)
+let compilationSequence = 0
 let caseSummarySequence = 0
 
 async function loadCaseSummary() {
@@ -262,6 +280,21 @@ function openCases(lesson) {
 
 watch(selectedKey, key => { casePanelVisible.value = Boolean(caseCounts.value[key]) })
 watch([bookId, isStudentView], loadCaseSummary, { immediate: true })
+
+async function loadBookCompilation() {
+  const ticket = ++compilationSequence
+  bookCompilation.value = null
+  compilationVisible.value = false
+  compilationError.value = false
+  if (isStudentView.value) return
+  try {
+    const res = await getBookResources(bookId.value)
+    if (ticket !== compilationSequence) return
+    bookCompilation.value = (res.data || []).find(item => item.category === 'DESIGN') || null
+  } catch { if (ticket === compilationSequence) compilationError.value = true }
+}
+watch([bookId, isStudentView], loadBookCompilation, { immediate: true })
+
 const jumpPage = ref(1)
 const currentPage = ref(1)
 
@@ -672,7 +705,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', refreshViewport)
   pageEls.clear()
   clearTextbookPageCache()
-  document.title = '信息教学平台'
+  document.title = import.meta.env.VITE_APP_TITLE || '信息科技学业测评平台'
 })
 </script>
 

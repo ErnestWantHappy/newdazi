@@ -23,6 +23,10 @@ public class TeacherToolSaveRequest
     private String iconUrl;
     @Size(max = 500, message = "标签不能超过500个字符")
     private String tags;
+    @Size(max = 500, message = "检索别名不能超过500个字符")
+    private String aliases;
+    @Size(max = 200, message = "教学任务不能超过200个字符")
+    private String taskTags;
     private String accessType;
     private String sourceType;
     @Size(max = 200, message = "来源标识不能超过200个字符")
@@ -46,6 +50,10 @@ public class TeacherToolSaveRequest
     public void setIconUrl(String iconUrl) { this.iconUrl = iconUrl; }
     public String getTags() { return tags; }
     public void setTags(String tags) { this.tags = tags; }
+    public String getAliases() { return aliases; }
+    public void setAliases(String aliases) { this.aliases = aliases; }
+    public String getTaskTags() { return taskTags; }
+    public void setTaskTags(String taskTags) { this.taskTags = taskTags; }
     public String getAccessType() { return accessType; }
     public void setAccessType(String accessType) { this.accessType = accessType; }
     public String getSourceType() { return sourceType; }

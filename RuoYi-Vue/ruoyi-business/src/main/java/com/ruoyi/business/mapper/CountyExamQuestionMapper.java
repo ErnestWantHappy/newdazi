@@ -10,6 +10,8 @@ import java.util.List;
  * @author ruoyi
  */
 public interface CountyExamQuestionMapper {
+    java.util.List<Long> lockQuestions(@org.apache.ibatis.annotations.Param("ids") java.util.List<Long> ids);
+    java.util.List<Long> lockExamQuestions(Long examId);
     
     /**
      * 根据考试ID查询题目列表

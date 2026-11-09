@@ -1,5 +1,31 @@
 # 数据模型与迁移约定
 
+## 2026-11-09 选择题图片与图文导入（130正式1.30.82）
+
+`sql/choice_question_media_v1.sql`：`biz_question`、`biz_county_exam_paper_question`各增加nullable `media_json TEXT`，旧NULL不回填；独立四表为`biz_question_image`、`biz_question_save_receipt`、`biz_question_import_batch`、`biz_question_import_item`。媒体schemaVersion=1，stem最多3图、A—D各1图，引用数字imageId字符串；原文字、student_answer和A—D答案评分不变。
+
+图片元数据保存相对路径/哈希/尺寸/上传者与TEMP/RETAINED状态，130原图位于独立私有目录`/data/upload-question-images`（`admin2:admin2 750`），不在Nginx公开根。保存回执唯一(owner_id,request_id)与新题写入同事务；导入批次唯一(owner_id,request_id)，预览revision更新与正式题/图片绑定/COMMITTED/结果ID映射同事务。含图题实质修改自动另存，普通课仍引用旧题，个人抽测复制媒体字段。
+
+```mermaid
+flowchart LR
+  Teacher[教师录题或Excel图文预览] --> Temp[私有暂存图片 TEMP]
+  Teacher --> Save{安全保存或批次确认事务}
+  Save --> Question[题库 media_json]
+  Save --> Receipt[保存回执或导入结果]
+  Temp --> Retained[已绑定图片 RETAINED]
+  Question --> Lesson[课程引用旧questionId]
+  Question --> Paper[个人抽测媒体与文字快照]
+  Lesson --> Read[按身份与课程范围读取Blob]
+  Paper --> Read
+  Retained --> Read
+```
+
+130于2026-11-09整库备份后执行迁移，备份`/data/backups/xueyeceping/20261109_071529_20261109_choice_media_v1/database.sql.gz`，70,566,942B，SHA-256`464ac8a37b0c4edc4886af96d730c4e64c0ab7b327f5ff0415afe00e9cd34966`。迁移前后题库4792、抽测4187不变；正式验收数据按清单清理后，题库/抽测/课程关联/答案回基线，四表0行，图片目录为空。含图业务存在时不删表/列/RETAINED原图，不整库回灌备份；若已有正式媒体，不得回退到不识图旧程序。[正式验收与回滚](../../contexts/choice-question-media/release-1.30.82.md)
+
+## 2026-11-07 电子教材与教学资源（130正式1.30.76）
+
+`biz_textbook_case` 新增 `origin`（默认 `LEGACY`，本批 `NINGBO2026`）；`biz_textbook_case_resource` 新增 `extra_filename/extra_path/extra_bytes`，保存同一教学设计合并后的另一格式原件，原资源键仍唯一。新增 `biz_textbook_book_resource`（册级整册教学设计汇编，`book_id+resource_key` 唯一）、`biz_guide_grade`（3–8 年级指南，`grade` 唯一，含指南 PDF/使用说明路径与哈希）、`biz_guide_lesson`（指南配套课件，`guide_id+lesson_no` 唯一，`available=0` 表示来源缺课件）。课例与资源一律按稳定 `source_key` 解析目标课例，禁止写死本机 `case_id`；`book_id` 仍按 `book_code + section_key + kind='LESSON'` 解析。SQL `sql/teaching_resources_20261107_v1.sql`、`teaching_resources_20261107_data.sql`（修正版）、`teaching_resources_20261107_fix_legacy_placement.sql`、`teaching_resources_20261107_rollback.sql` 幂等；正式执行后 308 课例/1,015 资源，旧 142 课例/693 资源/2 评价逐字段不变。[验证与回滚](../../contexts/textbook-teaching-resources-20261107/verification.md)。
+
 ## 2026-11-04 2025宁波课例批次（130正式1.30.71）
 
 无表结构变更。课例/资源仍用 `biz_textbook_case`、`biz_textbook_case_resource`：本批 `source_key = sha256("ningbo-2025:"+来源相对路径)[:32]`，资源键 `sha256("ningbo-2025:<课例来源>::<课例内路径>")`，与旧批次命名空间隔离。`book_id` 由 `book_code + section_key + kind='LESSON'` 解析（本机与130 book_id 不同，不得混用）。SQL `sql/textbook_cases_ningbo2025_v1.sql` 仅 `INSERT … ON DUPLICATE KEY UPDATE`，无 DELETE；导入后本机与130均 142 课例/693 资源，孤儿0、重复0，旧52条`case_id`/196资源/2条评价未变。`resources()` 查询新增计算列 `htmlPreview`（按 `original_path` 后缀），不落库、不影响PDF预览。[迁移与回退](../../contexts/textbook-cases-2025/migration-report.md)。

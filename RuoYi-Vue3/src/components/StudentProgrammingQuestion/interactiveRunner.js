@@ -1,8 +1,16 @@
+import { serverRunProgramming } from '@/api/business/programming'
+
+// 本机运行依赖 JSPI（WebAssembly.Suspending/promising），只有 Chrome/Edge 137+ 默认支持。
+export function canRunLocally() {
+  return typeof WebAssembly !== 'undefined' && 'Suspending' in WebAssembly && 'promising' in WebAssembly
+}
+
 // 每次运行独占解释器；停止、切题和超时均销毁线程，避免旧程序继续消耗资源。
 export function createInteractiveRunner(onEvent, options = {}) {
   let worker = null
   let timer
   let inputId = null
+  let requestSeq = null
   const createWorker = options.createWorker || (() => new Worker(new URL('./interactiveWorker.js', import.meta.url), { type: 'module' }))
   const limits = { load: 180000, run: 10000, input: 300000, ...options.limits }
 
@@ -20,6 +28,27 @@ export function createInteractiveRunner(onEvent, options = {}) {
     }, duration)
   }
   return {
+    /** 旧版浏览器走服务端运行公开示例；成功与否都通过事件回报，保持与本地运行相同的状态流转。 */
+    async runOnServer(code, context) {
+      release()
+      // 只接受最近一次请求的结果，避免连点或多题切换后旧响应覆盖当前题目
+      const instance = {}
+      requestSeq = instance
+      onEvent({ type: 'loading', text: '正在提交到服务器运行…' })
+      try {
+        // 测试可注入 serverRun；正常运行时走后端 server-run 接口
+        const call = options.serverRun || (payload => serverRunProgramming(payload))
+        const res = await call({ lessonId: context.lessonId, questionId: context.questionId, sourceCode: code })
+        if (requestSeq !== instance) return
+        const data = res.data || {}
+        if (!Array.isArray(data.cases) || !data.cases.length) throw new Error('服务器没有返回示例结果，请稍后重试')
+        onEvent({ type: 'server-result', cases: data.cases })
+        onEvent({ type: 'done' })
+      } catch (error) {
+        if (requestSeq !== instance) return
+        onEvent({ type: 'error', text: (error && error.message) || '服务器运行失败，请检查网络后重新运行' })
+      }
+    },
     run(code, baseUrl) {
       release()
       let instance

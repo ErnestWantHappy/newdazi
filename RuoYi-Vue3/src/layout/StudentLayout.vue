@@ -1,12 +1,14 @@
 <template>
   <div class="student-layout">
     <app-main />
+    <BrandLogoLanding />
   </div>
 </template>
 
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue'
 import { AppMain } from './components'
+import BrandLogoLanding from '@/components/BrandLogoLanding/index.vue'
 import { provideStudentSeatSession } from '@/components/SeatHelper/studentSession'
 
 provideStudentSeatSession()

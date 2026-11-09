@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.business.mapper.CountyExamQuestionMapper">
+    <select id="lockQuestions" resultType="java.lang.Long">
+        select question_id from biz_question where question_id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        order by question_id for update
+    </select>
+    <select id="lockExamQuestions" resultType="java.lang.Long">
+        select q.question_id from biz_question q inner join biz_county_exam_question eq on eq.question_id=q.question_id
+        where eq.exam_id=#{examId} order by q.question_id for update
+    </select>
 
     <resultMap type="CountyExamQuestion" id="CountyExamQuestionResult">
         <id     property="id"             column="id"             />
@@ -11,6 +20,7 @@
     </resultMap>
 
     <resultMap id="CountyExamQuestionDetailResult" type="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        <result property="mediaJson" column="media_json"/>
         <result property="questionId" column="question_id"/>
         <result property="questionScore" column="question_score"/>
         <result property="orderNum" column="order_num"/>
@@ -51,7 +61,8 @@
                q.typing_duration,
                q.word_count,
                q.preview_path,
-               q.file_path
+               q.file_path,
+               q.media_json
         from biz_county_exam_question eq
         left join biz_question q on eq.question_id = q.question_id
         where eq.exam_id = #{examId}

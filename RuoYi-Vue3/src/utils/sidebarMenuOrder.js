@@ -85,7 +85,7 @@ export function sortSidebarRoutes(routes, roles = []) {
     sorted.splice(sorted.indexOf(target), 1)
     sorted.splice(sorted.indexOf(anchor) + (before ? 0 : 1), 0, target)
   }
-  placeNextTo(['电子教材与优秀课例', '电子教材', '/textbook'], ['题库管理', '/question'])
+  placeNextTo(['电子教材与教学资源', '电子教材与优秀课例', '电子教材', '/textbook'], ['题库管理', '/question'])
   placeNextTo(['成绩查询', '/score'], ['导学单管理', '/business/guide-sheet-list'])
   placeNextTo(['教研活动', '/research-activity'], ['学生管理', '/studentguanli'], true)
   return sorted

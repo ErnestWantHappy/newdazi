@@ -35,13 +35,11 @@
             </div>
             
             <div class="question-content">{{ question.questionContent }}</div>
+            <QuestionMedia :question="question" :context="{ lessonId:question.lessonId }" />
             
             <!-- 选择题选项 -->
             <div v-if="question.questionType === 'choice'" class="options-list">
-              <div class="option-item">A. {{ question.optionA || '未配置' }}</div>
-              <div class="option-item">B. {{ question.optionB || '未配置' }}</div>
-              <div class="option-item">C. {{ question.optionC || '未配置' }}</div>
-              <div class="option-item">D. {{ question.optionD || '未配置' }}</div>
+              <div v-for="key in ['A','B','C','D']" :key="key" class="option-item">{{ key }}. {{ question['option'+key] || (slotImages(question,key).length ? '' : '未配置') }}<QuestionMedia :question="question" :slot="key" :context="{ lessonId:question.lessonId }" /></div>
             </div>
             
             <!-- 判断题答案提示 -->
@@ -62,6 +60,8 @@
 </template>
 
 <script setup name="StudentHome">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue';
+import { slotImages } from '@/utils/questionMedia';
 import { ref, onMounted } from 'vue';
 import { getCurrentLesson } from '@/api/business/studentHome';
 import { Loading } from '@element-plus/icons-vue';

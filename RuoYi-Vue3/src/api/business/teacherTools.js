@@ -6,6 +6,11 @@ export function getTeacherToolCatalog() {
   return request({ url: `${BASE_URL}/catalog`, method: 'get' })
 }
 
+// 教学任务清单只给管理页勾选用，避免教研发手输任务编码。
+export function listTeacherToolTasks() {
+  return request({ url: `${BASE_URL}/manage/tasks`, method: 'get' })
+}
+
 export function listTeacherToolCategories() {
   return request({ url: `${BASE_URL}/manage/categories`, method: 'get' })
 }

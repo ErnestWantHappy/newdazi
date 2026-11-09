@@ -1,8 +1,8 @@
 <template>
   <div class="app-container">
     <el-row :gutter="20" class="designer-grid">
-      <!-- 左侧：课程内容区 -->
-      <el-col :span="24" :xl="11">
+      <!-- 上方：课程内容区 -->
+      <el-col :span="24">
         <el-card class="box-card">
           <template #header>
             <div class="card-header">
@@ -285,11 +285,12 @@
               <template #default="scope">
                 <div class="question-content-text">{{ stripHtml(scope.row.questionContent) }}</div>
                 <div v-if="scope.row.questionType === 'choice'" class="options-list">
-                  <p>A. {{ scope.row.optionA || '未配置' }}</p>
-                  <p>B. {{ scope.row.optionB || '未配置' }}</p>
-                  <p>C. {{ scope.row.optionC || '未配置' }}</p>
-                  <p>D. {{ scope.row.optionD || '未配置' }}</p>
+                  <p>A. {{ scope.row.optionA || (slotImages(scope.row,'A').length ? '▧ 图片' : '未配置') }}</p>
+                  <p>B. {{ scope.row.optionB || (slotImages(scope.row,'B').length ? '▧ 图片' : '未配置') }}</p>
+                  <p>C. {{ scope.row.optionC || (slotImages(scope.row,'C').length ? '▧ 图片' : '未配置') }}</p>
+                  <p>D. {{ scope.row.optionD || (slotImages(scope.row,'D').length ? '▧ 图片' : '未配置') }}</p>
                   <p class="correct-answer">正确答案：{{ scope.row.answer }}</p>
+                  <div v-if="hasQuestionImages(scope.row)" class="choice-media-summary"><QuestionMedia :question="scope.row" compact :context="{ lessonId:scope.row.lessonId }" /><el-button link type="primary" @click="mediaPreviewQuestion=scope.row">预览图文</el-button></div>
                 </div>
                 <!-- 新增：判断题在已选列表中回显正确答案 -->
                 <div v-else-if="scope.row.questionType === 'judgment'" class="judge-info">
@@ -363,8 +364,8 @@
         </el-card>
       </el-col>
 
-      <!-- 右侧：题库选题区 -->
-      <el-col :span="24" :xl="13">
+      <!-- 下方：题库选题区 -->
+      <el-col :span="24">
         <el-card>
            <template #header>
              <div class="card-header">
@@ -423,11 +424,12 @@
               <template #default="scope">
                 <div class="question-content-text">{{ stripHtml(scope.row.questionContent) }}</div>
                 <div v-if="scope.row.questionType === 'choice'" class="options-list">
-                  <p>A. {{ scope.row.optionA || '未配置' }}</p>
-                  <p>B. {{ scope.row.optionB || '未配置' }}</p>
-                  <p>C. {{ scope.row.optionC || '未配置' }}</p>
-                  <p>D. {{ scope.row.optionD || '未配置' }}</p>
+                  <p>A. {{ scope.row.optionA || (slotImages(scope.row,'A').length ? '▧ 图片' : '未配置') }}</p>
+                  <p>B. {{ scope.row.optionB || (slotImages(scope.row,'B').length ? '▧ 图片' : '未配置') }}</p>
+                  <p>C. {{ scope.row.optionC || (slotImages(scope.row,'C').length ? '▧ 图片' : '未配置') }}</p>
+                  <p>D. {{ scope.row.optionD || (slotImages(scope.row,'D').length ? '▧ 图片' : '未配置') }}</p>
                   <p class="correct-answer">正确答案：{{ scope.row.answer }}</p>
+                  <div v-if="hasQuestionImages(scope.row)" class="choice-media-summary"><el-tag size="small">含图</el-tag><el-button link type="primary" @click="mediaPreviewQuestion=scope.row">预览图文</el-button></div>
                 </div>
                 <div v-else-if="scope.row.questionType === 'judgment'" class="judge-info">
                   正确答案：{{ formatJudgeAnswer(scope.row.answer) }}
@@ -497,6 +499,7 @@
     </div>
 
     <pdf-preview ref="pdfPreviewRef" />
+    <QuestionMediaPreviewDialog :question="mediaPreviewQuestion" :context="{ lessonId:mediaPreviewQuestion?.lessonId }" @close="mediaPreviewQuestion=null" />
     <el-dialog v-model="pythonPreviewVisible" title="Python 题目预览" width="760px" append-to-body>
       <template v-if="pythonPreviewQuestion">
         <h3 class="python-preview-title">{{ pythonPreviewQuestion.questionContent }}</h3>
@@ -516,6 +519,10 @@
 </template>
 
 <script setup name="LessonDesigner">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue';
+import QuestionMediaPreviewDialog from '@/components/QuestionMedia/QuestionMediaPreviewDialog.vue';
+import { hasQuestionImages, slotImages } from '@/utils/questionMedia';
+const mediaPreviewQuestion=ref(null);
 import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getDashboardData } from "@/api/business/teacher";
@@ -1230,6 +1237,7 @@ async function handleAddQuestion(row) {
             optionB: row.optionB,
             optionC: row.optionC,
             optionD: row.optionD,
+            media: row.media,
             answer: row.answer,
             previewPath: row.previewPath,
             practicalMode: row.questionType === 'practical' ? (row.practicalMode || 'FILE') : null,
@@ -1383,6 +1391,7 @@ onMounted(() => {
 
 
 <style scoped>
+.choice-media-summary{display:flex;align-items:center;gap:9px;margin:7px 0}
 .score-input-cell {
   display: flex;
   align-items: center;

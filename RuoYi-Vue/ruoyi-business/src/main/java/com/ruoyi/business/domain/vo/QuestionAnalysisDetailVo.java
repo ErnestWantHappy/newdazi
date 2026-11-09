@@ -6,6 +6,11 @@ import java.util.Map;
  * 题目分析详情视图对象
  */
 public class QuestionAnalysisDetailVo {
+    private String mediaJson;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getMediaJson() { return mediaJson; }
+    public void setMediaJson(String value) { mediaJson=value; }
+    public com.ruoyi.business.domain.QuestionMedia getMedia() { return com.ruoyi.business.utils.QuestionMediaCodec.parse(mediaJson); }
     private Long questionId;
     private String questionContent;
     private String questionType; // choice, judgment

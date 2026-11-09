@@ -19,6 +19,11 @@
         </el-dropdown>
       </div>
     </header>
+    <el-alert v-if="lastChoiceSave" type="success" :closable="true" class="choice-save-result" @close="lastChoiceSave=null">
+      <template #title>{{ lastChoiceSave.forked ? '已保留历史版本，本次修改已保存为新题，原课程保持不变。' : '题目已保存。' }}</template>
+      <el-button link type="primary" @click="handleDetail({ questionId:lastChoiceSave.questionId })">查看本次保存的题目</el-button>
+      <el-button v-if="hasPermi('business:question:edit')" link type="primary" @click="handleUpdate({ questionId:lastChoiceSave.questionId })">继续编辑</el-button>
+    </el-alert>
 
     <!-- 筛选默认展开：第一排搜索/年级/学期/课次，第二排公开、创建人、难度与搜索操作 -->
     <section class="qw__filters" :class="{ 'is-collapsed': !filtersOpen }">
@@ -161,9 +166,11 @@
         <practical-mode-picker
           :model-value="practicalMode"
           :counts="practicalCounts"
+          :failed-counts="failedPracticalModes"
           :can-add="canAdd"
           @update:model-value="changePracticalMode"
           @add="handleAddFromPractical"
+          @retry-count="retryPracticalModeTotal"
           @view-all="openAll(practicalScope())"
         />
       </workbench-section>
@@ -216,7 +223,7 @@
     </section>
 
     <!-- 以下弹窗与编辑器保持原有实现，确保复杂编辑能力不丢失 -->
-    <el-dialog :title="title" v-model="open" :width="isFlowchartPracticalQuestion(form) ? '96%' : '980px'" append-to-body>
+    <el-dialog :title="title" v-model="open" :class="{ 'choice-question-editor':form.questionType==='choice' }" :width="isFlowchartPracticalQuestion(form) ? '96%' : form.questionType==='choice' ? 'min(980px, 96vw)' : '980px'" append-to-body>
       <el-form
         ref="questionRef"
         :model="form"
@@ -298,12 +305,15 @@
           </el-col>
         </el-row>
         <el-form-item v-if="!isPythonPracticalQuestion(form)" :label="questionContentLabel" prop="questionContent">
+          <div style="width:100%" @paste="form.questionType === 'choice' && stemMediaInput?.paste($event)" @dragover.prevent @drop="form.questionType === 'choice' && stemMediaInput?.drop($event)">
           <el-input
             v-model="form.questionContent"
             :rows="questionContentRows"
             type="textarea"
             placeholder="请输入内容"
           />
+          <QuestionMediaInput v-if="form.questionType === 'choice'" :key="form.saveRequestId" ref="stemMediaInput" v-model="form.media.stem" :limit="3" label="题干图片" :context="{ questionId: form.questionId }" :disabled="submitting" @blocked="questionImageBlocked.stem=$event" />
+          </div>
         </el-form-item>
 
         <!-- 动态表单项: 打字题专属 -->
@@ -349,18 +359,7 @@
 
         <!-- 动态表单项: 选择题专属 -->
         <div v-if="form.questionType === 'choice'">
-          <el-form-item label="选项A" prop="optionA"
-            ><el-input v-model="form.optionA" placeholder="请输入选项A"
-          /></el-form-item>
-          <el-form-item label="选项B" prop="optionB"
-            ><el-input v-model="form.optionB" placeholder="请输入选项B"
-          /></el-form-item>
-          <el-form-item label="选项C" prop="optionC"
-            ><el-input v-model="form.optionC" placeholder="请输入选项C"
-          /></el-form-item>
-          <el-form-item label="选项D" prop="optionD"
-            ><el-input v-model="form.optionD" placeholder="请输入选项D"
-          /></el-form-item>
+          <ChoiceOptionFields :key="form.saveRequestId" v-model:question="form" :disabled="submitting" @blocked="questionImageBlocked.options=$event" />
           <el-form-item label="标准答案" prop="answer">
             <el-radio-group v-model="form.answer">
               <el-radio value="A">A</el-radio>
@@ -592,7 +591,7 @@
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button v-if="!isPythonPracticalQuestion(form)" type="primary" :loading="submitting" :disabled="submitting" @click="submitForm(false)">确 定</el-button>
+          <el-button v-if="!isPythonPracticalQuestion(form)" type="primary" :loading="submitting" :disabled="submitting || Object.values(questionImageBlocked).some(Boolean)" @click="submitForm(false)">保存题目</el-button>
           <template v-else>
             <el-button :loading="submitting && !validating" :disabled="submitting" @click="submitForm(false)">保存草稿</el-button>
             <el-button type="primary" :loading="submitting || validating" :disabled="submitting" @click="submitForm(true)">保存并验证全部测试点</el-button>
@@ -675,13 +674,15 @@
       </template>
     </el-dialog>
 
-    <flowchart-question-preview-dialog v-model="flowchartPreviewVisible" :question="flowchartPreviewQuestion" />
+    <python-question-preview-dialog v-model="pythonPreviewVisible" :question="pythonPreviewQuestion" :can-read-answer="!!pythonPreviewQuestion && canManageQuestion(pythonPreviewQuestion) && hasPermi('business:question:edit')" />
+    <flowchart-question-preview-dialog v-model="flowchartPreviewVisible" :question="flowchartPreviewQuestion" :can-read-answer="!!flowchartPreviewQuestion && canManageQuestion(flowchartPreviewQuestion)" />
     <el-dialog v-model="detailVisible" title="题目详情" width="min(760px, 94vw)" append-to-body>
       <div v-loading="detailLoading" class="question-detail">
         <template v-if="detailQuestion">
           <p class="detail-text">{{ detailQuestion.questionContent }}</p>
+          <QuestionMedia :question="detailQuestion" />
           <template v-if="detailQuestion.questionType === 'choice'">
-            <p v-for="key in ['A', 'B', 'C', 'D']" :key="key" class="detail-text">{{ key }}. {{ detailQuestion['option' + key] }}</p>
+            <div v-for="key in ['A', 'B', 'C', 'D']" :key="key" class="detail-text">{{ key }}. {{ detailQuestion['option' + key] }}<QuestionMedia :question="detailQuestion" :slot="key" /></div>
           </template>
           <template v-if="['choice', 'judgment'].includes(detailQuestion.questionType)">
             <el-divider />
@@ -694,6 +695,7 @@
     </el-dialog>
     <!-- 路由切页动画要求单一根节点，弹窗组件也须保留在页面根节点内。 -->
     <DataLabEditor ref="dataLabEditor" @saved="onSaved" />
+    <QuestionImportPreview v-model="questionImportVisible" @completed="refreshAll" @view="id => { questionImportVisible=false;handleDetail({ questionId:id }) }" />
   </div>
 </template>
 
@@ -709,6 +711,7 @@ import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQue
 import { getFlowchartQuestion, saveFlowchartQuestion } from "@/api/business/flowchart";
 import FlowchartQuestionDesigner from "@/components/FlowchartEditor/FlowchartQuestionDesigner.vue";
 import FlowchartQuestionPreviewDialog from "@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue";
+import PythonQuestionPreviewDialog from './components/PythonQuestionPreviewDialog.vue';
 import DataLabEditor from "@/components/DataLabExperiment/Editor.vue";
 import WorkbenchSection from "./components/WorkbenchSection.vue";
 import QuestionCard from "./components/QuestionCard.vue";
@@ -736,9 +739,21 @@ import {
   refreshAuthorizationHeader
 } from "@/utils/session";
 import useUserStore from "@/store/modules/user";
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue';
+import QuestionMediaInput from '@/components/QuestionMedia/QuestionMediaInput.vue';
+import ChoiceOptionFields from '@/components/QuestionMedia/ChoiceOptionFields.vue';
+import QuestionImportPreview from './components/QuestionImportPreview.vue';
+import { emptyQuestionMedia, normalizeQuestionMedia, hasChoiceOption, slotImages, newQuestionRequestId } from '@/utils/questionMedia';
+import { getQuestionSaveReceipt } from '@/api/business/questionImages';
+const stemMediaInput = ref(null);
+const questionImageBlocked = ref({ stem: false, options: false });
+const questionImportVisible = ref(false);
+const lastChoiceSave = ref(null);
 
 const { proxy } = getCurrentInstance();
 const userStore = useUserStore();
+try { lastChoiceSave.value = JSON.parse(localStorage.getItem(`choice-last-saved:${userStore.id}`) || 'null'); } catch { /* 本机提示不影响服务器题库。 */ }
+watch(lastChoiceSave, value => { try { if(value) localStorage.setItem(`choice-last-saved:${userStore.id}`,JSON.stringify(value)); else localStorage.removeItem(`choice-last-saved:${userStore.id}`); } catch {} });
 const dataLabEditor = ref(null);
 const { biz_question_type, sys_yes_no, biz_grade, biz_semester } =
   proxy.useDict("biz_question_type", "sys_yes_no", "biz_grade", "biz_semester");
@@ -823,6 +838,8 @@ const pythonImportReport = ref(null);
 // 最近一次解析出的导入载荷，用于“平均分配权重”后重新预检（用户主动点击才改权重）。
 const lastPythonPayload = ref(null);
 const flowchartPreviewVisible = ref(false);
+const pythonPreviewVisible = ref(false);
+const pythonPreviewQuestion = ref(null);
 const flowchartPreviewQuestion = ref(null);
 const originalFlowchartConfig = ref(null);
 const detailVisible = ref(false);
@@ -932,28 +949,45 @@ function practicalScope() {
 // 每种方式仅查询一条以取得真实 total，不拉取整类数据，也不重复累计全操作题。
 // 查询失败时为 null，入口显示“题量未知”，不能把失败或局部条数当成 0。
 const PRACTICAL_MODE_KEYS = ["FILE", "PYTHON", "DATA_LAB", "FLOWCHART"];
-const modeTotals = reactive({ counts: null, error: false, requestId: 0 });
+const modeTotals = reactive({ counts: null, failed: [], requestId: 0 });
 
 async function loadPracticalModeTotals() {
   const requestId = ++modeTotals.requestId;
+  // 四种方式是独立统计；单个弱网失败不能把其他三种已经拿到的真实题量一并丢弃。
+  const results = await Promise.allSettled(PRACTICAL_MODE_KEYS.map(mode => listQuestion({
+    ...buildModuleQuery(appliedFilters.value, scopeOf(mode), 1, 1),
+  })));
+  if (requestId !== modeTotals.requestId) return;
+  const counts = {};
+  const failed = [];
+  PRACTICAL_MODE_KEYS.forEach((mode, index) => {
+    const result = results[index];
+    if (result.status === 'fulfilled') counts[mode] = Number(result.value.total || 0);
+    else { counts[mode] = null; failed.push(mode); }
+  });
+  modeTotals.counts = counts;
+  modeTotals.failed = failed;
+}
+
+async function retryPracticalModeTotal(mode) {
+  if (!PRACTICAL_MODE_KEYS.includes(mode)) return;
+  const requestId = modeTotals.requestId;
   try {
-    const results = await Promise.all(PRACTICAL_MODE_KEYS.map(mode => listQuestion({
+    const response = await listQuestion({
       ...buildModuleQuery(appliedFilters.value, scopeOf(mode), 1, 1),
-    })));
+    });
     if (requestId !== modeTotals.requestId) return;
-    const counts = {};
-    PRACTICAL_MODE_KEYS.forEach((mode, index) => { counts[mode] = Number(results[index].total || 0); });
-    modeTotals.counts = counts;
-    modeTotals.error = false;
+    modeTotals.counts = { ...(modeTotals.counts || {}), [mode]: Number(response.total || 0) };
+    modeTotals.failed = modeTotals.failed.filter(item => item !== mode);
   } catch (_) {
-    if (requestId === modeTotals.requestId) {
-      modeTotals.counts = null;
-      modeTotals.error = true;
-    }
+    if (requestId !== modeTotals.requestId) return;
+    modeTotals.counts = { ...(modeTotals.counts || {}), [mode]: null };
+    if (!modeTotals.failed.includes(mode)) modeTotals.failed = [...modeTotals.failed, mode];
   }
 }
 
-const practicalCounts = computed(() => (modeTotals.counts && !modeTotals.error ? modeTotals.counts : null));
+const practicalCounts = computed(() => modeTotals.counts);
+const failedPracticalModes = computed(() => modeTotals.failed);
 
 /** “查看全部”：在当前页切换视图，不新增菜单和路由。 */
 function openAll(scope) {
@@ -1158,12 +1192,15 @@ function cancelUpload() {
 
 // 表单重置
 function reset() {
+  questionImageBlocked.value = { stem: false, options: false };
   pythonStep.value = 0;
   originalFlowchartConfig.value = null;
   createdQuestionId.value = null;
   modifyStartQuestionId.value = null;
   form.value = {
     questionId: null,
+    media: emptyQuestionMedia(),
+    saveRequestId: newQuestionRequestId(),
     questionType: null,
     questionContent: null,
     grade: null,
@@ -1616,6 +1653,9 @@ function handleUpdate(row) {
       return;
     }
     form.value = response.data;
+    form.value.media = normalizeQuestionMedia(form.value.media);
+    form.value.expectedSourceFingerprint = form.value.sourceFingerprint;
+    form.value.saveRequestId = newQuestionRequestId();
     modifyStartQuestionId.value = form.value.questionId;
     form.value.programming = defaultProgrammingConfig();
     form.value.practicalAllowedExtensionList = String(
@@ -1690,6 +1730,7 @@ function newQuestionFilterHint(questionType, practicalMode) {
 /** 保存普通题，或保存 Python 题后用参考代码验证全部测试点。 */
 function submitForm(validateAfterSave = false) {
   if (submitting.value) return;
+  if (Object.values(questionImageBlocked.value).some(Boolean)) return ElMessage.warning('请先处理上传中或失败的图片');
   proxy.$refs["questionRef"].validate(async (valid) => {
     if (!valid) return;
       // P6.1: 操作题必须配置评分项，且比例值合计必须为100
@@ -1761,7 +1802,12 @@ function submitForm(validateAfterSave = false) {
         let questionId = form.value.questionId;
         if (questionId != null) {
           // 编辑：失败时保留原记录，下次重试仍是更新，不会重复建题。
-          await updateQuestion(form.value);
+          const saved = await updateQuestion(form.value);
+          if (questionType === 'choice') {
+            questionId = saved.questionId || saved.data?.questionId || questionId;
+            form.value.questionId = questionId;
+            lastChoiceSave.value = { questionId, forked: saved.saveMode === 'FORKED' };
+          }
         } else if (createdQuestionId.value != null) {
           // 上一步已建好主记录但配置保存失败：只更新，不重复新增。
           form.value.questionId = createdQuestionId.value;
@@ -1772,6 +1818,7 @@ function submitForm(validateAfterSave = false) {
           questionId = response.questionId || response.data?.questionId;
           form.value.questionId = questionId;
           createdQuestionId.value = questionId;
+          if (questionType === 'choice') lastChoiceSave.value = { questionId, forked: false };
         }
         if (isPythonPracticalQuestion(form.value)) {
           if (!questionId) throw new Error("保存题目后未返回题目 ID");
@@ -1816,10 +1863,26 @@ function submitForm(validateAfterSave = false) {
             if (hint) ElMessage.warning(hint);
             else ElMessage.success("新增成功，已显示在对应题型中");
           } else {
-            ElMessage.success(questionType !== savedType || practicalMode !== savedMode ? "已保存，题型已更新" : "保存成功");
+            ElMessage.success(lastChoiceSave.value?.forked && savedType === 'choice' ? '已保留历史版本，本次修改已保存为新题，原课程不变' : (questionType !== savedType || practicalMode !== savedMode ? "已保存，题型已更新" : "保存成功"));
           }
         }
       } catch (error) {
+        if(questionType === 'choice') {
+          try {
+            const recovered=(await getQuestionSaveReceipt(form.value.saveRequestId)).data;
+            if(recovered?.questionId) {
+              const saved=(await getQuestion(recovered.questionId)).data;
+              form.value.questionId=recovered.questionId;
+              form.value.expectedSourceFingerprint=saved.sourceFingerprint;
+              form.value.saveRequestId=newQuestionRequestId();
+              createdQuestionId.value=recovered.questionId;
+              lastChoiceSave.value={questionId:recovered.questionId,forked:recovered.saveMode==='FORKED'};
+              refreshAll();
+              ElMessage.success('已确认上次保存成功；当前表单已保留，可继续修改后保存');
+              return recovered.questionId;
+            }
+          } catch { /* 无法核对时保留原请求键，重试仍可安全查询原结果。 */ }
+        }
         // 失败保留表单、附件与已建记录：再次点击保存只会补写配置。
         if (validateAfterSave) pythonStep.value = 2;
         if (!error?.__messageShown) {
@@ -1874,9 +1937,7 @@ function handleExport() {
 
 /** 导入按钮操作 */
 function handleImport() {
-  refreshUploadHeaders();
-  upload.title = "导入常规题（Excel）";
-  upload.open = true;
+  questionImportVisible.value = true;
 }
 
 /** 下载模板操作 */
@@ -1936,10 +1997,8 @@ const rules = computed(() => {
   if (form.value.questionType === "choice") {
     return {
       ...baseRules,
-      optionA: [{ required: true, message: "选项A不能为空" }],
-      optionB: [{ required: true, message: "选项B不能为空" }],
-      optionC: [{ required: true, message: "选项C不能为空" }],
-      optionD: [{ required: true, message: "选项D不能为空" }],
+      questionContent: [{ validator: (_r,_v,done) => done(String(form.value.questionContent || '').trim() || slotImages(form.value).length ? undefined : new Error('题干需填写文字或添加图片')) }],
+      ...Object.fromEntries(['A','B','C','D'].map(key => ['option'+key, [{ validator: (_r,_v,done) => done(hasChoiceOption(form.value,key) || (form.value.questionId && ['C','D'].includes(key) && form.value.answer !== key) ? undefined : new Error('选项'+key+'需填写文字或添加图片')) }]])),
       answer: [{ required: true, message: "标准答案不能为空" }],
     };
   } else if (form.value.questionType === "judgment") {
@@ -2054,6 +2113,11 @@ function downloadImportErrors() {
 
 /** 预览操作题附件 */
 function handlePreview(row) {
+  if (isPythonPracticalQuestion(row)) {
+    pythonPreviewQuestion.value = row;
+    pythonPreviewVisible.value = true;
+    return;
+  }
   if (isFlowchartPracticalQuestion(row)) {
     flowchartPreviewQuestion.value = row;
     flowchartPreviewVisible.value = true;
@@ -2115,4 +2179,12 @@ refreshAll();
 .question-detail { min-height: 120px; }
 .import-error-summary { margin: 0 0 12px; color: #b42318; font-weight: 700; }
 .python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
+</style>
+<style>
+@media(max-width:640px){
+  .choice-question-editor .el-col-12{flex:0 0 100%;max-width:100%}
+  .choice-question-editor .el-form-item__label{width:78px!important}
+  .choice-question-editor .el-dialog__body{padding:12px 4px}
+  .choice-question-editor .el-dialog__footer{position:sticky;bottom:0;background:white;padding:12px 4px;border-top:1px solid #ebeef5}
+}
 </style>

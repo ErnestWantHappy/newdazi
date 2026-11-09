@@ -5,6 +5,7 @@
 <mapper namespace="com.ruoyi.business.mapper.BizQuestionMapper">
 
     <resultMap type="BizQuestion" id="BizQuestionResult">
+        <result property="mediaJson" column="media_json"/>
         <result property="questionId"    column="question_id"    />
         <result property="questionType"    column="question_type"    />
         <result property="questionContent"    column="question_content"    />
@@ -40,7 +41,7 @@
     </resultMap>
 
     <sql id="selectBizQuestionVo">
-        select q.question_id, q.question_type, q.question_content, q.grade, q.difficulty, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name,
+        select q.media_json, q.question_id, q.question_type, q.question_content, q.grade, q.difficulty, q.semester, q.lesson_num, q.option_a, q.option_b, q.option_c, q.option_d, q.answer, q.analysis, q.file_path, q.preview_path, q.preview_status, q.practical_allowed_extensions, q.practical_mode, q.practical_image_max_count, q.is_public, q.typing_duration, q.word_count, q.creator_id, q.create_by, q.create_time, q.update_by, q.update_time, u.nick_name,
                pc.title programming_title, pc.knowledge_points, pc.validation_status, COALESCE(tc.test_case_count,0) test_case_count
         from biz_question q
         left join sys_user u on q.creator_id = u.user_id
@@ -89,9 +90,14 @@
         where q.question_id = #{questionId}
     </select>
 
+    <select id="selectQuestionForUpdate" parameterType="Long" resultMap="BizQuestionResult">
+        select * from biz_question where question_id=#{questionId} for update
+    </select>
+
     <insert id="insertBizQuestion" parameterType="BizQuestion" useGeneratedKeys="true" keyProperty="questionId">
         insert into biz_question
         <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="mediaJson != null">media_json,</if>
             <if test="questionType != null and questionType != ''">question_type,</if>
             <if test="questionContent != null and questionContent != ''">question_content,</if>
             <if test="grade != null">grade,</if>
@@ -120,6 +126,7 @@
             <if test="updateTime != null">update_time,</if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="mediaJson != null">#{mediaJson},</if>
             <if test="questionType != null and questionType != ''">#{questionType},</if>
             <if test="questionContent != null and questionContent != ''">#{questionContent},</if>
             <if test="grade != null">#{grade},</if>
@@ -152,6 +159,8 @@
     <update id="updateBizQuestion" parameterType="BizQuestion">
         update biz_question
         <trim prefix="SET" suffixOverrides=",">
+            <if test="mediaJson != null">media_json = #{mediaJson},</if>
+            <if test="questionType == 'choice' and questionContent != null and questionContent == ''">question_content = '',</if>
             <if test="questionType != null and questionType != ''">question_type = #{questionType},</if>
             <if test="questionContent != null and questionContent != ''">question_content = #{questionContent},</if>
             <choose>
@@ -228,4 +237,10 @@
             preview_path = #{previewPath}
         WHERE question_id = #{questionId}
     </update>
+    <select id="countMediaDependencies" resultType="int">
+        select (exists(select 1 from biz_lesson_question where question_id=#{questionId})
+            or exists(select 1 from biz_county_exam_question where question_id=#{questionId})
+            or exists(select 1 from biz_county_exam_paper_question where question_id=#{questionId})
+            or exists(select 1 from biz_student_answer_orphan_archive where question_id=#{questionId}))
+    </select>
 </mapper>

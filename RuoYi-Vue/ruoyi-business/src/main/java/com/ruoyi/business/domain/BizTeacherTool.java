@@ -25,6 +25,9 @@ public class BizTeacherTool extends BaseEntity
     private String delFlag;
     private List<Long> categoryIds = new ArrayList<>();
     private List<String> categoryNames = new ArrayList<>();
+    // 检索别名与教学任务编码：由教师工具分类对照表统一维护，避免在代码里零散硬编码同义词。
+    private String aliases;
+    private String taskTags;
 
     public Long getToolId() { return toolId; }
     public void setToolId(Long toolId) { this.toolId = toolId; }
@@ -56,6 +59,10 @@ public class BizTeacherTool extends BaseEntity
     public void setDelFlag(String delFlag) { this.delFlag = delFlag; }
     public List<Long> getCategoryIds() { return categoryIds; }
     public void setCategoryIds(List<Long> categoryIds) { this.categoryIds = categoryIds; }
+    public String getAliases() { return aliases; }
+    public void setAliases(String aliases) { this.aliases = aliases; }
+    public String getTaskTags() { return taskTags; }
+    public void setTaskTags(String taskTags) { this.taskTags = taskTags; }
     public List<String> getCategoryNames() { return categoryNames; }
     public void setCategoryNames(List<String> categoryNames) { this.categoryNames = categoryNames; }
 }

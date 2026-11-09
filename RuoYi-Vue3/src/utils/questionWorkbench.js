@@ -117,7 +117,7 @@ function normalize(text) {
 export function cardTitle(row) {
   if (!row) return ''
   if (row.practicalMode === 'PYTHON' && row.programmingTitle) return normalize(row.programmingTitle)
-  return normalize(row.questionContent) || '未填写题目内容'
+  return normalize(row.questionContent) || (row.media?.stem?.length ? '图片选择题' : '未填写题目内容')
 }
 
 export function cardExcerpt(row, limit = 80) {
@@ -129,7 +129,8 @@ export function cardExcerpt(row, limit = 80) {
 export function choiceOptions(row) {
   return ['A', 'B', 'C', 'D']
     .map(key => ({ key, text: normalize(row?.[`option${key}`]) }))
-    .filter(item => item.text)
+    .map(item => (row?.media?.options?.[item.key] || []).length > 0 ? { ...item, hasImage: true } : item)
+    .filter(item => item.text || item.hasImage)
 }
 
 /** 选择/判断的正确答案只做文字展示，避免在工作台上误触作答。 */
@@ -161,8 +162,9 @@ export function cardActions(row, { permissions = [], userId = null, isAdmin = fa
   const owned = isAdmin || String(row?.creatorId ?? '') === String(userId ?? '')
   const actions = []
   if (row?.questionType === 'practical') {
+    if (row.practicalMode === 'PYTHON' && has('business:question:query')) actions.push('preview')
     // 流程图可走只读预览；文件作品只有转换出预览页才有预览入口，不造假入口。
-    if (row.practicalMode === 'FLOWCHART' || row.previewPath) actions.push('preview')
+    else if (row.practicalMode === 'FLOWCHART' || row.previewPath) actions.push('preview')
   } else if (has('business:question:query')) {
     actions.push('view')
   }

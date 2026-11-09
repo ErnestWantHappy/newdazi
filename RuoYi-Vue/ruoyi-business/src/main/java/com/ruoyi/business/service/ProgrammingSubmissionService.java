@@ -263,8 +263,63 @@ public class ProgrammingSubmissionService {
         return result;
     }
 
-    public void cancel(BizStudent student, Long deptId, Long lessonId, Long questionId, Long submissionId) {
+    /**
+     * 旧版浏览器不能在本机运行 Python 时的兜底：服务端执行一次公开测试点，同步返回结果。
+     * 不写提交、草稿、成绩和历史记录，避免“运行”污染正式数据；因此也不返回隐藏测试点。
+     */
+    public Map<String, Object> runPublicCases(BizStudent student, Long deptId, Long lessonId, Long questionId, String sourceCode) {
         assertStudentQuestionAccess(student, deptId, lessonId, questionId);
+        validateSource(sourceCode);
+        ProgrammingQuestionConfig config = programmingMapper.selectConfig(questionId);
+        if (config == null || !"1".equals(config.getEnabled())) throw new ServiceException("该编程题暂未开放");
+        List<ProgrammingTestCase> cases = programmingMapper.selectPublicTestCases(questionId);
+        if (cases == null || cases.isEmpty()) throw new ServiceException("题目尚未配置可执行的示例测试点");
+        Judge0Client client = resolveClient();
+        reserveRunConcurrency(student);
+        List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
+        try {
+            for (ProgrammingTestCase testCase : cases) {
+                Judge0Result result = executeWith(client, sourceCode, testCase, config);
+                Map<String, Object> item = new HashMap<String, Object>();
+                item.put("caseName", testCase.getCaseName()); item.put("inputText", testCase.getInputText()); item.put("expectedOutput", testCase.getExpectedOutput());
+                item.put("actualOutput", result == null ? null : result.getStdout());
+                item.put("errorMessage", result == null ? null : trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
+                item.put("statusCode", mapStatus(result, testCase.getExpectedOutput()));
+                item.put("timeSeconds", result == null ? null : result.getTimeSeconds()); item.put("memoryKb", result == null ? null : result.getMemoryKb());
+                results.add(item);
+                // 外部判题服务不可用时不再排队等待剩余测试点，直接让页面提示稍后重试。
+                if ("SERVICE_ERROR".equals(item.get("statusCode"))) break;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("运行被中断，请稍后重试");
+        } finally { releaseRunConcurrency(student); }
+        Map<String, Object> data = new HashMap<String, Object>(); data.put("mode", "SERVER"); data.put("cases", results);
+        return data;
+    }
+
+    /** 服务端同步运行会占用请求线程，必须按学生和班级双重限流，避免整班同时运行时打满判题机。 */
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private void reserveRunConcurrency(BizStudent student) {
+        ValueOperations<String, Object> values = redisCache.redisTemplate.opsForValue();
+        String studentKey = "judge0:run:student:" + student.getStudentId();
+        if (!Boolean.TRUE.equals(values.setIfAbsent(studentKey, "1", 60, TimeUnit.SECONDS))) throw new ServiceException("上一次运行还没结束，请稍候再试");
+        String classKey = classRunKey(student);
+        Long active = values.increment(classKey); if (active != null && active.longValue() == 1L) redisCache.expire(classKey, 60, TimeUnit.SECONDS);
+        if (active != null && active.longValue() > Math.max(1, properties.getClassConcurrency())) {
+            values.decrement(classKey); redisCache.deleteObject(studentKey);
+            throw new ServiceException("本班同时运行的人数较多，请稍后再试");
+        }
+    }
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private void releaseRunConcurrency(BizStudent student) {
+        redisCache.deleteObject("judge0:run:student:" + student.getStudentId());
+        String classKey = classRunKey(student);
+        if (redisCache.redisTemplate.opsForValue().get(classKey) != null) redisCache.redisTemplate.opsForValue().decrement(classKey);
+    }
+    private String classRunKey(BizStudent s) { return "judge0:run:class:" + s.getDeptId() + ":" + s.getEntryYear() + ":" + s.getClassCode(); }
+
+    public void cancel(BizStudent student, Long deptId, Long lessonId, Long questionId, Long submissionId) {        assertStudentQuestionAccess(student, deptId, lessonId, questionId);
         int changed = programmingMapper.cancelSubmission(submissionId, student.getStudentId(), new Date());
         if (changed == 0) throw new ServiceException("仅等待中的本人提交可以取消");
         releaseSlot(submissionId, student, lessonId, questionId);
@@ -310,8 +365,12 @@ public class ProgrammingSubmissionService {
     }
 
     private Judge0Result execute(String sourceCode, ProgrammingTestCase testCase, ProgrammingQuestionConfig config) throws InterruptedException {
+        return executeWith(resolveClient(), sourceCode, testCase, config);
+    }
+
+    private Judge0Result executeWith(Judge0Client client, String sourceCode, ProgrammingTestCase testCase, ProgrammingQuestionConfig config) throws InterruptedException {
         Judge0Request request = new Judge0Request(); request.setSourceCode(sourceCode); request.setStdin(testCase.getInputText()); request.setExpectedOutput(testCase.getExpectedOutput()); request.setCpuTimeLimit(config.getTimeLimitSeconds()); request.setMemoryLimitKb(config.getMemoryLimitKb()); request.setMaxProcesses(config.getMaxProcesses()); request.setMaxFileSizeKb(config.getMaxFileSizeKb()); request.setMaxOutputKb(config.getMaxOutputKb());
-        Judge0Client client = resolveClient(); Judge0Result result = client.submit(request);
+        Judge0Result result = client.submit(request);
         if (result == null || result.getToken() == null) throw new ServiceException("Judge0 未返回提交令牌");
         for (int i = 0; i < Math.max(1, properties.getMaxPolls()); i++) { Thread.sleep(Math.max(100, properties.getPollIntervalMs())); result = client.poll(result.getToken()); if (result != null && result.isFinished()) return result; }
         throw new ServiceException("Judge0 判题轮询超时");
@@ -353,11 +412,12 @@ public class ProgrammingSubmissionService {
         if (finalRow == null || STATUS_CANCELLED.equals(finalRow.getStatusCode())) return;
         // 判题是异步线程回写：提交时已做当前课校验，但推进可能发生在判题完成前。
         // 这里按事务内加锁的当前指派再核一次，旧课只保留判题记录，不回写答案。
+        boolean canWriteAnswer = false;
         BizStudent answerStudent = studentMapper.selectBizStudentByStudentId(finalRow.getStudentId());
         if (answerStudent != null) {
             BizLessonAssignment currentAssignment = lessonAssignmentMapper.selectCurrentAssignmentForUpdate(
                     answerStudent.getEntryYear(), answerStudent.getClassCode(), answerStudent.getDeptId());
-            if (currentAssignment == null || !finalRow.getLessonId().equals(currentAssignment.getLessonId())) return;
+            canWriteAnswer = currentAssignment != null && finalRow.getLessonId().equals(currentAssignment.getLessonId());
         }
         int passed = 0; double totalWeight = 0D; double passedWeight = 0D; double maxTime = 0D; int maxMemory = 0;
         Map<Long, ProgrammingTestCase> casesById = new HashMap<Long, ProgrammingTestCase>();
@@ -376,7 +436,8 @@ public class ProgrammingSubmissionService {
             int questionScore = lessonQuestionScore(finalRow.getLessonId(), finalRow.getQuestionId()); int score = totalWeight <= 0D ? 0 : (int) Math.round(questionScore * passedWeight / totalWeight); finalRow.setScore(score);
         }
         if (programmingMapper.updateSubmissionResult(finalRow) != 1) return;
-        if ("SUBMIT".equals(finalRow.getSubmissionKind()) && !STATUS_SERVICE_ERROR.equals(status)) writeExistingAnswer(finalRow, finalRow.getScore(), "ACCEPTED".equals(status));
+        // 推进只阻止旧课成绩回写，判题记录本身仍须结束，避免学生一直看到“判题中”。
+        if (canWriteAnswer && "SUBMIT".equals(finalRow.getSubmissionKind()) && !STATUS_SERVICE_ERROR.equals(status)) writeExistingAnswer(finalRow, finalRow.getScore(), "ACCEPTED".equals(status));
     }
 
     private void completeServiceFailure(ProgrammingSubmission submission, String message) {

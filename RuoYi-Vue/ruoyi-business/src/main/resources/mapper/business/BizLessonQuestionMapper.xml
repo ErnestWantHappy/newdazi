@@ -110,6 +110,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 为课程题目详情创建一个明确的结果映射 -->
     <resultMap id="BizLessonQuestionDetailResult" type="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
         <id property="questionId" column="question_id"/>
+        <result property="mediaJson" column="media_json"/>
         <result property="lessonId" column="lesson_id"/>
         <result property="questionScore" column="question_score"/>
         <result property="orderNum" column="order_num"/>
@@ -143,6 +144,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             lq.question_score,
             lq.order_num,
             q.question_content,
+            q.media_json,
             q.question_type,
             q.option_a,
             q.option_b,

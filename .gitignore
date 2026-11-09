@@ -1,6 +1,8 @@
 /.playwright-cli/
 /output/
 /uploadPath/
+/uploadPath-question-images/
+/RuoYi-Vue/uploadPath-question-images/
 /uploadPath-private/
 /RuoYi-Vue/uploadPath/upload/
 /RuoYi-Vue/uploadPath-private/

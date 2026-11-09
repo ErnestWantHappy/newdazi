@@ -18,7 +18,7 @@ test('网页预览保留标准模式声明且策略先于用户脚本', () => {
 test('切班慢响应只保留一个轮询，失败后仍可重试，卸载全部清理', async () => {
   const props = { lessonId: 1, entryYear: '2026', classCode: '1' }, requests = [], timers = new Map()
   let watchScope, unmount, timerId = 0
-  const ctx = { ref, computed, defineProps: () => props, defineEmits: () => () => {},
+  const ctx = { ref, computed, defineProps: () => props, defineEmits: () => () => {}, defineExpose() {},
     watch: (_get, fn) => { watchScope = fn }, onBeforeUnmount: fn => { unmount = fn },
     setInterval: fn => { timers.set(++timerId, fn); return timerId }, clearInterval: id => timers.delete(id),
     request: () => { const d = deferred(); requests.push(d); return d.promise } }
@@ -35,13 +35,13 @@ test('切班慢响应只保留一个轮询，失败后仍可重试，卸载全�
 
 test('切换机房和请求失败期间旧名单不能用于确认', async () => {
   const props = { lessonId: 1, entryYear: '2026', classCode: '1' }, requests = []
-  const ctx = { ref, computed, defineProps: () => props, defineEmits: () => () => {},
+  const ctx = { ref, computed, defineProps: () => props, defineEmits: () => () => {}, defineExpose() {},
     watch() {}, onBeforeUnmount() {}, request: () => { const d = deferred(); requests.push(d); return d.promise } }
   vm.createContext(ctx)
   vm.runInContext(script('components/SeatHelper/ClassroomSeatPanel.vue') + '\nglobalThis.api={data,room,ready,identified,loadError,changeRoom};', ctx)
   const h = ctx.api
   h.room.value = '甲机房'
-  h.data.value = { enabled: true, roomName: '甲机房', rows: [{ studentId: 1, state: 'UNBOUND' }] }
+  h.data.value = { enabled: true, roomName: '甲机房', rows: [{ studentId: 1, state: 'UNBOUND', localIp: '192.168.1.10' }] }
   assert.equal(h.identified.value.length, 1)
   h.room.value = '乙机房'
   h.changeRoom()
@@ -68,7 +68,8 @@ test('保存布局不会抹去任务和成绩状态', async () => {
 test('图片失败集合变化立即重新计算兜底图', () => {
   const source = script('views/login.vue')
   const ctx = { ref, computed, focusSlides: ref([{ image: '/business/broken.jpg' }]), researchPreviews: ref([]),
-    failedSlideImages: ref(new Set()), defaultResearchSlides: [{ image: '/fallback.jpg' }], apiBase: '' }
+    failedSlideImages: ref(new Set()), defaultResearchSlides: [{ image: '/fallback.jpg' }], apiBase: '', visibleSlideCount: ref(1),
+    idleWork: { schedule(_key, callback) { callback() } } }
   vm.createContext(ctx)
   vm.runInContext(source.slice(source.indexOf('function formatSlideImage('), source.indexOf('// 方案一：')) + '\nglobalThis.api={researchSlides,handleSlideImageError};', ctx)
   const first = ctx.api.researchSlides.value[0]

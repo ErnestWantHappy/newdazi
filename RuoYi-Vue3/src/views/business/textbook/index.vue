@@ -2,8 +2,7 @@
   <div class="app-container textbook-shelf">
     <div class="shelf-head">
       <div>
-        <h2 class="shelf-title">电子教材</h2>
-        <p class="shelf-sub">信息科技 2026 版 · 教师用书 · 上课翻页与打印本课</p>
+        <h2 class="shelf-title">电子教材与教学资源</h2>
       </div>
       <el-input
         v-model="keyword"
@@ -50,6 +49,15 @@
                   下载整册
                 </el-button>
               </div>
+              <div v-if="bookCompilations.has(Number(book.bookId))" class="book-compilation">
+                <div class="compilation-heading">
+                  <span>教学设计汇编</span>
+                </div>
+                <div class="compilation-actions">
+                  <el-button link type="primary" size="small" @click.stop="previewCompilation(book)">预览汇编</el-button>
+                  <el-button link size="small" @click.stop="downloadCompilation(book)">下载</el-button>
+                </div>
+              </div>
             </div>
 
             <div v-for="item in group.pending" :key="`pending-${item.grade}-${item.semester}`" class="book-card is-pending">
@@ -63,13 +71,26 @@
         </div>
       </template>
 
-      <el-empty v-if="!loading && !visibleGroups.length" description="没有匹配的教材" />
+      <div v-if="visibleGuides.length" class="stage-block guide-block">
+        <div class="stage-title">教学指南与配套课件</div>
+        <div class="guide-grid">
+          <div v-for="guide in visibleGuides" :key="guide.grade" class="guide-card" @click="openGuide(guide)">
+            <div class="guide-grade">{{ guide.grade }} 年级</div>
+            <div class="guide-name">课程教学指南</div>
+            <div class="guide-meta">{{ guide.lessonCount }} 份课件</div>
+            <el-tag v-if="Number(guide.missingCount)" size="small" type="warning" effect="plain">暂缺 {{ guide.missingCount }} 课</el-tag>
+            <span class="book-open">查看指南</span>
+          </div>
+        </div>
+      </div>
+
+      <el-empty v-if="!loading && !visibleGroups.length && !visibleGuides.length" description="没有匹配的教材或指南" />
     </div>
 
-    <p v-if="caseSummaryError" class="shelf-tip">课例标记加载失败。<el-button link type="primary" @click="loadCaseSummary">重试</el-button></p>
-    <p class="shelf-tip">
-      整册 PDF 和本课 PDF 仅供教师课堂教学使用，请勿外传。
-    </p>
+    <p v-if="caseSummaryError" class="shelf-tip">教学资源标记加载失败。<el-button link type="primary" @click="loadCaseSummary">重试</el-button></p>
+    <p v-if="guideError" class="shelf-tip">课程指南加载失败。<el-button link type="primary" @click="loadResources">重试</el-button></p>
+    <p v-if="compilationError" class="shelf-tip">教学设计汇编加载失败。<el-button link type="primary" @click="loadResources">重试</el-button></p>
+    <CompilationPreview v-model="compilationVisible" :resource="selectedCompilation" />
   </div>
 </template>
 
@@ -80,7 +101,9 @@ import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
 import { Document, Search } from '@element-plus/icons-vue'
 import { listTextbookBooks, downloadTextbookBookPdf, TEXTBOOK_PENDING_VOLUMES } from '@/api/business/textbook'
+import { listBookResources, bookResourceDownloadUrl, getGuides } from '@/api/business/textbookResource'
 import LazyPageImage from './components/LazyPageImage.vue'
+import CompilationPreview from './components/CompilationPreview.vue'
 import { getCaseSummary } from '@/api/business/textbookCase'
 
 const router = useRouter()
@@ -88,6 +111,12 @@ const loading = ref(false)
 const books = ref([])
 const caseBookIds = ref(new Set())
 const caseSummaryError = ref(false)
+const bookCompilations = ref(new Map())
+const guides = ref([])
+const guideError = ref(false)
+const compilationError = ref(false)
+const compilationVisible = ref(false)
+const selectedCompilation = ref(null)
 
 async function loadCaseSummary() {
   caseSummaryError.value = false
@@ -99,11 +128,58 @@ async function loadCaseSummary() {
   }
 }
 onMounted(loadCaseSummary)
+onMounted(loadResources)
 const keyword = ref('')
 const downloadingBookId = ref(null)
 
 const primaryGrades = [3, 4, 5, 6]
 const juniorGrades = [7, 8, 9]
+
+async function loadResources() {
+  compilationError.value = false
+  guideError.value = false
+  try {
+    const res = await listBookResources()
+    const map = new Map()
+    for (const item of res.data || []) {
+      if (item.category === 'DESIGN' && !map.has(Number(item.bookId))) map.set(Number(item.bookId), item)
+    }
+    bookCompilations.value = map
+  } catch { compilationError.value = true }
+  try {
+    const res = await getGuides()
+    guides.value = res.data || []
+  } catch {
+    guideError.value = true
+  }
+}
+
+function previewCompilation(book) {
+  selectedCompilation.value = bookCompilations.value.get(Number(book.bookId))
+  compilationVisible.value = true
+}
+
+const visibleGuides = computed(() => {
+  const key = keyword.value.trim()
+  return guides.value.filter(guide => !key || `${guide.grade}年级${guide.title}`.includes(key))
+})
+
+function openGuide(guide) {
+  router.push(`/business/textbook/guide/${guide.grade}`)
+}
+
+function downloadCompilation(book) {
+  const item = bookCompilations.value.get(Number(book.bookId))
+  if (!item) return
+  const link = document.createElement('a')
+  link.href = bookResourceDownloadUrl(item.id)
+  link.download = item.filename
+  link.target = '_blank'
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
 
 function matches(book) {
   const key = keyword.value.trim()
@@ -166,23 +242,17 @@ onMounted(load)
 
 .shelf-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
 }
 
 .shelf-title {
-  margin: 0 0 6px;
-  font-size: 20px;
-  color: #303133;
-}
-
-.shelf-sub {
   margin: 0;
-  font-size: 13px;
-  color: #909399;
+  font-size: 22px;
+  color: #303133;
 }
 
 .shelf-search {
@@ -194,7 +264,7 @@ onMounted(load)
 }
 
 .stage-block + .stage-block {
-  margin-top: 26px;
+  margin-top: 32px;
 }
 
 .stage-title {
@@ -219,13 +289,12 @@ onMounted(load)
   border-radius: 8px;
   padding: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .book-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(64, 158, 255, 0.18);
-  border-color: #c6e2ff;
+  box-shadow: 0 4px 14px rgba(30, 45, 65, 0.06);
+  border-color: #b9cde3;
 }
 
 .book-card.is-pending {
@@ -276,6 +345,79 @@ onMounted(load)
   color: #909399;
 }
 
+.book-compilation {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f1f3;
+}
+.compilation-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+  color: #606266;
+}
+.compilation-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+.compilation-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.book-compilation :deep(.el-button) {
+  padding: 0;
+  font-size: 12px;
+}
+.guide-block {
+  border-top: 1px solid #ebeef5;
+  padding-top: 28px;
+}
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 14px;
+}
+.guide-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.guide-card:hover {
+  border-color: #b9cde3;
+}
+.guide-grade {
+  font-size: 18px;
+  color: #303133;
+  font-weight: 600;
+}
+.guide-name {
+  font-size: 14px;
+  color: #606266;
+  line-height: 1.4;
+}
+.guide-meta {
+  font-size: 12px;
+  color: #909399;
+}
+.guide-card .book-open {
+  margin-top: 2px;
+}
+@media (max-width: 390px) {
+  .guide-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .book-actions {
   display: flex;
   align-items: center;

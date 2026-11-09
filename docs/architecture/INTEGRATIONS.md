@@ -194,3 +194,7 @@ flowchart LR
 ## 2026-10-08正式1.30.37机位显示与助手0.2.1
 
 上方同日“本机待发布/正式仍0.2.0”已由此次发布取代。130 release `20261008_seat_install_v1`，JAR字节不变，助手下载路径切换并重启后台，三服务active；只执行产品更新SQL，更新115 PUBLISHED且教师可见。教师课堂/学生首页和实际下载通过；机房自启及还原基线仍需现场重启验收。备份哈希及恢复service/nginx/env的回滚步骤见 [正式验收](../../contexts/seat-install-release-verification-20261008.md)。
+
+## 2026-11-05 Python判题跨推进终态（1.30.73）
+
+课程判题完成事务保存终态与时间；锁定当前指派的比较结果仅控制biz_student_answer回写。推进、指派缺失或学生档案缺失不阻止判题记录结束，当前课最高分规则保持。仅发布ProgrammingSubmissionService类，无结构SQL/新配置。[验收](../../contexts/class-readiness-20261105.md)。

@@ -1,0 +1,68 @@
+-- 仅回退 1.30.77 热修；执行前先切回旧前端。
+SET NAMES utf8mb4;
+START TRANSACTION;
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023reffe648e16dd28d17f931ddb4f67e9a130' AND r.resource_key='nb2023reffe648e16dd28d17f931ddb4f67e9a130-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023reffe648e16dd28d17f931ddb4f67e9a130' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref4a83f32f523dc82faf7f7494f09ce80a' AND r.resource_key='nb2023ref4a83f32f523dc82faf7f7494f09ce80a-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref4a83f32f523dc82faf7f7494f09ce80a' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref360b978504ae1349a249449509c6584d' AND r.resource_key='nb2023ref360b978504ae1349a249449509c6584d-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref360b978504ae1349a249449509c6584d' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref12bee56cd98b41226b1e6e3cb21407fe' AND r.resource_key='nb2023ref12bee56cd98b41226b1e6e3cb21407fe-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref12bee56cd98b41226b1e6e3cb21407fe' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref7b26d84e59fa7e74b898ec3a148134a2' AND r.resource_key='nb2023ref7b26d84e59fa7e74b898ec3a148134a2-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref7b26d84e59fa7e74b898ec3a148134a2' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023refd0699b593ef8af21700cad6e0f410e03' AND r.resource_key='nb2023refd0699b593ef8af21700cad6e0f410e03-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023refd0699b593ef8af21700cad6e0f410e03' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref491445d4448f51dd59e8c151920a550c' AND r.resource_key='nb2023ref491445d4448f51dd59e8c151920a550c-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref491445d4448f51dd59e8c151920a550c' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023refd940bc7491b0d86c93117605542a9faf' AND r.resource_key='nb2023refd940bc7491b0d86c93117605542a9faf-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023refd940bc7491b0d86c93117605542a9faf' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023refcf2d9c0e420d24033d29e2c0a00186c8' AND r.resource_key='nb2023refcf2d9c0e420d24033d29e2c0a00186c8-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023refcf2d9c0e420d24033d29e2c0a00186c8' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023refbdae47d47d932c510c32a6aec38ca21e' AND r.resource_key='nb2023refbdae47d47d932c510c32a6aec38ca21e-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023refbdae47d47d932c510c32a6aec38ca21e' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref868845ff951099d5b6bd59aba501f319' AND r.resource_key='nb2023ref868845ff951099d5b6bd59aba501f319-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref868845ff951099d5b6bd59aba501f319' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref864139ecd8d30d081a5e24c7d8855664' AND r.resource_key='nb2023ref864139ecd8d30d081a5e24c7d8855664-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref864139ecd8d30d081a5e24c7d8855664' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref61d6ce903987394b387329ca29fb9e2b' AND r.resource_key='nb2023ref61d6ce903987394b387329ca29fb9e2b-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref61d6ce903987394b387329ca29fb9e2b' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref1bb9ac04069a041646370923d6786aea' AND r.resource_key='nb2023ref1bb9ac04069a041646370923d6786aea-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref1bb9ac04069a041646370923d6786aea' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023ref3125c80ed13462393d5ac827695c7bc7' AND r.resource_key='nb2023ref3125c80ed13462393d5ac827695c7bc7-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023ref3125c80ed13462393d5ac827695c7bc7' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE r FROM biz_textbook_case_resource r JOIN biz_textbook_case c USING(case_id) WHERE c.source_key='nb2023refbde1170ba50bb8198e583aad8ddcbf96' AND r.resource_key='nb2023refbde1170ba50bb8198e583aad8ddcbf96-design';
+DELETE FROM biz_textbook_case WHERE source_key='nb2023refbde1170ba50bb8198e583aad8ddcbf96' AND NOT EXISTS(SELECT 1 FROM biz_textbook_case_resource r WHERE r.case_id=biz_textbook_case.case_id);
+DELETE FROM biz_textbook_case_resource WHERE resource_key='recovered-aa55a0d7bb86dc98a6b1a4e5acc2fb0bc5d7f7c6600e9827c5267d1c31946b8f' AND original_path='aa/aa55a0d7bb86dc98a6b1a4e5acc2fb0bc5d7f7c6600e9827c5267d1c31946b8f.pdf';
+DELETE FROM biz_textbook_case_resource WHERE resource_key='recovered-014067b7704e275c57307114c42421728fe0071acb3ea88762cf10c7a5e71bd1' AND original_path='01/014067b7704e275c57307114c42421728fe0071acb3ea88762cf10c7a5e71bd1.pdf';
+UPDATE biz_textbook_case_resource SET `original_path`='f5/f5a36ddd67b6d4cdd81baec809e00b1fd1bb0e681cf0b99eff067e837a7bd983.zip',`bytes`='306275359',`description`='共 47 个文件，来源目录：四下（镇海）/05视频编码-周华静',`requirements`='解压后按文件名和包内 README 使用。' WHERE resource_id=1457 AND resource_key='pkg-f5a36ddd67b6d4cdd81baec809e00b1fd1bb0e681cf0b99eff067e837a7bd983';
+UPDATE biz_textbook_case_resource SET `original_path`='e5/e5bc4b8937b1a399c65b6f89ca11a24bd407af4956a2231e15f4ee5493f102e3.zip',`bytes`='23115',`description`='共 4 个文件，来源目录：三下（高新前湾）/前湾新区-第11课《资源智能生成》-卢旭浩',`requirements`='解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。' WHERE resource_id=1990 AND resource_key='pkg-e5bc4b8937b1a399c65b6f89ca11a24bd407af4956a2231e15f4ee5493f102e3';
+UPDATE biz_textbook_case_resource SET `original_path`='e1/e113bb2638ede812a64e0f9ab42ae8d63c233a98f5c6fe37b3593a070d3a6d15.zip',`bytes`='6003785',`description`='共 9 个文件，来源目录：三下（高新前湾）/前湾新区-第11课《资源智能生成》-岑姝锌',`requirements`='解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。
+含 Windows 程序或脚本，解压后按包内说明运行；请先确认来源可信。' WHERE resource_id=1991 AND resource_key='pkg-e113bb2638ede812a64e0f9ab42ae8d63c233a98f5c6fe37b3593a070d3a6d15';
+UPDATE biz_textbook_case_resource SET `original_path`='7f/7fc749ea0f274dacacf954ae004452bf2f38fedd1a826658a70d68adc56a2bc4.zip',`bytes`='32179515',`description`='共 23 个文件，来源目录：三下（高新前湾）/前湾新区-第11课《资源智能生成》-张楚人',`requirements`='解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。
+含 Windows 程序或脚本，解压后按包内说明运行；请先确认来源可信。' WHERE resource_id=1992 AND resource_key='pkg-7fc749ea0f274dacacf954ae004452bf2f38fedd1a826658a70d68adc56a2bc4';
+UPDATE biz_textbook_case_resource SET `original_path`='4a/4a511a68daef1fce04066be0972cfdf24ecfccf43dc97eb11c081a032c865782.zip',`bytes`='187500662',`description`='共 1 个文件，来源目录：四下（镇海）/慈溪市-第17课《手写数字的识别与应用》',`requirements`='解压后按文件名和包内 README 使用。' WHERE resource_id=2086 AND resource_key='pkg-4a511a68daef1fce04066be0972cfdf24ecfccf43dc97eb11c081a032c865782';
+UPDATE biz_textbook_case_resource SET `original_path`='dc/dc763795d56bf425ea3f28f39c7331041877f34f1cd7ca32b0beba7e4460e8f8.zip',`bytes`='7992937',`description`='共 29 个文件，来源目录：六下（余姚）/余姚市-认识智能体-余姚市梨洲小学-李炯荣(1)',`requirements`='解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。
+含 Windows 程序或脚本，解压后按包内说明运行；请先确认来源可信。' WHERE resource_id=2171 AND resource_key='pkg-dc763795d56bf425ea3f28f39c7331041877f34f1cd7ca32b0beba7e4460e8f8';
+UPDATE biz_textbook_case_resource SET `original_path`='8d/8d45d1a3eaadadfbef026975e0dbeacb9140c69362ec018a606b59dc9f102b3c.zip',`bytes`='57532675',`description`='共 128 个文件，来源目录：七上（奉化）/江北区-第19课《智能体的搭建与应用》',`requirements`='需 Node.js 环境：解压后在项目目录执行 npm install，再按 README 或 package.json 启动。
+解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。' WHERE resource_id=2191 AND resource_key='pkg-8d45d1a3eaadadfbef026975e0dbeacb9140c69362ec018a606b59dc9f102b3c';
+UPDATE biz_textbook_case_resource SET `original_path`='9f/9ff396904aab978a91c58074750d972eb0e651fbe31df321ef626f164e594d1c.zip',`bytes`='32078429',`description`='共 6 个文件，来源目录：七下（鄞州）/象山县-第19课《人工智能的技术基础》(1)',`requirements`='解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。
+含 Windows 程序或脚本，解压后按包内说明运行；请先确认来源可信。' WHERE resource_id=2255 AND resource_key='pkg-9ff396904aab978a91c58074750d972eb0e651fbe31df321ef626f164e594d1c';
+UPDATE biz_textbook_case_resource SET `original_path`='e3/e3d5a206a3e27a5ff1ec8c8e50dd92a8eed0856b15d2f51723aeabc1edbea2af.zip',`bytes`='222135913',`description`='共 402 个文件，来源目录：七下（鄞州）/象山县-第20课《人工智能中的神经网络》',`requirements`='解压后按文件名和包内 README 使用。' WHERE resource_id=2256 AND resource_key='pkg-e3d5a206a3e27a5ff1ec8c8e50dd92a8eed0856b15d2f51723aeabc1edbea2af';
+UPDATE biz_textbook_case_resource SET `original_path`='20/20694059d7dc3822be9fa08bade5e0d46ac3fb2000ba7f0a3716393b8c4ffb02.zip',`bytes`='58952906',`description`='共 48 个文件，来源目录：九年级/象山县 郑琦 -第13课《推荐系统探究》',`requirements`='解压后用浏览器打开入口 HTML；若页面依赖本地服务或模型文件，请按包内 README 启动。
+含 Windows 程序或脚本，解压后按包内说明运行；请先确认来源可信。' WHERE resource_id=2279 AND resource_key='pkg-20694059d7dc3822be9fa08bade5e0d46ac3fb2000ba7f0a3716393b8c4ffb02';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 16 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=1 AND resource_key='book-design-xxkj-3-0-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 13 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=2 AND resource_key='book-design-xxkj-3-1-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 19 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=3 AND resource_key='book-design-xxkj-4-0-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 18 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=4 AND resource_key='book-design-xxkj-4-1-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 16 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=5 AND resource_key='book-design-xxkj-5-0-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 18 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=6 AND resource_key='book-design-xxkj-5-1-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 17 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=7 AND resource_key='book-design-xxkj-6-0-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 18 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=8 AND resource_key='book-design-xxkj-6-1-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 20 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=9 AND resource_key='book-design-xxkj-7-0-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 22 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=10 AND resource_key='book-design-xxkj-7-1-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 4 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=11 AND resource_key='book-design-xxkj-8-0-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 10 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=12 AND resource_key='book-design-xxkj-8-1-2026';
+UPDATE biz_textbook_book_resource SET `title`='整册教学设计汇编',`description`='宁波市 2026 新教材整册教学设计汇编，收录 1 课；与“下载整册”教材 PDF 不同，本文件是教学设计合集。' WHERE id=13 AND resource_key='book-design-xxkj-9-9-2026';
+UPDATE biz_platform_update SET status='DRAFT',update_time=NOW() WHERE version_no='1.30.77';
+COMMIT;

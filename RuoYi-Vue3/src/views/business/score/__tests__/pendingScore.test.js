@@ -16,7 +16,7 @@ test('操作待批仍累计打字和理论，参与课程均分', () => {
   const row = summarize([{ lessonId: 1, practicalScore: 80, totalScore: 80, finalScore: 80 }, { ...pending, performanceScore: 10 }])
   assert.equal(row.avgPractical, 80)
   assert.equal(row.filteredAverage, 57.5)
-  assert.equal(row.filteredTotal, 57.5)
+  assert.equal(row.filteredTotal, 115)
   assert.equal(row.totalPerformance, 5)
 })
 test('操作待批保留空值，总分先展示已有成绩，真实零分参与平均', () => {

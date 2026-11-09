@@ -84,3 +84,37 @@ test('浏览器无法创建线程时给出可重试的错误', () => {
   assert.match(events[0].text, /代码已保留/)
   runner.dispose()
 })
+
+test('无 JSPI 时判定为不支持本机运行', async () => {
+  const { canRunLocally } = await import('../interactiveRunner.js')
+  const saved = { Suspending: WebAssembly.Suspending, promising: WebAssembly.promising }
+  try {
+    delete WebAssembly.Suspending
+    assert.equal(canRunLocally(), false)
+    WebAssembly.Suspending = function () {}
+    delete WebAssembly.promising
+    assert.equal(canRunLocally(), false)
+    WebAssembly.promising = function () {}
+    assert.equal(canRunLocally(), true)
+  } finally {
+    if (saved.Suspending) WebAssembly.Suspending = saved.Suspending
+    if (saved.promising) WebAssembly.promising = saved.promising
+  }
+})
+
+test('服务器运行按示例返回结果，并忽略过期响应', async () => {
+  const events = []
+  let resolveFirst
+  const runner = createInteractiveRunner(event => events.push(event), {
+    serverRun: () => new Promise(resolve => { resolveFirst = resolve })
+  })
+  const first = runner.runOnServer('print(1)', { lessonId: 1, questionId: 2 })
+  const second = runner.runOnServer('print(2)', { lessonId: 1, questionId: 2 })
+  resolveFirst({ data: { cases: [{ statusCode: 'ACCEPTED' }] } })
+  await first
+  assert.equal(events.filter(event => event.type === 'server-result').length, 0, '旧响应不能覆盖当前结果')
+  resolveFirst({ data: { cases: [{ statusCode: 'WRONG_ANSWER' }] } })
+  await second
+  assert.deepEqual(events.filter(event => event.type === 'server-result').pop().cases, [{ statusCode: 'WRONG_ANSWER' }])
+  assert.equal(events.at(-1).type, 'done')
+})

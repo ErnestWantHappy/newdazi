@@ -21,16 +21,17 @@
     <insert id="batchInsert">
         insert into biz_county_exam_paper_question
         (exam_id, student_id, question_id, question_type, question_content, option_a, option_b, option_c, option_d,
-         answer, analysis, question_score, order_num, typing_duration, word_count, file_path, preview_path)
+         answer, analysis, question_score, order_num, typing_duration, word_count, file_path, preview_path, media_json)
         values
         <foreach collection="list" item="item" separator=",">
             (#{item.examId}, #{item.studentId}, #{item.questionId}, #{item.questionType}, #{item.questionContent},
              #{item.optionA}, #{item.optionB}, #{item.optionC}, #{item.optionD}, #{item.answer}, #{item.analysis},
-             #{item.questionScore}, #{item.orderNum}, #{item.typingDuration}, #{item.wordCount}, #{item.filePath}, #{item.previewPath})
+             #{item.questionScore}, #{item.orderNum}, #{item.typingDuration}, #{item.wordCount}, #{item.filePath}, #{item.previewPath}, #{item.mediaJson})
         </foreach>
     </insert>
 
     <resultMap id="CountyExamPaperQuestionDetailResult" type="com.ruoyi.business.domain.vo.BizLessonQuestionDetailVo">
+        <result property="mediaJson" column="media_json"/>
         <result property="questionId" column="question_id"/>
         <result property="questionScore" column="question_score"/>
         <result property="orderNum" column="order_num"/>
@@ -51,7 +52,7 @@
     <select id="selectDetailsByExamAndStudent" resultMap="CountyExamPaperQuestionDetailResult">
         select question_id, question_score, order_num, question_content, question_type,
                option_a, option_b, option_c, option_d, answer, analysis, typing_duration,
-               word_count, preview_path, file_path
+               word_count, preview_path, file_path, media_json
         from biz_county_exam_paper_question
         where exam_id = #{examId}
           and student_id = #{studentId}

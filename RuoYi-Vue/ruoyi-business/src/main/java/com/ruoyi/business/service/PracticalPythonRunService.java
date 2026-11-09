@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -16,9 +17,13 @@ import com.ruoyi.common.exception.ServiceException;
 /** 批改运行只返回输出，不写提交、成绩或判题记录。 */
 @Service
 public class PracticalPythonRunService {
+    /** 与课堂判题默认班级容量保持一致，避免教师预览入口先于业务服务成为整班瓶颈。 */
+    private static final int MAX_CONCURRENT_RUNS = 8;
+    private static final long SLOT_WAIT_SECONDS = 3L;
+
     @Autowired @Qualifier("judge0HttpClient") private Judge0Client client;
     @Autowired private Judge0Properties properties;
-    private final Semaphore slots = new Semaphore(2);
+    private final Semaphore slots = new Semaphore(MAX_CONCURRENT_RUNS);
 
     public Map<String, Object> run(String source, String stdin) {
         if (!"http".equalsIgnoreCase(properties.getMode()))
@@ -27,8 +32,10 @@ public class PracticalPythonRunService {
             throw new ServiceException("在线运行的代码不能超过64 KiB，请下载后运行");
         if (stdin != null && stdin.length() > 4096)
             throw new ServiceException("程序输入不能超过4096个字符");
-        if (!slots.tryAcquire()) throw new ServiceException("运行服务繁忙，请稍后重试");
+        boolean acquired = false;
         try {
+            acquired = slots.tryAcquire(SLOT_WAIT_SECONDS, TimeUnit.SECONDS);
+            if (!acquired) throw new ServiceException("运行服务繁忙，请稍后重试");
             Judge0Request request = new Judge0Request();
             request.setSourceCode(source); request.setStdin(stdin);
             request.setCpuTimeLimit(3D); request.setMemoryLimitKb(131072);
@@ -51,7 +58,9 @@ public class PracticalPythonRunService {
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new ServiceException("运行请求已中断，请重试");
-        } finally { slots.release(); }
+        } finally {
+            if (acquired) slots.release();
+        }
     }
     private String value(String text) { return text == null ? "" : text; }
 }

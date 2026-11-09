@@ -12,7 +12,7 @@
       <el-tab-pane label="工具管理" name="tools">
         <el-card shadow="never">
           <el-form :model="query" inline class="query-form">
-            <el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="名称、说明或标签" @keyup.enter="searchTools" /></el-form-item>
+            <el-form-item label="关键词"><el-input v-model="query.keyword" clearable placeholder="名称、说明、标签或别名" @keyup.enter="searchTools" /></el-form-item>
             <el-form-item label="分类">
               <el-select v-model="query.categoryId" clearable placeholder="全部分类" style="width: 180px">
                 <el-option v-for="item in categories" :key="item.categoryId" :label="item.categoryName" :value="item.categoryId" />
@@ -27,7 +27,9 @@
             <el-table-column label="工具" min-width="220">
               <template #default="scope"><strong>{{ scope.row.title }}</strong><div class="subline">{{ scope.row.description }}</div></template>
             </el-table-column>
-            <el-table-column prop="categoryNameText" label="所属分类" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="categoryNameText" label="所属分类" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="taskNameText" label="教学任务" min-width="140" show-overflow-tooltip />
+            <el-table-column label="检索别名" min-width="200" show-overflow-tooltip><template #default="scope">{{ scope.row.aliases || '-' }}</template></el-table-column>
             <el-table-column label="访问方式" width="100"><template #default="scope">{{ accessLabels[scope.row.accessType] || scope.row.accessType }}</template></el-table-column>
             <el-table-column label="推荐" width="80"><template #default="scope"><el-tag v-if="scope.row.isRecommended === 'Y'" type="warning">推荐</el-tag><span v-else>-</span></template></el-table-column>
             <el-table-column prop="sortOrder" label="排序" width="70" />
@@ -65,12 +67,14 @@
       <el-form ref="toolFormRef" :model="toolForm" :rules="toolRules" label-width="100px" data-testid="teacher-tool-form">
         <el-row :gutter="18">
           <el-col :span="12"><el-form-item label="工具名称" prop="title"><el-input v-model="toolForm.title" maxlength="100" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="所属分类" prop="categoryIds"><el-select v-model="toolForm.categoryIds" multiple filterable collapse-tags style="width: 100%"><el-option v-for="item in enabledCategories" :key="item.categoryId" :label="item.categoryName" :value="item.categoryId" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="所属分类" prop="categoryIds"><el-select v-model="toolForm.categoryIds" multiple filterable collapse-tags style="width: 100%"><el-option v-for="item in categoryOptions" :key="item.categoryId" :label="item.status === '0' ? item.categoryName : `${item.categoryName}（已停用）`" :value="item.categoryId" :disabled="item.status !== '0'" /></el-select></el-form-item></el-col>
         </el-row>
         <el-form-item label="用途说明" prop="description"><el-input v-model="toolForm.description" type="textarea" :rows="2" maxlength="500" show-word-limit /></el-form-item>
         <el-form-item label="工具地址" prop="url"><el-input v-model="toolForm.url" placeholder="仅允许 http:// 或 https://" /></el-form-item>
         <el-form-item label="图标地址" prop="iconUrl"><el-input v-model="toolForm.iconUrl" placeholder="可不填；失败时显示内置工具图标" /></el-form-item>
         <el-form-item label="标签"><el-input v-model="toolForm.tags" placeholder="多个标签用逗号分隔" /></el-form-item>
+        <el-form-item label="检索别名"><el-input v-model="toolForm.aliases" placeholder="教师常用的其他说法，用逗号分隔，如：课件、演示文稿" /></el-form-item>
+        <el-form-item label="教学任务"><el-select v-model="toolForm.taskCodeList" multiple clearable collapse-tags placeholder="可多选；决定教师按任务筛选时能否找到" style="width: 100%" data-testid="teacher-tool-task-select"><el-option v-for="task in taskOptions" :key="task.taskCode" :label="task.taskName" :value="task.taskCode" :disabled="task.status === '1' || task.delFlag === '2'" /></el-select></el-form-item>
         <el-row :gutter="18">
           <el-col :span="8"><el-form-item label="访问方式"><el-select v-model="toolForm.accessType"><el-option v-for="(label, value) in accessLabels" :key="value" :label="label" :value="value" /></el-select></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="来源"><el-select v-model="toolForm.sourceType"><el-option v-for="(label, value) in sourceLabels" :key="value" :label="label" :value="value" /></el-select></el-form-item></el-col>
@@ -111,7 +115,7 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createTeacherTool, createTeacherToolCategory, deleteTeacherTool, getTeacherTool,
-  listTeacherToolCategories, listTeacherTools, restoreTeacherTool, updateTeacherTool,
+  listTeacherToolCategories, listTeacherToolTasks, listTeacherTools, restoreTeacherTool, updateTeacherTool,
   updateTeacherToolCategory, updateTeacherToolCategoryStatus, updateTeacherToolStatus
 } from '@/api/business/teacherTools.js'
 import { isSafeHttpUrl } from './teacherToolsUtils.js'
@@ -119,6 +123,7 @@ import { isSafeHttpUrl } from './teacherToolsUtils.js'
 const router = useRouter()
 const activeTab = ref('tools')
 const categories = ref([])
+const tasks = ref([])
 const tools = ref([])
 const total = ref(0)
 const toolLoading = ref(false)
@@ -129,13 +134,30 @@ const categoryDialogVisible = ref(false)
 const toolFormRef = ref()
 const categoryFormRef = ref()
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', categoryId: undefined, status: '', delFlag: '0' })
-const accessLabels = { DIRECT: '直接访问', LOGIN_REQUIRED: '需登录', INTRANET_ONLY: '限内网', DOWNLOAD: '下载工具' }
-const sourceLabels = { MANUAL: '平台维护', LOCAL_3005: '原3005站', LOCAL_80: '原80根站', ZJ_DISCIPLINE: '省学科平台' }
-const emptyTool = () => ({ toolId: undefined, title: '', description: '', url: '', iconUrl: '', tags: '', accessType: 'DIRECT', sourceType: 'MANUAL', sourceRef: '', isRecommended: 'N', recommendOrder: 100, sortOrder: 100, status: '0', categoryIds: [] })
+// 访问与来源标签与浏览页保持一致，避免教研发在两处看到不同叫法。
+const accessLabels = { DIRECT: '直接打开', LOGIN_REQUIRED: '需登录', INTRANET_ONLY: '限内网', DOWNLOAD: '下载工具' }
+const sourceLabels = { MANUAL: '平台自建', LOCAL_3005: '原3005站', LOCAL_80: '原80根站', ZJ_DISCIPLINE: '省学科平台' }
+// taskCodeList 只用于勾选；提交时转回接口字段 taskTags（逗号分隔编码）。
+const emptyTool = () => ({ toolId: undefined, title: '', description: '', url: '', iconUrl: '', tags: '', aliases: '', taskCodeList: [], accessType: 'DIRECT', sourceType: 'MANUAL', sourceRef: '', isRecommended: 'N', recommendOrder: 100, sortOrder: 100, status: '0', categoryIds: [] })
 const emptyCategory = () => ({ categoryId: undefined, categoryCode: '', categoryName: '', description: '', icon: 'tool', sectionLevel: 'SECONDARY', defaultExpanded: 'N', previewLimit: 4, sortOrder: 100, status: '0' })
 const toolForm = reactive(emptyTool())
 const categoryForm = reactive(emptyCategory())
-const enabledCategories = computed(() => categories.value.filter(item => item.status === '0'))
+// 已停用分类仍要回显，否则老工具打开编辑会丢归属；下拉里禁用不可再选，只能保留历史归属。
+const categoryOptions = computed(() => {
+  const selected = new Set(toolForm.categoryIds || [])
+  return categories.value.filter(item => item.status === '0' || selected.has(item.categoryId))
+})
+// 教学任务下拉只展示启用任务；编辑时命中的已停用任务单独补一个禁用选项，
+// 用完即弃，不写回全局 tasks，避免污染下一个工具的下拉。
+const taskOptions = computed(() => {
+  const enabled = tasks.value.filter(task => task?.status !== '1' && task?.delFlag !== '2')
+  const codes = new Set(enabled.map(task => task.taskCode))
+  const missing = (toolForm.taskCodeList || []).filter(code => code && !codes.has(code))
+  return [
+    ...enabled,
+    ...missing.map(code => ({ taskCode: code, taskName: `${code}（已停用）`, status: '1' }))
+  ]
+})
 const httpValidator = (_rule, value, callback) => !value || isSafeHttpUrl(value) ? callback() : callback(new Error('仅允许不含账号密码的 http/https 地址'))
 const toolRules = {
   title: [{ required: true, message: '请输入工具名称', trigger: 'blur' }],
@@ -153,6 +175,12 @@ async function loadCategories() {
   categoryLoading.value = true
   try { categories.value = (await listTeacherToolCategories()).data || [] } finally { categoryLoading.value = false }
 }
+async function loadTasks() {
+  try {
+    // 管理页只显示启用任务；停用任务在浏览端不再出现，也不在此提供勾选，避免脏编码写入。
+    tasks.value = ((await listTeacherToolTasks()).data || []).filter(task => task?.status !== '1' && task?.delFlag !== '2')
+  } catch { tasks.value = [] }
+}
 async function loadTools() {
   toolLoading.value = true
   try {
@@ -165,7 +193,21 @@ function searchTools() { query.pageNum = 1; loadTools() }
 function resetQuery() { Object.assign(query, { pageNum: 1, pageSize: 10, keyword: '', categoryId: undefined, status: '', delFlag: '0' }); loadTools() }
 async function openToolDialog(row) {
   Object.assign(toolForm, emptyTool())
-  if (row?.toolId) Object.assign(toolForm, (await getTeacherTool(row.toolId)).data)
+  if (row?.toolId) {
+    const detail = (await getTeacherTool(row.toolId)).data || {}
+    // 接口返回含 categoryNameText 等展示字段：只按表单白名单回填，避免脏字段进入提交。
+    const {
+      toolId, title, description, url, iconUrl, tags, aliases, taskTags,
+      accessType, sourceType, sourceRef, isRecommended, recommendOrder, sortOrder, status, categoryIds
+    } = detail
+    Object.assign(toolForm, {
+      toolId, title, description, url, iconUrl, tags, aliases,
+      accessType, sourceType, sourceRef, isRecommended, recommendOrder, sortOrder, status, categoryIds,
+      // 任务段历史数据统一按逗号存储，这里兼容旧分隔符读出，避免老数据回显丢失。
+      // 已停用任务由 taskOptions 补一个禁用选项展示，不再改写全局 tasks，避免污染下一个工具的下拉。
+      taskCodeList: String(taskTags || '').split(/[,，、;；]/).map(item => item.trim().toLowerCase()).filter(Boolean)
+    })
+  }
   toolDialogVisible.value = true
   nextTick(() => toolFormRef.value?.clearValidate())
 }
@@ -178,10 +220,30 @@ async function submitTool() {
   if (!await toolFormRef.value.validate().catch(() => false)) return
   submitting.value = true
   try {
-    const action = toolForm.toolId ? updateTeacherTool(toolForm.toolId, toolForm) : createTeacherTool(toolForm)
+    // 后端只接受已知字段；taskCodeList 只是勾选用的中间态，不能原样透传，避免未知字段污染保存链。
+    const { taskCodeList, title, description, url, iconUrl, tags, aliases,
+      accessType, sourceType, sourceRef, isRecommended, recommendOrder, sortOrder, status, categoryIds } = toolForm
+    const knownTaskCodes = new Set(tasks.value.map(task => task.taskCode))
+    // 任务清单尚未加载出来时不猜测编码：此时提交会被后端按对照表校验，未知编码直接拒绝。
+    const selectedTaskCodes = (taskCodeList || []).map(code => String(code || '').trim().toLowerCase()).filter(Boolean)
+    if (knownTaskCodes.size === 0 && selectedTaskCodes.length > 0) {
+      ElMessage.error('教学任务清单尚未加载完成，请稍后重试')
+      return
+    }
+    // 已停用任务在打开对话框时已作为“已停用”选项补回下拉，这里只拦截从未出现过的编码。
+    const unknownTaskCodes = selectedTaskCodes.filter(code => !knownTaskCodes.has(code))
+    if (unknownTaskCodes.length > 0) {
+      ElMessage.error('存在未知的教学任务（' + unknownTaskCodes.join('、') + '），请刷新任务清单后重试')
+      return
+    }
+    const payload = { title, description, url, iconUrl, tags, aliases, accessType, sourceType, sourceRef,
+      isRecommended, recommendOrder, sortOrder, status, categoryIds,
+      taskTags: selectedTaskCodes.join(',') }
+    const action = toolForm.toolId ? updateTeacherTool(toolForm.toolId, payload) : createTeacherTool(payload)
     await action
     ElMessage.success('工具已保存')
     toolDialogVisible.value = false
+    // 目录接口与后端 Redis 缓存同源，管理页保存后同样会失效该缓存。
     await loadTools()
   } finally { submitting.value = false }
 }
@@ -196,12 +258,29 @@ async function submitCategory() {
     await loadCategories()
   } finally { submitting.value = false }
 }
-async function changeToolStatus(row) { await updateTeacherToolStatus(row.toolId, row.status); ElMessage.success(row.status === '0' ? '已上架' : '已下架') }
-async function changeCategoryStatus(row) { await updateTeacherToolCategoryStatus(row.categoryId, row.status); ElMessage.success(row.status === '0' ? '分类已启用' : '分类已停用') }
+async function changeToolStatus(row) {
+  try {
+    await updateTeacherToolStatus(row.toolId, row.status)
+    ElMessage.success(row.status === '0' ? '已上架' : '已下架')
+  } catch {
+    // 开关已先翻转：失败时按服务端重拉，避免界面状态与真实上下架不一致。
+    ElMessage.error('状态切换失败，已恢复服务端状态，请重试')
+    await loadTools()
+  }
+}
+async function changeCategoryStatus(row) {
+  try {
+    await updateTeacherToolCategoryStatus(row.categoryId, row.status)
+    ElMessage.success(row.status === '0' ? '分类已启用' : '分类已停用')
+  } catch {
+    ElMessage.error('状态切换失败，已恢复服务端状态，请重试')
+    await loadCategories()
+  }
+}
 async function removeTool(row) { await ElMessageBox.confirm(`确认删除“${row.title}”吗？删除后可恢复。`, '删除工具', { type: 'warning' }); await deleteTeacherTool(row.toolId); ElMessage.success('已删除'); await loadTools() }
 async function restoreToolRow(row) { await restoreTeacherTool(row.toolId); ElMessage.success('已恢复'); await loadTools() }
 
-onMounted(async () => { await loadCategories(); await loadTools() })
+onMounted(async () => { await loadCategories(); await loadTasks(); await loadTools() })
 </script>
 
 <style scoped>

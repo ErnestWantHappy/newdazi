@@ -98,7 +98,16 @@ public class TextbookCaseController
     @GetMapping("/download/{id}")
     public void download(@PathVariable Long id, HttpServletRequest request, HttpServletResponse response) throws IOException
     {
-        if (requireBrowserTeacher(request, response)) file(id, false, response);
+        if (requireBrowserTeacher(request, response)) file(id, false, false, response);
+    }
+
+    /** 同一教学设计合并后的附加原件（如 Word 版），保持独立下载入口。 */
+    @Anonymous
+    @PreAuthorize("permitAll()")
+    @GetMapping("/download/{id}/extra")
+    public void downloadExtra(@PathVariable Long id, HttpServletRequest request, HttpServletResponse response) throws IOException
+    {
+        if (requireBrowserTeacher(request, response)) file(id, true, false, response);
     }
 
     @Anonymous
@@ -281,12 +290,18 @@ public class TextbookCaseController
     public void file(@PathVariable Long id, @RequestParam(defaultValue="false") boolean preview,
                      HttpServletResponse response) throws IOException
     {
+        file(id, false, preview, response);
+    }
+
+    private void file(Long id, boolean extra, boolean preview, HttpServletResponse response) throws IOException
+    {
         Map<String, Object> file = mapper.file(id);
         if (file == null) throw new ServiceException("资源已下架或不存在");
-        Path target = resolveFile(id, preview);
+        Path target = resolveFile(id, preview, extra);
+        String name = String.valueOf(extra ? file.get("extraFilename") : file.get("filename"));
         response.setContentType(preview ? "application/pdf" : "application/octet-stream");
         response.setHeader("Content-Disposition", (preview ? ContentDisposition.inline() : ContentDisposition.attachment())
-            .filename(preview ? "preview.pdf" : file.get("filename").toString(), StandardCharsets.UTF_8).build().toString());
+            .filename(preview ? "preview.pdf" : name, StandardCharsets.UTF_8).build().toString());
         response.setHeader("Cache-Control", "private, no-store");
         response.setHeader("X-Content-Type-Options", "nosniff");
         response.setContentLengthLong(Files.size(target));
@@ -295,10 +310,15 @@ public class TextbookCaseController
 
     private Path resolveFile(Long id, boolean preview) throws IOException
     {
+        return resolveFile(id, preview, false);
+    }
+
+    private Path resolveFile(Long id, boolean preview, boolean extra) throws IOException
+    {
         Map<String, Object> file = mapper.file(id);
         if (file == null) throw new ServiceException("资源已下架或不存在");
-        Object relative = file.get(preview ? "previewPath" : "originalPath");
-        if (relative == null) throw new ServiceException("预览尚未准备好，请下载原件");
+        Object relative = file.get(extra ? "extraPath" : (preview ? "previewPath" : "originalPath"));
+        if (relative == null) throw new ServiceException(extra ? "该资源没有附加原件" : "预览尚未准备好，请下载原件");
         // realpath 同时阻止越界路径和符号链接跳出资源目录。
         Path root = storage.getRoot().resolve("cases").toRealPath();
         Path target = root.resolve(relative.toString()).normalize();

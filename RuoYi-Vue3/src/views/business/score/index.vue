@@ -179,6 +179,7 @@
               [{{ questionTypeLabel(scope.row.questionType) }}]
             </span>
             {{ scope.row.questionContent }}
+            <el-button v-if="hasQuestionImages(scope.row)" link type="primary" @click="mediaPreviewQuestion=scope.row">查看图文题目</el-button>
           </template>
         </el-table-column>
         <el-table-column label="正确答案" width="120" align="center">
@@ -634,11 +635,15 @@
       </template>
     </el-dialog>
     
+    <QuestionMediaPreviewDialog :question="mediaPreviewQuestion" :context="{lessonId:selectedLessonIds[0]}" @close="mediaPreviewQuestion=null" />
   </div>
 </template>
 
 <script setup name="ScoreQuery">
 import { ref, watch, onMounted, nextTick, computed } from 'vue';
+import QuestionMediaPreviewDialog from '@/components/QuestionMedia/QuestionMediaPreviewDialog.vue';
+import { hasQuestionImages } from '@/utils/questionMedia';
+const mediaPreviewQuestion=ref(null);
 import useUserStore from '@/store/modules/user';
 import { getTheoryRedoContext, resetTheory, resetTyping } from '@/api/business/score';
 import { redoContextKey, isTheoryRedoPending, indexRedoStudents } from './theoryRedo';

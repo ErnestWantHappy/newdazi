@@ -1,5 +1,45 @@
 # 部署与回滚约定
 
+## 2026-11-09 正式1.30.86（首页品牌停留节奏微调，仅前端）
+
+130 Nginx 前端 root 为 `/data/apps/xueyeceping/releases/20261109_brand_logo_hold12_v1/frontend`，首页 SHA-256 `be732a834ec7e589cc1cb9102e753e899d777079e5c9dd654efc2d501d6df30e`；后端继续 `releases/20261109_choice_media_v1`（JAR `2b9c65e9`），MainPID `3019157`、NRestarts 0、三服务 active，未重启后端。制品 `frontend.tar.gz` 43,340,491B / SHA-256 `66220d2c200367f4fba4c53e2bebbe3cfae134c14369be1370ca090e54f64a8d`，820 文件；合并旧 static 后线上 3,137 文件。
+
+1.30.86 只把品牌 Logo 居中停留从约 2 秒缩短为约 1.2 秒；桌面220px、手机128px、起始遮罩隐藏首页内容、移动渐显、首次登录才播放均保持。实现上计时器由 `2200ms` 改为 `1400ms`，因为入场淡入约占0.2秒。只修改 `BrandLogoLanding/index.vue`；发布前整库备份 `/data/backups/xueyeceping/20261109_120529_20261109_brand_logo_hold12_v1/database.sql.gz`，70,925,485B，SHA-256 `9f307d75ccef89b4dcf5755673f47251672c363bd4327874d7bb5ef7c7a6d64a`；无业务迁移，仅执行 `sql/platform_update_1_30_86_20261109.sql`，更新 164/1.30.86/PUBLISHED 真实教师可见。
+
+正式浏览器验收通过：桌面 `1440×900` Logo 220px、停留 1240ms；手机 `390×844` Logo 128px、停留 1260ms；两端遮罩停留时为1并在移动中连续渐隐，标题、透明大图、刷新不重播也通过，0 页面脚本异常、0 个 5xx。证据见[1.30.86验收](../../contexts/brand-logo-entry/release-1.30.86.md)与 `output/playwright/brand-logo-hold-12-20261109/`。
+
+回退到 1.30.85：将 Nginx root 切至 `releases/20261109_brand_logo_entry_v2/frontend`，`nginx -t && systemctl reload nginx`，更新 164 转 DRAFT；1.30.85 release 保留。无需重启后端、不整库回灌。
+
+## 此前2026-11-09 1.30.85（首页品牌入场优化，仅前端）
+
+130 Nginx 前端 root 为 `/data/apps/xueyeceping/releases/20261109_brand_logo_entry_v2/frontend`，首页 SHA-256 `0e252cb6d8e319829173ea1c0fcc4f8aab274304c71ee54922c564982e7f7f52`；后端继续 `releases/20261109_choice_media_v1`（JAR `2b9c65e9`），MainPID `3019157`、NRestarts 0、三服务 active，未重启后端。制品 `frontend.tar.gz` 43,342,265B / SHA-256 `369c4dd07780196bfa16f90e8f77dc2d56cde12ed3723cfa2c9cc6a98c67c98a`，820 文件；合并旧 static 后线上 2,754 文件。
+
+1.30.84 已上线标题统一、登录页/教师首页/学生首页 Logo 点击透明大图和首次登录约1秒动画；1.30.85 只在此基础上替换 `BrandLogoLanding/index.vue`：桌面220px/手机128px、居中停留约2秒、起始遮罩完全隐藏内容、左移时780ms渐隐，刷新/站内跳转不重播。发布前整库备份 `/data/backups/xueyeceping/20261109_111458_20261109_brand_logo_entry_v2/database.sql.gz`，70,878,487B，SHA-256 `30aea88da7e349d9fdb71a7d4ed46b0670203e52ded79d1b3122787e224548e2`；无业务迁移，仅执行 `sql/platform_update_1_30_85_20261109.sql`，更新 163/1.30.85/PUBLISHED 真实教师可见。
+
+正式浏览器验收通过：桌面 `1440×900` Logo 220px、停留 2020ms；手机 `390×844` Logo 128px、停留 2060ms；两端遮罩停留时均为1并在移动中连续渐隐，标题与透明大图、刷新不重播也通过，0 页面脚本异常、0 个 5xx。证据见[1.30.85验收](../../contexts/brand-logo-entry/release-1.30.85.md)与 `output/playwright/brand-logo-entry-20261109/`。
+
+第一次 `20261109_brand_logo_entry_v1` 实际仍为 1.30.84 首页 `6b1912eb`，不是本轮效果；已由 `entry_v2` 覆盖并完成验收，不能把 `entry_v1` 记为成功版本。回退到 1.30.84：确认当前仍为 `entry_v2` 后，将 Nginx root 切至 `releases/20261109_brand_logo_v1/frontend`，`nginx -t && systemctl reload nginx`，更新 163 转 DRAFT；如需回到 1.30.83，则切至 `releases/20261109_lesson_designer_layout_v2/frontend`，更新 162、163 转 DRAFT。无需重启后端、不整库回灌。
+
+## 此前2026-11-09 1.30.83（课程设计页上下布局，仅前端）
+
+130 前端切至 `releases/20261109_lesson_designer_layout_v2/frontend`，首页 `0d2aa2343758c62bf3c4d3db67331bb0a04ae2b26226de8d897122566c6246bc`；后端保持 `releases/20261109_choice_media_v1`（JAR `2b9c65e9`）未重启，MainPID 3019157、NRestarts 0，三服务 active。制品 `frontend.tar.gz` 43,334,389B / SHA-256 `8141371efa0321ff57aee52fb3403ffdd94c780e2664f1a74752a4949132f71f`，820 文件；合并旧 static 后线上 1,981 文件。
+
+课程设计页改为课程内容设计在上、教学资源库在下，宽屏不再左右并排，手机端顺序一致；帮助教程文案同步为上下顺序。课程布局本身改 `business/lesson/designer.vue` 和 `help/tutorials.js`；同一包还含 `business/teacherTools/index.vue` 的动态卡片样式修复，合计三个前端文件，无后端、DDL 或业务数据变化。发布前整库备份 `/data/backups/xueyeceping/20261109_091504_20261109_lesson_designer_layout_v2/database.sql.gz`，70,575,490B，SHA-256 `ec91a843c9840435ca5165be3c76ed123a285ddfb4d63d34bf585499e142900f`；无业务 SQL，仅登记更新 161/1.30.83/PUBLISHED（`sql/platform_update_1_30_83_20261109.sql`，幂等）。
+
+正式验收：首页/验证码 200，真实教师 1440/390 上下顺序、整行宽度、0 横向溢出、0 页面脚本异常、0 个 5xx，未保存课程；教师工具页真实教师 11/11 通过，65 张工具卡、44px 图标、6 组色调，1440/390/320 无横向溢出，0 脚本异常/0 控制台错误/0 个 5xx，证据见[教师工具样式验收](../../contexts/teacher-tools/release-20261109-style.md)。回退：恢复 `nginx.before` 将 root 切回 `releases/20261109_choice_media_v1/frontend` 并 `nginx -t && systemctl reload nginx`，更新 161 转 DRAFT；不重启后端、不整库回灌。帮助页旧截图仍为左右布局，不影响页面，后续可单独更新。
+
+## 2026-11-09 正式1.30.82（选择题图片与Excel图文导入）
+
+130前后端`releases/20261109_choice_media_v1`：JAR`2b9c65e9273a324ba42d5aec0f97f942aa81ada3f5bb0dd5ce9c3e1fa7d5161d`，首页`8e2d045be4427cc598acca22d5214bfe8f0e67c6487a7c92d7e641788bce0cf3`；三服务active、NRestarts0、启动0 ERROR，旧1.30.81 release保留。迁移前整库备份`/data/backups/xueyeceping/20261109_071529_20261109_choice_media_v1/database.sql.gz`，70,566,942B，SHA-256`464ac8a37b0c4edc4886af96d730c4e64c0ab7b327f5ff0415afe00e9cd34966`；已执行`sql/choice_question_media_v1.sql`并复核两列四表，题库4792/抽测4187前后不变。产品更新160/1.30.82/PUBLISHED真实教师可见。
+
+私有原图目录为`/data/upload-question-images`，权限`admin2:admin2 750`，位于release外且不得加入Nginx公开根；后续发布、清理旧release和备份时必须保留。正式API 9项、浏览器9组（0页面异常/0个5xx、1440/390/320）通过；测试题、课程关联、答案、批次和图片已按清单清理，四表0行、目录为空。
+
+回退：课堂空闲时把unit中`ExecStart`的JAR与Nginx站点root切回`releases/20261108_review_fixes_v1`，`systemctl daemon-reload`、重启`xueyeceping-130`、`nginx -t`后reload，并将更新160转DRAFT；空列/空表可保留，不整库回灌。**一旦已有正式含图题，不得直接回退不识图旧程序**，须先保留`media_json`、四表记录和私有原图，或维持当前版本只做局部热修。详细证据见[1.30.82验收](../../contexts/choice-question-media/release-1.30.82.md)。
+
+## 2026-11-06 1.30.74仅前端题库预览
+
+130前端20261106_question_preview_v1，后端1.30.73/PID2940410保持；Nginx平滑reload，旧763静态资源保留。更新152/PUBLISHED教师可见。备份、真实验收与仅前端回退见[正式记录](../../contexts/question-workbench/release-20261106.md)。
+
 ## 2026-11-05 1.30.72后端整包+前端全量
 
 release `20261105_review_py_workbench_v2`：本机 clean 构建的业务 JAR 嵌入线上外层（仅内层 JAR 变化），前端首页 `06837bea`；三服务 active、NRestarts 0、env 未变。无结构 SQL，仅登记更新 150/PUBLISHED。备份 `/data/backups/xueyeceping/20261105_review_py_workbench_v2`，整库 gzip SHA256 `0350dfda788208a86aa6afb83c2c97248c2f59b7dc04bb38a9da39f03fb4e306`。回退入口 `python output/release-20261105/rollback.py`：确认当前仍为 v2 后恢复 unit/site、daemon-reload、重启后端、`nginx -t` + reload，更新 150 转 DRAFT，无全库回灌。[证据](../../contexts/RELEASE_LOG.md)。首发 v1 曾因成绩页与导出等级口径不一致在登记前回退，教训：**页面与导出的一致性必须在正式库真实数据上逐人比对**，本机或模拟数据通过不算数。

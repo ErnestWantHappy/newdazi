@@ -5,7 +5,12 @@
     <header class="dashboard-header">
       <div class="dashboard-header__inner">
         <div class="header-left">
-          <img src="@/assets/logo/logo.png" class="logo" alt="Logo" />
+          <PlatformLogo
+            :src="studentLogo"
+            class="logo"
+            data-brand-logo-target
+            alt="信息科技学业测评平台 Logo"
+          />
           <span class="platform-name">智慧课堂 - 学生端</span>
           <StudentSpaceSwitch space="regular" />
           <div v-if="hasGuideSheet" class="view-toggle" role="tablist" aria-label="课程内容切换">
@@ -529,6 +534,7 @@
               <div class="question-stem">
                 {{ index + 1 }}. {{ q.questionContent }}
               </div>
+              <QuestionMedia :question="q" :context="{ lessonId }" />
 
               <!-- 选择题 -->
               <div v-if="q.questionType === 'choice'" class="options-group">
@@ -537,12 +543,12 @@
                   :key="opt"
                   class="option-radio"
                   :class="{ active: answers[q.questionId] === opt }"
+                  role="radio" tabindex="0" :aria-checked="answers[q.questionId] === opt" :aria-disabled="theorySubmitted"
+                  @keydown.enter.prevent="selectTheoryAnswer(q.questionId,opt)" @keydown.space.prevent="selectTheoryAnswer(q.questionId,opt)"
                   @click="selectTheoryAnswer(q.questionId, opt)"
                 >
                   <span class="opt-label">{{ opt }}</span>
-                  <span class="opt-text">{{
-                    q["option" + opt] || "未配置"
-                  }}</span>
+                  <div class="choice-option-content"><span class="opt-text">{{ q['option'+opt] || (slotImages(q,opt).length ? '' : '未配置') }}</span><QuestionMedia :question="q" :slot="opt" :context="{ lessonId }" /></div>
                 </div>
               </div>
 
@@ -953,6 +959,7 @@
             </template>
 
             <div class="q-content">{{ idx + 1 }}. {{ q.questionContent }}</div>
+            <QuestionMedia :question="q" :context="{ lessonId:q.lessonId }" />
 
             <!-- 可交互选项 -->
             <div v-if="q.questionType === 'choice'" class="options-interactive">
@@ -969,7 +976,7 @@
                 }"
                 @click="selectWrongAnswer(q.questionId, 'A')"
               >
-                A. {{ q.optionA }}
+                <div class="choice-option-content">A. {{ q.optionA }}<QuestionMedia :question="q" slot="A" :context="{ lessonId:q.lessonId }" /></div>
               </div>
               <div
                 class="opt-btn"
@@ -984,7 +991,7 @@
                 }"
                 @click="selectWrongAnswer(q.questionId, 'B')"
               >
-                B. {{ q.optionB }}
+                <div class="choice-option-content">B. {{ q.optionB }}<QuestionMedia :question="q" slot="B" :context="{ lessonId:q.lessonId }" /></div>
               </div>
               <div
                 class="opt-btn"
@@ -999,7 +1006,7 @@
                 }"
                 @click="selectWrongAnswer(q.questionId, 'C')"
               >
-                C. {{ q.optionC }}
+                <div class="choice-option-content">C. {{ q.optionC }}<QuestionMedia :question="q" slot="C" :context="{ lessonId:q.lessonId }" /></div>
               </div>
               <div
                 class="opt-btn"
@@ -1014,7 +1021,7 @@
                 }"
                 @click="selectWrongAnswer(q.questionId, 'D')"
               >
-                D. {{ q.optionD }}
+                <div class="choice-option-content">D. {{ q.optionD }}<QuestionMedia :question="q" slot="D" :context="{ lessonId:q.lessonId }" /></div>
               </div>
             </div>
             <div
@@ -1112,7 +1119,11 @@
 </template>
 
 <script setup name="StudentIndex">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue';
+import { slotImages } from '@/utils/questionMedia';
 import StudentSpaceSwitch from "@/components/StudentSpaceSwitch"
+import PlatformLogo from "@/components/PlatformLogo/index.vue";
+import studentLogo from "@/assets/logo/logo.png";
 import { formatPracticalFileSize, practicalFileNameLimit } from '@/utils/practicalFileDisplay';
 import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from "vue";
 import { createTypingPinyinController } from "./typingPinyin";
@@ -2863,6 +2874,7 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.choice-option-content{flex:1;min-width:0;width:100%;text-align:left}.option-radio:focus-visible{outline:2px solid #409eff;outline-offset:2px}
 .student-dashboard {
   background-color: #f5f7fa;
   height: 100vh;
@@ -2926,6 +2938,7 @@ onUnmounted(() => {
   border-radius: 0 4px 4px 0;
 }
 .logo {
+  width: 32px;
   height: 32px;
 }
 .platform-name {
@@ -3878,6 +3891,7 @@ onUnmounted(() => {
     gap: 8px;
   }
   .logo {
+    width: 28px;
     height: 28px;
   }
   .platform-name {
@@ -3944,6 +3958,12 @@ onUnmounted(() => {
 }
 
 @media (max-width: 420px) {
+  .header-right{flex-wrap:wrap;justify-content:flex-start;gap:8px}
+  .header-actions{flex-wrap:wrap;gap:6px;flex:1 1 100%}
+  .header-actions :deep(.el-button){margin-left:0}
+  .banner-right{flex-wrap:wrap;gap:12px}
+  .course-score-box{flex:1;min-width:90px}
+  .score-rule-note{flex:1 1 100%;font-size:12px;line-height:1.7}
   .platform-name {
     display: none;
   }

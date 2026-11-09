@@ -105,13 +105,35 @@ test('三个操作题保存回调能切换方式、关闭弹窗并刷新完整�
 
 test('方式计数逐类取真实 total，不重复累计全操作题', async () => {
   const queries = []
-  const ctx = { modeTotals: { counts: null, requestId: 0 }, PRACTICAL_MODE_KEYS: ['FILE', 'PYTHON', 'DATA_LAB', 'FLOWCHART'], appliedFilters: { value: {} }, buildModuleQuery, scopeOf,
+  const ctx = { modeTotals: { counts: null, failed: [], requestId: 0 }, PRACTICAL_MODE_KEYS: ['FILE', 'PYTHON', 'DATA_LAB', 'FLOWCHART'], appliedFilters: { value: {} }, buildModuleQuery, scopeOf,
     listQuestion: async query => { queries.push(query); return { total: ({ FILE: 100, PYTHON: 20, DATA_LAB: 5, FLOWCHART: 7 })[query.practicalMode] ?? 132 } } }
   const start = script.indexOf('async function loadPracticalModeTotals(')
   await vm.runInNewContext(`${script.slice(start, script.indexOf('const practicalCounts =', start))} loadPracticalModeTotals()`, ctx)
   assert.equal(ctx.modeTotals.counts.FILE, 100)
   assert.equal(queries.length, 4)
   assert.ok(queries.every(query => query.practicalMode))
+})
+
+test('单个方式计数失败只影响该项，成功方式保留真实题量', async () => {
+  const ctx = {
+    modeTotals: { counts: null, failed: [], requestId: 0 },
+    PRACTICAL_MODE_KEYS: ['FILE', 'PYTHON', 'DATA_LAB', 'FLOWCHART'],
+    appliedFilters: { value: {} },
+    buildModuleQuery,
+    scopeOf,
+    listQuestion: async query => {
+      if (query.practicalMode === 'PYTHON') throw new Error('weak network')
+      return { total: ({ FILE: 100, DATA_LAB: 5, FLOWCHART: 7 })[query.practicalMode] }
+    },
+  }
+  const start = script.indexOf('async function loadPracticalModeTotals(')
+  await vm.runInNewContext(`${script.slice(start, script.indexOf('const practicalCounts =', start))} loadPracticalModeTotals()`, ctx)
+
+  assert.equal(ctx.modeTotals.counts.FILE, 100)
+  assert.equal(ctx.modeTotals.counts.DATA_LAB, 5)
+  assert.equal(ctx.modeTotals.counts.FLOWCHART, 7)
+  assert.equal(ctx.modeTotals.counts.PYTHON, null)
+  assert.deepEqual(Array.from(ctx.modeTotals.failed), ['PYTHON'])
 })
 
 test('批量编辑与删除各自鉴权，退出无写操作', () => {

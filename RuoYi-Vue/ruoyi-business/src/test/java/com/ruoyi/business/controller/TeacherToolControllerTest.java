@@ -20,7 +20,7 @@ class TeacherToolControllerTest
     {
         for (String method : Arrays.asList("categories", "createCategory", "updateCategory",
                 "updateCategoryStatus", "tools", "tool", "createTool", "updateTool",
-                "updateToolStatus", "deleteTool", "restoreTool"))
+                "updateToolStatus", "deleteTool", "restoreTool", "tasks"))
         {
             assertAuthorization(method, "business:teacherTool:manage", "hasRole('researcher')", "hasRole('admin')");
         }

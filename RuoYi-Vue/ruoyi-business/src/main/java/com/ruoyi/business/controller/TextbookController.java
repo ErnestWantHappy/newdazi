@@ -19,6 +19,7 @@ import com.ruoyi.business.domain.BizTextbookBook;
 import com.ruoyi.business.domain.BizTextbookPage;
 import com.ruoyi.business.service.TextbookCatalogService;
 import com.ruoyi.business.service.TextbookPdfService;
+import com.ruoyi.business.service.TextbookStudentAccessService;
 import com.ruoyi.business.service.TextbookStorageService;
 import com.ruoyi.common.core.domain.AjaxResult;
 
@@ -42,6 +43,9 @@ public class TextbookController
     @Autowired
     private TextbookPdfService pdfService;
 
+    @Autowired
+    private TextbookStudentAccessService studentAccessService;
+
     /** 书架：上架册列表 */
     @GetMapping("/books")
     public AjaxResult books()
@@ -55,6 +59,7 @@ public class TextbookController
     @GetMapping("/books/{bookId}/toc")
     public AjaxResult toc(@PathVariable Long bookId)
     {
+        studentAccessService.assertCanReadBook(bookId);
         return AjaxResult.success(catalogService.getToc(bookId));
     }
 
@@ -65,6 +70,7 @@ public class TextbookController
                             @RequestParam(required = false) Integer from,
                             @RequestParam(required = false) Integer to)
     {
+        studentAccessService.assertCanReadBook(bookId);
         List<BizTextbookPage> pages = catalogService.listPages(bookId, from, to);
         return AjaxResult.success(pages);
     }
@@ -119,6 +125,7 @@ public class TextbookController
     @GetMapping("/books/{bookId}/cover")
     public void cover(@PathVariable Long bookId, HttpServletRequest request, HttpServletResponse response) throws Exception
     {
+        studentAccessService.assertCanReadBook(bookId);
         BizTextbookPage page = catalogService.requirePage(bookId, 1);
         Path cover = storageService.resolveCover(bookId);
         Path file = cover != null ? cover : storageService.resolve(page.getImagePath());
@@ -147,6 +154,7 @@ public class TextbookController
     public void page(@PathVariable Long bookId, @PathVariable Integer pageNo,
                      HttpServletRequest request, HttpServletResponse response) throws Exception
     {
+        studentAccessService.assertCanReadBook(bookId);
         BizTextbookPage page = catalogService.requirePage(bookId, pageNo);
         Path file = storageService.resolve(page.getImagePath());
 

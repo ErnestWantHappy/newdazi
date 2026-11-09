@@ -114,11 +114,9 @@
               <template #default="scope">
                 <div class="question-content-text">{{ stripHtml(scope.row.questionContent) }}</div>
                 <div v-if="scope.row.questionType === 'choice'" class="options-list">
-                  <p>A. {{ scope.row.optionA || '未配置' }}</p>
-                  <p>B. {{ scope.row.optionB || '未配置' }}</p>
-                  <p>C. {{ scope.row.optionC || '未配置' }}</p>
-                  <p>D. {{ scope.row.optionD || '未配置' }}</p>
+                  <p v-for="key in ['A','B','C','D']" :key="key">{{ key }}. {{ scope.row['option'+key] || (slotImages(scope.row,key).length ? '▧ 图片' : '未配置') }}</p>
                   <p class="correct-answer">正确答案：{{ scope.row.answer }}</p>
+                  <div v-if="hasQuestionImages(scope.row)" class="choice-media-summary"><QuestionMedia :question="scope.row" :context="mediaContext(scope.row)" compact /><el-button link type="primary" @click="mediaPreviewQuestion=scope.row">预览图文</el-button></div>
                 </div>
                 <div v-else-if="scope.row.questionType === 'judgment'" class="judge-info">
                   正确答案：{{ formatJudgeAnswer(scope.row.answer) }}
@@ -226,11 +224,9 @@
               <template #default="scope">
                 <div class="question-content-text">{{ stripHtml(scope.row.questionContent) }}</div>
                 <div v-if="scope.row.questionType === 'choice'" class="options-list">
-                  <p>A. {{ scope.row.optionA || '未配置' }}</p>
-                  <p>B. {{ scope.row.optionB || '未配置' }}</p>
-                  <p>C. {{ scope.row.optionC || '未配置' }}</p>
-                  <p>D. {{ scope.row.optionD || '未配置' }}</p>
+                  <p v-for="key in ['A','B','C','D']" :key="key">{{ key }}. {{ scope.row['option'+key] || (slotImages(scope.row,key).length ? '▧ 图片' : '未配置') }}</p>
                   <p class="correct-answer">正确答案：{{ scope.row.answer }}</p>
+                  <el-button v-if="hasQuestionImages(scope.row)" link type="primary" @click="mediaPreviewQuestion=scope.row">预览图文</el-button>
                 </div>
                 <div v-else-if="scope.row.questionType === 'judgment'" class="judge-info">
                   正确答案：{{ formatJudgeAnswer(scope.row.answer) }}
@@ -290,10 +286,15 @@
     </div>
 
     <pdf-preview ref="pdfPreviewRef" />
+    <QuestionMediaPreviewDialog :question="mediaPreviewQuestion" :context="mediaContext(mediaPreviewQuestion)" @close="mediaPreviewQuestion=null" />
   </div>
 </template>
 
 <script setup name="CountyExamDesigner">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue';
+import QuestionMediaPreviewDialog from '@/components/QuestionMedia/QuestionMediaPreviewDialog.vue';
+import { hasQuestionImages, slotImages } from '@/utils/questionMedia';
+const mediaPreviewQuestion=ref(null);
 // 区域抽测组卷设计器 — 复制自教师端 designer.vue 并改造
 // 改造点：移除课程标题/第几课/指派班级，对接 countyExam API
 import { ref, computed, onMounted, getCurrentInstance } from 'vue';
@@ -323,6 +324,8 @@ const form = ref({
   randomJudgmentCount: 0,
 });
 const selectedQuestions = ref([]);
+const persistedQuestionIds=ref(new Set());
+function mediaContext(question){return question && persistedQuestionIds.value.has(question.questionId)?{examId:examId.value}:{}}
 
 const questionBankList = ref([]);
 const queryParams = ref({
@@ -568,6 +571,7 @@ function handleAddQuestion(row) {
             optionB: row.optionB,
             optionC: row.optionC,
             optionD: row.optionD,
+            media: row.media,
             answer: row.answer,
             previewPath: row.previewPath,
             typingDuration: row.typingDuration,
@@ -652,6 +656,7 @@ function initialize() {
     };
     
     // 加载已有题目
+    persistedQuestionIds.value=new Set((data.questions || []).map(item=>item.questionId));
     selectedQuestions.value = (data.questions || []).map((item, index) => ({
       ...item,
       questionScore: item.questionScore != null ? item.questionScore : 0,
@@ -670,6 +675,7 @@ onMounted(() => {
 
 
 <style scoped>
+.choice-media-summary{display:flex;align-items:center;gap:9px;margin:7px 0}
 .footer-toolbar {
   position: fixed;
   bottom: 0;

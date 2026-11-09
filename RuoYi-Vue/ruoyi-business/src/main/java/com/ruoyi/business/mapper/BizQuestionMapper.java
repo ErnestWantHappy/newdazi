@@ -11,6 +11,8 @@ import com.ruoyi.business.domain.BizQuestion;
  */
 public interface BizQuestionMapper 
 {
+    public BizQuestion selectQuestionForUpdate(Long questionId);
+    public int countMediaDependencies(Long questionId);
     /**
      * 查询题库管理
      * 

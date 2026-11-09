@@ -9,6 +9,11 @@ import com.ruoyi.business.domain.PracticalQuestionMaterial;
  */
 public class StudentLessonQuestionVo
 {
+    private String mediaJson;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getMediaJson() { return mediaJson; }
+    public void setMediaJson(String value) { mediaJson = value; }
+    public com.ruoyi.business.domain.QuestionMedia getMedia() { return com.ruoyi.business.utils.QuestionMediaCodec.parse(mediaJson); }
     private Long id;
     private Long lessonId;
     private Long questionId;

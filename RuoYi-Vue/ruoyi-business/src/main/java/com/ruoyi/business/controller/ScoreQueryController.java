@@ -1359,6 +1359,7 @@ public class ScoreQueryController extends BaseController {
             com.ruoyi.business.domain.vo.QuestionAnalysisDetailVo vo = new com.ruoyi.business.domain.vo.QuestionAnalysisDetailVo();
             vo.setQuestionId(q.getQuestionId());
             vo.setQuestionContent(q.getQuestionContent());
+            vo.setMediaJson(q.getMediaJson());
             vo.setQuestionType(q.getQuestionType());
             vo.setAnswer(q.getAnswer());
             

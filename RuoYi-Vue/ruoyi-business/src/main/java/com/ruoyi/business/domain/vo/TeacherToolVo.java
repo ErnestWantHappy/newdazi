@@ -8,9 +8,13 @@ public class TeacherToolVo extends BizTeacherTool
     private static final long serialVersionUID = 1L;
     private Long categoryId;
     private String categoryNameText;
+    /** 管理列表用的任务名称汇总。 */
+    private String taskNameText;
 
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
     public String getCategoryNameText() { return categoryNameText; }
     public void setCategoryNameText(String categoryNameText) { this.categoryNameText = categoryNameText; }
+    public String getTaskNameText() { return taskNameText; }
+    public void setTaskNameText(String taskNameText) { this.taskNameText = taskNameText; }
 }

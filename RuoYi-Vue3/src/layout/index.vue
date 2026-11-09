@@ -10,6 +10,7 @@
       <app-main />
       <settings ref="settingRef" />
     </div>
+    <BrandLogoLanding />
   </div>
 </template>
 
@@ -17,6 +18,7 @@
 import { useWindowSize } from '@vueuse/core'
 import Sidebar from './components/Sidebar/index.vue'
 import { AppMain, Navbar, Settings, TagsView } from './components'
+import BrandLogoLanding from '@/components/BrandLogoLanding/index.vue'
 import useAppStore from '@/store/modules/app'
 import useSettingsStore from '@/store/modules/settings'
 

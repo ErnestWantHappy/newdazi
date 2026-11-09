@@ -22,6 +22,7 @@ function setup() {
   const item = { source_type: 'PLAN', source_id: 1, question_id: 1 }
   const ctx = {
     current: ref(item), activeKey: ref('PLAN-1-1'), sourceCode: ref('first'), customInput: ref(''),
+    practiceSpace: ref('regular'),
     saving: ref(false), running: ref(false), customRunning: ref(false), submitting: ref(false), questionLoading: ref(false),
     draftState: ref('草稿待保存'), isJudging: ref(false), history: ref([]), selectedHistory: ref(null),
     consoleTab: ref('custom'), questions: ref([]), keyOf: row => `${row.source_type}-${row.source_id}-${row.question_id}`,

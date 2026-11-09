@@ -128,6 +128,11 @@ public class BizQuestionServiceImpl implements IBizQuestionService
     @Transactional(rollbackFor = Exception.class)
     public int updateBizQuestion(BizQuestion bizQuestion)
     {
+        if (!bizQuestion.isSafeMediaSave()) {
+            BizQuestion stored = bizQuestionMapper.selectQuestionForUpdate(bizQuestion.getQuestionId());
+            if (com.ruoyi.business.utils.QuestionMediaCodec.hasImages(bizQuestion.getMediaJson()) || (stored != null && com.ruoyi.business.utils.QuestionMediaCodec.hasImages(stored.getMediaJson())))
+                throw new ServiceException("含图题目请通过题库编辑页面安全保存");
+        }
         // 权限校验：非管理员只能编辑自己创建的题目
         Long currentUserId = SecurityUtils.getUserId();
         boolean isAdmin = SecurityUtils.isAdmin(currentUserId);
@@ -188,6 +193,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 }
             }
         }
+        for (Long id : new java.util.TreeSet<>(java.util.Arrays.asList(questionIds))) assertMediaQuestionDeletable(id);
         answerDeletionGuardService.assertQuestionsDeletable(questionIds);
         for (Long questionId : questionIds) {
             BizQuestion labQuestion = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
@@ -225,6 +231,7 @@ public class BizQuestionServiceImpl implements IBizQuestionService
                 return -1;
             }
         }
+        assertMediaQuestionDeletable(questionId);
         answerDeletionGuardService.assertQuestionsDeletable(new Long[] { questionId });
         BizQuestion question = bizQuestionMapper.selectBizQuestionByQuestionId(questionId);
         if (question != null && "DATA_LAB".equals(question.getPracticalMode())) assertPythonQuestionDeletable(questionId);
@@ -236,6 +243,12 @@ public class BizQuestionServiceImpl implements IBizQuestionService
             flowchartMapper.deleteQuestionConfig(questionId);
         }
         return bizQuestionMapper.deleteBizQuestionByQuestionId(questionId);
+    }
+
+    private void assertMediaQuestionDeletable(Long id) {
+        BizQuestion q=bizQuestionMapper.selectQuestionForUpdate(id);
+        if(q!=null && com.ruoyi.business.utils.QuestionMediaCodec.hasImages(q.getMediaJson()) && bizQuestionMapper.countMediaDependencies(id)>0)
+            throw new ServiceException("含图题已被课程或历史记录使用，请保留原题；修改保存时会自动保留历史版本");
     }
 
     /** Python 题被课程、题单或历史记录使用时只能走专门迁移，普通删除不能制造业务孤儿。 */

@@ -128,7 +128,7 @@ function getOptionContent(question, optionKey) {
     if (!question || !question.optionContents) return '未知内容';
     // 简单清洗一下 Key
     const key = (optionKey || '').trim();
-    return question.optionContents[key] || '未知内容';
+    return question.optionContents[key] || (question.media?.options?.[key]?.length ? '图片选项（可在答题分析查看图文）' : '未知内容');
 }
 
 function getAccuracyClass(acc) {

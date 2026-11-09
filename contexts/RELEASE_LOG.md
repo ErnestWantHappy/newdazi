@@ -1,5 +1,117 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-09 · 1.30.86：首页品牌停留节奏微调
+
+130 仅前端切换至 `releases/20261109_brand_logo_hold12_v1/frontend`，首页 SHA-256 `be732a834ec7e589cc1cb9102e753e899d777079e5c9dd654efc2d501d6df30e`。后端保持 `releases/20261109_choice_media_v1`（JAR `2b9c65e9`）未重启，MainPID `3019157`、NRestarts 0，三服务 active；1.30.85 release 保留。
+
+功能：品牌 Logo 桌面 `220px`、手机 `128px` 和全屏遮罩隐藏内容保持不变，只把居中停留由约 2 秒缩短为约 1.2 秒。计时器从 `2200ms` 调整为 `1400ms`；Logo 入场淡入约占 0.2 秒，因此肉眼可见的居中停留约为 1.2 秒。仅修改 `RuoYi-Vue3/src/components/BrandLogoLanding/index.vue`，不修改后端、数据库结构、权限或业务数据。
+
+制品 `frontend.tar.gz` 43,340,491B、SHA-256 `66220d2c200367f4fba4c53e2bebbe3cfae134c14369be1370ca090e54f64a8d`、820 文件；合并旧 static 后线上 3,137 文件。发布前整库备份 `/data/backups/xueyeceping/20261109_120529_20261109_brand_logo_hold12_v1/database.sql.gz`，70,925,485B，SHA-256 `9f307d75ccef89b4dcf5755673f47251672c363bd4327874d7bb5ef7c7a6d64a`。无业务 SQL，仅执行 `sql/platform_update_1_30_86_20261109.sql`；更新 164/1.30.86/PUBLISHED，真实教师 `/business/platform-update/list` 可见。
+
+正式浏览器验收（真实教师，1440×900 / 390×844）：桌面 Logo 220px、居中停留 `1240ms`，手机 128px、停留 `1260ms`；两端停留时遮罩不透明度均为 1，移动中连续渐隐；标题、透明 Logo 大图、刷新不重播通过，0 页面脚本异常、0 个 5xx。截图及机读结果见 `output/playwright/brand-logo-hold-12-20261109/`。
+
+回退：确认当前仍为 `hold12_v1` 后，将 Nginx root 切回 `releases/20261109_brand_logo_entry_v2/frontend`，更新 164 转 DRAFT；`1.30.85` 的 2 秒版本仍保留。无需重启后端、不整库回灌。
+
+## 2026-11-09 · 1.30.85：首页品牌入场体验优化
+
+130 仅前端切换至 `releases/20261109_brand_logo_entry_v2/frontend`，首页 SHA-256 `0e252cb6d8e319829173ea1c0fcc4f8aab274304c71ee54922c564982e7f7f52`。后端保持 `releases/20261109_choice_media_v1`（JAR `2b9c65e9273a324ba42d5aec0f97f942aa81ada3f5bb0dd5ce9c3e1fa7d5161d`）未重启，MainPID `3019157`、NRestarts 0，三服务 active；1.30.84 与误发候选目录均保留。
+
+功能：实际登录成功首次进入首页时，桌面 Logo 放大至 `220px`、手机 `128px`，居中停留约 2 秒；停留期间全屏浅色遮罩完全隐藏首页内容，Logo 向左上角目标移动时遮罩用 780ms 渐隐，页面内容随之逐渐出现。刷新、站内跳转不会重复播放，系统开启“减少动态效果”时跳过动画。只修改 `RuoYi-Vue3/src/components/BrandLogoLanding/index.vue`，不修改后端、数据库结构、权限或业务数据。
+
+制品 `frontend.tar.gz` 43,342,265B、SHA-256 `369c4dd07780196bfa16f90e8f77dc2d56cde12ed3723cfa2c9cc6a98c67c98a`、820 文件；合并旧 static 后线上 2,754 文件。发布前整库备份 `/data/backups/xueyeceping/20261109_111458_20261109_brand_logo_entry_v2/database.sql.gz`，70,878,487B，SHA-256 `30aea88da7e349d9fdb71a7d4ed46b0670203e52ded79d1b3122787e224548e2`。无业务 SQL，仅执行 `sql/platform_update_1_30_85_20261109.sql`；更新 163/1.30.85/PUBLISHED，真实教师 `/business/platform-update/list` 可见。
+
+正式浏览器验收（真实教师，1440×900 / 390×844）：桌面 Logo `220px`、居中停留 `2020ms`，手机 `128px`、停留 `2060ms`；两端停留时遮罩不透明度均为 1，移动中连续下降、结束接近 0；标题为“信息科技学业测评平台”，登录页与教师首页 Logo 可点击查看透明底大图，刷新动画计数 0，0 页面脚本异常、0 个 5xx。截图及机读结果见 `output/playwright/brand-logo-entry-20261109/`。
+
+发布过程需如实记录：第一次 `20261109_brand_logo_entry_v1` 的 staged 首页仍为 `6b1912ebad1a0cfc35c755fc7a4aae02b63da282c870f5886577a9446d4fcf8d`，实际是旧 1.30.84 包，只完成目录切换和更新 163 登记，不能作为本轮动画效果上线证据；随后创建 `20261109_brand_logo_entry_v2` 并切换到 `0e252cb6…` 首页，正式浏览器验收通过后，才确认 1.30.85 上线。回退到 1.30.84 时，将 Nginx root 指向 `releases/20261109_brand_logo_v1/frontend` 并将更新 163 转 DRAFT；如需回到 1.30.83，则指向 `releases/20261109_lesson_designer_layout_v2/frontend`，更新 162、163 均转 DRAFT。无需重启后端或整库回灌。
+
+## 2026-11-09 · 1.30.84：品牌标题、透明 Logo 大图与首次登录动画
+
+130 仅前端切换至 `releases/20261109_brand_logo_v1/frontend`，首页 SHA-256 `6b1912ebad1a0cfc35c755fc7a4aae02b63da282c870f5886577a9446d4fcf8d`；后端保持 `releases/20261109_choice_media_v1`（JAR `2b9c65e9`）未重启。制品 `frontend.tar.gz` 43,339,532B、SHA-256 `5afa0828fb738eed592a75e61a41459a90e99c7972deec0b4a85c67ff1d30f43`、820 文件。
+
+功能：浏览器标题统一为“信息科技学业测评平台”；登录页、教师首页和学生首页 Logo 可点击查看透明底大图；实际登录成功首次进入首页时，Logo 居中约 1 秒后缩小至左上角。正式教师桌面/手机实测居中停留分别为 `1020ms`、`1059ms`，刷新不重播，0 页面脚本异常、0 个 5xx；更新 162/1.30.84/PUBLISHED 真实教师可见。该版本已被 1.30.85 的“更大、停留 2 秒、内容完全隐藏后渐显”体验接续。
+
+## 2026-11-09 · 1.30.83：课程设计页上下布局与教师工具样式修复
+
+130 仅前端切换至 `releases/20261109_lesson_designer_layout_v2/frontend`，首页 SHA-256 `0d2aa2343758c62bf3c4d3db67331bb0a04ae2b26226de8d897122566c6246bc`。后端保持 `releases/20261109_choice_media_v1`（JAR `2b9c65e9273a324ba42d5aec0f97f942aa81ada3f5bb0dd5ce9c3e1fa7d5161d`）未重启，MainPID 3019157、NRestarts 0，三服务 active；旧 1.30.82 release 保留。
+
+功能：教师从首页“添加课程”进入课程设计页后，课程内容设计在上、教学资源库在下，宽屏不再左右并排，手机端保持同一顺序；帮助教程文案同步由“左侧/右侧”改为上下顺序。课程布局改两个前端文件；同一前端包还包含教师工具动态卡片样式修复，合计三个前端文件，不修改后端、数据库结构或业务数据。
+
+教师工具修复：`ToolCard`、`ToolIcon` 由 render 函数动态创建，原 scoped 卡片样式没有作用到内部元素；改为 `.teacher-tools-page` 限定的非 scoped 样式后，恢复图标色块、标签底色、色调和分区渐变。真实教师正式页 11/11 通过：65 张工具卡、图标 44px、6 组色调，1440/390/320 无横向溢出，0 脚本异常、0 控制台错误、0 个 5xx。教师工具样式本身未单独占用版本号，已包含在 1.30.83 前端包；之后 1.30.84 用于品牌标识发布，与本样式修复无关。证据见 [教师工具样式验收](teacher-tools/release-20261109-style.md)。
+
+制品 `frontend.tar.gz` 43,334,389B、SHA-256 `8141371efa0321ff57aee52fb3403ffdd94c780e2664f1a74752a4949132f71f`、820 文件；合并 1.30.82 旧 static 后线上 1,981 文件。发布前整库备份 `/data/backups/xueyeceping/20261109_091504_20261109_lesson_designer_layout_v2/database.sql.gz`，70,575,490B，SHA-256 `ec91a843c9840435ca5165be3c76ed123a285ddfb4d63d34bf585499e142900f`。本次无业务 SQL，仅执行 `sql/platform_update_1_30_83_20261109.sql`；更新 161/1.30.83/PUBLISHED 真实教师接口可见。
+
+正式验收：首页与验证码接口均 200；真实教师 1440/390 浏览器实测课程内容设计在上、教学资源库在下，两栏整行宽度，0 横向溢出、0 页面脚本异常、0 个 5xx；未点击保存、未创建课程。截图见 `output/playwright/lesson-layout-20261109/`。回退时切回 1.30.82 前端根并将更新 161 转 DRAFT，不重启后端、不回灌数据库。帮助页旧截图仍为左右布局，列为后续可选补充。未 Git 提交/推送。
+
+## 2026-11-09 · 1.30.82：选择题图片与 Excel 图文导入
+
+130 前后端切换至 `releases/20261109_choice_media_v1`：JAR SHA-256 `2b9c65e9273a324ba42d5aec0f97f942aa81ada3f5bb0dd5ce9c3e1fa7d5161d`，首页 SHA-256 `8e2d045be4427cc598acca22d5214bfe8f0e67c6487a7c92d7e641788bce0cf3`。后端 PID 3019157，三服务 active、NRestarts 0、启动 0 ERROR；旧 1.30.81 release 保留。
+
+功能：题干最多 3 图、每个选项 1 图，支持上传/粘贴/拖拽截图；题库“含图”标记、教师详情放大、学生作答展示。Excel 原模板内嵌图识别、预览修正、复核与整批原子确认；已引用含图题实质修改自动另存，保存回执可找回真实题目；个人抽测透传媒体。图片仅存私有目录 `/data/upload-question-images`（`admin2:admin2 750`），读取校验登录身份与题目/课程凭证，不通过 Nginx 静态根公开。
+
+发布前整库备份 `/data/backups/xueyeceping/20261109_071529_20261109_choice_media_v1/database.sql.gz`，70,566,942B，SHA-256 `464ac8a37b0c4edc4886af96d730c4e64c0ab7b327f5ff0415afe00e9cd34966`。执行 `sql/choice_question_media_v1.sql`：两可空 TEXT 列、四张新表及唯一索引；迁移前后题库 4792、抽测 4187 不变，四表 0 行。上传/粘贴、保存/回执、匿名与错课拒绝、学生答题、Excel 图文预览/确认共正式 API 9 项通过；教师题库/详情/上传/Excel 和学生页浏览器 9 组通过，0 页面异常、0 个 5xx，1440/390/320 无横向溢出。
+
+发布前后端全量 951 项通过（0 失败、3 跳过），前端图片专项 5 项及构建门禁 41 项通过。验收后按清单精确删除测试题 991673/991674、课程关联 14696、答案 823815、4 个导入批次和 10 张图片，题库/抽测/课程关联/答案回基线，四表 0 行、图片目录为空。产品更新 160/1.30.82/PUBLISHED 真实教师接口可见；`sql/platform_update_1_30_82_20261109.sql` 幂等。应用回退可保留空列/空表并切回 1.30.81；若已产生正式含图题，不得在未保留媒体和原图时回退旧程序，也不整库回灌备份。未实测真实 WPS/Excel 变体、整班并发、七天 TEMP 清理、老旧浏览器和区域抽测图片页面；未 Git 提交/推送。详细证据见[1.30.82 验收](choice-question-media/release-1.30.82.md)。
+
+## 2026-11-08 · 1.30.81：答案泄露、教材越权与课堂并发修复
+
+130后端`releases/20261108_review_fixes_v1/ruoyi-admin.jar`，SHA-256 `653e603497cde1852fe52a971e52a5459036bdf1ff14836cf2d65ce8666dc906`；前端`releases/20261108_review_fixes_v1/frontend`，首页SHA-256 `05d698804d74016551eedee63ec7ecc0f865e70cbbb54ccbd2e9d482f7f2e94c`。隔离制品发布并重启后端，旧静态资源合并后线上1,213文件，避免已上线懒加载分块404；首页200，MainPID 3012796、NRestarts 0，三服务active。
+
+修复：①题库列表/详情对非创建者、非管理员的Python操作题裁剪`answer`/`analysis`；②学生教材`toc/pages/cover/page`只允许当前班级课程绑定教材，校验学校与`bookId`；③教师操作题运行并发2→8并增加3秒排队，失败不误释放；④一年级指南空态、操作题单项计数重试、汇编页码记忆、教师工具320px收藏按钮、成绩页import顺序。
+
+发布前真实复现与发布后对比：普通教师题目991538详情答案长度333→0，管理员仍333；绑定学生教材1成功、教材7拒绝，无绑定学生教材1拒绝，教师教材1/7成功。浏览器7/7通过（答案隐藏、指南空态、成绩页、教师工具1440/390/320、操作题计数中断重试、学生页、51页汇编页码记忆），0页面JS异常、0 5xx。后端定向18项、主工作区业务模块全量955项（3跳过）、前端登录7/机位9/题库25项、Vite生产构建及发布门禁通过；1.30.81业务JAR`media_json`扫描0。
+
+更新159/1.30.81/PUBLISHED，真实教师`/business/platform-update/list`可见；`sql/platform_update_1_30_81_20261108.sql`幂等复跑仍一条。整库备份`/data/backups/xueyeceping/20261108_232251_20261108_review_fixes_v1/database.sql.gz`，70,854,452B，SHA-256 `774464dcd89a91881a581ece8d0d6281359fa11af7383fc08b271a43d7be6e90`。未混入未上线选择题图片/Excel图文导入；`media_json`仍未迁移130。未做整班45人并发压测和老旧浏览器实机验证；越权拒绝沿用业务码500。未Git提交/推送。详细证据见[1.30.81验收](review-fixes-1.30.81.md)。
+
+## 2026-11-08 · 1.30.80：教师工具查找、筛选与精选排序修复
+
+130后端`releases/20261108_teacher_tools_v1/ruoyi-admin.jar`，SHA-256 `ca13521278d3516a099073b9db5dcc3b11739ccae475b14c9e735ec84c105d41`；前端`releases/20261108_teacher_tools_frontend_v1/frontend`，首页SHA-256 `0a2702000274026d4a0f82f7b6cd6fcf9b986f3642912c7a67514450d87c71e5`。隔离制品发布，后端重启及Nginx切换完成，探活200。修复精选排序、来源重名、管理别名、任务/状态/分类校验、弹窗记录、键盘收藏、筛选重复与未加载身份假成功；统一直接打开与词条排序、恢复图标色调、容忍Redis失效失败。
+
+已执行任务/词条两表两列迁移及别名回填，正式83工具/12分类/14精选/5任务/51词条，39工具有别名；禁止重复执行数据回填。后端TeacherTool21项、前端19项通过；正式角色接口及浏览器24/24通过（1440/390/320、0页面JS异常）。更新158/1.30.80/PUBLISHED纯教师列表可见，登记SQL幂等复跑仍一条。
+
+迁移前整库备份`/data/backups/xueyeceping/20261108_132415_20261108_teacher_tools_v1/database.sql.gz`，70,841,443B，SHA-256 `fd0537caca65530a9bf7a96cfa738ba4ddee4c565c0ff0869447777c07286df2`；133127发布备份已含新增结构，不作为迁移前备份。应用回退至旧后端`20261107_teaching_resources_v1`、旧前端`20261108_teaching_label_v1/frontend`，更新158转DRAFT；应用回滚可保留新表新列。跨设备收藏和脏数据未改，真实管理写操作未实测。[详细证据与回滚](teacher-tools/release-20261108.md)。未Git提交/推送。
+
+## 2026-11-08 · 1.30.79：移除汇编数量说明
+
+130前端`20261108_teaching_label_v1/frontend`，首页SHA-256 `3c464a7bf982b8ae7dd828a67b09da8e3405b0f41731eb81055344753342bc17`。按用户要求移除书架与汇编预览中的覆盖数量，预览保留2026版标记。40项构建门禁、本机制品及正式真实教师1440/390/320预览/真实PDF下载/关闭及关联资源、指南回归通过，0页面JS异常；首页/验证码200。更新157/PUBLISHED真实教师可见。
+
+仅前端隔离构建与Nginx reload，后端PID2984156/NRestarts0保持；无业务SQL/DDL/依赖变化。备份`/data/backups/xueyeceping/20261108_teaching_label_v1/nginx.conf` SHA-256 `d1224892dee60714f9e5ee01eba59e420af2e4f6208d1ec70371f10f00c71284`。回退恢复配置并reload，前端回1.30.78，更新157转DRAFT，无业务回灌。详见[验收](textbook-teaching-resources-20261107/ui-1.30.79.md)；未Git提交/推送。
+
+## 2026-11-08 · 1.30.78：教材资源页面精简
+
+130前端`20261108_teaching_ui_v1/frontend`，首页SHA-256 `8c5c328c9e242899769e69cf64c47861004f82943b4b01a496c179c835b9a49e`。去掉书架/指南/弹窗重复说明、原始路径，合并重复课名与2023参考标记；保留简短覆盖、缺课及运行条件展开。40项构建门禁通过；本机制品及正式真实教师1440/390/320汇编预览/真实PDF下载/关闭/参考预览/去重/指南状态通过，0页面JS异常。首页/验证码200；更新156/PUBLISHED真实教师可见。
+
+仅前端隔离构建与Nginx reload，后端PID2984156/NRestarts0保持，无业务SQL/DDL/依赖/后端配置变更。备份`/data/backups/xueyeceping/20261108_teaching_ui_v1/nginx.conf` SHA-256 `c8ef47d3fe1b26fd40b0b87f57d65104c57550b2d2680eef037be5739e3e85db`；回退恢复配置、`nginx -t`+reload，前端回1.30.77并将更新156转DRAFT，无业务库回灌。详见[页面精简验收](textbook-teaching-resources-20261107/ui-1.30.78.md)。学生有效身份/机房整班未重验；未Git提交/推送。
+
+## 2026-11-08 · 1.30.77：教学资源补全、汇编预览与配套包整理
+
+130前端切换`20261108_teaching_hotfix_v1/frontend`，首页SHA-256 `9aa4508979fcef5a175cb5508aa5b4e8445410fd5d5ff7e5509a3e579f4feb28`；后端保持1.30.76/PID2984156/NRestarts0，未重启，仅Nginx reload。13册汇编在线预览并标明真实覆盖，补16课2023参考、恢复2原件、净化10个配套包755项，指南显示179可用课件。合并来源八上19/20、八下11/20、九年级1/18；正式324课例/1,033资源/2评价。
+
+真实教师1440/390/320预览、下载、关闭、指南及无溢出/0脚本异常通过，13汇编页图与16参考预览通过，匿名401；学生本轮未成功登录，403未重验。备份与当前逐行核对、热修精确回退独立副本实测通过，发现并修复回退快照换行转义错误。更新155/1.30.77/PUBLISHED真实教师列表可见。未混入其他未上线功能，无DDL、无后端配置或新依赖，无Git提交/推送。
+
+备份`/data/backups/xueyeceping/20261108_teaching_hotfix_v1/database.sql`，SHA-256 `e8483c66e99f9a9032c6dc3623907c62b4c7b7348d8dfc62cb345a028b69d1a0`。回退：前端恢复`20261107_teaching_resources_v1/frontend`，`nginx -t`后reload；按需执行`sql/teaching_resources_20261108_hotfix_rollback.sql`，不回灌整库、不重启后端。详细证据和剩余边界见[热修验收](textbook-teaching-resources-20261107/hotfix-1.30.77.md)。
+
+## 2026-11-07 · 1.30.75：课堂 Python 示例展示与旧浏览器服务端运行
+
+130 后端+前端 `20261107_python_server_run_v3`：JAR SHA-256 `e6e349d383d4280d6efaa8cf12edc06efca42445fbe116995604e4a78ce58357`，首页 `bc81d43141c1cce7b2f2ced5c9721f3d56a8b4c86b24923e8be5f43cac1f1111`；PID 2977794，NRestarts 0，外置 env 未变，三服务 active，启动 0 ERROR。整库备份 `/data/backups/xueyeceping/20261107_python_server_run_v3/database.sql.gz`（54,947,634B，SHA-256 `d04b0d2bc0fdef85a67f6adf62d610fadf20d291d0cee2f028c811d741b3a088`）。
+
+功能：课堂 Python 题在代码框上方恢复“示例（输入/预期输出）”；支持 JSPI 的浏览器保持本机交互运行，不支持的浏览器自动改调 `POST /business/student-home/programming/server-run`（只跑公开样例，不写提交/草稿/成绩）并显示一行弱化提示。无 SQL 结构变更、无配置变更。
+
+事故与纠正：首次 `20261107_python_server_run_v1` 用整份工作区快照打包，带入其他会话未提交的 `media_json` 查询，130 库无该列，学生学习页 500；已立即回滚并恢复。v2 改为 HEAD `9d920c4` + 仅本功能文件重建，核对业务 JAR 内 `media_json` 为 0 后才切换。随后发现 v2 前端只基于 HEAD，会丢掉已上线的 1.30.74 题库预览；v3 按 1.30.74 发布清单补齐 5 个源码文件并逐一用清单 SHA-256 校验一致，保留 Python/流程图预览与教师姓名。
+
+生产实测：学生 2025300101 的 `python6`/lesson 990787 正常加载；公开样例显示“输入 15 / 预期输出 是”；真实 Judge0 `server-run` 正确代码 0.58s `ACCEPTED`；Playwright 新版浏览器本机运行无提示，模拟无 JSPI 旧浏览器服务端运行 200、提示 12px `#98a2b3`、390px 无横向溢出、0 JS 错误；教师题库页 26 张卡片、显示“出题教师”、0 JS 错误。更新 `update_id=153` 1.30.75/PUBLISHED 可见。制品与回滚脚本在 `output/release-20261107-python-run-v3/`，浏览器证据 `output/playwright/python-server-run-20261107/prod-result.json`。
+
+## 2026-11-06 1.30.74：题库教师姓名与预览优化
+
+已发布130前端 `20261106_question_preview_v1`，首页9fb8ec9d；教师姓名、打字正文去重、Python详情/起始代码/参考答案/测试输入输出弹窗、流程图双版本只读预览。仅Nginx平滑reload，后端1.30.73/PID2940410未重启，旧763资源保留；真实师生桌面/窄屏通过。更新152/PUBLISHED教师可见。整库备份SHA-256 `c5708e1fbb4da05e875e7fe01793bec03dc387fb07ad67520a268332d2e05110`；[证据与回退](question-workbench/release-20261106.md)。
+
+## 2026-11-05 · 1.30.73 · 修复Python判题跨推进状态
+
+130后端20261105_python_completion_v1，仅替换ProgrammingSubmissionService.class；外层JAR SHA-256 1f0e7735f2d69b34dd80b5efbb09e491b4608264d5aad9e55ff65dc965e7995f。前端保持1.30.72首页06837bea，外置env和Nginx不变。新进程2940410，三服务active/NRestarts0。判题完成正常落终态，已结束课不回写成绩。
+
+四项新增回归、业务901项（3跳过）/Quartz19项、前端219项通过；正式真实师生API/浏览器、42人成绩/导出、43人名单/35份作品及390px验收通过。执行sql/python_completion_release_20261105.sql，1.30.73/PUBLISHED真实教师可见。无结构迁移或成绩修改。
+
+整库备份/data/backups/xueyeceping/20261105_python_completion_v1/database.sql.gz，54,365,823B，SHA-256 edef929d7ede0518c82e2e1fdbfd0fc3f23fae79bd775081fe4267a6224f5267，含unit/site/env/JAR/config。回退调用python output/class-readiness-20261105/release.py rollback，恢复1.30.72并将1.30.73更新撤为DRAFT，不回灌业务库。详情与剩余未验边界见[class-readiness-20261105.md](class-readiness-20261105.md)。
+
 ## 2026-11-05 · 1.30.72 · 审查修复 + 题库工作台 + 操作题 PY 运行（后端整包 + 前端全量）
 
 130 release `20261105_review_py_workbench_v2`：后端本机 `mvn -pl ruoyi-admin -am clean package` 的全新业务 JAR 嵌入线上外层（外层 292+ 条目逐字节一致，仅 `BOOT-INF/lib/ruoyi-business-3.9.0.jar` 变化；外层 JAR `f072a021d8ea9ab3185e9a7955be7f536fc76521593dd475a9040549def0d533`，108,204,442B），前端首页 `06837bea879a93c33e3e663b6d0ddc12f331b918858d131057cb05a8e4e1c859`，三服务 active、PID 2938625、NRestarts 0、启动期 0 ERROR、env 29 项未变。更新 `150	1.30.72	PUBLISHED`，真实教师 `/business/platform-update/list` 可见。
@@ -560,3 +672,5 @@ SQL：已执行`sql/textbook_case_feedback_v1.sql`、`sql/menu_order_textbook_v1
 | 2026-09-16 | 1.30.12 | `releases/20260914_lesson_fixes_v1` 就地换后端 JAR（仅新增 2 类）+ 130 nginx 新增 `/aiot-lamp/`；另部署独立服务 `releases/20260916_aiot_lamp_v1`（不属本平台制品） | AIoT 语音控制灯课堂工具接入与课堂接口补丁：① 把 `AiotClassroomController`/`AiotClassroomService` 两个类补回线上 JAR，修复 `/prod-api/aiot-classroom/*` 长期 404（补丁 base f42701b8…fed8eb 与线上一致，新 JAR b5efdf26…25d9eb）；② nginx 80 站点新增 `/aiot-lamp/` 反代到独立 systemd 服务 `aiot-lamp`（127.0.0.1:3014，用户 admin2，数据在 `/data/apps/aiot-lamp/shared`）。无业务 SQL、无表结构变更。备份 `backups/xueyeceping/20260916_aiot_context/ruoyi-admin.jar.bak`、`backups/nginx/20260916_aiot_lamp/xueyeceping-130.conf.bak`；重启 `xueyeceping-130` 后 502→200，`/prod-api/captchaImage` 200、平台首页 200、`/aiot-lamp/` 200。回滚：拷回 jar 重启后端 + 拷回 nginx conf reload。 | 否（未写平台更新弹窗） |
 
 | 2026-09-16 | 1.30.12 | 130 releases/20260916_iot_subscribe_fix_v1 | 原data主题订阅权限修复，移除平台自动判定/关键词兜底及指定命令界面；真实班级账号128→0，跨班仍拒绝；真机待复验 | 是（DRAFT，update_id=92） |
+
+| 2026-11-07 | 1.30.76 | 130 `releases/20261107_teaching_resources_v1`（后端+前端+资源批次） | 电子教材更名“电子教材与教学资源”，新增宁波2026教学设计166课例/322资源、48旧课例补同课版本50资源、13册整册教学设计汇编、3–8年级课程指南6组180课件（五年级第28课暂未提供）；旧课例身份/作者/评价与693条旧资源逐字段不变。正式142→308课例、693→1,015资源；资源包992文件哈希通过。备份整库570MB/SHA-256 `f03b611c…`；JAR `2abe3223…`、首页 `8f092e5d…`、资源包 `3c2cc2a5…`；教师端预览下载200、匿名401、学生403，390/320无横向溢出。更新154/PUBLISHED，真实教师接口可见；回滚SQL在副本库实测回到142/693/2评价。 | 是（正式库 PUBLISHED，update_id=154） |

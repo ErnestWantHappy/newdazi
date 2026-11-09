@@ -16,6 +16,7 @@ function setup() {
     const ref = value => ({ value });
     const ctx = {
         selectedLessonId: ref(1), selectedQuestionId: ref(1), selectedClassCode: ref('1'),
+        loadFailed: ref(false),
         classes: ref([{ classCode: '1', entryYear: '2024' }]),
         currentStudent: ref(a), currentIndex: ref(0), submissions: ref([a, b]),
         submissionsRequestSeq: 0, loading: ref(false), submitting: ref(false),

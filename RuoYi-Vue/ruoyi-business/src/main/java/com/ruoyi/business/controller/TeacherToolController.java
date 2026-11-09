@@ -40,6 +40,14 @@ public class TeacherToolController extends BaseController
         return success(service.getCatalog());
     }
 
+    /** 教学任务快捷筛选的只读清单，供管理页勾选，避免教研发手输编码。 */
+    @GetMapping("/manage/tasks")
+    @PreAuthorize("@ss.hasPermi('business:teacherTool:manage') and " + MANAGE_GUARD)
+    public AjaxResult tasks()
+    {
+        return success(service.listTasks());
+    }
+
     @GetMapping("/manage/categories")
     @PreAuthorize("@ss.hasPermi('business:teacherTool:manage') and " + MANAGE_GUARD)
     public AjaxResult categories()

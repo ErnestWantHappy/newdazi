@@ -10,5 +10,8 @@ export function getStudentProgramming(lessonId, questionId) { return request({ u
 export function saveProgrammingDraft(data) { return request({ url: '/business/student-home/programming/draft', method: 'put', data }) }
 export function runProgramming(data) { return request({ url: '/business/student-home/programming/run', method: 'post', data }) }
 export function customRunProgramming(data) { return request({ url: '/business/student-home/programming/custom-run', method: 'post', data }) }
+// 旧版浏览器兜底：服务端跑公开测试点，不写提交和成绩。
+// 关闭全局 1 秒防重复：学生失败后马上重试是正常操作，服务端已按学生和班级限流。
+export function serverRunProgramming(data) { return request({ url: '/business/student-home/programming/server-run', method: 'post', data, timeout: 60000, headers: { repeatSubmit: false } }) }
 export function submitProgramming(data) { return request({ url: '/business/student-home/programming/submit', method: 'post', data }) }
 export function cancelProgramming(lessonId, questionId, submissionId) { return request({ url: `/business/student-home/programming/${lessonId}/${questionId}/submissions/${submissionId}/cancel`, method: 'post' }) }

@@ -5,12 +5,13 @@
       <div class="qcard__title" role="button" tabindex="0" @click="emit('primary')" @keydown.enter.prevent="emit('primary')" @keydown.space.prevent="emit('primary')">
         <el-icon v-if="icon" class="qcard__icon"><component :is="icon" /></el-icon>
         <span class="qcard__title-text">{{ title }}</span>
+        <el-tag v-if="hasQuestionImages(question)" size="small" type="info">含图</el-tag>
       </div>
-      <p v-if="question.questionType === 'typing'" class="qcard__excerpt">{{ excerpt }}</p>
-      <ul v-else-if="options.length" class="qcard__options">
-        <li v-for="item in options" :key="item.key"><b>{{ item.key }}</b>. {{ item.text }}</li>
+      <ul v-if="options.length" class="qcard__options">
+        <li v-for="item in options" :key="item.key"><b>{{ item.key }}</b>. {{ item.text }}<span v-if="item.hasImage" class="qcard__image-label">▧ 图片</span></li>
       </ul>
       <div class="qcard__meta">
+        <span>出题教师：{{ question.nickName || '姓名未登记' }}</span>
         <span v-if="typingMeta">{{ typingMeta }}</span>
         <span v-if="scopeMeta">{{ scopeMeta }}</span>
         <span v-if="pythonMeta">{{ pythonMeta }}</span>
@@ -30,9 +31,9 @@
 
 <script setup>
 import { computed } from 'vue'
+import { hasQuestionImages } from '@/utils/questionMedia'
 import {
   answerLabel,
-  cardExcerpt,
   cardTitle,
   choiceOptions,
   gradeScopeText,
@@ -48,7 +49,6 @@ const props = defineProps({
 const emit = defineEmits(['view', 'preview', 'edit', 'remove', 'primary'])
 
 const title = computed(() => cardTitle(props.question))
-const excerpt = computed(() => cardExcerpt(props.question))
 const options = computed(() => (props.question.questionType === 'choice' ? choiceOptions(props.question).slice(0, 4) : []))
 const answerText = computed(() => answerLabel(props.question))
 const scopeMeta = computed(() => gradeScopeText(props.question, props.gradeDict, props.semesterDict))

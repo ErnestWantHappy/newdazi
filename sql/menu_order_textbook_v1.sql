@@ -1,5 +1,5 @@
 -- 菜单排序调整：
--- 1. 电子教材与优秀课例紧接题库管理之后
+-- 1. 电子教材与教学资源紧接题库管理之后
 -- 2. 成绩查询紧接导学单管理之后
 -- 3. 教研活动紧靠学生管理之前
 -- 包含原顺序备份与幂等更新。
@@ -21,7 +21,7 @@ UPDATE sys_menu SET order_num = 40 WHERE menu_id = 2018; -- 学生管理
 UPDATE sys_menu SET order_num = 50 WHERE menu_id = 2038; -- 班级管理
 UPDATE sys_menu SET order_num = 60 WHERE menu_id = 2006; -- 课程管理
 UPDATE sys_menu SET order_num = 70 WHERE menu_id = 2031; -- 题库管理
-UPDATE sys_menu SET order_num = 80, menu_name = '电子教材与优秀课例' WHERE menu_id = 26100; -- 电子教材与优秀课例 (紧接题库管理之后)
+UPDATE sys_menu SET order_num = 80, menu_name = '电子教材与教学资源' WHERE menu_id = 26100; -- 电子教材与教学资源 (紧接题库管理之后)
 UPDATE sys_menu SET order_num = 90 WHERE menu_id = 2048; -- 导学单管理
 UPDATE sys_menu SET order_num = 100 WHERE menu_id = 2042; -- 成绩查询 (紧接导学单管理之后)
 UPDATE sys_menu SET order_num = 110 WHERE menu_id = 2044; -- 学生个人成绩画像

@@ -183,6 +183,7 @@
               <div class="question-stem">
                 {{ index + 1 }}. {{ question.questionContent }}
               </div>
+              <QuestionMedia :question="question" :context="{ examId }" />
 
               <div v-if="question.questionType === 'choice'" class="options-group">
                 <div
@@ -190,10 +191,12 @@
                   :key="option"
                   class="option-radio"
                   :class="{ active: answers[question.questionId] === option }"
+                  role="radio" tabindex="0" :aria-checked="answers[question.questionId] === option" :aria-disabled="theorySubmitted || isReadOnly"
+                  @keydown.enter.prevent="!theorySubmitted && !isReadOnly && setTheoryAnswer(question,option)" @keydown.space.prevent="!theorySubmitted && !isReadOnly && setTheoryAnswer(question,option)"
                   @click="!theorySubmitted && !isReadOnly && setTheoryAnswer(question, option)"
                 >
                   <span class="opt-label">{{ option }}</span>
-                  <span class="opt-text">{{ question['option' + option] || '未配置' }}</span>
+                  <div class="choice-option-content"><span class="opt-text">{{ question['option' + option] || (slotImages(question,option).length ? '' : '未配置') }}</span><QuestionMedia :question="question" :slot="option" :context="{ examId }" /></div>
                 </div>
               </div>
 
@@ -310,6 +313,8 @@
 </template>
 
 <script setup name="StudentCountyExam">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue'
+import { slotImages } from '@/utils/questionMedia'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCurrentCountyExam, saveCountyExamDraft, submitCountyExam } from '@/api/business/countyExam'
@@ -1013,6 +1018,7 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.choice-option-content{flex:1;min-width:0;width:100%;text-align:left}.option-radio:focus-visible{outline:2px solid #409eff;outline-offset:2px}
 .county-student-page {
   min-height: 100vh;
   background: #f5f7fa;

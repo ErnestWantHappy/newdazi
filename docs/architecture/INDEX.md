@@ -1,12 +1,26 @@
 # 架构资料索引
 
+2026-11-09 当前正式1.30.86：实际登录成功首次进入首页时，桌面Logo放大至220px、手机128px，居中停留约1.2秒，期间遮罩完全隐藏首页内容；Logo移向左上角时遮罩渐隐、页面内容逐渐出现。刷新/站内跳转不重播，减少动态效果时跳过。前端`releases/20261109_brand_logo_hold12_v1`首页`be732a83`，后端仍为`releases/20261109_choice_media_v1`；真实教师1440/390实测停留1240/1260ms、遮罩从1连续渐隐、0脚本异常、0个5xx，更新164/PUBLISHED教师可见。1.30.85的2秒版本、1.30.84标题统一与透明Logo大图均保留为历史版本；1.30.83课程设计页/教师工具样式、1.30.82选择题图片/Excel图文导入继续有效。[发布验收](../../contexts/brand-logo-entry/release-1.30.86.md)、[1.30.84～1.30.86发布登记](../../contexts/RELEASE_LOG.md)、[1.30.82验收与回滚](../../contexts/choice-question-media/release-1.30.82.md)。
+
+2026-11-09 此前1.30.83：教师课程设计页改为“课程内容设计在上、教学资源库在下”，宽屏不再左右并排，手机端顺序一致，帮助教程文案同步；同一前端包已修复教师工具动态卡片样式，恢复图标色块、标签底色和分区渐变。课程布局改两个前端文件、样式修复改一个前端文件，后端与数据库保持1.30.82。前端`releases/20261109_lesson_designer_layout_v2`首页`0d2aa234`，合并旧static后1,981文件；真实教师1440/390验收0横向溢出、0脚本异常、0个5xx，更新161/PUBLISHED教师可见。[教师工具样式验收](../../contexts/teacher-tools/release-20261109-style.md)。
+
+2026-11-08 已上线130正式1.30.77：13册教学设计汇编增加在线预览与准确覆盖说明；新增八上15课、八下1课2023参考，合并全部来源后八上19/20、八下11/20、九年级1/18。恢复2份PDF、净化10个配套包，指南显示179可用/180课次。无DDL和后端改动，前端独立release、Nginx平滑reload；学生本轮有效身份未重验。当前事实、逐行备份比对、副本精确回退和未验边界见[1.30.77验收](../../contexts/textbook-teaching-resources-20261107/hotfix-1.30.77.md)。下方1.30.76为历史状态。
+
+2026-11-07 已上线130正式1.30.76：电子教材栏目改名“电子教材与教学资源”，宁波2026教学设计按现行课次补充（166新课例、48旧课例补同课版本），13册整册汇编与3–8年级课程指南（6组180课件，五年级第28课暂未提供）独立展示；新增三张表、课例来源列与附加原件列，资源按`source_key`跨库落位，教师/教研员/管理员鉴权、学生403。正式142→308课例、693→1,015资源、旧评价与693条旧资源不变；备份与回滚实测通过。[验证与回滚](../../contexts/textbook-teaching-resources-20261107/verification.md)、[需求](../../contexts/textbook-teaching-resources-20261107/requirements.md)、[设计](../../contexts/textbook-teaching-resources-20261107/design.md)、[任务](../../contexts/textbook-teaching-resources-20261107/tasks.md)。
+
+2026-11-09 选择题图片增强A已随130正式1.30.82上线：题干最多3图、选项各1图、上传/粘贴/拖拽，Excel图文预览/修正/原子确认，已引用含图题自动另存与回执找回；普通课、错题、学情与个人抽测透传。生产原图在`/data/upload-question-images`，使用登录身份+题目/课程凭证读取，不进入公开静态根。真实WPS/Excel变体、整班并发、七天清理和区域抽测图片页仍待验。[需求](../../contexts/choice-question-media/requirements.md)、[设计](../../contexts/choice-question-media/design.md)、[任务](../../contexts/choice-question-media/tasks.md)、[ADR](../../contexts/choice-question-media/ADR-001-additive-media-and-safe-save.md)、[正式验收](../../contexts/choice-question-media/release-1.30.82.md)。
+
+2026-11-09 本机在研、未发布：Excel导入v3新增题干图片1-3与选项A-D图片共7列，旧模板兼容；图片专用列按左上角锚点归属，跨题行进入待确认，导出写回同一组列。专项16项通过，真实WPS/Excel样本仍待验。[ADR-002](../../contexts/choice-question-media/ADR-002-excel-image-columns-and-anchor-ownership.md)、[设计](../../contexts/choice-question-media/design.md)。
+
+教师工具1.30.80专题：83工具/12分类/14精选/5任务，39工具有别名；个人常用/最近打开仅当前浏览器按账号隔离。1.30.83同包恢复动态卡片、图标、标签和分区样式，并完成真实教师11/11验收。迁移已执行，禁止重复回填；脏数据与跨设备收藏待确认。[需求](../../contexts/teacher-tools/requirements.md)、[设计](../../contexts/teacher-tools/design.md)、[验证与待办](../../contexts/teacher-tools/tasks.md)、[样式验收](../../contexts/teacher-tools/release-20261109-style.md)、[回填与待治理数据](../../contexts/teacher-tools/data-v2-20261106.md)。
+
 2026-11-05 题库工作台本机审查修复：保存回调、查看全部事件参数、FILE分类/计数、通配权限、批量动作5项修复；前端24项/Mapper2项/隔离浏览器10组及构建通过。含后端FILE历史空值筛选，需前后端同步发布并重启后端，无迁移SQL；真实库写链待验，未发布。详见[需求](../../contexts/question-workbench/requirements.md)、[设计](../../contexts/question-workbench/design.md)、[验证与待办](../../contexts/question-workbench/tasks.md)。
 
 2026-11-04 本机在研操作题 PY 上传、源码预览与教师 Judge0 隔离运行，尚未发布。详见[需求](../../contexts/practical-python-upload/requirements.md)、[设计](../../contexts/practical-python-upload/design.md)、[验证与待办](../../contexts/practical-python-upload/tasks.md)。
 
 > 整理日期 **2026-11-04**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
 >
-> 最新正式：130 **1.30.72**，`20261105_review_py_workbench_v2`，后端JAR`f072a021`、首页`06837bea`，助手0.2.6。本版含审查 P0/P1 修复、题库工作台改版、操作题 PY 运行、成绩页与导出等级口径统一（按合计排名）、概览/登录慢查询；更新150/PUBLISHED教师可见。2025宁波课例90份/497资源与旧52/196、评价、连续滚动保持。[发布登记](../../contexts/RELEASE_LOG.md)、[迁移与回退](../../contexts/textbook-cases-2025/migration-report.md)。
+> 最新正式：130 **1.30.86**（前端`releases/20261109_brand_logo_hold12_v1`、首页`be732a83`；后端保持`releases/20261109_choice_media_v1`、JAR `2b9c65e9`，助手0.2.6）。品牌Logo在首次登录后以更大尺寸居中停留约1.2秒，整页内容先隐藏再随左移动画渐显；标题、透明Logo大图、不重播和减少动态效果边界同时保留。1.30.83课程设计页/教师工具样式、1.30.82选择题图片/Excel图文导入及`media_json`四表迁移继续有效。详细证据见[1.30.86发布验收](../../contexts/brand-logo-entry/release-1.30.86.md)、[发布日志](../../contexts/RELEASE_LOG.md)与[1.30.82正式验收](../../contexts/choice-question-media/release-1.30.82.md)，历史版本按专题追溯。
 
 ## 按任务选择资料
 
@@ -39,6 +53,7 @@
 
 | 任务类型 | 必读资料 | 需要时继续读 |
 | --- | --- | --- |
+| 选择题图片、Excel图文导入、私有图片鉴权与保存回执 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/choice-question-media/requirements.md`、`design.md`、`tasks.md`、`ADR-001-additive-media-and-safe-save.md`、`release-1.30.82.md` |
 | 题库浏览、新增入口与按钮权限（本机未发布） | `BUSINESS_BOUNDARIES.md` | `contexts/question-workbench/requirements.md`、`design.md`、`tasks.md`；题型按模块新增与动态按钮的边界见该专题 |
 | 任何开发接管 | `SYSTEM_ARCHITECTURE.md`、`BUSINESS_BOUNDARIES.md` | 对应专题 `contexts/<专题>/` |
 | 自动/手动课堂推进、逐班预检和结果 | `BUSINESS_BOUNDARIES.md` | `contexts/course-advance-20261020/requirements.md`、`design.md`、`tasks.md`、`ADR-001-authoritative-preview.md`；历史下一课年级规则见`contexts/teacher-dashboard-grade-history/` |
@@ -67,6 +82,8 @@
 
 ## 当前证据与历史入口
 
+- 2026-11-05夜间独立课前检查：正式1.30.72实际哈希/服务、师生查询和浏览器验证，Python跨推进判题终态P1与前端全测未通过边界，见[验收报告](../../contexts/class-readiness-20261105.md)；无业务代码、部署或结构变更。
+
 - Python输入入门五题：[2026-10-20正式数据录入、题包与20/20判题验收](../../contexts/python-input-20261020.md)，全库235题，无部署或业务规则变更。
 - 最新机位：[本机验证](../../contexts/seat-helper-local-20261014/verification.md)、[正式验收与回退](../../contexts/seat-helper-local-20261014/release-verification.md)。
 - 机位0.2.4与成绩/打字修复已合并正式1.30.52：[正式验收](../../contexts/seat-score-release-20261017.md)、[机位需求/任务](../../contexts/seat-helper-browser-20261016/tasks.md)、[ADR-006](../../contexts/seat-helper-browser-20261016/ADR-006-native-browser-priority.md)。10月16日旧暂存未切换，旧停止指示已由10月17日明确授权替代。
@@ -85,3 +102,7 @@
 - AOCI 已按用户要求卸载；不再有索引加载、维护或同步任务。旧工具记录仅为历史，停用决策见 [ADR-002](ADR/ADR-002-aoci-project-memory.md)。
 - 1.30.51新增期限DTO计数、调整触发规则及PPTX临时副本转换，已按AGENTS完成测试、定向SQL和正式重启/验收；需求/设计/任务/ADR已同步。既有其他专题状态按各自证据，不因本轮发布升级为已完成。
 - 密码、Token、Cookie只放本机私密文件或环境变量，不写入上述文档、图或交接。
+
+## 2026-11-06 题库预览1.30.74已上线
+
+教师姓名、打字去重、Python完整预览及流程图双版本只读预览，沿用现有接口/答案归属权限；已正式发布，见[设计](../../contexts/question-workbench/design.md)、[正式验收与回退](../../contexts/question-workbench/release-20261106.md)。无后端或数据架构变更。

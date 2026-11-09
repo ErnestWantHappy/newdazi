@@ -111,13 +111,14 @@ test('按钮按权限与归属动态显示：他人公开题只能查看', () =>
   assert.deepEqual(cardActions(own, { permissions: ['business:question:remove'], userId: 7 }), ['remove'])
 })
 
-test('操作题预览只在确有预览资源或流程图时出现', () => {
+test('操作题支持 Python、流程图与已有附件预览，Python 需查询权限', () => {
   const base = { questionType: 'practical', creatorId: 7 }
   assert.deepEqual(cardActions({ ...base, practicalMode: 'FILE' }, { permissions: ['business:question:query'], userId: 7 }), [])
   assert.deepEqual(cardActions({ ...base, practicalMode: 'FILE', previewPath: 'a/b.png' }, { userId: 7 }), ['preview'])
   assert.deepEqual(cardActions({ ...base, practicalMode: 'FLOWCHART' }, { userId: 7 }), ['preview'])
   // 操作题不能走普通题详情
-  assert.deepEqual(cardActions({ ...base, practicalMode: 'PYTHON' }, { permissions: ['business:question:query'], userId: 7 }), [])
+  assert.deepEqual(cardActions({ ...base, practicalMode: 'PYTHON' }, { permissions: ['business:question:query'], userId: 7 }), ['preview'])
+  assert.deepEqual(cardActions({ ...base, practicalMode: 'PYTHON' }, { permissions: [], userId: 7 }), [])
   assert.equal(primaryAction(['preview']), 'preview')
   assert.equal(primaryAction(['view', 'edit']), 'view')
   assert.equal(primaryAction([]), '')

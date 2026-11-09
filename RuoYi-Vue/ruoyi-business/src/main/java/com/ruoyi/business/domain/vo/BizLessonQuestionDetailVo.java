@@ -7,6 +7,11 @@ import com.ruoyi.business.domain.BizLessonQuestion;
  * (比 BizLessonQuestion 多了题干和题型)
  */
 public class BizLessonQuestionDetailVo extends BizLessonQuestion {
+    private String mediaJson;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getMediaJson() { return mediaJson; }
+    public void setMediaJson(String value) { mediaJson = value; }
+    public com.ruoyi.business.domain.QuestionMedia getMedia() { return com.ruoyi.business.utils.QuestionMediaCodec.parse(mediaJson); }
     private String questionContent;
     private String questionType;
     

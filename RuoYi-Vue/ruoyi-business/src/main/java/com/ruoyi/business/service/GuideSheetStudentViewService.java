@@ -166,6 +166,7 @@ public class GuideSheetStudentViewService
             target.setQuestionScore(source.getQuestionScore());
             target.setOrderNum(source.getOrderNum());
             target.setQuestionContent(source.getQuestionContent());
+            target.setMediaJson(source.getMediaJson());
             target.setQuestionType(source.getQuestionType());
             target.setOptionA(source.getOptionA());
             target.setOptionB(source.getOptionB());

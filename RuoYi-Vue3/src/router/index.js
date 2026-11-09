@@ -138,6 +138,12 @@ export const constantRoutes = [
         component: () => import('@/views/business/textbook/reader'),
         name: 'TextbookReader',
         meta: { title: '电子教材', activeMenu: '/textbook', noCache: true }
+      },
+      {
+        path: 'guide/:grade(\\d+)',
+        component: () => import('@/views/business/textbook/guide'),
+        name: 'TeachingGuide',
+        meta: { title: '课程教学指南', activeMenu: '/textbook', noCache: true }
       }
     ]
   },

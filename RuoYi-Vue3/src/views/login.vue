@@ -6,7 +6,7 @@
     <!-- 顶部导航栏：左上角放置统一Logo图与系统名称，带优雅偏距 -->
     <header class="login-header">
       <div class="header-brand">
-        <img :src="logoImg" alt="平台Logo" class="brand-logo" />
+        <PlatformLogo :src="logoImg" class="brand-logo" alt="信息科技学业测评平台 Logo" />
         <div class="brand-text">
           <h1 class="brand-title">{{ title }}</h1>
           <span class="brand-subtitle">学业测评与教研协同综合管理系统</span>
@@ -273,6 +273,8 @@ import { getToken, needsSchoolSelection } from '@/utils/auth'
 import { ElMessageBox } from 'element-plus'
 import { getLoginActivityPreviews, getLoginSchoolPreviews, getLoginFocusSlides } from '@/api/business/loginPreview'
 import { createLoginIdleWork } from '@/utils/loginIdleWork'
+import { markLoginBrandAnimation } from '@/utils/loginBrandAnimation'
+import PlatformLogo from '@/components/PlatformLogo/index.vue'
 import logoImg from '@/assets/logo/logo.webp'
 import slide1 from '@/assets/images/research/slide-1.webp'
 import slide2 from '@/assets/images/research/slide-2.webp'
@@ -574,7 +576,7 @@ function handleLogin(captchaVerified = false) {
           loading.value = false
           return
         }
-        return continueAfterLogin()
+        return continueAfterLogin(true)
       }).catch((error) => {
         loading.value = false
         if (!error?.notified) proxy.$modal.msgError(error?.message || "登录失败，请检查账号、密码和验证码")
@@ -598,7 +600,7 @@ function clearCaptcha() {
   captchaRef.value?.clearValidate()
 }
 
-async function continueAfterLogin() {
+async function continueAfterLogin(showBrandAnimation = false) {
   await userStore.getInfo()
   const query = route.query
   const otherQueryParams = Object.keys(query).reduce((acc, cur) => {
@@ -615,6 +617,7 @@ async function continueAfterLogin() {
   }
 
   const target = roles.includes('student') ? await studentSpaceDialog.value.selectAtLogin() : (redirect.value || defaultPath)
+  if (showBrandAnimation) markLoginBrandAnimation()
   try {
     await router.push({ path: target, query: otherQueryParams })
   } finally {
@@ -631,7 +634,7 @@ function confirmSchoolSelection() {
   loading.value = true
   userStore.selectSchool(selectedSchoolId.value).then(() => {
     schoolDialogVisible.value = false
-    return continueAfterLogin()
+    return continueAfterLogin(true)
   }).catch(() => {
     loading.value = false
   })

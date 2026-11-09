@@ -162,6 +162,7 @@ test('旧请求失败和finally不清除新请求加载态', async () => {
 function uploads() {
   const requests = [], ctx = { practicalUploadEpoch: 1, lessonId: ref(9), practicalDrafts: ref({}), practicalFileLists: ref({}), practicalUploadStates: ref({}),
     submittingPracticalQuestionId: ref(null), practicalArtifacts: ref({}), uploadingQuestionId: ref(null), ElMessage: message,
+    practicalScores: ref({}), submittedAnswers: ref({}), syncPracticalSubmission() {},
     refreshPracticalSubmission: async () => ({ previewStatus: 'success' }),
     submitPracticalArtifact: data => { const d = deferred(); requests.push({ ...d, data }); return d.promise } }
   vm.createContext(ctx)
@@ -207,7 +208,8 @@ test('布局持续续期超过90秒，身份变化和卸载终止旧轮询', asy
   const user = { id: 1, token: 'A' }, timers = [], requests = []
   let start, unmount
   const ctx = { ref, window: { addEventListener() {}, removeEventListener() {} }, provide() {}, watch: (_get, callback) => { start = callback }, onBeforeUnmount: fn => { unmount = fn },
-    useUserStore: () => user, takeSeatHelperToken: () => null, clearTimeout() {}, setTimeout: fn => { timers.push(fn); return timers.length },
+    useUserStore: () => user, takeSeatHelperToken: () => null, probeLocalSeatHelper: async () => null,
+    clearTimeout() {}, setTimeout: fn => { timers.push(fn); return timers.length },
     request: async data => { requests.push(data); return { data: { enabled: true, associated: true } } } }
   vm.createContext(ctx)
   const source = read('components/SeatHelper/studentSession.js').replace(/^import.*$/gm, '').replace('export function', 'function')

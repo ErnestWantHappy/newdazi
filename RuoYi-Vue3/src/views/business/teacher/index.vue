@@ -385,24 +385,29 @@
             </div>
           </div>
           <div class="q-content">{{ q.questionContent }}</div>
+          <QuestionMedia :question="q" :context="{ lessonId:q.lessonId }" />
 
           <!-- 选择题选项 -->
           <div v-if="q.questionType === 'choice'" class="q-options">
-            <div v-if="q.optionA" class="option-item" :class="{ 'is-answer': q.answer === 'A' }">
+            <div v-if="hasChoiceOption(q,'A')" class="option-item" :class="{ 'is-answer': q.answer === 'A' }">
               <span class="opt-label">A.</span>
               <span class="opt-text">{{ q.optionA }}</span>
+              <QuestionMedia :question="q" slot="A" :context="{ lessonId:q.lessonId }" />
             </div>
-            <div v-if="q.optionB" class="option-item" :class="{ 'is-answer': q.answer === 'B' }">
+            <div v-if="hasChoiceOption(q,'B')" class="option-item" :class="{ 'is-answer': q.answer === 'B' }">
               <span class="opt-label">B.</span>
               <span class="opt-text">{{ q.optionB }}</span>
+              <QuestionMedia :question="q" slot="B" :context="{ lessonId:q.lessonId }" />
             </div>
-            <div v-if="q.optionC" class="option-item" :class="{ 'is-answer': q.answer === 'C' }">
+            <div v-if="hasChoiceOption(q,'C')" class="option-item" :class="{ 'is-answer': q.answer === 'C' }">
               <span class="opt-label">C.</span>
               <span class="opt-text">{{ q.optionC }}</span>
+              <QuestionMedia :question="q" slot="C" :context="{ lessonId:q.lessonId }" />
             </div>
-            <div v-if="q.optionD" class="option-item" :class="{ 'is-answer': q.answer === 'D' }">
+            <div v-if="hasChoiceOption(q,'D')" class="option-item" :class="{ 'is-answer': q.answer === 'D' }">
               <span class="opt-label">D.</span>
               <span class="opt-text">{{ q.optionD }}</span>
+              <QuestionMedia :question="q" slot="D" :context="{ lessonId:q.lessonId }" />
             </div>
             <div class="q-answer-box">
               参考答案：<span class="ans-text">{{ q.answer }}</span>
@@ -435,6 +440,8 @@
 </template>
 
 <script setup name="TeacherDashboard">
+import QuestionMedia from '@/components/QuestionMedia/QuestionMedia.vue';
+import { hasChoiceOption } from '@/utils/questionMedia';
 import ExtensionClassPanel from '@/components/ExtensionClassPanel'
 import useExtensionUser from '@/store/modules/user'
 const extensionAllowed = computed(() => { const roles = useExtensionUser().roles; return roles.includes('admin') || roles.includes('teacher') })

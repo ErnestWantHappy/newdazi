@@ -15,5 +15,6 @@ const loginName = entry.toString().match(/(?:\.\/|static\/js\/)(login-[\w-]+\.js
 requireCheck(loginName, '无法定位登录模块')
 const login = fs.readFileSync(path.join(dist, 'static/js', loginName), 'utf8')
 requireCheck(!/\/static\/(png\/logo-|jpg\/slide-[123]-)/.test(login), '登录模块重新引用未优化的 Logo 或 JPG 兜底图')
-requireCheck(/\/static\/webp\/logo-/.test(login), '登录模块未引用 WebP Logo')
+// 共享 Logo 组件可能被 Vite 提升到入口公共块，登录页仍通过该组件使用 WebP 资源。
+requireCheck(/\/static\/webp\/logo-/.test(login) || /\/static\/webp\/logo-/.test(entry.toString()), '登录模块未引用 WebP Logo')
 console.log(`前端发布检查通过：入口 gzip ${gzipSync(entry).length}B，登录图片引用正确`)

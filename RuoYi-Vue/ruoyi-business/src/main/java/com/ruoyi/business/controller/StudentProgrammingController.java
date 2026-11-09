@@ -61,6 +61,12 @@ public class StudentProgrammingController extends BaseController {
     public AjaxResult run(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "RUN", httpRequest); }
     @PostMapping("/custom-run")
     public AjaxResult customRun(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "CUSTOM_RUN", httpRequest); }
+    /** 旧版浏览器不支持本机运行 Python 时，由服务端跑公开测试点；只返回结果，不落提交或成绩。 */
+    @PostMapping("/server-run")
+    public AjaxResult serverRun(@RequestBody StudentProgrammingRequest request) {
+        BizStudent student = currentStudent();
+        return success(programmingSubmissionService.runPublicCases(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode));
+    }
     @PostMapping("/submit")
     public AjaxResult submit(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "SUBMIT", httpRequest); }
 

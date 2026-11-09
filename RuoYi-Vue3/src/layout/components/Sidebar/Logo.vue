@@ -1,20 +1,32 @@
 <template>
   <div class="sidebar-logo-container" :class="{ 'collapse': collapse }">
     <transition name="sidebarLogoFade">
-      <router-link v-if="collapse" key="collapse" class="sidebar-logo-link" to="/">
-        <img v-if="logo" :src="logo" class="sidebar-logo" />
-        <h1 v-else class="sidebar-title">{{ title }}</h1>
-      </router-link>
-      <router-link v-else key="expand" class="sidebar-logo-link" to="/">
-        <img v-if="logo" :src="logo" class="sidebar-logo" />
-        <h1 class="sidebar-title">{{ title }}</h1>
-      </router-link>
+      <div v-if="collapse" key="collapse" class="sidebar-logo-link">
+        <PlatformLogo
+          :src="logo"
+          class="sidebar-logo"
+          data-brand-logo-target
+          alt="信息科技学业测评平台 Logo"
+        />
+      </div>
+      <div v-else key="expand" class="sidebar-logo-link">
+        <PlatformLogo
+          :src="logo"
+          class="sidebar-logo"
+          data-brand-logo-target
+          alt="信息科技学业测评平台 Logo"
+        />
+        <router-link class="sidebar-title-link" to="/">
+          <h1 class="sidebar-title">{{ title }}</h1>
+        </router-link>
+      </div>
     </transition>
   </div>
 </template>
 
 <script setup>
 import logo from '@/assets/logo/logo.png'
+import PlatformLogo from '@/components/PlatformLogo/index.vue'
 import useSettingsStore from '@/store/modules/settings'
 import variables from '@/assets/styles/variables.module.scss'
 
@@ -66,14 +78,24 @@ const getLogoTextColor = computed(() => {
   overflow: hidden;
 
   & .sidebar-logo-link {
-    height: 100%;
+    display: flex;
     width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
 
     & .sidebar-logo {
       width: 32px;
       height: 32px;
       vertical-align: middle;
       margin-right: 12px;
+    }
+
+    & .sidebar-title-link {
+      display: inline-flex;
+      height: 100%;
+      align-items: center;
+      text-decoration: none;
     }
 
     & .sidebar-title {

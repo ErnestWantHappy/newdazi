@@ -204,6 +204,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
             return 0;
         }
         validateQuestionPayload(questions);
+        questionMapper.lockQuestions(questions.stream().map(CountyExamQuestion::getQuestionId).distinct().sorted().collect(java.util.stream.Collectors.toList()));
         int order = 1;
         for (CountyExamQuestion question : questions) {
             question.setExamId(examId);
@@ -249,6 +250,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
         CountyExam exam = requireExamForUpdate(examId);
         requireDraft(exam);
         int normalizedDuration = normalizeDurationMinutes(durationMinutes == null ? exam.getDurationMinutes() : durationMinutes);
+        questionMapper.lockExamQuestions(examId);
         CountyExam durationUpdate = new CountyExam();
         durationUpdate.setExamId(examId);
         durationUpdate.setDurationMinutes(normalizedDuration);
@@ -1409,6 +1411,7 @@ public class CountyExamServiceImpl implements ICountyExamService {
             snapshot.setQuestionId(question.getQuestionId());
             snapshot.setQuestionType(question.getQuestionType());
             snapshot.setQuestionContent(question.getQuestionContent());
+            snapshot.setMediaJson(question.getMediaJson());
             snapshot.setOptionA(question.getOptionA());
             snapshot.setOptionB(question.getOptionB());
             snapshot.setOptionC(question.getOptionC());

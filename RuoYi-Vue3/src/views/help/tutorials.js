@@ -168,7 +168,7 @@ export const teacherTutorials = {
         title: '在课程设计器完成选题和指派',
         eyebrow: '第 2 步',
         image: stepCourseDesignerImage,
-        text: '左侧填写课程信息，右侧从教学资源库添加题目，再设置分值和班级。',
+        text: '先填写课程信息，再从下方教学资源库添加题目，最后设置分值和班级。',
         tips: ['按年级、学期和课次筛选题目。', '核对课程总分、题目顺序、随机规则和目标班级后保存。']
       }
     ]

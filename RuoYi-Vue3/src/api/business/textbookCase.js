@@ -16,6 +16,10 @@ export function caseDownloadUrl(id) {
   return `${import.meta.env.VITE_APP_BASE_API}/business/textbook/cases/download/${encodeURIComponent(id)}`
 }
 
+export function caseExtraDownloadUrl(id) {
+  return `${import.meta.env.VITE_APP_BASE_API}/business/textbook/cases/download/${encodeURIComponent(id)}/extra`
+}
+
 export function caseMediaUrl(id) {
   return `${import.meta.env.VITE_APP_BASE_API}/business/textbook/cases/media/${encodeURIComponent(id)}`
 }

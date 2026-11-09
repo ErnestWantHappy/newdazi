@@ -14,6 +14,34 @@ public class BizQuestion extends BaseEntity
 
     private Long questionId;
 
+    private String mediaJson;
+    private boolean mediaTouched;
+    private String expectedSourceFingerprint;
+    private String saveRequestId;
+    private boolean safeMediaSave;
+    public void allowMediaSave() { safeMediaSave = true; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isSafeMediaSave() { return safeMediaSave; }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getMediaJson() { return mediaJson; }
+    public void setMediaJson(String value) { mediaJson = value; }
+    public QuestionMedia getMedia() { return com.ruoyi.business.utils.QuestionMediaCodec.parse(mediaJson); }
+    public void setMedia(QuestionMedia value) {
+        mediaJson = com.ruoyi.business.utils.QuestionMediaCodec.write(com.ruoyi.business.utils.QuestionMediaCodec.normalize(value));
+        mediaTouched = true;
+    }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isMediaTouched() { return mediaTouched; }
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getSourceFingerprint() { return "choice".equals(questionType) ? com.ruoyi.business.utils.QuestionMediaCodec.fingerprint(this) : null; }
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    public String getExpectedSourceFingerprint() { return expectedSourceFingerprint; }
+    public void setExpectedSourceFingerprint(String value) { expectedSourceFingerprint = value; }
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    public String getSaveRequestId() { return saveRequestId; }
+    public void setSaveRequestId(String value) { saveRequestId = value; }
+
     @Excel(name = "题目类型", readConverterExp = "choice=选择题,typing=打字题,judgment=判断题,选择题=choice,打字题=typing,判断题=judgment", combo = {"选择题", "判断题", "打字题"})
     private String questionType;
 

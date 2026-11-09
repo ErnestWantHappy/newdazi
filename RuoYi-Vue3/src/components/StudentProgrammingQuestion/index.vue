@@ -11,6 +11,21 @@
     </template>
 
     <el-alert v-if="loadError" :title="loadError" type="error" :closable="false"><el-button text @click="load">重新加载</el-button></el-alert>
+    <!-- 样例是学生知道“该输入什么”的唯一依据，不能只依赖运行终端 -->
+    <section v-if="examples.length" class="examples-section">
+      <div class="section-heading"><span>示例</span><el-select v-if="examples.length > 1" v-model="exampleIndex" size="small" class="example-select"><el-option v-for="(item, index) in examples" :key="item.testCaseId" :label="item.caseName || `示例 ${index + 1}`" :value="index" /></el-select></div>
+      <div class="example-body">
+        <div class="example-input">
+          <label>输入</label>
+          <pre>{{ currentExample.inputText || '（无输入）' }}</pre>
+        </div>
+        <div>
+          <label>预期输出</label>
+          <pre>{{ currentExample.expectedOutput || '（无输出）' }}</pre>
+        </div>
+      </div>
+      <p v-if="currentExample.caseName" class="example-caption">{{ currentExample.caseName }}</p>
+    </section>
     <section class="editor-section">
       <div class="section-heading">
         <span>编辑代码</span>
@@ -26,11 +41,13 @@
       </div>
       <div class="programming-actions">
         <el-button type="success" :disabled="loading || !!loadError || localRunning || isPending || submitting" @click="run">运行</el-button>
-        <el-button v-if="localRunning" type="danger" plain @click="terminal?.stop()">停止运行</el-button>
+        <el-button v-if="localRunning && localRunSupported" type="danger" plain @click="terminal?.stop()">停止运行</el-button>
         <el-button type="primary" :loading="submitting" :disabled="loading || !!loadError || isPending || localRunning" @click="submit">交作业</el-button>
         <el-button text :loading="saving" :disabled="loading || !!loadError" @click="saveDraft">保存草稿</el-button>
       </div>
-      <interactive-terminal :key="question.questionId" ref="terminal" @busy="localRunning = $event" />
+      <interactive-terminal :key="question.questionId" ref="terminal" :server-mode="!localRunSupported" @busy="localRunning = $event" @completed="refreshResult" />
+      <!-- 旧版浏览器提示保持次要，避免把一个可用功能渲染成故障 -->
+      <p v-if="!localRunSupported" class="browser-hint">当前浏览器版本较低，已改为服务器运行；建议升级谷歌浏览器最新版。</p>
     </section>
 
     <section v-if="current" class="result-section">
@@ -85,6 +102,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { cancelProgramming, getStudentProgramming, saveProgrammingDraft, submitProgramming } from '@/api/business/programming'
 import InteractiveTerminal from './InteractiveTerminal.vue'
+import { canRunLocally } from './interactiveRunner.js'
 
 const props = defineProps({ lessonId: { type: Number, required: true }, question: { type: Object, required: true } })
 const emit = defineEmits(['completed'])
@@ -116,6 +134,11 @@ const themeCompartment = new Compartment()
 const statusText = computed(() => current.value ? `${statusLabel(current.value.statusCode)}${current.value.statusMessage ? `：${current.value.statusMessage}` : ''}` : '')
 const statusType = computed(() => !current.value ? 'info' : (tagType(current.value.statusCode) === 'danger' ? 'error' : tagType(current.value.statusCode)))
 const isPending = computed(() => ['WAITING', 'JUDGING'].includes(current.value?.statusCode))
+// 运行时再判断一次：同一份前端会被不同版本浏览器使用，不能只按构建环境决定
+const localRunSupported = ref(canRunLocally())
+const examples = ref([])
+const exampleIndex = ref(0)
+const currentExample = computed(() => examples.value[exampleIndex.value] || {})
 
 const completionWords = ['print', 'input', 'len', 'range', 'str', 'int', 'float', 'list', 'dict', 'set', 'tuple', 'sum', 'min', 'max', 'sorted', 'enumerate', 'True', 'False', 'None', 'if', 'elif', 'else', 'for', 'while', 'def', 'return', 'import', 'from', 'in', 'and', 'or', 'not']
 const completionSource = completeFromList(completionWords.map(label => ({ label, type: 'keyword' })))
@@ -168,6 +191,8 @@ async function load() {
     if (disposed || questionId !== props.question.questionId || lessonId !== props.lessonId) return
     const data = res.data || {}
     config.value = data.config || {}
+    examples.value = Array.isArray(data.publicCases) ? data.publicCases : []
+    exampleIndex.value = Math.min(exampleIndex.value, Math.max(0, examples.value.length - 1))
     historyList.value = data.history || []
     const firstLoad = loadedQuestionId !== props.question.questionId
     if (firstLoad) {
@@ -218,6 +243,8 @@ async function saveDraft() {
 function run() {
   if (!sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码')
   if (loading.value || loadError.value || localRunning.value || isPending.value || submitting.value) return
+  // 旧版浏览器不能挂起 input()，改为服务端按示例输入运行一次
+  if (!localRunSupported.value) return terminal.value?.runOnServer(sourceCode.value, { lessonId: props.lessonId, questionId: props.question.questionId })
   terminal.value?.run(sourceCode.value)
 }
 async function submit() {
@@ -294,11 +321,19 @@ pre { min-height:38px; max-height:180px; margin:0; padding:9px 10px; overflow:au
 .case-metrics { margin-top:8px; color:#909399; font-size:12px; }
 .error-output { color:#f56c6c; }
 .service-error-note { margin-top:12px; padding:12px; color:#b88230; background:#fdf6ec; border:1px solid #f3d19e; border-radius:4px; }
+.examples-section { margin-bottom:4px; padding:12px 14px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc; }
+.examples-section .section-heading { margin-bottom:8px; }
+.example-select { width:auto; min-width:120px; }
+.example-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.example-body label { display:block; margin-bottom:4px; color:#909399; font-size:12px; }
+.example-caption { margin:6px 0 0; color:#909399; font-size:12px; }
+.browser-hint { margin:8px 0 0; color:#98a2b3; font-size:12px; line-height:1.5; }
 .history-table { width:100%; }
 @media (max-width:700px) {
   .programming-header,.title-line { align-items:flex-start; flex-direction:column; }
   .editor-section > .section-heading { align-items:flex-start; flex-direction:column; gap:4px; }
   .io-grid { grid-template-columns:1fr; }
+  .example-body { grid-template-columns:1fr; }
   .editor-tools { justify-content:flex-start; }
   .editor-shell.is-fullscreen { inset:0; }
 }

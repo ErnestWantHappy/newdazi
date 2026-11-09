@@ -1,6 +1,7 @@
 package com.ruoyi.business.service;
 
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.judge.Judge0Client;
@@ -13,6 +14,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class PracticalPythonRunServiceTest {
+    @Test void classroomCapacityIsAlignedAndSlotIsReleasedAfterFailure() {
+        Judge0Client client = mock(Judge0Client.class);
+        PracticalPythonRunService service = service(client);
+        Semaphore slots = (Semaphore) ReflectionTestUtils.getField(service, "slots");
+        assertEquals(8, slots.availablePermits());
+
+        when(client.submit(any())).thenThrow(new ServiceException("不可用"));
+        assertThrows(ServiceException.class, () -> service.run("print(1)", ""));
+        assertEquals(8, slots.availablePermits());
+    }
+
     @Test void isolatedExecutionReturnsOutputWithoutLeakingToken() {
         Judge0Client client = mock(Judge0Client.class);
         PracticalPythonRunService service = service(client);

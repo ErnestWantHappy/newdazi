@@ -19,6 +19,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.domain.BizTextbookPage;
 import com.ruoyi.business.service.TextbookCatalogService;
+import com.ruoyi.business.service.TextbookStudentAccessService;
 import com.ruoyi.business.service.TextbookStorageService;
 
 /**
@@ -69,6 +70,7 @@ class TextbookControllerPageResponseTest
         controller = new TextbookController();
         ReflectionTestUtils.setField(controller, "catalogService", catalogService);
         ReflectionTestUtils.setField(controller, "storageService", storageService);
+        ReflectionTestUtils.setField(controller, "studentAccessService", mock(TextbookStudentAccessService.class));
     }
 
     @Test

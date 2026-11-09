@@ -4,6 +4,9 @@ package com.ruoyi.business.domain;
  * 区域抽测学生试卷题目快照。
  */
 public class CountyExamPaperQuestion {
+    private String mediaJson;
+    public String getMediaJson() { return mediaJson; }
+    public void setMediaJson(String value) { mediaJson = value; }
     private Long paperQuestionId;
     private Long examId;
     private Long studentId;

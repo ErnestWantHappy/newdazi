@@ -31,6 +31,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="url" column="url"/>
         <result property="iconUrl" column="icon_url"/>
         <result property="tags" column="tags"/>
+        <result property="aliases" column="aliases"/>
+        <result property="taskTags" column="task_tags"/>
         <result property="accessType" column="access_type"/>
         <result property="sourceType" column="source_type"/>
         <result property="sourceRef" column="source_ref"/>
@@ -48,6 +50,22 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <resultMap id="ToolVoResult" type="com.ruoyi.business.domain.vo.TeacherToolVo" extends="ToolResult">
         <result property="categoryId" column="category_id"/>
         <result property="categoryNameText" column="category_name_text"/>
+        <result property="taskNameText" column="task_name_text"/>
+    </resultMap>
+
+    <resultMap id="TaskResult" type="com.ruoyi.business.domain.vo.TeacherToolTaskVo">
+        <id property="taskCode" column="task_code"/>
+        <result property="taskName" column="task_name"/>
+        <result property="description" column="description"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="toolCount" column="tool_count"/>
+    </resultMap>
+
+    <resultMap id="TermResult" type="com.ruoyi.business.domain.vo.TeacherToolTermVo">
+        <id property="termId" column="term_id"/>
+        <result property="term" column="term"/>
+        <result property="toolId" column="tool_id"/>
+        <result property="sortOrder" column="sort_order"/>
     </resultMap>
 
     <sql id="categoryColumns">
@@ -57,7 +75,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </sql>
 
     <sql id="toolColumns">
-        tool_id, title, description, url, icon_url, tags, access_type, source_type,
+        tool_id, title, description, url, icon_url, tags, aliases, task_tags, access_type, source_type,
         source_ref, is_recommended, recommend_order, sort_order, status, del_flag,
         create_by, create_time, update_by, update_time
     </sql>
@@ -69,8 +87,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         ORDER BY sort_order, category_id
     </select>
 
+    <!-- 每行是一个“工具×分类”；category_name_text 汇总该工具全部启用分类，前端据此给出完整归属。 -->
+    <!-- MySQL 8 不允许 GROUP_CONCAT(DISTINCT ...) 里 ORDER BY 非去重列；关联本身按分类唯一，无需 DISTINCT，前端合并时再去重。 -->
     <select id="selectCatalogTools" resultMap="ToolVoResult">
-        SELECT t.*, r.category_id
+        SELECT t.*, r.category_id,
+               (SELECT GROUP_CONCAT(c2.category_name ORDER BY c2.sort_order, c2.category_id SEPARATOR '、')
+                FROM biz_teacher_tool_category_rel r2
+                JOIN biz_teacher_tool_category c2 ON c2.category_id=r2.category_id
+                WHERE r2.tool_id=t.tool_id AND c2.status='0' AND c2.del_flag='0') AS category_name_text
         FROM biz_teacher_tool t
         JOIN biz_teacher_tool_category_rel r ON r.tool_id=t.tool_id
         JOIN biz_teacher_tool_category c ON c.category_id=r.category_id
@@ -89,6 +113,71 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           )
         ORDER BY t.recommend_order, t.sort_order, t.tool_id
     </select>
+
+    <select id="selectCatalogTasks" resultMap="TaskResult">
+        SELECT k.task_code, k.task_name, k.description, k.sort_order, COUNT(DISTINCT t.tool_id) AS tool_count
+        FROM biz_teacher_tool_task k
+        JOIN biz_teacher_tool t ON FIND_IN_SET(k.task_code, t.task_tags) > 0
+        WHERE k.status='0' AND k.del_flag='0' AND t.status='0' AND t.del_flag='0'
+          AND EXISTS (
+            SELECT 1 FROM biz_teacher_tool_category_rel r
+            JOIN biz_teacher_tool_category c ON c.category_id=r.category_id
+            WHERE r.tool_id=t.tool_id AND c.status='0' AND c.del_flag='0'
+          )
+        GROUP BY k.task_id, k.task_code, k.task_name, k.description, k.sort_order
+        ORDER BY k.sort_order, k.task_id
+    </select>
+
+    <select id="selectCatalogTerms" resultMap="TermResult">
+        SELECT m.term_id, m.term, m.tool_id, m.sort_order
+        FROM biz_teacher_tool_term m
+        JOIN biz_teacher_tool t ON t.tool_id=m.tool_id
+        WHERE t.status='0' AND t.del_flag='0'
+          AND EXISTS (
+            SELECT 1 FROM biz_teacher_tool_category_rel r
+            JOIN biz_teacher_tool_category c ON c.category_id=r.category_id
+            WHERE r.tool_id=t.tool_id AND c.status='0' AND c.del_flag='0'
+          )
+        ORDER BY m.tool_id, m.sort_order, m.term_id
+    </select>
+
+    <select id="selectTaskList" resultMap="TaskResult">
+        SELECT task_code, task_name, description, sort_order, status, del_flag, 0 AS tool_count
+        FROM biz_teacher_tool_task
+        WHERE del_flag='0' AND status='0'
+        ORDER BY sort_order, task_id
+    </select>
+
+    <select id="selectAllTaskList" resultMap="TaskResult">
+        SELECT task_code, task_name, description, sort_order, status, del_flag, 0 AS tool_count
+        FROM biz_teacher_tool_task
+        WHERE del_flag='0'
+        ORDER BY sort_order, task_id
+    </select>
+
+    <select id="selectTermsByToolId" resultMap="TermResult">
+        SELECT term_id, term, tool_id, sort_order
+        FROM biz_teacher_tool_term
+        WHERE tool_id=#{toolId}
+        ORDER BY sort_order, term_id
+    </select>
+
+    <select id="selectTermCount" resultType="int">
+        SELECT COUNT(1) FROM biz_teacher_tool_term WHERE tool_id=#{toolId}
+    </select>
+
+    <delete id="deleteTermsByToolId">
+        DELETE FROM biz_teacher_tool_term WHERE tool_id=#{toolId}
+    </delete>
+
+    <insert id="insertTerms">
+        INSERT INTO biz_teacher_tool_term (term, tool_id, sort_order, create_by, create_time)
+        VALUES
+        <!-- 与 SQL 回填统一使用 sort_order=100；同一工具内按 term_id（录入顺序）稳定展示。 -->
+        <foreach collection="terms" item="term" separator=",">
+            (#{term}, #{toolId}, 100, #{createBy}, NOW())
+        </foreach>
+    </insert>
 
     <select id="selectCategoryList" resultMap="CategoryResult">
         SELECT <include refid="categoryColumns"/>
@@ -134,22 +223,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE category_id=#{categoryId} AND del_flag='0'
     </update>
 
+    <!-- 管理列表不再用 GROUP BY 聚合：分类名与任务名改用关联子查询，避免 ONLY_FULL_GROUP_BY 下 SELECT t.* 报错， -->
+    <!-- 也避免多表 LEFT JOIN 产生笛卡尔行后再 GROUP_CONCAT(DISTINCT ...) 去重的不稳定排序。 -->
     <select id="selectToolList" resultMap="ToolVoResult">
-        SELECT t.*, GROUP_CONCAT(DISTINCT c.category_name ORDER BY c.sort_order SEPARATOR '、') AS category_name_text
+        SELECT t.*,
+               (SELECT GROUP_CONCAT(c2.category_name ORDER BY c2.sort_order, c2.category_id SEPARATOR '、')
+                FROM biz_teacher_tool_category_rel r2
+                JOIN biz_teacher_tool_category c2 ON c2.category_id=r2.category_id
+                WHERE r2.tool_id=t.tool_id AND c2.status='0' AND c2.del_flag='0') AS category_name_text,
+               (SELECT GROUP_CONCAT(k2.task_name ORDER BY k2.sort_order, k2.task_id SEPARATOR '、')
+                FROM biz_teacher_tool_task k2
+                WHERE FIND_IN_SET(k2.task_code, t.task_tags) > 0 AND k2.del_flag='0' AND k2.status='0') AS task_name_text
         FROM biz_teacher_tool t
-        LEFT JOIN biz_teacher_tool_category_rel r ON r.tool_id=t.tool_id
-        LEFT JOIN biz_teacher_tool_category c ON c.category_id=r.category_id AND c.del_flag='0'
         WHERE t.del_flag=#{delFlag}
         <if test="keyword != null and keyword != ''">
-            AND (t.title LIKE CONCAT('%', #{keyword}, '%') OR t.description LIKE CONCAT('%', #{keyword}, '%')
-                 OR t.tags LIKE CONCAT('%', #{keyword}, '%'))
+            AND (t.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\' OR t.description LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                 OR t.tags LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\' OR t.aliases LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
         </if>
         <if test="categoryId != null">
             AND EXISTS (SELECT 1 FROM biz_teacher_tool_category_rel fr WHERE fr.tool_id=t.tool_id AND fr.category_id=#{categoryId})
         </if>
         <if test="sourceType != null and sourceType != ''">AND t.source_type=#{sourceType}</if>
         <if test="status != null and status != ''">AND t.status=#{status}</if>
-        GROUP BY t.tool_id
         ORDER BY t.sort_order, t.tool_id
     </select>
 
@@ -168,23 +263,36 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="countCategoriesByIds" resultType="int">
         SELECT COUNT(DISTINCT category_id)
         FROM biz_teacher_tool_category
+        WHERE del_flag='0' AND status='0' AND category_id IN
+        <foreach collection="categoryIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="countExistingCategoriesByIds" resultType="int">
+        SELECT COUNT(DISTINCT category_id)
+        FROM biz_teacher_tool_category
         WHERE del_flag='0' AND category_id IN
         <foreach collection="categoryIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 
+    <!-- 分组拼接默认只给 1024 字节：目录与管理列表的分类名/任务名汇总可能被截断，查询前先放大本会话上限。 -->
+    <update id="increaseGroupConcatMaxLen">
+        SET SESSION group_concat_max_len = 100000
+    </update>
+
     <insert id="insertTool" parameterType="com.ruoyi.business.domain.BizTeacherTool"
             useGeneratedKeys="true" keyProperty="toolId">
         INSERT INTO biz_teacher_tool
-        (title, description, url, icon_url, tags, access_type, source_type, source_ref,
+        (title, description, url, icon_url, tags, aliases, task_tags, access_type, source_type, source_ref,
          is_recommended, recommend_order, sort_order, status, del_flag, create_by, create_time)
         VALUES
-        (#{title}, #{description}, #{url}, #{iconUrl}, #{tags}, #{accessType}, #{sourceType}, #{sourceRef},
+        (#{title}, #{description}, #{url}, #{iconUrl}, #{tags}, #{aliases}, #{taskTags}, #{accessType}, #{sourceType}, #{sourceRef},
          #{isRecommended}, #{recommendOrder}, #{sortOrder}, #{status}, '0', #{createBy}, NOW())
     </insert>
 
     <update id="updateTool" parameterType="com.ruoyi.business.domain.BizTeacherTool">
         UPDATE biz_teacher_tool
         SET title=#{title}, description=#{description}, url=#{url}, icon_url=#{iconUrl}, tags=#{tags},
+            aliases=#{aliases}, task_tags=#{taskTags},
             access_type=#{accessType}, source_type=#{sourceType}, source_ref=#{sourceRef},
             is_recommended=#{isRecommended}, recommend_order=#{recommendOrder}, sort_order=#{sortOrder},
             status=#{status}, update_by=#{updateBy}, update_time=NOW()

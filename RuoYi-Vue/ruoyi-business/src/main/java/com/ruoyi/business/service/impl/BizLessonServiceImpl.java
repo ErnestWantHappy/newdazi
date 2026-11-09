@@ -706,6 +706,10 @@ public class BizLessonServiceImpl implements IBizLessonService
                 : previousQuestionIds.stream().filter(Objects::nonNull)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
         removedQuestionIds.removeAll(newQuestionIds);
+        // 与含图题安全另存共用题目行锁，避免检查引用后又被课程绑定。
+        for (Long questionId : new java.util.TreeSet<Long>(newQuestionIds)) {
+            bizQuestionMapper.selectQuestionForUpdate(questionId);
+        }
         // 先完整归档再移出在线答案表；外层事务保证归档、删关联和重建题目要么全部成功，要么全部回滚。
         studentAnswerArchiveService.archiveRemovedQuestions(lessonId, removedQuestionIds);
 

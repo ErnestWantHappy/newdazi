@@ -1,5 +1,9 @@
 # 电子教材（教师端）设计
 
+## 2026-11-08 学生教材访问边界（已发布1.30.81）
+
+学生`toc/pages/cover/page`四接口统一经`TextbookStudentAccessService`校验：学生档案存在、当前班级有课程指派、课程学校与当前学校一致、URL`bookId`等于课程`textbook_book_id`；任一不满足即拒绝。教师、教研员、管理员保留整册阅读，书架、PDF和教学资源权限不变。该策略只读校验，不修改课程绑定或教材数据；越权提示沿用`ServiceException`业务码500约定。
+
 ## 2026-11-02 封面缩略图（已发布1.30.66）
 
 `GET /business/textbook/books/{bookId}/cover`先通过目录服务校验上架册和第一页，再读 `TEXTBOOK_ROOT/covers/{bookId}.jpg`，缺失回退第一页原图；鉴权允许教师侧及studentSs学生，匿名拒绝。360px派生图随制品校验上传，不覆盖原页图。封面private/max-age3600、Vary Authorization、尺寸+mtime ETag，正文仍no-cache；前端请求缓存和失败回退原页图。[正式证据](../release-20261102-all.md)。
