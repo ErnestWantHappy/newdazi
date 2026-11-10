@@ -62,3 +62,6 @@ tools/tests/__pycache__/
 /RuoYi-Vue3/dist-*/
 scripts/*/__pycache__/
 /work/
+
+# Python 运行缓存不进入仓库
+**/__pycache__/
