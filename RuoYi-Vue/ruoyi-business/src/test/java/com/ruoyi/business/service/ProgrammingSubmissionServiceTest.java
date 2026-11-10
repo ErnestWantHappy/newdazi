@@ -258,8 +258,8 @@ class ProgrammingSubmissionServiceTest {
     }
 
     @Test
-    void courseAnswerKeepsBestScoreAcrossSubmissions() {
-        // 课程编程题与打字题一致取历史最高分：低分重交不得覆盖已落库的高分。
+    void courseAnswerKeepsSystemScoreOutOfFormalGrade() {
+        // Python 系统分只作参考，不能在教师确认前写正式成绩。
         ProgrammingSubmission submission = new ProgrammingSubmission();
         submission.setStudentId(9492L);
         submission.setLessonId(371L);
@@ -270,8 +270,7 @@ class ProgrammingSubmissionServiceTest {
         ReflectionTestUtils.invokeMethod(service, "writeExistingAnswer", submission, 0, false);
 
         ArgumentCaptor<BizStudentAnswer> captor = ArgumentCaptor.forClass(BizStudentAnswer.class);
-        verify(studentAnswerMapper).upsertAnswer(captor.capture());
-        assertTrue(Boolean.TRUE.equals(captor.getValue().getKeepBestScore()));
-        assertEquals(Integer.valueOf(0), captor.getValue().getScore());
+        verify(studentAnswerMapper).upsertProgrammingAnswer(captor.capture());
+        assertNull(captor.getValue().getScore());
     }
 }

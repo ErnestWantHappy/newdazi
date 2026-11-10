@@ -18,12 +18,22 @@
       <span v-if="!serverCases.length && state === 'idle'" class="terminal-placeholder">点击“运行”，服务器会按上方示例输入运行代码。</span>
     </div>
     <div class="terminal-note">运行用于调试，不计分；本次输出刷新后不保留。代码自动保存，交作业后可在提交记录中查看。</div>
+
+    <!-- 运行方式由系统决定，只在降级时用一句轻提示告知，不打断操作 -->
+    <p v-if="!localSupported" class="terminal-mode-hint">
+      当前浏览器版本较低，已自动改用服务器运行，使用方法与原来相同。升级到最新版
+      <a href="https://www.google.cn/chrome/" target="_blank" rel="noopener">Chrome</a>
+      或
+      <a href="https://www.microsoft.com/edge" target="_blank" rel="noopener">Edge</a>
+      后可在本机运行、启动更快。
+    </p>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onUnmounted, ref } from 'vue'
 import { createInteractiveRunner } from './interactiveRunner'
+import { canRunLocally } from './interactiveRunner.js'
 
 const props = defineProps({ serverMode: { type: Boolean, default: false } })
 const emit = defineEmits(['busy', 'completed'])
@@ -35,6 +45,8 @@ const serverCases = ref([])
 const screen = ref(null)
 const inputElement = ref(null)
 const busy = computed(() => ['loading', 'running', 'input'].includes(state.value))
+// 运行时再判一次：同一份前端会被不同版本浏览器使用，不能只按构建环境决定
+const localSupported = ref(canRunLocally())
 const runner = createInteractiveRunner(event => {
   if (event.type === 'output') transcript.value += event.text
   else if (event.type === 'server-result') serverCases.value = event.cases || []
@@ -90,6 +102,8 @@ defineExpose({ run, runOnServer, stop })
 .terminal-input button { min-height:36px; margin-left:8px; padding:5px 8px; border:1px solid #b1c9df; border-radius:4px; background:#fff; color:#235780; cursor:pointer; }
 .terminal-note,.terminal-placeholder { color:#667085; font-size:12px; }
 .terminal-note { margin-top:8px; line-height:1.6; }
+.terminal-mode-hint { margin:6px 0 0; color:#8a6d3b; font-size:12px; line-height:1.6; }
+.terminal-mode-hint a { color:#1a6fbf; }
 .server-case + .server-case { margin-top:12px; padding-top:12px; border-top:1px dashed #dcdfe6; }
 .server-case-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
 .server-case label { display:block; color:#667085; font-size:12px; }

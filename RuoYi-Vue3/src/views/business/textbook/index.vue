@@ -34,7 +34,7 @@
                 />
               </div>
               <div class="book-name" :title="book.title">{{ book.shortTitle }} <el-tag v-if="caseBookIds.has(Number(book.bookId))" size="small">优秀课例</el-tag></div>
-              <div class="book-meta">{{ book.unitCount }} 单元 · {{ book.lessonCount }} 课</div>
+              <div class="book-meta">{{ book.unitCount }} {{ Number(book.grade) > 9 ? '章' : '单元' }} · {{ book.lessonCount }} {{ Number(book.grade) > 9 ? '节' : '课' }}</div>
               <div class="book-actions">
                 <span class="book-open">打开阅读</span>
                 <el-button
@@ -84,13 +84,38 @@
         </div>
       </div>
 
-      <el-empty v-if="!loading && !visibleGroups.length && !visibleGuides.length" description="没有匹配的教材或指南" />
+      <div v-if="standards.length" class="stage-block guide-block">
+        <div class="stage-title">课程标准</div>
+        <div class="guide-grid">
+          <div v-for="standard in visibleStandards" :key="standard.standardId" class="guide-card standard-card" @click="previewStandard(standard)">
+            <div class="guide-grade">{{ standard.audience }}</div>
+            <div class="guide-name">{{ standard.title }}</div>
+            <div class="guide-meta">PDF · {{ formatBytes(standard.bytes) }}</div>
+            <div class="standard-actions">
+              <span class="book-open">在线阅读</span>
+              <el-button link type="primary" size="small" @click.stop="downloadStandard(standard)">下载 PDF</el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <el-empty v-if="!loading && !visibleGroups.length && !visibleGuides.length && !visibleStandards.length" description="没有匹配的教材、指南或标准" />
     </div>
 
     <p v-if="caseSummaryError" class="shelf-tip">教学资源标记加载失败。<el-button link type="primary" @click="loadCaseSummary">重试</el-button></p>
     <p v-if="guideError" class="shelf-tip">课程指南加载失败。<el-button link type="primary" @click="loadResources">重试</el-button></p>
+    <p v-if="standardError" class="shelf-tip">课程标准加载失败。<el-button link type="primary" @click="loadStandards">重试</el-button></p>
     <p v-if="compilationError" class="shelf-tip">教学设计汇编加载失败。<el-button link type="primary" @click="loadResources">重试</el-button></p>
     <CompilationPreview v-model="compilationVisible" :resource="selectedCompilation" />
+    <el-dialog v-model="standardVisible" :title="selectedStandard?.title || '课程标准'" class="standard-preview-dialog" width="96%" top="3vh" append-to-body destroy-on-close>
+      <CasePreview
+        v-if="standardVisible && selectedStandard"
+        :key="selectedStandard.standardKey"
+        :resource-id="selectedStandard.standardKey"
+        source="standard"
+        :title="selectedStandard.title"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -101,9 +126,10 @@ import { ElMessage } from 'element-plus'
 import { saveAs } from 'file-saver'
 import { Document, Search } from '@element-plus/icons-vue'
 import { listTextbookBooks, downloadTextbookBookPdf, TEXTBOOK_PENDING_VOLUMES } from '@/api/business/textbook'
-import { listBookResources, bookResourceDownloadUrl, getGuides } from '@/api/business/textbookResource'
+import { listBookResources, bookResourceDownloadUrl, getGuides, getStandards, standardDownloadUrl } from '@/api/business/textbookResource'
 import LazyPageImage from './components/LazyPageImage.vue'
 import CompilationPreview from './components/CompilationPreview.vue'
+import CasePreview from './components/CasePreview.vue'
 import { getCaseSummary } from '@/api/business/textbookCase'
 
 const router = useRouter()
@@ -114,6 +140,10 @@ const caseSummaryError = ref(false)
 const bookCompilations = ref(new Map())
 const guides = ref([])
 const guideError = ref(false)
+const standards = ref([])
+const standardError = ref(false)
+const standardVisible = ref(false)
+const selectedStandard = ref(null)
 const compilationError = ref(false)
 const compilationVisible = ref(false)
 const selectedCompilation = ref(null)
@@ -129,11 +159,13 @@ async function loadCaseSummary() {
 }
 onMounted(loadCaseSummary)
 onMounted(loadResources)
+onMounted(loadStandards)
 const keyword = ref('')
 const downloadingBookId = ref(null)
 
 const primaryGrades = [3, 4, 5, 6]
 const juniorGrades = [7, 8, 9]
+const seniorGrades = [10, 11, 12]
 
 async function loadResources() {
   compilationError.value = false
@@ -168,6 +200,43 @@ function openGuide(guide) {
   router.push(`/business/textbook/guide/${guide.grade}`)
 }
 
+async function loadStandards() {
+  standardError.value = false
+  try {
+    const res = await getStandards()
+    standards.value = res.data || []
+  } catch {
+    standardError.value = true
+  }
+}
+
+function previewStandard(standard) {
+  selectedStandard.value = standard
+  standardVisible.value = true
+}
+
+function downloadStandard(standard) {
+  const link = document.createElement('a')
+  link.href = standardDownloadUrl(standard.standardKey)
+  link.download = standard.filename
+  link.target = '_blank'
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+  return `${Math.max(1, Math.round(bytes / 1024))}KB`
+}
+
+const visibleStandards = computed(() => {
+  const key = keyword.value.trim()
+  return standards.value.filter(item => !key || `${item.audience}${item.title}`.includes(key))
+})
+
 function downloadCompilation(book) {
   const item = bookCompilations.value.get(Number(book.bookId))
   if (!item) return
@@ -199,7 +268,8 @@ const visibleGroups = computed(() => {
   }
   return [
     build('primary', '小学', primaryGrades),
-    build('junior', '初中', juniorGrades)
+    build('junior', '初中', juniorGrades),
+    build('senior', '高中', seniorGrades)
   ].filter(group => group.books.length || group.pending.length)
 })
 
@@ -413,6 +483,18 @@ onMounted(load)
 .guide-card .book-open {
   margin-top: 2px;
 }
+.standard-card {
+  justify-content: center;
+}
+.standard-card .guide-name {
+  text-align: center;
+}
+.standard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
 @media (max-width: 390px) {
   .guide-grid {
     grid-template-columns: 1fr;
@@ -439,5 +521,15 @@ onMounted(load)
   margin: 22px 0 0;
   font-size: 12px;
   color: #a8abb2;
+}
+</style>
+
+<style>
+.standard-preview-dialog { height: 94dvh; max-width: 1800px; display: flex; flex-direction: column; margin-bottom: 0; box-sizing: border-box; }
+.standard-preview-dialog .el-dialog__header { flex: none; padding-bottom: 12px; }
+.standard-preview-dialog .el-dialog__title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.standard-preview-dialog .el-dialog__body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+@media (max-width: 600px) {
+  .standard-preview-dialog.el-dialog:not(.is-fullscreen) { width: 100% !important; max-width: none; height: 100dvh; margin: 0 !important; border-radius: 0; padding: 12px; }
 }
 </style>

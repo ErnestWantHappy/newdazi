@@ -95,6 +95,37 @@ public class PracticalSubmissionVo {
     /** 提交绑定快照的版本号，用于批改页展示“评分依据 vM（提交时）”。 */
     private Integer rubricSnapshotVersion;
 
+    /** Python 系统判题：最佳正式提交ID。 */
+    private Long systemSubmissionId;
+
+    /** Python 系统判题：状态码。 */
+    private String systemStatusCode;
+
+    /** Python 系统判题：状态说明。 */
+    private String systemStatusMessage;
+
+    /** Python 系统判题：最高分。 */
+    private Integer systemScore;
+
+    /** Python 系统判题：通过用例数。 */
+    private Integer systemPassedCaseCount;
+
+    /** Python 系统判题：用例总数。 */
+    private Integer systemTotalCaseCount;
+
+    /** Python 系统判题：最大用时（秒）。 */
+    private Double systemTimeSeconds;
+
+    /** Python 系统判题：最大内存（KB）。 */
+    private Integer systemMemoryKb;
+
+    /** Python 系统判题：判题完成时间。 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date systemJudgedAt;
+
+    /** Python 系统判题：最高分提交对应的源代码，不能与答题表旧代码混用。 */
+    private String systemSourceCode;
+
     /** 当前版本附件，按作品顺序排列 */
     private List<PracticalAttachment> attachments = new ArrayList<PracticalAttachment>();
 
@@ -180,4 +211,34 @@ public class PracticalSubmissionVo {
 
     public List<PracticalAttachment> getAttachments() { return attachments; }
     public void setAttachments(List<PracticalAttachment> attachments) { this.attachments = attachments; }
+
+    public Long getSystemSubmissionId() { return systemSubmissionId; }
+    public void setSystemSubmissionId(Long systemSubmissionId) { this.systemSubmissionId = systemSubmissionId; }
+
+    public String getSystemStatusCode() { return systemStatusCode; }
+    public void setSystemStatusCode(String systemStatusCode) { this.systemStatusCode = systemStatusCode; }
+
+    public String getSystemStatusMessage() { return systemStatusMessage; }
+    public void setSystemStatusMessage(String systemStatusMessage) { this.systemStatusMessage = systemStatusMessage; }
+
+    public Integer getSystemScore() { return systemScore; }
+    public void setSystemScore(Integer systemScore) { this.systemScore = systemScore; }
+
+    public Integer getSystemPassedCaseCount() { return systemPassedCaseCount; }
+    public void setSystemPassedCaseCount(Integer systemPassedCaseCount) { this.systemPassedCaseCount = systemPassedCaseCount; }
+
+    public Integer getSystemTotalCaseCount() { return systemTotalCaseCount; }
+    public void setSystemTotalCaseCount(Integer systemTotalCaseCount) { this.systemTotalCaseCount = systemTotalCaseCount; }
+
+    public Double getSystemTimeSeconds() { return systemTimeSeconds; }
+    public void setSystemTimeSeconds(Double systemTimeSeconds) { this.systemTimeSeconds = systemTimeSeconds; }
+
+    public Integer getSystemMemoryKb() { return systemMemoryKb; }
+    public void setSystemMemoryKb(Integer systemMemoryKb) { this.systemMemoryKb = systemMemoryKb; }
+
+    public Date getSystemJudgedAt() { return systemJudgedAt; }
+    public void setSystemJudgedAt(Date systemJudgedAt) { this.systemJudgedAt = systemJudgedAt; }
+
+    public String getSystemSourceCode() { return systemSourceCode; }
+    public void setSystemSourceCode(String systemSourceCode) { this.systemSourceCode = systemSourceCode; }
 }

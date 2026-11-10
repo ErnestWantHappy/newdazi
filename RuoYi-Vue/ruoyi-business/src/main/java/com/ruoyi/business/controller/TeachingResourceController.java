@@ -89,6 +89,34 @@ public class TeachingResourceController
         return AjaxResult.success(mapper.guides());
     }
 
+    @GetMapping("/standards")
+    public AjaxResult standards()
+    {
+        return AjaxResult.success(mapper.standards());
+    }
+
+    @GetMapping("/standards/{key}/preview-info")
+    public AjaxResult standardPreviewInfo(@PathVariable String key) throws IOException
+    {
+        return previewInfo(mapper.standardFile(key));
+    }
+
+    @GetMapping("/standards/{key}/pages/{pageNo}")
+    public void standardPreviewPage(@PathVariable String key, @PathVariable int pageNo,
+        @RequestParam(defaultValue = "false") boolean thumbnail, HttpServletResponse response) throws IOException
+    {
+        renderPage(mapper.standardFile(key), pageNo, thumbnail, response);
+    }
+
+    @Anonymous
+    @PreAuthorize("permitAll()")
+    @GetMapping("/standards/{key}/download")
+    public void standardDownload(@PathVariable String key, HttpServletRequest request, HttpServletResponse response) throws IOException
+    {
+        if (!requireBrowserTeacher(request, response)) return;
+        download(mapper.standardFile(key), false, response);
+    }
+
     @GetMapping("/guides/{grade}")
     public AjaxResult guide(@PathVariable Integer grade)
     {

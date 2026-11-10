@@ -26,6 +26,22 @@ export function getGuides() {
   return request({ url: `${base}/guides`, silentError: true })
 }
 
+export function getStandards() {
+  return request({ url: `${base}/standards`, silentError: true })
+}
+
+export function getStandardPreviewInfo(key) {
+  return request({ url: `${base}/standards/${encodeURIComponent(key)}/preview-info`, silentError: true })
+}
+
+export function getStandardPreviewPage(key, page, thumbnail = false) {
+  return request({ url: `${base}/standards/${encodeURIComponent(key)}/pages/${page}`, params: { thumbnail }, responseType: 'blob', timeout: 60000, silentError: true })
+}
+
+export function standardDownloadUrl(key) {
+  return `${import.meta.env.VITE_APP_BASE_API}${base}/standards/${encodeURIComponent(key)}/download`
+}
+
 export function getGuide(grade) {
   return request({ url: `${base}/guides/${grade}`, silentError: true })
 }

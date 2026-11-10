@@ -2,7 +2,9 @@ package com.ruoyi.business.controller;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -79,6 +81,8 @@ public class TeacherGradingController extends BaseController {
     @Autowired
     private ClassroomTaskStateService classroomTaskStateService;
     @Autowired private com.ruoyi.business.mapper.BizLessonAssignmentMapper assignmentMapper;
+    @Autowired private com.ruoyi.business.mapper.ProgrammingJudgeMapper programmingJudgeMapper;
+    @Autowired private com.ruoyi.business.service.PracticalPythonRunService practicalPythonRunService;
 
     /**
      * 获取课程的班级列表（用于批改页面班级选择下拉框）
@@ -146,6 +150,154 @@ public class TeacherGradingController extends BaseController {
     }
 
     /**
+     * Python 编程题批量采用系统判题最高分。
+     * 只覆盖已正式提交且已有系统判题分的学生；已退回、无系统分或分数越界的学生跳过。
+     */
+    @PostMapping("/python/batch-adopt-system-scores")
+    @Transactional(rollbackFor = Exception.class)
+    public AjaxResult batchAdoptPythonSystemScores(@RequestBody PythonBatchAdoptRequest request) {
+        if (request.getLessonId() == null || request.getQuestionId() == null) {
+            return AjaxResult.error("课程和操作题不能为空");
+        }
+        if (StringUtils.isBlank(request.getClassCode()) || StringUtils.isBlank(request.getEntryYear())) {
+            return AjaxResult.error("班级和入学年份不能为空");
+        }
+        String classCode = request.getClassCode().trim();
+        String entryYear = request.getEntryYear().trim();
+        Long deptId = SecurityUtils.getDeptId();
+        guideSheetAccessService.assertCanViewLessonClass(request.getLessonId(), entryYear, classCode);
+        BizLessonQuestionDetailVo lessonQuestion = findPracticalQuestion(
+                request.getLessonId(), request.getQuestionId());
+        if (lessonQuestion == null) {
+            return AjaxResult.error("操作题不存在或不属于当前课程");
+        }
+        if (!"PYTHON".equalsIgnoreCase(lessonQuestion.getPracticalMode())) {
+            return AjaxResult.error("仅 Python 操作题支持批量采用系统分");
+        }
+        if (lessonQuestion.getQuestionScore() == null || lessonQuestion.getQuestionScore() < 0) {
+            return AjaxResult.error("操作题满分配置无效，不能批量采用系统分");
+        }
+        com.ruoyi.business.domain.vo.PracticalGradingStatusVo deadlineStatus =
+                practicalGradingDeadlineService.getStatus(
+                        request.getLessonId(), deptId, entryYear, classCode, false);
+        if (deadlineStatus == null || !deadlineStatus.isCanGrade()) {
+            return AjaxResult.error("已逾期，操作题批改已锁定");
+        }
+        List<PracticalSubmissionVo> submissions = studentAnswerMapper.selectPracticalSubmissions(
+                request.getLessonId(), request.getQuestionId(), classCode, entryYear, deptId);
+        Map<Long, PythonBatchAdoptSnapshot> expectedByStudent = new HashMap<>();
+        if (request.getExpectedSnapshots() != null) {
+            for (PythonBatchAdoptSnapshot snapshot : request.getExpectedSnapshots()) {
+                if (snapshot != null && snapshot.getStudentId() != null) {
+                    expectedByStudent.put(snapshot.getStudentId(), snapshot);
+                }
+            }
+        }
+        int totalCount = 0;
+        int adoptedCount = 0;
+        int skippedCount = 0;
+        for (PracticalSubmissionVo row : submissions) {
+            if (!Boolean.TRUE.equals(row.getSubmitted())) {
+                continue;
+            }
+            totalCount++;
+            PythonBatchAdoptSnapshot expected = expectedByStudent.get(row.getStudentId());
+            if (expected != null && !matchesExpectedSnapshot(expected, row)) {
+                // 教师页面加载后若有人改分或学生重交，不能按旧页面批量覆盖。
+                skippedCount++;
+                continue;
+            }
+            Integer systemScore = row.getSystemScore();
+            if (systemScore == null
+                    || systemScore < 0
+                    || systemScore > lessonQuestion.getQuestionScore()) {
+                skippedCount++;
+                continue;
+            }
+            BizStudent student = studentMapper.selectBizStudentByStudentId(row.getStudentId());
+            if (student == null || student.getDeptId() == null) {
+                skippedCount++;
+                continue;
+            }
+            com.ruoyi.business.domain.ProgrammingSubmission bestSubmission = null;
+            BizStudentAnswer lockedAnswer;
+            if (row.getAnswerId() != null) {
+                lockedAnswer = studentAnswerMapper.selectByIdForUpdate(row.getAnswerId());
+                if (lockedAnswer == null || !sameAnswerSnapshot(lockedAnswer, row)) {
+                    skippedCount++;
+                    continue;
+                }
+                if (classroomTaskStateService.isReturnedForUpdate(
+                        row.getStudentId(), request.getLessonId(), request.getQuestionId())) {
+                    skippedCount++;
+                    continue;
+                }
+                bestSubmission = programmingJudgeMapper.selectBestFinalSubmission(
+                        row.getStudentId(), request.getLessonId(), request.getQuestionId());
+                if (!sameSystemSubmission(bestSubmission, row.getSystemSubmissionId(), systemScore)) {
+                    skippedCount++;
+                    continue;
+                }
+            } else {
+                // 没有答题行时先锁任务状态，再按当前最高分判题记录补建；
+                // 并发学生重交若已先插入答题行，insertAnswerIfAbsent 返回 0，本学生留到下一轮再处理。
+                if (classroomTaskStateService.isReturnedForUpdate(
+                        row.getStudentId(), request.getLessonId(), request.getQuestionId())) {
+                    skippedCount++;
+                    continue;
+                }
+                bestSubmission = programmingJudgeMapper.selectBestFinalSubmission(
+                        row.getStudentId(), request.getLessonId(), request.getQuestionId());
+                if (!sameSystemSubmission(bestSubmission, row.getSystemSubmissionId(), systemScore)) {
+                    skippedCount++;
+                    continue;
+                }
+                BizStudentAnswer created = buildPythonAnswer(request.getLessonId(), row, bestSubmission);
+                if (studentAnswerMapper.insertAnswerIfAbsent(created) != 1) {
+                    skippedCount++;
+                    continue;
+                }
+                lockedAnswer = studentAnswerMapper.selectByStudentLessonQuestionForUpdate(
+                        row.getStudentId(), request.getLessonId(), request.getQuestionId());
+                if (lockedAnswer == null) {
+                    throw new ServiceException("Python 答题记录补建失败");
+                }
+            }
+            String sourceCode = bestSubmission == null ? row.getSystemSourceCode() : bestSubmission.getSourceCode();
+            studentAnswerMapper.updateScoreAndStudentAnswer(lockedAnswer.getAnswerId(), systemScore, sourceCode);
+            scoringDetailMapper.deleteBizScoringDetailByAnswerId(lockedAnswer.getAnswerId());
+            classroomTaskStateService.markInTransaction(student, student.getDeptId(),
+                    request.getLessonId(), request.getQuestionId(), ClassroomTaskStateService.GRADED);
+            adoptedCount++;
+        }
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<String, Object>();
+        result.put("adoptedCount", adoptedCount);
+        result.put("skippedCount", skippedCount);
+        result.put("totalCount", totalCount);
+        return AjaxResult.success(result);
+    }
+
+    /** 教师运行查看当前最高分提交，不产生判题记录，也不影响正式成绩。 */
+    @PostMapping("/python/{submissionId}/run")
+    public AjaxResult runPythonSubmission(@PathVariable Long submissionId,
+            @RequestBody(required = false) Map<String, String> body) {
+        com.ruoyi.business.domain.ProgrammingSubmission submission =
+                programmingJudgeMapper.selectSubmissionById(submissionId);
+        if (submission == null || !"SUBMIT".equals(submission.getSubmissionKind())) {
+            throw new ServiceException("Python 提交记录不存在");
+        }
+        BizStudent student = studentMapper.selectBizStudentByStudentId(submission.getStudentId());
+        if (student == null) throw new ServiceException("学生档案不存在");
+        guideSheetAccessService.assertCanViewLessonClass(
+                submission.getLessonId(), student.getEntryYear(), student.getClassCode());
+        String source = submission.getSourceCode();
+        if (source == null) throw new ServiceException("该提交没有可运行的代码");
+        if (source.length() > 65536) throw new ServiceException("在线运行的代码不能超过64 KiB，请下载后运行");
+        return AjaxResult.success(practicalPythonRunService.run(source,
+                body == null ? null : body.get("stdin")));
+    }
+
+    /**
      * 当前课程、班级、操作题下失败文件重新转换
      */
     @PostMapping("/retry-failed-previews")
@@ -177,28 +329,94 @@ public class TeacherGradingController extends BaseController {
     @PostMapping("/grade")
     @Transactional(rollbackFor = Exception.class)
     public AjaxResult grade(@RequestBody GradeRequest request) {
-        if (request.getAnswerId() == null || request.getScore() == null) {
+        if (request.getScore() == null) {
             return AjaxResult.error("参数不完整");
         }
 
-        BizStudentAnswer answer = studentAnswerMapper.selectByIdForUpdate(request.getAnswerId());
+        BizStudentAnswer answer;
+        com.ruoyi.business.domain.ProgrammingSubmission systemSubmission = null;
+        if (request.getAnswerId() == null) {
+            if (request.getSystemSubmissionId() == null) {
+                return AjaxResult.error("参数不完整");
+            }
+            systemSubmission = programmingJudgeMapper.selectSubmissionById(request.getSystemSubmissionId());
+            if (systemSubmission == null
+                    || !"SUBMIT".equals(systemSubmission.getSubmissionKind())
+                    || systemSubmission.getScore() == null) {
+                return AjaxResult.error("系统判题记录不存在或尚未完成");
+            }
+            com.ruoyi.business.domain.ProgrammingSubmission best = programmingJudgeMapper.selectBestFinalSubmission(
+                    systemSubmission.getStudentId(), systemSubmission.getLessonId(), systemSubmission.getQuestionId());
+            if (best == null || !Objects.equals(best.getSubmissionId(), systemSubmission.getSubmissionId())) {
+                return AjaxResult.error("系统判题结果已更新，请刷新后重新批改");
+            }
+            BizLessonQuestionDetailVo systemQuestion = findPracticalQuestion(
+                    systemSubmission.getLessonId(), systemSubmission.getQuestionId());
+            if (systemQuestion == null || !"PYTHON".equalsIgnoreCase(systemQuestion.getPracticalMode())) {
+                return AjaxResult.error("系统判题记录不属于当前 Python 操作题");
+            }
+            String scopeError = validateGradeScope(systemSubmission.getStudentId(), systemSubmission.getLessonId());
+            if (scopeError != null) {
+                return AjaxResult.error(scopeError);
+            }
+            if (classroomTaskStateService.isReturnedForUpdate(
+                    systemSubmission.getStudentId(), systemSubmission.getLessonId(), systemSubmission.getQuestionId())) {
+                return AjaxResult.error("作品已退回，请等待学生重新提交后再批改");
+            }
+            BizStudentAnswer created = new BizStudentAnswer();
+            created.setStudentId(systemSubmission.getStudentId());
+            created.setLessonId(systemSubmission.getLessonId());
+            created.setQuestionId(systemSubmission.getQuestionId());
+            created.setStudentAnswer(systemSubmission.getSourceCode());
+            created.setSubmitTime(systemSubmission.getJudgedAt() == null
+                    ? systemSubmission.getSubmittedAt() : systemSubmission.getJudgedAt());
+            created.setAnswerTime(systemSubmission.getTimeSeconds() == null
+                    ? 0 : (int) Math.ceil(systemSubmission.getTimeSeconds()));
+            studentAnswerMapper.insertAnswerIfAbsent(created);
+            answer = studentAnswerMapper.selectByStudentLessonQuestionForUpdate(
+                    systemSubmission.getStudentId(), systemSubmission.getLessonId(), systemSubmission.getQuestionId());
+        } else {
+            answer = studentAnswerMapper.selectByIdForUpdate(request.getAnswerId());
+        }
         if (answer == null) {
             return AjaxResult.error("答题记录不存在");
         }
+        Long answerId = answer.getAnswerId();
         String scopeError = validateGradeScope(answer.getStudentId(), answer.getLessonId());
         if (scopeError != null) {
             return AjaxResult.error(scopeError);
         }
-        if (StringUtils.isBlank(answer.getStudentAnswer())) {
+        BizLessonQuestionDetailVo answerQuestion = findPracticalQuestion(answer.getLessonId(), answer.getQuestionId());
+        boolean python = answerQuestion != null && "PYTHON".equalsIgnoreCase(answerQuestion.getPracticalMode());
+        if (python) {
+            com.ruoyi.business.domain.ProgrammingSubmission best = programmingJudgeMapper.selectBestFinalSubmission(
+                    answer.getStudentId(), answer.getLessonId(), answer.getQuestionId());
+            if (request.getSystemSubmissionId() != null
+                    && (best == null || !Objects.equals(best.getSubmissionId(), request.getSystemSubmissionId()))) {
+                return AjaxResult.error("系统判题结果已更新，请刷新后重新批改");
+            }
+            if (StringUtils.isBlank(answer.getStudentAnswer()) && best == null) {
+                return AjaxResult.error("学生尚未提交操作题作品");
+            }
+            systemSubmission = best;
+        } else if (StringUtils.isBlank(answer.getStudentAnswer())) {
             return AjaxResult.error("学生尚未提交操作题作品");
         }
         if (classroomTaskStateService.isReturnedForUpdate(answer.getStudentId(), answer.getLessonId(), answer.getQuestionId()))
             return AjaxResult.error("作品已退回，请等待学生重新提交后再批改");
-        boolean answerChanged = answer.getPracticalVersionId() != null
-                ? !Objects.equals(request.getPracticalVersionId(), answer.getPracticalVersionId())
-                : answer.getStudentAnswer().startsWith("FLOWCHART:")
-                ? !Objects.equals(request.getExpectedAnswer(), answer.getStudentAnswer())
-                : request.getSubmitTime() == null || !request.getSubmitTime().equals(answer.getSubmitTime());
+        boolean answerChanged;
+        if (python) {
+            String effectiveAnswer = systemSubmission == null ? answer.getStudentAnswer() : systemSubmission.getSourceCode();
+            answerChanged = request.getExpectedAnswer() == null
+                    || (!Objects.equals(request.getExpectedAnswer(), effectiveAnswer)
+                    && !Objects.equals(request.getExpectedAnswer(), answer.getStudentAnswer()));
+        } else {
+            answerChanged = answer.getPracticalVersionId() != null
+                    ? !Objects.equals(request.getPracticalVersionId(), answer.getPracticalVersionId())
+                    : answer.getStudentAnswer().startsWith("FLOWCHART:")
+                    ? !Objects.equals(request.getExpectedAnswer(), answer.getStudentAnswer())
+                    : request.getSubmitTime() == null || !request.getSubmitTime().equals(answer.getSubmitTime());
+        }
         if (answerChanged || !Objects.equals(request.getExpectedScore(), answer.getScore())) {
             return AjaxResult.error("答卷或成绩已发生变化，请刷新后重新批改");
         }
@@ -244,11 +462,16 @@ public class TeacherGradingController extends BaseController {
                 questionScore, scoringItems, scoringDetails);
 
         // 期限校验必须和改分处于同一事务，避免已逾期后仍写入部分评分明细。
-        practicalGradingDeadlineService.assertCanGrade(request.getAnswerId());
-        studentAnswerMapper.updateScore(request.getAnswerId(), finalScore);
+        practicalGradingDeadlineService.assertCanGrade(answerId);
+        if (python) {
+            String effectiveAnswer = systemSubmission == null ? answer.getStudentAnswer() : systemSubmission.getSourceCode();
+            studentAnswerMapper.updateScoreAndStudentAnswer(answerId, finalScore, effectiveAnswer);
+        } else {
+            studentAnswerMapper.updateScore(answerId, finalScore);
+        }
 
         // 切回直接打分时也要清除旧分项，避免页面再次打开显示过期明细。
-        scoringDetailMapper.deleteBizScoringDetailByAnswerId(request.getAnswerId());
+        scoringDetailMapper.deleteBizScoringDetailByAnswerId(answerId);
         for (com.ruoyi.business.domain.BizScoringDetail detail : scoringDetails) {
             scoringDetailMapper.insertBizScoringDetail(detail);
         }
@@ -326,6 +549,44 @@ public class TeacherGradingController extends BaseController {
                 .orElse(null);
     }
 
+    private boolean sameAnswerSnapshot(BizStudentAnswer answer, PracticalSubmissionVo row) {
+        return answer != null
+                && Objects.equals(answer.getScore(), row.getScore())
+                && Objects.equals(answer.getSubmitTime(), row.getSubmitTime())
+                && Objects.equals(answer.getPracticalVersionId(), row.getPracticalVersionId())
+                && Objects.equals(answer.getStudentAnswer(), row.getStudentAnswer());
+    }
+
+    private boolean matchesExpectedSnapshot(PythonBatchAdoptSnapshot expected, PracticalSubmissionVo row) {
+        return Objects.equals(expected.getAnswerId(), row.getAnswerId())
+                && Objects.equals(expected.getScore(), row.getScore())
+                && Objects.equals(expected.getStudentAnswer(), row.getStudentAnswer())
+                && Objects.equals(expected.getPracticalVersionId(), row.getPracticalVersionId())
+                && Objects.equals(expected.getSystemSubmissionId(), row.getSystemSubmissionId())
+                && Objects.equals(expected.getSystemScore(), row.getSystemScore());
+    }
+
+    private boolean sameSystemSubmission(com.ruoyi.business.domain.ProgrammingSubmission submission,
+                                         Long expectedSubmissionId, Integer expectedScore) {
+        return submission != null
+                && Objects.equals(submission.getSubmissionId(), expectedSubmissionId)
+                && Objects.equals(submission.getScore(), expectedScore);
+    }
+
+    private BizStudentAnswer buildPythonAnswer(Long lessonId, PracticalSubmissionVo row,
+                                               com.ruoyi.business.domain.ProgrammingSubmission submission) {
+        BizStudentAnswer answer = new BizStudentAnswer();
+        answer.setStudentId(row.getStudentId());
+        answer.setLessonId(lessonId);
+        answer.setQuestionId(row.getQuestionId());
+        answer.setStudentAnswer(submission.getSourceCode());
+        answer.setSubmitTime(submission.getJudgedAt() == null
+                ? submission.getSubmittedAt() : submission.getJudgedAt());
+        answer.setAnswerTime(submission.getTimeSeconds() == null
+                ? 0 : (int) Math.ceil(submission.getTimeSeconds()));
+        return answer;
+    }
+
     /**
      * 与成绩改分一致：本校 + 课程已指派该班 +（创建人/管理员/任教班级）。
      */
@@ -371,6 +632,52 @@ public class TeacherGradingController extends BaseController {
 
     // ============ 请求体定义 ============
 
+    public static class PythonBatchAdoptRequest {
+        private Long lessonId;
+        private Long questionId;
+        private String classCode;
+        private String entryYear;
+        private List<PythonBatchAdoptSnapshot> expectedSnapshots;
+
+        public Long getLessonId() { return lessonId; }
+        public void setLessonId(Long lessonId) { this.lessonId = lessonId; }
+        public Long getQuestionId() { return questionId; }
+        public void setQuestionId(Long questionId) { this.questionId = questionId; }
+        public String getClassCode() { return classCode; }
+        public void setClassCode(String classCode) { this.classCode = classCode; }
+        public String getEntryYear() { return entryYear; }
+        public void setEntryYear(String entryYear) { this.entryYear = entryYear; }
+        public List<PythonBatchAdoptSnapshot> getExpectedSnapshots() { return expectedSnapshots; }
+        public void setExpectedSnapshots(List<PythonBatchAdoptSnapshot> expectedSnapshots) {
+            this.expectedSnapshots = expectedSnapshots;
+        }
+    }
+
+    public static class PythonBatchAdoptSnapshot {
+        private Long studentId;
+        private Long answerId;
+        private Integer score;
+        private String studentAnswer;
+        private Long practicalVersionId;
+        private Long systemSubmissionId;
+        private Integer systemScore;
+
+        public Long getStudentId() { return studentId; }
+        public void setStudentId(Long studentId) { this.studentId = studentId; }
+        public Long getAnswerId() { return answerId; }
+        public void setAnswerId(Long answerId) { this.answerId = answerId; }
+        public Integer getScore() { return score; }
+        public void setScore(Integer score) { this.score = score; }
+        public String getStudentAnswer() { return studentAnswer; }
+        public void setStudentAnswer(String studentAnswer) { this.studentAnswer = studentAnswer; }
+        public Long getPracticalVersionId() { return practicalVersionId; }
+        public void setPracticalVersionId(Long practicalVersionId) { this.practicalVersionId = practicalVersionId; }
+        public Long getSystemSubmissionId() { return systemSubmissionId; }
+        public void setSystemSubmissionId(Long systemSubmissionId) { this.systemSubmissionId = systemSubmissionId; }
+        public Integer getSystemScore() { return systemScore; }
+        public void setSystemScore(Integer systemScore) { this.systemScore = systemScore; }
+    }
+
     public static class GradeRequest {
         private Long answerId;
         private Integer score;
@@ -378,6 +685,9 @@ public class TeacherGradingController extends BaseController {
         private String expectedAnswer;
         public String getExpectedAnswer() { return expectedAnswer; }
         public void setExpectedAnswer(String value) { expectedAnswer = value; }
+        private Long systemSubmissionId;
+        public Long getSystemSubmissionId() { return systemSubmissionId; }
+        public void setSystemSubmissionId(Long value) { systemSubmissionId = value; }
         private Long practicalVersionId;
         private Long rubricSnapshotId;
         private String mode;

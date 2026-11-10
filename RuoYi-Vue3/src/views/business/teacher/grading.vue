@@ -56,8 +56,10 @@
       <div class="right-actions">
         <el-button v-if="isCurrentFile" plain :disabled="!currentEntryYear || !selectedClassCode" @click="paperImportVisible = true">导入纸质作业</el-button>
         <el-button v-if="isCurrentFile" plain :disabled="!currentEntryYear || !selectedClassCode" @click="classInsightVisible = true">AI 学情分析</el-button>
-        <el-button plain @click="openAiConfig">AI 设置</el-button>
+        <el-button v-if="isCurrentPython" type="success" plain :loading="batchAdoptLoading" :disabled="!canBatchAdoptSystemScores" @click="batchAdoptSystemScores">批量采用系统分</el-button>
+        <el-button v-if="!isCurrentPython" plain @click="openAiConfig">AI 设置</el-button>
         <el-button
+          v-if="isCurrentFile"
           type="success"
           plain
           :loading="aiStarting"
@@ -66,18 +68,19 @@
         >
           批量生成 AI 建议
         </el-button>
-        <el-button v-if="aiJob" type="primary" plain :loading="aiBatchApplying"
+        <el-button v-if="isCurrentFile && aiJob" type="primary" plain :loading="aiBatchApplying"
           :disabled="!canBatchApplyAiSuggestions" @click="applyAiSuggestionsInBatch">
           批量采用 AI 建议
         </el-button>
-        <el-tag v-if="aiJob" :type="aiJobTagType">{{ aiJobStatusText }}</el-tag>
-        <el-button v-if="aiJob" link type="primary" @click="openAiJobDetail">AI 处理详情</el-button>
-        <el-button v-if="['PENDING','RUNNING'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('pause')">暂停</el-button>
-        <el-button v-if="aiJob?.jobStatus === 'PAUSED' && aiJobBatchAdoptAllowed" link type="success" @click="controlAiJob('resume')">继续</el-button>
-        <el-tag v-if="aiJob?.jobStatus === 'PAUSED' && !aiJobBatchAdoptAllowed" type="danger">旧任务缺参考答案，请取消后重建</el-tag>
-        <el-button v-if="['PENDING','RUNNING','PAUSED'].includes(aiJob?.jobStatus)" link type="danger" @click="controlAiJob('cancel')">取消</el-button>
-        <el-button v-if="['FAILED','PARTIAL_FAILED'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('retry')">重试失败项</el-button>
+        <el-tag v-if="isCurrentFile && aiJob" :type="aiJobTagType">{{ aiJobStatusText }}</el-tag>
+        <el-button v-if="isCurrentFile && aiJob" link type="primary" @click="openAiJobDetail">AI 处理详情</el-button>
+        <el-button v-if="isCurrentFile && ['PENDING','RUNNING'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('pause')">暂停</el-button>
+        <el-button v-if="isCurrentFile && aiJob?.jobStatus === 'PAUSED' && aiJobBatchAdoptAllowed" link type="success" @click="controlAiJob('resume')">继续</el-button>
+        <el-tag v-if="isCurrentFile && aiJob?.jobStatus === 'PAUSED' && !aiJobBatchAdoptAllowed" type="danger">旧任务缺参考答案，请取消后重建</el-tag>
+        <el-button v-if="isCurrentFile && ['PENDING','RUNNING','PAUSED'].includes(aiJob?.jobStatus)" link type="danger" @click="controlAiJob('cancel')">取消</el-button>
+        <el-button v-if="isCurrentFile && ['FAILED','PARTIAL_FAILED'].includes(aiJob?.jobStatus)" link type="warning" @click="controlAiJob('retry')">重试失败项</el-button>
         <el-button
+          v-if="isCurrentFile"
           type="warning"
           plain
           :loading="retryLoading"
@@ -146,7 +149,7 @@
                本操作题已交: <b class="score-num">{{ submittedCount }}</b> / <span class="score-num">{{ currentClassTotalStudents }}</span>
                <span>，未交 {{ currentClassTotalStudents - submittedCount }}</span>
                <span style="margin: 0 6px; color: #dcdfe6">|</span>
-               已批: <b class="score-num">{{ gradedCount }}</b> / <span class="score-num">{{ submittedCount }}</span>
+               {{ isCurrentPython ? '已判分' : '已批' }}: <b class="score-num">{{ gradedCount }}</b> / <span class="score-num">{{ submittedCount }}</span>
             </span>
          </div>
          <div class="student-list-scroll">
@@ -183,7 +186,7 @@
                <div class="s-status" v-else-if="!s.submitted && s.answerId != null" style="color: #E6A23C">白卷</div>
                <div class="s-status" v-else-if="!s.submitted" :class="taskStateClass(s.taskState)">未提交</div>
                <div class="s-status score-num" v-else-if="s.score != null">{{ s.score }}分</div>
-               <div v-if="aiResultFor(s)?.resultStatus === 'SUCCESS'" class="s-ai">AI {{ aiResultFor(s).suggestedScore }}分</div>
+               <div v-if="!isCurrentPython && aiResultFor(s)?.resultStatus === 'SUCCESS'" class="s-ai">AI {{ aiResultFor(s).suggestedScore }}分</div>
             </div>
             <el-empty v-if="submissions.length === 0" description="暂无学生" :image-size="60" />
          </div>
@@ -201,6 +204,12 @@
                :version-no="currentStudent.versionNo"
                :ai-suggestion="currentAiSuggestion" :ai-summary="currentAiSummary"
                @apply-suggestion="applyFlowchartSuggestion" />
+             <teacher-python-submission-preview
+               v-else-if="isCurrentPython"
+               :key="`${selectedQuestionId}-${currentStudent.answerId || currentStudent.studentId}`"
+               :student="currentStudent"
+               :question="selectedQuestion"
+             />
              <template v-else>
              <div class="preview-header">
                  <div class="header-info">
@@ -303,7 +312,37 @@
                 </div>
             </div>
 
-            <div v-if="currentAiSuggestion" class="ai-suggestion-card">
+            <div v-if="isCurrentPython" class="python-system-card">
+               <div class="python-system-head">
+                  <strong>系统判题</strong>
+                  <el-tag size="small" :type="pythonStatusTagType(currentStudent.systemStatusCode)">
+                     {{ pythonStatusLabel(currentStudent.systemStatusCode) }}
+                  </el-tag>
+               </div>
+               <div class="python-system-score">
+                  <span class="score-num">{{ currentStudent.systemScore == null ? '--' : currentStudent.systemScore }}</span>
+                  <span>/ {{ currentStudent.maxScore }} 分</span>
+               </div>
+               <div class="python-system-meta" v-if="currentStudent.systemTotalCaseCount != null">
+                  通过用例 {{ currentStudent.systemPassedCaseCount ?? 0 }} / {{ currentStudent.systemTotalCaseCount }}
+               </div>
+               <div class="python-system-meta" v-if="currentStudent.systemJudgedAt">
+                  判题时间 {{ currentStudent.systemJudgedAt }}
+               </div>
+               <div v-if="currentStudent.systemStatusMessage" class="python-system-message">
+                  {{ currentStudent.systemStatusMessage }}
+               </div>
+               <el-alert v-if="currentStudent.systemScore == null" title="暂无系统判题分，可由教师直接评分。" type="info" :closable="false" show-icon />
+            </div>
+            <el-alert
+              v-if="currentStudent.systemScore != null && currentStudent.score == null"
+              title="系统判题分仅供参考，尚未写入正式成绩；可五星打分、数字打分或批量采用系统分。"
+              type="info"
+              :closable="false"
+              show-icon
+            />
+
+            <div v-if="!isCurrentPython && currentAiSuggestion" class="ai-suggestion-card">
                <div class="ai-suggestion-head">
                   <strong>AI 建议：{{ currentAiSuggestion.suggestedScore }} 分</strong>
                   <el-tag size="small" type="warning">仅供教师复核</el-tag>
@@ -324,7 +363,7 @@
                <el-button size="small" type="success" plain @click="applyAiSuggestion">采用到评分框</el-button>
             </div>
             <el-alert
-              v-else-if="currentAiResult?.resultStatus === 'FAILED'"
+              v-else-if="!isCurrentPython && currentAiResult?.resultStatus === 'FAILED'"
               :title="currentAiResult.errorMessage || '该份 AI 建议生成失败'"
               type="warning"
               :closable="false"
@@ -636,10 +675,10 @@
 
 <script setup name="TeacherGrading">
 import { formatPracticalFileSize } from '@/utils/practicalFileDisplay';
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { getDashboardData } from '@/api/business/teacher';
-import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission, returnClassroomTask } from '@/api/business/teacherGrading';
+import { getClassesByLesson, getPracticalQuestions, getPracticalSubmissions, retryFailedPreviews, getPracticalDeadlineStatus, gradeSubmission, returnClassroomTask, adoptPythonSystemScores } from '@/api/business/teacherGrading';
 import { getScoringItems, getScoringDetails } from '@/api/business/scoringItem';  // P6
 import { getAiConfig, saveAiConfig, deleteAiConfig, deleteAiProviderKey, testAiConfig, createAiJob, getAiJob, getAiJobEvents,
     getAiPreflight, getLatestAiJob, uploadAiReferenceAnswer, batchApplyAiSuggestions,
@@ -653,6 +692,7 @@ import websocketClient from '@/plugins/websocket';
 import PaperImportDrawer from './components/PaperImportDrawer.vue';
 import PracticalInsightDrawer from './components/PracticalInsightDrawer.vue';
 import PracticalTextPreview from '@/components/PracticalTextPreview/index.vue';
+import TeacherPythonSubmissionPreview from '@/components/TeacherPythonSubmissionPreview/index.vue';
 import Download from '@/plugins/download';
 
 const route = useRoute();
@@ -675,7 +715,12 @@ const selectedQuestionId = ref(null);
 const selectedQuestion = computed(() => questions.value.find(item =>
     String(item.questionId) === String(selectedQuestionId.value)) || null);
 const isCurrentFlowchart = computed(() => String(selectedQuestion.value?.practicalMode || '').toUpperCase() === 'FLOWCHART');
+const isCurrentPython = computed(() => String(selectedQuestion.value?.practicalMode || '').toUpperCase() === 'PYTHON');
 const isCurrentFile = computed(() => !!selectedQuestion.value && String(selectedQuestion.value.practicalMode || 'FILE').toUpperCase() === 'FILE');
+// AI 配置只在文件题批改时按需加载，Python 题不触发可选权限请求。
+watch(isCurrentFile, (value) => {
+  if (value && !aiConfig.value) loadAiConfigStatus().catch(() => {});
+});
 const paperImportVisible = ref(false);
 const classInsightVisible = ref(false);
 const paperScope = computed(() => ({ lessonId: selectedLessonId.value, questionId: selectedQuestionId.value,
@@ -702,7 +747,12 @@ const previewUrl = ref('');
 const preferPdfOriginal = ref(false);
 const currentAttachmentIndex = ref(0);
 const retryLoading = ref(false);
+const batchAdoptLoading = ref(false);
 const submitting = ref(false);
+const canBatchAdoptSystemScores = computed(() => Boolean(
+    isCurrentPython.value && selectedClassCode.value && selectedQuestionId.value
+    && deadlineStatus.value?.canGrade && !loading.value && !submitting.value
+));
 const aiConfigVisible = ref(false);
 const aiConfigSaving = ref(false);
 const aiTesting = ref(false);
@@ -777,6 +827,7 @@ const rubricVersionLabel = computed(() => {
 });
 
 const currentAttachments = computed(() => {
+    if (isCurrentPython.value) return [];
     const attachments = currentStudent.value?.attachments;
     if (Array.isArray(attachments) && attachments.length) return attachments;
     if (!currentStudent.value?.studentAnswer) return [];
@@ -976,10 +1027,33 @@ function taskStateClass(state) {
     return `task-state-${String(state || 'NOT_ENTERED').toLowerCase()}`;
 }
 
+function pythonStatusLabel(status) {
+    return ({
+        ACCEPTED: '全部通过',
+        PARTIAL: '部分通过',
+        WRONG_ANSWER: '答案错误',
+        SYNTAX_ERROR: '语法错误',
+        RUNTIME_ERROR: '运行错误',
+        TIME_LIMIT: '运行超时',
+        MEMORY_LIMIT: '内存超限',
+        SERVICE_ERROR: '判题服务异常',
+        WAITING: '等待判题',
+        JUDGING: '判题中',
+        CANCELLED: '已取消'
+    })[String(status || '').toUpperCase()] || '暂无判题结果';
+}
+
+function pythonStatusTagType(status) {
+    const value = String(status || '').toUpperCase();
+    if (value === 'ACCEPTED') return 'success';
+    if (value === 'PARTIAL') return 'warning';
+    if (['SERVICE_ERROR', 'WAITING', 'JUDGING', 'CANCELLED'].includes(value)) return 'info';
+    return value ? 'danger' : 'info';
+}
+
 // 初始化加载课程数据
 onMounted(() => {
   fetchDashboardData();
-  loadAiConfigStatus();
   initGradingWebSocket();
   startClassroomStateCalibration();
   document.addEventListener('keydown', handleGlobalKeydown);
@@ -1116,7 +1190,7 @@ function onQuestionChange(val) {
 // P6: 加载评分项
 function loadScoringItems(practicalVersionId = currentStudent.value?.practicalVersionId) {
     if (!selectedLessonId.value || !selectedQuestionId.value) return Promise.resolve();
-    if (isCurrentFlowchart.value) {
+    if (isCurrentFlowchart.value || isCurrentPython.value) {
         scoringItems.value = [];
         itemScores.value = {};
         itemStarCounts.value = {};
@@ -1315,10 +1389,19 @@ function loadSubmissions(options = {}) {
         const nextStudent = preservedStudent || submissions.value.find(s => s.submitted);
         if (silent && selectedStudent) {
             // 名单可以更新，正在批改的作品、成绩基线和输入必须保持同一快照。
-            gradingSnapshotStale.value = !sameGradingSnapshot(selectedStudent, preservedStudent);
+            // 批量采用系统分后，服务端成绩变化是预期结果，不能因此提示“成绩已更新”。
+            const acceptSnapshot = options.acceptServerSnapshot === true && preservedStudent != null;
+            gradingSnapshotStale.value = acceptSnapshot
+                ? false
+                : !sameGradingSnapshot(selectedStudent, preservedStudent);
             currentIndex.value = submissions.value.findIndex(s => s.studentId === selectedStudent.studentId);
             if (!gradingSnapshotStale.value) {
                 currentStudent.value = preservedStudent;
+                if (acceptSnapshot) {
+                    currentScore.value = preservedStudent.score != null ? preservedStudent.score : null;
+                    overallStarCount.value = 0;
+                    itemStarCounts.value = {};
+                }
                 refreshSelectedAttachmentPreview();
             }
             return;
@@ -1344,12 +1427,58 @@ function loadSubmissions(options = {}) {
 function sameGradingSnapshot(previous, latest) {
     if (!previous || !latest) return false;
     return ['answerId', 'practicalVersionId', 'flowchartSubmissionId', 'rubricSnapshotId',
-        'submitTime', 'studentAnswer', 'score', 'maxScore', 'submitted']
+        'submitTime', 'studentAnswer', 'systemSourceCode', 'score', 'maxScore', 'submitted',
+        'systemSubmissionId', 'systemScore', 'systemStatusCode', 'systemJudgedAt']
         .every(key => (previous[key] ?? null) === (latest[key] ?? null));
 }
 
 async function reloadCurrentSubmission() {
     await loadSubmissions();
+}
+
+async function batchAdoptSystemScores() {
+    if (!canBatchAdoptSystemScores.value) return;
+    const classInfo = classes.value.find(c => c.classCode === selectedClassCode.value);
+    const entryYear = classInfo?.entryYear || currentEntryYear.value;
+    try {
+        await ElMessageBox.confirm(
+            '将当前班级所有已提交 Python 学生的成绩更新为系统判题最高分；已经人工修改的分数也会被覆盖。是否继续？',
+            '批量采用系统分',
+            { type: 'warning', confirmButtonText: '确认采用', cancelButtonText: '取消' }
+        );
+    } catch (_) {
+        return;
+    }
+    batchAdoptLoading.value = true;
+    try {
+        const res = await adoptPythonSystemScores({
+            lessonId: selectedLessonId.value,
+            questionId: selectedQuestionId.value,
+            classCode: selectedClassCode.value,
+            entryYear: String(entryYear || ''),
+            // 页面快照只用于并发保护：有人改分或学生重交后，不能用旧列表覆盖新事实。
+            expectedSnapshots: submissions.value
+                .filter(student => student.submitted)
+                .map(student => ({
+                    studentId: student.studentId,
+                    answerId: student.answerId ?? null,
+                    score: student.score ?? null,
+                    studentAnswer: student.studentAnswer ?? null,
+                    practicalVersionId: student.practicalVersionId ?? null,
+                    systemSubmissionId: student.systemSubmissionId ?? null,
+                    systemScore: student.systemScore ?? null
+                }))
+        });
+        const data = res.data || {};
+        const skipped = Number(data.skippedCount || 0);
+        ElMessage.success(`已采用系统分 ${Number(data.adoptedCount || 0)} 人${skipped ? `，跳过 ${skipped} 人` : ''}`);
+        await loadSubmissions({ silent: true, acceptServerSnapshot: true });
+        await loadDeadlineStatus();
+    } catch (_) {
+        // 统一请求拦截器已经展示具体错误，这里保留当前批改状态。
+    } finally {
+        batchAdoptLoading.value = false;
+    }
 }
 
 const gradedCount = computed(() => submissions.value.filter(s => s.submitted && s.score != null).length);
@@ -1565,6 +1694,10 @@ async function pollAiJob() {
 }
 
 async function restoreLatestAiJob() {
+    if (!isCurrentFile.value) {
+        resetAiJobView();
+        return;
+    }
     if (!selectedLessonId.value || !selectedQuestionId.value || !selectedClassCode.value) return;
     const scope = aiScopeParams();
     try {
@@ -1954,7 +2087,12 @@ async function submitScore() {
         ElMessage.warning('当前答卷或成绩已更新，请先重新加载当前答卷');
         return;
     }
-    if (!currentStudent.value.submitted || currentStudent.value.answerId == null) return;
+    if (!currentStudent.value.submitted) return;
+    if (currentStudent.value.answerId == null
+        && (!isCurrentPython.value || currentStudent.value.systemSubmissionId == null)) {
+        ElMessage.warning('当前答卷尚未生成可批改记录，请刷新后重试');
+        return;
+    }
     if (!deadlineStatus.value) {
         ElMessage.warning('尚未取得批改期限，请重新读取后再提交');
         return;
@@ -2004,7 +2142,10 @@ async function submitScore() {
         answerId: targetAnswerId,
         score: finalScore,
         expectedScore,
-        expectedAnswer: targetStudent.studentAnswer,
+        expectedAnswer: isCurrentPython.value
+            ? (targetStudent.systemSourceCode ?? targetStudent.studentAnswer)
+            : targetStudent.studentAnswer,
+        systemSubmissionId: isCurrentPython.value ? (targetStudent.systemSubmissionId || null) : null,
         practicalVersionId: targetStudent.practicalVersionId || null,
         rubricSnapshotId: targetStudent.rubricSnapshotId || null,
         mode: requestMode,
@@ -2022,7 +2163,9 @@ async function submitScore() {
         ElMessage.success('批改保存成功');
 
         const wasUngraded = expectedScore == null;
-        const targetItem = submissions.value.find(item => item.answerId === targetAnswerId);
+        const targetItem = targetAnswerId == null
+            ? submissions.value.find(item => item.studentId === targetStudent.studentId)
+            : submissions.value.find(item => item.answerId === targetAnswerId);
         if (targetItem) targetItem.score = finalScore;
         if (currentStudent.value?.answerId === targetAnswerId) {
             currentStudent.value.score = finalScore;
@@ -3010,6 +3153,144 @@ function autoFocusItem() {
   &:hover {
     opacity: 1;
     transform: translateY(-2px);
+  }
+}
+.python-system-card {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+}
+.python-system-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #303133;
+  font-size: 14px;
+}
+.python-system-score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+  color: #606266;
+}
+.python-system-score .score-num {
+  color: #303133;
+  font-size: 24px;
+  line-height: 1;
+}
+.python-system-meta,
+.python-system-message {
+  margin-top: 6px;
+  color: #606266;
+  font-size: 12px;
+}
+.python-system-message { color: #909399; }
+
+/* 窄屏改为纵向工作流：先选学生、再看作品、最后打分。
+   三栏并排会把代码和评分压成不可操作的窄条，页面本身允许纵向滚动。 */
+@media (max-width: 900px) {
+  .grading-page {
+    height: auto;
+    min-height: calc(100vh - 84px);
+  }
+
+  .grading-header {
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .grading-header .header-collapse-bar {
+    align-items: flex-start;
+  }
+
+  .grading-header .header-collapse-bar .collapse-summary {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .grading-header .header-collapse-bar .collapse-question {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .grading-header .left-filters > .el-select,
+  .grading-header .single-question-name {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .grading-header .filter-label {
+    flex: 0 0 100%;
+  }
+
+  .deadline-status-panel {
+    padding-right: 12px;
+  }
+
+  .deadline-panel-head,
+  .deadline-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .deadline-summary {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .deadline-panel-bottom {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .deadline-progress {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .grading-main {
+    flex-direction: column;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .student-list-panel {
+    width: 100%;
+    height: 220px;
+    flex: none;
+  }
+
+  .student-list-panel .panel-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 10px 12px;
+  }
+
+  .student-list-panel .panel-title .grading-stats {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .preview-panel {
+    width: 100%;
+    min-height: 520px;
+    flex: none;
+  }
+
+  .scoring-panel {
+    width: 100%;
+    flex: none;
+    overflow: visible;
+    padding: 14px;
+  }
+
+  .shortcut-tip-badge {
+    display: none;
   }
 }
 </style>

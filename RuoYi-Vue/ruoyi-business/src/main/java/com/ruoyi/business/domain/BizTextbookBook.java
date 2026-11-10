@@ -24,7 +24,7 @@ public class BizTextbookBook extends BaseEntity
     /** 短名，如 七上 */
     private String shortTitle;
 
-    /** 年级 1-9 */
+    /** 年级 1-12；10-12 仅用于高中学段展示，不参与中小学课程绑定 */
     private Integer grade;
 
     /** 学期：0上册 1下册 9全一册 */
@@ -57,7 +57,7 @@ public class BizTextbookBook extends BaseEntity
     /** 导入时间 */
     private Date importedAt;
 
-    /** 学段，由年级推导，不落库：primary / junior */
+    /** 学段，由年级推导，不落库：primary / junior / senior */
     private String stage;
 
     /** 单元数（列表查询时统计） */

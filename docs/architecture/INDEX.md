@@ -1,6 +1,10 @@
 # 架构资料索引
 
-2026-11-09 当前正式1.30.86：实际登录成功首次进入首页时，桌面Logo放大至220px、手机128px，居中停留约1.2秒，期间遮罩完全隐藏首页内容；Logo移向左上角时遮罩渐隐、页面内容逐渐出现。刷新/站内跳转不重播，减少动态效果时跳过。前端`releases/20261109_brand_logo_hold12_v1`首页`be732a83`，后端仍为`releases/20261109_choice_media_v1`；真实教师1440/390实测停留1240/1260ms、遮罩从1连续渐隐、0脚本异常、0个5xx，更新164/PUBLISHED教师可见。1.30.85的2秒版本、1.30.84标题统一与透明Logo大图均保留为历史版本；1.30.83课程设计页/教师工具样式、1.30.82选择题图片/Excel图文导入继续有效。[发布验收](../../contexts/brand-logo-entry/release-1.30.86.md)、[1.30.84～1.30.86发布登记](../../contexts/RELEASE_LOG.md)、[1.30.82验收与回滚](../../contexts/choice-question-media/release-1.30.82.md)。
+2026-11-10 当前正式1.30.91：仅数据修正，130前后端仍为`releases/20261110_python_grading_snapshot_v1`（JAR`ec36df3f`、首页`f66da562`），MainPID`3097248`、NRestarts0、启动错误0。顾意丽《返回成语现场》配套材料包说明由1045字技术清单改为91字教师说明，产品更新169/PUBLISHED真实教师可见；1.30.88完成Python批改最高分代码同版本、无答题行补建、批量采用行锁/个案容错、最高分索引、课例来源空值修复与导入脚本加固；1.30.89完成批改页手机窄屏纵向布局；1.30.90补页面快照并发保护。产品更新166/1.30.88、167/1.30.89、168/1.30.90、169/1.30.91均PUBLISHED。电子教材16册/1840页、高中3册539页、2份课程标准、327课例/1050资源保持。[Python专题](../../contexts/python-grading/requirements.md)、[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[发布日志](../../contexts/RELEASE_LOG.md)、[ADR-020](ADR/ADR-020-python-grading-best-submission-source.md)。
+
+2026-11-09 已随当前release上线：教研活动课例导入3节（post 15郑东旭《语音合成》、post 60赵琪《返回成语现场》、post 70顾意丽《返回成语现场》），总课例327/资源1050；来源活动、`RESEARCH_ACTIVITY`标签、压缩包/音频识别和窄屏换行已生效。2026-11-10 1.30.91将顾意丽资源2314的教师说明改为91字，并修正后续压缩包说明生成规则。专题[需求](../../contexts/research-to-textbook-cases/requirements.md)、[设计](../../contexts/research-to-textbook-cases/design.md)、[任务](../../contexts/research-to-textbook-cases/tasks.md)、[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[ADR-018](ADR/ADR-018-research-post-idempotent-case-import.md)。
+
+2026-11-09 此前1.30.86：实际登录成功首次进入首页时，桌面Logo放大至220px、手机128px，居中停留约1.2秒，期间遮罩完全隐藏首页内容；Logo移向左上角时遮罩渐隐、页面内容逐渐出现。刷新/站内跳转不重播，减少动态效果时跳过。前端`releases/20261109_brand_logo_hold12_v1`首页`be732a83`，后端当时仍为`releases/20261109_choice_media_v1`；更新164/PUBLISHED曾教师可见，现由1.30.87接续。[历史验收](../../contexts/brand-logo-entry/release-1.30.86.md)。
 
 2026-11-09 此前1.30.83：教师课程设计页改为“课程内容设计在上、教学资源库在下”，宽屏不再左右并排，手机端顺序一致，帮助教程文案同步；同一前端包已修复教师工具动态卡片样式，恢复图标色块、标签底色和分区渐变。课程布局改两个前端文件、样式修复改一个前端文件，后端与数据库保持1.30.82。前端`releases/20261109_lesson_designer_layout_v2`首页`0d2aa234`，合并旧static后1,981文件；真实教师1440/390验收0横向溢出、0脚本异常、0个5xx，更新161/PUBLISHED教师可见。[教师工具样式验收](../../contexts/teacher-tools/release-20261109-style.md)。
 
@@ -18,9 +22,9 @@
 
 2026-11-04 本机在研操作题 PY 上传、源码预览与教师 Judge0 隔离运行，尚未发布。详见[需求](../../contexts/practical-python-upload/requirements.md)、[设计](../../contexts/practical-python-upload/design.md)、[验证与待办](../../contexts/practical-python-upload/tasks.md)。
 
-> 整理日期 **2026-11-04**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
+> 整理日期 **2026-11-09**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
 >
-> 最新正式：130 **1.30.86**（前端`releases/20261109_brand_logo_hold12_v1`、首页`be732a83`；后端保持`releases/20261109_choice_media_v1`、JAR `2b9c65e9`，助手0.2.6）。品牌Logo在首次登录后以更大尺寸居中停留约1.2秒，整页内容先隐藏再随左移动画渐显；标题、透明Logo大图、不重播和减少动态效果边界同时保留。1.30.83课程设计页/教师工具样式、1.30.82选择题图片/Excel图文导入及`media_json`四表迁移继续有效。详细证据见[1.30.86发布验收](../../contexts/brand-logo-entry/release-1.30.86.md)、[发布日志](../../contexts/RELEASE_LOG.md)与[1.30.82正式验收](../../contexts/choice-question-media/release-1.30.82.md)，历史版本按专题追溯。
+> 最新正式：130 **1.30.91**（数据修正；前后端仍为`releases/20261110_python_grading_snapshot_v1`，JAR `ec36df3f`、首页`f66da562`，助手0.2.6）。1.30.88修复Python批改最高分代码/分数一致、无答题行补建与批量采用个案容错；1.30.89修复手机窄屏批改布局；1.30.90补页面快照并发保护；1.30.91精简顾意丽配套材料包说明并修正生成规则。电子教材16册1840页、2份课程标准、327课例/1050资源继续有效。详细证据见[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[Python批改专题](../../contexts/python-grading/tasks.md)、[发布日志](../../contexts/RELEASE_LOG.md)与[数据模型](DATA_MODEL.md)。
 
 ## 按任务选择资料
 
@@ -54,6 +58,7 @@
 | 任务类型 | 必读资料 | 需要时继续读 |
 | --- | --- | --- |
 | 选择题图片、Excel图文导入、私有图片鉴权与保存回执 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/choice-question-media/requirements.md`、`design.md`、`tasks.md`、`ADR-001-additive-media-and-safe-save.md`、`release-1.30.82.md` |
+| Python 操作题批改、最高分代码、无答题行补建、批量采用页面快照保护与窄屏布局 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/python-grading/requirements.md`、`design.md`、`tasks.md`、`release-1.30.88.md`、`release-1.30.89.md`、`release-1.30.90.md`、`ADR-020-python-grading-best-submission-source.md` |
 | 题库浏览、新增入口与按钮权限（本机未发布） | `BUSINESS_BOUNDARIES.md` | `contexts/question-workbench/requirements.md`、`design.md`、`tasks.md`；题型按模块新增与动态按钮的边界见该专题 |
 | 任何开发接管 | `SYSTEM_ARCHITECTURE.md`、`BUSINESS_BOUNDARIES.md` | 对应专题 `contexts/<专题>/` |
 | 自动/手动课堂推进、逐班预检和结果 | `BUSINESS_BOUNDARIES.md` | `contexts/course-advance-20261020/requirements.md`、`design.md`、`tasks.md`、`ADR-001-authoritative-preview.md`；历史下一课年级规则见`contexts/teacher-dashboard-grade-history/` |
@@ -69,7 +74,7 @@
 | 画程流程图操作题、草稿、结构检查与教师确认 | `SYSTEM_ARCHITECTURE.md`、`BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/flowchart-tool/requirements.md`、`design.md`、`tasks.md`、四份专题 ADR |
 | 画流程图题“拍照 + AI 生成标准答案”（本机未发布） | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/flowchart-ai-answer/requirements.md`、`design.md`、`tasks.md`；复用 `contexts/operation-artifact-ai-grading/` 视觉模型与教师 Key |
 | 教师首页共享课程、课程管理能力、学生端顶部导航 | `BUSINESS_BOUNDARIES.md` | `contexts/teacher-course-sharing/requirements.md`、`design.md`、`tasks.md`、`ADR-001-server-authoritative-course-capabilities.md` |
-| 教师端电子教材、课次手选、打印本课、教材页图存储 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md`、`DEPLOYMENT_RUNBOOK.md` | `contexts/textbook-module/requirements.md`、`design.md`、`tasks.md`、`ADR/ADR-004-textbook-page-images-outside-release.md` |
+| 教师端电子教材、高中分组、课程标准、课次手选、打印本课、教材页图存储 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md`、`DEPLOYMENT_RUNBOOK.md` | `contexts/textbook-module/requirements.md`、`design.md`、`tasks.md`、`release-1.30.87.md`、`ADR/ADR-004-textbook-page-images-outside-release.md`、`ADR/ADR-019-curriculum-standards-as-teaching-resources.md` |
 | 通用班级分组、组长、教师端学生桌面、协作小组路由 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md`、`INTEGRATIONS.md` | `contexts/class-grouping-and-desktop/requirements.md`、`design.md`、`tasks.md`、`ADR-001-server-observed-presence-and-class-entry.md`、`contexts/online-collaboration/` |
 | 2026-09-02 多功能改造总计划、P0-P1 本地状态、优先级与开发提示词 | 各相关架构文档、`ADR/ADR-001-versioned-classroom-task-state.md` | `contexts/multi-feature-upgrade-20260902/requirements.md`、`design.md`、`tasks.md`、`development-prompts.md`、`handoff-prompt.md` |
 | 学生批量导入性能、事务一致性、诊断分级与重复删除幂等 | `BUSINESS_BOUNDARIES.md`、`DATA_MODEL.md` | `contexts/student-import-diagnosis-governance/requirements.md`、`design.md`、`tasks.md`、`ADR-001-batched-transactional-import-and-dynamic-diagnosis.md` |

@@ -44,6 +44,18 @@
   <insert id="upsertDraft">INSERT INTO biz_programming_draft (student_id,lesson_id,question_id,source_code,update_time) VALUES (#{studentId},#{lessonId},#{questionId},#{sourceCode},NOW()) ON DUPLICATE KEY UPDATE source_code=VALUES(source_code),update_time=NOW()</insert>
   <select id="selectSubmissionByKey" resultMap="SubmissionMap">SELECT * FROM biz_programming_submission WHERE student_id=#{studentId} AND lesson_id=#{lessonId} AND question_id=#{questionId} AND submission_key=#{submissionKey}</select>
   <select id="selectSubmissionById" resultMap="SubmissionMap">SELECT * FROM biz_programming_submission WHERE submission_id=#{submissionId}</select>
+  <select id="selectBestFinalSubmission" resultMap="SubmissionMap">
+    SELECT *
+    FROM biz_programming_submission
+    WHERE student_id=#{studentId}
+      AND lesson_id=#{lessonId}
+      AND question_id=#{questionId}
+      AND submission_kind='SUBMIT'
+      AND score IS NOT NULL
+      AND status_code IN ('ACCEPTED','PARTIAL','WRONG_ANSWER','SYNTAX_ERROR','RUNTIME_ERROR','TIME_LIMIT','MEMORY_LIMIT')
+    ORDER BY score DESC, judged_at DESC, submission_id DESC
+    LIMIT 1
+  </select>
   <select id="selectStudentSubmissions" resultMap="SubmissionMap">SELECT * FROM biz_programming_submission WHERE student_id=#{studentId} AND lesson_id=#{lessonId} AND question_id=#{questionId} ORDER BY submission_id DESC LIMIT #{limit}</select>
   <insert id="insertSubmission" useGeneratedKeys="true" keyProperty="submissionId">INSERT INTO biz_programming_submission (submission_key,student_id,lesson_id,question_id,source_code,custom_input,submission_kind,status_code,status_message,score,passed_case_count,total_case_count,request_ip,submitted_at) VALUES (#{submissionKey},#{studentId},#{lessonId},#{questionId},#{sourceCode},#{customInput},#{submissionKind},#{statusCode},#{statusMessage},#{score},0,0,#{requestIp},#{submittedAt})</insert>
   <update id="markJudging">UPDATE biz_programming_submission SET status_code='JUDGING',status_message='判题中',judged_at=#{judgingAt} WHERE submission_id=#{submissionId} AND status_code='WAITING'</update>

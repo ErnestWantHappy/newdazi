@@ -22,6 +22,18 @@ class StudentAnswerMapperContractTest
         assertStudentIdJoin("mapper/business/BizLessonMapper.xml");
     }
 
+    @Test
+    void programmingUpsertKeepsHighestScoreAndLatestSameScoreCode() throws Exception
+    {
+        try (InputStream input = getClass().getClassLoader()
+                .getResourceAsStream("mapper/business/BizStudentAnswerMapper.xml")) {
+            String xml = new String(readFully(input), StandardCharsets.UTF_8);
+            assertTrue(xml.contains("<insert id=\"upsertProgrammingAnswer\""));
+            assertTrue(xml.contains("score = score"));
+            assertTrue(xml.contains("student_answer = IF(score IS NULL, VALUES(student_answer), student_answer)"));
+        }
+    }
+
     private void assertStudentIdJoin(String resource) throws Exception
     {
         try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {

@@ -32,6 +32,9 @@ import com.ruoyi.business.judge.Judge0Properties;
 import com.ruoyi.business.judge.Judge0Request;
 import com.ruoyi.business.judge.Judge0Result;
 import com.ruoyi.business.judge.Judge0StatusMapper;
+import com.ruoyi.business.judge.JudgeOutcome;
+import com.ruoyi.business.judge.JudgeOutput;
+import com.ruoyi.business.judge.JudgeSourceWrapper;
 import com.ruoyi.business.judge.OutputComparator;
 import com.ruoyi.business.mapper.BizLessonAssignmentMapper;
 import com.ruoyi.business.mapper.BizLessonMapper;
@@ -126,6 +129,15 @@ public class ProgrammingSubmissionService {
                 Map<String, Object> detail = new HashMap<String, Object>();
                 detail.put("caseName", testCase.getCaseName()); detail.put("isPublic", testCase.getIsPublic()); detail.put("statusCode", status);
                 detail.put("timeSeconds", judgeResult == null ? null : judgeResult.getTimeSeconds()); detail.put("memoryKb", judgeResult == null ? null : judgeResult.getMemoryKb());
+                // 教师看不到差异就只能反复试。这里把输入、期望、实际和原因一并返回，前端直接展开给老师看。
+                detail.put("inputText", testCase.getInputText());
+                detail.put("expectedOutput", testCase.getExpectedOutput());
+                detail.put("actualOutput", judgeResult == null ? null : JudgeOutput.of(judgeResult.getStdout()).visible());
+                if (!"ACCEPTED".equals(status)) {
+                    detail.put("errorSummary", judgeResult == null ? null : trim(firstNonEmpty(judgeResult.getCompileOutput(), judgeResult.getStderr(), judgeResult.getMessage()), 1000));
+                    detail.put("hint", JudgeOutcome.differenceHint(testCase.getExpectedOutput(),
+                            judgeResult == null ? null : judgeResult.getStdout()));
+                }
                 details.add(detail);
                 if (!"ACCEPTED".equals(status)) valid = false;
             }
@@ -141,6 +153,41 @@ public class ProgrammingSubmissionService {
         Map<String, Object> result = new HashMap<String, Object>();
         result.put("valid", valid); result.put("validationStatus", valid ? "VALID" : "INVALID"); result.put("passedCount", countAccepted(details)); result.put("totalCount", details.size()); result.put("cases", details);
         return result;
+    }
+
+    /**
+     * 用教师参考代码跑出每个测试点的真实输出，供“一键生成期望输出”。
+     * 不写库：教师看到结果后自行保存，避免静默覆盖已人工核对的答案。
+     */
+    public Map<String, Object> generateExpectedOutputs(Long questionId, Long currentUserId, boolean admin) {
+        BizQuestion question = requirePythonQuestion(questionId);
+        assertQuestionOwner(question, currentUserId, admin);
+        ProgrammingQuestionConfig config = programmingMapper.selectConfig(questionId);
+        if (config == null) throw new ServiceException("请先保存 Python 判题配置");
+        validateSource(question.getAnswer());
+        List<ProgrammingTestCase> cases = programmingMapper.selectTestCases(questionId);
+        validateTestCases(cases);
+        List<Map<String, Object>> outputs = new ArrayList<Map<String, Object>>();
+        try {
+            for (ProgrammingTestCase testCase : cases) {
+                Judge0Result result = execute(question.getAnswer(), testCase, config);
+                Map<String, Object> item = new HashMap<String, Object>();
+                item.put("testCaseId", testCase.getTestCaseId());
+                item.put("caseName", testCase.getCaseName());
+                item.put("inputText", testCase.getInputText());
+                item.put("expectedOutput", JudgeOutput.of(result == null ? null : result.getStdout()).plain());
+                item.put("statusCode", Judge0StatusMapper.toPlatformStatus(result));
+                item.put("errorSummary", result == null ? null
+                        : trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
+                outputs.add(item);
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("生成期望输出被中断，请稍后重试");
+        }
+        Map<String, Object> data = new HashMap<String, Object>();
+        data.put("cases", outputs);
+        return data;
     }
 
     private static int countAccepted(List<Map<String, Object>> details) {
@@ -268,10 +315,16 @@ public class ProgrammingSubmissionService {
      * 不写提交、草稿、成绩和历史记录，避免“运行”污染正式数据；因此也不返回隐藏测试点。
      */
     public Map<String, Object> runPublicCases(BizStudent student, Long deptId, Long lessonId, Long questionId, String sourceCode) {
+        return runPublicCases(student, deptId, lessonId, questionId, sourceCode, null);
+    }
+
+    public Map<String, Object> runPublicCases(BizStudent student, Long deptId, Long lessonId, Long questionId, String sourceCode, String stdin) {
         assertStudentQuestionAccess(student, deptId, lessonId, questionId);
         validateSource(sourceCode);
         ProgrammingQuestionConfig config = programmingMapper.selectConfig(questionId);
         if (config == null || !"1".equals(config.getEnabled())) throw new ServiceException("该编程题暂未开放");
+        // 传了 stdin 说明是交互式运行：按用户逐步填写的输入跑一次，而不是按示例批量跑。
+        if (stdin != null) return runInteractivePublic(student, config, sourceCode, stdin);
         List<ProgrammingTestCase> cases = programmingMapper.selectPublicTestCases(questionId);
         if (cases == null || cases.isEmpty()) throw new ServiceException("题目尚未配置可执行的示例测试点");
         Judge0Client client = resolveClient();
@@ -282,7 +335,8 @@ public class ProgrammingSubmissionService {
                 Judge0Result result = executeWith(client, sourceCode, testCase, config);
                 Map<String, Object> item = new HashMap<String, Object>();
                 item.put("caseName", testCase.getCaseName()); item.put("inputText", testCase.getInputText()); item.put("expectedOutput", testCase.getExpectedOutput());
-                item.put("actualOutput", result == null ? null : result.getStdout());
+                // 按终端顺序回放，学生降级运行时看到的提示语、输入与输出顺序和本机一致。
+                item.put("actualOutput", result == null ? null : JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()));
                 item.put("errorMessage", result == null ? null : trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
                 item.put("statusCode", mapStatus(result, testCase.getExpectedOutput()));
                 item.put("timeSeconds", result == null ? null : result.getTimeSeconds()); item.put("memoryKb", result == null ? null : result.getMemoryKb());
@@ -296,6 +350,67 @@ public class ProgrammingSubmissionService {
         } finally { releaseRunConcurrency(student); }
         Map<String, Object> data = new HashMap<String, Object>(); data.put("mode", "SERVER"); data.put("cases", results);
         return data;
+    }
+
+    /**
+     * 旧浏览器没有本机解释器时的交互式运行：用教师配置的资源限制，把当前累计输入交给程序。
+     * 程序还差输入就返回 needInput，前端继续显示输入框；不写提交、草稿和成绩。
+     */
+    private Map<String, Object> runInteractivePublic(BizStudent student, ProgrammingQuestionConfig config,
+                                                     String sourceCode, String stdin) {
+        validateCustomInput(stdin);
+        reserveRateAndSlotForInteractive(student);
+        try {
+            ProgrammingTestCase customCase = new ProgrammingTestCase();
+            customCase.setTestCaseId(CUSTOM_CASE_ID);
+            customCase.setCaseName("自定义输入");
+            customCase.setInputText(stdin);
+            customCase.setIsPublic("1");
+            customCase.setScoreWeight(0D);
+            Judge0Result result = executeWith(resolveClient(), sourceCode, customCase, config);
+            boolean needInput = JudgeOutput.needsMoreInput(result == null ? null : result.getStderr());
+            boolean success = needInput || (result != null && Judge0StatusMapper.toPlatformStatus(result).equals("ACCEPTED"));
+            String output = result == null ? "" : JudgeOutput.of(result.getStdout()).terminalText(stdin)
+                    + JudgeOutput.cleanError(result.getStderr())
+                    + (result.getCompileOutput() == null ? "" : result.getCompileOutput());
+            Map<String, Object> data = new HashMap<String, Object>();
+            data.put("mode", "SERVER");
+            data.put("success", success);
+            data.put("needInput", needInput);
+            data.put("output", trim(output, 32768));
+            data.put("statusCode", result == null ? "SERVICE_ERROR" : Judge0StatusMapper.toPlatformStatus(result));
+            return data;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("运行被中断，请稍后重试");
+        } finally { releaseInteractiveRun(student); }
+    }
+
+    /**
+     * 交互运行会因每次 input() 往返一次，但仍是同一名学生连续点击，按学生限频即可；
+     * 同时保留整班并发上限，避免降级班级把判题机打满。
+     */
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private void reserveRateAndSlotForInteractive(BizStudent student) {
+        ValueOperations<String, Object> values = redisCache.redisTemplate.opsForValue();
+        String key = "judge0:interactive:" + student.getStudentId();
+        if (!Boolean.TRUE.equals(values.setIfAbsent(key, "1", 10, TimeUnit.SECONDS)))
+            throw new ServiceException("上一次运行还没结束，请稍候再试");
+        String classKey = classRunKey(student);
+        Long active = values.increment(classKey);
+        if (active != null && active.longValue() == 1L) redisCache.expire(classKey, 60, TimeUnit.SECONDS);
+        if (active != null && active.longValue() > Math.max(1, properties.getClassConcurrency())) {
+            values.decrement(classKey);
+            redisCache.deleteObject(key);
+            throw new ServiceException("本班同时运行的人数较多，请稍后再试");
+        }
+    }
+
+    private void releaseInteractiveRun(BizStudent student) {
+        redisCache.deleteObject("judge0:interactive:" + student.getStudentId());
+        String classKey = classRunKey(student);
+        if (redisCache.redisTemplate.opsForValue().get(classKey) != null)
+            redisCache.redisTemplate.opsForValue().decrement(classKey);
     }
 
     /** 服务端同步运行会占用请求线程，必须按学生和班级双重限流，避免整班同时运行时打满判题机。 */
@@ -369,7 +484,8 @@ public class ProgrammingSubmissionService {
     }
 
     private Judge0Result executeWith(Judge0Client client, String sourceCode, ProgrammingTestCase testCase, ProgrammingQuestionConfig config) throws InterruptedException {
-        Judge0Request request = new Judge0Request(); request.setSourceCode(sourceCode); request.setStdin(testCase.getInputText()); request.setExpectedOutput(testCase.getExpectedOutput()); request.setCpuTimeLimit(config.getTimeLimitSeconds()); request.setMemoryLimitKb(config.getMemoryLimitKb()); request.setMaxProcesses(config.getMaxProcesses()); request.setMaxFileSizeKb(config.getMaxFileSizeKb()); request.setMaxOutputKb(config.getMaxOutputKb());
+        // 套壳后 input() 提示语带标记，判题才能既不误判也不误删学生输出。
+        Judge0Request request = new Judge0Request(); request.setSourceCode(JudgeSourceWrapper.wrap(sourceCode)); request.setStdin(testCase.getInputText()); request.setExpectedOutput(JudgeSourceWrapper.needsWrap(sourceCode) ? null : testCase.getExpectedOutput()); request.setCpuTimeLimit(config.getTimeLimitSeconds()); request.setMemoryLimitKb(config.getMemoryLimitKb()); request.setMaxProcesses(config.getMaxProcesses()); request.setMaxFileSizeKb(config.getMaxFileSizeKb()); request.setMaxOutputKb(config.getMaxOutputKb());
         Judge0Result result = client.submit(request);
         if (result == null || result.getToken() == null) throw new ServiceException("Judge0 未返回提交令牌");
         for (int i = 0; i < Math.max(1, properties.getMaxPolls()); i++) { Thread.sleep(Math.max(100, properties.getPollIntervalMs())); result = client.poll(result.getToken()); if (result != null && result.isFinished()) return result; }
@@ -388,7 +504,8 @@ public class ProgrammingSubmissionService {
             row.setTimeSeconds(result.getTimeSeconds());
             row.setMemoryKb(result.getMemoryKb());
             if ("1".equals(testCase.getIsPublic())) {
-                row.setOutputText(trim(result.getStdout(), 65536));
+                // 只有公开样例回写输出；这里同样回放成终端文本，学生看到的与教师端一致。
+                row.setOutputText(trim(JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()), 65536));
                 row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
             }
         }
@@ -398,8 +515,13 @@ public class ProgrammingSubmissionService {
     /** 自定义运行没有期望输出：执行成功即为“运行完成”，绝不参与答案比较或课程计分。 */
     private ProgrammingSubmissionCase toCustomCaseResult(Long submissionId, ProgrammingTestCase testCase, Judge0Result result) {
         ProgrammingSubmissionCase row = new ProgrammingSubmissionCase(); row.setSubmissionId(submissionId); row.setTestCaseId(CUSTOM_CASE_ID); row.setIsPublic("1"); row.setJudge0StatusId(result == null ? null : result.getStatusId());
-        String status = Judge0StatusMapper.toPlatformStatus(result); row.setStatusCode("ACCEPTED".equals(status) ? STATUS_COMPLETED : status);
-        if (result != null) { row.setTimeSeconds(result.getTimeSeconds()); row.setMemoryKb(result.getMemoryKb()); row.setOutputText(trim(result.getStdout(), 65536)); row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000)); }
+        String status = JudgeOutcome.runStatus(result); row.setStatusCode(status);
+        if (result != null) {
+            row.setTimeSeconds(result.getTimeSeconds()); row.setMemoryKb(result.getMemoryKb());
+            // 回放成终端文本：提示语、老师填的输入、程序输出按真实顺序排列。
+            row.setOutputText(trim(JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()), 65536));
+            row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
+        }
         return row;
     }
 
@@ -433,7 +555,8 @@ public class ProgrammingSubmissionService {
         String status = forcedStatus == null ? summarize(results, passed) : forcedStatus;
         finalRow.setStatusCode(status); finalRow.setStatusMessage(statusMessage(status)); finalRow.setPassedCaseCount(passed); finalRow.setTotalCaseCount(testCases.size()); finalRow.setTimeSeconds(maxTime); finalRow.setMemoryKb(maxMemory); finalRow.setJudgedAt(new Date());
         if ("SUBMIT".equals(finalRow.getSubmissionKind()) && !STATUS_SERVICE_ERROR.equals(status)) {
-            int questionScore = lessonQuestionScore(finalRow.getLessonId(), finalRow.getQuestionId()); int score = totalWeight <= 0D ? 0 : (int) Math.round(questionScore * passedWeight / totalWeight); finalRow.setScore(score);
+            int questionScore = lessonQuestionScore(finalRow.getLessonId(), finalRow.getQuestionId());
+            finalRow.setScore(JudgeOutcome.weightedScore(questionScore, passedWeight, totalWeight));
         }
         if (programmingMapper.updateSubmissionResult(finalRow) != 1) return;
         // 推进只阻止旧课成绩回写，判题记录本身仍须结束，避免学生一直看到“判题中”。
@@ -445,9 +568,9 @@ public class ProgrammingSubmissionService {
         row.setStatusCode(STATUS_SERVICE_ERROR); row.setStatusMessage("判题服务异常，代码和提交已保留"); row.setErrorSummary(message); row.setPassedCaseCount(0); row.setTotalCaseCount(0); row.setJudgedAt(new Date()); programmingMapper.updateSubmissionResult(row);
     }
 
-    // 课程编程题与打字题一致保留历史最高分：多次提交只保留最优成绩，防止调优中的低分覆盖已通过的高分。
+    // 系统判题分只作参考；答题行同步代码，正式分数必须等教师确认。
     private void writeExistingAnswer(ProgrammingSubmission submission, int score, boolean correct) {
-        BizStudentAnswer answer = new BizStudentAnswer(); answer.setStudentId(submission.getStudentId()); answer.setLessonId(submission.getLessonId()); answer.setQuestionId(submission.getQuestionId()); answer.setStudentAnswer(submission.getSourceCode()); answer.setScore(score); answer.setIsCorrect(correct); answer.setSubmitTime(new Date()); answer.setAnswerTime(submission.getTimeSeconds() == null ? 0 : (int) Math.ceil(submission.getTimeSeconds())); answer.setKeepBestScore(true); studentAnswerMapper.upsertAnswer(answer);
+        BizStudentAnswer answer = new BizStudentAnswer(); answer.setStudentId(submission.getStudentId()); answer.setLessonId(submission.getLessonId()); answer.setQuestionId(submission.getQuestionId()); answer.setStudentAnswer(submission.getSourceCode()); answer.setSubmitTime(new Date()); answer.setAnswerTime(submission.getTimeSeconds() == null ? 0 : (int) Math.ceil(submission.getTimeSeconds())); studentAnswerMapper.upsertProgrammingAnswer(answer);
     }
 
     private void assertStudentQuestionAccess(BizStudent student, Long deptId, Long lessonId, Long questionId) {
@@ -506,11 +629,7 @@ public class ProgrammingSubmissionService {
     }
     private void validateTextLength(String label, String value, int maxBytes) { if (value != null && value.getBytes(StandardCharsets.UTF_8).length > maxBytes) throw new ServiceException(label + "超过允许大小"); }
     private String mapStatus(Judge0Result result, String expectedOutput) {
-        String status = Judge0StatusMapper.toPlatformStatus(result);
-        if (("ACCEPTED".equals(status) || "WRONG_ANSWER".equals(status)) && result != null) {
-            return OutputComparator.matches(expectedOutput, result.getStdout()) ? "ACCEPTED" : "WRONG_ANSWER";
-        }
-        return status;
+        return JudgeOutcome.caseStatus(result, expectedOutput);
     }
     private String summarize(List<ProgrammingSubmissionCase> rows, int passed) { if (passed == rows.size()) return "ACCEPTED"; if (passed > 0) return "PARTIAL"; for (ProgrammingSubmissionCase row : rows) if (!"WRONG_ANSWER".equals(row.getStatusCode())) return row.getStatusCode(); return "WRONG_ANSWER"; }
     private String statusMessage(String status) { if (STATUS_COMPLETED.equals(status)) return "运行完成"; if ("ACCEPTED".equals(status)) return "通过"; if ("PARTIAL".equals(status)) return "部分通过"; if ("WRONG_ANSWER".equals(status)) return "答案错误"; if ("SYNTAX_ERROR".equals(status)) return "语法错误"; if ("RUNTIME_ERROR".equals(status)) return "运行错误"; if ("TIME_LIMIT".equals(status)) return "运行超时"; if ("MEMORY_LIMIT".equals(status)) return "内存超限"; return "判题服务异常，代码和提交已保留"; }

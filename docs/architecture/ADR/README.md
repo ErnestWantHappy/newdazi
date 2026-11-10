@@ -10,3 +10,6 @@
 - [ADR-002-aoci-project-memory.md](ADR-002-aoci-project-memory.md)：核心上下文、架构专题与源码证据分工；原AOCI接入方案已于2026-10-15停用。
 - [ADR-003-slow-sql-interceptor-six-arg.md](ADR-003-slow-sql-interceptor-six-arg.md)：慢 SQL 拦截必须同时覆盖 PageHelper 的 6 参数 `Executor.query`，否则分页查询绕过持久化。
 - [ADR-004-textbook-page-images-outside-release.md](ADR-004-textbook-page-images-outside-release.md)：电子教材页图存于 release 之外，经鉴权接口 + ETag 回图，不落无鉴权的 `/profile/`，不建课程绑定表。
+- [ADR-018-research-post-idempotent-case-import.md](ADR-018-research-post-idempotent-case-import.md)：教研活动课例以来源帖子幂等，活动标题独立快照，压缩包必须深度检查，低峰窗口先DRAFT再PUBLISHED。
+- [ADR-019-curriculum-standards-as-teaching-resources.md](ADR-019-curriculum-standards-as-teaching-resources.md)：课程标准独立于教材册次，使用独立表与教师侧资料区，不复用假课次，不落无鉴权静态目录。
+- [ADR-020-python-grading-best-submission-source.md](ADR-020-python-grading-best-submission-source.md)：Python 批改以最高分正式提交为判题事实源，答题行负责成绩和任务状态写入；无答题行可补建，批量采用加锁复核并个案跳过。

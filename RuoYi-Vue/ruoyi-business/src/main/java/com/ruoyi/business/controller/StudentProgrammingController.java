@@ -65,7 +65,8 @@ public class StudentProgrammingController extends BaseController {
     @PostMapping("/server-run")
     public AjaxResult serverRun(@RequestBody StudentProgrammingRequest request) {
         BizStudent student = currentStudent();
-        return success(programmingSubmissionService.runPublicCases(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode));
+        return success(programmingSubmissionService.runPublicCases(student, SecurityUtils.getDeptId(),
+                request.lessonId, request.questionId, request.sourceCode, request.stdin));
     }
     @PostMapping("/submit")
     public AjaxResult submit(@RequestBody StudentProgrammingRequest request, HttpServletRequest httpRequest) { return submit(request, "SUBMIT", httpRequest); }
@@ -93,6 +94,9 @@ public class StudentProgrammingController extends BaseController {
 
     public static class StudentProgrammingRequest {
         private Long lessonId; private Long questionId; private String sourceCode; private String customInput; private String submissionKey;
+        /** 旧浏览器交互运行的累计输入；为空时按公开示例运行。 */
+        private String stdin;
+        public String getStdin() { return stdin; } public void setStdin(String v) { stdin = v; }
         public Long getLessonId() { return lessonId; } public void setLessonId(Long v) { lessonId = v; }
         public Long getQuestionId() { return questionId; } public void setQuestionId(Long v) { questionId = v; }
         public String getSourceCode() { return sourceCode; } public void setSourceCode(String v) { sourceCode = v; }

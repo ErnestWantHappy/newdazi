@@ -43,6 +43,25 @@ export function getPracticalDeadlineStatus(lessonId, entryYear, classCode) {
   })
 }
 
+// Python 编程题批量采用系统判题最高分
+export function adoptPythonSystemScores(data) {
+  return request({
+    url: '/business/teacher/grading/python/batch-adopt-system-scores',
+    method: 'post',
+    data
+  })
+}
+
+// 教师运行查看 Python 最高分提交，不产生判题记录
+export function runPythonSubmission(submissionId, stdin) {
+  return request({
+    url: `/business/teacher/grading/python/${submissionId}/run`,
+    method: 'post',
+    data: { stdin },
+    timeout: 30000
+  })
+}
+
 // 批改打分
 export function gradeSubmission(data) {
   return request({

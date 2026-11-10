@@ -120,6 +120,9 @@ public class TextbookCaseController
         String name = path.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
         String extension = name.substring(name.lastIndexOf('.') + 1);
         Map<String, String> types = new java.util.HashMap<>();
+        // 音频演示文件沿用教师鉴权和 Range 下载，只扩展明确的安全 MIME，不开放任意文件。
+        types.put("mp3", "audio/mpeg"); types.put("wav", "audio/wav");
+        types.put("m4a", "audio/mp4"); types.put("ogg", "audio/ogg");
         types.put("mp4", "video/mp4"); types.put("webm", "video/webm");
         types.put("jpg", "image/jpeg"); types.put("jpeg", "image/jpeg");
         types.put("png", "image/png"); types.put("webp", "image/webp");

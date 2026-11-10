@@ -100,6 +100,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          #{previewErrorMessage}, #{practicalArtifactId}, #{practicalVersionId})
     </insert>
 
+    <!-- Python 系统判题分仅作批改参考：答题行同步最新最高分代码，正式分数留给教师确认。 -->
+    <insert id="upsertProgrammingAnswer" parameterType="com.ruoyi.business.domain.BizStudentAnswer"
+            useGeneratedKeys="true" keyProperty="answerId">
+        INSERT INTO biz_student_answer
+        (student_id, lesson_id, question_id, student_answer, is_correct, score, answer_time,
+         submit_time, typing_speed, accuracy_rate, completion_rate, preview_status, preview_path,
+         preview_retry_count, preview_last_retry_time, preview_error_message, practical_artifact_id,
+         practical_version_id)
+        VALUES
+        (#{studentId}, #{lessonId}, #{questionId}, #{studentAnswer}, #{isCorrect}, #{score},
+         #{answerTime}, #{submitTime}, #{typingSpeed}, #{accuracyRate}, #{completionRate},
+         #{previewStatus}, #{previewPath}, #{previewRetryCount}, #{previewLastRetryTime},
+         #{previewErrorMessage}, #{practicalArtifactId}, #{practicalVersionId})
+        ON DUPLICATE KEY UPDATE
+            answer_id = LAST_INSERT_ID(answer_id),
+            answer_time = IF(score IS NULL, VALUES(answer_time), answer_time),
+            submit_time = IF(score IS NULL, VALUES(submit_time), submit_time),
+            student_answer = IF(score IS NULL, VALUES(student_answer), student_answer),
+            practical_version_id = COALESCE(VALUES(practical_version_id), practical_version_id),
+            score = score
+    </insert>
+
     <!-- 批量插入答题记录 -->
     <insert id="batchInsert" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="answerId">
         INSERT INTO biz_student_answer 
@@ -371,20 +393,33 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             a.preview_last_retry_time AS previewLastRetryTime,
             a.preview_error_message AS previewErrorMessage,
             a.practical_version_id AS practicalVersionId,
+            ps.submission_id AS systemSubmissionId,
+            ps.status_code AS systemStatusCode,
+            ps.status_message AS systemStatusMessage,
+            ps.score AS systemScore,
+            ps.passed_case_count AS systemPassedCaseCount,
+            ps.total_case_count AS systemTotalCaseCount,
+            ps.time_seconds AS systemTimeSeconds,
+            ps.memory_kb AS systemMemoryKb,
+            ps.judged_at AS systemJudgedAt,
+            ps.source_code AS systemSourceCode,
             fs.submission_id AS flowchartSubmissionId,
             fs.version_no AS versionNo,
             a.score AS score,
             lq.question_score AS maxScore,
             a.submit_time AS submitTime,
             COALESCE(state.task_state,
-                CASE WHEN a.answer_id IS NULL THEN 'NOT_ENTERED'
-                     WHEN a.submit_time IS NULL OR NULLIF(TRIM(a.student_answer), '') IS NULL THEN 'WORKING'
+                CASE WHEN a.answer_id IS NULL AND ps.submission_id IS NULL THEN 'NOT_ENTERED'
+                     WHEN a.answer_id IS NOT NULL
+                          AND ps.submission_id IS NULL
+                          AND (a.submit_time IS NULL OR NULLIF(TRIM(a.student_answer), '') IS NULL) THEN 'WORKING'
                      WHEN a.score IS NULL THEN 'SUBMITTED' ELSE 'GRADED' END) AS taskState,
             COALESCE(state.state_version, 0) AS stateVersion,
             state.changed_at AS stateChangedAt,
-            CASE WHEN a.answer_id IS NOT NULL
+            CASE WHEN (a.answer_id IS NOT NULL
                        AND a.student_answer IS NOT NULL
-                       AND TRIM(a.student_answer) &lt;&gt; '' THEN 1 ELSE 0 END AS submitted
+                       AND TRIM(a.student_answer) &lt;&gt; '')
+                      OR ps.submission_id IS NOT NULL THEN 1 ELSE 0 END AS submitted
         FROM biz_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         LEFT JOIN biz_student_answer a ON s.student_id = a.student_id
@@ -401,6 +436,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          AND a.student_answer = CONCAT('FLOWCHART:', fs.submission_id)
          AND fs.lesson_id = #{lessonId}
          AND fs.question_id = #{questionId}
+        LEFT JOIN biz_programming_submission ps
+          ON ps.submission_id = (
+              SELECT candidate.submission_id
+              FROM biz_programming_submission candidate
+              WHERE candidate.student_id = s.student_id
+                AND candidate.lesson_id = #{lessonId}
+                AND candidate.question_id = #{questionId}
+                AND candidate.submission_kind = 'SUBMIT'
+                AND candidate.score IS NOT NULL
+                AND candidate.status_code IN ('ACCEPTED','PARTIAL','WRONG_ANSWER','SYNTAX_ERROR','RUNTIME_ERROR','TIME_LIMIT','MEMORY_LIMIT')
+              ORDER BY candidate.score DESC, candidate.judged_at DESC, candidate.submission_id DESC
+              LIMIT 1
+          )
         INNER JOIN biz_lesson_question lq ON lq.question_id = #{questionId} AND lq.lesson_id = #{lessonId}
         INNER JOIN biz_question q ON q.question_id = lq.question_id
         WHERE s.class_code = #{classCode}
@@ -413,6 +461,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="updateScore">
         UPDATE biz_student_answer 
         SET score = #{score}
+        WHERE answer_id = #{answerId}
+    </update>
+
+    <update id="updateScoreAndStudentAnswer">
+        UPDATE biz_student_answer
+        SET score = #{score},
+            student_answer = COALESCE(#{studentAnswer}, student_answer)
         WHERE answer_id = #{answerId}
     </update>
     
@@ -565,6 +620,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 批改事务先锁定答卷，后续提交时间和旧分数校验才具有并发意义。 -->
     <select id="selectByIdForUpdate" resultMap="BizStudentAnswerResult">
         SELECT * FROM biz_student_answer WHERE answer_id = #{answerId} FOR UPDATE
+    </select>
+
+    <select id="selectByStudentLessonQuestionForUpdate" resultMap="BizStudentAnswerResult">
+        SELECT * FROM biz_student_answer
+        WHERE student_id = #{studentId}
+          AND lesson_id = #{lessonId}
+          AND question_id = #{questionId}
+        FOR UPDATE
     </select>
 
     <resultMap id="StudentAnswerMatrixResult" type="com.ruoyi.business.domain.vo.StudentAnswerMatrixVo">

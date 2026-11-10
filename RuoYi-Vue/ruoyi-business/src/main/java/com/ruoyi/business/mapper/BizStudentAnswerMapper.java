@@ -26,6 +26,9 @@ public interface BizStudentAnswerMapper
      */
     int upsertAnswer(BizStudentAnswer answer);
 
+    /** Python 正式提交专用：同步最高分代码，不覆盖教师正式成绩。 */
+    int upsertProgrammingAnswer(BizStudentAnswer answer);
+
     /**
      * 理论题首次提交仅允许插入，唯一键冲突表示答案已进入终态。
      */
@@ -117,10 +120,20 @@ public interface BizStudentAnswerMapper
      */
     int updateScore(@Param("answerId") Long answerId, @Param("score") Integer score);
 
+    /** 单纯改分时同步代码，确保教师看到的系统判题代码与答题表一致。 */
+    int updateScoreAndStudentAnswer(@Param("answerId") Long answerId,
+                                    @Param("score") Integer score,
+                                    @Param("studentAnswer") String studentAnswer);
+
     /**
      * 锁定答卷后再批改，避免学生重交或其他批改请求并发覆盖。
      */
     BizStudentAnswer selectByIdForUpdate(@Param("answerId") Long answerId);
+
+    /** 无答题行时按唯一键补建后必须重新锁定，避免并发请求各自写入不同版本。 */
+    BizStudentAnswer selectByStudentLessonQuestionForUpdate(@Param("studentId") Long studentId,
+                                                           @Param("lessonId") Long lessonId,
+                                                           @Param("questionId") Long questionId);
     
     /**
      * P2: 查询学生成绩汇总（按课程分组）

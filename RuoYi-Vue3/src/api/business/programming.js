@@ -4,6 +4,8 @@ export function getProgrammingQuestion(questionId) { return request({ url: `/bus
 export function previewProgrammingQuestion(questionId) { return request({ url: `/business/programming/question/${questionId}/preview`, method: 'get' }) }
 export function saveProgrammingQuestion(questionId, data) { return request({ url: `/business/programming/question/${questionId}`, method: 'put', data }) }
 export function validateProgrammingQuestion(questionId) { return request({ url: `/business/programming/question/${questionId}/validate`, method: 'post' }) }
+// 用参考代码生成各测试点的真实输出，只返回结果、不落库，教师确认后再保存
+export function generateProgrammingOutputs(questionId) { return request({ url: `/business/programming/question/${questionId}/generate-outputs`, method: 'post', timeout: 120000 }) }
 export function previewProgrammingImport(data) { return request({ url: '/business/programming/question/import/preview', method: 'post', data, timeout: 600000 }) }
 export function confirmProgrammingImport(confirmToken) { return request({ url: '/business/programming/question/import/confirm', method: 'post', data: { confirmToken }, timeout: 600000 }) }
 export function getStudentProgramming(lessonId, questionId) { return request({ url: `/business/student-home/programming/${lessonId}/${questionId}`, method: 'get' }) }

@@ -42,13 +42,13 @@
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { getCasePreviewInfo, getCasePreviewPage } from '@/api/business/textbookCase'
-import { getGuidePreviewInfo, getGuidePreviewPage, getGuideLessonPreviewInfo, getGuideLessonPreviewPage, getBookResourcePreviewInfo, getBookResourcePreviewPage } from '@/api/business/textbookResource'
+import { getGuidePreviewInfo, getGuidePreviewPage, getGuideLessonPreviewInfo, getGuideLessonPreviewPage, getBookResourcePreviewInfo, getBookResourcePreviewPage, getStandardPreviewInfo, getStandardPreviewPage } from '@/api/business/textbookResource'
 import { buildPreviewLayout, currentScrollPage, visiblePreviewPages } from '@/utils/casePreviewScroll'
 
 const props = defineProps({
-  resourceId: { type: Number, required: true },
+  resourceId: { type: [Number, String], required: true },
   title: String,
-  // case=课例资源，guide=整本指南 PDF，guideLesson=指南课件，book=册级教学设计汇编
+  // case=课例资源，guide=整本指南 PDF，guideLesson=指南课件，book=册级教学设计汇编，standard=课程标准
   source: { type: String, default: 'case' },
   // 同一汇编关闭再打开时由父层记住最后阅读页；不写入浏览器或服务器。
   initialPage: { type: Number, default: 1 }
@@ -57,7 +57,8 @@ const previewApi = computed(() => ({
   case: { info: getCasePreviewInfo, page: getCasePreviewPage },
   guide: { info: getGuidePreviewInfo, page: getGuidePreviewPage },
   guideLesson: { info: getGuideLessonPreviewInfo, page: getGuideLessonPreviewPage },
-  book: { info: getBookResourcePreviewInfo, page: getBookResourcePreviewPage }
+  book: { info: getBookResourcePreviewInfo, page: getBookResourcePreviewPage },
+  standard: { info: getStandardPreviewInfo, page: getStandardPreviewPage }
 }[props.source] || { info: getCasePreviewInfo, page: getCasePreviewPage }))
 const emit = defineEmits(['ready', 'pending', 'failed', 'page-change'])
 const initialPage = Math.max(1, Math.trunc(Number(props.initialPage) || 1))

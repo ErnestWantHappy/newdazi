@@ -1,8 +1,72 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 上下文版本 **v5.33**，更新日期 **2026-11-09**。130正式 **1.30.86**：前端为`releases/20261109_brand_logo_hold12_v1`（首页`be732a83`），后端保持`releases/20261109_choice_media_v1`（JAR `2b9c65e9`）。1.30.86保留桌面220px、手机128px和起始遮罩隐藏整页内容，只把Logo居中停留由约2秒缩短为约1.2秒，左移时内容仍逐渐出现。1.30.84标题统一、Logo点击透明大图，1.30.83课程设计页上下布局与教师工具样式，1.30.82选择题图片/Excel图文导入及更早修复继续保留。本机另有未发布Excel图片专用列v3，见下方专节。
+> 上下文版本 **v5.42**，更新日期 **2026-11-10**。130正式为 **1.30.92**：`releases/20261110_python_manual_confirm_v1`，JAR`a8162e41`、首页`d86ee446`，MainPID`3107625`、NRestarts0、启动错误0。Python批改改为教师确认制：系统判题分仅参考，教师可运行查看最高分提交并用五星/数字打分，正式成绩只在教师确认或批量采用后写入。已精准恢复老师反馈课程43条和验收教师课程74条系统0分误写记录。电子教材16册/1840页、高中3册539页、2份课程标准、327课例/1050资源保持；Git HEAD仍为本轮修改前，工作区尚未提交。
 
-## 已上线1.30.86：首页品牌停留节奏微调（2026-11-09）
+## 已上线1.30.92：Python批改教师确认制与运行查看（2026-11-10）
+
+- 教师反馈三类问题已定位：Python在线提交无运行查看、Python禁用五星、学生0/4用例时系统0分被自动写成正式成绩并显示“已判分”。本机已改为系统判题分仅参考：`biz_programming_submission`照常保存最高分判题事实，`biz_student_answer.score`保持NULL等待教师确认。
+- 教师操作路径：批改页选学生 → 查看最高分代码/用例结果 → 可点“运行查看”输入自定义数据 → 五星/数字打分或批量采用系统分；运行不写判题、成绩或任务状态。已评分后学生重交不悄悄替换被评分代码版本。
+- 涉及`TeacherGradingController`、`ProgrammingSubmissionService`、`BizStudentAnswerMapper.xml`、`teacherGrading.js`、`TeacherPythonSubmissionPreview`、`grading.vue`及专题/架构文档；无表结构变更。
+- 发布：整库备份`/data/backups/xueyeceping/20261110_124146_20261110_python_manual_confirm_v1/database.sql.gz`，53,410,495B，SHA-256`0178408250904a8d6aaab98f9bc576b754246042eec5b58283f3623754562cc3`；产品更新170/PUBLISHED。
+- 数据修复：老师反馈课程`990607/4506` 43条系统0分转待批，教师已给安欣妍80分未动；验收教师课程`662/4268` 74条系统0分转待批，70条既有非零成绩保持已批。
+- 验收：后端定向25项、前端批改页12项、生产构建通过；真实教师1440/390运行查看输出正确、0横向溢出、0页面脚本异常、0个5xx，更新170真实教师可见。证据`output/playwright/python-manual-confirm-1.30.92-20261110/`、`output/release-20261110-python-manual-confirm/remote-state.json`。
+- 未验边界：未做两名教师并发评分和学生并发重交的生产实测；其他历史课程仍存在的系统0分不自动回滚，后续按`sql/python_grading_manual_confirm_20261110.sql`逐课核对后处理。
+
+## 已上线1.30.91：课例配套材料包说明精简（2026-11-10）
+
+- 顾意丽《返回成语现场》资源`resource_id=2314`原“使用说明”为1045字，含压缩包大小、SHA-256、完整目录、内部程序和未上架清单，教师阅读负担过重。现改为91字：“本包为‘返回成语现场’课堂工具，含成语连环画创作与作品展示。解压后双击‘启动课堂工具.bat’，浏览器打开学生端；教师端地址见启动窗口，需联网使用AI出图。教学设计和课件见资源列表。”
+- 内容依据RAR实际结构：`app.py`、`templates/teacher.html`、`templates/screen.html`、`data/groups.json`、`static/generated`图片和`static/uploads`音频；教学设计、反思、说课稿和课件是同课例的其他独立资源，不在RAR内。
+- 同时修正`.agents/skills/research-to-textbook-cases/scripts/build_archive_summary.py`：教师说明只保留内容与操作，技术检查仍留在`archive-inspection.json`和manifest；说明上限180字，不再显示SHA-256、完整路径、内部程序清单。新增4项说明回归测试，教研导入脚本测试24项通过。
+- 发布为数据修正，不重启后端、不换前端、不改表结构。整库备份`/data/backups/xueyeceping/20261110_060850_20261110_case_summary_v1/database.sql.gz`，53,147,066B，SHA-256`4ff6cf0ed05e74c85c8a908a429df5e6aa0fbaf9a2e3658a7a3ab79d58928d4c`；仅更新资源2314与登记产品更新169/1.30.91/PUBLISHED。正式库327课例/1,050资源前后不变。
+- 验收：真实教师API和阅读器页面均返回91字说明，1440/390无横向溢出、0页面脚本异常、0个5xx；产品更新169真实教师可见。证据`output/playwright/case-summary-1.30.91-20261110/`、`output/release-20261110-case-summary/remote-state.json`。回退用`python scripts/deploy/update_case_summary_130.py --mode rollback --backup-dir <备份目录>`，将说明恢复为旧版并把169转DRAFT。
+
+## 已上线1.30.90：Python批量采用页面快照保护（2026-11-10）
+
+- 批改页“批量采用系统分”现在提交页面加载时的学生快照；后端逐人比对`answerId`、分数、答案内容、作品版本、系统提交ID和系统分。页面打开后学生重交或另一教师改分，该生跳过并计入`skippedCount`，不用旧快照覆盖新事实。
+- 快照保护叠加在1.30.88已有行锁与最高分提交复核之上；无快照的旧客户端仍保留后端行锁、退回检查和最高分校验，但新版前端可消除“页面列表过期”这一类并发窗口。
+- 发布：release `20261110_python_grading_snapshot_v1`，JAR `ec36df3f9118e5b711c6cb44e445b8d64bae303ccd495cf9df7b60bfb07fd440`，108,301,513B；首页`f66da562736e9c1faf6c920a9629f7c980ab2433856bf2f3eb073a7f52a084c0`；前端制品43,377,956B/SHA-256`c3c9c75b…`/820文件，合并旧静态后2,043文件；MainPID`3097248`、NRestarts0、首页/验证码200、启动错误0。
+- 整库备份`/data/backups/xueyeceping/20261110_000343_20261110_python_grading_snapshot_v1/database.sql.gz`，53,200,609B，SHA-256`2de6cf0240fbf731bc5626672cb59f3db09f20d5d8c0259f5f0d909f7b20d6cf`；产品更新168/PUBLISHED。
+- 验证：后端业务全量969项通过/0失败/3跳过；新增批量采用4项（含页面快照变更跳过）通过；前端生产构建与发布门禁通过。130真实教师1440/390只读验收：45人名单、代码与系统分40/40、判题时间正常，0横向溢出、0页面脚本异常、0个5xx；更新168真实教师可见。证据`output/playwright/python-grading-1.30.90-20261110/`与`output/release-20261110-python-grading-snapshot/remote-state.json`。
+- 未验边界：未在生产写测试成绩，未做两名教师真实并发改分、学生真实并发重交和整班Judge0压测；并发跳过由4项单元测试和线上只读链路覆盖，不能宣称已完成生产并发实测。
+
+## 已上线1.30.89：Python批改页窄屏适配（2026-11-09）
+
+- 真实验收发现手机390px仍把学生名单、代码预览和打分区压成三栏窄条；现已改为“学生名单 → 作品 → 打分区”纵向排列，筛选和期限信息整行显示，Python系统判题栏上下排列。桌面1440三栏不变。
+- 仅改`grading.vue`、`TeacherPythonSubmissionPreview/index.vue`和测试桩；后端、数据库结构、权限、成绩规则未变。前端`releases/20261109_grading_mobile_v1/frontend`，首页`db0e4c385b8172d5d7ab2b1f75223255bd04f1b188022150053053bd59214212`，制品43,441,015B/SHA-256`3e4c9d4e…`/820文件。
+- 整库备份`/data/backups/xueyeceping/20261109_234706_20261109_grading_mobile_v1/database.sql.gz`，53,200,867B，SHA-256`095b6398fb338bb8ea59d00b25fc2f89c6eedc38c61c6e3f2afcb8f3a47347e5`；产品更新167/PUBLISHED。
+- 130真实教师1440/390只读验收：45人名单、代码、系统分40/40、判题时间与按钮正常，0横向溢出、0页面脚本异常、0个5xx；历史课程已逾期，批量按钮按规则禁用，未点击、未写成绩。证据`output/playwright/python-grading-1.30.89-20261109/`。
+
+## 已上线1.30.88：Python批改稳定化与课例来源修复（2026-11-09）
+
+- 后端`releases/20261109_python_grading_fix_v1`，JAR`0cfb023c559ec7e4c6b5490b90405240ccd6aba8dee62e437b4edeccbbcd5c13`，108,299,981B；同release前端首页`27d47323c3216af7a45235a64000c1c55a8823d0d067c793293e00dd3bf623d7`；产品更新166/PUBLISHED。1.30.89只切前端，后端PID保持。
+- 最高分正式提交只接受`SUBMIT`、非空分数和已知终态白名单，排序`score DESC, judged_at DESC, submission_id DESC`；代码、判题时间、用时、内存和用例指标同源。无答题行但有正式提交时可预览、人工评分和批量补建。同分重交采用最新代码。
+- 批量采用在事务内加行锁、复核当前最高分提交与退回状态；档案缺失、系统分缺失或越界、满分配置NULL/负数时跳过并计数，不再整班回滚。页面列表快照比对在1.30.90补齐。新增`idx_programming_submission_best`，130 MySQL 8.0.46 `EXPLAIN`命中索引且`using_filesort=false`。
+- 课例来源为空/未知不再误显示“优秀课例”或开放评价；教研导入脚本增加路径穿越/软链接防护和SQL失败回退；高中教材脚本改为文件先就绪、数据库后提交并支持幂等重试。
+- 验证：后端业务全量968项通过/0失败/3跳过；Python定向3项、前端`gradingRefresh`12项、前端生产构建通过。130真实教师接口Python范围45人/40人有系统判题，最高分代码、分数和提交ID 40/40一致；启动错误0。备份`/data/backups/xueyeceping/20261109_232033_20261109_python_grading_fix_v1`，53,200,539B，SHA-256`f1f6d2609f4424df4468cf1849babd13774372db518b953d05d910d0ff5d51e9`。专题[需求](python-grading/requirements.md)、[设计](python-grading/design.md)、[任务](python-grading/tasks.md)、[验收](python-grading/release-1.30.88.md)、[ADR-020](../docs/architecture/ADR/ADR-020-python-grading-best-submission-source.md)。
+- 未验边界：未在生产真实成绩链触发无答题行补建；未做两名教师并发改分、学生并发重交和整班Judge0压力测试。上述路径由单元测试、本机数据路径和线上只读比对覆盖，不得宣称已生产并发实测。
+
+## 2026-11-09审查报告结论
+
+- `BUG-DOC-01`说1.30.87未上线是误判：发布前130已是1.30.87，只是Git HEAD停在1.30.86。`BUG-CH-01`所述“旧题fork时删图、状态仍RETAINED”未形成可复现证据；RETAINED长期未引用图仍按保守策略不自动清理，本轮未改。
+- Python批改的无答题行、同分代码错位、批量采用缺少锁与个案容错、页面列表过期覆盖新成绩、满分为空、最高分慢查询，教研来源空值，以及两个导入脚本的重入/解压安全问题均为真实缺陷，已按上述1.30.88/1.30.89/1.30.90修复并上线。
+
+## 此前1.30.87：高中教材与课程标准（2026-11-09）
+
+- 电子教材书架新增“高中”分组：必修1《数据与计算》193页、必修2《信息系统与社会》161页、选择性必修1《数据与数据结构》185页，共3册539页、15单元82目录条目；沿用逐页阅读、目录、整册/本课PDF下载、鉴权和ETag。高中阅读器目录使用“章 / 节 / 本章导入 / 本章巩固与项目挑战”。
+- 新增独立表`biz_textbook_standard`与“课程标准”资料区：义务教育信息科技课程标准（2022年版）74页、普通高中信息科技课程标准（2017年版2025年修订）64页；支持在线逐页预览与PDF下载，不伪装成教材课次。教师、教研员、管理员可用；学生查看/下载返回拒绝，匿名下载401。
+- 正式库由13册/1301页变为16册/1840页，高中`book_id=14/15/16`，重复页0；旧327课例/1050资源及`research-post-15/60/70` PUBLISHED保持不变。页图在`shared/textbook/xxkj-hs-*-2019`，课标在`shared/textbook/cases/standards`，封面`covers/14-16.jpg`；`shared/textbook/cases`仍指向`20261107_teaching_resources_v1/resources/cases`，不得删除或替换该链接。
+- 发布：后端JAR`cbd0042c56b217662229e570192a58e6f94afe5e6e551e344bda72db6d41f1b8`，108,296,532B；前端热修`20261109_high_school_overview_guard_v1`，首页`246b85165a8273239073759646b92e7bab8548197551faed9b1d025edb82a458`，820前端文件；后端/首页/验证码200，三服务active。整库备份`/data/backups/xueyeceping/20261109_203740_20261109_high_school_textbooks_v1/database.sql.gz`，53,167,168B，SHA-256`42ea3ea4b702d9850efa86ffc75afa875a74a1e54ca293ad0d3b09fc24263e99`；更新165/1.30.87/PUBLISHED。
+- 前端热修根因：平台总览接口在用户进入教材页后才返回，旧页面卸载后仍对空图表容器调用ECharts初始化。`RuoYi-Vue3/src/views/platform/overview/index.vue`现于卸载后丢弃迟到结果，并对图表容器做空值保护；仅切Nginx前端根，后端未重启、数据库未变。热修备份`/data/backups/xueyeceping/20261109_210407_20261109_high_school_overview_guard_v1/`。
+- 验收：正式API19项通过（16册、高中3册目录/页图、2份课标预览/下载、整册PDF44,409,670B、学生/匿名拒绝、教研课例未中断）；热修后真实教师浏览器连续两次完整复跑通过，1440/390/320无横向溢出、0个5xx、0页面脚本异常。证据`output/playwright/high-school-textbook-online-20261109/`。
+- 回退：若只需撤销总览页热修，将Nginx根切回`releases/20261109_high_school_textbooks_v1/frontend`并reload，不重启后端、不动数据库。若回退整轮高中功能，再恢复原整库备份中的`service.before`/`nginx.before`、daemon-reload并重启后端；或仅执行`UPDATE biz_textbook_book SET status='1' WHERE book_code LIKE 'xxkj-hs-%'; UPDATE biz_textbook_standard SET status='1';`并把更新165转DRAFT。新增表/页图/课标/封面均为增量，优先保留，不整库回灌、不递归删除共享教材目录。
+
+## 已上线（随当前版本保留）：教研活动课例导入（2026-11-09）
+
+- `biz_textbook_case`327课例/1,050资源，其中新增3节：post 15郑东旭《语音合成》（八下第2课）、post 60赵琪《返回成语现场》（四上第17课）、post 70顾意丽《返回成语现场》（四上第17课）；`source_key`分别为`research-post-15/60/70`，均为PUBLISHED，互不覆盖。8条同名旧课例保留。
+- 26个来源文件325,446,066B；深度检查ZIP/RAR，9个PDF预览、2份中文压缩包说明、17个去重上架资源。`.url`快捷方式、`.bat`、Python工具源码和缓存不单独上架，只在压缩包说明中指引教师本地查看；音频/图片提供安全下载或播放。
+- 前端显示完整来源教研活动、`RESEARCH_ACTIVITY`标签、ARCHIVE/RAR/7Z识别、音频控件和窄屏换行；后端返回来源字段并扩展安全音频MIME。增量DDL为`sql/research_to_textbook_cases_v1.sql`。详见[专题任务](research-to-textbook-cases/tasks.md)与[ADR-018](../docs/architecture/ADR/ADR-018-research-post-idempotent-case-import.md)。
+
+## 此前1.30.86：首页品牌停留节奏微调（2026-11-09）
 
 - 品牌Logo桌面`220px`、手机`128px`、全屏遮罩和移动渐显均保持；居中停留由约2秒缩短为约1.2秒。实现上把入场后的计时器由`2200ms`改为`1400ms`，因为淡入本身约占0.2秒。
 - 仅改`RuoYi-Vue3/src/components/BrandLogoLanding/index.vue`，不修改后端、数据库、权限或业务数据；实际登录首次进入才播放，刷新/站内跳转不重播，减少动态效果时跳过。
@@ -187,7 +251,7 @@
 
 | 能力 | 当前事实与边界 | 证据 |
 | --- | --- | --- |
-| 电子教材/阅读缩放 | 13册1301页；教师书架、学生绑定入口、目录/缩放/打印；正文鉴权+ETag+no-cache | [教材任务](textbook-module/tasks.md) |
+| 电子教材/课标 | 16册1840页（小学初中13册+高中3册539页）、2份课程标准；教师书架、高中分组、课标在线预览/下载、附件鉴权+ETag+no-cache | [教材任务](textbook-module/tasks.md)、[1.30.87验收](textbook-module/release-1.30.87.md) |
 | 机位助手0.2.6 | 默认C盘、迁移旧D盘配置；真实下载和53项回归已有证据，机房同传唯一性仍待验 | [发布日志](RELEASE_LOG.md)、[本机验证](seat-helper-local-20261014/verification.md) |
 | 导学单/诊断 | 1.30.60修模板预览执行、自动保存、满分分母；慢SQL拦截6参查询已修 | [导学单审查](guide-sheet-audit-20261027.md)、[诊断专题](diagnosis-perf-20261028/) |
 | 流程图AI标准答案 | 1.30.56～59已上线生成/排版/正交布线/判断分支左右端口；保留版本评分保护 | [专题](flowchart-ai-answer/tasks.md)、[发布日志](RELEASE_LOG.md) |
@@ -197,6 +261,11 @@
 
 ## 迁移、发布与回退
 
+- **1.30.91（2026-11-10，仅数据）**：不换前后端、不重启、不改表结构；仅更新资源2314说明并登记169/PUBLISHED。整库备份`/data/backups/xueyeceping/20261110_060850_20261110_case_summary_v1/database.sql.gz`，53,147,066B，SHA-256`4ff6cf0e…`。回退运行`python scripts/deploy/update_case_summary_130.py --mode rollback --backup-dir <备份目录>`，恢复旧说明并把169转DRAFT。详见[1.30.91验收](research-to-textbook-cases/release-1.30.91.md)。
+- **1.30.90（2026-11-10）**：前后端`20261110_python_grading_snapshot_v1`，仅执行`sql/platform_update_1_30_90_20261110.sql`登记168/PUBLISHED，无表结构变更。回退恢复备份`/data/backups/xueyeceping/20261110_000343_20261110_python_grading_snapshot_v1/service.before`和`nginx.before`，daemon-reload、重启后端、reload Nginx，更新168转DRAFT；不整库回灌。详见[1.30.90验收](python-grading/release-1.30.90.md)。
+- **1.30.89（2026-11-09，仅前端）**：Nginx根为`20261109_grading_mobile_v1/frontend`，后端仍`20261109_python_grading_fix_v1`；只执行产品更新`sql/platform_update_1_30_89_20261109.sql`登记167/PUBLISHED。回退恢复备份`/data/backups/xueyeceping/20261109_234706_20261109_grading_mobile_v1/nginx.before`并reload，更新167转DRAFT；不重启后端、不整库回灌。详见[1.30.89验收](python-grading/release-1.30.89.md)。
+- **1.30.88（2026-11-09）**：后端+前端`20261109_python_grading_fix_v1`，执行`sql/python_grading_stability_20261109.sql`新增最高分索引，登记更新166/PUBLISHED。回退恢复该备份`service.before`/`nginx.before`并重启后端、reload Nginx；新增索引和已补建正式答题行保留，不整库回灌。详见[1.30.88验收](python-grading/release-1.30.88.md)。
+- **1.30.87（2026-11-09）**：release`20261109_high_school_textbooks_v1`，基于`20261109_research_python_grading_v1`增量构建；执行`sql/high_school_textbooks_20261109.sql`新增`biz_textbook_standard`并导入高中3册539页/2份课标。整库备份`/data/backups/xueyeceping/20261109_203740_20261109_high_school_textbooks_v1`，`database.sql.gz`53,167,168B，SHA-256`42ea3ea4b702d9850efa86ffc75afa875a74a1e54ca293ad0d3b09fc24263e99`，含旧unit/site/env/JAR/index；产品更新`sql/platform_update_1_30_87_20261109.sql`登记165/PUBLISHED。回退见[1.30.87验收](textbook-module/release-1.30.87.md)，不整库回灌。
 - **1.30.72（2026-11-05）**：备份 `/data/backups/xueyeceping/20261105_review_py_workbench_v2` 整库 gzip SHA-256 `0350dfda788208a86aa6afb83c2c97248c2f59b7dc04bb38a9da39f03fb4e306`，含 unit/site/env/JAR/index/config 与 SHA256SUMS；首次尝试的 v1 备份（`7bc84a0c…`）与 release 目录保留。仅执行 `sql/review_workbench_release_20261105.sql` 登记更新 150。回退脚本 `output/release-20261105/rollback.py`。
 - 1.30.66备份 `/data/backups/xueyeceping/20261102_all_updates_v1`：整库52,104,859B，SHA-256 `118839d5…cad4ef`，含旧unit/site/env/config/JAR/index与SHA256SUMS。新release独立创建，旧release/备份保留。
 - 本轮无结构/业务SQL；仅执行幂等 `sql/all_updates_release_20261102.sql` 登记更新144/PUBLISHED，真实教师 `/business/platform-update/list` 可见。封面13张为新增派生资源，env29项未变。
@@ -217,6 +286,7 @@
 7. 学生打字拼音提示已随1.30.67发布；正式学生测试账号当前课无打字题，真实打字课的师生使用反馈、旧浏览器和窄屏体验仍待观察。
 8. **跨校教师仍缺课**：教师首页 `getTeacherDashboardData` 按 `loginUser.deptId` 单校取班级、自建课和共享课，跨校任课的第二个学校整块看不到；本机 5 名教师跨两校（139/169、133/166、167/181、120/183）。修这里要改班级分组口径和课程查询的学校范围，属权限边界变更，需单独立项确认后再动。
 9. 1.30.82图片功能待补：真实WPS/Excel多版本内嵌图、整班并发图片上传/读取、TEMP七天清理跨期、老旧浏览器和区域抽测含图题真实页面；磁盘容量告警仍需上线后观察。
+10. 1.30.87前端 `getAttribute` 空值脚本异常已定位并修复：平台总览接口迟到后，旧页面仍对空图表容器初始化 ECharts。修复已随 `20261109_high_school_overview_guard_v1` 前端热修平滑上线，连续两次浏览器复跑0异常；老旧机房浏览器仍待真实设备观察。
 
 ## 文档维护与追溯
 

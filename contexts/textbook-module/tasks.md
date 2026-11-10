@@ -1,6 +1,6 @@
 # 电子教材（教师端）任务与验证
 
-> 状态：**130正式1.30.66**；1.30.64已上线课程绑定/学生入口/PDF修复，1.30.66补封面缩略图并正式复验13册书架和PDF下载。下方旧未发布描述为历史阶段。
+> 状态：**130正式1.30.87**；高中3册539页和2份课程标准已上线，电子教材共16册1840页；1.30.64/1.30.66课程绑定、学生入口、PDF和封面继续有效。下方旧未发布描述为历史阶段。
 > 关联：[需求](requirements.md)、[设计](design.md)、[ADR-004](../../docs/architecture/ADR/ADR-004-textbook-page-images-outside-release.md)
 
 ## 1. 已完成
@@ -123,7 +123,7 @@ python scripts/textbook/smoke_teacher_textbook.py
 - [x] **130 已于 2026-10-29 发布 1.30.61**（release `20261029_textbook_seat_v1`）：整库备份、两份 SQL、1301 张图片（255,685,333B）上传并逐张校验、shared env 增 `TEXTBOOK_ROOT`、后端重启与前后端切换完成；教师/教研员 API 与学生 403 已验证，更新 139/PUBLISHED 且教师可见。证据见[发布日志](../RELEASE_LOG.md)。
 - [x] **2026-10-30 前端热更 1.30.62**（release `20261030_textbook_zoom_v1`）：默认适应整页、宽度/50%–200% 缩放与记忆、窄屏目录浮层；Nginx 平滑 reload，后端未重启，更新 140/PUBLISHED 且教师可见；回退恢复 `nginx.before` 即回 1.30.61。
 - [x] 教师/教研员菜单可见（菜单 26100 已授权 `admin/teacher/researcher`，线上教师端已显示「电子教材」）。
-- [x] 13 册已全部上架（三上～九年级），书架不再有灰卡；`TEXTBOOK_PENDING_VOLUMES` 机制保留，将来缺册时再加。
+- [x] 原13册（三上～九年级）与高中3册均已上架，当前16册1840页；`TEXTBOOK_PENDING_VOLUMES` 机制保留，将来缺册时再加。
 - [ ] `toc-review.md` 需用户抽查，重点九年级第 6 课与各单元导入页。
 - [x] 学生端入口：2026-10-30 本机已实现“当前课绑定教材才显示、直达该课”（见第 5 节）；学生书架、全文检索、整册下载仍不做。
 - [ ] 审计剩余 P3/边界项：书架封面不主动清缓存（A-4）、`/pages` 死代码与 ETag 强比较（A-6）、`no-cache` 回滚页 304 成本（A-8）；按需在发布后处理。
@@ -142,7 +142,7 @@ python scripts/textbook/smoke_teacher_textbook.py
 
 ## 5. 2026-10-30 课程教材绑定与学生端入口（本机，未发布）
 
-- [x] 数据：`biz_lesson` 增 `textbook_book_id` / `textbook_section_key` 两列可空，本机已执行 `sql/lesson_textbook_binding_v1.sql`，130 未执行。
+- [x] 数据：`biz_lesson` 增 `textbook_book_id` / `textbook_section_key` 两列可空，本机与130均已执行 `sql/lesson_textbook_binding_v1.sql`。
 - [x] 后端：保存时校验册已上架、年级/学期匹配、条目存在且为 `LESSON`；专用 update 支持显式清空；旧前端不提交 `textbookBindingTouched` 时不改写绑定。教师首页/详情返回两字段，学生 `current-lesson` 同步返回。
 - [x] 权限：`/toc`、`/pages`、`/page` 放行 `@studentSs.isStudent()`；`/books` 仍仅 `admin/teacher/researcher`，页图鉴权、ETag 与 `no-cache` 不变。
 - [x] 前端：设计器删除“第几课”显示并新增非必填单选；课程卡删除“第N课”标签、已绑定胶囊带 `?section=` 直达；学生顶部按钮仅在绑定时显示；阅读器支持 query 预选，并修正首屏页宽未落 DOM 导致的定位漂移。
@@ -180,3 +180,14 @@ python scripts/textbook/smoke_teacher_textbook.py
 - [x] 130发布前真实复现：绑定教材1的学生可读教材7、无绑定学生可读教材1；发布后两者均被拒，绑定教材1与教师教材1/7保持成功。
 - [x] 后端`TextbookStudentAccessServiceTest`5项、教材页响应6项及定向18项通过；浏览器学生首页/绑定教材页通过，0页面异常。
 - [ ] 未做：整班学生同时切换教材的压力测试、越权提示统一为HTTP 403的重构；当前返回业务码500，前端按业务失败提示。
+
+## 10. 2026-11-09 高中教材与课程标准（130正式1.30.87）
+
+- [x] 导入高中3册：必修1《数据与计算》193页、必修2《信息系统与社会》161页、选择性必修1《数据与数据结构》185页；正式ID 14/15/16，15单元/82目录条目/重复页0。
+- [x] 新增 `biz_textbook_standard` 与2份课标：义务教育2022版74页、普通高中2017版2025修订64页；独立“课程标准”分组，在线逐页预览+PDF下载，不伪造教材课次。
+- [x] 书架新增“高中”分组，高中阅读器使用“章/节/本章导入/本章巩固与项目挑战”；课程标准和高中教材仅 `admin/teacher/researcher`，学生/匿名拒绝。
+- [x] 正式库备份、DDL/种子、539页+2份课标资源哈希复核通过；旧327课例/1050资源和研究课例PUBLISHED未变。
+- [x] 正式API 19项、热修后真实教师浏览器连续两次完整复跑通过；1440/390/320无横向溢出、0个5xx、0页面脚本异常。
+- [x] 首次 `getAttribute` 空值异常已定位为平台总览页接口迟到竞态，增加卸载后的结果丢弃和图表容器空值保护；独立前端热修`20261109_high_school_overview_guard_v1`已平滑切换，后端未重启。
+- [x] 发布 `20261109_high_school_textbooks_v1`后端与`20261109_high_school_overview_guard_v1`前端，产品更新165/1.30.87/PUBLISHED；详情、哈希、证据与回退见[1.30.87验收](release-1.30.87.md)。
+- [ ] 未做：真实课堂长期使用观察；本轮只验证现代Chromium，未覆盖老旧机房浏览器。

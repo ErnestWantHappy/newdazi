@@ -143,17 +143,23 @@ const questionChartRef = ref(null)
 const examStatusChartRef = ref(null)
 const chartInstances = []
 const loading = ref(false)
+// 路由切换后接口仍可能返回，不能让已卸载页面再次初始化图表。
+let pageActive = false
 
 const metrics = computed(() => overview.value.metrics || [])
 const healthClass = computed(() => overview.value.systemHealth?.level === 'warning' ? 'is-warning' : 'is-stable')
 
 function loadData() {
+  if (!pageActive) return
   loading.value = true
   getPlatformOverview().then(res => {
+    if (!pageActive) return
     overview.value = res.data || {}
-    nextTick(renderCharts)
+    nextTick(() => {
+      if (pageActive) renderCharts()
+    })
   }).finally(() => {
-    loading.value = false
+    if (pageActive) loading.value = false
   })
 }
 
@@ -165,6 +171,7 @@ function renderCharts() {
 }
 
 function renderTrendChart() {
+  if (!trendChartRef.value) return
   const chart = echarts.init(trendChartRef.value)
   chartInstances.push(chart)
   const answers = overview.value.answerTrend || []
@@ -188,6 +195,7 @@ function renderTrendChart() {
 }
 
 function renderQuestionChart() {
+  if (!questionChartRef.value) return
   const chart = echarts.init(questionChartRef.value)
   chartInstances.push(chart)
   chart.setOption({
@@ -209,6 +217,7 @@ function renderQuestionChart() {
 }
 
 function renderExamStatusChart() {
+  if (!examStatusChartRef.value) return
   const chart = echarts.init(examStatusChartRef.value)
   chartInstances.push(chart)
   chart.setOption({
@@ -267,11 +276,13 @@ function formatGrade(grade) {
 }
 
 onMounted(() => {
+  pageActive = true
   loadData()
   window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
+  pageActive = false
   window.removeEventListener('resize', handleResize)
   disposeCharts()
 })

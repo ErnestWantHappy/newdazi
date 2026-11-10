@@ -21,18 +21,18 @@
           <el-option-group v-for="unit in units" :key="unit.unitNo" :label="unit.title">
             <el-option
               v-if="unit.intro"
-              :label="`单元导入 · ${unit.title}`"
+              :label="`${unitWord}导入 · ${unit.title}`"
               :value="unit.intro.sectionKey"
             />
             <el-option
               v-for="lesson in unit.lessons"
               :key="lesson.sectionKey"
-              :label="`第${lesson.lessonNo}课 ${lesson.title}`"
+              :label="`${lessonLabel(lesson)} ${lesson.title}`"
               :value="lesson.sectionKey"
             />
             <el-option
               v-if="unit.summary"
-              :label="`单元小结 · ${unit.title}`"
+              :label="`${unitWord}${Number(book.grade) > 9 ? '巩固与项目挑战' : '小结'} · ${unit.title}`"
               :value="unit.summary.sectionKey"
             />
           </el-option-group>
@@ -83,7 +83,7 @@
         <el-button v-if="!isStudentView && compilationError" size="small" text @click="loadBookCompilation">汇编加载失败，重试</el-button>
         <el-button size="small" type="primary" plain :disabled="!currentSection" @click="printSection">
           <el-icon><Printer /></el-icon>
-          <span>打印本课</span>
+          <span>打印{{ sectionWord }}</span>
         </el-button>
         <el-button
           v-if="!isStudentView"
@@ -92,10 +92,10 @@
           plain
           :disabled="!currentLessonSection"
           :loading="sectionPdfLoading"
-          title="保存本课 PDF"
+          :title="`保存${sectionWord} PDF`"
           @click="saveSectionPdf"
         >
-          <span>保存本课 PDF</span>
+          <span>保存{{ sectionWord }} PDF</span>
         </el-button>
         <el-button size="small" text class="toc-toggle" @click="tocVisible = !tocVisible">
           {{ tocVisible ? '收起目录' : '显示目录' }}
@@ -133,7 +133,7 @@
             :class="{ 'is-active': selectedKey === unit.intro.sectionKey }"
             @click="selectAndGo(unit.intro)"
           >
-            单元导入
+            {{ unitWord }}导入
           </div>
           <div
             v-for="lesson in unit.lessons"
@@ -142,9 +142,9 @@
             :class="{ 'is-active': selectedKey === lesson.sectionKey }"
             @click="selectAndGo(lesson)"
           >
-            <span class="toc-no">第{{ lesson.lessonNo }}课</span>
+            <span class="toc-no">{{ lessonLabel(lesson) }}</span>
             <span class="toc-text">{{ lesson.title }}</span>
-            <button v-if="!isStudentView && caseCounts[lesson.sectionKey]" class="case-badge" :aria-label="`第${lesson.lessonNo}课，查看${caseCounts[lesson.sectionKey]}份教学资源`" :title="`${caseCounts[lesson.sectionKey]}份教学资源`" @click.stop="openCases(lesson)"><el-icon><Collection /></el-icon> {{ caseCounts[lesson.sectionKey] }}</button>
+            <button v-if="!isStudentView && caseCounts[lesson.sectionKey]" class="case-badge" :aria-label="`${lessonLabel(lesson)}，查看${caseCounts[lesson.sectionKey]}份教学资源`" :title="`${caseCounts[lesson.sectionKey]}份教学资源`" @click.stop="openCases(lesson)"><el-icon><Collection /></el-icon> {{ caseCounts[lesson.sectionKey] }}</button>
           </div>
           <div
             v-if="unit.summary"
@@ -152,7 +152,7 @@
             :class="{ 'is-active': selectedKey === unit.summary.sectionKey }"
             @click="selectAndGo(unit.summary)"
           >
-            单元小结与反思
+            {{ unitWord }}{{ Number(book.grade) > 9 ? '巩固与项目挑战' : '小结与反思' }}
           </div>
         </div>
         <div v-if="appendixSection" class="toc-item is-muted" @click="goToPage(appendixSection.pdfStart)">
@@ -162,7 +162,7 @@
 
       <main ref="scrollEl" class="pages">
         <div v-if="!selectedKey" class="pick-hint">
-          请先在右上角「选择课次」；选定后可跳转页码、打印本课。
+          请先在右上角「选择{{ sectionWord }}」；选定后可跳转页码、打印{{ sectionWord }}。
         </div>
 
         <div class="pages-inner" :style="pageWidth ? { width: `${pageWidth}px` } : undefined">
@@ -188,7 +188,19 @@
           </div>
         </div>
       </main>
-      <CasePanel v-if="!isStudentView && casePanelVisible && caseCounts[selectedKey]" :key="`${bookId}/${selectedKey}`" :book-id="bookId" :section-key="selectedKey" @close="casePanelVisible = false" />
+      <template v-if="!isStudentView && casePanelVisible && caseCounts[selectedKey]">
+        <div
+          class="case-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整本课教学资源宽度"
+          tabindex="0"
+          title="拖拽调整宽度"
+          @pointerdown="startCaseResize"
+          @keydown="resizeCasePanelByKey"
+        ></div>
+        <CasePanel :key="`${bookId}/${selectedKey}`" :book-id="bookId" :section-key="selectedKey" :style="{ flexBasis: `${casePanelWidth}px`, width: `${casePanelWidth}px` }" @close="casePanelVisible = false" />
+      </template>
     </div>
 
     <CompilationPreview v-model="compilationVisible" :resource="bookCompilation" />
@@ -251,11 +263,61 @@ const selectedKey = ref('')
 const caseCounts = ref({})
 const caseSummaryError = ref(false)
 const casePanelVisible = ref(false)
+const casePanelWidth = ref(Number(localStorage.getItem('textbook-case-panel-width')) || 360)
 const bookCompilation = ref(null)
 const compilationVisible = ref(false)
 const compilationError = ref(false)
 let compilationSequence = 0
 let caseSummarySequence = 0
+let caseResizeStart = null
+
+const CASE_PANEL_MIN_WIDTH = 290
+const CASE_PANEL_MAX_WIDTH = 720
+
+casePanelWidth.value = Math.min(CASE_PANEL_MAX_WIDTH, Math.max(CASE_PANEL_MIN_WIDTH, Math.round(casePanelWidth.value)))
+
+function normalizeCaseWidth(width) {
+  return Math.min(CASE_PANEL_MAX_WIDTH, Math.max(CASE_PANEL_MIN_WIDTH, Math.round(width)))
+}
+
+function setCasePanelWidth(width) {
+  casePanelWidth.value = normalizeCaseWidth(width)
+  localStorage.setItem('textbook-case-panel-width', String(casePanelWidth.value))
+}
+
+function moveCaseResize(event) {
+  if (!caseResizeStart) return
+  event.preventDefault()
+  setCasePanelWidth(caseResizeStart.width + caseResizeStart.x - event.clientX)
+}
+
+function stopCaseResize() {
+  if (!caseResizeStart) return
+  caseResizeStart = null
+  document.body.classList.remove('is-resizing-case-panel')
+  window.removeEventListener('pointermove', moveCaseResize)
+  window.removeEventListener('pointerup', stopCaseResize)
+  window.removeEventListener('pointercancel', stopCaseResize)
+}
+
+function startCaseResize(event) {
+  if (event.button !== 0) return
+  caseResizeStart = { x: event.clientX, width: casePanelWidth.value }
+  document.body.classList.add('is-resizing-case-panel')
+  window.addEventListener('pointermove', moveCaseResize)
+  window.addEventListener('pointerup', stopCaseResize)
+  window.addEventListener('pointercancel', stopCaseResize)
+  event.preventDefault()
+}
+
+function resizeCasePanelByKey(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  if (event.key === 'ArrowLeft') setCasePanelWidth(casePanelWidth.value + 24)
+  else if (event.key === 'ArrowRight') setCasePanelWidth(casePanelWidth.value - 24)
+  else if (event.key === 'Home') setCasePanelWidth(CASE_PANEL_MIN_WIDTH)
+  else setCasePanelWidth(CASE_PANEL_MAX_WIDTH)
+}
 
 async function loadCaseSummary() {
   const ticket = ++caseSummarySequence
@@ -299,6 +361,8 @@ const jumpPage = ref(1)
 const currentPage = ref(1)
 
 const totalPages = computed(() => book.value?.totalPages || pages.value.length || 0)
+const sectionWord = computed(() => Number(book.value?.grade) > 9 ? '本节' : '本课')
+const unitWord = computed(() => Number(book.value?.grade) > 9 ? '本章' : '单元')
 
 // 阅读缩放：默认“适应整页”，避免打开时一屏只看到页面上半部分；教师的选择会记住。
 const ZOOM_LEVELS = [50, 60, 67, 75, 85, 100, 110, 125, 150, 175, 200]
@@ -416,9 +480,13 @@ function retryFailedPages() {
 
 function sectionLabel(section) {
   if (!section) return ''
-  if (section.kind === 'UNIT_INTRO') return '单元导入'
-  if (section.kind === 'SUMMARY') return '单元小结与反思'
-  return `第${section.lessonNo}课 ${section.title}`
+  if (section.kind === 'UNIT_INTRO') return `${unitWord.value}导入`
+  if (section.kind === 'SUMMARY') return unitWord.value + (Number(book.value?.grade) > 9 ? '巩固与项目挑战' : '小结与反思')
+  return `${lessonLabel(section)} ${section.title}`
+}
+
+function lessonLabel(section) {
+  return Number(book.value?.grade) > 9 ? `第${section.lessonNo}节` : `第${section.lessonNo}课`
 }
 
 function sectionRange(section) {
@@ -608,7 +676,7 @@ function escapeHtml(text) {
 async function printSection() {
   const section = currentSection.value
   if (!section) {
-    ElMessage.warning('请先选择要打印的课次')
+    ElMessage.warning(`请先选择要打印的${sectionWord.value}`)
     return
   }
   if (printing.value) return
@@ -698,6 +766,7 @@ onMounted(() => window.addEventListener('resize', refreshViewport))
 
 onBeforeUnmount(() => {
   window.clearTimeout(presetTimer)
+  stopCaseResize()
   pageObserver?.disconnect()
   pageObserver = null
   zoomObserver?.disconnect()
@@ -833,6 +902,10 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
 }
+
+.case-resizer { flex: 0 0 6px; width: 6px; cursor: col-resize; background: #e4e7ed; touch-action: none; }
+.case-resizer:hover, .case-resizer:focus-visible { background: #c6e2ff; outline: none; }
+body.is-resizing-case-panel, body.is-resizing-case-panel * { cursor: col-resize !important; user-select: none !important; }
 
 /* 窄屏目录改为浮层，展开时不再把正文挤成一条 */
 @media (max-width: 900px) {

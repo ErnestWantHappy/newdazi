@@ -1,5 +1,25 @@
 # 数据模型与迁移约定
 
+## 2026-11-10 Python 批改最高分提交、页面快照与教师确认制（130正式1.30.92）
+
+Python 课程成绩继续保留历史最高分，但判题事实统一取 `biz_programming_submission` 的正式 `SUBMIT`：`score IS NOT NULL`，`status_code` 只允许 `ACCEPTED/PARTIAL/WRONG_ANSWER/SYNTAX_ERROR/RUNTIME_ERROR/TIME_LIMIT/MEMORY_LIMIT`，按 `score DESC, judged_at DESC, submission_id DESC` 取一条。不得用 `NOT IN` 排除，否则 NULL 或未来未知状态会被误当最高分。
+
+`biz_student_answer` 仍是课程成绩、任务状态和人工评分的写入点，但教师预览代码优先读取最高分提交的 `source_code`。1.30.92 起为教师确认制：学生正式提交只同步待批阶段代码与时间，`score` 保持 NULL；教师评分后不再为学生重交悄悄替换被评分版本。系统分保存在判题记录中，批量采用或人工打分才写 `biz_student_answer.score`。该策略只用于 Python，打字仍沿用各自最高分规则，理论题仍锁定首次提交。
+
+无答题行但已有正式提交时，批改列表仍标记已提交；教师人工评分或批量采用可在事务内 `INSERT IGNORE` 补建答题行，再按 `(student_id, lesson_id, question_id)` 加锁读取。批量采用必须复核当前最高分提交、退回状态和任务状态；1.30.90 起前端额外提交页面学生快照，后端逐人比对 `answerId`、分数、答案、作品版本、系统提交 ID 和系统分。个案脏数据或过期快照跳过并计入 `skippedCount`，不抛异常导致整班回滚。
+
+新增索引：`KEY idx_programming_submission_best (student_id, lesson_id, question_id, submission_kind, score, judged_at, submission_id)`，脚本 `sql/python_grading_stability_20261109.sql`。130 MySQL 8.0.46 实测命中该索引、反向扫描且 `using_filesort=false`。索引仅增量添加，不重算历史成绩；回退后端可保留索引，已补建正式答题行不回删。[需求](../../contexts/python-grading/requirements.md)、[设计](../../contexts/python-grading/design.md)、[ADR-020](ADR/ADR-020-python-grading-best-submission-source.md)。
+
+## 2026-11-09 高中教材与课程标准（130正式1.30.87）
+
+高中3册沿用 `biz_textbook_book/unit/section/page` 四表，不新增教材结构表：`xxkj-hs-b1-2019`（必修1《数据与计算》，193页）、`xxkj-hs-b2-2019`（必修2《信息系统与社会》，161页）、`xxkj-hs-e1-2019`（选择性必修1《数据与数据结构》，185页），正式库ID为14/15/16，共539页、15单元、82目录条目、重复页0。年级用10–12表达高中学段，`TextbookCatalogService.stageOf` 推导 `senior`，不参与中小学课程绑定；页图存`TEXTBOOK_ROOT/xxkj-hs-*-2019`，封面`covers/14-16.jpg`。
+
+新增独立表 `biz_textbook_standard`，以 `standard_key` 唯一保存课程标准：`it-2022`（义务教育2022版，74页，15,793,942B）、`hs-it-2025`（普通高中2017版2025修订，64页，1,658,192B）。课程标准和教材课次分离，不伪造课次；资源在 `TEXTBOOK_ROOT/cases/standards`，通过教师侧鉴权接口预览/下载，学生拒绝。DDL与种子为 `sql/high_school_textbooks_20261109.sql`，幂等；正式库已执行，教材总数16册/1840页。历史13册1301页事实保留在各历史验收中，不再作为当前总数。
+
+## 教研活动课例来源字段（2026-11-09，130已执行）
+
+`biz_textbook_case`新增可空`research_topic_id BIGINT`、非空默认空串的`research_topic_title VARCHAR(255)`与可空`research_post_id BIGINT`，并在`research_post_id`上建立允许多个NULL的唯一索引。旧课例三列保持空值，`case_id`、`origin`、资源和评价不变。新来源`origin='RESEARCH_ACTIVITY'`，`source_key='research-post-<post_id>'`；资源仍按`case_id+resource_key`归属，文件按SHA-256前缀落在课例私有资源根，不进入`/profile`。活动标题保存导入时快照，避免未来改名破坏历史展示。正式库现有327课例/1,050资源，`research-post-15/60/70`均为PUBLISHED；DDL见`sql/research_to_textbook_cases_v1.sql`，执行前检查见`.agents/skills/research-to-textbook-cases/references/quality-gates.md`。
+
 ## 2026-11-09 选择题图片与图文导入（130正式1.30.82）
 
 `sql/choice_question_media_v1.sql`：`biz_question`、`biz_county_exam_paper_question`各增加nullable `media_json TEXT`，旧NULL不回填；独立四表为`biz_question_image`、`biz_question_save_receipt`、`biz_question_import_batch`、`biz_question_import_item`。媒体schemaVersion=1，stem最多3图、A—D各1图，引用数字imageId字符串；原文字、student_answer和A—D答案评分不变。
@@ -42,7 +62,7 @@ flowchart LR
 
 新增 4 张独立表，不改既有表：`biz_textbook_book`（册，`book_code` 唯一，`grade`+`semester`，`total_pages`/`page_offset`）、`biz_textbook_unit`（单元，`book_id+unit_no` 唯一）、`biz_textbook_section`（条目，`kind` 为 FRONT/UNIT_INTRO/LESSON/SUMMARY/APPENDIX，`section_key` 册内稳定，`lesson_no` 仅 LESSON）、`biz_textbook_page`（页，`book_id+page_no` 唯一，`image_path` 为教材根目录相对路径，`sha256` 作 ETag）。
 
-菜单 `menu_id=26100`（`path=textbook`，`component=business/textbook/index`）授权 `admin/teacher/researcher`。DDL 与种子均在 `sql/textbook_v1.sql`、`sql/textbook_seed_20261029.sql`，幂等；130 已执行 **13 册 / 50 单元 / 334 条目 / 1301 页**，每册页号 1..total_pages 连续、越界页由 `requirePage` 拒绝。不建课程↔教材绑定表，课次由教师手选。[设计](../../contexts/textbook-module/design.md)、[ADR-004](ADR/ADR-004-textbook-page-images-outside-release.md)。
+菜单 `menu_id=26100`（`path=textbook`，`component=business/textbook/index`）授权 `admin/teacher/researcher`。DDL 与种子均在 `sql/textbook_v1.sql`、`sql/textbook_seed_20261029.sql`，幂等；2026-11-09 由 `sql/high_school_textbooks_20261109.sql` 增量扩展，130现为 **16册 / 1840页**（13册/1301页 + 高中3册/539页）及 **2份课程标准**，每册页号 1..total_pages 连续、越界页由 `requirePage` 拒绝。课程标准独立表 `biz_textbook_standard`，不建教材册次伪条目；课程↔教材绑定仍用两列，课次由教师手选。[设计](../../contexts/textbook-module/design.md)、[1.30.87验收](../../contexts/textbook-module/release-1.30.87.md)、[ADR-004](ADR/ADR-004-textbook-page-images-outside-release.md)、[ADR-019](ADR/ADR-019-curriculum-standards-as-teaching-resources.md)。
 
 ## 2026-10-20文件自主重交（130正式1.30.53）
 
@@ -211,7 +231,7 @@ erDiagram
 - 一次学生导入中的 `sys_user`、`sys_user_role`、`biz_student` 和新增 `biz_teacher_class` 必须处于同一事务，按最多 200 条分批写入并核对影响行数；任何一段失败都必须回滚，禁止继续返回“部分成功”。允许在写库前排除格式错误、Excel 内重复和已有有效账号，并在结构化结果中分别计数。
 - 学生安全处理复用既有状态字段：`sys_user.status` 为 `0=正常、1=停用`，停用不改 `biz_student` 及历史成绩；只有经 `StudentBusinessRecordMapper` 确认无答题及其他业务记录的学生才允许硬删除。批量纠错以 `student_id` 定位并原地更新 `user_id` 对应账号和档案，禁止删除重建。
 - `biz_lesson.status` 为 `0=正常、1=已归档`，归档课程仍保留指派、答案和成绩，仅从日常课程查询中过滤；恢复通过课程状态接口完成。迁移脚本为 `sql/lesson_archive_status_v1.sql`，回滚脚本为 `sql/lesson_archive_status_v1_rollback.sql`。
-- `biz_lesson.textbook_book_id` / `textbook_section_key`（2026-10-30，本机已执行 `sql/lesson_textbook_binding_v1.sql`，130 未执行）保存本课对应的一个教材课次，均可空；`textbook_section_key` 对应 `biz_textbook_section.section_key`，服务端校验册上架、课程年级/学期匹配且 `kind='LESSON'`。不建独立绑定表；旧前端不提交 `textbookBindingTouched` 时不改写绑定，专用 update 才允许置空。
+- `biz_lesson.textbook_book_id` / `textbook_section_key`（2026-10-30，本机及130均已执行 `sql/lesson_textbook_binding_v1.sql`）保存本课对应的一个教材课次，均可空；`textbook_section_key` 对应 `biz_textbook_section.section_key`，服务端校验册上架、课程年级/学期匹配且 `kind='LESSON'`。不建独立绑定表；旧前端不提交 `textbookBindingTouched` 时不改写绑定，专用 update 才允许置空。
 
 ## 2026-09-03 多功能改造数据模型状态
 

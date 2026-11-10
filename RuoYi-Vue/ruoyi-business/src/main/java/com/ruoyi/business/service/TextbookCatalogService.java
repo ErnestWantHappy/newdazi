@@ -164,6 +164,10 @@ public class TextbookCatalogService
 
     private String stageOf(Integer grade)
     {
-        return grade == null || grade <= 6 ? "primary" : "junior";
+        if (grade == null || grade <= 6)
+        {
+            return "primary";
+        }
+        return grade <= 9 ? "junior" : "senior";
     }
 }

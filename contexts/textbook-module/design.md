@@ -1,5 +1,15 @@
 # 电子教材（教师端）设计
 
+## 2026-11-09 高中教材与课程标准（已发布1.30.87）
+
+高中教材复用既有 `biz_textbook_book/unit/section/page`，不新增结构表。`book_code` 使用 `xxkj-hs-b1-2019`、`xxkj-hs-b2-2019`、`xxkj-hs-e1-2019`；年级10–12只用于高中学段展示，`TextbookCatalogService.stageOf` 推导 `senior`，不参与中小学课程绑定。三册共539页、15单元、82目录条目，阅读器对高中使用“章/节/本章导入/本章巩固与项目挑战”文案，接口和页图鉴权沿用既有实现。
+
+课程标准新增 `biz_textbook_standard`：`standard_key` 唯一，保存 `title/audience/filename/original_path/preview_path/bytes/sha256/sort_no/status`。课标不是教材册次，不写 `biz_textbook_book/section`，避免生成假课次；文件放在 `TEXTBOOK_ROOT/cases/standards`，通过 `TeachingResourceController` 的教师侧接口读取。前端在书架单独显示“课程标准”分组，点击进入弹窗连续预览，下载走鉴权链接，学生不显示。
+
+课标接口：`GET /business/textbook/resources/standards`、`/standards/{key}/preview-info`、`/standards/{key}/pages/{pageNo}`、`/standards/{key}/download`；`admin/teacher/researcher` 可用，学生/匿名拒绝。预览页图按页渲染并做哈希缓存，文件名和原始PDF分开保存，禁止把课标放进 `/profile/`。
+
+正式库16册1840页（高中3册539页+原13册1301页），`book_id=14/15/16`，重复页0；旧课例327/资源1050不变。上线后浏览器验收定位到平台总览页的迟到接口会重新初始化已卸载图表容器，修复放在该页卸载保护而非教材模块：页面失效后丢弃结果，图表容器为空时不调用ECharts。发布证据见[1.30.87验收](release-1.30.87.md)。
+
 ## 2026-11-08 学生教材访问边界（已发布1.30.81）
 
 学生`toc/pages/cover/page`四接口统一经`TextbookStudentAccessService`校验：学生档案存在、当前班级有课程指派、课程学校与当前学校一致、URL`bookId`等于课程`textbook_book_id`；任一不满足即拒绝。教师、教研员、管理员保留整册阅读，书架、PDF和教学资源权限不变。该策略只读校验，不修改课程绑定或教材数据；越权提示沿用`ServiceException`业务码500约定。
@@ -35,9 +45,9 @@ MySQL：biz_textbook_book / unit / section / page
 | 关键字段 | 说明 |
 | --- | --- |
 | `book_id` | 主键 |
-| `book_code` | 唯一册编码，`xxkj-<grade>-<semester>-2026` |
+| `book_code` | 唯一册编码；小学/初中 `xxkj-<grade>-<semester>-2026`，高中 `xxkj-hs-b1-2019`/`b2`/`e1` |
 | `title` / `short_title` | 全称（信息科技 七年级上册）/ 短名（七上） |
-| `grade` / `semester` | 年级 1–9；学期 `0/1/9` |
+| `grade` / `semester` | 年级 1–12（10–12为高中展示）；学期 `0/1/9` |
 | `publisher` / `edition` | 出版社、版次年份 |
 | `total_pages` | PDF 总页数，用于页号校验 |
 | `page_offset` | 印刷页 = PDF 页 − 偏移（分段册取起点段） |
@@ -66,6 +76,10 @@ MySQL：biz_textbook_book / unit / section / page
 
 用户明确要求手动选课次，且平台课程标题不可靠。前端只在课程卡胶囊上按 `grade + semester` 解析册次，教材与平台课程没有数据库层关联。
 
+### 2.6 `biz_textbook_standard`（课程标准）
+
+课程标准独立于教材册次，避免把课标伪装成某册某课。`standard_key` 唯一，保存原PDF路径、预览路径、字节数、SHA-256、适用学段、排序和上下架状态；不参与课程绑定，不复用 `biz_textbook_page`。正式库两条记录为 `it-2022`（义务教育2022版）与 `hs-it-2025`（普通高中2017版2025修订）。
+
 ## 3. 后端
 
 ### 3.1 接口
@@ -76,6 +90,10 @@ MySQL：biz_textbook_book / unit / section / page
 | GET | `/business/textbook/books/{bookId}/toc` | 册 + 单元树 + 前置/附录 + 页元数据 |
 | GET | `/business/textbook/books/{bookId}/pages?from&to` | 页元数据闭区间，可省略 |
 | GET | `/business/textbook/page/{bookId}/{pageNo}` | 单页 JPEG，鉴权 + ETag + 304 |
+| GET | `/business/textbook/resources/standards` | 课程标准列表（教师侧） |
+| GET | `/business/textbook/resources/standards/{key}/preview-info` | 课标页数/预览信息 |
+| GET | `/business/textbook/resources/standards/{key}/pages/{pageNo}` | 课标页图 |
+| GET | `/business/textbook/resources/standards/{key}/download` | 课标原PDF下载 |
 
 统一 `@PreAuthorize("@ss.hasAnyRoles('admin,teacher,researcher')")`；无 token 由若依安全链返回 `code:401`，学生返回 `code:403`。
 
@@ -104,7 +122,7 @@ textbook:
 
 ### 4.1 书架 `views/business/textbook/index.vue`
 
-- 顶部标题 + 说明；按 `stage` 分「小学 / 初中」两块。
+- 顶部标题 + 说明；按 `stage` 分「小学 / 初中 / 高中」，课程标准另设独立分组。
 - 上架册显示封面（按 blob 取回）、短名、「N 单元 · N 课」。
 - 未上架册渲染灰卡「暂未上架」，点击提示后不跳转。
 
@@ -169,6 +187,7 @@ textbook:
 | `import_textbook.py` | 渲染 + 压缩 + 生成 manifest 与种子 SQL |
 | `verify_pack.py` | 校验页数/哈希/区间，`--rerender N` 抽样重渲染比对 |
 | `smoke_teacher_textbook.py` | 教师端 12 项 Playwright 冒烟 |
+| `high_school_20261109.py` / `apply_high_school_textbooks_20261109.py` | 高中3册与课标的本机导入/正式应用，附带页数、哈希和标准文件校验 |
 
 压缩参数：按页面原始宽度计算缩放系数，直接用 PyMuPDF 渲染成宽 1400px 的 JPEG，质量 75；**13 册 1301 页合计 243.8MB**（原 13 个 PDF 合计约 740MB，压缩后约为 1/3）。选 1400px 是因为在 1440 宽视口下整页显示已接近 1:1，再高只增加流量不增加可读性。
 

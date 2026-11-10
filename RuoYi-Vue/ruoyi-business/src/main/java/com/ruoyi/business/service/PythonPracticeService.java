@@ -36,6 +36,9 @@ import com.ruoyi.business.judge.Judge0Properties;
 import com.ruoyi.business.judge.Judge0Request;
 import com.ruoyi.business.judge.Judge0Result;
 import com.ruoyi.business.judge.Judge0StatusMapper;
+import com.ruoyi.business.judge.JudgeOutcome;
+import com.ruoyi.business.judge.JudgeOutput;
+import com.ruoyi.business.judge.JudgeSourceWrapper;
 import com.ruoyi.business.judge.OutputComparator;
 
 /** 独立 Python 刷题服务：不读取或写入课程答案和课程成绩。 */
@@ -588,42 +591,41 @@ public class PythonPracticeService {
                 cases = mapper.selectSnapshotCases(number(submission.get("snapshot_id")), "RUN".equals(submission.get("submit_type")));
             }
             if (cases.isEmpty()) throw new ServiceException("题目尚未配置测试点");
-            int passed = 0; String firstFailure = "";
+            int passed = 0; String firstFailure = ""; double totalWeight = 0D; double passedWeight = 0D;
             int order = 1;
             for (Map<String, Object> item : cases) {
                 String expectedOutput = customRun ? null : stringOrNull(item.get("expected_output"));
-                Judge0Request request = new Judge0Request(); request.setSourceCode(String.valueOf(submission.get("source_code"))); request.setStdin(stringOrNull(item.get("input_text"))); request.setExpectedOutput(expectedOutput);
+                String sourceCode = String.valueOf(submission.get("source_code"));
+                Judge0Request request = new Judge0Request(); request.setSourceCode(JudgeSourceWrapper.wrap(sourceCode)); request.setStdin(stringOrNull(item.get("input_text"))); request.setExpectedOutput(JudgeSourceWrapper.needsWrap(sourceCode) ? null : expectedOutput);
                 request.setCpuTimeLimit(decimal(item.get("time_limit_seconds"), 2D)); request.setMemoryLimitKb(intValue(item.get("memory_limit_kb"), 131072));
                 Judge0Result result = client().submit(request);
                 if (result == null || result.getToken() == null) throw new ServiceException("Judge0 未返回提交令牌");
                 for (int poll = 0; poll < Math.max(1, judgeProperties.getMaxPolls()); poll++) { Thread.sleep(Math.max(100, judgeProperties.getPollIntervalMs())); result = client().poll(result.getToken()); if (result != null && result.isFinished()) break; }
-                String status = customRun ? Judge0StatusMapper.toPlatformStatus(result) : caseStatus(result, expectedOutput);
+                String status = customRun ? JudgeOutcome.runStatus(result) : JudgeOutcome.caseStatus(result, expectedOutput);
                 if ("ACCEPTED".equals(status)) passed++; else if (firstFailure.isEmpty()) firstFailure = status;
+                // 权重必须参与算分，否则同一道题在题单和课程里分数不一致。
+                double weight = decimal(item.get("score_weight"), 1D);
+                totalWeight += weight;
+                if ("ACCEPTED".equals(status)) passedWeight += weight;
                 boolean publicCase = customRun || "1".equals(String.valueOf(item.get("is_public")));
                 Map<String, Object> caseRow = new HashMap<String, Object>();
                 caseRow.put("submissionId", submissionId); caseRow.put("snapshotCaseId", number(item.get("snapshot_case_id"))); caseRow.put("caseName", stringOrEmpty(item.get("case_name"))); caseRow.put("isPublic", publicCase ? "1" : "0"); caseRow.put("statusCode", status);
-                caseRow.put("judge0StatusId", result == null ? null : result.getStatusId()); caseRow.put("timeSeconds", result == null ? null : result.getTimeSeconds()); caseRow.put("memoryKb", result == null ? null : result.getMemoryKb()); caseRow.put("outputText", publicCase && result != null ? result.getStdout() : null); caseRow.put("errorSummary", publicCase ? judgeError(result) : statusMessage(status)); caseRow.put("orderNum", order++);
+                caseRow.put("judge0StatusId", result == null ? null : result.getStatusId()); caseRow.put("timeSeconds", result == null ? null : result.getTimeSeconds()); caseRow.put("memoryKb", result == null ? null : result.getMemoryKb()); caseRow.put("outputText", publicCase && result != null ? JudgeOutput.of(result.getStdout()).terminalText(stringOrNull(item.get("input_text"))) : null); caseRow.put("errorSummary", publicCase ? judgeError(result) : JudgeOutcome.statusMessage(status)); caseRow.put("orderNum", order++);
                 mapper.insertSubmissionCase(caseRow);
             }
             String status = passed == cases.size() ? "ACCEPTED" : (passed > 0 ? "PARTIAL" : (firstFailure.isEmpty() ? "SERVICE_ERROR" : firstFailure));
-            Map<String, Object> result = new HashMap<String, Object>(); result.put("submissionId", submissionId); result.put("statusCode", status); result.put("statusMessage", customRun && "ACCEPTED".equals(status) ? "运行完成" : statusMessage(status)); result.put("score", customRun ? null : Math.round(100F * passed / cases.size())); result.put("passedCaseCount", passed); result.put("totalCaseCount", cases.size()); result.put("judgeSummary", customRun ? "自定义输入运行" : passed + "/" + cases.size()); mapper.updateSubmissionResult(result);
+            int score = customRun ? 0 : JudgeOutcome.weightedScore(100D, passedWeight, totalWeight);
+            Map<String, Object> result = new HashMap<String, Object>(); result.put("submissionId", submissionId); result.put("statusCode", status); result.put("statusMessage", customRun && "ACCEPTED".equals(status) ? "运行完成" : JudgeOutcome.statusMessage(status)); result.put("score", customRun ? null : score); result.put("passedCaseCount", passed); result.put("totalCaseCount", cases.size()); result.put("judgeSummary", customRun ? "自定义输入运行" : passed + "/" + cases.size()); mapper.updateSubmissionResult(result);
             if ("SUBMIT".equalsIgnoreCase(String.valueOf(submission.get("submit_type")))) {
                 Map<String, Object> progress = new HashMap<String, Object>();
                 progress.put("studentId", submission.get("student_id")); progress.put("sourceType", submission.get("source_type")); progress.put("sourceId", submission.get("source_id")); progress.put("questionId", submission.get("question_id"));
-                progress.put("bestScore", Math.round(100F * passed / cases.size())); progress.put("passedFlag", passed == cases.size() ? "1" : "0");
+                progress.put("bestScore", score); progress.put("passedFlag", passed == cases.size() ? "1" : "0");
                 progress.put("firstPassTime", passed == cases.size() ? new Date() : null); mapper.upsertProgress(progress);
             }
         } catch (Exception ex) { Map<String, Object> result = new HashMap<String, Object>(); result.put("submissionId", submissionId); result.put("statusCode", "SERVICE_ERROR"); result.put("statusMessage", "判题服务异常，代码和提交已保留"); result.put("score", null); result.put("passedCaseCount", 0); result.put("totalCaseCount", 0); result.put("judgeSummary", "判题服务异常"); mapper.updateSubmissionResult(result); }
     }
 
     private Judge0Client client() { if ("mock".equalsIgnoreCase(judgeProperties.getMode())) return mockClient; if ("http".equalsIgnoreCase(judgeProperties.getMode())) return httpClient; throw new ServiceException("Judge0 判题服务未启用"); }
-    private static String caseStatus(Judge0Result result, String expectedOutput) {
-        String status = Judge0StatusMapper.toPlatformStatus(result);
-        if (("ACCEPTED".equals(status) || "WRONG_ANSWER".equals(status)) && result != null) {
-            return OutputComparator.matches(expectedOutput, result.getStdout()) ? "ACCEPTED" : "WRONG_ANSWER";
-        }
-        return status;
-    }
     private static int intValue(Object value, int fallback) { return value == null ? fallback : Integer.valueOf(String.valueOf(value)); }
     private static double decimal(Object value, double fallback) { return value == null ? fallback : Double.valueOf(String.valueOf(value)); }
     private static String stringOrNull(Object value) { return value == null ? null : String.valueOf(value); }

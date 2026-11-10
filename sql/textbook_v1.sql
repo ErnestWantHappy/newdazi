@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS `biz_textbook_book` (
   `book_code`     VARCHAR(32)  NOT NULL                COMMENT '册编码，如 xxkj-7-0-2026',
   `title`         VARCHAR(120) NOT NULL                COMMENT '书名全称',
   `short_title`   VARCHAR(40)  NOT NULL                COMMENT '短名，如 七上',
-  `grade`         TINYINT      NOT NULL                COMMENT '年级 1-9',
+  `grade`         TINYINT      NOT NULL                COMMENT '年级 1-12；10-12 仅用于高中学段展示',
   `semester`      CHAR(1)      NOT NULL DEFAULT '0'    COMMENT '学期：0上册 1下册 9全一册',
   `publisher`     VARCHAR(80)  DEFAULT NULL            COMMENT '出版社',
   `edition`       VARCHAR(20)  DEFAULT NULL            COMMENT '版次年份',

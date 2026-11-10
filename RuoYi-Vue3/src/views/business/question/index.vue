@@ -446,8 +446,23 @@
 
           <div v-show="pythonStep === 2" class="python-step-panel">
             <el-alert :type="validationAlertType" :title="validationStatusText" :closable="false" class="validation-alert" />
+            <!-- 验证失败时把每个测试点的输入、期望、实际和原因直接摆出来，老师不用猜 -->
+            <el-table v-if="validationFailures.length" :data="validationFailures" border size="small" class="validation-diff">
+              <el-table-column label="测试点" prop="caseName" width="130" />
+              <el-table-column label="程序输入"><template #default="{ row }"><pre>{{ row.inputText || '（无输入）' }}</pre></template></el-table-column>
+              <el-table-column label="你填的期望输出"><template #default="{ row }"><pre>{{ row.expectedOutput || '（空）' }}</pre></template></el-table-column>
+              <el-table-column label="程序实际输出"><template #default="{ row }"><pre>{{ row.actualOutput || '（空）' }}</pre></template></el-table-column>
+              <el-table-column label="原因" min-width="220"><template #default="{ row }"><span class="diff-hint">{{ row.hint || row.errorSummary || '输出和期望不一致' }}</span></template></el-table-column>
+            </el-table>
+            <el-collapse v-if="validationFailures.length" class="validation-more">
+              <el-collapse-item title="按参考代码重新生成期望输出" name="generate">
+                <p class="generate-note">系统会用参考代码跑一遍每个测试点，把结果填进“期望输出”。只改本页内容，保存后才生效。</p>
+                <el-button type="primary" plain :loading="generatingOutputs" @click="generateExpectedOutputs">用参考代码生成输出</el-button>
+              </el-collapse-item>
+            </el-collapse>
             <el-form-item label="起始代码"><el-input v-model="form.programming.starterCode" type="textarea" :rows="5" placeholder="可留空；如填写，只给出必要结构，不泄露解法" /></el-form-item>
             <el-form-item label="参考代码" prop="answer" required><el-input v-model="form.answer" type="textarea" :rows="10" placeholder="仅教师可见。保存后系统会用这份代码跑完全部测试点。" /></el-form-item>
+            <p class="answer-tip">可以放心写 input("提示文字")，系统会识别提示语，不会因此判错。</p>
             <el-collapse>
               <el-collapse-item title="高级资源限制（通常无需修改）" name="limits">
                 <el-row :gutter="12"><el-col :span="8"><el-form-item label="时限（秒）"><el-input-number v-model="form.programming.timeLimitSeconds" :min="0.1" :max="10" :step="0.1" /></el-form-item></el-col><el-col :span="8"><el-form-item label="内存（KB）"><el-input-number v-model="form.programming.memoryLimitKb" :min="16384" :max="524288" :step="1024" /></el-form-item></el-col><el-col :span="8"><el-form-item label="输出（KB）"><el-input-number v-model="form.programming.maxOutputKb" :min="1" :max="1024" /></el-form-item></el-col></el-row>
@@ -707,7 +722,7 @@ import {
   addQuestion,
   updateQuestion,
 } from "@/api/business/question";
-import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQuestion, previewProgrammingImport, confirmProgrammingImport } from "@/api/business/programming";
+import { getProgrammingQuestion, saveProgrammingQuestion, validateProgrammingQuestion, previewProgrammingImport, confirmProgrammingImport, generateProgrammingOutputs } from "@/api/business/programming";
 import { getFlowchartQuestion, saveFlowchartQuestion } from "@/api/business/flowchart";
 import FlowchartQuestionDesigner from "@/components/FlowchartEditor/FlowchartQuestionDesigner.vue";
 import FlowchartQuestionPreviewDialog from "@/components/FlowchartEditor/FlowchartQuestionPreviewDialog.vue";
@@ -1456,6 +1471,43 @@ function distributeProgrammingWeights() {
 }
 
 const validationAlertType = computed(() => form.value.programming?.validationStatus === "VALID" ? "success" : form.value.programming?.validationStatus === "INVALID" ? "error" : "warning");
+const validationCases = ref([]);
+const generatingOutputs = ref(false);
+// 只展示未通过的测试点，通过的不占版面
+const validationFailures = computed(() => (validationCases.value || []).filter(item => item.statusCode !== "ACCEPTED"));
+
+/**
+ * 用参考代码跑出真实输出并回填。
+ * 只改本页表单，教师还需点保存；这样不会静默覆盖已人工核对的期望输出。
+ */
+async function generateExpectedOutputs() {
+  const questionId = form.value.questionId || createdQuestionId.value;
+  if (!questionId) return ElMessage.warning("请先保存题目，再生成期望输出");
+  if (!String(form.value.answer || "").trim()) return ElMessage.warning("请先填写参考代码");
+  generatingOutputs.value = true;
+  try {
+    const result = (await generateProgrammingOutputs(questionId)).data || {};
+    const rows = result.cases || [];
+    const byId = new Map(rows.map(item => [String(item.testCaseId), item]));
+    let filled = 0;
+    for (const testCase of form.value.programming?.testCases || []) {
+      const matched = byId.get(String(testCase.testCaseId));
+      if (matched && matched.statusCode === "ACCEPTED") {
+        testCase.expectedOutput = matched.expectedOutput ?? "";
+        filled++;
+      }
+    }
+    if (filled) {
+      ElMessage.success(`已按参考代码填写 ${filled} 个测试点的期望输出，请核对后保存`);
+    } else {
+      ElMessage.error("参考代码未能正常运行，请先检查代码或测试点输入");
+    }
+  } catch (error) {
+    ElMessage.error(error?.msg || error?.message || "生成期望输出失败，请稍后重试");
+  } finally {
+    generatingOutputs.value = false;
+  }
+}
 const validationStatusText = computed(() => {
   const status = form.value.programming?.validationStatus;
   if (status === "VALID") return "验证通过：参考代码已通过全部测试点，可以加入课程或刷题题单。";
@@ -1826,11 +1878,12 @@ function submitForm(validateAfterSave = false) {
           if (validateAfterSave) {
             const validation = await validateProgrammingQuestion(questionId);
             form.value.programming.validationStatus = validation.data?.validationStatus || "INVALID";
+            validationCases.value = validation.data?.cases || [];
             const passed = validation.data?.passedCount || 0;
             const totalCases = validation.data?.totalCount || 0;
             if (!validation.data?.valid) {
               pythonStep.value = 2;
-              ElMessage.error(`未通过验证：${passed}/${totalCases} 个测试点通过，题目已保存为草稿`);
+              ElMessage.error(`未通过验证：${passed}/${totalCases} 个测试点通过，题目已保存为草稿；第 3 步已列出具体差异`);
               // 题目本身已写入，列表与计数必须刷新，否则教师会以为没有保存。
               afterQuestionSaved(questionType, practicalMode);
               open.value = true;

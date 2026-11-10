@@ -60,6 +60,18 @@ public class ProgrammingQuestionController extends BaseController {
             questionId, userId, SecurityUtils.isAdmin(userId), SecurityUtils.getUsername()));
     }
 
+    /**
+     * 用参考代码跑一遍各测试点，返回程序真实输出，供教师一键回填期望输出。
+     * 只计算不落库，教师确认后仍走正常保存，避免自动覆盖已人工核对过的答案。
+     */
+    @PreAuthorize("@ss.hasPermi('business:question:edit')")
+    @PostMapping("/{questionId}/generate-outputs")
+    public AjaxResult generateOutputs(@PathVariable Long questionId) {
+        Long userId = SecurityUtils.getUserId();
+        return success(programmingSubmissionService.generateExpectedOutputs(
+            questionId, userId, SecurityUtils.isAdmin(userId)));
+    }
+
     @PreAuthorize("@ss.hasPermi('business:question:import')")
     @PostMapping("/import/preview")
     public AjaxResult previewImport(@RequestBody PythonQuestionImportRequest request) {

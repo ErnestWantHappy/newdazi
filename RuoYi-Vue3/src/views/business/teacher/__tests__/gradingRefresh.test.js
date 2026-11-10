@@ -33,7 +33,8 @@ function setup() {
             ctx.refreshSelectedAttachmentPreview();
         },
         ElMessage: Object.fromEntries(['error', 'warning', 'success', 'info'].map(k => [k, m => messages.push(m)])),
-        questions: ref([{ questionId: 1 }]), isFullscreen: ref(false), autoFocusItem() {}
+        questions: ref([{ questionId: 1 }]), isFullscreen: ref(false), autoFocusItem() {},
+        isCurrentPython: ref(false)
     };
     vm.createContext(ctx);
     vm.runInContext(extract('function loadSubmissions(options = {})', 'const gradedCount'), ctx);

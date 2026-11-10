@@ -8,6 +8,14 @@ import org.apache.ibatis.annotations.Select;
 /** 册级教学设计汇编与课程指南只读查询；发布由离线导入完成。 */
 public interface TeachingResourceMapper
 {
+    @Select("SELECT standard_id AS standardId,standard_key AS standardKey,title,audience,filename,bytes "
+        + "FROM biz_textbook_standard WHERE status='0' ORDER BY sort_no,standard_id")
+    List<Map<String, Object>> standards();
+
+    @Select("SELECT title,filename,original_path AS originalPath,preview_path AS previewPath "
+        + "FROM biz_textbook_standard WHERE standard_key=#{key} AND status='0'")
+    Map<String, Object> standardFile(@Param("key") String key);
+
     @Select("SELECT r.id,r.category,r.title,r.filename,r.bytes,r.description,r.requirements,"
         + "CASE WHEN r.preview_path IS NULL OR r.preview_path='' THEN 0 ELSE 1 END AS previewable "
         + "FROM biz_textbook_book_resource r JOIN biz_textbook_book b ON b.book_id=r.book_id AND b.status='0' "

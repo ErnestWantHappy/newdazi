@@ -25,6 +25,8 @@ public interface ProgrammingJudgeMapper {
     int upsertDraft(ProgrammingDraft draft);
     ProgrammingSubmission selectSubmissionByKey(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId, @Param("questionId") Long questionId, @Param("submissionKey") String submissionKey);
     ProgrammingSubmission selectSubmissionById(@Param("submissionId") Long submissionId);
+    /** 查询学生本题最高分的有效正式提交，供批改页与系统分采用保持同一版本。 */
+    ProgrammingSubmission selectBestFinalSubmission(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId, @Param("questionId") Long questionId);
     List<ProgrammingSubmission> selectStudentSubmissions(@Param("studentId") Long studentId, @Param("lessonId") Long lessonId, @Param("questionId") Long questionId, @Param("limit") int limit);
     int insertSubmission(ProgrammingSubmission submission);
     int markJudging(@Param("submissionId") Long submissionId, @Param("judgingAt") Date judgingAt);

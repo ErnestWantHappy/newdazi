@@ -13,7 +13,7 @@ class ProgrammingSubmissionCompletionTest {
     @Test void advancedClassCompletesWithoutWritingOldAnswer() { complete(2L, true, false); }
     @Test void removedAssignmentCompletesWithoutWritingOldAnswer() { complete(null, true, false); }
     @Test void removedStudentCompletesWithoutWritingOldAnswer() { complete(null, false, false); }
-    @Test void currentClassStillWritesAnswer() { complete(1L, true, true); }
+    @Test void currentClassWritesAnswerWithoutSystemScore() { complete(1L, true, true); }
 
     private void complete(Long currentLesson, boolean studentExists, boolean writesAnswer) {
         ProgrammingSubmissionService service = new ProgrammingSubmissionService();
@@ -49,6 +49,13 @@ class ProgrammingSubmissionCompletionTest {
         verify(mapper).updateSubmissionResult(submission);
         assertEquals("ACCEPTED", submission.getStatusCode());
         assertNotNull(submission.getJudgedAt());
-        verify(answers, times(writesAnswer ? 1 : 0)).upsertAnswer(any());
+        // Python 判题只同步代码，系统分不能代替教师确认正式成绩。
+        verify(answers, times(writesAnswer ? 1 : 0)).upsertProgrammingAnswer(any());
+        if (writesAnswer) {
+            org.mockito.ArgumentCaptor<BizStudentAnswer> captor =
+                    org.mockito.ArgumentCaptor.forClass(BizStudentAnswer.class);
+            verify(answers).upsertProgrammingAnswer(captor.capture());
+            assertNull(captor.getValue().getScore());
+        }
     }
 }

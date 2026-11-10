@@ -15,7 +15,9 @@ public interface TextbookCaseMapper
         + " GROUP BY c.book_id,c.section_key")
     List<Map<String, Object>> summary();
 
-    @Select("SELECT c.case_id AS caseId,c.title,c.author,c.school,c.origin" + PUBLISHED
+    @Select("SELECT c.case_id AS caseId,c.title,c.author,c.school,c.origin,"
+        + "c.research_topic_id AS researchTopicId,c.research_topic_title AS researchTopicTitle,"
+        + "c.research_post_id AS researchPostId" + PUBLISHED
         + " AND c.book_id=#{bookId} AND c.section_key=#{sectionKey} ORDER BY c.sort_no,c.case_id")
     List<Map<String, Object>> cases(@Param("bookId") Long bookId, @Param("sectionKey") String sectionKey);
 

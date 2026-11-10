@@ -7,7 +7,19 @@
     <el-empty v-else-if="!cases.length" description="本课暂无已发布教学资源" :image-size="50" />
     <el-collapse v-else v-model="expanded" class="case-list">
       <el-collapse-item v-for="item in cases" :key="item.caseId" :name="item.caseId">
-        <template #title><div class="case-heading"><div><strong>{{ caseTitle(item) }}</strong><el-tag size="small" :type="isLegacy(item) ? 'success' : 'info'" effect="plain">{{ originLabel(item) }}</el-tag><div v-if="item.school || item.author" class="muted">{{ [item.school, item.author].filter(Boolean).join(' · ') }}</div></div><CaseVotes v-if="isLegacy(item)" :item="item" :can-vote="canVote" :busy="voting !== null" @vote="vote" /></div></template>
+        <template #title>
+          <div class="case-heading">
+            <div class="case-heading-main">
+              <div class="case-title-row">
+                <strong>{{ caseTitle(item) }}</strong>
+                <el-tag size="small" :type="isLegacy(item) ? 'success' : 'info'" effect="plain">{{ originLabel(item) }}</el-tag>
+              </div>
+              <div v-if="item.school || item.author" class="muted">{{ [item.author, item.school].filter(Boolean).join(' · ') }}</div>
+              <div v-if="item.researchTopicTitle" class="muted research-topic" :title="item.researchTopicTitle">来源教研活动：{{ item.researchTopicTitle }}</div>
+            </div>
+            <CaseVotes v-if="isLegacy(item)" :item="item" :can-vote="canVote" :busy="voting !== null" @vote="vote" />
+          </div>
+        </template>
         <p v-if="voteHints[item.caseId]" role="status" class="vote-hint">{{ voteHints[item.caseId] }}</p>
         <section v-for="resource in item.resources" :key="resource.resourceId" class="resource">
           <strong v-if="resource.title !== item.title">{{ resource.title }}</strong>
@@ -17,6 +29,7 @@
             <p>{{ resource.requirements }}</p>
           </details>
           <el-button v-if="Number(resource.previewable)" size="small" type="primary" plain @click="preview(resource)">预览</el-button>
+          <el-button v-else-if="isPlayableMedia(resource)" size="small" type="primary" plain @click="preview(resource)">播放</el-button>
           <el-button v-if="Number(resource.htmlPreview)" size="small" type="success" plain @click="openHtml(resource)">打开网页</el-button>
           <el-button size="small" :loading="downloading === resource.resourceId" :disabled="downloading !== null" @click="download(resource)">{{ downloadLabel(resource) }}</el-button>
           <el-button v-if="resource.extraFilename" size="small" :loading="downloading === `extra-${resource.resourceId}`" :disabled="downloading !== null" @click="downloadExtra(resource)">下载 {{ resource.extraFilename.split('.').pop().toUpperCase() }} 版</el-button>
@@ -38,10 +51,11 @@
         <div v-if="previewMediaType" class="media-preview">
           <p v-if="mediaError" role="alert">预览加载失败，可以关闭后重新预览或下载原件。</p>
           <!-- 超大视频在线解码会拖慢甚至让页面崩溃，改为提示下载后本地播放。 -->
-          <p v-else-if="previewMediaType === 'video' && Number(previewResource.bytes) > LARGE_MEDIA_LIMIT" class="muted">
-            该视频约 {{ formatBytes(previewResource.bytes) }}，浏览器在线播放容易卡顿或失败，建议下载后用本地播放器观看。
+          <p v-else-if="(previewMediaType === 'video' || previewMediaType === 'audio') && Number(previewResource.bytes) > LARGE_MEDIA_LIMIT" class="muted">
+            该媒体约 {{ formatBytes(previewResource.bytes) }}，在线播放容易卡顿或失败，建议下载后用本地播放器观看。
           </p>
           <video v-else-if="previewMediaType === 'video'" :key="previewResource.resourceId" :src="caseMediaUrl(previewResource.resourceId)" controls preload="metadata" @loadeddata="markPreviewReady" @error="mediaError = true" />
+          <audio v-else-if="previewMediaType === 'audio'" :key="previewResource.resourceId" :src="caseMediaUrl(previewResource.resourceId)" controls preload="metadata" @loadeddata="markPreviewReady" @error="mediaError = true" />
           <img v-else :key="previewResource.resourceId" :src="caseMediaUrl(previewResource.resourceId)" :alt="previewTitle" @load="markPreviewReady" @error="mediaError = true" />
         </div>
         <CasePreview v-else :key="previewResource.resourceId" :resource-id="Number(previewResource.resourceId)" :title="previewTitle" @ready="markPreviewReady" @pending="markPreviewPending" @failed="markPreviewPending" />
@@ -100,12 +114,14 @@ const LARGE_MEDIA_LIMIT = 100 * 1024 * 1024
 const previewMediaType = computed(() => {
   const extension = previewResource.value?.filename.split('.').pop().toLowerCase()
   if (['mp4', 'webm'].includes(extension)) return 'video'
+  if (['mp3', 'wav', 'm4a', 'ogg'].includes(extension)) return 'audio'
   if (['jpg', 'jpeg', 'png', 'webp'].includes(extension)) return 'image'
   return ''
 })
 const previewTools = computed(() => {
   const owner = cases.value.find(item => item.resources.some(resource => resource.resourceId === previewResource.value?.resourceId))
-  return (owner?.resources || []).filter(resource => !Number(resource.previewable) && /\.zip$/i.test(resource.filename))
+  return (owner?.resources || []).filter(resource => !Number(resource.previewable)
+    && (resource.category === 'ARCHIVE' || /\.(?:zip|rar|7z|tar|tgz|tar\.gz)$/i.test(resource.filename)))
 })
 const previewSiblings = computed(() => {
   const owner = cases.value.find(item => item.resources.some(resource => resource.resourceId === previewResource.value?.resourceId))
@@ -159,11 +175,20 @@ function openHtml(resource) {
 }
 
 function isLegacy(item) {
-  return !item.origin || item.origin === 'LEGACY'
+  // 来源缺失是历史脏数据，不能等同于获得过评价的 LEGACY 课例。
+  return item?.origin === 'LEGACY'
+}
+
+function isPlayableMedia(resource) {
+  const extension = resource.filename?.split('.').pop().toLowerCase()
+  return ['mp3', 'wav', 'm4a', 'ogg', 'mp4', 'webm', 'jpg', 'jpeg', 'png', 'webp'].includes(extension)
 }
 
 function originLabel(item) {
-  return isLegacy(item) ? '优秀课例' : item.origin === 'NINGBO2023' ? '宁波版 2023 参考' : '宁波版 2026'
+  return isLegacy(item) ? '优秀课例'
+    : item.origin === 'RESEARCH_ACTIVITY' ? '教研活动课例'
+      : item.origin === 'NINGBO2023' ? '宁波版 2023 参考'
+        : item.origin === 'NINGBO2026' ? '宁波版 2026' : '来源未标注'
 }
 
 function caseTitle(item) {
@@ -175,7 +200,7 @@ function downloadExtra(resource) {
 }
 
 function downloadLabel(resource) {
-  if (/\.zip$/i.test(resource.filename) || resource.category === 'TOOL') return '下载配套材料包'
+  if (resource.category === 'ARCHIVE' || /\.(?:zip|rar|7z|tar|tgz|tar\.gz)$/i.test(resource.filename) || resource.category === 'TOOL') return '下载配套材料包'
   return `下载${categoryNames[resource.category] || resource.title}`
 }
 
@@ -331,9 +356,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.case-panel { width: clamp(290px, 25vw, 380px); flex: 0 0 clamp(290px, 25vw, 380px); min-height: 0; min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; background: white; padding: 12px; border-left: 1px solid #e4e7ed; z-index: 12; }
+.case-panel { flex: 0 0 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; background: white; padding: 12px; z-index: 12; }
 .case-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .case-heading { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-right: 6px; }
+.case-heading-main { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.case-title-row { width: 100%; display: flex; align-items: flex-start; justify-content: flex-start; gap: 6px; min-width: 0; }
+.case-title-row strong { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.case-title-row :deep(.el-tag) { flex: none; margin-left: 0; }
+.research-topic { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vote-hint { font-size: 12px; color: #606266; margin: 6px 0; }
 header { display: flex; justify-content: space-between; align-items: center; }
 .download-hint { margin: 6px 0 0; padding: 6px 8px; border-radius: 4px; background: #f0f9eb; color: #529b2e; font-size: 12px; line-height: 1.5; }
@@ -351,6 +381,7 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .preview-layout { display: flex; gap: 16px; flex: 1; min-height: 0; min-width: 0; position: relative; }
 .media-preview { flex: 1; min-width: 0; min-height: 0; overflow: auto; display: grid; place-items: center; background: #eef1f5; }
 .media-preview video, .media-preview img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; margin: auto; }
+.media-preview audio { width: min(100%, 640px); margin: auto; }
 .preview-tools { width: 280px; flex-shrink: 0; min-height: 0; overflow-y: auto; background: white; padding: 0 10px; box-sizing: border-box; }
 .tools-heading { display: flex; align-items: center; justify-content: space-between; }
 .tools-heading h3 { font-size: 14px; }
@@ -358,6 +389,7 @@ header { display: flex; justify-content: space-between; align-items: center; }
 @media (max-width: 1000px) { .preview-tools { position: absolute; right: 0; top: 0; bottom: 0; width: min(320px, 100%); z-index: 2; border-left: 1px solid #ddd; box-shadow: -4px 0 16px #0002; } }
 .preview-state { min-height: 120px; display: grid; place-content: center; }
 @media (max-width: 1200px) { .case-panel { position: absolute; right: 0; top: 0; bottom: 0; width: min(100%, 380px); box-shadow: -4px 0 16px #0002; box-sizing: border-box; } }
+@media (max-width: 600px) { .research-topic { white-space: normal; overflow-wrap: anywhere; } }
 </style>
 
 <style>
