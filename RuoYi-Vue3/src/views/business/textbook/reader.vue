@@ -199,7 +199,7 @@
           @pointerdown="startCaseResize"
           @keydown="resizeCasePanelByKey"
         ></div>
-        <CasePanel :key="`${bookId}/${selectedKey}`" :book-id="bookId" :section-key="selectedKey" :style="{ flexBasis: `${casePanelWidth}px`, width: `${casePanelWidth}px` }" @close="casePanelVisible = false" />
+        <CasePanel :key="`${bookId}/${selectedKey}`" :book-id="bookId" :section-key="selectedKey" :style="{ '--case-panel-width': `${casePanelWidth}px` }" @close="casePanelVisible = false" />
       </template>
     </div>
 
@@ -906,6 +906,7 @@ onBeforeUnmount(() => {
 .case-resizer { flex: 0 0 6px; width: 6px; cursor: col-resize; background: #e4e7ed; touch-action: none; }
 .case-resizer:hover, .case-resizer:focus-visible { background: #c6e2ff; outline: none; }
 body.is-resizing-case-panel, body.is-resizing-case-panel * { cursor: col-resize !important; user-select: none !important; }
+@media (max-width: 1200px) { .case-resizer { display: none; } }
 
 /* 窄屏目录改为浮层，展开时不再把正文挤成一条 */
 @media (max-width: 900px) {

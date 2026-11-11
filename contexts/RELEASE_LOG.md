@@ -1,5 +1,17 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-11 · 1.30.93：教材资源面板可拖宽与课例标题左对齐（仅前端）
+
+130 前端切至 `releases/20261111_case_panel_resize_v1`：首页 `447e7bc566034d7133eb4be32826989b76b6ae78c3bdcd758a007f9eb64c0396`，制品 `frontend.tar.gz` 43,377,300B / SHA-256 `09be0cdf2845e380649fbf4efbdfd3c326449879d043b71117200376e7e45fc3`，821 文件；合并旧静态后线上 2,821 文件。后端继续 `20261110_python_manual_confirm_v1`，MainPID `3107625`、NRestarts 0、三服务 active，未重启后端。
+
+教材阅读页右侧教学资源面板增加左侧拖拽条，支持鼠标和键盘调宽，宽度限制 290 至 720 像素并按浏览器记住；优秀课例与教研活动课例标题统一左对齐；手机和窄屏保持浮层布局并隐藏拖拽条，页面不横向溢出。
+
+发布前只备份产品更新表 `/data/backups/xueyeceping/20261111_082806_20261111_case_panel_resize_v1/platform_update.before.sql`（75,987B，SHA-256 `6db6f4c6a330b41a19a31d6249b9fccde0ca77733fc4082f5a34a062161ff540`）及 unit/nginx/index；仅执行 `sql/platform_update_1_30_93_20261111.sql` 登记产品更新 **171 / 1.30.93 / PUBLISHED**。本轮只改前端，不动课程、题库、成绩、权限和表结构。
+
+验收：真实教研员账号 1440×900 拖拽 360→500px、宽度记忆 500、课例标题与面板内容左边界同为 1092px、无横向溢出；390×844 面板 380px、拖拽条不可见、无横向溢出；0 页面异常、0 个 5xx。证据 `output/playwright/case-panel-1.30.93-online-1440.png`、`case-panel-1.30.93-online-390.png`、`output/release-20261111-case-panel-resize/`。
+
+回退：确认 Nginx root 仍为 `20261111_case_panel_resize_v1/frontend` 后，恢复备份 `nginx.before` 到站点配置，`nginx -t && systemctl reload nginx`，更新 171 转 DRAFT；不重启后端、不整库回灌。
+
 ## 2026-11-10 · 1.30.92：Python 批改教师确认制与运行查看
 
 130 前后端为 `releases/20261110_python_manual_confirm_v1`：JAR SHA-256 `a8162e4135b5ca9d153f190c6245e064b67e6481c166538e27793f237b9e0a8e`（108,301,913B），首页 `d86ee446906b62db309733b9406fb420a1182cc78800052ab9f7ff5a3f49c45e`，前端制品821文件，MainPID `3107625`、NRestarts 0，首页/验证码200、启动错误0。产品更新 **170 / 1.30.92 / PUBLISHED**，真实教师可见。

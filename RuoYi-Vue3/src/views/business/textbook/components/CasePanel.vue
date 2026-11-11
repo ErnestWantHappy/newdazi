@@ -356,7 +356,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.case-panel { flex: 0 0 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; background: white; padding: 12px; z-index: 12; }
+.case-panel { width: min(var(--case-panel-width, 360px), 100%); flex: 0 0 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; background: white; padding: 12px; z-index: 12; }
 .case-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .case-heading { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-right: 6px; }
 .case-heading-main { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }

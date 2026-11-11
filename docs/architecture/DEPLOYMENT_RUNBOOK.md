@@ -1,5 +1,15 @@
 # 部署与回滚约定
 
+## 2026-11-11 正式1.30.93（教材资源面板可拖宽，仅前端）
+
+130 Nginx 前端 root 为 `releases/20261111_case_panel_resize_v1/frontend`，首页 `447e7bc566034d7133eb4be32826989b76b6ae78c3bdcd758a007f9eb64c0396`；后端继续 `releases/20261110_python_manual_confirm_v1`（JAR `a8162e41`），MainPID `3107625`、NRestarts 0、三服务 active，未重启后端。制品 `frontend.tar.gz` 43,377,300B / SHA-256 `09be0cdf2845e380649fbf4efbdfd3c326449879d043b71117200376e7e45fc3`，821 文件；合并旧静态后线上 2,821 文件。
+
+教材阅读页右侧教学资源面板增加左侧拖拽条，鼠标或键盘调宽，范围 290–720px 并按浏览器记忆；优秀课例与教研活动课例标题统一左对齐；手机和窄屏保持浮层并隐藏拖拽条。只备份产品更新表 `/data/backups/xueyeceping/20261111_082806_20261111_case_panel_resize_v1/platform_update.before.sql`（75,987B，SHA-256 `6db6f4c6a330b41a19a31d6249b9fccde0ca77733fc4082f5a34a062161ff540`）及 unit/nginx/index；仅执行 `sql/platform_update_1_30_93_20261111.sql` 登记产品更新 **171 / 1.30.93 / PUBLISHED**。
+
+发布源码在临时目录由 `git archive HEAD` 加教材两文件构建；HEAD 中尚未上线的 Python 交互改动（教师运行终端、生成输出、学生本机运行提示）未进入本制品。验收：真实教研员 1440 拖拽 360→500px 并记忆、标题与面板内容左边界 1092px、无横向溢出；390 面板 380px、拖拽条不可见、无横向溢出；0 页面异常、0 个 5xx。证据 `output/playwright/case-panel-1.30.93-online-1440.png`、`-390.png`、`output/release-20261111-case-panel-resize/`。
+
+回退：确认当前 root 仍为 `20261111_case_panel_resize_v1/frontend` 后，恢复备份 `nginx.before` 到 `/etc/nginx/sites-available/xueyeceping-130`，`nginx -t && systemctl reload nginx`，更新 171 转 DRAFT；不重启后端、不整库回灌。
+
 ## 2026-11-10 正式1.30.92（Python批改教师确认制与运行查看）
 
 130 前后端为 `releases/20261110_python_manual_confirm_v1`：JAR `a8162e4135b5ca9d153f190c6245e064b67e6481c166538e27793f237b9e0a8e`（108,301,913B），首页 `d86ee446906b62db309733b9406fb420a1182cc78800052ab9f7ff5a3f49c45e`，前端制品821文件；MainPID `3107625`、NRestarts 0、首页/验证码200、启动错误0。产品更新 **170 / 1.30.92 / PUBLISHED**。
