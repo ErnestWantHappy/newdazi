@@ -6,7 +6,8 @@
  * 前端因此能呈现与本地一致的“提示语 → 你输入 → 输出”顺序，而不是一次性灌入。
  */
 export async function runInteractiveOnServer(call, inputs) {
-  const response = await call({ stdin: inputs.join('\n') })
+  // 每行输入都以换行结束，直接回车也必须算一行。
+  const response = await call({ stdin: inputs.map(value => `${value}\n`).join('') })
   // 兼容 axios 原始响应和已解包的结果
   const data = response?.data?.data || response?.data || response || {}
   return {

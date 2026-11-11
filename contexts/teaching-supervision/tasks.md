@@ -116,3 +116,10 @@
   - [x] 监管批改筛选收敛为待批改、已批改、已逾期
   - [x] 重跑后端测试、fat jar、前端测试与生产构建
   - _Requirements: REQ-26 至 REQ-31_
+
+## 2026-11-11 1.30.96 已发布
+
+- [x] F14 免抽测班级证据排除拓展班载体班（`biz_extension_class`），课程来源四类 UNION 全部限定 `IFNULL(lesson_scope,'regular')='regular'`；`ExemptionApplicationMapperScopeTest`+`ExemptionApplicationServiceTest` 8项通过。
+- [x] F22 监管学生明细的操作题 JOIN 补 `practical.submit_time >= q.activityStartTime` 与 `< q.activityEndTime`，与班级汇总共用左闭右开窗口；`TeachingSupervisionStudentDetailsWindowTest` 1项通过。
+- [x] 130 已发布1.30.96；本机 `biz_extension_class` 0行、legacy题单0，未做真实人数对比。
+- [ ] 未验：真实拓展班教师免抽测预览、真实监管页面班级行与学生明细人数对比。

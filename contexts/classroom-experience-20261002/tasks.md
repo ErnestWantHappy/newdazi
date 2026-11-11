@@ -99,3 +99,10 @@ Node定向3项通过，涵盖截图两种IP优先级、无助手降级、自动�
 [x] 0.2.2图标、30项客户端回归、正式下载与自检。[x] 页框扩展/路径变换10项测试、六class隔离发布、44份精确重算及原件成绩版本保护核对。[x] 1.30.49/127 PUBLISHED且教师可见。[ ] 固定A4内容流裁剪修复与像素位置对齐验收。[ ] 真实机房自启/还原验收。
 
 发布、剩余限制和回滚见 `contexts/seat-logo-overflow-release-20261014.md`；AOCI未同步。
+
+## 2026-11-11 1.30.96 已发布
+
+- [x] F01 区域抽测超时上传：服务事务内先 `autoSubmitStudentExam` 再返回null，控制器在事务结束后提示；CAS失败仍抛错回滚。`CountyExamServiceImplTest` 21项（新增2项事务提交/回滚）。
+- [x] F02 自动推进查询限定 `status=0` 并在循环跳过归档课；`LessonAutoAdvanceServiceImplTest` 19项。
+- [x] F16 首次进入计时先锁参与记录再建卷，避免并发撞唯一键；F17 上传归属TTL改为24小时覆盖长考试；`CountyExamServiceImplTest` 22项、`CountyExamAndCollaborationAccessTest` 2项。
+- [ ] 未验：真实双标签页并发首次进入、真实长考试最后上传后提交、真实整班自动推进。

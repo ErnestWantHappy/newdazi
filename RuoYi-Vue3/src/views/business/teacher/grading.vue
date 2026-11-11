@@ -209,6 +209,7 @@
                :key="`${selectedQuestionId}-${currentStudent.answerId || currentStudent.studentId}`"
                :student="currentStudent"
                :question="selectedQuestion"
+               :lesson-id="selectedLessonId"
              />
              <template v-else>
              <div class="preview-header">
@@ -2163,11 +2164,9 @@ async function submitScore() {
         ElMessage.success('批改保存成功');
 
         const wasUngraded = expectedScore == null;
-        const targetItem = targetAnswerId == null
-            ? submissions.value.find(item => item.studentId === targetStudent.studentId)
-            : submissions.value.find(item => item.answerId === targetAnswerId);
+        const targetItem = submissions.value.find(item => item.studentId === targetStudent.studentId);
         if (targetItem) targetItem.score = finalScore;
-        if (currentStudent.value?.answerId === targetAnswerId) {
+        if (currentStudent.value?.studentId === targetStudent.studentId) {
             currentStudent.value.score = finalScore;
         }
 
@@ -2178,7 +2177,7 @@ async function submitScore() {
             }
         }
         loadDeadlineStatus();
-        shouldAdvance = currentStudent.value?.answerId === targetAnswerId;
+        shouldAdvance = currentStudent.value?.studentId === targetStudent.studentId;
     } catch (error) {
         // 统一请求封装已经展示错误信息，此处只负责阻止失败后跳转。
         shouldAdvance = false;
@@ -2189,7 +2188,8 @@ async function submitScore() {
     if (shouldAdvance) {
         await nextSubmittedStudent();
     }
-    loadSubmissions({ silent: true });
+    // 仍停在刚保存的学生时，新成绩/新答题记录就是本次保存结果，应直接采纳。
+    loadSubmissions({ silent: true, acceptServerSnapshot: currentStudent.value?.studentId === targetStudent.studentId });
 }
 
 async function returnCurrentTask() {

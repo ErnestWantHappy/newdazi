@@ -529,12 +529,15 @@ public class CountyExamServiceImpl implements ICountyExamService {
         }
         CountyExam exam = requireExam(activeClasses.get(0).getExamId());
         ensureParticipant(exam, student, loginUser.getDeptId());
+        CountyExamStudent examStudent;
         if (startTiming) {
+            // 先锁参与记录再建卷，同一学生并发首次进入时串行执行，避免撞试卷唯一键。
+            CountyExamStudent locked = lockStudentAttempt(exam.getExamId(), student.getStudentId());
             ensurePaperForStudent(exam, student.getStudentId());
+            examStudent = ensureStudentTiming(exam, locked);
+        } else {
+            examStudent = studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
         }
-        CountyExamStudent examStudent = startTiming
-                ? ensureStudentTiming(exam, lockStudentAttempt(exam.getExamId(), student.getStudentId()))
-                : studentMapper.selectByExamAndStudent(exam.getExamId(), student.getStudentId());
         Date now = new Date();
         if (STUDENT_SUBMITTED.equals(examStudent.getStatus())) {
             return endedStudentExamPayload(exam, examStudent, "区域抽测已提交");
@@ -587,7 +590,8 @@ public class CountyExamServiceImpl implements ICountyExamService {
         }
         if (isTimedOut(examStudent, new Date())) {
             autoSubmitStudentExam(exam, student);
-            throw new ServiceException("区域抽测作答时间已结束");
+            // 返回后提交自动交卷结果，避免抛出异常导致交卷写入回滚。
+            return null;
         }
         ensurePaperForStudent(exam, student.getStudentId());
         if (paperQuestionMapper.countPracticalByExamStudentQuestion(

@@ -175,3 +175,10 @@
 ## 2026-10-03 正式发布补充
 
 130正式1.30.24已包含本轮课堂修复；正式专用班级API与页面验证通过，现有师生数据未代修改。密钥表依赖已迁移，原配置/主密钥保持；历史状态及真实厂商/机房验证按 [正式验收](../classroom-experience-20261002/release-verification-20261003.md) 的范围执行。
+
+## 2026-11-11 1.30.96 已发布
+
+- [x] F08 附件转换线程池拒绝时退回 pending、不递增重试，afterCommit 逐附件隔离异常；pending 按时间门限纳入定时恢复，保留200条与重试上限。
+- [x] F09 AI 任务 finish 不覆盖 PAUSED/CANCELLED，retry 拒绝取消/暂停状态，迟到 updateResult=0 记 RESULT_DISCARDED；F21 resume 前只回收超过15分钟的 PROCESSING 结果。
+- [x] 测试：`PracticalAttachmentConversionFailureTest`+`PracticalArtifactRetryServiceTest` 10项、`PracticalAiJobServiceTest`+`PracticalAiGradingMapperStaleTest` 13项，全过。130已发布1.30.96，教师更新列表可见。
+- [ ] 未验：真实饱和线程池/@Async 拒绝、真实 MySQL 恢复查询与 Quartz、真实模型取消/续跑竞态；取消后模型抛异常的失败事件仍记FAILED（非阻断）。

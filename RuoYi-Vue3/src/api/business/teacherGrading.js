@@ -62,6 +62,16 @@ export function runPythonSubmission(submissionId, stdin) {
   })
 }
 
+// 教师直接运行当前展示的代码（学生尚未提交时也能验证），同样不写判题记录和成绩
+export function runPythonSource(sourceCode, stdin, lessonId) {
+  return request({
+    url: '/business/teacher/grading/python/run',
+    method: 'post',
+    data: { sourceCode, stdin, lessonId },
+    timeout: 30000
+  })
+}
+
 // 批改打分
 export function gradeSubmission(data) {
   return request({

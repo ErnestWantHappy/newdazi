@@ -147,8 +147,11 @@ public class PracticalAiJobWorker
             result.setErrorMessage(null);
             result.setFinishTime(new Date());
             result.setDurationMs(System.currentTimeMillis() - startedAt);
-            aiMapper.updateResult(result);
-            event(job.getJobId(), result.getResultId(), "INFO", "COMPLETED", "本份 AI 建议已完成并保存");
+            if (aiMapper.updateResult(result) == 0) {
+                event(job.getJobId(), result.getResultId(), "WARN", "RESULT_DISCARDED", "任务已取消，本份 AI 建议未保存");
+            } else {
+                event(job.getJobId(), result.getResultId(), "INFO", "COMPLETED", "本份 AI 建议已完成并保存");
+            }
         }
         catch (Exception e)
         {
@@ -394,7 +397,8 @@ public class PracticalAiJobWorker
     {
         aiMapper.updateJobCounts(jobId);
         PracticalAiJob job = aiMapper.selectJobForWorker(jobId);
-        if (job == null || "PAUSED".equals(job.getJobStatus())) return;
+        // 教师已取消的任务终态不能被收尾覆盖。
+        if (job == null || "PAUSED".equals(job.getJobStatus()) || "CANCELLED".equals(job.getJobStatus())) return;
         if ("CANCEL_REQUESTED".equals(job.getJobStatus()))
         {
             cancelRemaining(jobId);

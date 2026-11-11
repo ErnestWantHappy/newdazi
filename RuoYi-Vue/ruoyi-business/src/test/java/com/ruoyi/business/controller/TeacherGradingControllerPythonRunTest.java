@@ -26,6 +26,8 @@ import static org.mockito.Mockito.when;
 class TeacherGradingControllerPythonRunTest {
     private ProgrammingJudgeMapper programming;
     private BizStudentMapper students;
+    private com.ruoyi.business.mapper.BizLessonMapper lessons;
+    private com.ruoyi.business.mapper.BizStudentAnswerMapper answers;
     private GuideSheetAccessService access;
     private PracticalPythonRunService runner;
     private TeacherGradingController controller;
@@ -35,10 +37,14 @@ class TeacherGradingControllerPythonRunTest {
         controller = new TeacherGradingController();
         programming = mock(ProgrammingJudgeMapper.class);
         students = mock(BizStudentMapper.class);
+        lessons = mock(com.ruoyi.business.mapper.BizLessonMapper.class);
+        answers = mock(com.ruoyi.business.mapper.BizStudentAnswerMapper.class);
         access = mock(GuideSheetAccessService.class);
         runner = mock(PracticalPythonRunService.class);
         ReflectionTestUtils.setField(controller, "programmingJudgeMapper", programming);
         ReflectionTestUtils.setField(controller, "studentMapper", students);
+        ReflectionTestUtils.setField(controller, "lessonMapper", lessons);
+        ReflectionTestUtils.setField(controller, "studentAnswerMapper", answers);
         ReflectionTestUtils.setField(controller, "guideSheetAccessService", access);
         ReflectionTestUtils.setField(controller, "practicalPythonRunService", runner);
         LoginUser loginUser = new LoginUser(2L, 139L,
@@ -94,5 +100,42 @@ class TeacherGradingControllerPythonRunTest {
         student.setEntryYear("2026");
         student.setClassCode("1");
         return student;
+    }
+
+    @Test
+    void teacherRunsOwnLessonCodeEvenWhenStudentHasNotSubmitted() {
+        com.ruoyi.business.domain.BizLesson lesson = new com.ruoyi.business.domain.BizLesson();
+        lesson.setLessonId(20L);
+        lesson.setDeptId(139L);
+        lesson.setCreatorId(2L);
+        when(lessons.selectBizLessonByLessonId(20L)).thenReturn(lesson);
+        java.util.Map<String, Object> runResult = Collections.singletonMap("output", "免票");
+        when(runner.run("print('免票')", "3")).thenReturn(runResult);
+
+        java.util.Map<String, String> body = new java.util.HashMap<String, String>();
+        body.put("lessonId", "20");
+        body.put("sourceCode", "print('免票')");
+        body.put("stdin", "3");
+
+        Object data = controller.runPythonSource(body).get("data");
+
+        assertEquals(runResult, data);
+    }
+
+    @Test
+    void runningSourceStillRequiresLessonPermission() {
+        com.ruoyi.business.domain.BizLesson lesson = new com.ruoyi.business.domain.BizLesson();
+        lesson.setLessonId(21L);
+        lesson.setDeptId(139L);
+        lesson.setCreatorId(99L);
+        when(lessons.selectBizLessonByLessonId(21L)).thenReturn(lesson);
+        // 非创建者且没有该课班级 → 无权运行
+        when(answers.selectClassStatusByLesson(21L, 2L, 139L)).thenReturn(Collections.emptyList());
+        java.util.Map<String, String> body = new java.util.HashMap<String, String>();
+        body.put("lessonId", "21");
+        body.put("sourceCode", "print(1)");
+
+        assertThrows(ServiceException.class, () -> controller.runPythonSource(body));
+        org.mockito.Mockito.verifyNoInteractions(runner);
     }
 }

@@ -209,7 +209,7 @@
     JOIN biz_student s ON (
       EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id
         JOIN biz_extension_plan_member am ON am.plan_version_id=av.plan_version_id AND am.student_id=s.student_id
-        WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='extension')
+        WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope IN ('extension','legacy'))
       OR (EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='regular')
         AND CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)))
     JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=pc.dept_id
@@ -236,7 +236,7 @@
     JOIN biz_student s ON (
       EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id
         JOIN biz_extension_plan_member am ON am.plan_version_id=av.plan_version_id AND am.student_id=s.student_id
-        WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='extension')
+        WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope IN ('extension','legacy'))
       OR (EXISTS(SELECT 1 FROM biz_python_practice_plan_version av JOIN biz_python_practice_plan ap ON ap.plan_id=av.plan_id WHERE av.plan_version_id=pc.plan_version_id AND ap.plan_scope='regular')
         AND CAST(s.entry_year AS BINARY)=CAST(pc.entry_year AS BINARY) AND CAST(s.class_code AS BINARY)=CAST(pc.class_code AS BINARY)))
     JOIN sys_user u ON u.user_id=s.user_id AND u.dept_id=pc.dept_id

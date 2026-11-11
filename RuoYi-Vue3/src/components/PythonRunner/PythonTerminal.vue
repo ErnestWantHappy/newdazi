@@ -8,6 +8,7 @@
     <div ref="screen" class="py-screen" role="log" aria-label="程序输出" tabindex="0">
       <span v-if="transcript">{{ transcript }}</span>
       <span v-else-if="state === 'idle'" class="py-placeholder">{{ placeholder }}</span>
+      <!-- 输入框紧跟在提示语后面（不再另起一行），和 Thonny 看到的一样 -->
       <form v-if="waitingInput" class="py-input" @submit.prevent="sendInput">
         <input
           ref="inputElement"
@@ -26,9 +27,15 @@
         {{ hasRun ? '重新运行' : '运行 Python' }}
       </button>
       <button v-if="busy && mode === 'local'" type="button" class="py-ghost" @click="stop">停止</button>
-      <span class="py-mode">{{ modeLabel }}</span>
     </div>
     <p class="py-note">{{ noteText }}</p>
+    <!-- 只提示、不拦路：低版本浏览器照样能运行，只是改用云端 -->
+    <p v-if="mode === 'server'" class="py-upgrade">
+      想启动更快，可升级到最新版
+      <a href="https://www.google.cn/chrome/" target="_blank" rel="noopener">Chrome</a>
+      或
+      <a href="https://www.microsoft.com/edge" target="_blank" rel="noopener">Edge</a>。
+    </p>
   </section>
 </template>
 
@@ -36,6 +43,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createInteractiveRunner, canRunLocally } from '@/components/StudentProgrammingQuestion/interactiveRunner'
 import { runInteractiveOnServer } from './serverInteractive'
+import { shouldFallbackToServer, FALLBACK_NOTICE } from './fallback'
 
 const props = defineProps({
   // 要运行的代码；切换后自动清空上一次输出，避免串码。
@@ -62,17 +70,22 @@ const screen = ref(null)
 const inputElement = ref(null)
 // 服务器模式累计输入行：每次“回车确认”追加一行后整体重放，保证提示语与输出顺序真实。
 const serverInputs = ref([])
+// 本机模式已填过的输入：本机运行中途崩溃时，降级到服务器可以接着用，不用重新输一遍。
+const localInputs = ref([])
+// 降级时加一句人话说明；只解释“为什么换了运行方式”，不拦路
+const fallbackNotice = ref('')
 let sequence = 0
 
 const busy = computed(() => ['loading', 'running', 'input'].includes(state.value))
-const modeLabel = computed(() => mode.value === 'local' ? '本机运行' : '服务器运行')
 const placeholder = computed(() => props.inputCount === 1
   ? '点击“运行 Python”，程序会提示你输入。'
   : '点击“运行 Python”，程序会在这里显示提示和结果。')
 const noteText = computed(() => {
-  if (props.note) return props.note
-  if (mode.value === 'server') return '当前浏览器不支持本机运行，已自动切换到服务器运行，功能不受影响。'
-  return '本机运行不占用服务器，结果不会保存。'
+  // 降级提示只加在最后，不打断原本的操作说明；师生不需要理解运行方式
+  const base = props.note || '运行结果不会保存，也不影响成绩。'
+  if (fallbackNotice.value) return `${base} ${fallbackNotice.value}`
+  if (mode.value === 'server') return base + ' 当前浏览器版本较低，已自动使用云端运行，使用方法完全一样；升级浏览器后启动更快。'
+  return base
 })
 
 const runner = createInteractiveRunner(event => {
@@ -112,8 +125,12 @@ const runner = createInteractiveRunner(event => {
   }
   if (event.type === 'error') {
     // 兼容性原因失败才自动降级，其余错误如实展示，避免把代码错误当成浏览器问题。
-    if (mode.value === 'local' && isCompatibilityIssue(event.text)) {
+    if (shouldFallbackToServer(event, mode.value)) {
       mode.value = 'server'
+      serverInputs.value = [...localInputs.value]
+      // 本机已经回显过的内容由服务器整体重放，避免提示语和输出出现两遍
+      transcript.value = ''
+      fallbackNotice.value = FALLBACK_NOTICE
       runOnServer()
       return
     }
@@ -125,11 +142,6 @@ const runner = createInteractiveRunner(event => {
   }
 })
 
-function isCompatibilityIssue(text) {
-  const value = String(text || '')
-  return /不支持|无法创建|加载失败|加载超时|无法启动|WebAssembly|Worker/i.test(value)
-}
-
 function scrollToEnd() {
   nextTick(() => { if (screen.value) screen.value.scrollTop = screen.value.scrollHeight })
 }
@@ -139,6 +151,8 @@ function reset() {
   waitingInput.value = false
   inputText.value = ''
   serverInputs.value = []
+  localInputs.value = []
+  fallbackNotice.value = ''
   state.value = 'idle'
   statusText.value = '尚未运行'
 }
@@ -169,10 +183,13 @@ async function runOnServer() {
     return
   }
   const ticket = ++sequence
+  // 服务器返回的是“到目前为止的完整终端内容”，先清空，否则多输一次就会重复上一轮的提示和输出。
+  transcript.value = ''
   state.value = 'running'
   waitingInput.value = false
   statusText.value = '正在运行…'
   try {
+    // 教师端接口返回 success(data)，学生端接口同样包一层 data，统一在 runInteractiveOnServer 里兼容
     const result = await runInteractiveOnServer(props.serverRun, serverInputs.value)
     if (ticket !== sequence) return
     transcript.value = result?.output || '程序没有输出'
@@ -203,6 +220,7 @@ function sendInput() {
   const value = inputText.value
   if (mode.value === 'local') {
     if (runner.input(value)) {
+      localInputs.value = [...localInputs.value, value]
       inputText.value = ''
       waitingInput.value = false
       state.value = 'running'
@@ -287,6 +305,7 @@ defineExpose({ start, stop, reset })
 }
 .py-primary:disabled { background: #a0cfff; cursor: not-allowed; }
 .py-ghost { min-height: 34px; padding: 4px 12px; border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; color: #606266; cursor: pointer; }
-.py-mode { color: #909399; font-size: 12px; }
 .py-note { margin: 0; color: #667085; font-size: 12px; line-height: 1.6; }
+.py-upgrade { margin: 0; color: #8a6d3b; font-size: 12px; line-height: 1.6; }
+.py-upgrade a { color: #1a6fbf; }
 </style>

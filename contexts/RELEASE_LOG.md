@@ -1,5 +1,21 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-11 · 1.30.96：Python 运行与批改等 22 项缺陷修复（前后端）
+
+130 前后端切至 `releases/20261111_bugfix_v1`：JAR SHA-256 `2cb253df9e7f703f429d6994317a36a5111309003715e87e4ab0042311928be5`（108,317,622B）；首页 `1fde9972c70b5a14698d734a9855bf2cfd867693ede974c264b10a34be6ab562`，`frontend.tar.gz` 43,392,889B / SHA-256 `15c1a391f1382c240912f14df1483353358d00510462c87cf74a8c903b682ff2`，825 文件；MainPID `3162268`、NRestarts 0、active/running，首页与验证码 200。产品更新 **174 / 1.30.96 / PUBLISHED**，真实教师 `/business/platform-update/list` 可见。仅执行 `sql/platform_update_1_30_96_20261111.sql`，未改表结构、未批量改成绩。
+
+**修复清单（F01–F22）**：区域抽测超时上传先提交自动交卷再提示；自动推进跳过归档课；刷题轮询未完成不写分和进度；生成输出遇输入不足返回中文错误且无 NUL；等待输入信号不再被业务 `except Exception` 吞掉；旧浏览器 stdin 空回车可推进；切题后迟到运行响应作废；附件转换队列拒绝可退回重试；AI 批改暂停/取消终态不被覆盖、迟到结果丢弃；教师给最后一名学生打分不锁按钮并接受服务端快照；批改用真实答题行、拒绝过期快照、两事务 READ_COMMITTED；判题入队失败退槽位和分钟额度且不标课堂已提交；历史拓展班题单可查学情；免抽测排除拓展班载体班并只看常规课；协作健康检查限管理员/教师；区域抽测首次进入先锁后建卷；上传归属覆盖 24 小时；切题/离开前补存草稿；PDF 失败清理临时文件；课例投票理由五种组合语义统一；AI 任务 resume 回收超时处理中结果；监管学生明细补学期时间窗。
+
+**本机验证**：后端全量 **1074 通过 / 0 失败 / 0 错误 / 3 跳过**（基线 1040，净增 34）；前端构建门禁 login 9、seat-helper 9、question-workbench 26、python-runner 23 全过，另批改刷新 14、草稿补存 3，共 84；`npm run build:prod` 通过。F06/F07/F10 另用真实 Vue 组件 + 隔离模拟 API 做浏览器验收，F15 用本机学生账号实测 403。真实 Judge0/Redis 故障、真实 legacy/拓展班样本、真实 MySQL 并发改分仍未专项实测。
+
+**发布异常与处置（如实记录）**：`deploy_bugfix_130.py --mode deploy` 在登记产品更新阶段 SSH 连接被重置；脚本尝试自动回滚时同样无法建立连接，未写 `remote-state.json`。现场只读复核确认新 release 已完整切换且健康（JAR/首页哈希、active/running、NRestarts 0），随后单独执行同一产品更新 SQL，复核 **174 / 1.30.96 / PUBLISHED**。未宣称“脚本全流程一次通过”。
+
+**发布前备份**：`/data/backups/xueyeceping/20261111_195021_20261111_bugfix_v1/`；整库 `database.sql.gz` 54,586,308B，SHA-256 `d9190f0b2a9220299321bb5176b8e68144b5daafd4919a7e23fc65a072f6acf7`；`service.before` `0ac50da9…`、`nginx.before` `d1d7f552…`、`env.before` `ca11cd4f…`、`jar.before` `741b5959…`、`index.before.html` `4239bdf9…`，归属与文件哈希见同目录 `release.before.json`。
+
+**线上验收**：真实教师登录及 `/business/platform-update/list` 通过；`generate-outputs` 对题目 3337 返回 2 个测试点、无 NUL、未落库；匿名协作健康接口业务码 401 且无数据，正式学生凭据未能登录（`acc26_s001` 返回用户不存在/密码错误），线上学生 403 未实测，本机学生 403 已验证；真实教师批改页课程 990847/6班（38/44 已交、0/38 已批）1440 截图 `output/playwright/bugfix-1.30.96/online-grading-1440.png`，页面资源 0 个 5xx、无横向溢出；Nginx 5xx 仅出现在重启窗口 19:52:57–58，19:53 后计数 0。
+
+**回退**：确认仍指向 `20261111_bugfix_v1` 后，用备份 `service.before` 恢复 `/etc/systemd/system/xueyeceping-130.service`、`nginx.before` 恢复站点、`env.before` 核对未漂移，`systemctl daemon-reload`、重启 `xueyeceping-130`、`nginx -t && systemctl reload nginx`，回到发布前基线（后端 1.30.95、前端 1.30.94）；更新 174 转 DRAFT；不整库回灌。
+
 ## 2026-11-11 · 1.30.95：打字题英文引号自动纠正（后端，随附判题限流缺陷修复）
 
 130 后端切至 `releases/20261111_typing_quote_v1`：JAR SHA-256 `741b595902488bd6446c74a5a8fbae1828694e4f49e22fa4cad538034f5d58b8`（108,315,711B）；前端未动，继续 1.30.94 的 `20261111_python_interactive_v1/frontend`。MainPID `3160006`、NRestarts 0、active、首页/验证码 200（第 4 次 5 秒探活通过）。产品更新 **173 / 1.30.95 / PUBLISHED**，仅执行 `sql/platform_update_1_30_95_20261111.sql`。

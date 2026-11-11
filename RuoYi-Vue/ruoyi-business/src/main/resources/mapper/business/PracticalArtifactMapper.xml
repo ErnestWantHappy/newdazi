@@ -208,6 +208,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           AND normalized_status = 'pending'
     </update>
 
+    <!-- 投递失败退回 pending，不增加重试次数，避免队列满被误判为毒文件。 -->
+    <update id="releaseAttachmentNormalizationClaim">
+        UPDATE biz_practical_attachment
+        SET normalized_status = 'pending', update_time = NOW()
+        WHERE attachment_id = #{attachmentId}
+          AND normalized_status = 'converting'
+    </update>
+
     <update id="updateAttachmentNormalization">
         UPDATE biz_practical_attachment
         SET normalized_status = #{normalizedStatus},
@@ -235,6 +243,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT * FROM biz_practical_attachment
         WHERE normalized_retry_count &lt; #{maxRetryCount}
           AND (
+            (normalized_status = 'pending'
+              AND file_kind IN ('OFFICE', 'PDF', 'IMAGE')
+              AND COALESCE(update_time, create_time) &lt;= #{failedBefore})
+            OR
             (normalized_status = 'failed'
               AND COALESCE(normalized_last_retry_time, update_time, create_time) &lt;= #{failedBefore})
             OR

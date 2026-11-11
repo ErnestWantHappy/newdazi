@@ -451,7 +451,8 @@
               <el-table-column label="测试点" prop="caseName" width="130" />
               <el-table-column label="程序输入"><template #default="{ row }"><pre>{{ row.inputText || '（无输入）' }}</pre></template></el-table-column>
               <el-table-column label="你填的期望输出"><template #default="{ row }"><pre>{{ row.expectedOutput || '（空）' }}</pre></template></el-table-column>
-              <el-table-column label="程序实际输出"><template #default="{ row }"><pre>{{ row.actualOutput || '（空）' }}</pre></template></el-table-column>
+              <!-- 展示“提示语 → 输入 → 输出”的终端顺序，和师生实际运行看到的一致 -->
+              <el-table-column label="程序实际输出"><template #default="{ row }"><pre>{{ row.terminalOutput ?? row.actualOutput ?? '（空）' }}</pre></template></el-table-column>
               <el-table-column label="原因" min-width="220"><template #default="{ row }"><span class="diff-hint">{{ row.hint || row.errorSummary || '输出和期望不一致' }}</span></template></el-table-column>
             </el-table>
             <el-collapse v-if="validationFailures.length" class="validation-more">
@@ -1497,10 +1498,12 @@ async function generateExpectedOutputs() {
         filled++;
       }
     }
+    const failure = rows.find(item => item.statusCode !== "ACCEPTED" && item.errorSummary);
     if (filled) {
       ElMessage.success(`已按参考代码填写 ${filled} 个测试点的期望输出，请核对后保存`);
+      if (failure) ElMessage.warning(failure.errorSummary);
     } else {
-      ElMessage.error("参考代码未能正常运行，请先检查代码或测试点输入");
+      ElMessage.error(failure?.errorSummary || "参考代码未能正常运行，请先检查代码或测试点输入");
     }
   } catch (error) {
     ElMessage.error(error?.msg || error?.message || "生成期望输出失败，请稍后重试");
@@ -2232,6 +2235,10 @@ refreshAll();
 .question-detail { min-height: 120px; }
 .import-error-summary { margin: 0 0 12px; color: #b42318; font-weight: 700; }
 .python-wizard{margin-top:18px;padding:18px;border:1px solid #e4e7ed;border-radius:8px;background:#fafbfc}.python-steps{margin-bottom:24px}.python-step-panel{min-height:390px;padding:18px 10px 4px;background:#fff;border-radius:6px}.case-summary{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}.case-summary>div{display:flex;gap:8px;flex-wrap:wrap}.case-table{margin-top:14px}.case-actions{display:flex;align-items:center;gap:12px;margin-top:12px;color:#909399;font-size:12px}.validation-alert{margin-bottom:16px}.wizard-actions{display:flex;justify-content:center;gap:10px;margin-top:16px}.python-import-actions{display:flex;align-items:center;gap:14px;margin:18px 0}.import-report{margin-top:14px}.import-alert{margin:12px 0}.import-errors{max-height:260px;margin-top:12px;padding:10px 16px;overflow:auto;background:#fff5f5;color:#b42318;border-radius:6px}.import-errors h4{margin:0 0 8px}.import-errors li{margin:5px 0}
+/* 验题差异：输入、期望、实际并排，原因用正常文字，教师不需要理解技术细节 */
+.validation-diff{margin-bottom:12px}.validation-diff pre{max-height:160px;margin:0;padding:6px 8px;overflow:auto;border-radius:4px;background:#f7f8fa;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 Consolas,"Microsoft YaHei",monospace}
+.diff-hint{color:#8a5a00;line-height:1.6}.validation-more{margin-bottom:16px}.generate-note{margin:0 0 10px;color:#606266;font-size:13px;line-height:1.7}
+.answer-tip{margin:6px 0 0;color:#16803b;font-size:12px;line-height:1.7}
 </style>
 <style>
 @media(max-width:640px){

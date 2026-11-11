@@ -172,6 +172,15 @@
             stage_updated_time=NOW(),error_message=NULL,finish_time=NULL
         WHERE job_id=#{jobId} AND result_status='PROCESSING'
     </update>
+    <!-- 只回收明显卡死的份：正常一份模型请求远小于该时长，避免把仍在处理的那份重复派发。 -->
+    <update id="resetStaleProcessingResults">
+        UPDATE biz_practical_ai_result
+        SET result_status='PENDING',processing_stage='WAITING',processing_started_time=NULL,
+            stage_updated_time=NOW(),error_message=NULL,finish_time=NULL
+        WHERE job_id=#{jobId} AND result_status='PROCESSING'
+          AND (processing_started_time IS NULL
+               OR processing_started_time &lt; DATE_SUB(NOW(), INTERVAL #{staleMinutes} MINUTE))
+    </update>
     <update id="resetFailedResults">
         UPDATE biz_practical_ai_result SET result_status='PENDING',suggested_score=NULL,scoring_details_json=NULL,
           evidence_json=NULL,confidence=NULL,provider_request_id=NULL,prompt_tokens=NULL,completion_tokens=NULL,

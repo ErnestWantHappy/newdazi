@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.ruoyi.business.domain.BizLesson;
 import com.ruoyi.business.domain.BizLessonAssignment;
@@ -56,13 +54,9 @@ class ProgrammingPublicRunTest {
         BizLessonMapper lessons = mock(BizLessonMapper.class);
         BizLessonQuestionMapper lessonQuestions = mock(BizLessonQuestionMapper.class);
         RedisCache redisCache = mock(RedisCache.class);
-        // RedisCache 的 redisTemplate 是公开字段，直接赋值比 mock 属性更稳定
-        RedisTemplate<String, Object> template = mock(RedisTemplate.class);
-        ValueOperations<String, Object> values = mock(ValueOperations.class);
-        redisCache.redisTemplate = template;
-        when(template.opsForValue()).thenReturn(values);
-        when(values.setIfAbsent(anyString(), any(), anyLong(), any())).thenReturn(true);
-        when(values.increment(anyString())).thenReturn(1L);
+        // 限流已全部收敛到 RedisCache 的原子封装，这里只模拟“抢到学生锁、班级计数为 1”
+        when(redisCache.setCacheObjectIfAbsent(anyString(), any(), anyLong(), any())).thenReturn(true);
+        when(redisCache.incrementCounterWithTtl(anyString(), anyLong(), any())).thenReturn(1L);
         Judge0Properties properties = new Judge0Properties();
         ReflectionTestUtils.setField(properties, "mode", "http"); ReflectionTestUtils.setField(properties, "maxPolls", 2); ReflectionTestUtils.setField(properties, "pollIntervalMs", 100);
         ReflectionTestUtils.setField(properties, "classConcurrency", 8); ReflectionTestUtils.setField(properties, "maxSourceBytes", 65536);
@@ -70,7 +64,7 @@ class ProgrammingPublicRunTest {
         student.setStudentId(30L); student.setDeptId(9L); student.setEntryYear("2025"); student.setClassCode("1");
         BizLessonAssignment current = new BizLessonAssignment(); current.setLessonId(10L); current.setPracticalOpen(1);
         when(assignments.selectCurrentLessonByClass("2025", "1", 9L)).thenReturn(10L);
-        when(assignments.selectCurrentAssignmentForUpdate("2025", "1", 9L)).thenReturn(current);
+        when(assignments.selectCurrentAssignment("2025", "1", 9L)).thenReturn(current);
         BizLesson lesson = new BizLesson(); lesson.setLessonId(10L); lesson.setDeptId(9L);
         when(lessons.selectBizLessonByLessonId(10L)).thenReturn(lesson);
         BizLessonQuestionDetailVo question = new BizLessonQuestionDetailVo(); question.setQuestionId(20L); question.setQuestionType("practical"); question.setPracticalMode("PYTHON");

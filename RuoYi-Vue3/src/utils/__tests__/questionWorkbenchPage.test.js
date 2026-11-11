@@ -8,6 +8,25 @@ const page = 'src/views/business/question/index.vue'
 const source = read(page)
 const script = scriptOf(page)
 
+test('生成期望输出只回填成功项并显示输入不足原因', async () => {
+  const body = script.slice(script.indexOf('async function generateExpectedOutputs()'), script.indexOf('const validationStatusText'))
+  const errors = []
+  const form = { value: { questionId: 1, answer: 'input()', programming: { testCases: [
+    { testCaseId: 1, expectedOutput: '原答案' }, { testCaseId: 2, expectedOutput: '旧答案' }
+  ] } } }
+  const context = { form, createdQuestionId: { value: null }, generatingOutputs: { value: false },
+    generateProgrammingOutputs: async () => ({ data: { cases: [
+      { testCaseId: 1, statusCode: 'RUNTIME_ERROR', expectedOutput: '半截', errorSummary: '输入行数不够' },
+      { testCaseId: 2, statusCode: 'ACCEPTED', expectedOutput: '完整答案' }
+    ] } }), ElMessage: { warning: text => errors.push(text), error: text => errors.push(text), success: () => {} } }
+  vm.createContext(context)
+  vm.runInContext(body + '\nthis.run = generateExpectedOutputs', context)
+  await context.run()
+  assert.equal(form.value.programming.testCases[0].expectedOutput, '原答案')
+  assert.equal(form.value.programming.testCases[1].expectedOutput, '完整答案')
+  assert.deepEqual(errors, ['输入行数不够'])
+})
+
 test('工作台按“打字题 → 选择/判断并列 → 操作题”固定顺序排列', () => {
   const typing = source.indexOf('title="打字题"')
   const choice = source.indexOf('title="选择题"')

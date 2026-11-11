@@ -2,6 +2,7 @@ package com.ruoyi.business.judge;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.regex.Pattern;
 
 /**
  * 判题前给代码套一层很薄的外壳，只做一件事：让 input() 的提示语在输出里带可识别标记。
@@ -21,12 +22,19 @@ public final class JudgeSourceWrapper {
     /** 程序还在等下一次输入时写到 stderr 的标记，用来区分“输入不够”和真正的运行错误。 */
     public static final String NEED_INPUT = "\u0000\u0001N\u0001\u0000";
 
+    /**
+     * 只在真正调用 input() 时套壳。
+     * 单纯出现 input 这个单词（注释、变量名、字符串）不该改变程序的执行方式，
+     * 否则会让原本正常的存量题目走上另一条链路。
+     */
+    private static final Pattern INPUT_CALL = Pattern.compile("\\binput\\s*\\(");
+
     private JudgeSourceWrapper() {
     }
 
     /** 是否需要套壳：不含 input( 的代码完全保持原样，避免改动既有判题行为。 */
     public static boolean needsWrap(String source) {
-        return source != null && source.contains("input");
+        return source != null && INPUT_CALL.matcher(source).find();
     }
 
     public static String wrap(String source) {
@@ -43,7 +51,8 @@ public final class JudgeSourceWrapper {
         builder.append("_PLATFORM_PROMPT_START = '\\x00\\x01P\\x01\\x00'\n");
         builder.append("_PLATFORM_PROMPT_END = '\\x00\\x01E\\x01\\x00'\n");
         builder.append("_PLATFORM_NEED_INPUT = '\\x00\\x01N\\x01\\x00'\n");
-        builder.append("class _PlatformNeedInput(Exception):\n");
+        // 继承 BaseException，学生的 except Exception 拦不住等待输入信号；裸 except 仍会拦住，属于无法避免的边界。
+        builder.append("class _PlatformNeedInput(BaseException):\n");
         builder.append("    pass\n");
         builder.append("def _platform_input(prompt=''):\n");
         builder.append("    _text = '' if prompt is None else str(prompt)\n");

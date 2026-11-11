@@ -7,10 +7,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:prod": "npm run test:login && npm run test:seat-helper && npm run test:question-workbench && vite build && node ../scripts/verify_frontend_release.mjs",
+    "build:prod": "npm run test:login && npm run test:seat-helper && npm run test:question-workbench && npm run test:python-runner && vite build && node ../scripts/verify_frontend_release.mjs",
     "test:login": "node --test src/utils/__tests__/loginIdleWork.test.js src/utils/__tests__/loginBrandAnimation.test.js",
     "test:seat-helper": "node --test src/utils/__tests__/seatHelperVersion.test.js src/utils/__tests__/seatHelper.test.js",
     "test:question-workbench": "node --test src/utils/__tests__/questionWorkbench.test.js src/utils/__tests__/questionWorkbenchPage.test.js",
+    "test:python-runner": "node --test src/components/PythonRunner/__tests__/fallback.test.js src/components/PythonRunner/__tests__/serverInteractive.test.js src/components/StudentProgrammingQuestion/__tests__/interactiveRunner.test.js",
     "build:stage": "vite build --mode staging",
     "preview": "vite preview"
   },

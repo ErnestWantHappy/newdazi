@@ -1,5 +1,15 @@
 # 部署与回滚约定
 
+## 2026-11-11 正式1.30.96（Python运行与批改等22项缺陷修复，前后端）
+
+130 前后端切至 `releases/20261111_bugfix_v1`：JAR `2cb253df9e7f703f429d6994317a36a5111309003715e87e4ab0042311928be5`（108,317,622B）；首页 `1fde9972c70b5a14698d734a9855bf2cfd867693ede974c264b10a34be6ab562`，`frontend.tar.gz` 43,392,889B / SHA-256 `15c1a391f1382c240912f14df1483353358d00510462c87cf74a8c903b682ff2`，825 文件；MainPID `3162268`、NRestarts 0、active/running、首页/验证码 200。产品更新 **174 / 1.30.96 / PUBLISHED**，真实教师接口可见。仅执行 `sql/platform_update_1_30_96_20261111.sql`，无表结构变更。
+
+发布前整库备份 `/data/backups/xueyeceping/20261111_195021_20261111_bugfix_v1/database.sql.gz`，54,586,308B，SHA-256 `d9190f0b2a9220299321bb5176b8e68144b5daafd4919a7e23fc65a072f6acf7`，含 `service.before`、`nginx.before`、`env.before`、`jar.before`、`index.before.html` 和 `release.before.json`。本机后端全量1074通过/0失败/0错误/3跳过，前端门禁67项+批改刷新14+草稿补存3全过，生产构建通过。
+
+发布异常：`deploy_bugfix_130.py --mode deploy` 在登记产品更新阶段 SSH 连接被重置，自动回滚也未建立连接；现场只读确认新 release 已完整切换且健康后，单独执行同一产品更新 SQL 并复核 PUBLISHED。未将本次记录为脚本全流程一次通过。线上验收真实教师更新列表、生成输出、匿名健康接口、批改页1440截图通过；不足输入专项因接口不收 stdin 未实测；正式学生凭据不可登录，线上学生403未实测（本机学生403已验证）。Nginx 5xx 仅重启窗口19:52:57–58，19:53后为0。
+
+回退：确认仍指向 `20261111_bugfix_v1` 后，恢复备份 `service.before` 到 `/etc/systemd/system/xueyeceping-130.service`、`nginx.before` 到站点配置、核对 `env.before` 未漂移，`systemctl daemon-reload`、重启 `xueyeceping-130`、`nginx -t && systemctl reload nginx`，回到1.30.95；更新174转DRAFT；不整库回灌。
+
 ## 2026-11-11 正式1.30.95（打字题英文引号自动纠正，仅后端）
 
 130 后端切至 `releases/20261111_typing_quote_v1`：JAR `741b595902488bd6446c74a5a8fbae1828694e4f49e22fa4cad538034f5d58b8`（108,315,711B）；前端未动，继续 `20261111_python_interactive_v1/frontend`。MainPID `3160006`、NRestarts 0、active、首页/验证码 200。产品更新 **173 / 1.30.95 / PUBLISHED**。

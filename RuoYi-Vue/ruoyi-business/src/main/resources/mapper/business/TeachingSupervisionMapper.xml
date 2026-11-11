@@ -676,6 +676,8 @@
         LEFT JOIN biz_student_answer practical
                ON practical.student_id = student.student_id
               AND practical.lesson_id = #{q.lessonId}
+              AND practical.submit_time &gt;= #{q.activityStartTime}
+              AND practical.submit_time &lt; #{q.activityEndTime}
               AND practical.student_answer IS NOT NULL AND TRIM(practical.student_answer) &lt;&gt; ''
               AND EXISTS (SELECT 1 FROM biz_question pq
                           WHERE pq.question_id = practical.question_id AND pq.question_type = 'practical')

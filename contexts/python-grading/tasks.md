@@ -1,6 +1,6 @@
 # Python 操作题批改稳定化任务
 
-状态：**1.30.88～1.30.92 均已上线**
+状态：**1.30.88～1.30.92、1.30.94 均已上线**
 
 ## 已完成
 
@@ -22,6 +22,32 @@
 - [x] Python 批改开放五星/数字切换，五星映射满分比例。
 - [x] 增加教师运行查看最高分提交接口和页面控制台，不写判题与成绩。
 - [x] 教师评分后学生重交不悄悄替换已评分代码版本。
+
+## 2026-11-10 Python 全链路交互运行与判题统一（2026-11-11 已上线 1.30.94）
+
+- [x] `JudgeSourceWrapper`：只对真正调用 `input(` 的代码套壳，提示语带标记，缺输入写 NEED_INPUT，报错只留学生栈帧。
+- [x] `JudgeOutput`：拆分 plain/visible/terminalText，兼容两种期望输出写法，不清洗字符串。
+- [x] `JudgeOutcome`：统一状态、加权分数、人话差异说明；缺输入不当通过。
+- [x] 课程判题、刷题判题、教师运行、作品运行全部接入统一判题结论。
+- [x] 修复 `ProgrammingSubmissionService` 把终端文本换行压平的问题（`clip` 保留中间换行，只去末尾空行）。
+- [x] 新增 `POST /business/python-practice/student/run`：刷题页调试运行，不写提交与成绩。
+- [x] 新增 `POST /business/teacher/grading/python/run`：学生未提交时教师也能运行当前代码，按课程归属校验权限。
+- [x] 新增 `POST /business/programming-questions/{id}/generate-outputs`：按参考代码生成期望输出，只算不落库。
+- [x] `PythonTerminal.vue` 统一教师端、学生做题、学生刷题、作品运行；降级自动切换并保留已填输入。
+- [x] 教师建题第 3 步显示逐测试点差异与“用参考代码生成输出”，提示可放心写 `input("提示")`。
+- [x] 教师“运行查看”打开即自动运行，不再需要点第二个按钮。
+- [x] 低版本浏览器只给轻提示，不拦截操作。
+- [x] 2026-11-11 复跑后端 1017 项、前端 20 项与生产构建，并用真实浏览器验证教师运行、学生刷题在本机/服务器两种模式下交互一致。
+- [x] 2026-11-11 130 上线 1.30.94：真实教师课程295连续两次提示语等待输入并按提示语回放，0脚本错误/0个5xx/0横向溢出；教师直接运行、生成输出与学生接口鉴权实测正确。
+
+### 本轮验证证据（本机）
+
+- 后端业务模块全量：**1017 项通过，0 失败，3 跳过**（`-DforkCount=0`）。
+- 新增后端定向测试：`JudgeSourceWrapperTest` 7 项（含 6 项用本机真实 Python 3.10 执行套壳源码）、`JudgeOutputTest` 14 项、`JudgeOutcomeTest` 6 项、`ProgrammingTeacherValidationTest` 6 项、`ProgrammingInteractiveRunTest` 4 项、`PythonPracticeInteractiveRunTest` 7 项、`TeacherGradingControllerPythonRunTest` 4 项全部通过。
+- 前端：`npm run test:python-runner` **20 项通过**（fallback / serverInteractive / interactiveRunner）；`npm run build:prod` 与发布门禁通过（入口 gzip 562,501B）。
+- 浏览器实测（2026-11-11，本机真实前后端 + 真实 Python 执行，临时 Judge0 兼容服务）：教师批改“运行查看”打开即运行，提示语后内联输入框，输入 17 后回放“请输入您的年龄：17 / 免票”；本机 Pyodide 与模拟无 JSPI 的服务器模式结果一致，页面脚本错误 0。学生刷题页同题两种模式同样通过。临时课程、答题行、题单已精确删除，残余 0。
+- 建题与历史兼容：参考答案含 `input("请输入姓名：")` 时 6/6 测试点通过；期望输出写成“提示语+结果”的旧题仍 6/6 通过；`generate-outputs` 返回纯结果且数据库逐行未变；错误期望输出返回逐测试点人话差异。
+- 未实测：130 整班 45 人并发、非 Chromium 浏览器实机、130 真实学生操作；作品 `.py` 预览运行和教师建题向导仅完成代码/接口核对，未在浏览器逐步点完；历史同分提交是否需要重算未评估。
 
 ## 验证证据
 
@@ -45,4 +71,11 @@
 - [x] 老师反馈课程`990607/4506` 43条、验收教师课程`662/4268` 74条系统0分转待批。
 - 历史修复脚本：`sql/python_grading_manual_confirm_20261110.sql`，目标ID为0时只查候选；其他课程仍须逐课核对后执行。
 - [ ] `RETAINED` 题目图片的长期未引用自动清理仍按原保守策略，不在本专题改动。
+
+## 2026-11-11 1.30.96 已发布
+
+- [x] F03 刷题轮询超时/服务错误不写系统分和进度；F04 生成输出输入不足返回中文 RUNTIME_ERROR、不回填失败项；F05 等待输入信号继承 BaseException；F06 服务器交互 stdin 每行带换行，空回车可推进；F07 切题/停止后迟到响应作废。
+- [x] F10 批改按 studentId 同步分数并只对当前学生接受服务端快照；F11 批改用真实 answerId、缺快照拒绝/跳过、两个事务 READ_COMMITTED；F12 判题入队失败退槽位和分钟额度、不标课堂已提交；F18 切题/卸载前补存旧题草稿；F21 resume 回收超时 PROCESSING 结果（AI 批改细节见 operation-artifact-ai-grading）。
+- [x] 本机后端全量1074通过/0失败/3跳过；前端 python-runner 23、批改刷新14、草稿补存3全过；F06/F07/F10 以真实 Vue 组件+隔离模拟 API 做浏览器验收。130 已发布 1.30.96，真实教师更新列表与批改页验收通过。
+- [ ] 未验：真实 Judge0 超时/整班并发、真实 Redis 故障与队列饱和、旧浏览器空回车、线上不足输入专项；正式学生凭据不可登录，线上学生403未实测（本机学生403已验证）。
 

@@ -1,27 +1,17 @@
 <template>
   <section class="terminal-section" aria-label="Python 运行终端">
     <div class="terminal-heading"><strong>运行结果</strong><span role="status" :class="{ 'has-error': state === 'error' }">{{ status }}</span></div>
-    <div v-if="!serverMode" ref="screen" class="terminal-screen" role="log" aria-label="程序输出" tabindex="0">
+    <!-- 本地运行和服务器运行共用同一终端外观：都是“提示语 → 你输入 → 输出” -->
+    <div ref="screen" class="terminal-screen" role="log" aria-label="程序输出" tabindex="0">
+      <!-- 输入框紧跟在提示语同一行，和 Thonny 一样，不会出现“提示语换行后才有输入框” -->
       <span>{{ transcript }}</span><form v-if="state === 'input'" class="terminal-input" @submit.prevent="sendInput"><input ref="inputElement" v-model="inputText" aria-label="程序等待输入，输入后按回车" autocomplete="off" spellcheck="false" maxlength="4096" :disabled="!busy"><button type="submit">回车确认</button></form>
-      <span v-if="!transcript && state === 'idle'" class="terminal-placeholder">点击“运行”，按程序提示输入并按回车。</span>
-    </div>
-    <!-- 旧版浏览器：程序一次性在服务器跑示例输入，按测试点展示实际输出 -->
-    <div v-else class="terminal-screen" role="log" aria-label="程序输出" tabindex="0">
-      <article v-for="(item, index) in serverCases" :key="index" class="server-case">
-        <div class="server-case-head"><strong>{{ item.caseName || `示例 ${index + 1}` }}</strong><el-tag size="small" :type="caseTagType(item.statusCode)">{{ caseLabel(item.statusCode) }}</el-tag></div>
-        <div><label>输入</label><pre>{{ item.inputText || '（无输入）' }}</pre></div>
-        <div><label>实际输出</label><pre>{{ item.actualOutput || '（无输出）' }}</pre></div>
-        <div v-if="item.errorMessage"><label>错误信息</label><pre class="error-text">{{ item.errorMessage }}</pre></div>
-        <div class="server-case-metrics">运行时间：{{ item.timeSeconds == null ? '-' : `${item.timeSeconds}s` }} · 内存：{{ item.memoryKb == null ? '-' : `${item.memoryKb}KB` }}</div>
-      </article>
-      <pre class="error-text">{{ transcript }}</pre>
-      <span v-if="!serverCases.length && state === 'idle'" class="terminal-placeholder">点击“运行”，服务器会按上方示例输入运行代码。</span>
+      <span v-if="!transcript && state === 'idle'" class="terminal-placeholder">点击“运行”，程序会在这里显示提示；按提示输入并按回车。</span>
     </div>
     <div class="terminal-note">运行用于调试，不计分；本次输出刷新后不保留。代码自动保存，交作业后可在提交记录中查看。</div>
 
     <!-- 运行方式由系统决定，只在降级时用一句轻提示告知，不打断操作 -->
     <p v-if="!localSupported" class="terminal-mode-hint">
-      当前浏览器版本较低，已自动改用服务器运行，使用方法与原来相同。升级到最新版
+      {{ fallbackNotice || '当前浏览器版本较低，已自动改用服务器运行，使用方法与原来相同。' }}升级到最新版
       <a href="https://www.google.cn/chrome/" target="_blank" rel="noopener">Chrome</a>
       或
       <a href="https://www.microsoft.com/edge" target="_blank" rel="noopener">Edge</a>
@@ -34,23 +24,52 @@
 import { computed, nextTick, onUnmounted, ref } from 'vue'
 import { createInteractiveRunner } from './interactiveRunner'
 import { canRunLocally } from './interactiveRunner.js'
+import { shouldFallbackToServer, FALLBACK_NOTICE } from '@/components/PythonRunner/fallback'
 
-const props = defineProps({ serverMode: { type: Boolean, default: false } })
-const emit = defineEmits(['busy', 'completed'])
+// serverMode 仅保留兼容旧调用；实际运行方式由浏览器能力自动决定。
+const props = defineProps({
+  serverMode: { type: Boolean, default: false },
+  // 课程与题目标识；本机运行失败自动降级时需要它
+  context: { type: Object, default: null }
+})
+const emit = defineEmits(['busy', 'completed', 'fallback'])
 const state = ref('idle')
 const status = ref('等待运行')
 const transcript = ref('')
 const inputText = ref('')
-const serverCases = ref([])
+// 服务器模式累计的输入行；每次提交都给到目前已填的全部内容
+const serverInputs = ref([])
+// 本机模式已填过的输入：本机中途失败转服务器时可以直接接着用
+const localInputs = ref([])
+let serverContext = null
 const screen = ref(null)
 const inputElement = ref(null)
 const busy = computed(() => ['loading', 'running', 'input'].includes(state.value))
 // 运行时再判一次：同一份前端会被不同版本浏览器使用，不能只按构建环境决定
 const localSupported = ref(canRunLocally())
+// 降级后要告诉学生发生了什么，但不能让他以为自己做错了
+const fallbackNotice = ref('')
 const runner = createInteractiveRunner(event => {
   if (event.type === 'output') transcript.value += event.text
-  else if (event.type === 'server-result') serverCases.value = event.cases || []
   else {
+    // 本机运行因浏览器能力失败时自动改走服务器，学生不需要重试或换浏览器。
+    if (shouldFallbackToServer(event, localSupported.value ? 'local' : 'server')) {
+      localSupported.value = false
+      fallbackNotice.value = FALLBACK_NOTICE
+      emit('fallback')
+      if (serverContext) {
+        transcript.value = ''
+        // 已经填过的输入带过去，学生不用重输
+        serverInputs.value = [...localInputs.value]
+        rerunServer()
+      } else {
+        // 没有可运行的代码时也要复位按钮状态，不能让学生停在“运行中”。
+        state.value = 'idle'
+        status.value = '等待运行'
+        emit('busy', false)
+      }
+      return
+    }
     state.value = event.type
     status.value = ({ loading: event.text, running: '正在运行…', input: '等待输入，按回车继续', done: '运行结束', error: '运行失败，可以修改后重试', stopped: '已停止，可以重新运行' })[event.type]
     if (event.type === 'error') transcript.value = event.text
@@ -63,27 +82,53 @@ const runner = createInteractiveRunner(event => {
   })
 })
 
-const CASE_LABELS = { ACCEPTED: '与示例一致', WRONG_ANSWER: '与示例不一致', SYNTAX_ERROR: '语法错误', RUNTIME_ERROR: '运行错误', TIME_LIMIT: '运行超时', MEMORY_LIMIT: '内存超限', SERVICE_ERROR: '服务器繁忙', COMPLETED: '运行完成' }
-function caseLabel(code) { return CASE_LABELS[code] || '运行失败' }
-function caseTagType(code) { return code === 'ACCEPTED' ? 'success' : code === 'SERVICE_ERROR' ? 'info' : 'danger' }
-
+/**
+ * 唯一的运行入口：能本机就跑本机，跑不了自动改服务器；
+ * 调用方不需要先判断浏览器能力，否则一旦判断与实际不符，学生就会卡在“点了没反应”。
+ */
 function run(code) {
   transcript.value = ''
   inputText.value = ''
-  serverCases.value = []
+  serverInputs.value = []
+  localInputs.value = []
+  // 记录代码与上下文；本机运行失败降级时可直接用同一份代码走服务器
+  serverContext = { code, context: props.context }
+  if (!localSupported.value) return rerunServer()
   runner.run(code, new URL(import.meta.env.VITE_PYODIDE_BASE_URL || '/pyodide/', location.href).href.replace(/\/?$/, '/'))
 }
 function runOnServer(code, context) {
   transcript.value = ''
-  serverCases.value = []
-  return runner.runOnServer(code, context)
+  serverInputs.value = []
+  localInputs.value = []
+  serverContext = { code, context }
+  localSupported.value = false
+  return rerunServer()
 }
-function sendInput() {  if (state.value !== 'input') return
-  if (runner.input(inputText.value)) {
-    inputText.value = ''
-    state.value = 'running'
-    status.value = '正在运行…'
+
+/**
+ * 用累计输入重跑一次；每次 input() 都会在服务端停下并返回 needInput。
+ * 服务端返回的是“到目前为止的完整终端内容”，所以要先清空，否则每多输一次就会重复一遍之前的提示和输出。
+ */
+function rerunServer() {
+  if (!serverContext) return Promise.resolve()
+  transcript.value = ''
+  return runner.runInteractiveOnServer(serverContext.code, serverContext.context, serverInputs.value)
+}
+function sendInput() {
+  if (state.value !== 'input') return
+  if (localSupported.value) {
+    if (runner.input(inputText.value)) {
+      localInputs.value = [...localInputs.value, inputText.value]
+      inputText.value = ''
+      state.value = 'running'
+      status.value = '正在运行…'
+    }
+    return
   }
+  // 服务器模式：累计这一行后重跑，下一个 input() 会再次进入等待输入状态
+  serverInputs.value = [...serverInputs.value, inputText.value]
+  inputText.value = ''
+  rerunServer()
 }
 function stop() { runner.stop() }
 onUnmounted(() => runner.dispose())
@@ -104,11 +149,4 @@ defineExpose({ run, runOnServer, stop })
 .terminal-note { margin-top:8px; line-height:1.6; }
 .terminal-mode-hint { margin:6px 0 0; color:#8a6d3b; font-size:12px; line-height:1.6; }
 .terminal-mode-hint a { color:#1a6fbf; }
-.server-case + .server-case { margin-top:12px; padding-top:12px; border-top:1px dashed #dcdfe6; }
-.server-case-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
-.server-case label { display:block; color:#667085; font-size:12px; }
-.server-case pre { margin:2px 0 6px; padding:6px 8px; background:#fff; border:1px solid #e5e7eb; border-radius:4px; font:inherit; white-space:pre-wrap; overflow-wrap:anywhere; }
-.server-case pre.error-text { color:#b42318; }
-.terminal-screen > pre.error-text { margin:0; padding:0; border:0; background:transparent; color:#b42318; font:inherit; }
-.server-case-metrics { color:#98a2b3; font-family:"Microsoft YaHei",sans-serif; font-size:12px; }
 </style>

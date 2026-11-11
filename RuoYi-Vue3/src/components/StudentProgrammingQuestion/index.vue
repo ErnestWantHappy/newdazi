@@ -45,9 +45,15 @@
         <el-button type="primary" :loading="submitting" :disabled="loading || !!loadError || isPending || localRunning" @click="submit">交作业</el-button>
         <el-button text :loading="saving" :disabled="loading || !!loadError" @click="saveDraft">保存草稿</el-button>
       </div>
-      <interactive-terminal :key="question.questionId" ref="terminal" :server-mode="!localRunSupported" @busy="localRunning = $event" @completed="refreshResult" />
-      <!-- 旧版浏览器提示保持次要，避免把一个可用功能渲染成故障 -->
-      <p v-if="!localRunSupported" class="browser-hint">当前浏览器版本较低，已改为服务器运行；建议升级谷歌浏览器最新版。</p>
+      <interactive-terminal
+        :key="question.questionId"
+        ref="terminal"
+        :server-mode="!localRunSupported"
+        :context="{ lessonId: props.lessonId, questionId: question.questionId }"
+        @busy="localRunning = $event"
+        @completed="refreshResult"
+        @fallback="localRunSupported = false"
+      />
     </section>
 
     <section v-if="current" class="result-section">
@@ -240,11 +246,17 @@ async function saveDraft() {
     if (!disposed && pendingDraft.value && (saved || questionId !== props.question.questionId)) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 800) }
   }
 }
+// 切题或离开页面前补存还没自动保存的代码；只发请求不等结果，避免卡住切换。
+function flushDraftNow(lessonId, questionId) {
+  if (!pendingDraft.value || !questionId || !sourceCode.value.trim() || lastSavedSource === sourceCode.value) return
+  saveProgrammingDraft({ lessonId, questionId, sourceCode: sourceCode.value }).catch(() => {})
+}
+
 function run() {
   if (!sourceCode.value.trim()) return ElMessage.warning('请先输入 Python 代码')
   if (loading.value || loadError.value || localRunning.value || isPending.value || submitting.value) return
-  // 旧版浏览器不能挂起 input()，改为服务端按示例输入运行一次
-  if (!localRunSupported.value) return terminal.value?.runOnServer(sourceCode.value, { lessonId: props.lessonId, questionId: props.question.questionId })
+  // 运行方式由终端自己决定：能用本机就用本机，起不来自动改服务器，
+  // 这里不再按浏览器版本分流，避免“检测说支持、实际起不来”时学生点了没反应。
   terminal.value?.run(sourceCode.value)
 }
 async function submit() {
@@ -272,7 +284,9 @@ function schedulePoll() {
   }, 1000)
 }
 
-watch(() => props.question.questionId, () => {
+watch(() => [props.lessonId, props.question.questionId], (value, oldValue) => {
+  // 回调执行时 props 已指向新题，补存必须用旧题目 ID。
+  if (oldValue) flushDraftNow(oldValue[0], oldValue[1])
   terminal.value?.stop()
   localRunning.value = false
   clearTimeout(draftTimer)
@@ -286,7 +300,7 @@ watch(() => props.question.questionId, () => {
   nextTick(load)
 }, { immediate: true })
 onMounted(() => nextTick(mountEditor))
-onUnmounted(() => { disposed = true; clearTimeout(draftTimer); clearTimeout(pollTimer); editorView?.destroy() })
+onUnmounted(() => { flushDraftNow(props.lessonId, loadedQuestionId); disposed = true; clearTimeout(draftTimer); clearTimeout(pollTimer); editorView?.destroy() })
 </script>
 
 <style scoped>

@@ -18,3 +18,5 @@ export function getStudentPracticeOverview(params = {}) { return request({ url: 
 export function getStudentPracticeQuestion(params) { return request({ url: '/business/python-practice/student/question', method: 'get', params }) }
 export function saveStudentPracticeDraft(data) { return request({ url: '/business/python-practice/student/draft', method: 'post', data }) }
 export function submitStudentPractice(data) { return request({ url: '/business/python-practice/student/submit', method: 'post', data }) }
+// 调试运行：不写提交记录和成绩，用于“边跑边输入”，与学生做题页体验一致
+export function runStudentPractice(data) { return request({ url: '/business/python-practice/student/run', method: 'post', data, timeout: 60000, headers: { repeatSubmit: false } }) }

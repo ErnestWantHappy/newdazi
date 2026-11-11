@@ -30,6 +30,24 @@ public class PythonPracticeStudentController extends BaseController {
     @GetMapping("/question")
     public AjaxResult question(@RequestParam String sourceType, @RequestParam Long sourceId, @RequestParam Long questionId, @RequestParam(defaultValue="regular") String space) { service.assertStudentSpace(SecurityUtils.getUserId(),space,sourceType,sourceId,questionId); return success(service.studentQuestion(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), sourceType, sourceId, questionId)); }
 
+    /**
+     * 调试运行：只跑代码，不写提交和成绩。
+     * 学生端统一使用“边跑边输入”的方式，程序停在 input() 时前端继续问。
+     */
+    @PreAuthorize("@studentSs.isStudent()")
+    @PostMapping("/run")
+    public AjaxResult run(@RequestBody Map<String, Object> request) {
+        Long sourceId = requiredLong(request, "sourceId");
+        Long questionId = requiredLong(request, "questionId");
+        String sourceType = strOrNull(request == null ? null : request.get("sourceType"));
+        if (sourceId == null || questionId == null || sourceType == null) {
+            return error("参数不完整：sourceType/sourceId/questionId 必须为有效值");
+        }
+        return success(service.runInteractive(SecurityUtils.getUserId(),
+            String.valueOf(request.getOrDefault("space", "regular")), sourceType, sourceId, questionId,
+            strOrNull(request.get("sourceCode")), strOrNull(request.get("stdin"))));
+    }
+
     @PreAuthorize("@studentSs.isStudent()")
     @PostMapping("/draft")
     public AjaxResult draft(@RequestBody Map<String, Object> request) {

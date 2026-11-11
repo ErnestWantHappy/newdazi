@@ -695,8 +695,14 @@ public class PracticalArtifactService
                 }
                 for (PracticalAttachment attachment : attachments)
                 {
-                    if ("pending".equals(attachment.getNormalizedStatus()))
-                        conversionService.convertAsync(attachment.getAttachmentId());
+                    if ("pending".equals(attachment.getNormalizedStatus())) {
+                        try {
+                            conversionService.convertAsync(attachment.getAttachmentId());
+                        } catch (RuntimeException e) {
+                            // 事务已提交，转换故障不能再向学生报告提交失败。
+                            org.slf4j.LoggerFactory.getLogger(PracticalArtifactService.class).warn("提交后附件转换投递失败，attachmentId={}", attachment.getAttachmentId(), e);
+                        }
+                    }
                 }
             }
         });

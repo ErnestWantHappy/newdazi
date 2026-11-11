@@ -36,6 +36,8 @@ import java.util.UUID;
 @RequestMapping("/business/countyExam")
 public class CountyExamController extends BaseController {
 
+    /** 上传归属键要覆盖整场考试；考试时长没有业务上限，按 24 小时保留。 */
+    static final Integer UPLOAD_OWNER_TTL_HOURS = 24;
     @Autowired
     private ICountyExamService countyExamService;
 
@@ -276,13 +278,18 @@ public class CountyExamController extends BaseController {
             throw new ServiceException("上传文件不能为空，请重新选择文件");
         }
         Long studentId = countyExamService.validateStudentWorkUpload(examId, questionId);
+        if (studentId == null) {
+            // 服务事务已提交自动交卷结果，此时提示超时不会回滚交卷。
+            throw new ServiceException("区域抽测作答时间已结束，系统已自动交卷");
+        }
         // 区域评卷匿名化不能只停留在页面，磁盘路径也不得包含学生ID。
         String scopedUploadPath = RuoYiConfig.getUploadPath() + "/county-exam/" + examId
                 + "/" + questionId + "/" + UUID.randomUUID();
         String fileName = FileUploadUtils.upload(
                 scopedUploadPath, file, new String[] { "doc", "docx", "ppt", "pptx", "xls", "xlsx", "pdf", "jpg", "jpeg", "png" }, true);
-        redisCache.setCacheObject("student:county-exam-upload-owner:" + fileName, studentId, 60,
-                java.util.concurrent.TimeUnit.MINUTES);
+        // 考试时长没有上限，归属键必须覆盖整场考试，避免长考试最后提交被判“作品路径无效”。
+        redisCache.setCacheObject("student:county-exam-upload-owner:" + fileName, studentId, UPLOAD_OWNER_TTL_HOURS,
+                java.util.concurrent.TimeUnit.HOURS);
         AjaxResult ajax = AjaxResult.success();
         ajax.put("fileName", fileName);
         ajax.put("newFileName", FileUtils.getName(fileName));

@@ -14,6 +14,8 @@ public final class JudgeOutcome {
 
     /** 单测试点状态：只有判题服务本身接受、且输出匹配，才算通过。 */
     public static String caseStatus(Judge0Result result, String expectedOutput) {
+        // 正式判题时输入由题目固定给出，程序还要输入说明题目漏配了输入，不能当成功。
+        if (JudgeOutput.needsMoreInput(result == null ? null : result.getStderr())) return "RUNTIME_ERROR";
         String status = Judge0StatusMapper.toPlatformStatus(result);
         if (!"ACCEPTED".equals(status) && !"WRONG_ANSWER".equals(status)) return status;
         if (result == null) return status;
@@ -22,6 +24,8 @@ public final class JudgeOutcome {
 
     /** 自定义运行没有期望输出，能跑完即视为运行成功。 */
     public static String runStatus(Judge0Result result) {
+        // 学生已经提交了输入却仍停在等待输入，说明输入没填够，按运行错误提示更贴近真实原因。
+        if (JudgeOutput.needsMoreInput(result == null ? null : result.getStderr())) return "RUNTIME_ERROR";
         String status = Judge0StatusMapper.toPlatformStatus(result);
         return "ACCEPTED".equals(status) ? "COMPLETED" : status;
     }
@@ -69,8 +73,8 @@ public final class JudgeOutcome {
         if (OutputComparator.matches(expected, actual)) return null;
         String visible = output.visible();
         if (!visible.equals(actual) && OutputComparator.matches(expected, visible)) {
-            return "程序输出的提示语和结果连在一起了。可以把期望输出写成“提示语+结果”，"
-                    + "或点“用参考代码生成输出”，系统会自动按真实运行结果填写。";
+            // 教师把“提示语+结果”一起写成期望输出时，判题本身是能通过的，不算差异。
+            return null;
         }
         return "期望输出是“" + brief(expected) + "”，程序实际输出是“" + brief(actual) + "”。";
     }

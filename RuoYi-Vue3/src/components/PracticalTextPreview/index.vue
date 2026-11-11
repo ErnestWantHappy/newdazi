@@ -13,7 +13,7 @@
       </div>
       <iframe v-if="data.fileKind === 'HTML' && mode === 'effect'" :srcdoc="previewDocument" sandbox="allow-scripts" referrerpolicy="no-referrer" title="学生网页作品效果" class="html-work" />
       <pre v-else class="source-work">{{ data.text }}</pre>
-      <PracticalPythonRun v-if="isPython && allowPythonRun" :key="attachmentId" :attachment-id="attachmentId" />
+      <PracticalPythonRun v-if="isPython && allowPythonRun" :key="attachmentId" :attachment-id="attachmentId" :code="data.text" />
     </template>
   </div>
 </template>

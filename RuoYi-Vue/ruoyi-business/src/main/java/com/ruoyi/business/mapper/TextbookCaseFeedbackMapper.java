@@ -18,10 +18,11 @@ public interface TextbookCaseFeedbackMapper
         + "FROM biz_textbook_case_feedback WHERE case_id=#{caseId}")
     Map<String, Object> summary(@Param("caseId") Long caseId, @Param("userId") Long userId);
 
-    @Insert("INSERT INTO biz_textbook_case_feedback(case_id,user_id,vote,reason) VALUES(#{caseId},#{userId},#{vote},#{reason}) "
+    @Insert("INSERT INTO biz_textbook_case_feedback(case_id,user_id,vote,reason) "
+        + "VALUES(#{caseId},#{userId},#{vote},CASE WHEN #{vote}=0 THEN NULL ELSE NULLIF(#{reason},'') END) "
         + "ON DUPLICATE KEY UPDATE "
         + "vote=VALUES(vote), "
-        + "reason=CASE WHEN VALUES(vote)=0 THEN NULL WHEN VALUES(reason) IS NOT NULL THEN NULLIF(VALUES(reason),'') ELSE reason END, "
+        + "reason=CASE WHEN VALUES(vote)=0 THEN NULL WHEN #{reason} IS NOT NULL THEN NULLIF(#{reason},'') ELSE reason END, "
         + "updated_at=NOW()")
     int vote(@Param("caseId") Long caseId, @Param("userId") Long userId, @Param("vote") int vote, @Param("reason") String reason);
 

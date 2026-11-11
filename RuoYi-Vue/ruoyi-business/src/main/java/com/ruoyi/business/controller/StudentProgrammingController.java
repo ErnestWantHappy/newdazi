@@ -79,8 +79,10 @@ public class StudentProgrammingController extends BaseController {
     private AjaxResult submit(StudentProgrammingRequest request, String kind, HttpServletRequest httpRequest) {
         BizStudent student = currentStudent(); guideSheetAccessService.assertNoPendingCountyExam();
         ProgrammingSubmission submission = programmingSubmissionService.submit(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId, request.sourceCode, request.customInput, request.submissionKey, kind, httpRequest.getRemoteAddr(), programmingSubmissionWorker);
-        taskStateService.markSafely(student, student.getDeptId(), request.lessonId, request.questionId,
-                "SUBMIT".equals(kind) ? ClassroomTaskStateService.SUBMITTED : ClassroomTaskStateService.WORKING);
+        // 判题服务异常时学生还没拿到结果，不能把课堂任务标成已提交。
+        if (!"SERVICE_ERROR".equals(submission.getStatusCode()))
+            taskStateService.markSafely(student, student.getDeptId(), request.lessonId, request.questionId,
+                    "SUBMIT".equals(kind) ? ClassroomTaskStateService.SUBMITTED : ClassroomTaskStateService.WORKING);
         List<StudentProgrammingSubmissionVo> history = programmingSubmissionService.getStudentHistory(student, SecurityUtils.getDeptId(), request.lessonId, request.questionId);
         StudentProgrammingSubmissionVo safe = history.stream().filter(item -> submission.getSubmissionId().equals(item.getSubmissionId())).findFirst().orElse(null);
         String message = "RUN".equals(kind) ? "示例运行已进入队列" : ("CUSTOM_RUN".equals(kind) ? "自定义运行已进入队列" : "正式提交已进入队列");

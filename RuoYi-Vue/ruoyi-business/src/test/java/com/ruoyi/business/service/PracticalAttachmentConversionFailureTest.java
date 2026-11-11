@@ -86,6 +86,84 @@ class PracticalAttachmentConversionFailureTest
         assertEquals("PDF 文件生成失败", attachment.getPreviewErrorMessage());
     }
 
+    @Test
+    void rejectedQueueReleasesClaimWithoutConsumingRetry() {
+        PracticalAttachment attachment = attachment(103L);
+        attachment.setFileKind("PDF");
+        org.mockito.Mockito.when(artifactMapper.selectAttachmentById(103L)).thenReturn(attachment);
+        org.mockito.Mockito.when(artifactMapper.claimAttachmentNormalization(org.mockito.ArgumentMatchers.eq(103L),
+                org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        PracticalAttachmentConversionService proxy = org.mockito.Mockito.mock(PracticalAttachmentConversionService.class);
+        ReflectionTestUtils.setField(service, "self", proxy);
+        org.mockito.Mockito.doThrow(new java.util.concurrent.RejectedExecutionException("full"))
+                .when(proxy).processClaimedAsync(103L);
+
+        org.junit.jupiter.api.Assertions.assertFalse(service.convertAsync(103L));
+
+        org.mockito.Mockito.verify(artifactMapper).releaseAttachmentNormalizationClaim(103L);
+        org.mockito.Mockito.verify(artifactMapper, org.mockito.Mockito.never())
+                .resetAttachmentNormalization(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void afterCommitConversionFailureDoesNotFailSubmittedWork() {
+        PracticalArtifactService artifacts = new PracticalArtifactService();
+        PracticalAttachmentConversionService conversion = org.mockito.Mockito.mock(PracticalAttachmentConversionService.class);
+        ReflectionTestUtils.setField(artifacts, "conversionService", conversion);
+        org.mockito.Mockito.when(conversion.convertAsync(104L)).thenThrow(new IllegalStateException("temporary"));
+        PracticalAttachment attachment = attachment(104L);
+        attachment.setNormalizedStatus("pending");
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            ReflectionTestUtils.invokeMethod(artifacts, "registerAfterCommit", java.util.Collections.emptyList(),
+                    java.util.Collections.singletonList(attachment));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                    org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations().get(0).afterCommit());
+            org.mockito.Mockito.verify(conversion).convertAsync(104L);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void pendingQueueRetryUsesAtomicClaimWithoutIncrementingFailureCount() {
+        PracticalAttachment attachment = attachment(105L);
+        attachment.setNormalizedStatus("pending");
+        org.mockito.Mockito.when(artifactMapper.selectAttachmentById(105L)).thenReturn(attachment);
+        PracticalAttachmentConversionService proxy = org.mockito.Mockito.mock(PracticalAttachmentConversionService.class);
+        ReflectionTestUtils.setField(service, "self", proxy);
+        org.mockito.Mockito.when(proxy.convertAsync(105L)).thenReturn(true);
+        assertTrue(service.retry(105L));
+        org.mockito.Mockito.verify(proxy).convertAsync(105L);
+        org.mockito.Mockito.verify(artifactMapper, org.mockito.Mockito.never())
+                .resetAttachmentNormalization(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void recoverableMapperIncludesAgedPendingWithBatchAndRetryLimits() throws Exception {
+        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        try (java.io.InputStream input = getClass().getClassLoader()
+                .getResourceAsStream("mapper/business/PracticalArtifactMapper.xml")) {
+            new org.apache.ibatis.builder.xml.XMLMapperBuilder(input, configuration, "PracticalArtifactMapper.xml",
+                    configuration.getSqlFragments()).parse();
+        }
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("failedBefore", new java.util.Date());
+        params.put("stuckBefore", new java.util.Date());
+        params.put("maxRetryCount", 3);
+        String sql = configuration.getMappedStatement("com.ruoyi.business.mapper.PracticalArtifactMapper.selectRecoverableAttachments")
+                .getBoundSql(params).getSql().replaceAll("\\s+", " ");
+        assertTrue(sql.contains("normalized_status = 'pending'"));
+        assertTrue(sql.contains("file_kind IN ('OFFICE', 'PDF', 'IMAGE')"));
+        assertTrue(sql.contains("COALESCE(update_time, create_time) <= ?"));
+        assertTrue(sql.contains("normalized_retry_count < ?"));
+        assertTrue(sql.contains("LIMIT 200"));
+        String release = configuration.getMappedStatement("com.ruoyi.business.mapper.PracticalArtifactMapper.releaseAttachmentNormalizationClaim")
+                .getBoundSql(java.util.Collections.singletonMap("attachmentId", 1L)).getSql();
+        org.junit.jupiter.api.Assertions.assertFalse(release.contains("normalized_retry_count"));
+        assertTrue(release.contains("normalized_status = 'converting'"));
+    }
+
     private PracticalAttachment attachment(Long id)
     {
         PracticalAttachment attachment = new PracticalAttachment();

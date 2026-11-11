@@ -1,10 +1,14 @@
 # 架构资料索引
 
-2026-11-11 **当前正式1.30.93（仅前端）**：130前端 `releases/20261111_case_panel_resize_v1`（首页`447e7bc5`），后端仍1.30.92（JAR`a8162e41`，MainPID`3107625`、NRestarts0）；教材资源面板可拖宽、课例标题左对齐，产品更新171/PUBLISHED。详见[发布日志](../../contexts/RELEASE_LOG.md)、[部署与回滚](DEPLOYMENT_RUNBOOK.md)。
+2026-11-11 **当前正式1.30.96**：130前后端均为 `releases/20261111_bugfix_v1`（JAR`2cb253df`、首页`1fde9972`），MainPID`3162268`、NRestarts0、active/running；产品更新174/PUBLISHED。本轮按F01–F22修复区域抽测超时交卷、Python交互运行、批改快照、附件转换、AI终态、免抽测/拓展班、草稿补存、PDF清理、投票理由、监管时间窗等22项；本机后端1074通过/0失败/3跳过，前端门禁+手工测试84项全过。发布脚本在登记产品更新阶段SSH连接重置，现场确认新版本已切换且健康后单独执行登记SQL，异常与回滚见[发布日志](../../contexts/RELEASE_LOG.md)。线上不足输入专项与正式学生403未实测。当前事实见[核心上下文](../../contexts/PROJECT_CORE.md)，逐项证据见[修复进度](../../contexts/bug-audit-20261111/fix-progress.md)。
 
-2026-11-10 **本机在研、未发布**：Python 全链路交互运行与判题统一。新增`JudgeSourceWrapper`（提示语打标记，不做正则删除）、`JudgeOutput`（plain/visible/terminalText）、`JudgeOutcome`（统一状态与加权分数）；`PythonTerminal.vue`统一教师批改、学生刷题、`.py`作品三个运行入口，学生做题页复用同一运行内核与交互规则；高版本浏览器本机跑，其余自动降级且保留已填输入。新增三个不写成绩的接口（刷题调试运行、教师直接运行、生成期望输出），无表结构变更。2026-11-11 复跑：后端业务全量1017项通过/0失败/3跳过，前端20项与生产构建通过；真实浏览器验证教师“运行查看”和学生刷题在本机Pyodide/服务器两种模式下均为“提示语→输入→输出”，页面脚本错误0。详见[设计与边界](../../contexts/python-grading/design-interactive-terminal.md)、[任务与证据](../../contexts/python-grading/tasks.md)、[当前事实](../../contexts/PROJECT_CORE.md)。正式环境前端已为1.30.93（教材资源面板可拖宽），后端仍为1.30.92；本项 Python 交互仍未发布。
+2026-11-11 **历史1.30.95**：打字英文引号归一化和判题限流修复已上线；130后端当时为 `releases/20261111_typing_quote_v1`（JAR`741b5959`），前端仍为 `releases/20261111_python_interactive_v1/frontend`（首页`4239bdf9`），产品更新173/PUBLISHED。整班Judge0专项仍未实测。
 
-2026-11-10 当前正式1.30.91：仅数据修正，130前后端仍为`releases/20261110_python_grading_snapshot_v1`（JAR`ec36df3f`、首页`f66da562`），MainPID`3097248`、NRestarts0、启动错误0。顾意丽《返回成语现场》配套材料包说明由1045字技术清单改为91字教师说明，产品更新169/PUBLISHED真实教师可见；1.30.88完成Python批改最高分代码同版本、无答题行补建、批量采用行锁/个案容错、最高分索引、课例来源空值修复与导入脚本加固；1.30.89完成批改页手机窄屏纵向布局；1.30.90补页面快照并发保护。产品更新166/1.30.88、167/1.30.89、168/1.30.90、169/1.30.91均PUBLISHED。电子教材16册/1840页、高中3册539页、2份课程标准、327课例/1050资源保持。[Python专题](../../contexts/python-grading/requirements.md)、[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[发布日志](../../contexts/RELEASE_LOG.md)、[ADR-020](ADR/ADR-020-python-grading-best-submission-source.md)。
+2026-11-11 已上线1.30.94：Python 全链路交互运行与判题统一。`JudgeSourceWrapper`（提示语打标记，不做正则删除）、`JudgeOutput`（plain/visible/terminalText）、`JudgeOutcome`（统一状态与加权分数）；`PythonTerminal.vue`统一教师批改、学生刷题、`.py`作品三个运行入口，学生做题页复用同一运行内核与交互规则；高版本浏览器本机跑，其余自动降级且保留已填输入。新增三个不写成绩的接口（刷题调试运行、教师直接运行、生成期望输出），无表结构变更。验收：后端业务全量1017项通过/0失败/3跳过，前端20项与生产构建通过；130真实教师“运行查看”连续两次提示语等待输入并回放，0脚本错误、0个5xx；教师直接运行接口与生成输出接口实测正确。详见[设计与边界](../../contexts/python-grading/design-interactive-terminal.md)、[任务与证据](../../contexts/python-grading/tasks.md)、[当前事实](../../contexts/PROJECT_CORE.md)。
+
+2026-11-11 **判题限流修复已随1.30.95上线**：修复非原子归还留下TTL=-1负值键、运行锁短于判题耗时且释放不认主、分钟额度失败不回退、槽位归还依赖可能变更的档案等问题。`RedisCache`新增3个Lua原子助手，运行侧使用认主释放和逐测试点续期；无SQL迁移/新配置/新依赖。历史全量1036项及真实Redis复验已通过，属于1.30.95前证据，不是1.30.96本轮验证；130整班专项尚未实测。详见[复核与修复报告](../../contexts/bug-audit-20261111/report.md)、[限流实现与键方案](INTEGRATIONS.md)。
+
+2026-11-10 **历史1.30.91状态**：仅数据修正，130前后端当时为`releases/20261110_python_grading_snapshot_v1`（JAR`ec36df3f`、首页`f66da562`），MainPID`3097248`、NRestarts0、启动错误0。顾意丽《返回成语现场》配套材料包说明由1045字技术清单改为91字教师说明，产品更新169/PUBLISHED真实教师可见；1.30.88完成Python批改最高分代码同版本、无答题行补建、批量采用行锁/个案容错、最高分索引、课例来源空值修复与导入脚本加固；1.30.89完成批改页手机窄屏纵向布局；1.30.90补页面快照并发保护。产品更新166/1.30.88、167/1.30.89、168/1.30.90、169/1.30.91均PUBLISHED。电子教材16册/1840页、高中3册539页、2份课程标准、327课例/1050资源保持。[Python专题](../../contexts/python-grading/requirements.md)、[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[发布日志](../../contexts/RELEASE_LOG.md)、[ADR-020](ADR/ADR-020-python-grading-best-submission-source.md)。
 
 2026-11-09 已随当前release上线：教研活动课例导入3节（post 15郑东旭《语音合成》、post 60赵琪《返回成语现场》、post 70顾意丽《返回成语现场》），总课例327/资源1050；来源活动、`RESEARCH_ACTIVITY`标签、压缩包/音频识别和窄屏换行已生效。2026-11-10 1.30.91将顾意丽资源2314的教师说明改为91字，并修正后续压缩包说明生成规则。专题[需求](../../contexts/research-to-textbook-cases/requirements.md)、[设计](../../contexts/research-to-textbook-cases/design.md)、[任务](../../contexts/research-to-textbook-cases/tasks.md)、[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[ADR-018](ADR/ADR-018-research-post-idempotent-case-import.md)。
 
@@ -26,9 +30,9 @@
 
 2026-11-04 本机在研操作题 PY 上传、源码预览与教师 Judge0 隔离运行，尚未发布。详见[需求](../../contexts/practical-python-upload/requirements.md)、[设计](../../contexts/practical-python-upload/design.md)、[验证与待办](../../contexts/practical-python-upload/tasks.md)。
 
-> 整理日期 **2026-11-09**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
+> 整理日期 **2026-11-11**。先读 `AGENTS.md` → [PROJECT_CORE.md](../../contexts/PROJECT_CORE.md)，再按下表读任务相关资料；不默认全文扫描或通读历史。
 >
-> 最新正式：130 **1.30.91**（数据修正；前后端仍为`releases/20261110_python_grading_snapshot_v1`，JAR `ec36df3f`、首页`f66da562`，助手0.2.6）。1.30.88修复Python批改最高分代码/分数一致、无答题行补建与批量采用个案容错；1.30.89修复手机窄屏批改布局；1.30.90补页面快照并发保护；1.30.91精简顾意丽配套材料包说明并修正生成规则。电子教材16册1840页、2份课程标准、327课例/1050资源继续有效。详细证据见[1.30.91验收](../../contexts/research-to-textbook-cases/release-1.30.91.md)、[Python批改专题](../../contexts/python-grading/tasks.md)、[发布日志](../../contexts/RELEASE_LOG.md)与[数据模型](DATA_MODEL.md)。
+> 当前正式版本与本轮状态以本页顶部和核心上下文为准；下方带旧日期条目保留为历史专题入口，不能据此认定功能仍未上线。电子教材16册1840页、2份课程标准、327课例1050资源保持。
 
 ## 按任务选择资料
 

@@ -204,16 +204,25 @@ public class TextbookPdfService
         if (cacheDir == null)
         {
             Path temp = null;
+            boolean ok = false;
             try
             {
                 temp = Files.createTempFile("textbook-pdf-", ".pdf");
                 buildWithPermit(pages, temp, title);
+                ok = true;
                 return new PdfDownload(temp, filename, true);
             }
             catch (IOException e)
             {
-                deleteQuietly(temp);
                 throw new ServiceException("PDF 生成失败，请稍后重试");
+            }
+            finally
+            {
+                // 任何失败都要清掉半成品；成功时文件交给下载流程，下载后删除。
+                if (!ok)
+                {
+                    deleteQuietly(temp);
+                }
             }
         }
 

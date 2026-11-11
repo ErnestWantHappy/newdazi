@@ -54,6 +54,7 @@ public interface PracticalAiGradingMapper
     int markResultProcessing(@Param("resultId") Long resultId, @Param("processingStage") String processingStage);
     int updateResultStage(@Param("resultId") Long resultId, @Param("processingStage") String processingStage);
     int resetInterruptedResults(@Param("jobId") Long jobId);
+    int resetStaleProcessingResults(@Param("jobId") Long jobId, @Param("staleMinutes") int staleMinutes);
     int resetFailedResults(@Param("jobId") Long jobId);
     int updatePendingResultsStatus(@Param("jobId") Long jobId, @Param("resultStatus") String resultStatus,
                                    @Param("errorMessage") String errorMessage, @Param("finishTime") Date finishTime);

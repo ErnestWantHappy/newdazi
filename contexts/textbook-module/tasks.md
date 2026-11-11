@@ -191,3 +191,10 @@ python scripts/textbook/smoke_teacher_textbook.py
 - [x] 首次 `getAttribute` 空值异常已定位为平台总览页接口迟到竞态，增加卸载后的结果丢弃和图表容器空值保护；独立前端热修`20261109_high_school_overview_guard_v1`已平滑切换，后端未重启。
 - [x] 发布 `20261109_high_school_textbooks_v1`后端与`20261109_high_school_overview_guard_v1`前端，产品更新165/1.30.87/PUBLISHED；详情、哈希、证据与回退见[1.30.87验收](release-1.30.87.md)。
 - [ ] 未做：真实课堂长期使用观察；本轮只验证现代Chromium，未覆盖老旧机房浏览器。
+
+## 2026-11-11 1.30.96 已发布
+
+- [x] F19 电子教材 PDF：缓存目录不可写退回系统临时文件时，用成功标记+finally清理半成品；`ServiceException`/`IOException` 失败都不再遗留 `textbook-pdf-*`。`TextbookPdfServiceTempFileTest` 1项通过。
+- [x] F20 课例评价投票理由：INSERT/UPDATE 统一直接引用 `#{reason}`，首次空原因/清空/快捷改票/撤销五种组合语义一致；注解契约+真实 MySQL 随机克隆表用例2项通过，测试表已 DROP，`review_%` 残留0。
+- [x] 130 已发布1.30.96；本专题无表结构和既有教材资源改动。
+- [ ] 未验：真实只读共享目录权限、真实教师连续投票交互。

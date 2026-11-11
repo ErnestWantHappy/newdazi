@@ -112,6 +112,11 @@
         LEFT JOIN sys_user user
                ON user.user_id = student.user_id
               AND user.dept_id = candidate.dept_id
+        WHERE NOT EXISTS (
+            SELECT 1 FROM biz_extension_class ext
+            WHERE ext.dept_id = candidate.dept_id
+              AND ext.entry_year = candidate.entry_year
+              AND ext.class_code = candidate.class_code)
         GROUP BY candidate.dept_id, candidate.entry_year, candidate.class_code
         ORDER BY CAST(candidate.class_code AS UNSIGNED), candidate.class_code
     </select>
@@ -128,12 +133,16 @@
                     ON lesson.lesson_id = scope.lesson_id
                    AND lesson.dept_id = scope.dept_id
             WHERE lesson.creator_id = #{teacherId}
+              AND IFNULL(lesson.lesson_scope,'regular') = 'regular'
               AND scope.dept_id = #{deptId}
               AND scope.entry_year = #{entryYear}
             UNION
             SELECT assignment.lesson_id, assignment.dept_id,
                    assignment.entry_year, assignment.class_code
             FROM biz_lesson_assignment assignment
+            INNER JOIN biz_lesson lesson
+                    ON lesson.lesson_id = assignment.lesson_id
+                   AND IFNULL(lesson.lesson_scope,'regular') = 'regular'
             WHERE assignment.assigner_id = #{teacherId}
               AND assignment.dept_id = #{deptId}
               AND assignment.entry_year = #{entryYear}
@@ -142,6 +151,9 @@
                    history.entry_year COLLATE utf8mb4_general_ci AS entry_year,
                    history.class_code COLLATE utf8mb4_general_ci AS class_code
             FROM biz_lesson_assignment_history history
+            INNER JOIN biz_lesson lesson
+                    ON lesson.lesson_id = history.lesson_id
+                   AND IFNULL(lesson.lesson_scope,'regular') = 'regular'
             WHERE (history.assigner_id = #{teacherId} OR history.advanced_by = #{teacherId})
               AND history.dept_id = #{deptId}
               AND history.entry_year = #{entryYear}
@@ -150,6 +162,9 @@
                    history.entry_year COLLATE utf8mb4_general_ci AS entry_year,
                    history.class_code COLLATE utf8mb4_general_ci AS class_code
             FROM biz_lesson_assignment_history history
+            INNER JOIN biz_lesson lesson
+                    ON lesson.lesson_id = history.next_lesson_id
+                   AND IFNULL(lesson.lesson_scope,'regular') = 'regular'
             WHERE history.next_lesson_id IS NOT NULL
               AND (history.assigner_id = #{teacherId} OR history.advanced_by = #{teacherId})
               AND history.dept_id = #{deptId}
@@ -164,6 +179,11 @@
                    AND user.del_flag = '0'
             WHERE user.dept_id = #{deptId}
               AND student.entry_year = #{entryYear}
+              AND NOT EXISTS (
+                  SELECT 1 FROM biz_extension_class ext
+                  WHERE ext.dept_id = user.dept_id
+                    AND ext.entry_year = student.entry_year
+                    AND ext.class_code = student.class_code)
         ),
         activity AS (
             SELECT answer.lesson_id, answer.student_id, answer.submit_time AS activity_time

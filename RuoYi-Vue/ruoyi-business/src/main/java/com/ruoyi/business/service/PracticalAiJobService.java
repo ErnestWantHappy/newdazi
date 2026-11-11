@@ -175,6 +175,8 @@ public class PracticalAiJobService
         if (!"PAUSED".equals(job.getJobStatus())) throw new ServiceException("当前任务不是暂停状态");
         if (StringUtils.isBlank(job.getReferenceAnswerJson()))
             throw new ServiceException("旧任务缺少教师参考答案，不能继续；请取消后重新发起");
+        // 只回收明显超时的处理中结果；暂停后马上继续时旧 worker 可能仍在跑，不能重复派发。
+        mapper.resetStaleProcessingResults(jobId, 15);
         mapper.updateJobStatus(jobId, "PENDING", null, null, null);
         addEvent(jobId, null, "INFO", "RESUMED", "教师已继续任务，将从未完成作品接续");
         worker.run(jobId);
@@ -203,6 +205,10 @@ public class PracticalAiJobService
         PracticalAiJob job = requireOwned(jobId, teacherUserId);
         if ("RUNNING".equals(job.getJobStatus()) || "PENDING".equals(job.getJobStatus()))
             throw new ServiceException("任务仍在执行中");
+        if ("CANCEL_REQUESTED".equals(job.getJobStatus()) || "CANCELLED".equals(job.getJobStatus()))
+            throw new ServiceException("任务已取消，不能重试；如需继续请重新发起");
+        if ("PAUSED".equals(job.getJobStatus()))
+            throw new ServiceException("任务已暂停，请先点“继续”再重试失败作品");
         if (StringUtils.isBlank(job.getReferenceAnswerJson()))
             throw new ServiceException("旧任务缺少教师参考答案，不能重试；请重新发起");
         int count = mapper.resetFailedResults(jobId);

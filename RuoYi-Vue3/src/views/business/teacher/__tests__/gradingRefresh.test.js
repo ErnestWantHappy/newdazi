@@ -22,7 +22,7 @@ function setup() {
         submissionsRequestSeq: 0, loading: ref(false), submitting: ref(false),
         gradingSnapshotStale: ref(false), currentScore: ref(8), previewUrl: ref('A'),
         deadlineStatus: ref({ canGrade: true }), useItemScoring: ref(false),
-        gradingInputMode: ref('NUMERIC'), overallStarCount: ref(0),
+        gradingInputMode: ref('NUMERIC'), overallStarCount: ref(0), itemStarCounts: ref({}),
         getPracticalSubmissions: () => new Promise(resolve => requests.push(resolve)),
         gradeSubmission: data => new Promise((resolve, reject) => grades.push({ data, resolve, reject })),
         restoreLatestAiJob() {}, syncClassroomSocket() {}, loadDeadlineStatus() {},
@@ -43,6 +43,37 @@ function setup() {
     vm.runInContext(extract('async function nextSubmittedStudent()', 'function prevStudent()'), ctx);
     return { ctx, a, b, requests, grades, messages };
 }
+
+test('最后一名首次建答题行后接受本次保存快照，不锁提交', async () => {
+    const { ctx, a, b, requests, grades } = setup();
+    b.answerId = 20;
+    a.score = 8;
+    ctx.selectStudent(b, 1); ctx.currentScore.value = 7;
+    const saving = ctx.submitScore(); grades[0].resolve(); await saving;
+    requests.at(-1)({ data: [a, { ...b, answerId: 99, score: 7 }] });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(ctx.loadFailed.value, false);
+    assert.equal(ctx.gradingSnapshotStale.value, false);
+    assert.equal(ctx.currentStudent.value.answerId, 99);
+    assert.equal(ctx.currentScore.value, 7);
+});
+
+test('两个空answerId学生保存期间换人不会误写另一人成绩或自动跳转', async () => {
+    const { ctx, a, b, grades, requests } = setup();
+    a.answerId = null; b.answerId = null;
+    ctx.isCurrentPython.value = true;
+    a.systemSubmissionId = 1; b.systemSubmissionId = 2;
+    const saving = ctx.submitScore();
+    ctx.selectStudent(b, 1);
+    grades[0].resolve(); await saving;
+    assert.equal(a.score, 8);
+    assert.equal(b.score, null);
+    assert.equal(ctx.currentStudent.value.studentId, 2);
+    requests.at(-1)({ data: [{ ...a, answerId: 99 }, { ...b, score: 5 }] });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(ctx.gradingSnapshotStale.value, true, '换人后的外部变化仍须保护');
+    assert.equal(ctx.currentStudent.value.studentId, 2, '不能自动跳回已批改学生');
+});
 
 test('迟到刷新保持当前学生、输入和对应预览', async () => {
     const { ctx, a, b, requests } = setup();

@@ -45,7 +45,14 @@ public class PracticalAttachmentConversionService
                 || "IMAGE".equals(attachment.getFileKind()))) return false;
         Date claimedAt = new Date();
         if (artifactMapper.claimAttachmentNormalization(attachmentId, claimedAt) <= 0) return false;
-        self.processClaimedAsync(attachmentId);
+        try {
+            self.processClaimedAsync(attachmentId);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // 转换队列已满，退回待转换，不能让提交或批改列表因此报错。
+            artifactMapper.releaseAttachmentNormalizationClaim(attachmentId);
+            log.warn("附件转换队列已满，attachmentId={} 已退回待转换", attachmentId);
+            return false;
+        }
         return true;
     }
 
@@ -125,6 +132,8 @@ public class PracticalAttachmentConversionService
     {
         PracticalAttachment attachment = artifactMapper.selectAttachmentById(attachmentId);
         if (attachment == null || "unsupported".equals(attachment.getNormalizedStatus())) return false;
+        // 队列拒绝留下的待转换附件没有处理失败，直接原子领取，不消耗文件重试次数。
+        if ("pending".equals(attachment.getNormalizedStatus())) return self.convertAsync(attachmentId);
         if (artifactMapper.resetAttachmentNormalization(attachmentId, new Date()) <= 0) return false;
         return self.convertAsync(attachmentId);
     }

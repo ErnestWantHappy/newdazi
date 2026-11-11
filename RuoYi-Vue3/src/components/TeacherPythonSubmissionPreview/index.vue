@@ -78,15 +78,17 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { runPythonSubmission } from '@/api/business/teacherGrading';
+import { runPythonSubmission, runPythonSource } from '@/api/business/teacherGrading';
 import PythonTerminal from '@/components/PythonRunner/PythonTerminal.vue';
 import { guessInputCount } from '@/components/PythonRunner/serverInteractive';
 
 const props = defineProps({
   student: { type: Object, required: true },
-  question: { type: Object, default: null }
+  question: { type: Object, default: null },
+  // 当前课程；用于没有提交记录时直接运行代码的权限校验
+  lessonId: { type: [Number, String], default: null }
 });
 
 // 系统分与代码必须来自同一条最高分提交；答题表仅作历史兼容回退。
@@ -118,22 +120,21 @@ watch(() => props.student?.systemSubmissionId, () => {
 });
 
 function openRun() {
-  if (!props.student?.systemSubmissionId) {
-    ElMessage.warning('未找到可运行的系统提交记录，请下载后运行');
-    return;
-  }
   // 再点一次收起，避免教师找不到返回代码列表的入口
   runVisible.value = !runVisible.value;
-}
-
-async function run() {
-  terminal.value?.start();
+  // 打开面板就直接跑一次：老师点“运行查看”期待看到结果，不该再找第二个按钮
+  if (runVisible.value) {
+    nextTick(() => terminal.value?.start());
+  }
 }
 
 /** 服务器运行：把累计输入交给后端，由后端按真实提示语回放终端文本。 */
 function serverRun(payload) {
-  if (!props.student?.systemSubmissionId) throw new Error('未找到可运行的系统提交记录');
-  return runPythonSubmission(props.student.systemSubmissionId, payload?.stdin ?? '');
+  const stdin = payload?.stdin ?? '';
+  // 有系统提交记录时按记录运行（沿用原有权限校验）；没有记录时直接运行当前展示的代码，
+  // 避免教师因为学生尚未提交就无法验证写法。
+  if (props.student?.systemSubmissionId) return runPythonSubmission(props.student.systemSubmissionId, stdin);
+  return runPythonSource(sourceCode.value, stdin, props.lessonId);
 }
 
 function statusLabel(status) {

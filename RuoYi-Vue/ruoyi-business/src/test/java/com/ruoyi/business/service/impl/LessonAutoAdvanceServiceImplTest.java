@@ -402,6 +402,26 @@ class LessonAutoAdvanceServiceImplTest
         assertNull(result);
     }
 
+    @Test
+    void nextLessonSkipsArchivedCourseAndQueriesActiveOnly()
+    {
+        BizLesson current = lesson(1L, 1, "assessment");
+        BizLesson archived = lesson(2L, 2, "assessment");
+        archived.setStatus("1");
+        BizLesson active = lesson(3L, 3, "assessment");
+        active.setStatus("0");
+        when(lessonMapper.selectBizLessonList(any(BizLesson.class))).thenAnswer(invocation -> {
+            BizLesson query = invocation.getArgument(0);
+            assertEquals("0", query.getStatus());
+            // 模拟历史/异常返回，循环保险仍须跳过归档课。
+            return Arrays.asList(current, archived, active);
+        });
+
+        BizLesson result = ReflectionTestUtils.invokeMethod(service, "findNextLesson", current);
+
+        assertEquals(3L, result.getLessonId());
+    }
+
     private BizLesson lesson(Long id, int number, String mode)
     {
         BizLesson lesson = new BizLesson();

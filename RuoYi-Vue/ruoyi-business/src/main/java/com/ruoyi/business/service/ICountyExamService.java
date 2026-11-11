@@ -101,6 +101,10 @@ public interface ICountyExamService {
 
     Map<String, Object> submitStudentExam(CountyExamSubmitRequest request);
 
+    /**
+     * 校验学生作品上传权限。
+     * @return 学生ID；返回 null 表示已超时且系统已自动交卷
+     */
     Long validateStudentWorkUpload(Long examId, Long questionId);
 
     Map<String, Object> getGradingEntry();

@@ -47,7 +47,6 @@ import com.ruoyi.common.core.redis.RedisCache;
 import com.ruoyi.common.constant.HttpStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
-import org.springframework.data.redis.core.ValueOperations;
 
 @Service
 public class ProgrammingSubmissionService {
@@ -57,6 +56,16 @@ public class ProgrammingSubmissionService {
     private static final String STATUS_CANCELLED = "CANCELLED";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final Long CUSTOM_CASE_ID = 0L;
+    /**
+     * 服务端同步运行的学生锁有效期：必须覆盖单个测试点的最坏轮询耗时
+     * （默认 24 次 × 500ms = 12 秒，服务器把间隔调大后接近 108 秒），
+     * 原来的 10 秒/60 秒会在判题途中过期，让学生重复占用班级额度。
+     */
+    private static final long RUN_LOCK_SECONDS = 120L;
+    /** 班级运行计数比学生锁多留一档余量，避免锁还在、计数先过期导致并发被低估。 */
+    private static final long RUN_CLASS_TTL_SECONDS = 180L;
+    /** 提交槽位键是归还班级桶的唯一线索，必须活到判题结束，不能沿用原来的 180 秒。 */
+    private static final int SUBMISSION_SLOT_TTL_SECONDS = 6 * 60 * 60;
     @Autowired private ProgrammingJudgeMapper programmingMapper;
     @Autowired private BizQuestionMapper questionMapper;
     @Autowired private BizLessonQuestionMapper lessonQuestionMapper;
@@ -133,6 +142,10 @@ public class ProgrammingSubmissionService {
                 detail.put("inputText", testCase.getInputText());
                 detail.put("expectedOutput", testCase.getExpectedOutput());
                 detail.put("actualOutput", judgeResult == null ? null : JudgeOutput.of(judgeResult.getStdout()).visible());
+                // 教师最需要看到的是“提示语 → 输入 → 输出”的真实终端顺序。
+                // 只给 visible() 会把提示语和结果粘成“请输入您的年龄免票”，和本机运行对不上。
+                detail.put("terminalOutput", judgeResult == null ? null
+                        : JudgeOutput.of(judgeResult.getStdout()).terminalText(testCase.getInputText()));
                 if (!"ACCEPTED".equals(status)) {
                     detail.put("errorSummary", judgeResult == null ? null : trim(firstNonEmpty(judgeResult.getCompileOutput(), judgeResult.getStderr(), judgeResult.getMessage()), 1000));
                     detail.put("hint", JudgeOutcome.differenceHint(testCase.getExpectedOutput(),
@@ -176,9 +189,11 @@ public class ProgrammingSubmissionService {
                 item.put("caseName", testCase.getCaseName());
                 item.put("inputText", testCase.getInputText());
                 item.put("expectedOutput", JudgeOutput.of(result == null ? null : result.getStdout()).plain());
-                item.put("statusCode", Judge0StatusMapper.toPlatformStatus(result));
-                item.put("errorSummary", result == null ? null
-                        : trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
+                boolean needInput = JudgeOutput.needsMoreInput(result == null ? null : result.getStderr());
+                // 参考代码还停在 input() 等输入，输出不完整，不能当成期望输出。
+                item.put("statusCode", needInput ? "RUNTIME_ERROR" : Judge0StatusMapper.toPlatformStatus(result));
+                item.put("errorSummary", needInput ? "参考代码还在等待输入：该测试点给的输入行数不够，请补足输入后再生成"
+                        : (result == null ? null : trim(firstNonEmpty(result.getCompileOutput(), JudgeOutput.cleanError(result.getStderr()), result.getMessage()), 1000)));
                 outputs.add(item);
             }
         } catch (InterruptedException ex) {
@@ -260,8 +275,9 @@ public class ProgrammingSubmissionService {
         if (submissionKey == null || !submissionKey.matches("[A-Za-z0-9_-]{8,64}")) throw new ServiceException("提交幂等键格式错误");
         ProgrammingSubmission existing = programmingMapper.selectSubmissionByKey(student.getStudentId(), lessonId, questionId, submissionKey);
         if (existing != null) return existing;
+        String rateKey;
         try {
-            reserveRateAndSlot(student, deptId, lessonId, questionId);
+            rateKey = reserveRateAndSlot(student, deptId, lessonId, questionId);
         } catch (ServiceException e) {
             // 同一幂等键并发重试时，返回已落库的原提交而不是误报学生锁占用。
             existing = programmingMapper.selectSubmissionByKey(student.getStudentId(), lessonId, questionId, submissionKey);
@@ -270,23 +286,27 @@ public class ProgrammingSubmissionService {
         }
         try {
             existing = programmingMapper.selectSubmissionByKey(student.getStudentId(), lessonId, questionId, submissionKey);
-            if (existing != null) { releaseReservation(student, lessonId, questionId); return existing; }
+            if (existing != null) { releaseReservation(student, lessonId, questionId, rateKey); return existing; }
             ProgrammingSubmission submission = new ProgrammingSubmission(); submission.setSubmissionKey(submissionKey); submission.setStudentId(student.getStudentId()); submission.setLessonId(lessonId); submission.setQuestionId(questionId); submission.setSourceCode(sourceCode); submission.setCustomInput("CUSTOM_RUN".equals(kind) ? (customInput == null ? "" : customInput) : null); submission.setSubmissionKind(kind); submission.setStatusCode(STATUS_WAITING); submission.setStatusMessage("等待判题"); submission.setRequestIp(requestIp); submission.setSubmittedAt(new Date());
             programmingMapper.insertSubmission(submission);
-            redisCache.setCacheObject(slotKey(submission.getSubmissionId()), classSlotKey(student, lessonId, questionId), 180, TimeUnit.SECONDS);
             try {
+                // 槽位键记下提交当时的班级桶，判题结束归还时不再依赖可能已变更的学生档案。
+                // 放进入队异常保护内：Redis 写失败也必须走服务失败收尾，不能留下永久 WAITING。
+                redisCache.setCacheObject(slotKey(submission.getSubmissionId()), classSlotKey(student, lessonId, questionId), SUBMISSION_SLOT_TTL_SECONDS, TimeUnit.SECONDS);
                 worker.judge(submission.getSubmissionId());
             } catch (RuntimeException e) {
                 completeServiceFailure(submission, "判题任务无法进入队列：" + safeMessage(e));
                 releaseSlot(submission.getSubmissionId(), student, lessonId, questionId);
+                // 判题没有真正开始，不能占用学生每分钟额度。
+                redisCache.decrementCounterOrDelete(rateKey);
             }
             return submission;
         } catch (DuplicateKeyException e) {
-            releaseReservation(student, lessonId, questionId);
+            releaseReservation(student, lessonId, questionId, rateKey);
             existing = programmingMapper.selectSubmissionByKey(student.getStudentId(), lessonId, questionId, submissionKey);
             if (existing != null) return existing;
             throw e;
-        } catch (RuntimeException e) { releaseReservation(student, lessonId, questionId); throw e; }
+        } catch (RuntimeException e) { releaseReservation(student, lessonId, questionId, rateKey); throw e; }
     }
 
     public List<StudentProgrammingSubmissionVo> getStudentHistory(BizStudent student, Long deptId, Long lessonId, Long questionId) {
@@ -328,10 +348,11 @@ public class ProgrammingSubmissionService {
         List<ProgrammingTestCase> cases = programmingMapper.selectPublicTestCases(questionId);
         if (cases == null || cases.isEmpty()) throw new ServiceException("题目尚未配置可执行的示例测试点");
         Judge0Client client = resolveClient();
-        reserveRunConcurrency(student);
+        String runToken = reserveRunConcurrency(student);
         List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
         try {
             for (ProgrammingTestCase testCase : cases) {
+                renewRunConcurrency(student, runToken);
                 Judge0Result result = executeWith(client, sourceCode, testCase, config);
                 Map<String, Object> item = new HashMap<String, Object>();
                 item.put("caseName", testCase.getCaseName()); item.put("inputText", testCase.getInputText()); item.put("expectedOutput", testCase.getExpectedOutput());
@@ -347,7 +368,7 @@ public class ProgrammingSubmissionService {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new ServiceException("运行被中断，请稍后重试");
-        } finally { releaseRunConcurrency(student); }
+        } finally { releaseRunConcurrency(student, runToken); }
         Map<String, Object> data = new HashMap<String, Object>(); data.put("mode", "SERVER"); data.put("cases", results);
         return data;
     }
@@ -359,7 +380,8 @@ public class ProgrammingSubmissionService {
     private Map<String, Object> runInteractivePublic(BizStudent student, ProgrammingQuestionConfig config,
                                                      String sourceCode, String stdin) {
         validateCustomInput(stdin);
-        reserveRateAndSlotForInteractive(student);
+        // 与示例运行共用同一把学生锁和同一个班级桶，学生不能靠切换运行方式绕过串行约束。
+        String runToken = reserveRunConcurrency(student);
         try {
             ProgrammingTestCase customCase = new ProgrammingTestCase();
             customCase.setTestCaseId(CUSTOM_CASE_ID);
@@ -377,61 +399,55 @@ public class ProgrammingSubmissionService {
             data.put("mode", "SERVER");
             data.put("success", success);
             data.put("needInput", needInput);
-            data.put("output", trim(output, 32768));
+            data.put("output", clip(output, 32768));
             data.put("statusCode", result == null ? "SERVICE_ERROR" : Judge0StatusMapper.toPlatformStatus(result));
             return data;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new ServiceException("运行被中断，请稍后重试");
-        } finally { releaseInteractiveRun(student); }
+        } finally { releaseRunConcurrency(student, runToken); }
     }
 
     /**
-     * 交互运行会因每次 input() 往返一次，但仍是同一名学生连续点击，按学生限频即可；
-     * 同时保留整班并发上限，避免降级班级把判题机打满。
+     * 交互运行和示例运行共用同一把学生锁：两者都是同一名学生在同一题上连续点击，
+     * 分成两把锁会让学生同时跑两条判题链，绕过“上一次运行还没结束”的串行约束，
+     * 而班级桶只有一个，被绕过的并发最终全部压到判题机上。
+     *
+     * 锁值写本次请求的随机令牌，释放和续期都认主，避免锁超时后误删/误延长下一次运行的新锁。
+     * 返回令牌交给调用方，在 finally 里原样归还。
      */
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private void reserveRateAndSlotForInteractive(BizStudent student) {
-        ValueOperations<String, Object> values = redisCache.redisTemplate.opsForValue();
-        String key = "judge0:interactive:" + student.getStudentId();
-        if (!Boolean.TRUE.equals(values.setIfAbsent(key, "1", 10, TimeUnit.SECONDS)))
+    private String reserveRunConcurrency(BizStudent student) {
+        String studentKey = runStudentKey(student);
+        String token = java.util.UUID.randomUUID().toString();
+        if (!Boolean.TRUE.equals(redisCache.setCacheObjectIfAbsent(studentKey, token, RUN_LOCK_SECONDS, TimeUnit.SECONDS)))
             throw new ServiceException("上一次运行还没结束，请稍候再试");
         String classKey = classRunKey(student);
-        Long active = values.increment(classKey);
-        if (active != null && active.longValue() == 1L) redisCache.expire(classKey, 60, TimeUnit.SECONDS);
-        if (active != null && active.longValue() > Math.max(1, properties.getClassConcurrency())) {
-            values.decrement(classKey);
-            redisCache.deleteObject(key);
+        long active = redisCache.incrementCounterWithTtl(classKey, RUN_CLASS_TTL_SECONDS, TimeUnit.SECONDS);
+        if (active > Math.max(1, properties.getClassConcurrency())) {
+            redisCache.decrementCounterOrDelete(classKey);
+            redisCache.deleteObjectIfValueMatches(studentKey, token);
             throw new ServiceException("本班同时运行的人数较多，请稍后再试");
         }
+        return token;
     }
 
-    private void releaseInteractiveRun(BizStudent student) {
-        redisCache.deleteObject("judge0:interactive:" + student.getStudentId());
-        String classKey = classRunKey(student);
-        if (redisCache.redisTemplate.opsForValue().get(classKey) != null)
-            redisCache.redisTemplate.opsForValue().decrement(classKey);
+    /**
+     * 一次运行可能串行跑多个测试点，总耗时远超单个锁 TTL；每跑一个测试点前续期一次。
+     * 这样既保证整段运行独占学生锁，又让线程异常退出后锁最多在一个 TTL 内自动恢复，
+     * 不必把 TTL 直接放大到“测试点数 × 单点最坏耗时”而让学生被锁死几分钟。
+     */
+    private void renewRunConcurrency(BizStudent student, String token) {
+        redisCache.expireIfValueMatches(runStudentKey(student), token, RUN_LOCK_SECONDS, TimeUnit.SECONDS);
+        // 班级计数只延长有效期，不涉及归属：即使已被同班其他请求重建，续期也是安全的。
+        redisCache.expire(classRunKey(student), RUN_CLASS_TTL_SECONDS, TimeUnit.SECONDS);
     }
 
-    /** 服务端同步运行会占用请求线程，必须按学生和班级双重限流，避免整班同时运行时打满判题机。 */
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private void reserveRunConcurrency(BizStudent student) {
-        ValueOperations<String, Object> values = redisCache.redisTemplate.opsForValue();
-        String studentKey = "judge0:run:student:" + student.getStudentId();
-        if (!Boolean.TRUE.equals(values.setIfAbsent(studentKey, "1", 60, TimeUnit.SECONDS))) throw new ServiceException("上一次运行还没结束，请稍候再试");
-        String classKey = classRunKey(student);
-        Long active = values.increment(classKey); if (active != null && active.longValue() == 1L) redisCache.expire(classKey, 60, TimeUnit.SECONDS);
-        if (active != null && active.longValue() > Math.max(1, properties.getClassConcurrency())) {
-            values.decrement(classKey); redisCache.deleteObject(studentKey);
-            throw new ServiceException("本班同时运行的人数较多，请稍后再试");
-        }
+    private void releaseRunConcurrency(BizStudent student, String token) {
+        redisCache.deleteObjectIfValueMatches(runStudentKey(student), token);
+        // 班级槽位是本次请求自己加的，无论学生锁是否已过期都必须归还，否则额度只减不增。
+        redisCache.decrementCounterOrDelete(classRunKey(student));
     }
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private void releaseRunConcurrency(BizStudent student) {
-        redisCache.deleteObject("judge0:run:student:" + student.getStudentId());
-        String classKey = classRunKey(student);
-        if (redisCache.redisTemplate.opsForValue().get(classKey) != null) redisCache.redisTemplate.opsForValue().decrement(classKey);
-    }
+    private String runStudentKey(BizStudent s) { return "judge0:run:student:" + s.getStudentId(); }
     private String classRunKey(BizStudent s) { return "judge0:run:class:" + s.getDeptId() + ":" + s.getEntryYear() + ":" + s.getClassCode(); }
 
     public void cancel(BizStudent student, Long deptId, Long lessonId, Long questionId, Long submissionId) {        assertStudentQuestionAccess(student, deptId, lessonId, questionId);
@@ -505,7 +521,7 @@ public class ProgrammingSubmissionService {
             row.setMemoryKb(result.getMemoryKb());
             if ("1".equals(testCase.getIsPublic())) {
                 // 只有公开样例回写输出；这里同样回放成终端文本，学生看到的与教师端一致。
-                row.setOutputText(trim(JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()), 65536));
+                row.setOutputText(clip(JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()), 65536));
                 row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
             }
         }
@@ -519,7 +535,7 @@ public class ProgrammingSubmissionService {
         if (result != null) {
             row.setTimeSeconds(result.getTimeSeconds()); row.setMemoryKb(result.getMemoryKb());
             // 回放成终端文本：提示语、老师填的输入、程序输出按真实顺序排列。
-            row.setOutputText(trim(JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()), 65536));
+            row.setOutputText(clip(JudgeOutput.of(result.getStdout()).terminalText(testCase.getInputText()), 65536));
             row.setErrorSummary(trim(firstNonEmpty(result.getCompileOutput(), result.getStderr(), result.getMessage()), 1000));
         }
         return row;
@@ -566,6 +582,8 @@ public class ProgrammingSubmissionService {
     private void completeServiceFailure(ProgrammingSubmission submission, String message) {
         ProgrammingSubmission row = programmingMapper.selectSubmissionById(submission.getSubmissionId()); if (row == null || STATUS_CANCELLED.equals(row.getStatusCode())) return;
         row.setStatusCode(STATUS_SERVICE_ERROR); row.setStatusMessage("判题服务异常，代码和提交已保留"); row.setErrorSummary(message); row.setPassedCaseCount(0); row.setTotalCaseCount(0); row.setJudgedAt(new Date()); programmingMapper.updateSubmissionResult(row);
+        // 提交接口会读取入参状态决定是否标记课堂任务已提交，内存对象必须同步失败状态。
+        submission.setStatusCode(STATUS_SERVICE_ERROR); submission.setStatusMessage("判题服务异常，代码和提交已保留");
     }
 
     // 系统判题分只作参考；答题行同步代码，正式分数必须等教师确认。
@@ -577,7 +595,10 @@ public class ProgrammingSubmissionService {
         if (student == null || lessonId == null || questionId == null) throw new ServiceException("课程或题目参数不完整");
         Long current = lessonAssignmentMapper.selectCurrentLessonByClass(student.getEntryYear(), student.getClassCode(), deptId);
         if (!lessonId.equals(current)) throw forbidden("只能操作当前指派课程的编程题");
-        BizLessonAssignment assignment = lessonAssignmentMapper.selectCurrentAssignmentForUpdate(
+        // 这里只做准入校验，不加行锁：本方法的调用方都没有事务，FOR UPDATE 出了语句就释放，
+        // 既锁不住任何东西，又让人误以为当前课已经互斥。真正的当前课互斥在 completeInTransaction
+        // 写成绩前用 selectCurrentAssignmentForUpdate 取锁，那里才有事务边界。
+        BizLessonAssignment assignment = lessonAssignmentMapper.selectCurrentAssignment(
                 student.getEntryYear(), student.getClassCode(), deptId);
         if (assignment == null || !Integer.valueOf(1).equals(assignment.getPracticalOpen()))
             throw forbidden("本课操作题暂未开放");
@@ -634,38 +655,94 @@ public class ProgrammingSubmissionService {
     private String summarize(List<ProgrammingSubmissionCase> rows, int passed) { if (passed == rows.size()) return "ACCEPTED"; if (passed > 0) return "PARTIAL"; for (ProgrammingSubmissionCase row : rows) if (!"WRONG_ANSWER".equals(row.getStatusCode())) return row.getStatusCode(); return "WRONG_ANSWER"; }
     private String statusMessage(String status) { if (STATUS_COMPLETED.equals(status)) return "运行完成"; if ("ACCEPTED".equals(status)) return "通过"; if ("PARTIAL".equals(status)) return "部分通过"; if ("WRONG_ANSWER".equals(status)) return "答案错误"; if ("SYNTAX_ERROR".equals(status)) return "语法错误"; if ("RUNTIME_ERROR".equals(status)) return "运行错误"; if ("TIME_LIMIT".equals(status)) return "运行超时"; if ("MEMORY_LIMIT".equals(status)) return "内存超限"; return "判题服务异常，代码和提交已保留"; }
     private int lessonQuestionScore(Long lessonId, Long questionId) { for (BizLessonQuestionDetailVo q : lessonQuestionMapper.selectDetailsByLessonId(lessonId)) if (questionId.equals(q.getQuestionId())) return q.getQuestionScore() == null ? 0 : q.getQuestionScore().intValue(); return 0; }
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private void reserveRateAndSlot(BizStudent student, Long deptId, Long lessonId, Long questionId) {
-        ValueOperations<String, Object> values = redisCache.redisTemplate.opsForValue();
-        String rateKey = "judge0:rate:" + student.getStudentId() + ":" + (System.currentTimeMillis() / 60000L); Long count = values.increment(rateKey); if (count != null && count.longValue() == 1L) redisCache.expire(rateKey, 70, TimeUnit.SECONDS); if (count != null && count.longValue() > properties.getStudentSubmitsPerMinute()) throw new ServiceException("提交过于频繁，请稍后再试");
-        Boolean acquired = values.setIfAbsent(studentLockKey(student.getStudentId(), lessonId, questionId), "1", 120, TimeUnit.SECONDS); if (!Boolean.TRUE.equals(acquired)) throw new ServiceException("本题已有提交正在判题，请等待结果或取消等待中的提交");
-        Long active = values.increment(classSlotKey(student, lessonId, questionId)); if (active != null && active.longValue() == 1L) redisCache.expire(classSlotKey(student, lessonId, questionId), 180, TimeUnit.SECONDS); if (active != null && active.longValue() > properties.getClassConcurrency()) { values.decrement(classSlotKey(student, lessonId, questionId)); redisCache.deleteObject(studentLockKey(student.getStudentId(), lessonId, questionId)); throw new ServiceException("本班判题队列已满，请稍后重试"); }
+    /**
+     * 预留“每分钟提交额度 + 学生锁 + 班级槽位”，返回本次占用的分钟桶键。
+     *
+     * 分钟桶键必须由调用方带回来：跨分钟边界失败时若按当前时间重算，会退到下一个桶，
+     * 把别人的额度减掉。预留失败（学生锁被占、班级队列满）不是学生的错，就地退还额度，
+     * 否则失败重试会白白吃掉每分钟的成功配额。
+     */
+    private String reserveRateAndSlot(BizStudent student, Long deptId, Long lessonId, Long questionId) {
+        String rateKey = rateKey(student);
+        long count = redisCache.incrementCounterWithTtl(rateKey, 70, TimeUnit.SECONDS);
+        if (count > properties.getStudentSubmitsPerMinute()) throw new ServiceException("提交过于频繁，请稍后再试");
+        try {
+            String studentKey = studentLockKey(student.getStudentId(), lessonId, questionId);
+            if (!Boolean.TRUE.equals(redisCache.setCacheObjectIfAbsent(studentKey, "1", 120, TimeUnit.SECONDS)))
+                throw new ServiceException("本题已有提交正在判题，请等待结果或取消等待中的提交");
+            String classKey = classSlotKey(student, lessonId, questionId);
+            long active = redisCache.incrementCounterWithTtl(classKey, 180, TimeUnit.SECONDS);
+            if (active > properties.getClassConcurrency()) {
+                redisCache.decrementCounterOrDelete(classKey);
+                redisCache.deleteObject(studentKey);
+                throw new ServiceException("本班判题队列已满，请稍后重试");
+            }
+        } catch (RuntimeException e) {
+            redisCache.decrementCounterOrDelete(rateKey);
+            throw e;
+        }
+        return rateKey;
     }
+
+    /**
+     * 判题线程和重启恢复只拿得到 submissionId，这里必须把槽位还回去。
+     * 班级桶键优先读提交时落库的值：学生被软删（档案查询带 del_flag='0'）或中途转班时，
+     * 重新查档案会查不到人或算出新班级，导致槽位漏还或还错桶，班级额度被长期占死。
+     */
     private void releaseSlot(Long submissionId, Long studentId, Long lessonId, Long questionId) {
-        BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
-        if (student != null) releaseSlot(submissionId, student, lessonId, questionId);
+        String classKey = readSlotClassKey(submissionId);
+        if (classKey == null) {
+            BizStudent student = studentMapper.selectBizStudentByStudentId(studentId);
+            if (student != null) classKey = classSlotKey(student, lessonId, questionId);
+        }
+        releaseSlotInternal(submissionId, studentId, lessonId, questionId, classKey);
     }
-    @SuppressWarnings({ "unchecked", "rawtypes" })
+
     private void releaseSlot(Long submissionId, BizStudent student, Long lessonId, Long questionId) {
+        releaseSlotInternal(submissionId, student.getStudentId(), lessonId, questionId,
+                classSlotKey(student, lessonId, questionId));
+    }
+
+    private void releaseSlotInternal(Long submissionId, Long studentId, Long lessonId, Long questionId, String classKey) {
         if (submissionId != null) {
             // 取消和异步线程可能先后到达；释放标记保证一个提交最多归还一次班级槽位。
-            Boolean firstRelease = redisCache.redisTemplate.opsForValue().setIfAbsent(releasedSlotKey(submissionId), "1", 10, TimeUnit.MINUTES);
-            if (!Boolean.TRUE.equals(firstRelease)) return;
+            if (!Boolean.TRUE.equals(redisCache.setCacheObjectIfAbsent(releasedSlotKey(submissionId), "1", 10, TimeUnit.MINUTES))) return;
             redisCache.deleteObject(slotKey(submissionId));
         }
-        releaseReservation(student, lessonId, questionId);
+        // 学生锁只依赖提交行上的三个 id，档案查不到也照样能释放，不能整段跳过。
+        redisCache.deleteObject(studentLockKey(studentId, lessonId, questionId));
+        if (classKey != null) redisCache.decrementCounterOrDelete(classKey);
     }
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private void releaseReservation(BizStudent student, Long lessonId, Long questionId) {
+
+    private String readSlotClassKey(Long submissionId) {
+        if (submissionId == null) return null;
+        Object stored = redisCache.getCacheObject(slotKey(submissionId));
+        return stored instanceof String ? (String) stored : null;
+    }
+
+    /** 提交未落库时退还学生锁、班级槽位和本次分钟额度；判题结束后的归还走 releaseSlot，不退额度。 */
+    private void releaseReservation(BizStudent student, Long lessonId, Long questionId, String rateKey) {
         redisCache.deleteObject(studentLockKey(student.getStudentId(), lessonId, questionId));
-        String classKey = classSlotKey(student, lessonId, questionId);
-        if (redisCache.redisTemplate.opsForValue().get(classKey) != null) redisCache.redisTemplate.opsForValue().decrement(classKey);
+        redisCache.decrementCounterOrDelete(classSlotKey(student, lessonId, questionId));
+        if (rateKey != null) redisCache.decrementCounterOrDelete(rateKey);
     }
+    private String rateKey(BizStudent s) { return "judge0:rate:" + s.getStudentId() + ":" + (System.currentTimeMillis() / 60000L); }
     private String studentLockKey(Long studentId, Long lessonId, Long questionId) { return "judge0:active:student:" + studentId + ":" + lessonId + ":" + questionId; }
     private String classSlotKey(BizStudent s, Long lessonId, Long questionId) { return "judge0:active:class:" + s.getDeptId() + ":" + s.getEntryYear() + ":" + s.getClassCode(); }
     private String slotKey(Long submissionId) { return "judge0:slot:submission:" + submissionId; }
     private String releasedSlotKey(Long submissionId) { return "judge0:released:submission:" + submissionId; }
     private String trim(String value, int max) { if (value == null) return null; String v = value.replaceAll("[\\r\\n]+", " ").trim(); return v.length() <= max ? v : v.substring(0, max); }
+    /**
+     * 终端回放文本必须保留中间换行：压成一行会让“提示语、输入、输出”重新粘连，看不出是谁说的。
+     * 只去掉末尾多余的换行，避免历史成绩页多出一条空白行。
+     */
+    private String clip(String value, int max) {
+        if (value == null) return null;
+        int end = value.length();
+        while (end > 0 && (value.charAt(end - 1) == '\n' || value.charAt(end - 1) == '\r')) end--;
+        String text = value.substring(0, end);
+        return text.length() <= max ? text : text.substring(0, max);
+    }
     private String firstNonEmpty(String... values) { for (String v : values) if (v != null && !v.trim().isEmpty()) return v; return null; }
     private String safeMessage(Exception e) { return trim(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(), 1000); }
 }

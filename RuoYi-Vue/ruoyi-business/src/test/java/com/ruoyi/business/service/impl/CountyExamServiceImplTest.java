@@ -222,6 +222,86 @@ class CountyExamServiceImplTest
     }
 
     @Test
+    void shouldCommitAutomaticSubmissionWhenUploadTimesOut()
+    {
+        prepareTimedOutUpload(1);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        TransactionStatus transactionStatus = mock(TransactionStatus.class);
+        ICountyExamService transactionalService = transactionalService(transactionManager, transactionStatus);
+
+        assertEquals(null, transactionalService.validateStudentWorkUpload(7L, 101L));
+
+        verify(studentMapper).markSubmittedIfOpen(eq(30L), any(Date.class), eq("1"));
+        verify(answerMapper).insert(any());
+        verify(transactionManager).commit(transactionStatus);
+        verify(transactionManager, never()).rollback(transactionStatus);
+    }
+
+    @Test
+    void shouldRollbackTimedOutUploadWhenAutomaticSubmitCasFails()
+    {
+        prepareTimedOutUpload(0);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        TransactionStatus transactionStatus = mock(TransactionStatus.class);
+        ICountyExamService transactionalService = transactionalService(transactionManager, transactionStatus);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> transactionalService.validateStudentWorkUpload(7L, 101L));
+
+        assertTrue(error.getMessage().contains("提交状态已变化"));
+        verify(studentMapper).markSubmittedIfOpen(eq(30L), any(Date.class), eq("1"));
+        verify(transactionManager).rollback(transactionStatus);
+        verify(transactionManager, never()).commit(transactionStatus);
+    }
+
+    @Test
+    void shouldLockParticipantBeforeBuildingPaperOnFirstEntry()
+    {
+        login(20L, 104L, "student");
+        BizStudent student = new BizStudent();
+        student.setStudentId(20L); student.setEntryYear("2025"); student.setClassCode("1"); student.setDeptId(104L);
+        when(bizStudentMapper.selectBizStudentByUserId(20L)).thenReturn(student);
+        CountyExamClass active = new CountyExamClass();
+        active.setExamId(7L);
+        when(classMapper.selectActiveByStudentInfo(104L, "2025", "1")).thenReturn(Collections.singletonList(active));
+        CountyExam exam = new CountyExam();
+        exam.setExamId(7L); exam.setExamName("抽测"); exam.setStatus("1"); exam.setDurationMinutes(60);
+        when(countyExamMapper.selectCountyExamById(7L)).thenReturn(exam);
+        CountyExamStudent participant = new CountyExamStudent();
+        participant.setExamId(7L); participant.setStudentId(20L); participant.setStatus("1");
+        participant.setStartTime(new Date()); participant.setDeadlineTime(new Date(System.currentTimeMillis() + 60000L));
+        when(studentMapper.selectByExamAndStudent(7L, 20L)).thenReturn(participant);
+        when(studentMapper.selectByExamAndStudentForUpdate(7L, 20L)).thenReturn(participant);
+        when(paperQuestionMapper.countByExamAndStudent(7L, 20L)).thenReturn(1);
+
+        service.getCurrentStudentExam();
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(studentMapper, paperQuestionMapper);
+        // 两个标签页同时首次进入时，必须先锁参与记录再建卷，否则会同时插入同一学生的试卷。
+        order.verify(studentMapper).selectByExamAndStudentForUpdate(7L, 20L);
+        order.verify(paperQuestionMapper).countByExamAndStudent(7L, 20L);
+    }
+
+    private void prepareTimedOutUpload(int submitted)
+    {
+        prepareStudentContext("0");
+        studentMapper.selectByExamAndStudent(7L, 20L)
+                .setDeadlineTime(new Date(System.currentTimeMillis() - 60000L));
+        when(paperQuestionMapper.countByExamAndStudent(7L, 20L)).thenReturn(1);
+        when(paperQuestionMapper.selectDetailsByExamAndStudent(7L, 20L))
+                .thenReturn(Collections.singletonList(question(101L, "choice")));
+        when(studentMapper.markSubmittedIfOpen(eq(30L), any(Date.class), eq("1"))).thenReturn(submitted);
+    }
+
+    private ICountyExamService transactionalService(PlatformTransactionManager manager, TransactionStatus status)
+    {
+        when(manager.getTransaction(any())).thenReturn(status);
+        ProxyFactory factory = new ProxyFactory(service);
+        factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
+        return (ICountyExamService) factory.getProxy();
+    }
+
+    @Test
     void shouldScaleCountyScoringWeightsToQuestionScore()
     {
         List<CountyExamScoringItemVo> items = CountyExamServiceImpl.buildCountyScoringItems(

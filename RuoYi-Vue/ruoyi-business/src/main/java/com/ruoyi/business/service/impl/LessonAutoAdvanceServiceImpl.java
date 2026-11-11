@@ -569,6 +569,7 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
         query.setDeptId(current.getDeptId());
         query.setEntryYear(current.getEntryYear());
         query.setGrade(current.getGrade());
+        query.setStatus("0");
         List<BizLesson> list = lessonMapper.selectBizLessonList(query);
         if (list == null || list.isEmpty())
         {
@@ -585,6 +586,8 @@ public class LessonAutoAdvanceServiceImpl implements LessonAutoAdvanceService
             {
                 continue;
             }
+            // 已归档/停用的课学生端看不到，推进过去会让整班当前课变空。
+            if (l.getStatus() != null && !"0".equals(l.getStatus())) continue;
             if ("attendance".equalsIgnoreCase(l.getLessonMode()))
             {
                 continue;

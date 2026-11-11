@@ -40,6 +40,8 @@ import com.ruoyi.business.judge.JudgeOutcome;
 import com.ruoyi.business.judge.JudgeOutput;
 import com.ruoyi.business.judge.JudgeSourceWrapper;
 import com.ruoyi.business.judge.OutputComparator;
+import com.ruoyi.common.core.redis.RedisCache;
+import java.util.concurrent.TimeUnit;
 
 /** 独立 Python 刷题服务：不读取或写入课程答案和课程成绩。 */
 @Service
@@ -57,6 +59,7 @@ public class PythonPracticeService {
     @Autowired private Judge0Properties judgeProperties;
     @Autowired @Qualifier("judge0HttpClient") private Judge0Client httpClient;
     @Autowired @Qualifier("judge0MockClient") private Judge0Client mockClient;
+    @Autowired private RedisCache redisCache;
 
     public List<Map<String, Object>> teacherPlans(Long deptId, String entryYear) {
         List<Map<String, Object>> plans = mapper.selectPlans(deptId, entryYear);
@@ -526,6 +529,110 @@ public class PythonPracticeService {
         Map<String, Object> row = new HashMap<String, Object>(); row.put("studentId", student.getStudentId()); row.put("sourceType", sourceType); row.put("sourceId", sourceId); row.put("questionId", questionId); row.put("snapshotId", question.get("snapshot_id")); row.put("sourceCode", sourceCode == null ? "" : sourceCode); mapper.upsertDraft(row); return row;
     }
 
+    /**
+     * 刷题页的“交互运行”：只跑代码、不落提交和成绩，程序到下一个 input() 停下让前端继续问。
+     * 高版本浏览器本机运行失败降级时也走这里，师生不需要知道区别。
+     */
+    public Map<String, Object> runInteractive(Long userId, String space, String sourceType, Long sourceId,
+                                              Long questionId, String sourceCode, String stdin) {
+        BizStudent student = requireStudent(userId);
+        assertStudentSpace(userId, space, sourceType, sourceId, questionId);
+        Map<String, Object> question = mapper.selectQuestion(sourceType, sourceId, questionId);
+        if (question == null) throw new ServiceException("题目不存在或未开放");
+        if ("DATA_LAB".equals(question.get("practical_mode"))) throw new ServiceException("实验题请使用实验成果提交入口");
+        String code = sourceCode == null ? "" : sourceCode;
+        if (code.trim().isEmpty()) throw new ServiceException("请先输入 Python 代码");
+        if (code.length() > 131072) throw new ServiceException("代码长度不能超过 128KB");
+        if (stdin != null && stdin.length() > 65536) throw new ServiceException("程序输入不能超过 64KB");
+        Judge0Request request = new Judge0Request();
+        // 套壳后提示语带标记，运行结果才能按“提示语 → 你输入 → 输出”回放
+        request.setSourceCode(JudgeSourceWrapper.wrap(code));
+        request.setStdin(stdin);
+        request.setCpuTimeLimit(decimal(question.get("time_limit_seconds"), 2D));
+        request.setMemoryLimitKb(intValue(question.get("memory_limit_kb"), 131072));
+        request.setMaxProcesses(intValue(question.get("max_processes"), 8));
+        request.setMaxFileSizeKb(intValue(question.get("max_file_size_kb"), 1024));
+        request.setMaxOutputKb(intValue(question.get("max_output_kb"), 64));
+        // 交互运行每填一行输入就重跑一次，必须和课程链路一样限流，
+        // 否则一个班同时降级到服务器运行时会把判题机打满，正常交卷反而排队。
+        String runToken = reserveInteractiveRun(student);
+        Judge0Result result;
+        try {
+            result = executeSync(request);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("运行被中断，请稍后重试");
+        } finally {
+            releaseInteractiveRun(student, runToken);
+        }
+        boolean needInput = JudgeOutput.needsMoreInput(result == null ? null : result.getStderr());
+        String output = result == null ? "" : JudgeOutput.of(result.getStdout()).terminalText(stdin)
+                + JudgeOutput.cleanError(result.getStderr()) + stringOrEmpty(result.getCompileOutput());
+        if (!needInput && result != null && result.getStatusId() != null && result.getStatusId() != 3) {
+            output += "\n" + JudgeOutcome.statusMessage(Judge0StatusMapper.toPlatformStatus(result));
+        }
+        Map<String, Object> data = new HashMap<String, Object>();
+        data.put("success", needInput || (result != null && result.getStatusId() != null && result.getStatusId() == 3));
+        data.put("needInput", needInput);
+        // 去掉末尾空行，避免终端底部多出一行空白；中间换行必须保留
+        String trimmed = output.replaceAll("[\\r\\n]+$", "");
+        data.put("output", trimmed.length() > 32768 ? trimmed.substring(0, 32768) + "\n输出已截断" : trimmed);
+        data.put("statusCode", result == null ? "SERVICE_ERROR" : Judge0StatusMapper.toPlatformStatus(result));
+        return data;
+    }
+
+    /**
+     * 同一学生同一时间只允许一次交互运行，并按班级限制并发；判题机故障时也不放行超额请求。
+     *
+     * 锁 TTL 必须覆盖 executeSync 的最坏轮询耗时（默认 24×500ms=12 秒，服务器把间隔调大后接近 108 秒），
+     * 原来的 10 秒会在运行途中过期，学生就能重复占额度。锁值写本次请求的随机令牌，
+     * 释放时只删自己的锁，避免超时后误删下一次运行的新锁。
+     */
+    private String reserveInteractiveRun(BizStudent student) {
+        String studentKey = practiceInteractiveKey(student);
+        String token = UUID.randomUUID().toString();
+        if (!Boolean.TRUE.equals(redisCache.setCacheObjectIfAbsent(studentKey, token, 120, TimeUnit.SECONDS)))
+            throw new ServiceException("上一次运行还没结束，请稍候再试");
+        String classKey = classKey(student);
+        long active = redisCache.incrementCounterWithTtl(classKey, 180, TimeUnit.SECONDS);
+        // 配置缺失时按默认 8 人放行，不能让缺省配置把整班运行直接拦死。
+        Integer configured = judgeProperties.getClassConcurrency();
+        int limit = configured == null ? 8 : Math.max(1, configured.intValue());
+        if (active > limit) {
+            redisCache.decrementCounterOrDelete(classKey);
+            redisCache.deleteObjectIfValueMatches(studentKey, token);
+            throw new ServiceException("本班同时运行的人数较多，请稍后再试");
+        }
+        return token;
+    }
+
+    private void releaseInteractiveRun(BizStudent student, String token) {
+        redisCache.deleteObjectIfValueMatches(practiceInteractiveKey(student), token);
+        // 班级槽位是本次请求自己加的，无论学生锁是否已过期都必须归还，否则额度只减不增。
+        redisCache.decrementCounterOrDelete(classKey(student));
+    }
+
+    private String practiceInteractiveKey(BizStudent student) {
+        return "judge0:practice:interactive:" + student.getStudentId();
+    }
+
+    /** 和课程判题链路保持同样的班级标识，避免不同学校/年级的同名班被合并计数。 */
+    private String classKey(BizStudent student) {
+        return "judge0:practice:class:" + student.getDeptId() + ":" + student.getEntryYear() + ":" + student.getClassCode();
+    }
+
+    /** 同步提交并等待终态；抽出来便于交互运行复用同一套轮询边界。 */
+    private Judge0Result executeSync(Judge0Request request) throws InterruptedException {
+        Judge0Result result = client().submit(request);
+        if (result == null || result.getToken() == null) throw new ServiceException("判题服务未返回结果，请稍后重试");
+        for (int poll = 0; poll < Math.max(1, judgeProperties.getMaxPolls()); poll++) {
+            Thread.sleep(Math.max(100, judgeProperties.getPollIntervalMs()));
+            result = client().poll(result.getToken());
+            if (result != null && result.isFinished()) return result;
+        }
+        throw new ServiceException("运行时间较长，请稍后重试");
+    }
+
     public Map<String, Object> submit(Long userId, String sourceType, Long sourceId, Long questionId, String sourceCode, String submitType, String customInput, PythonPracticeSubmissionWorker submissionWorker) {
         BizStudent student = requireStudent(userId); assertStudentScope(student, student.getDeptId(), sourceType, sourceId, questionId); Map<String, Object> question = mapper.selectQuestion(sourceType, sourceId, questionId);
         if (question == null) throw new ServiceException("题目不存在或未开放");
@@ -601,7 +708,9 @@ public class PythonPracticeService {
                 Judge0Result result = client().submit(request);
                 if (result == null || result.getToken() == null) throw new ServiceException("Judge0 未返回提交令牌");
                 for (int poll = 0; poll < Math.max(1, judgeProperties.getMaxPolls()); poll++) { Thread.sleep(Math.max(100, judgeProperties.getPollIntervalMs())); result = client().poll(result.getToken()); if (result != null && result.isFinished()) break; }
+                if (result == null || !result.isFinished()) throw new ServiceException("Judge0 判题轮询超时");
                 String status = customRun ? JudgeOutcome.runStatus(result) : JudgeOutcome.caseStatus(result, expectedOutput);
+                if (!customRun && "SERVICE_ERROR".equals(status)) throw new ServiceException("判题服务异常");
                 if ("ACCEPTED".equals(status)) passed++; else if (firstFailure.isEmpty()) firstFailure = status;
                 // 权重必须参与算分，否则同一道题在题单和课程里分数不一致。
                 double weight = decimal(item.get("score_weight"), 1D);

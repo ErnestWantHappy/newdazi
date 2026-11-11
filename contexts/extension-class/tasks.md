@@ -64,3 +64,9 @@
 - [x] 130 发布（2026-11-02，1.30.64）：整库备份后执行 4 表 7 列迁移，复核 999 课/9 题单/27,897 学生默认 `regular`、拓展表 0 行；真实库验证原 JOIN 报 1267、`CAST` 版返回 85 行；三角色接口冒烟通过。证据见 `RELEASE_LOG.md`。
 - [x] 双角色规则调整（2026-11-02，1.30.65 热更）：`requireTeacher` 只看 `teacher` 角色，兼任教研员的教师可管理/创建自己的拓展班；`create` 放行双角色本人建班；负责人候选与 `teacher/teachers` 查询仍排除 researcher。单测 23 项通过，130 实测教师 `classes/teachers/candidates` 200、候选 3 人不含双角色账号、学生 403。
 - [ ] 未做：旧 50 班在 130 登记与 `extension_legacy_snapshot_v1.sql` 回填实跑（登记后必须立即执行，否则会把中间调动算进历史名单）。
+
+## 2026-11-11 1.30.96 已发布
+
+- [x] F13 `PythonPracticeMapper.xml` 学情两处 `plan_scope` 放开 `legacy`，仅改这两处；`PythonPracticeMapperScopeTest` 1项通过。本机 legacy 题单0，未做真实人数对比。
+- [x] F14 免抽测排除拓展班载体班并限定常规课，详见 `teaching-supervision/tasks.md`；本机 `biz_extension_class` 0行，靠 SQL 审查+XML解析测试。
+- [x] 130 已发布1.30.96；未改拓展班表结构或历史名单。

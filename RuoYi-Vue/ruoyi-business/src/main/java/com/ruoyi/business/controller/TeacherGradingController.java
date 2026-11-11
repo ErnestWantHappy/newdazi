@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import com.ruoyi.common.core.controller.BaseController;
@@ -154,7 +155,7 @@ public class TeacherGradingController extends BaseController {
      * 只覆盖已正式提交且已有系统判题分的学生；已退回、无系统分或分数越界的学生跳过。
      */
     @PostMapping("/python/batch-adopt-system-scores")
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public AjaxResult batchAdoptPythonSystemScores(@RequestBody PythonBatchAdoptRequest request) {
         if (request.getLessonId() == null || request.getQuestionId() == null) {
             return AjaxResult.error("课程和操作题不能为空");
@@ -202,7 +203,8 @@ public class TeacherGradingController extends BaseController {
             }
             totalCount++;
             PythonBatchAdoptSnapshot expected = expectedByStudent.get(row.getStudentId());
-            if (expected != null && !matchesExpectedSnapshot(expected, row)) {
+            // 新版页面传了快照却缺少该生，说明是页面打开后才交的，教师还没看过，不能覆盖。
+            if (expected == null ? !expectedByStudent.isEmpty() : !matchesExpectedSnapshot(expected, row)) {
                 // 教师页面加载后若有人改分或学生重交，不能按旧页面批量覆盖。
                 skippedCount++;
                 continue;
@@ -298,6 +300,31 @@ public class TeacherGradingController extends BaseController {
     }
 
     /**
+     * 教师直接运行当前展示的代码。
+     *
+     * 有些学生还没提交，但教师需要先验证自己的讲法与代码写法；
+     * 这里同样只运行、不写判题记录和成绩，权限按课程归属校验。
+     */
+    @PostMapping("/python/run")
+    public AjaxResult runPythonSource(@RequestBody Map<String, String> body) {
+        if (body == null) throw new ServiceException("运行参数不能为空");
+        Long lessonId = null;
+        String rawLessonId = body.get("lessonId");
+        if (StringUtils.isNotEmpty(rawLessonId)) {
+            try {
+                lessonId = Long.valueOf(rawLessonId.trim());
+            } catch (NumberFormatException ex) {
+                throw new ServiceException("课程参数无效");
+            }
+        }
+        assertLessonVisibleToCurrentTeacher(lessonId);
+        String source = body.get("sourceCode");
+        if (StringUtils.isEmpty(source)) throw new ServiceException("没有可运行的代码");
+        if (source.length() > 65536) throw new ServiceException("在线运行的代码不能超过64 KiB，请下载后运行");
+        return AjaxResult.success(practicalPythonRunService.run(source, body.get("stdin")));
+    }
+
+    /**
      * 当前课程、班级、操作题下失败文件重新转换
      */
     @PostMapping("/retry-failed-previews")
@@ -327,7 +354,7 @@ public class TeacherGradingController extends BaseController {
      * 必须校验答题所属学生/课程是否在当前教师管理范围内，禁止仅凭 answerId 越权改分。
      */
     @PostMapping("/grade")
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public AjaxResult grade(@RequestBody GradeRequest request) {
         if (request.getScore() == null) {
             return AjaxResult.error("参数不完整");
@@ -395,6 +422,10 @@ public class TeacherGradingController extends BaseController {
                     && (best == null || !Objects.equals(best.getSubmissionId(), request.getSystemSubmissionId()))) {
                 return AjaxResult.error("系统判题结果已更新，请刷新后重新批改");
             }
+            // 页面打开时没有提交、现在却有了，说明学生刚交新代码，教师还没看过，不能直接给分。
+            if (best != null && request.getSystemSubmissionId() == null) {
+                return AjaxResult.error("学生有新的判题提交，请刷新后重新批改");
+            }
             if (StringUtils.isBlank(answer.getStudentAnswer()) && best == null) {
                 return AjaxResult.error("学生尚未提交操作题作品");
             }
@@ -447,7 +478,7 @@ public class TeacherGradingController extends BaseController {
                 com.ruoyi.business.domain.BizScoringDetail scoringDetail =
                         new com.ruoyi.business.domain.BizScoringDetail();
                 if (detail != null) {
-                    scoringDetail.setAnswerId(request.getAnswerId());
+                    scoringDetail.setAnswerId(answerId);
                     scoringDetail.setItemId(detail.getItemId());
                     scoringDetail.setScore(detail.getScore());
                     scoringDetail.setStarCount(detail.getStarCount());

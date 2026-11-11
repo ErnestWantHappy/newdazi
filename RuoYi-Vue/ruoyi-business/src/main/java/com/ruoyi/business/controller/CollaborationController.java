@@ -21,6 +21,7 @@ public class CollaborationController
     @Autowired private CollaborationRoomService service;
 
     @GetMapping("/health")
+    @PreAuthorize("@ss.hasAnyRoles('admin,teacher')")
     public AjaxResult health()
     {
         return AjaxResult.success(service.health());

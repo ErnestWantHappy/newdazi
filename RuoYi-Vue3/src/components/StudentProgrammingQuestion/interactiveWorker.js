@@ -26,14 +26,23 @@ self.onmessage = async ({ data }) => {
     return
   }
   if (data.type !== 'run') return
+  // JSPI 可以挂起同步 input()，无需改写学生代码，也不要求 HTTP 站点开启跨源隔离。
+  if (!('Suspending' in WebAssembly) || !('promising' in WebAssembly)) {
+    self.postMessage({ type: 'error', compat: true, text: '当前浏览器不支持交互运行，请使用新版 Chrome 或 Edge；代码仍可保存和提交' })
+    return
+  }
+  let pyodide
   try {
-    // JSPI 可以挂起同步 input()，无需改写学生代码，也不要求 HTTP 站点开启跨源隔离。
-    if (!('Suspending' in WebAssembly) || !('promising' in WebAssembly)) {
-      throw new Error('当前浏览器不支持交互运行，请使用新版 Chrome 或 Edge；代码仍可保存和提交')
-    }
     self.postMessage({ type: 'loading', text: '正在加载 Python，首次运行需要稍等…' })
     const { loadPyodide } = await import(/* @vite-ignore */ `${data.baseUrl}pyodide.mjs`)
-    const pyodide = await loadPyodide({ indexURL: data.baseUrl })
+    pyodide = await loadPyodide({ indexURL: data.baseUrl })
+  } catch (error) {
+    // 只有“环境根本起不来”才带 compat 标记，由外层自动改用服务器运行。
+    // 学生代码自己报的错绝不能带这个标记，否则会被当成本地兼容性问题吞掉。
+    self.postMessage({ type: 'error', compat: true, text: 'Python 运行环境加载失败，已改用服务器运行；代码已保留' })
+    return
+  }
+  try {
     pyodide.setStdout({ write(buffer) { output(decoder.decode(buffer, { stream: true })); return buffer.length } })
     pyodide.setStderr({ write(buffer) { output(decoder.decode(buffer, { stream: true })); return buffer.length } })
     pyodide.registerJsModule('classroom_terminal', {

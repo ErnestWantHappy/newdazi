@@ -60,6 +60,8 @@ public interface PracticalArtifactMapper
     int claimAttachmentNormalization(@Param("attachmentId") Long attachmentId,
                                      @Param("claimedAt") Date claimedAt);
 
+    int releaseAttachmentNormalizationClaim(@Param("attachmentId") Long attachmentId);
+
     int updateAttachmentPreview(PracticalAttachment attachment);
 
     int updateAttachmentNormalization(PracticalAttachment attachment);

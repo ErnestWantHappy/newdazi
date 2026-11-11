@@ -76,6 +76,17 @@ class PracticalArtifactRetryServiceTest
         verify(conversionService, never()).retry(4L);
     }
 
+    @Test
+    void scheduledRecoveryRequeuesPendingAttachment() {
+        PracticalAttachment pending = attachment(13L, "pending", new Date(0L), 0);
+        when(artifactMapper.selectRecoverableAttachments(any(Date.class), any(Date.class), eq(3)))
+                .thenReturn(Collections.singletonList(pending));
+        when(conversionService.retry(13L)).thenReturn(true);
+        Map<String, Object> result = service.retryAttachmentsAfterOfficeRecovered();
+        assertEquals(1, result.get("triggeredCount"));
+        verify(conversionService).retry(13L);
+    }
+
     private PracticalAttachment attachment(Long id)
     {
         PracticalAttachment attachment = new PracticalAttachment();

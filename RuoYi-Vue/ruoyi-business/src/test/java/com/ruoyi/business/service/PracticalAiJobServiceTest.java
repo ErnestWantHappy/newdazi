@@ -116,6 +116,23 @@ class PracticalAiJobServiceTest
     }
 
     @Test
+    void shouldReclaimOnlyStaleProcessingBeforeResumingJob()
+    {
+        PracticalAiJob paused = new PracticalAiJob(); paused.setJobId(88L); paused.setJobStatus("PAUSED");
+        paused.setReferenceAnswerJson("[{}]");
+        when(mapper.selectJob(88L, 7L)).thenReturn(paused);
+
+        service.resume(88L, 7L);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(mapper, worker);
+        order.verify(mapper).resetStaleProcessingResults(88L, 15);
+        order.verify(mapper).updateJobStatus(org.mockito.ArgumentMatchers.eq(88L),
+                org.mockito.ArgumentMatchers.eq("PENDING"), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
+        order.verify(worker).run(88L);
+    }
+
+    @Test
     void shouldExposeStageEtaAndStalledStateWithoutSensitiveProviderPayload()
     {
         PracticalAiJob job = new PracticalAiJob();
@@ -141,6 +158,86 @@ class PracticalAiJobServiceTest
         assertEquals("REQUESTING_MODEL", progress.get("currentStage"));
         assertTrue((Boolean) progress.get("stalled"));
         assertEquals(30L, progress.get("estimatedRemainingSeconds"));
+    }
+
+    @Test
+    void retryCancelledIsRejected() { assertRetryRejected("CANCELLED"); }
+
+    @Test
+    void retryCancelRequestedIsRejected() { assertRetryRejected("CANCEL_REQUESTED"); }
+
+    @Test
+    void retryPausedIsRejected() { assertRetryRejected("PAUSED"); }
+
+    private void assertRetryRejected(String status) {
+        PracticalAiJob job = new PracticalAiJob();
+        job.setJobId(88L); job.setJobStatus(status); job.setReferenceAnswerJson("[{}]");
+        when(mapper.selectJob(88L, 7L)).thenReturn(job);
+        org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                () -> service.retryFailed(88L, 7L));
+        verify(mapper, never()).resetFailedResults(any());
+        verifyNoInteractions(worker);
+    }
+
+    @Test
+    void workerFinishPreservesCancelledAndPaused() {
+        PracticalAiJobWorker realWorker = new PracticalAiJobWorker();
+        ReflectionTestUtils.setField(realWorker, "aiMapper", mapper);
+        PracticalAiJob job = new PracticalAiJob(); job.setJobId(88L);
+        when(mapper.selectJobForWorker(88L)).thenReturn(job);
+        for (String status : Arrays.asList("CANCELLED", "PAUSED")) {
+            job.setJobStatus(status);
+            ReflectionTestUtils.invokeMethod(realWorker, "finish", 88L);
+        }
+        verify(mapper, never()).updateJobStatus(any(), any(), any(), any(), any());
+        verify(mapper, never()).insertEvent(any());
+    }
+
+    @Test
+    void workerDiscardsLateResultWithoutSavedEvent() throws Exception {
+        PracticalAiJobWorker realWorker = new PracticalAiJobWorker();
+        ReflectionTestUtils.setField(realWorker, "aiMapper", mapper);
+        com.ruoyi.business.mapper.BizStudentAnswerMapper answers = org.mockito.Mockito.mock(com.ruoyi.business.mapper.BizStudentAnswerMapper.class);
+        com.ruoyi.business.mapper.PracticalRubricSnapshotMapper snapshots = org.mockito.Mockito.mock(com.ruoyi.business.mapper.PracticalRubricSnapshotMapper.class);
+        PracticalRubricSnapshotService rubrics = org.mockito.Mockito.mock(PracticalRubricSnapshotService.class);
+        PracticalVisionGradingProvider provider = org.mockito.Mockito.mock(PracticalVisionGradingProvider.class);
+        ReflectionTestUtils.setField(realWorker, "answerMapper", answers);
+        ReflectionTestUtils.setField(realWorker, "snapshotMapper", snapshots);
+        ReflectionTestUtils.setField(realWorker, "rubricService", rubrics);
+        ReflectionTestUtils.setField(realWorker, "artifactMapper", artifactMapper);
+        ReflectionTestUtils.setField(realWorker, "provider", provider);
+        ReflectionTestUtils.setField(realWorker, "objectMapper", new ObjectMapper());
+        String oldProfile = com.ruoyi.common.config.RuoYiConfig.getProfile();
+        java.nio.file.Path profile = java.nio.file.Files.createTempDirectory("ai-late-result");
+        java.nio.file.Path upload = java.nio.file.Files.createDirectory(profile.resolve("upload"));
+        java.nio.file.Path page = upload.resolve("page.jpg");
+        java.nio.file.Files.write(page, new byte[] { 1 });
+        new com.ruoyi.common.config.RuoYiConfig().setProfile(profile.toString());
+        try {
+            com.ruoyi.business.domain.BizStudentAnswer answer = new com.ruoyi.business.domain.BizStudentAnswer();
+            answer.setPracticalVersionId(201L);
+            when(answers.selectById(101L)).thenReturn(answer);
+            com.ruoyi.business.domain.PracticalRubricSnapshot rubric = new com.ruoyi.business.domain.PracticalRubricSnapshot();
+            rubric.setSnapshotId(301L);
+            when(snapshots.selectByVersionId(201L)).thenReturn(rubric);
+            PracticalAttachment attachment = new PracticalAttachment();
+            attachment.setNormalizedStatus("success"); attachment.setNormalizedPagesJson("[\"/profile/upload/page.jpg\"]");
+            when(artifactMapper.selectAttachmentsByVersion(201L)).thenReturn(Collections.singletonList(attachment));
+            when(provider.grade(any(), any(), any())).thenReturn(new PracticalAiGradingOutput());
+            when(mapper.updateResult(any())).thenReturn(0);
+            PracticalAiJob job = new PracticalAiJob(); job.setJobId(88L); job.setReferenceAnswerJson("[]");
+            PracticalAiResult result = new PracticalAiResult(); result.setResultId(1L); result.setAnswerId(101L);
+            result.setPracticalVersionId(201L); result.setRubricSnapshotId(301L);
+            ReflectionTestUtils.invokeMethod(realWorker, "gradeOne", job, config(), "test-only", result, Collections.emptyList());
+            org.mockito.ArgumentCaptor<com.ruoyi.business.domain.PracticalAiEvent> events = org.mockito.ArgumentCaptor.forClass(com.ruoyi.business.domain.PracticalAiEvent.class);
+            verify(mapper, org.mockito.Mockito.atLeastOnce()).insertEvent(events.capture());
+            assertTrue(events.getAllValues().stream().anyMatch(event -> "RESULT_DISCARDED".equals(event.getEventStage())));
+            assertFalse(events.getAllValues().stream().anyMatch(event -> "COMPLETED".equals(event.getEventStage())));
+            verify(mapper).updateResult(any());
+        } finally {
+            new com.ruoyi.common.config.RuoYiConfig().setProfile(oldProfile);
+            java.nio.file.Files.deleteIfExists(page); java.nio.file.Files.deleteIfExists(upload); java.nio.file.Files.deleteIfExists(profile);
+        }
     }
 
     private TeacherAiConfig config()

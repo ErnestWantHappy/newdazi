@@ -18,8 +18,13 @@ public final class JudgeOutput {
 
     private JudgeOutput(String raw, String plainText, String visibleText) {
         this.raw = raw == null ? "" : raw;
-        this.plainText = plainText;
-        this.visibleText = visibleText;
+        // 统一换行：判题比较本身忽略 CRLF，但教师差异页和学生终端会直接显示，残留 \r 会造成错位。
+        this.plainText = normalizeNewlines(plainText);
+        this.visibleText = normalizeNewlines(visibleText);
+    }
+
+    private static String normalizeNewlines(String value) {
+        return value == null ? "" : value.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     public static JudgeOutput of(String raw) {
@@ -94,8 +99,10 @@ public final class JudgeOutput {
      */
     public String terminalText(String stdin) {
         List<String> inputs = splitLines(stdin);
+        // 没有套壳标记时无法判断输入被读了几次（例如 input() 不带提示语，或代码根本没调用 input），
+        // 此时原样返回程序输出，绝不追加任何说明文字，避免把提示当成程序输出参与判题或展示。
         if (!raw.contains(JudgeSourceWrapper.PROMPT_START)) {
-            return appendUnusedInputs(raw, inputs, 0);
+            return normalizeNewlines(raw);
         }
         StringBuilder out = new StringBuilder();
         int cursor = 0;
@@ -116,20 +123,14 @@ public final class JudgeOutput {
             if (inputIndex < inputs.size()) {
                 out.append(inputs.get(inputIndex));
                 inputIndex++;
+                // 有输入才换行；还在等输入时不换行，让输入框紧跟在提示语后面，和 Thonny 一致。
+                out.append('\n');
             }
-            out.append('\n');
             cursor = end + JudgeSourceWrapper.PROMPT_END.length();
         }
-        return appendUnusedInputs(out.toString(), inputs, inputIndex);
-    }
-
-    /** 代码一次都没调 input() 却填了输入时，如实提示，避免教师以为输入没生效。 */
-    private static String appendUnusedInputs(String text, List<String> inputs, int used) {
-        if (used >= inputs.size()) return text;
-        StringBuilder tail = new StringBuilder(text);
-        if (!text.isEmpty() && !text.endsWith("\n")) tail.append('\n');
-        tail.append("（本次运行没有读取你填写的输入，程序可能不需要输入）");
-        return tail.toString();
+        // 多填的输入不再追加说明文字：回放文本只负责展示真实的“提示语 + 输入 + 输出”。
+        // 统一换行：个别判题机在 Windows 上返回 CRLF，残留在行尾的 \r 会让终端显示错位。
+        return normalizeNewlines(out.toString());
     }
 
     private static List<String> splitLines(String stdin) {
