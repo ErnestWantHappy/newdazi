@@ -30,6 +30,7 @@ import org.w3c.dom.NodeList;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.ruoyi.business.domain.BizQuestion;
 import com.ruoyi.business.domain.QuestionMedia;
+import com.ruoyi.business.utils.TypingContentNormalizer;
 import com.ruoyi.common.exception.ServiceException;
 
 /** 题库专用双通道读取：文字不被图片路径覆盖，歧义不自动猜。 */
@@ -190,7 +191,9 @@ public class QuestionWorkbookReader {
         if(type.isEmpty()||Arrays.asList("choice","选择题","单选","单选题").contains(type)) type="choice";
         else if(Arrays.asList("judgment","判断题","判断").contains(type))type="judgment";
         else if(Arrays.asList("typing","打字题").contains(type))type="typing";
-        q.setQuestionType(type);q.setQuestionContent(v.get("stem"));q.setOptionA(v.get("A"));q.setOptionB(v.get("B"));q.setOptionC(v.get("C"));q.setOptionD(v.get("D"));
+        q.setQuestionType(type);
+        // Excel 课文同样可能带入弯单引号；打字题入库前与手工编辑保持同一归一化规则。
+        q.setQuestionContent("typing".equals(type)?TypingContentNormalizer.normalize(v.get("stem")):v.get("stem"));q.setOptionA(v.get("A"));q.setOptionB(v.get("B"));q.setOptionC(v.get("C"));q.setOptionD(v.get("D"));
         q.setAnswer(v.getOrDefault("answer","").toUpperCase(Locale.ROOT));q.setAnalysis(v.get("analysis"));
         q.setIsPublic(Arrays.asList("N","0","否").contains(v.get("public"))?"N":"Y");
         String grade=v.getOrDefault("grade","");String[] cn={"一年级","二年级","三年级","四年级","五年级","六年级","七年级","八年级","九年级"};

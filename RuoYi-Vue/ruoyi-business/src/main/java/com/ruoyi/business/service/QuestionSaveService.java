@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.business.domain.BizQuestion;
 import com.ruoyi.business.mapper.BizQuestionMapper;
 import com.ruoyi.business.utils.QuestionMediaCodec;
+import com.ruoyi.business.utils.TypingContentNormalizer;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 
@@ -31,6 +32,8 @@ public class QuestionSaveService {
         // Python/文件作品等分步配置继续沿用原保存链路，不能共享选择题的幂等请求键。
         BizQuestion current=create?null:questions.selectQuestionForUpdate(sourceId);
         String type=q.getQuestionType()!=null?q.getQuestionType():(current==null?null:current.getQuestionType());
+        // 打字题学生只能敲英文撇，弯单引号会导致永远打不对；保存前把字母间的弯单引号归一化。
+        if("typing".equals(type)) q.setQuestionContent(TypingContentNormalizer.normalize(q.getQuestionContent()));
         if(!"choice".equals(type) && !QuestionMediaCodec.hasImages(q.getMediaJson()) && (current==null || !QuestionMediaCodec.hasImages(current.getMediaJson()))) {
             int rows=create?questionService.insertBizQuestion(q):questionService.updateBizQuestion(q);
             if(rows==-1)throw new ServiceException("无权编辑他人创建的题目",403);

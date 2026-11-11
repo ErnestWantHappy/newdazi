@@ -1,5 +1,23 @@
 # 部署与回滚约定
 
+## 2026-11-11 正式1.30.95（打字题英文引号自动纠正，仅后端）
+
+130 后端切至 `releases/20261111_typing_quote_v1`：JAR `741b595902488bd6446c74a5a8fbae1828694e4f49e22fa4cad538034f5d58b8`（108,315,711B）；前端未动，继续 `20261111_python_interactive_v1/frontend`。MainPID `3160006`、NRestarts 0、active、首页/验证码 200。产品更新 **173 / 1.30.95 / PUBLISHED**。
+
+打字题保存时自动把英文单词之间的中文弯单引号（U+2018/U+2019）纠正为键盘可输入的英文撇：手工编辑/新增走 `QuestionSaveService`，Excel 导入走 `QuestionWorkbookReader`，规则见 `TypingContentNormalizer`；中文课文引号与中文标点练习题不受影响。同时数据修复两道存量题（991848、990812，U+2019→U+0027）。本 JAR 同时随附已验证的判题限流缺陷修复（用户知情确认保留）。备份：数据修复前 `biz_question` 单表 `20261111_172752_typing_quote_v1`；发布整库 `20261111_173215_20261111_typing_quote_v1`（含 `service.before`）。线上验收：真实教师 API 建弯撇打字题入库即直撇，测试题已清理。
+
+回退：恢复 `service.before` 到 `/etc/systemd/system/xueyeceping-130.service`，`systemctl daemon-reload`、重启 `xueyeceping-130`，回到 1.30.94；更新 173 转 DRAFT。数据修复不随应用回滚，需撤销时按单表备份精确恢复两行，不整库回灌。
+
+## 2026-11-11 正式1.30.94（Python 在线运行与判题全链路统一）
+
+130 前后端为 `releases/20261111_python_interactive_v1`：JAR `44b937814598ce970f47b448f28200ae5c7cc74217b6754c9a9549c54419b24d`（108,314,033B），首页 `4239bdf9fb27d1fd1c509d070653826db0bd92d09395f41541a309ff3e85cd6d`；前端制品 `frontend.tar.gz` 43,385,478B / SHA-256 `9ff7cf1d262ce1901e8437b6c35ce8de5210719971b745079a350a7a1838c2e5`，825 文件；合并 1.30.93 旧静态后线上 3,219 文件。MainPID `3136003`、NRestarts 0、active/running、首页/验证码 200。产品更新 **172 / 1.30.94 / PUBLISHED**。
+
+本次把教师批改“运行查看”、学生做题与刷题、作品 `.py` 运行统一到同一运行与判题规则：打开即运行，提示语按顺序显示，输入框紧跟提示语；课程与刷题按测试点权重计分，等待输入不再误判通过；教师建题可用 `input("提示文字")`，验证失败逐测试点显示期望与实际，可生成期望输出但需确认保存；历史题目两种期望输出写法均兼容。无表结构变更，仅执行 `sql/platform_update_1_30_94_20261111.sql` 登记产品更新。
+
+发布前整库备份 `/data/backups/xueyeceping/20261111_085038_20261111_python_interactive_v1/database.sql.gz`，53,964,422B，SHA-256 `56412316a446a6ae80d05a7290340631ea089c5ec6b46c8732d1af074e10e344`，含 `service.before`、`nginx.before`、`env.before`、`jar.before`、`index.before.html`。验收：真实教师课程 295 连续两次等待输入并按提示语回放，最终输出投票结果；0 页面脚本错误、0 个 5xx、0 横向溢出；教师直接运行接口 `needInput=true` 后带 `stdin=17` 返回 `请输入你的年龄：17 / 购票`；生成输出仅计算不落库；学生运行接口匿名业务码 401。证据 `output/playwright/python-1.30.94-online/`、`output/release-20261111-python-interactive-130/remote-state.json`。
+
+回退：确认当前仍为本 release 后，恢复备份 `service.before` 到 `/etc/systemd/system/xueyeceping-130.service`、`nginx.before` 到 `/etc/nginx/sites-available/xueyeceping-130`，`systemctl daemon-reload`、重启 `xueyeceping-130`、`nginx -t && systemctl reload nginx`，首页回 `447e7bc5…`、JAR 回 `a8162e41…`；更新 172 转 DRAFT。不整库回灌。
+
 ## 2026-11-11 正式1.30.93（教材资源面板可拖宽，仅前端）
 
 130 Nginx 前端 root 为 `releases/20261111_case_panel_resize_v1/frontend`，首页 `447e7bc566034d7133eb4be32826989b76b6ae78c3bdcd758a007f9eb64c0396`；后端继续 `releases/20261110_python_manual_confirm_v1`（JAR `a8162e41`），MainPID `3107625`、NRestarts 0、三服务 active，未重启后端。制品 `frontend.tar.gz` 43,377,300B / SHA-256 `09be0cdf2845e380649fbf4efbdfd3c326449879d043b71117200376e7e45fc3`，821 文件；合并旧静态后线上 2,821 文件。

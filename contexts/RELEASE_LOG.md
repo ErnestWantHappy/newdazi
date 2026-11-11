@@ -1,5 +1,31 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-11 · 1.30.95：打字题英文引号自动纠正（后端，随附判题限流缺陷修复）
+
+130 后端切至 `releases/20261111_typing_quote_v1`：JAR SHA-256 `741b595902488bd6446c74a5a8fbae1828694e4f49e22fa4cad538034f5d58b8`（108,315,711B）；前端未动，继续 1.30.94 的 `20261111_python_interactive_v1/frontend`。MainPID `3160006`、NRestarts 0、active、首页/验证码 200（第 4 次 5 秒探活通过）。产品更新 **173 / 1.30.95 / PUBLISHED**，仅执行 `sql/platform_update_1_30_95_20261111.sql`。
+
+**起因**：吴琴琴老师反馈打字课文里放的是英文单引号，学生打字时显示中文单引号且该字符标红。实证根因是 `ry-vue.biz_question` 库存内容本身就是中文弯单引号 U+2019（屏幕上与英文撇肉眼几乎无法分辨），学生键盘敲不出、逐字比对必然判错；管理端详情、学生端渲染、后端透传全链路无任何引号转换。全库 665 道打字题扫描：弯单引号仅 3 条（其中 714 为故意的中文标点符号练习题，保留），弯双引号 191 条均为中文课文合法标点，未动。
+
+**修复**：①数据——`991848`（三年级英文题 It's）、`990812`（七年级 I'can）两题 `REPLACE(U+2019→U+0027)`，更新 2 行，复核弯引号 0、直引号 1；两题分别挂课 `990995`、`990609`，学生重开课程即正常。②代码——新增 `TypingContentNormalizer`（仅替换前后均为英文字母的 U+2018/U+2019），接入 `QuestionSaveService.save`（手工新增/编辑）与 `QuestionWorkbookReader`（Excel 导入打字题）；中文课文引号与符号练习题不受影响。后端全量单测 **1040 通过 / 0 失败 / 3 跳过**（含新增归一化 4 项）。
+
+**线上验收**：真实教师 681108 经 API 新建打字题（内容三个撇全部故意提交 U+2019），入库 991851 后弯引号 0、直引号 1（`It's…can't…it's`），验证后已删除，残余 0 行。
+
+**随附上线（用户知情后确认保留）**：本 JAR 同时包含本机已验证的判题限流缺陷修复（`RedisCache` 原子计数封装、班级并发上限负值自愈、交互锁 TTL 120s 认主释放、槽位归还、`assertStudentQuestionAccess` 去锁，详见 `contexts/PROJECT_CORE.md` 对应节与 `bug-audit-20261111/report.md` §8；本机全量 1036/0/3 含 16 线程真实 Redis 并发复核，叠加本轮 4 项共 1040）。该修复为 PROJECT_CORE 标记的最优先待发布项，130 此前运行含缺陷的 1.30.94。限流修复未做线上专项行为验证（单测与探活覆盖），保留待机房真实整班使用观察。
+
+备份：`biz_question` 单表 `/data/backups/xueyeceping/20261111_172752_typing_quote_v1/biz_question.sql.gz`（562,440B，SHA-256 `52f07db03616993b5afffef1b5f89bdf911dd6410a67fc7bf47e3f4925628dc2`，数据修复前）；发布整库 `/data/backups/xueyeceping/20261111_173215_20261111_typing_quote_v1/database.sql.gz`（SHA-256 `a79b21b105c1f20863a5040d96310842405bace0cc1858360572efec5e5a7c19`，含 service.before）。注意：整库备份时点在数据修复之后、JAR 切换之前。
+
+回退：确认当前仍为本 release 后，恢复 `service.before` 到 `/etc/systemd/system/xueyeceping-130.service`，`systemctl daemon-reload`、重启 `xueyeceping-130`，回到 1.30.94（限流缺陷随之回到线上）；更新 173 转 DRAFT。数据修复不随应用回滚，如需撤销按单表备份精确恢复两题两行，不整库回灌。
+
+## 2026-11-11 · 1.30.94：Python 在线运行与判题全链路统一（前后端）
+
+130 前后端切至 `releases/20261111_python_interactive_v1`：JAR `44b937814598ce970f47b448f28200ae5c7cc74217b6754c9a9549c54419b24d`（108,314,033B），首页 `4239bdf9fb27d1fd1c509d070653826db0bd92d09395f41541a309ff3e85cd6d`；前端制品 `frontend.tar.gz` 43,385,478B / SHA-256 `9ff7cf1d262ce1901e8437b6c35ce8de5210719971b745079a350a7a1838c2e5`，825 文件；合并 1.30.93 旧静态后线上 3,219 文件。MainPID `3136003`、NRestarts 0、active/running，首页与验证码 200。产品更新 **172 / 1.30.94 / PUBLISHED**，真实教师 `/business/platform-update/list` 可见。
+
+教师批改页“运行查看”、学生做题与刷题、作品 `.py` 运行统一运行与判题规则：打开即运行，提示语按顺序显示，输入框紧跟提示语；课程与刷题按测试点权重计分，等待输入按运行错误处理，不再误判通过。教师建题可直接写 `input("提示文字")`，验证失败逐测试点显示期望与实际输出，并可一键按参考代码生成期望输出（只计算，需教师确认保存）；历史题目的“提示语+结果”和“仅结果”两种期望输出均兼容。高版本浏览器本机 Pyodide 运行，其他浏览器自动走服务器并保留已填输入。无表结构变更，仅执行 `sql/platform_update_1_30_94_20261111.sql` 登记产品更新。
+
+发布前整库备份 `/data/backups/xueyeceping/20261111_085038_20261111_python_interactive_v1/database.sql.gz`，53,964,422B，SHA-256 `56412316a446a6ae80d05a7290340631ea089c5ec6b46c8732d1af074e10e344`，含 service/nginx/env/jar/index 旧版备份。验收：真实教师账号在课程 295（2021级7班蒋沂航）连续两次“等待输入”，回放 `请输入投票的总人数：1`、`输入a投票给a作品，输入b投票给b作品：a`，最终输出投票结果；0 页面脚本错误、0 个 5xx、0 横向溢出。另核验教师直接运行 `needInput=true` 后带 `stdin=17` 返回 `请输入你的年龄：17 / 购票`；`generate-outputs` 对题目 3337 返回两个测试点纯结果且未落库；学生运行接口匿名访问返回业务码 401。证据 `output/playwright/python-1.30.94-online/`、`output/release-20261111-python-interactive-130/remote-state.json`。
+
+回退：确认当前仍指向 `20261111_python_interactive_v1` 后，恢复本备份 `service.before` 到 `/etc/systemd/system/xueyeceping-130.service`、`nginx.before` 到 `/etc/nginx/sites-available/xueyeceping-130`，`systemctl daemon-reload`、重启 `xueyeceping-130`、`nginx -t && systemctl reload nginx`，首页回到 `447e7bc5…`、JAR 回到 `a8162e41…`；更新 172 转 DRAFT。不整库回灌。
+
 ## 2026-11-11 · 1.30.93：教材资源面板可拖宽与课例标题左对齐（仅前端）
 
 130 前端切至 `releases/20261111_case_panel_resize_v1`：首页 `447e7bc566034d7133eb4be32826989b76b6ae78c3bdcd758a007f9eb64c0396`，制品 `frontend.tar.gz` 43,377,300B / SHA-256 `09be0cdf2845e380649fbf4efbdfd3c326449879d043b71117200376e7e45fc3`，821 文件；合并旧静态后线上 2,821 文件。后端继续 `20261110_python_manual_confirm_v1`，MainPID `3107625`、NRestarts 0、三服务 active，未重启后端。
