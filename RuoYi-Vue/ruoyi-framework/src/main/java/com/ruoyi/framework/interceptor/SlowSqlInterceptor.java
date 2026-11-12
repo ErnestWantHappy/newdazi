@@ -15,6 +15,9 @@ import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import com.ruoyi.common.core.domain.model.LoginUser;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.spring.SpringUtils;
 import com.ruoyi.framework.manager.AsyncManager;
 import com.ruoyi.system.service.ISysPerfEventService;
@@ -77,6 +80,16 @@ public class SlowSqlInterceptor implements Interceptor
             BoundSql boundSql = mappedStatement.getBoundSql(parameter);
             final String mapperId = mappedStatement.getId();
             final String sql = boundSql.getSql();
+            // 在当前执行线程读取身份，异步落库线程不保留原 SecurityContext。
+            // 无登录身份只代表来源未记录，可能是匿名请求、后台任务或历史采集缺失。
+            String operName = null;
+            Authentication authentication = SecurityUtils.getAuthentication();
+            Object principal = authentication == null ? null : authentication.getPrincipal();
+            if (principal instanceof LoginUser)
+            {
+                operName = ((LoginUser) principal).getUsername();
+            }
+            final String triggerUser = operName;
             AsyncManager.me().execute(new java.util.TimerTask()
             {
                 @Override
@@ -84,7 +97,7 @@ public class SlowSqlInterceptor implements Interceptor
                 {
                     try
                     {
-                        SpringUtils.getBean(ISysPerfEventService.class).recordSlowSql(mapperId, sql, duration);
+                        SpringUtils.getBean(ISysPerfEventService.class).recordSlowSql(mapperId, sql, duration, triggerUser);
                     }
                     catch (Exception e)
                     {

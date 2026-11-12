@@ -4,7 +4,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutorService;
+import javax.annotation.PreDestroy;
+import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,36 +64,179 @@ public class PlatformOverviewController
                     + "inner join sys_dept d on papers.dept_id = d.dept_id "
                     + "group by d.dept_id, d.dept_name order by active_student_count desc, avg_score desc limit 8";
 
-    // 概览由二十余条聚合拼装，单次约 1 秒；60 秒内复用同一快照，避免多人反复刷新首页把统计压力放大。
-    private static final long SUMMARY_CACHE_MS = 60_000L;
+    /**
+     * 概览由二十余条聚合拼装，130 实测全量构建约 9~10 秒（趋势/学校两条聚合各 4.4 秒），
+     * 平台统计不需要分钟级实时，快照 TTL 放宽到 5 分钟，把重聚合压出用户请求路径：
+     * 过期后立即返回旧快照，由后台单线程刷新；冷启动无旧值时最多等待15秒共享构建结果。
+     */
+    private static final long SUMMARY_CACHE_MS = 300_000L;
 
+    private static final Logger log = LoggerFactory.getLogger(PlatformOverviewController.class);
+
+    private static final long FAILURE_RETRY_MS = 30_000L;
+    private static final long COLD_WAIT_SECONDS = 15L;
     private final Object summaryLock = new Object();
-    private volatile Map<String, Object> summaryCache;
-    private volatile long summaryCacheAt;
+    private volatile Snapshot summaryCache;
+    private volatile long nextRetryAt;
+    private volatile boolean refreshFailed;
+    private CompletableFuture<Snapshot> refreshFuture;
+
+    /** 预热与请求共用一个任务；线程池随控制器销毁，避免上下文重建遗留线程。 */
+    private final ExecutorService refreshPool = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "platform-overview-refresh");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    /** 应用就绪后异步预热一次，避免重启后第一位教研员同步等待全量聚合。 */
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmUpSnapshot()
+    {
+        triggerAsyncRefresh();
+    }
 
     @PreAuthorize("@ss.hasAnyRoles('admin,researcher')")
     @GetMapping("/summary")
     public AjaxResult summary()
     {
-        Map<String, Object> cached = summaryCache;
-        if (cached != null && System.currentTimeMillis() - summaryCacheAt < SUMMARY_CACHE_MS)
+        Snapshot cached = summaryCache;
+        if (isFresh(cached))
         {
-            return AjaxResult.success(cached);
+            return snapshotResult(cached);
         }
+        CompletableFuture<Snapshot> pending = triggerAsyncRefresh();
+        cached = summaryCache;
+        if (cached != null)
+        {
+            return snapshotResult(cached);
+        }
+        if (pending == null)
+        {
+            return AjaxResult.error("平台概览暂不可用，请稍后重试");
+        }
+        try
+        {
+            return snapshotResult(pending.get(COLD_WAIT_SECONDS, TimeUnit.SECONDS));
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            return AjaxResult.error("平台概览读取已中断，请稍后重试");
+        }
+        catch (Exception e)
+        {
+            // 等待超时不取消共享任务，后续请求仍复用该任务。
+            return AjaxResult.error("平台概览正在准备或暂不可用，请稍后重试");
+        }
+    }
+
+    private boolean isFresh(Snapshot cached)
+    {
+        return cached != null && System.currentTimeMillis() - cached.generatedAt < SUMMARY_CACHE_MS;
+    }
+
+    private AjaxResult snapshotResult(Snapshot snapshot)
+    {
+        Map<String, Object> data = new LinkedHashMap<>(snapshot.data);
         synchronized (summaryLock)
         {
-            cached = summaryCache;
-            if (cached != null && System.currentTimeMillis() - summaryCacheAt < SUMMARY_CACHE_MS)
+            data.put("generatedAt", snapshot.generatedAt);
+            data.put("stale", !isFresh(snapshot));
+            data.put("refreshing", refreshFuture != null && !refreshFuture.isDone());
+            data.put("refreshFailed", refreshFailed);
+            data.put("retryAfterMs", Math.max(0L, nextRetryAt - System.currentTimeMillis()));
+        }
+        return AjaxResult.success(data);
+    }
+
+    private CompletableFuture<Snapshot> triggerAsyncRefresh()
+    {
+        synchronized (summaryLock)
+        {
+            // 锁内重查新鲜度，避免持有旧快照的请求重复触发刚完成的刷新。
+            if (isFresh(summaryCache))
             {
-                return AjaxResult.success(cached);
+                return CompletableFuture.completedFuture(summaryCache);
             }
-            Map<String, Object> data = buildSummary();
-            summaryCache = data;
-            summaryCacheAt = System.currentTimeMillis();
-            return AjaxResult.success(data);
+            if (refreshFuture != null && !refreshFuture.isDone())
+            {
+                return refreshFuture;
+            }
+            if (System.currentTimeMillis() < nextRetryAt)
+            {
+                return null;
+            }
+            CompletableFuture<Snapshot> pending = new CompletableFuture<>();
+            refreshFuture = pending;
+            refreshFailed = false;
+            try
+            {
+                refreshPool.execute(() -> {
+                    try
+                    {
+                        Snapshot snapshot = new Snapshot(buildSummary(), System.currentTimeMillis());
+                        synchronized (summaryLock)
+                        {
+                            summaryCache = snapshot;
+                            nextRetryAt = 0L;
+                            refreshFailed = false;
+                            pending.complete(snapshot);
+                        }
+                    }
+                    catch (Throwable e)
+                    {
+                        failRefresh(pending, e);
+                        if (e instanceof Error)
+                        {
+                            throw (Error) e;
+                        }
+                    }
+                });
+            }
+            catch (RuntimeException e)
+            {
+                failRefresh(pending, e);
+            }
+            return pending;
+        }
+    }
+
+    private void failRefresh(CompletableFuture<Snapshot> pending, Throwable error)
+    {
+        synchronized (summaryLock)
+        {
+            nextRetryAt = System.currentTimeMillis() + FAILURE_RETRY_MS;
+            refreshFailed = true;
+            pending.completeExceptionally(error);
+        }
+        log.warn("平台概览快照刷新失败，保留旧快照并延迟重试: {}", error.getMessage());
+    }
+
+    @PreDestroy
+    public void destroy()
+    {
+        refreshPool.shutdownNow();
+        synchronized (summaryLock)
+        {
+            if (refreshFuture != null && !refreshFuture.isDone())
+            {
+                failRefresh(refreshFuture, new IllegalStateException("平台概览服务已停止"));
+            }
+        }
+    }
+
+    private static final class Snapshot
+    {
+        private final Map<String, Object> data;
+        private final long generatedAt;
+
+        private Snapshot(Map<String, Object> data, long generatedAt)
+        {
+            this.data = data;
+            this.generatedAt = generatedAt;
         }
     }
 
@@ -187,26 +339,13 @@ public class PlatformOverviewController
 
     private Long count(String sql)
     {
-        try
-        {
-            Long value = jdbcTemplate.queryForObject(sql, Long.class);
-            return value == null ? 0L : value;
-        }
-        catch (Exception e)
-        {
-            return 0L;
-        }
+        // 读取失败必须终止整份快照，不能把数据库故障伪装成真实零值。
+        Long value = jdbcTemplate.queryForObject(sql, Long.class);
+        return value == null ? 0L : value;
     }
 
     private List<Map<String, Object>> queryList(String sql)
     {
-        try
-        {
-            return jdbcTemplate.queryForList(sql);
-        }
-        catch (Exception e)
-        {
-            return new ArrayList<>();
-        }
+        return jdbcTemplate.queryForList(sql);
     }
 }

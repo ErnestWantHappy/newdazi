@@ -11,7 +11,11 @@ import com.ruoyi.system.domain.SysPerfEvent;
  */
 public interface ISysPerfEventService
 {
-    void recordSlowSql(String mapperId, String sqlText, long durationMs);
+    /**
+     * operName 为触发用户；后台线程（定时预刷新/调度任务）无登录上下文时传 null，
+     * 诊断时间线据此区分“用户请求慢 SQL”与“后台任务慢 SQL”。
+     */
+    void recordSlowSql(String mapperId, String sqlText, long durationMs, String operName);
 
     void recordFromOperLog(SysOperLog operLog);
 

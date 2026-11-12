@@ -58,6 +58,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
 import { getCollaborationDocument, getCollaborationRoster, getCollaborationSession, heartbeatCollaborationRoom, leaveCollaborationRoom, saveCollaborationDocument } from '@/api/business/collaboration'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const route = useRoute()
 const container = ref(null)
@@ -167,12 +168,11 @@ function compatibilityError() {
 
 function copyDiagnostics() {
   const text = JSON.stringify(browserDiagnostics(), null, 2)
-  const writePromise = navigator.clipboard && typeof navigator.clipboard.writeText === 'function'
-    ? navigator.clipboard.writeText(text)
-    : Promise.reject(new Error('当前浏览器不支持剪贴板'))
-  writePromise
-    .then(() => ElMessage.success('诊断信息已复制'))
-    .catch(() => ElMessage.info(text))
+  // 内网 HTTP 下 navigator.clipboard 不存在，统一走带 execCommand 降级的剪贴板工具
+  copyToClipboard(text).then(ok => {
+    if (ok) ElMessage.success('诊断信息已复制')
+    else ElMessage.info(text)
+  })
 }
 
 function saveFileName(file) {

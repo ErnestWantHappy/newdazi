@@ -41,7 +41,7 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
     private SysPerfEventMapper perfEventMapper;
 
     @Override
-    public void recordSlowSql(String mapperId, String sqlText, long durationMs)
+    public void recordSlowSql(String mapperId, String sqlText, long durationMs, String operName)
     {
         if (durationMs < SLOW_API_THRESHOLD_MS || StringUtils.isEmpty(sqlText))
         {
@@ -58,6 +58,7 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
         event.setSqlText(truncate(sqlText, 4000));
         event.setSqlHash(hashSql(sqlText));
         event.setDurationMs(durationMs);
+        event.setOperName(StringUtils.isNotEmpty(operName) ? operName : null);
         event.setOccurTime(new Date());
         safeInsert(event);
     }
@@ -142,6 +143,8 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
 
     private void safeInsert(SysPerfEvent event)
     {
+        // 所有事件共用写入边界，避免超长用户名导致慢 SQL 或 API 事件整条丢失。
+        event.setOperName(StringUtils.hasText(event.getOperName()) ? truncate(event.getOperName(), 64) : null);
         try
         {
             perfEventMapper.insertSysPerfEvent(event);
@@ -170,6 +173,21 @@ public class SysPerfEventServiceImpl implements ISysPerfEventService
             // 历史事件也动态重算，发布后无需改表或批量更新旧记录。
             event.setSeverity(advice.getSeverity());
             event.setCategory(advice.getCategory());
+            event.setAdvice(advice.getAdvice());
+            return;
+        }
+        if ("slow_sql".equals(event.getEventType()))
+        {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("sql", event.getSqlText());
+            row.put("title", event.getTitle());
+            row.put("sourceName", event.getSourceName());
+            row.put("operName", event.getOperName());
+            row.put("maxTimespan", event.getDurationMs());
+            DiagnosisAdvice advice = DiagnosisAdvisor.adviseForSlowSql(row);
+            // 重算历史建议，纠正旧记录把空用户名当作后台任务的推断。
+            event.setCategory(advice.getCategory());
+            event.setSeverity(advice.getSeverity());
             event.setAdvice(advice.getAdvice());
             return;
         }

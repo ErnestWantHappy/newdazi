@@ -1,5 +1,16 @@
 # 系统诊断与性能热点治理：设计（2026-10-28）
 
+## 2026-11-12 审计修复设计（本机，未发布）
+
+- `PlatformOverviewController` 使用实例单线程池及共享 `CompletableFuture<Snapshot>`。新鲜度复查、任务认领、结果发布在同一短锁内；查询在锁外执行。快照数据和生成时间通过同一不可变封装发布。
+- 5分钟TTL到期返回旧快照；冷请求共用预热任务，最多等待15秒，超时不取消任务。查询异常直接终止整次构建；失败保旧、30秒冷却；线程池随控制器销毁关闭。
+- `/business/platformOverview/summary` 保留原数据字段，增补 `generatedAt/stale/refreshing/refreshFailed/retryAfterMs`。页面只在陈旧且未失败时每1.5秒补取；卸载清理定时器，失败停止自动补取。
+- `oper_name` 是执行线程采集到的用户名，不是来源分类字段。写入前统一限制64字符；空值显示“来源未记录”。历史慢SQL回显重新计算建议，不回填数据库。
+- 慢SQL先按耗时/运行中状态计算等级，再补业务用途；只有准确Mapper ID可描述LoginPreview用途，不能由签到表名认定后台线程。Druid聚合没有执行来源时保持未知。
+- 长SQL用完整文本tooltip提供滚动阅读；仪表按原始占比分级，显示一位小数。JSON_CONTAINS两参只保留语义等价，不承诺已否决索引收益。
+
+以下为2026-10-28原设计记录。
+
 ## 1. 慢 SQL 持久化根因
 
 `SlowSqlInterceptor` 原先只声明 `Executor.query` 的 4 参数签名；PageHelper 在外层拦截器里直接调用 6 参数 `query(ms, parameter, rowBounds, resultHandler, cacheKey, boundSql)`，导致所有经过 PageHelper 的查询绕过慢 SQL 拦截。修复为同时声明 4 参数、6 参数 `query` 和 `update` 三个签名，并保留静态调用计数用于自检。详见 ADR-003。

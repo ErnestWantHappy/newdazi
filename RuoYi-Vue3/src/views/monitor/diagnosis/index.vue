@@ -1,12 +1,14 @@
 <template>
   <div class="diagnosis-page">
-    <section class="diagnosis-hero">
-      <div>
+    <section class="diagnosis-hero panel-card">
+      <div class="hero-main">
         <div class="eyebrow">系统监控</div>
         <h1>系统诊断中心</h1>
-        <p v-if="data.environmentLabel">当前运行环境：{{ data.environmentLabel }}</p>
-        <p v-if="data.historySource">历史日志来源：{{ data.historySource }}。主机、缓存和转换服务状态实时采集自当前环境。</p>
-        <p>把服务状态、缓存健康、慢 SQL、异常日志和最近操作整理成可复制的排障证据。</p>
+        <p class="hero-desc">
+          服务状态、缓存健康、慢 SQL、异常日志与最近操作，整理成可复制的排障证据
+          <template v-if="data.environmentLabel"> · {{ data.environmentLabel }}</template>
+          <template v-if="data.historySource"> · 历史日志来源：{{ data.historySource }}</template>
+        </p>
       </div>
       <div class="hero-actions">
         <el-radio-group v-model="diagnosisHours" size="small" @change="loadData">
@@ -21,64 +23,93 @@
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :xs="24" :lg="8">
         <section class="health-card" :class="healthLevelClass">
-          <span class="health-label">当前判断 · {{ scopeLabel }}</span>
+          <div class="health-top">
+            <span class="health-label">当前判断 · {{ scopeLabel }}</span>
+            <el-icon v-if="healthLevelClass === 'is-stable'" class="health-icon is-ok"><CircleCheckFilled /></el-icon>
+            <el-icon v-else class="health-icon is-warn"><WarningFilled /></el-icon>
+          </div>
           <h2>{{ data.health?.title || '正在读取系统状态' }}</h2>
           <p>{{ riskText }}</p>
         </section>
       </el-col>
       <el-col :xs="12" :lg="4">
         <section class="mini-card">
-          <span title="最近5分钟有活动的去重账号，与在线用户列表口径一致">在线用户（近5分钟）</span>
+          <div class="mini-head">
+            <el-icon><User /></el-icon>
+            <span title="最近5分钟有活动的去重账号，与在线用户列表口径一致">在线用户</span>
+          </div>
           <strong>{{ data.onlineCount || 0 }}</strong>
+          <em>近 5 分钟活跃</em>
         </section>
       </el-col>
       <el-col :xs="12" :lg="4">
         <section class="mini-card">
-          <span>Redis Key</span>
+          <div class="mini-head">
+            <el-icon><Key /></el-icon>
+            <span>Redis Key</span>
+          </div>
           <strong>{{ data.cache?.dbSize || 0 }}</strong>
+          <em>缓存键数量</em>
         </section>
       </el-col>
       <el-col :xs="12" :lg="4">
-        <section class="mini-card">
-          <span>慢 SQL</span>
+        <section class="mini-card" :class="{ 'is-attention': (data.slowSql || []).length > 0 }">
+          <div class="mini-head">
+            <el-icon><DataLine /></el-icon>
+            <span>慢 SQL</span>
+          </div>
           <strong>{{ (data.slowSql || []).length }}</strong>
+          <em>Druid 记录</em>
         </section>
       </el-col>
       <el-col :xs="12" :lg="4">
-        <section class="mini-card">
-          <span>最近错误</span>
+        <section class="mini-card" :class="{ 'is-danger': (data.recentErrors || []).length > 0 }">
+          <div class="mini-head">
+            <el-icon><Warning /></el-icon>
+            <span>最近错误</span>
+          </div>
           <strong>{{ (data.recentErrors || []).length }}</strong>
+          <em>{{ scopeLabel }}内</em>
         </section>
       </el-col>
     </el-row>
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :xs="24" :lg="9">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>资源压力</h2>
-            <span>CPU、JVM、系统内存</span>
+            <h2><el-icon><Odometer /></el-icon>资源压力</h2>
+            <span>CPU · JVM · 系统内存</span>
           </div>
           <div ref="resourceChartRef" class="chart"></div>
+          <div class="gauge-legend">
+            <span class="legend-item"><i class="dot is-ok"></i>正常 &lt; 70%</span>
+            <span class="legend-item"><i class="dot is-warn"></i>偏高 70% 至 &lt; 90%</span>
+            <span class="legend-item"><i class="dot is-danger"></i>危险 &gt;= 90%</span>
+          </div>
           <p class="resource-note">{{ jvmDetailText }}</p>
         </section>
       </el-col>
       <el-col :xs="24" :lg="15">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>风险提示</h2>
+            <h2><el-icon><Warning /></el-icon>风险提示</h2>
             <span>{{ scopeLabel }}内优先处理这些信号</span>
           </div>
           <div v-if="riskList.length" class="risk-list">
-            <div v-for="risk in riskList" :key="risk" class="risk-item">{{ risk }}</div>
+            <div v-for="risk in riskList" :key="risk" class="risk-item">
+              <i class="risk-bar"></i>{{ risk }}
+            </div>
           </div>
-          <el-empty v-else description="暂无明显风险" :image-size="92" />
+          <el-empty v-else description="暂无明显风险" :image-size="80" />
           <div v-if="adviceSummary.length" class="advice-block">
             <h3>建议动作</h3>
             <div v-for="(item, index) in adviceSummary" :key="index" class="advice-item">
-              <el-tag :type="severityTagType(item.severity)" size="small">{{ categoryLabel(item.category) }}</el-tag>
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.advice }}</span>
+              <el-tag :type="severityTagType(item.severity)" size="small" effect="light">{{ categoryLabel(item.category) }}</el-tag>
+              <div class="advice-body">
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.advice }}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -87,9 +118,9 @@
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :xs="24" :lg="10">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>主机硬件信息</h2>
+            <h2><el-icon><Cpu /></el-icon>主机硬件信息</h2>
             <span>服务器与物理资源属性</span>
           </div>
           <el-alert
@@ -112,9 +143,9 @@
         </section>
       </el-col>
       <el-col :xs="24" :lg="14">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>磁盘状态</h2>
+            <h2><el-icon><Coin /></el-icon>磁盘状态</h2>
             <span>各分区容量与使用率</span>
           </div>
           <el-table :data="hardware.sysFiles || []" size="small" border>
@@ -123,9 +154,13 @@
             <el-table-column prop="total" label="总大小" min-width="80" />
             <el-table-column prop="free" label="可用大小" min-width="80" />
             <el-table-column prop="used" label="已用大小" min-width="80" />
-            <el-table-column label="已用百分比" min-width="140">
+            <el-table-column label="已用百分比" min-width="150">
               <template #default="{ row }">
-                <el-progress :percentage="Number(row.usage || 0)" :stroke-width="12" />
+                <el-progress
+                  :percentage="Number(row.usage || 0)"
+                  :stroke-width="10"
+                  :color="gaugeLevel(Number(row.usage || 0)) === 'ok' ? '#1f9d8a' : gaugeLevel(Number(row.usage || 0)) === 'warn' ? '#d07a2d' : '#b85b52'"
+                />
               </template>
             </el-table-column>
           </el-table>
@@ -135,9 +170,9 @@
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :span="24">
-        <section class="panel">
+        <section class="panel panel-card jvm-panel">
           <div class="panel-head">
-            <h2>Java 虚拟机信息</h2>
+            <h2><el-icon><Platform /></el-icon>Java 虚拟机信息</h2>
             <span>{{ hardware.jvm?.name || '—' }}</span>
           </div>
           <el-descriptions :column="3" border size="small">
@@ -154,21 +189,25 @@
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :span="24">
-        <section class="panel conversion-panel">
+        <section class="panel panel-card conversion-panel">
           <div class="panel-head">
-            <div>
-              <h2>文档转换健康</h2>
+            <div class="panel-title-group">
+              <h2><el-icon><Files /></el-icon>文档转换健康</h2>
               <span>LibreOffice 进程、conversion 线程池和预览转换积压</span>
             </div>
-            <el-tag :type="libreOfficeInfo.excessiveProcesses ? 'danger' : 'success'" effect="plain">
-              进程 {{ libreOfficeInfo.processCount || 0 }} / 阈值 {{ libreOfficeInfo.processWarnThreshold || 0 }}
-            </el-tag>
-            <el-button size="small" :loading="cleanupLoading" @click="handleLibreOfficeCleanup">手动清理</el-button>
+            <div class="panel-actions">
+              <el-tag :type="libreOfficeInfo.excessiveProcesses ? 'danger' : 'success'" effect="plain">
+                进程 {{ libreOfficeInfo.processCount || 0 }} / 阈值 {{ libreOfficeInfo.processWarnThreshold || 0 }}
+              </el-tag>
+              <el-button size="small" :loading="cleanupLoading" @click="handleLibreOfficeCleanup">手动清理</el-button>
+            </div>
           </div>
           <div class="conversion-metrics">
             <div class="conversion-card">
               <span>LibreOffice 服务池</span>
-              <strong>{{ libreOfficeInfo.serviceAvailable ? '可用' : '不可用' }}</strong>
+              <strong :class="libreOfficeInfo.serviceAvailable ? 'tone-ok' : 'tone-danger'">
+                {{ libreOfficeInfo.serviceAvailable ? '可用' : '不可用' }}
+              </strong>
               <em>实例 {{ libreOfficeInfo.instanceCount || 0 }}，已安装 {{ libreOfficeInfo.installed ? '是' : '否' }}</em>
             </div>
             <div class="conversion-card">
@@ -183,13 +222,13 @@
             </div>
             <div class="conversion-card">
               <span>等待转换</span>
-              <strong>{{ conversionBacklog.waiting }}</strong>
+              <strong :class="conversionBacklog.waiting > 0 ? 'tone-warn' : ''">{{ conversionBacklog.waiting }}</strong>
               <em>日常 {{ conversionInfo.dailyWaitingCount || 0 }}，区域抽测 {{ conversionInfo.countyWaitingCount || 0 }}</em>
             </div>
             <div class="conversion-card">
               <span>预览失败</span>
               <el-tooltip :content="previewErrorSummary" placement="top">
-                <strong>{{ conversionBacklog.failed }}</strong>
+                <strong :class="conversionBacklog.failed > 0 ? 'tone-warn' : ''">{{ conversionBacklog.failed }}</strong>
               </el-tooltip>
               <em>累计；近 7 天 {{ conversionRecent7d }} 条</em>
             </div>
@@ -200,11 +239,11 @@
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :span="24">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <div>
-              <h2>诊断时间线</h2>
-              <span>持久化的慢 SQL、慢接口与异常操作，便于定位卡顿时段</span>
+            <div class="panel-title-group">
+              <h2><el-icon><Clock /></el-icon>诊断时间线</h2>
+              <span>持久化的慢 SQL、慢接口与异常操作，便于定位卡顿时段；来源以记录的用户名为准，缺失时显示“来源未记录”</span>
             </div>
             <div class="panel-actions">
               <el-select v-model="eventType" clearable placeholder="全部类型" size="small" style="width: 130px" @change="loadEvents">
@@ -225,7 +264,12 @@
             <el-table-column prop="durationMs" label="耗时" width="90">
               <template #default="{ row }">{{ row.durationMs }} ms</template>
             </el-table-column>
-            <el-table-column prop="operName" label="用户" width="110" show-overflow-tooltip />
+            <el-table-column prop="operName" label="来源" width="110">
+              <template #default="{ row }">
+                <el-tag v-if="!row.operName" size="small" type="info" effect="plain">来源未记录</el-tag>
+                <span v-else>{{ row.operName }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="sourceUrl" label="接口/SQL" min-width="180" show-overflow-tooltip />
             <el-table-column prop="severity" label="等级" width="88">
               <template #default="{ row }">
@@ -251,9 +295,9 @@
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :xs="24" :lg="12">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>最近系统异常</h2>
+            <h2><el-icon><WarningFilled /></el-icon>最近系统异常</h2>
             <span>{{ scopeLabel }}内需处理的系统错误；业务校验提示已折叠到下方</span>
           </div>
           <el-table :data="data.recentErrors || []" height="330" :empty-text="`${scopeLabel}内暂无系统异常`">
@@ -279,9 +323,9 @@
       </el-col>
 
       <el-col :xs="24" :lg="12">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>慢接口</h2>
+            <h2><el-icon><Timer /></el-icon>慢接口</h2>
             <span>{{ scopeLabel }}内耗时超过 1 秒的请求</span>
           </div>
           <el-table :data="data.slowOperations || []" height="330" :empty-text="`${scopeLabel}内暂无慢接口`">
@@ -303,7 +347,7 @@
 
     <el-row v-if="businessTips.length" :gutter="16" class="diagnosis-grid">
       <el-col :span="24">
-        <section class="panel">
+        <section class="panel panel-card">
           <el-collapse v-model="businessTipsOpen">
             <el-collapse-item name="tips">
               <template #title>
@@ -333,16 +377,18 @@
 
     <el-row :gutter="16" class="diagnosis-grid">
       <el-col :xs="24" :lg="14">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>Druid 慢 SQL</h2>
-            <span>{{ sqlStatScopeLabel }}</span>
+            <div class="panel-title-group">
+              <h2><el-icon><DataLine /></el-icon>Druid 慢 SQL</h2>
+              <span>{{ sqlStatScopeLabel }}</span>
+            </div>
             <el-button size="small" :loading="selfTestLoading" @click="handlePerfEventSelfTest">链路自检</el-button>
           </div>
           <el-table :data="data.slowSql || []" height="360" empty-text="暂无 Druid SQL 统计">
             <el-table-column prop="maxTimespan" label="最大耗时" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.severity === 'critical' ? 'danger' : 'warning'" size="small">{{ row.maxTimespan }} ms</el-tag>
+                <el-tag :type="row.severity === 'critical' ? 'danger' : row.severity === 'info' ? 'info' : 'warning'" size="small">{{ row.maxTimespan }} ms</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="avgTime" label="平均耗时" width="92">
@@ -367,7 +413,17 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="sql" label="SQL" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="sql" label="SQL" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">
+                <el-tooltip
+                  :content="row.sql"
+                  placement="top"
+                  :popper-style="{ maxWidth: 'min(720px, calc(100vw - 32px))', maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }"
+                >
+                  <code class="sql-code">{{ row.sql }}</code>
+                </el-tooltip>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="86" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="copyRow(row)">复制</el-button>
@@ -378,9 +434,9 @@
       </el-col>
 
       <el-col :xs="24" :lg="10">
-        <section class="panel">
+        <section class="panel panel-card">
           <div class="panel-head">
-            <h2>后台任务状态</h2>
+            <h2><el-icon><List /></el-icon>后台任务状态</h2>
             <span>平台业务任务用途与执行频率</span>
           </div>
           <el-table :data="sortedJobs" height="360" empty-text="暂无后台任务">
@@ -409,8 +465,9 @@
 
 <script setup name="SystemDiagnosis">
 import * as echarts from 'echarts'
-import { DocumentCopy, Refresh } from '@element-plus/icons-vue'
+import { Coin, Cpu, DataLine, DocumentCopy, Files, Key, List, Odometer, Platform, Refresh, Timer, User, Warning, WarningFilled, CircleCheckFilled } from '@element-plus/icons-vue'
 import { cleanupLibreOffice, getDiagnosisSummary, getDiagnosisEvents, perfEventSelfTest } from '@/api/monitor/diagnosis'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const { proxy } = getCurrentInstance()
 const data = ref({})
@@ -469,6 +526,8 @@ const sqlStatScopeLabel = computed(() => {
   }
   return '进程内统计，自后端启动起（重启清零）'
 })
+const cpuUsed = computed(() => Number(data.value.server?.cpu?.used || 0))
+const memUsed = computed(() => Number(data.value.server?.mem?.usage || 0))
 
 function formatMb(value) {
   const num = Number(value || 0)
@@ -491,6 +550,14 @@ function fmtGb(value) {
   return `${Number(value).toFixed(2)} GB`
 }
 
+// 三环仪表与磁盘进度条共用同一套语义色：正常 teal、偏高橙、危险红
+function gaugeLevel(value) {
+  if (value >= 90) return 'danger'
+  if (value >= 70) return 'warn'
+  return 'ok'
+}
+
+const GAUGE_COLORS = { ok: '#1f9d8a', warn: '#d07a2d', danger: '#b85b52' }
 
 function loadData() {
   // 容错：后端已做并行+超时降级，此处再兜底网络异常，保留上次数据避免页面瘫痪
@@ -545,34 +612,34 @@ function renderResourceChart() {
   if (!resourceChartRef.value) return
   if (resourceChart) resourceChart.dispose()
   resourceChart = echarts.init(resourceChartRef.value)
-  const server = data.value.server || {}
   resourceChart.setOption({
-    color: ['#1f9d8a', '#d07a2d', '#b85b52'],
     tooltip: { formatter: '{b}: {c}%' },
     series: [
-      gaugeItem('CPU', Number(server.cpu?.used || 0), ['16%', '55%']),
-      gaugeItem('JVM', jvmUsageOfMax.value, ['50%', '55%']),
-      gaugeItem('内存', Number(server.mem?.usage || 0), ['84%', '55%'])
+      gaugeItem('CPU', cpuUsed.value, ['14%', '58%']),
+      gaugeItem('JVM', jvmUsageOfMax.value, ['50%', '58%']),
+      gaugeItem('内存', memUsed.value, ['86%', '58%'])
     ]
   })
 }
 
 function gaugeItem(name, value, center) {
+  const color = GAUGE_COLORS[gaugeLevel(value)]
   return {
     name,
     type: 'gauge',
     center,
-    radius: '54%',
+    // 半径按容器短边一半的百分比：44% 保证窄视口（约 330px 宽）下三环互不重叠
+    radius: '44%',
     min: 0,
     max: 100,
-    progress: { show: true, width: 8 },
-    axisLine: { lineStyle: { width: 8, color: [[0.7, '#dfe8e5'], [0.9, '#f0d8b8'], [1, '#e4b8b4']] } },
+    progress: { show: true, width: 9, roundCap: true, itemStyle: { color } },
+    axisLine: { lineStyle: { width: 9, color: [[1, 'rgba(124, 140, 160, 0.22)']] } },
     axisTick: { show: false },
     splitLine: { show: false },
     axisLabel: { show: false },
     pointer: { show: false },
-    detail: { valueAnimation: true, formatter: '{value}%', fontSize: 17, offsetCenter: [0, '8%'] },
-    title: { offsetCenter: [0, '58%'], fontSize: 13, color: '#52616f' },
+    detail: { valueAnimation: true, formatter: value => `${Number(value).toFixed(1)}%`, fontSize: 17, fontWeight: 700, color, offsetCenter: [0, '10%'] },
+    title: { offsetCenter: [0, '62%'], fontSize: 12.5 },
     data: [{ value, name }]
   }
 }
@@ -614,10 +681,10 @@ function copyRow(row) {
 }
 
 function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    proxy.$modal.msgSuccess('已复制，可直接发给 AI 排查')
-  }).catch(() => {
-    proxy.$modal.msgError('复制失败，请手动选择文本')
+  // 内网 HTTP 下 navigator.clipboard 不存在，必须走带 execCommand 降级的统一工具，否则点击无任何反馈
+  copyToClipboard(text).then(ok => {
+    if (ok) proxy.$modal.msgSuccess('已复制，可直接发给 AI 排查')
+    else proxy.$modal.msgError('复制失败，请手动选择文本')
   })
 }
 
@@ -640,50 +707,83 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+// 与 platform/overview 同一设计语言：浅灰底白卡 + teal 唯一强调色 + 语义三色。
+// 颜色收敛到变量，html.dark 下整体覆盖（先例：help/index.vue）。
 .diagnosis-page {
+  --diag-bg: #f5f7f9;
+  --diag-card: #ffffff;
+  --diag-border: rgba(36, 49, 63, 0.08);
+  --diag-shadow: 0 14px 34px rgba(32, 45, 58, 0.07);
+  --diag-text: #24313f;
+  --diag-text-2: #647080;
+  --diag-text-3: #7a8795;
+  --diag-soft: #f8fafc;
+  --diag-soft-border: #e8edf2;
+  --diag-teal: #1f9d8a;
+  --diag-teal-soft: #eef8f5;
+  --diag-amber: #d07a2d;
+  --diag-amber-soft: #fff8ed;
+  --diag-red: #b85b52;
+
   min-height: calc(100vh - 84px);
   padding: 22px;
   background:
-    linear-gradient(135deg, rgba(184, 91, 82, 0.08), transparent 30%),
-    linear-gradient(45deg, rgba(31, 157, 138, 0.08), transparent 36%),
-    #f5f7f9;
-  color: #24313f;
+    linear-gradient(135deg, rgba(31, 157, 138, 0.07), transparent 30%),
+    linear-gradient(45deg, rgba(208, 122, 45, 0.06), transparent 36%),
+    var(--diag-bg);
+  color: var(--diag-text);
 }
 
-.diagnosis-hero,
-.panel,
-.health-card,
-.mini-card {
-  border: 1px solid rgba(36, 49, 63, 0.08);
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 14px 34px rgba(32, 45, 58, 0.07);
+.panel-card {
+  border: 1px solid var(--diag-border);
+  border-radius: 10px;
+  background: var(--diag-card);
+  box-shadow: var(--diag-shadow);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+
+  &:hover {
+    box-shadow: 0 18px 42px rgba(32, 45, 58, 0.1);
+  }
 }
 
+// ── 顶部 Hero ──────────────────────────────
 .diagnosis-hero {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: flex-end;
-  padding: 26px 28px;
-}
-
-.diagnosis-hero h1 {
-  margin: 8px 0 10px;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-.diagnosis-hero p {
-  margin: 0;
-  color: #647080;
+  align-items: center;
+  padding: 22px 26px;
 }
 
 .eyebrow {
-  color: #b85b52;
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--diag-teal);
+  font-weight: 700;
   font-size: 13px;
+  letter-spacing: 0.08em;
+
+  &::before {
+    content: '';
+    width: 18px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--diag-teal);
+  }
+}
+
+.hero-main h1 {
+  margin: 8px 0 8px;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.hero-desc {
+  margin: 0;
+  color: var(--diag-text-2);
+  font-size: 13.5px;
 }
 
 .hero-actions {
@@ -691,62 +791,125 @@ onBeforeUnmount(() => {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .diagnosis-grid {
   margin-top: 16px;
 }
 
-.health-card,
-.mini-card,
-.panel {
-  padding: 18px;
-}
-
+// ── 健康结论卡 ──────────────────────────────
 .health-card {
+  padding: 18px 20px;
   min-height: 128px;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    bottom: 14px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--diag-teal);
+  }
+
+  &.is-warning::before {
+    background: var(--diag-amber);
+  }
 }
 
-.health-card.is-stable {
-  border-left: 5px solid #1f9d8a;
+.health-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.health-card.is-warning {
-  border-left: 5px solid #d07a2d;
+.health-icon {
+  font-size: 26px;
+
+  &.is-ok {
+    color: var(--diag-teal);
+  }
+
+  &.is-warn {
+    color: var(--diag-amber);
+  }
 }
 
-.health-label,
-.mini-card span,
-.panel-head span {
-  color: #7a8795;
+.health-label {
+  color: var(--diag-text-3);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .health-card h2 {
-  margin: 12px 0 8px;
+  margin: 10px 0 8px;
   font-size: 20px;
-  letter-spacing: 0;
+  line-height: 1.35;
 }
 
 .health-card p {
   margin: 0;
-  color: #647080;
+  color: var(--diag-text-2);
   line-height: 1.7;
+  font-size: 13.5px;
 }
 
+// ── Mini 统计卡 ──────────────────────────────
 .mini-card {
+  padding: 18px 20px;
   min-height: 128px;
+  border-left: none;
+
+  .mini-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--diag-text-3);
+    font-size: 13px;
+    font-weight: 600;
+
+    .el-icon {
+      font-size: 16px;
+      color: var(--diag-teal);
+    }
+  }
+
+  strong {
+    display: block;
+    margin-top: 14px;
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  em {
+    display: block;
+    margin-top: 10px;
+    font-style: normal;
+    color: var(--diag-text-3);
+    font-size: 12px;
+  }
+
+  &.is-attention strong,
+  &.is-attention .mini-head .el-icon {
+    color: var(--diag-amber);
+  }
+
+  &.is-danger strong,
+  &.is-danger .mini-head .el-icon {
+    color: var(--diag-red);
+  }
 }
 
-.mini-card strong {
-  display: block;
-  margin-top: 18px;
-  font-size: 30px;
-  color: #24313f;
-}
-
+// ── 面板通用 ──────────────────────────────
 .panel {
+  padding: 18px 20px;
   min-height: 390px;
 }
 
@@ -754,108 +917,215 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+// JVM 信息只有一张描述表，沿用 390px 最小高度会在表格下方留大片空白
+.jvm-panel {
+  min-height: 0;
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
   align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
+
+  h2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+
+    .el-icon {
+      color: var(--diag-teal);
+      font-size: 18px;
+    }
+  }
+
+  > span,
+  .panel-title-group span {
+    color: var(--diag-text-3);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
 }
 
-.resource-note {
-  margin: 8px 0 0;
-  color: #647080;
-  font-size: 12px;
-}
+.panel-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 
-.business-tip-title {
-  font-weight: 700;
-  color: #52616f;
+  h2 {
+    margin: 0;
+  }
 }
 
 .panel-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.sql-desc {
-  display: grid;
-  gap: 4px;
-}
-
-.sql-desc strong {
-  color: #24313f;
-}
-
-.sql-desc span {
-  color: #647080;
-  font-size: 12px;
-}
-
-.event-expand {
-  padding: 8px 12px 12px;
-  color: #52616f;
-  line-height: 1.7;
-  word-break: break-all;
-}
-
-.panel-head h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
+// ── 资源仪表 ──────────────────────────────
 .chart {
-  height: 300px;
+  height: 260px;
 }
 
+.gauge-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  color: var(--diag-text-3);
+  font-size: 12px;
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+
+    &.is-ok {
+      background: var(--diag-teal);
+    }
+
+    &.is-warn {
+      background: var(--diag-amber);
+    }
+
+    &.is-danger {
+      background: var(--diag-red);
+    }
+  }
+}
+
+.resource-note {
+  margin: 10px 0 0;
+  color: var(--diag-text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+// ── 风险与建议 ──────────────────────────────
 .risk-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .risk-item {
-  padding: 13px 14px;
-  border-radius: 6px;
-  background: #fff8ed;
-  border-left: 4px solid #d07a2d;
+  position: relative;
+  padding: 11px 14px 11px 20px;
+  border-radius: 8px;
+  background: var(--diag-amber-soft);
   color: #5b4b35;
   line-height: 1.6;
+  font-size: 13.5px;
+
+  .risk-bar {
+    position: absolute;
+    left: 8px;
+    top: 13px;
+    bottom: 13px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--diag-amber);
+  }
 }
 
 .advice-block {
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid #e8edf2;
-}
+  border-top: 1px solid var(--diag-soft-border);
 
-.advice-block h3 {
-  margin: 0 0 12px;
-  font-size: 15px;
-  color: #24313f;
+  h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 700;
+  }
 }
 
 .advice-item {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
   margin-bottom: 10px;
-  border-radius: 6px;
-  background: #f7faf9;
-  border-left: 4px solid #1f9d8a;
+  border-radius: 8px;
+  background: var(--diag-soft);
+  border-left: 3px solid var(--diag-teal);
+
+  .el-tag {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .advice-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+
+    strong {
+      font-size: 13.5px;
+    }
+
+    span {
+      color: var(--diag-text-2);
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+  }
 }
 
-.advice-item strong {
-  color: #24313f;
+.business-tip-title {
+  font-weight: 700;
+  color: var(--diag-text-2);
+  font-size: 13.5px;
 }
 
-.advice-item span {
-  color: #647080;
-  line-height: 1.6;
+// ── 表格细节 ──────────────────────────────
+.sql-desc {
+  display: grid;
+  gap: 4px;
+
+  strong {
+    color: var(--diag-text);
+    font-size: 13px;
+  }
+
+  span {
+    color: var(--diag-text-2);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.sql-code {
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 11.5px;
+  color: var(--diag-text-2);
+  word-break: break-all;
+  display: block;
+  max-height: 3.4em;
+  overflow: hidden;
+}
+
+.event-expand {
+  padding: 8px 12px 12px;
+  color: var(--diag-text-2);
+  line-height: 1.7;
+  word-break: break-all;
+  font-size: 13px;
 }
 
 .job-name {
@@ -864,6 +1134,7 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+// ── 文档转换卡片 ──────────────────────────────
 .conversion-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -872,15 +1143,15 @@ onBeforeUnmount(() => {
 
 .conversion-card {
   min-height: 104px;
-  padding: 14px;
-  border: 1px solid #e8edf2;
+  padding: 14px 16px;
+  border: 1px solid var(--diag-soft-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--diag-soft);
 
   span,
   em {
     display: block;
-    color: #7a8795;
+    color: var(--diag-text-3);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -889,12 +1160,51 @@ onBeforeUnmount(() => {
     display: block;
     margin: 8px 0;
     font-size: 24px;
-    color: #24313f;
+    font-weight: 700;
+    color: var(--diag-text);
+    font-variant-numeric: tabular-nums;
+
+    &.tone-ok {
+      color: var(--diag-teal);
+    }
+
+    &.tone-warn {
+      color: var(--diag-amber);
+    }
+
+    &.tone-danger {
+      color: var(--diag-red);
+    }
   }
 
   em {
     font-style: normal;
   }
+}
+
+// ── 暗色模式：跟随全局 html.dark，保证工具页夜间不刺眼 ──
+// :global 必须包裹完整选择器（先例 help/index.vue），“前缀 global + 后缀 scoped”写法会被静默丢弃
+:global(html.dark .diagnosis-page) {
+  --diag-bg: #141414;
+  --diag-card: #1d1d1d;
+  --diag-border: rgba(255, 255, 255, 0.09);
+  --diag-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --diag-text: #e5eaf3;
+  --diag-text-2: #a3adc2;
+  --diag-text-3: #8b95a5;
+  --diag-soft: #232323;
+  --diag-soft-border: #303030;
+  --diag-teal-soft: rgba(31, 157, 138, 0.14);
+  --diag-amber-soft: rgba(208, 122, 45, 0.14);
+
+  background:
+    linear-gradient(135deg, rgba(31, 157, 138, 0.1), transparent 30%),
+    linear-gradient(45deg, rgba(208, 122, 45, 0.07), transparent 36%),
+    var(--diag-bg);
+}
+
+:global(html.dark .diagnosis-page .risk-item) {
+  color: #e0c9a8;
 }
 
 @media (max-width: 900px) {
@@ -907,8 +1217,8 @@ onBeforeUnmount(() => {
     align-items: flex-start;
   }
 
-  .diagnosis-hero h1 {
-    font-size: 29px;
+  .hero-main h1 {
+    font-size: 23px;
   }
 
   .conversion-metrics {

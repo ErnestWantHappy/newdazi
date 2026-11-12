@@ -25,6 +25,13 @@
 - 每次查询多一层计时开销，可忽略；事件写入仍异步，入库失败有计数器。
 - 自检接口会用 1.1 秒慢查询主动验证链路；生产执行时会产生 1 条 slow_sql 事件和 1 条 Druid 统计，属预期。
 
+## 2026-11-12 补充决策（本机，未发布）
+
+- 用户名在执行SQL的线程采集后传给异步落库；只读取当前Authentication中的LoginUser，不为采集身份额外查库，匿名或无身份线程返回空值。
+- `oper_name`空值仅表示来源未记录，不能证明后台调度、匿名请求或历史事件的实际来源。准确Mapper ID只能说明用途；禁止从`biz_lesson_checkin`表名推断后台预刷新。
+- 耗时达到3000ms或仍有运行中查询优先critical，业务用途不覆盖风险等级；历史慢SQL回显动态重算，纠正旧建议，不批量回填数据库。
+- 所有性能事件写入前统一将用户名限制为64字符，沿用既有表列；写入失败保留可观察计数。
+
 ## 验证
 
 本机 `POST /monitor/diagnosis/perf-event/self-test` 返回 `intercepted=true, persisted=true, eventId=1426, elapsedMs=1226`；`sys_perf_event` 可查到 `select sleep(1.1) /* diag-self-test */`。

@@ -1,5 +1,7 @@
 # 架构资料索引
 
+2026-11-12 **诊断中心审计修复仅本机，未发布**：概览预热/请求共享构建、失败保旧与30秒退避、冷启动15秒等待上限；响应增加快照状态，概览页补取后台结果。空用户名保持来源未知，慢SQL先判critical，长SQL全文与仪表阈值补修。当前正式仍1.30.96；验证边界见[核心上下文](../../contexts/PROJECT_CORE.md)、[专题需求](../../contexts/diagnosis-perf-20261028/requirements.md)、[设计](../../contexts/diagnosis-perf-20261028/design.md)、[任务与验收](../../contexts/diagnosis-perf-20261028/tasks.md)、[ADR-003补充](ADR/ADR-003-slow-sql-interceptor-six-arg.md)。无新增SQL/配置，发布需前后端同步及重启后端；本轮未连接生产。
+
 2026-11-11 **当前正式1.30.96**：130前后端均为 `releases/20261111_bugfix_v1`（JAR`2cb253df`、首页`1fde9972`），MainPID`3162268`、NRestarts0、active/running；产品更新174/PUBLISHED。本轮按F01–F22修复区域抽测超时交卷、Python交互运行、批改快照、附件转换、AI终态、免抽测/拓展班、草稿补存、PDF清理、投票理由、监管时间窗等22项；本机后端1074通过/0失败/3跳过，前端门禁+手工测试84项全过。发布脚本在登记产品更新阶段SSH连接重置，现场确认新版本已切换且健康后单独执行登记SQL，异常与回滚见[发布日志](../../contexts/RELEASE_LOG.md)。线上不足输入专项与正式学生403未实测。当前事实见[核心上下文](../../contexts/PROJECT_CORE.md)，逐项证据见[修复进度](../../contexts/bug-audit-20261111/fix-progress.md)。
 
 2026-11-11 **历史1.30.95**：打字英文引号归一化和判题限流修复已上线；130后端当时为 `releases/20261111_typing_quote_v1`（JAR`741b5959`），前端仍为 `releases/20261111_python_interactive_v1/frontend`（首页`4239bdf9`），产品更新173/PUBLISHED。整班Judge0专项仍未实测。

@@ -11,7 +11,12 @@
           <span class="dot"></span>
           {{ overview.systemHealth?.title || '正在读取平台状态' }}
         </div>
-        <el-button :icon="Refresh" round @click="loadData">刷新数据</el-button>
+        <span v-if="overview.generatedAt" class="snapshot-status">
+          数据时间：{{ new Date(overview.generatedAt).toLocaleString() }}
+          · {{ overview.refreshFailed ? '刷新失败，保留上次数据，请稍后重试' : overview.stale ? '正在更新，暂显示上次数据' : '已更新' }}
+        </span>
+        <span v-if="loadError" role="alert">{{ loadError }}</span>
+        <el-button :icon="Refresh" :loading="loading" round @click="loadData">刷新数据</el-button>
       </div>
     </section>
 
@@ -143,6 +148,8 @@ const questionChartRef = ref(null)
 const examStatusChartRef = ref(null)
 const chartInstances = []
 const loading = ref(false)
+const loadError = ref('')
+let refreshTimer = null
 // 路由切换后接口仍可能返回，不能让已卸载页面再次初始化图表。
 let pageActive = false
 
@@ -150,14 +157,23 @@ const metrics = computed(() => overview.value.metrics || [])
 const healthClass = computed(() => overview.value.systemHealth?.level === 'warning' ? 'is-warning' : 'is-stable')
 
 function loadData() {
-  if (!pageActive) return
+  if (!pageActive || loading.value) return
+  clearTimeout(refreshTimer)
+  refreshTimer = null
   loading.value = true
+  loadError.value = ''
   getPlatformOverview().then(res => {
     if (!pageActive) return
     overview.value = res.data || {}
     nextTick(() => {
       if (pageActive) renderCharts()
     })
+    // 只在当前页面等待本次后台刷新，失败后停止轮询，避免持续故障时反复施压。
+    if (overview.value.stale && !overview.value.refreshFailed) {
+      refreshTimer = setTimeout(loadData, 1500)
+    }
+  }).catch(() => {
+    if (pageActive) loadError.value = '平台概览暂不可用，请稍后点击刷新重试'
   }).finally(() => {
     if (pageActive) loading.value = false
   })
@@ -283,6 +299,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   pageActive = false
+  clearTimeout(refreshTimer)
+  refreshTimer = null
   window.removeEventListener('resize', handleResize)
   disposeCharts()
 })

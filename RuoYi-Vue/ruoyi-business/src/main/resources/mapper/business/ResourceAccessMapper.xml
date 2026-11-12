@@ -34,7 +34,7 @@
         from biz_practical_attachment attachment
         inner join biz_practical_submission_version v on v.version_id = attachment.version_id
         where v.source_answer_id is not null
-          and JSON_CONTAINS(attachment.normalized_pages_json, JSON_QUOTE(#{resource}), '$')
+          and JSON_CONTAINS(attachment.normalized_pages_json, JSON_QUOTE(#{resource}))
     </select>
 
     <select id="selectReferenceQuestionIdByResource" resultType="java.lang.Long">

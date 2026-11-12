@@ -107,18 +107,26 @@ public final class DiagnosisAdvisor
         long maxTimespan = number(row, "maxTimespan");
         long runningCount = number(row, "runningCount");
         String combined = (title + " " + sql).toLowerCase();
+        // 先确定风险等级，业务用途不能覆盖耗时和运行中状态所反映的风险。
+        boolean critical = maxTimespan >= 3000 || runningCount > 0;
+        String advice = critical
+                ? "SQL 耗时达到 3 秒或仍有查询运行中，可能影响系统；请优先结合发生时间和关联接口排查"
+                : "数据库查询偏慢；如持续出现，建议结合慢接口和操作日志定位触发行为";
+        String mapperId = text(row, "mapperId", "sourceName", "source_name");
+        if ("com.ruoyi.business.mapper.LoginPreviewMapper.selectLessons".equals(mapperId))
+        {
+            advice += "；该 Mapper 用于登录页开课看板，用途不能证明本次由请求还是后台刷新触发";
+        }
         if (containsAny(combined, "answer_trend", "paper_score", "last_submit", "平台概览", "platformoverview"))
         {
-            return new DiagnosisAdvice("performance", "info",
-                    "平台概览统计查询较重；避免多人频繁刷新首页，必要时错峰查看");
+            advice += "；平台概览采用 5 分钟快照缓存，已有快照过期时返回旧值并在后台刷新，"
+                    + "冷启动无快照时请求最多等待15秒共享构建结果；需核对本次执行来源";
         }
-        if (maxTimespan >= 3000 || runningCount > 0)
+        if (!StringUtils.hasText(text(row, "operName", "oper_name")))
         {
-            return new DiagnosisAdvice("performance", "critical",
-                    "SQL 可能正在拖慢系统；结合最近执行时间查看是否多人同时使用");
+            advice += "；执行来源未记录，不能仅凭空用户名判断是否为后台任务或用户请求";
         }
-        return new DiagnosisAdvice("performance", "warning",
-                "数据库查询偏慢；如持续出现，建议结合慢接口和操作日志定位触发行为");
+        return new DiagnosisAdvice("performance", critical ? "critical" : "warning", advice);
     }
 
     public static DiagnosisAdvice adviseForResource(String type, double usage)

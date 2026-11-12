@@ -22,6 +22,7 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createResearchPublicShare, getResearchPublicShare, revokeResearchPublicShare } from '@/api/business/researchActivity.js'
+import { copyToClipboard } from '@/utils/clipboard'
 const props = defineProps({ modelValue: Boolean, topicId: [String, Number] })
 const emit = defineEmits(['update:modelValue'])
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
@@ -49,24 +50,10 @@ async function generate() {
   } finally { generating.value = false }
 }
 async function copyUrl() {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(shareUrl.value)
-    } else {
-      const input = document.createElement('textarea')
-      input.value = shareUrl.value
-      input.style.position = 'fixed'
-      input.style.opacity = '0'
-      document.body.appendChild(input)
-      input.focus()
-      input.select()
-      if (!document.execCommand('copy')) throw new Error('copy failed')
-      document.body.removeChild(input)
-    }
-    ElMessage.success('链接已复制')
-  } catch {
-    ElMessage.info('复制失败，请手动选中链接复制')
-  }
+  // 统一走带 execCommand 降级的剪贴板工具，内网 HTTP 与 HTTPS 环境行为一致
+  const ok = await copyToClipboard(shareUrl.value)
+  if (ok) ElMessage.success('链接已复制')
+  else ElMessage.info('复制失败，请手动选中链接复制')
 }
 async function revoke() { await ElMessageBox.confirm('撤销后原链接立即失效，确认继续吗？', '撤销分享', { type: 'warning' }); await revokeResearchPublicShare(props.topicId); shareUrl.value = ''; status.value = { enabled: false, expireTime: null }; ElMessage.success('分享链接已撤销') }
 </script>

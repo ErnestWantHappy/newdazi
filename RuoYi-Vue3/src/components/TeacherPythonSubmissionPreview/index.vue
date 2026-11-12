@@ -81,6 +81,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { runPythonSubmission, runPythonSource } from '@/api/business/teacherGrading';
+import { copyToClipboard } from '@/utils/clipboard';
 import PythonTerminal from '@/components/PythonRunner/PythonTerminal.vue';
 import { guessInputCount } from '@/components/PythonRunner/serverInteractive';
 
@@ -174,10 +175,11 @@ function formatMemory(value) {
 
 async function copySource() {
   if (!sourceCode.value) return;
-  try {
-    await navigator.clipboard.writeText(sourceCode.value);
+  // 内网 HTTP 部署下 navigator.clipboard 不存在，统一走带降级的剪贴板工具
+  const ok = await copyToClipboard(sourceCode.value);
+  if (ok) {
     ElMessage.success('代码已复制');
-  } catch (_) {
+  } else {
     ElMessage.warning('当前浏览器不允许自动复制，请手动选择代码');
   }
 }
