@@ -1,5 +1,21 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-12 · 1.30.97：诊断中心升级与平台概览提速（前后端）
+
+130 前后端切至 `releases/20261112_diagnosis_gov_v1`：JAR SHA-256 `9c1a9d30090b9c0f574c260a923c6a0b47901d6433c8653c8f1138703888313d`（108,322,607B）；首页 `6faf1440b64ce1eb174bb5b981d0f76da7d625ed413ea80384b8fb25b9e6d4a1`，`frontend.tar.gz` 43,392,861B / SHA-256 `5b703f79fe103564be1392ed6dc6f6607a73f0f36bd1b150144851e435b9568c`，825 文件；MainPID `3264464`、NRestarts 0、active/running。产品更新 **175 / 1.30.97 / PUBLISHED**，真实教师 `/business/platform-update/list` 可见（681108 实测）。仅执行 `sql/platform_update_1_30_97_20261112.sql`，未改表结构。
+
+**改动**：①内网 HTTP 下 `navigator.clipboard` 为 undefined 导致复制按钮无反应——诊断中心、教师 Python 提交预览、协同编辑器诊断复制、教研公开分享 4 处统一改用 `utils/clipboard.js` 降级方案。②平台概览快照治理：TTL 60s→300s，预热/冷请求/过期刷新共用单线程共享构建（冷等待上限 15 秒），查询失败不再伪装零值快照、保留旧值并 30 秒退避，响应附 `generatedAt/stale/refreshing` 等状态，页面显示数据时间并在旧值期间自动补取；修复审计发现的预热与冷请求并发双构建、失败覆盖正常快照两项缺陷。③慢 SQL 来源标注：执行线程采集用户名入库（空值显示"来源未记录"，不再推断后台任务），`biz_lesson_checkin` 表名不再用作来源识别，≥3000ms 或运行中优先 critical，历史慢 SQL 建议动态重算，用户名统一截断 64 字符。④诊断中心视觉重构：仪表按原值分级、JVM 一位小数、长 SQL 全文 tooltip、阈值图例统一、时间线"来源"列、历史来源说明；JSON_CONTAINS 两参化并清除已否决多值索引注释。
+
+**本机验证**：后端全量 **1114 通过 / 0 失败 / 0 错误 / 4 跳过**（1.30.96 基线 1074，净增 40：缓存并发/失败退避 12 项 + 诊断规则 14 项等）；前端 `build:prod` 通过、67 项门禁全过；本机冒烟：教研员登录，概览页「数据时间 · 已更新」状态行正常、8 项指标与图表就绪，诊断页历史无用户名慢 SQL 正确显示"来源未记录"、复制报告 toast 正常。
+
+**发布与线上验收**：`deploy_diagnosis_gov_130.py --mode deploy` 全流程一次通过（对比 1.30.96 的登记阶段 SSH 重置），inspect/check 基线门禁全过、发布窗口无课堂活动（作答/签到/判题/AI 均 0）。线上只读验收：首页 SHA 命中新制品、验证码 200、概览接口真实数据量下 52ms/24ms 且带 `generatedAt`、诊断汇总 200/1335ms、真实教师更新列表可见 1.30.97 PUBLISHED。验证脚本 `output/release-20261112-diagnosis-gov-130/verify_online.py`。
+
+**发布前备份**：`/data/backups/xueyeceping/20261112_204125_20261112_diagnosis_gov_v1/`；整库 `database.sql.gz` 55,381,091B，SHA-256 `3077d91738d8f38671935d49b73551c14eeebde060cbce9ce6c98075d5b9dca2`；含 `service.before`、`nginx.before`、`env.before`、`jar.before`、`index.before.html` 与 `release.before.json`。
+
+**回退**：`python scripts/deploy/deploy_diagnosis_gov_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261112_204125_20261112_diagnosis_gov_v1`（校验备份归属后恢复 unit/站点配置、daemon-reload、重启后端、`nginx -t && reload`），回到 1.30.96（JAR `2cb253df`、首页 `1fde9972`）；更新 175 转 DRAFT；不整库回灌。
+
+**生产 SWR 实测**（`observe_swr.py`）：TTL 内 26–46ms；过期后首请求 26ms 返回旧值（`stale:true, refreshing:true`）并触发后台刷新，约 9 秒新快照发布、`generatedAt` 前进——真实数据量下用户路径不再有 9–10 秒同步聚合。**待观察**：机房高峰概览过期首访体验、诊断页在更多真实事件下的来源展示。
+
 ## 2026-11-11 · 1.30.96：Python 运行与批改等 22 项缺陷修复（前后端）
 
 130 前后端切至 `releases/20261111_bugfix_v1`：JAR SHA-256 `2cb253df9e7f703f429d6994317a36a5111309003715e87e4ab0042311928be5`（108,317,622B）；首页 `1fde9972c70b5a14698d734a9855bf2cfd867693ede974c264b10a34be6ab562`，`frontend.tar.gz` 43,392,889B / SHA-256 `15c1a391f1382c240912f14df1483353358d00510462c87cf74a8c903b682ff2`，825 文件；MainPID `3162268`、NRestarts 0、active/running，首页与验证码 200。产品更新 **174 / 1.30.96 / PUBLISHED**，真实教师 `/business/platform-update/list` 可见。仅执行 `sql/platform_update_1_30_96_20261111.sql`，未改表结构、未批量改成绩。

@@ -1,5 +1,15 @@
 # 部署与回滚约定
 
+## 2026-11-12 正式1.30.97（诊断中心升级与平台概览提速，前后端）
+
+130 前后端切至 `releases/20261112_diagnosis_gov_v1`：JAR `9c1a9d30090b9c0f574c260a923c6a0b47901d6433c8653c8f1138703888313d`（108,322,607B）；首页 `6faf1440b64ce1eb174bb5b981d0f76da7d625ed413ea80384b8fb25b9e6d4a1`，`frontend.tar.gz` 43,392,861B / SHA-256 `5b703f79…`，825 文件；MainPID `3264464`、NRestarts 0、active/running。产品更新 **175 / 1.30.97 / PUBLISHED**，真实教师可见。
+
+内容：4 处内网 HTTP 复制降级修复；诊断中心视觉重构与慢 SQL 来源治理（空用户名=来源未记录、critical 优先、用户名截断 64）；平台概览 SWR 快照（TTL 300s 共享后台构建、冷等待上限 15s、失败保旧 30s 退避、响应附数据时间与刷新状态）。无表结构变更，仅执行 `sql/platform_update_1_30_97_20261112.sql`。
+
+发布前整库备份 `/data/backups/xueyeceping/20261112_204125_20261112_diagnosis_gov_v1/database.sql.gz`，55,381,091B，SHA-256 `3077d917…`，含 `service.before`、`nginx.before`、`env.before`、`jar.before`、`index.before.html` 和 `release.before.json`。本机后端全量 1114 通过/0 失败/4 跳过，前端 build:prod+67 门禁通过，本机冒烟（概览数据时间行、来源未记录、复制 toast）。发布脚本 `scripts/deploy/deploy_diagnosis_gov_130.py` 全流程一次通过；线上验收：首页哈希、验证码、概览 52/24ms 带 generatedAt、诊断汇总 200、真实教师更新可见；生产 SWR 实测：过期首请求 26ms 秒回旧值+后台约 9 秒刷新。证据 `output/release-20261112-diagnosis-gov-130/`。
+
+回退：`python scripts/deploy/deploy_diagnosis_gov_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261112_204125_20261112_diagnosis_gov_v1`（校验备份归属后恢复 unit/站点配置、daemon-reload、重启后端、`nginx -t && reload`），回到 1.30.96（JAR `2cb253df`、首页 `1fde9972`）；更新 175 转 DRAFT；不整库回灌。
+
 ## 2026-11-11 正式1.30.96（Python运行与批改等22项缺陷修复，前后端）
 
 130 前后端切至 `releases/20261111_bugfix_v1`：JAR `2cb253df9e7f703f429d6994317a36a5111309003715e87e4ab0042311928be5`（108,317,622B）；首页 `1fde9972c70b5a14698d734a9855bf2cfd867693ede974c264b10a34be6ab562`，`frontend.tar.gz` 43,392,889B / SHA-256 `15c1a391f1382c240912f14df1483353358d00510462c87cf74a8c903b682ff2`，825 文件；MainPID `3162268`、NRestarts 0、active/running、首页/验证码 200。产品更新 **174 / 1.30.96 / PUBLISHED**，真实教师接口可见。仅执行 `sql/platform_update_1_30_96_20261111.sql`，无表结构变更。
