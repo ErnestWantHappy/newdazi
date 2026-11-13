@@ -5,12 +5,13 @@
 ## 1. 129 监控增强
 
 ### 1.1 后端（ruoyi-admin/web/controller/monitor/ExtensionHealthController 扩展）
-- 现有：MONITOR_HOST129_SSH_COMMAND（NSSM 环境变量）注入 129 探针命令，命令输出 JSON，60 秒缓存，6 秒超时，失败 available=false。
+- 现有：MONITOR_HOST129_SSH_COMMAND（systemd EnvironmentFile）注入 129 探针命令，命令输出 JSON；成功快照优先返回，超过 60 秒标 `stale` 并后台刷新；探针超时 18 秒、health 等待 21 秒、单飞，失败保留上次成功数据并 15 秒退避（2026-11-13 1.30.98）。
 - 扩展探针输出契约（hwprobe.sh 在 129 上执行后输出 JSON）：
   { hostname, ip, os, kernel, cpu:{model,cores,sockets}, memory:{totalBytes,usedBytes,availableBytes}, disks:[{mount,fs,totalBytes,freeBytes,usedPercent}], nodeVersion, cryptpadNodeVersion, java:{version,startTime,home,arguments} }
 - 后端把 java 对象展开为 hostHardware.javaVersion/javaStartTime/javaHome/javaArguments；disks 与 memory 原样透传；cpu 已支持 model/cores。无新表、无新接口，字段并入现有 GET /monitor/extension/health 的 hostHardware。
 - 129 侧探针脚本：deploy/host129/hwprobe.sh（uname/hostname/ip/nproc/lscpu/meminfo/df/node -v/java 进程 ps 与参数），由运维凭据恢复后部署并授权 SSH 执行。
 - 2026-09-21 正式配置：130 使用 `/home/admin2/.ssh/id_ed25519_monitor` 登录 123 的 `Administrator`，再由 123 使用 `id_ed25519_monitor129` 登录 129 执行 `/home/admin2/hwprobe.sh`；命令写入 `MONITOR_HOST129_SSH_COMMAND`，`known_hosts` 启用严格校验。
+- 2026-11-13 1.30.98：两跳 SSH 实测 10.8–11.3 秒（130→123 约 0.28s，123→129 约 8.5s），原 health 只等 8 秒导致缓存过期后闪“129 硬件信息暂缺”；已改为成功快照优先 + 过期后台刷新 + 单飞，前端区分“正在探测/确认暂缺”。证据见[发布日志](../RELEASE_LOG.md)。
 
 ### 1.2 前端（views/monitor/extension/index.vue）
 - 现有 129 硬件卡渲染 hostHw；本次扩展：

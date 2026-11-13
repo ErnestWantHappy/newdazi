@@ -1,5 +1,21 @@
 # AI 发布登记单（Agent Release Log）
 
+## 2026-11-13 · 1.30.98：扩展服务监控 129 硬件探针稳定性修复（前后端）
+
+130 前后端切至 `releases/20261113_extension_monitor_v1`：JAR SHA-256 `e5abdc7b946994a01aee6e52436941057ab6132d0bc0b162cb22e4aa5f59cef6`（108,323,266B）；首页 `4547eb60013fd513deed87de47495b51cbc84c0bde38da802292b895c0db74c0`，`frontend.tar.gz` 43,392,819B / SHA-256 `cad5003d33389e4fe8a5f3902d7de631c362c6bcbcc2ece8d5d51cf503354ad0`，825 文件；MainPID `3321939`、NRestarts 0、active/running。产品更新 **176 / 1.30.98 / PUBLISHED**，真实教师 681108 `/business/platform-update/list` 已见。仅执行 `sql/platform_update_1_30_98_20261113.sql`，未改表结构。
+
+**根因**：129 探针经 130→123→129 两跳 SSH，实测 10.8–11.3 秒（130→123 约 0.28s，123→129 约 8.5s），而后端 health 只等 8 秒、探针超时 12 秒；缓存 60 秒过期后的第一轮必然返回 `available=false`/“硬件探针未在 8 秒内返回”，页面闪“129 硬件信息暂缺”；前端首轮无数据时也直接按缺失渲染。
+
+**改动**：①后端改为成功快照优先：有快照立即返回（过期标 `stale` 并后台刷新），首次无快照才同步探测；探针超时 12s→18s、health 等待 8s→21s；同一时刻只允许一个 SSH 进程；刷新失败保留上次成功数据并 15 秒退避。②前端区分“正在探测”和“确认暂缺”，过期数据标“后台刷新中”。
+
+**本机验证**：后端 `clean package` 全量 **1114 通过 / 0 失败 / 0 错误 / 4 跳过**；前端 `npm run build:prod` 通过（入口 gzip 562,549B）。
+
+**发布与线上验收**：`deploy_extension_monitor_130.py --mode deploy` 通过；因 09:32 仍有 1 条 5 分钟内提交（09:28:08，判题/签到/AI 均为 0），按用户“尽快发布、停机尽量 15 秒内”指令使用 `--allow-activity` 跳过课堂活动门禁，版本/基线/索引门禁仍校验。停机 09:33:49→09:34:13（约 24 秒，Spring Boot 启动 19.5 秒，略超 15 秒目标）。线上验收：`hostHardware.available=true`；停轮询 65 秒后两次请求 29/33ms 返回 `stale=true`（旧 `fetchedAt` 09:37:23），13 秒后 34ms 返回 `stale=false`、`fetchedAt` 09:39:43；页面连续 90 秒未再出现“暂缺”。
+
+**发布前备份**：`/data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1/`；整库 `database.sql.gz` 55,440,416B，SHA-256 `a5ecef6bb0253617472f0e83242b63c7c46b1e173693c2215651f6a6d7247c0d`。
+
+**回退**：`python scripts/deploy/deploy_extension_monitor_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1`，回到 1.30.97（JAR `9c1a9d30`、首页 `6faf1440`）；更新 176 转 DRAFT；不整库回灌。
+
 ## 2026-11-12 · 1.30.97：诊断中心升级与平台概览提速（前后端）
 
 130 前后端切至 `releases/20261112_diagnosis_gov_v1`：JAR SHA-256 `9c1a9d30090b9c0f574c260a923c6a0b47901d6433c8653c8f1138703888313d`（108,322,607B）；首页 `6faf1440b64ce1eb174bb5b981d0f76da7d625ed413ea80384b8fb25b9e6d4a1`，`frontend.tar.gz` 43,392,861B / SHA-256 `5b703f79fe103564be1392ed6dc6f6607a73f0f36bd1b150144851e435b9568c`，825 文件；MainPID `3264464`、NRestarts 0、active/running。产品更新 **175 / 1.30.97 / PUBLISHED**，真实教师 `/business/platform-update/list` 可见（681108 实测）。仅执行 `sql/platform_update_1_30_97_20261112.sql`，未改表结构。

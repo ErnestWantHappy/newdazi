@@ -74,13 +74,21 @@ public class ExtensionHealthController
     @Value("${monitor.host129.ssh-command:${MONITOR_HOST129_SSH_COMMAND:}}")
     private String host129SshCommand;
 
-    /** 硬件信息变化缓慢，缓存 60 秒，避免每次看板刷新都打一次 SSH。 */
+    /** 硬件信息变化缓慢，缓存 60 秒；过期后先返回旧值再后台刷新，看板不会等 SSH。 */
     private static final long HOST129_CACHE_MS = 60_000L;
-    private static final long HOST129_PROBE_TIMEOUT_MS = 12000L;
+    /**
+     * 129 探针经 130→123→129 两跳 SSH，实测单次约 11 秒（123 上 Windows OpenSSH 占 8~9 秒），
+     * 超时必须留足余量，否则探针会被误杀。
+     */
+    private static final long HOST129_PROBE_TIMEOUT_MS = 18000L;
     private volatile long host129CacheAt;
     private volatile Map<String, Object> host129Cache;
     private static final long HOST129_FAIL_CACHE_MS = 15_000L;
     private volatile Map<String, Object> host129FailCache;
+    private volatile long host129FailAt;
+    /** 单飞：同一时刻只允许一个 SSH 探针进程，避免 10 秒轮询叠加出多个 SSH。 */
+    private final java.util.concurrent.atomic.AtomicBoolean host129Probing =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
 
@@ -112,17 +120,18 @@ public class ExtensionHealthController
         mqtt.put("subscription", iotMqttProperties.getSubscription());
         data.put("mqttReceiver", mqtt);
 
-        // SSH 探针冷启动需 2~6 秒，不能用 3 秒的 joinQuietly 预算，否则必然被提前放弃
+        // 等待预算必须大于探针超时：两跳 SSH 冷启动约 11 秒，原先 8 秒会稳定误报“暂缺”
+        long hostWaitMs = HOST129_PROBE_TIMEOUT_MS + 3000L;
         Map<String, Object> hostHardware;
         try
         {
-            hostHardware = hostHw.get(8, TimeUnit.SECONDS);
+            hostHardware = hostHw.get(hostWaitMs, TimeUnit.MILLISECONDS);
         }
         catch (Exception e)
         {
             hostHardware = new LinkedHashMap<>();
             hostHardware.put("available", false);
-            hostHardware.put("error", "硬件探针未在 8 秒内返回");
+            hostHardware.put("error", "硬件探针未在 " + (hostWaitMs / 1000) + " 秒内返回");
         }
         data.put("hostHardware", hostHardware);
         data.put("systemInfo", buildSystemInfo((Map<String, Object>) data.get("emqx"), hostHardware));
@@ -226,36 +235,71 @@ public class ExtensionHealthController
     }
 
     /**
-     * 129 硬件探针：执行配置的免密 SSH 命令拉取 hwprobe.sh 的 JSON。
-     * 结果缓存 60 秒；未配置命令、超时、非零退出或 JSON 解析失败一律降级为 available=false。
+     * 129 硬件探针缓存策略：
+     * 1. 有成功快照就优先返回（超过 60 秒标记 stale 并后台刷新），因为两跳 SSH 实测约 11 秒，
+     *    不能让看板每轮都等它，更不能让过期瞬间闪回“暂缺”；
+     * 2. 没有任何成功快照时才同步探测一次，失败结果缓存 15 秒；
+     * 3. 同一时刻只跑一个 SSH 进程（单飞），多余的请求立即返回“探测中”。
      */
     private Map<String, Object> probeHost129()
     {
-        Map<String, Object> result = new LinkedHashMap<>();
         if (host129SshCommand == null || host129SshCommand.trim().isEmpty())
         {
+            Map<String, Object> result = new LinkedHashMap<>();
             result.put("available", false);
             result.put("error", "未配置 monitor.host129.ssh-command");
             return result;
         }
-        // 失败结果也缓存 15 秒：探针故障时避免每次看板刷新都重打一次 SSH
+        Map<String, Object> cached = host129Cache;
+        long now = System.currentTimeMillis();
+        if (cached != null)
+        {
+            boolean stale = now - host129CacheAt >= HOST129_CACHE_MS;
+            if (stale && now - host129FailAt >= HOST129_FAIL_CACHE_MS)
+            {
+                // 刷新刚失败时 15 秒内不再重试，避免故障期每 10 秒轮询都打一次两跳 SSH
+                refreshHost129Async();
+            }
+            Map<String, Object> copy = new LinkedHashMap<>(cached);
+            copy.put("stale", stale);
+            return copy;
+        }
         Map<String, Object> cachedFail = host129FailCache;
-        if (cachedFail != null && System.currentTimeMillis() - host129CacheAt < HOST129_FAIL_CACHE_MS)
+        if (cachedFail != null && now - host129FailAt < HOST129_FAIL_CACHE_MS)
         {
             return cachedFail;
         }
-        Map<String, Object> cached = host129Cache;
-        if (cached != null && System.currentTimeMillis() - host129CacheAt < HOST129_CACHE_MS)
+        return probeHost129Once();
+    }
+
+    /** 后台刷新失效快照；真正的单飞由 probeHost129Once 的 CAS 保证。 */
+    private void refreshHost129Async()
+    {
+        if (host129Probing.get())
         {
-            return cached;
+            return;
         }
+        CompletableFuture.runAsync(this::probeHost129Once);
+    }
+
+    /** 执行一次真实探测：成功写快照，失败只写短失败缓存，绝不清空上一次成功快照。 */
+    private Map<String, Object> probeHost129Once()
+    {
+        if (!host129Probing.compareAndSet(false, true))
+        {
+            Map<String, Object> probing = new LinkedHashMap<>();
+            probing.put("available", false);
+            probing.put("probing", true);
+            return probing;
+        }
+        Thread watchdog = null;
         try
         {
             ProcessBuilder pb = probeProcess(host129SshCommand.trim());
             pb.redirectErrorStream(false);
             final Process p = pb.start();
             // 看门狗：超时强杀进程，保证下方 readAll 能拿到 EOF 而不是永久阻塞
-            Thread watchdog = new Thread(() -> {
+            watchdog = new Thread(() -> {
                 try
                 {
                     Thread.sleep(HOST129_PROBE_TIMEOUT_MS + 500L);
@@ -272,7 +316,7 @@ public class ExtensionHealthController
             try { rc = p.exitValue(); } catch (IllegalThreadStateException e) { rc = -1; }
             if (out.trim().isEmpty() || !out.trim().startsWith("{"))
             {
-                return unavailableHostCached("探针无有效输出（rc=" + rc + "）");
+                return cacheHost129Failure("探针无有效输出（rc=" + rc + "）");
             }
             JsonNode node = objectMapper.readTree(out.trim());
             Map<String, Object> parsed = objectMapper.convertValue(node, Map.class);
@@ -280,12 +324,20 @@ public class ExtensionHealthController
             parsed.put("fetchedAt", new java.util.Date());
             host129Cache = parsed;
             host129CacheAt = System.currentTimeMillis();
-            watchdog.interrupt();
+            host129FailCache = null;
             return parsed;
         }
         catch (Exception e)
         {
-            return unavailableHost(safeMessage(e));
+            return cacheHost129Failure(safeMessage(e));
+        }
+        finally
+        {
+            if (watchdog != null)
+            {
+                watchdog.interrupt();
+            }
+            host129Probing.set(false);
         }
     }
 
@@ -311,11 +363,11 @@ public class ExtensionHealthController
         return result;
     }
 
-    private Map<String, Object> unavailableHostCached(String reason)
+    private Map<String, Object> cacheHost129Failure(String reason)
     {
         Map<String, Object> result = unavailableHost(reason);
         host129FailCache = result;
-        host129CacheAt = System.currentTimeMillis();
+        host129FailAt = System.currentTimeMillis();
         return result;
     }
 

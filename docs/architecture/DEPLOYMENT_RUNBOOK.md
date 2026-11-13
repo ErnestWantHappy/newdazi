@@ -1,5 +1,13 @@
 # 部署与回滚约定
 
+## 2026-11-13 正式1.30.98（扩展服务监控 129 硬件探针稳定性修复，前后端）
+
+130 前后端切至 `releases/20261113_extension_monitor_v1`：JAR `e5abdc7b946994a01aee6e52436941057ab6132d0bc0b162cb22e4aa5f59cef6`（108,323,266B）；首页 `4547eb60013fd513deed87de47495b51cbc84c0bde38da802292b895c0db74c0`，`frontend.tar.gz` 43,392,819B / SHA-256 `cad5003d…`，825 文件；MainPID `3321939`、NRestarts 0、active/running。产品更新 **176 / 1.30.98 / PUBLISHED**，真实教师 681108 可见。
+
+内容：129 探针两跳 SSH 实测约 11 秒，health 原 8 秒等待导致缓存过期后闪“硬件信息暂缺”。后端改为成功快照优先（过期标 `stale` 后台刷新）、探针超时 18s、health 等待 21s、单飞；前端区分“探测中/暂缺”。无表结构变更，仅执行 `sql/platform_update_1_30_98_20261113.sql`。备份 `/data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1/`，整库 SHA-256 `a5ecef6b…`；停机约 24 秒（Spring Boot 启动 19.5 秒）。
+
+回退：确认当前仍为本 release 后，恢复备份 `service.before`/`nginx.before` 到 unit 与站点配置，`systemctl daemon-reload`、重启 `xueyeceping-130`、`nginx -t && systemctl reload nginx`，回到 1.30.97（JAR `9c1a9d30`、首页 `6faf1440`）；更新 176 转 DRAFT；不整库回灌。命令：`python scripts/deploy/deploy_extension_monitor_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1`。
+
 ## 2026-11-12 正式1.30.97（诊断中心升级与平台概览提速，前后端）
 
 130 前后端切至 `releases/20261112_diagnosis_gov_v1`：JAR `9c1a9d30090b9c0f574c260a923c6a0b47901d6433c8653c8f1138703888313d`（108,322,607B）；首页 `6faf1440b64ce1eb174bb5b981d0f76da7d625ed413ea80384b8fb25b9e6d4a1`，`frontend.tar.gz` 43,392,861B / SHA-256 `5b703f79…`，825 文件；MainPID `3264464`、NRestarts 0、active/running。产品更新 **175 / 1.30.97 / PUBLISHED**，真实教师可见。

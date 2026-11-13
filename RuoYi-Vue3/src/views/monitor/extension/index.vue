@@ -56,7 +56,12 @@
     </el-row>
 
 
-    <el-alert v-if="!hostHw.available" type="warning" show-icon :closable="false" class="hw-missing"
+    <el-alert v-if="hwState === 'probing'" type="info" show-icon :closable="false" class="hw-missing"
+      title="正在探测 129 硬件信息"
+      description="129 探针经 123 跳板执行，首次约需 10~15 秒；完成后自动显示，其余服务探针不受影响。"
+      style="margin-bottom: 16px" />
+
+    <el-alert v-else-if="hwState === 'missing'" type="warning" show-icon :closable="false" class="hw-missing"
       title="129 硬件信息暂缺"
       :description="hostHw.error || 'SSH 凭据未恢复或探针不可达；恢复凭据并配置 MONITOR_HOST129_SSH_COMMAND 后自动出数据。其余服务探针不受影响。'"
       style="margin-bottom: 16px" />
@@ -64,7 +69,7 @@
     <el-row :gutter="16" class="host-dash" v-if="hostHw.available">
       <el-col :sm="24" :lg="14">
         <el-card shadow="hover">
-          <template #header><span class="card-title">129 硬件信息（SSH 探针 · {{ hostHw.os || '—' }}）</span></template>
+          <template #header><span class="card-title">129 硬件信息（SSH 探针 · {{ hostHw.os || '—' }}）<el-tag v-if="hostHw.stale" size="mini" type="info" style="margin-left: 8px">后台刷新中</el-tag></span></template>
           <el-row :gutter="12">
             <el-col :span="12">
               <div class="res-block">
@@ -191,6 +196,8 @@ const autoRefresh = ref(true)
 const lastCheckedAt = ref('')
 const latencyMs = ref(null)
 const loadError = ref('')
+// 首轮接口返回前不把“还没拿到数据”误判成“硬件暂缺”
+const hwLoaded = ref(false)
 let timer = null
 
 // 状态语义四档：up 正常 / degraded 降级 / down 故障 / unconfigured 未配置
@@ -234,6 +241,7 @@ async function fetchHealth() {
     const d = res.data || {}
     Object.keys(data).forEach((k) => delete data[k])
     Object.assign(data, d)
+    hwLoaded.value = true
     latencyMs.value = d.latencyMs
     lastCheckedAt.value = d.checkedAt ? new Date(d.checkedAt).toLocaleTimeString() : ''
     loadError.value = ''
@@ -244,6 +252,12 @@ async function fetchHealth() {
 // ===== 129 主机资源 + 双机对比 =====
 const sysInfo = computed(() => data.systemInfo || {})
 const hostHw = computed(() => data.hostHardware || {})
+// ready=有数据；probing=首轮未返回或后端正在探测；missing=拿到响应但确实没有可用数据
+const hwState = computed(() => {
+  if (hostHw.value.available) return 'ready'
+  if (hostHw.value.probing || !hwLoaded.value) return 'probing'
+  return 'missing'
+})
 const hwMemPercent = computed(() => {
   const m = hostHw.value.memory || {}
   if (!m.totalBytes) return null

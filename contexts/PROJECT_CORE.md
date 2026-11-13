@@ -1,20 +1,29 @@
 # 信息科技学业测评平台：当前核心事实
 
-> 上下文版本 **v5.52（1.30.97 已上线）**，更新日期 **2026-11-12**。正式环境为 **1.30.97**。本轮发布证据见[发布日志](RELEASE_LOG.md)与 `output/release-20261112-diagnosis-gov-130/`，历史证据见[修复前完整归档](PROJECT_HISTORY_20261111_before_13096.md)。
+> 上下文版本 **v5.53（1.30.98 已上线）**，更新日期 **2026-11-13**。正式环境为 **1.30.98**。本轮发布证据见[发布日志](RELEASE_LOG.md)与 `output/release-20261113-extension-monitor-130/`。
 
-## 当前焦点：诊断中心 + 概览治理已随 1.30.97 上线（2026-11-12 20:41 备份、20:47 切换）
+## 当前焦点：扩展服务监控 129 硬件探针稳定性修复已随 1.30.98 上线（2026-11-13 09:34）
 
-- **已上线内容**：4 处内网 HTTP 复制降级修复（诊断中心/Python 预览/协同编辑器/教研分享）；诊断中心视觉重构（来源列、阈值统一、长 SQL 全文 tooltip、JVM 一位小数）；平台概览 SWR 快照（TTL 300s、共享后台构建、失败保旧 30 秒退避、响应附数据时间与刷新状态、页面自动补取）；慢 SQL 来源治理（空用户名=来源未记录、签到表名不识别来源、critical 优先、用户名截断 64 字符）。
-- **发布事实**：`releases/20261112_diagnosis_gov_v1`，JAR `9c1a9d30`（108,322,607B）、首页 `6faf1440`（825 文件）、MainPID 3264464、NRestarts 0；产品更新 **175/1.30.97/PUBLISHED** 真实教师可见；发布脚本全流程一次通过；备份 `/data/backups/xueyeceping/20261112_204125_20261112_diagnosis_gov_v1`（整库 55,381,091B，SHA-256 `3077d917…`）；无表结构变更。
-- **验证**：后端全量 1114/0/4（新增缓存 12 + 诊断 14）；前端 build:prod 与 67 项门禁通过；本机冒烟（概览数据时间行、来源未记录标签、复制 toast）；线上只读验收（首页哈希、验证码、概览 52/24ms 带 generatedAt、诊断汇总 200、教师更新可见）。
-- **回退**：`python scripts/deploy/deploy_diagnosis_gov_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261112_204125_20261112_diagnosis_gov_v1`，回到 1.30.96；更新 175 转 DRAFT；不整库回灌。
-- **生产 SWR 实测通过**（2026-11-12 20:47–20:57）：TTL 内 26–46ms；过期后首请求 26ms 秒回旧值（stale/refreshing 标记）+ 后台约 9 秒刷新，下一次请求拿到新快照。待观察（非阻断）：机房高峰概览过期首访、更多真实慢 SQL 事件的来源展示。
-- 下一步：无既定在研任务；SWR 生产观察结果如有异常按诊断专题跟进。
+- **根因**：129 探针经 130→123→129 两跳 SSH，实测 10.8–11.3 秒（130→123 约 0.28s，123→129 约 8.5s）；后端 health 原只等 8 秒、探针超时 12 秒，60 秒缓存过期后的第一轮必然返回 `available=false`/“硬件探针未在 8 秒内返回”，页面闪“129 硬件信息暂缺”；前端首轮无数据时也直接按缺失渲染。
+- **改动**：后端改为成功快照优先（有快照立即返回，过期标 `stale` 并后台刷新；首次无快照才同步探测），探针超时 12s→18s、health 等待 8s→21s、单飞、失败保留旧数据并 15 秒退避；前端区分“正在探测/确认暂缺”，过期数据标“后台刷新中”。
+- **发布事实**：`releases/20261113_extension_monitor_v1`，JAR `e5abdc7b`（108,323,266B）、首页 `4547eb60`（825 文件）、MainPID 3321939、NRestarts 0；产品更新 **176/1.30.98/PUBLISHED**，真实教师 681108 可见；备份 `/data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1`（整库 55,440,416B，SHA-256 `a5ecef6b…`）；无表结构变更。
+- **验证**：后端全量 1114/0/4（无新增用例），前端 build:prod 通过；线上停轮询 65 秒后两次请求 29/33ms 返回 `stale=true`（旧 `fetchedAt` 09:37:23），13 秒后 34ms 返回 `stale=false`、`fetchedAt` 09:39:43；页面连续 90 秒未再出现“暂缺”。
+- **发布窗口**：09:32 仍有 1 条 5 分钟内提交（09:28:08，判题/签到/AI 均为 0），按用户“尽快发布、停机尽量 15 秒内”指令以 `--allow-activity` 跳过课堂活动门禁；停机 09:33:49→09:34:13 约 24 秒（Spring Boot 19.5 秒），略超 15 秒目标。
+- **回退**：`python scripts/deploy/deploy_extension_monitor_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1`，回到 1.30.97；更新 176 转 DRAFT；不整库回灌。
+- 下一步：无既定在研任务；若后续强要求 15 秒内停机，需评估双实例/预热切换，不属于本轮。
 
-## 正式基线：1.30.97（发布后已线上核对）
+## 同日数据库层优化（2026-11-13 09:19，无代码发布，随 1.30.98 基线保留）
 
-- 130 为 Linux/systemd/Nginx 正式主站；前后端均为 `releases/20261112_diagnosis_gov_v1`，JAR SHA-256 `9c1a9d30…`，首页 `6faf1440…`，MainPID 3264464、NRestarts 0。产品更新 175/PUBLISHED 真实教师可见。备份与回退见上方当前焦点。
-- 上一版 1.30.96（`20261111_bugfix_v1`）及其 22 项修复、1.30.95 打字引号归一化、1.30.94 Python 交互运行均为历史基线，证据见[发布日志](RELEASE_LOG.md)。教材面板、电子教材16册1840页、课例327/资源1050保持。
+- **已完成**：`biz_student_answer`（67.2 万行）时间索引三列→四列（追加 `score`，INPLACE 在线执行，EXPLAIN 变 range+Using index），脚本 `sql/platform_overview_index_score_20261113.sql`；MySQL `tmp_table_size`/`max_heap_table_size` 16M→64M、`innodb_buffer_pool_size` 128M→2G（SET GLOBAL 在线生效 + `mysqld.cnf` 持久化，原文件备份 `.bak.20261113_091940`）。
+- **实测收益**：概览趋势 4875→2656ms（-46%）、学校聚合 2318→1744ms（-25%），均低于诊断 3 秒阈值；MySQL 与应用零重启。
+- **备份**：`/data/backups/xueyeceping/20261113_091330_overview_index_score_v1/database.sql.gz`（55,435,764B，SHA-256 `88d76b24…bdd01`）。**回退**：索引按 SQL 末尾注释 ALTER 回三列；参数恢复 16777216/16777216/134217728 并删除 `mysqld.cnf` 追加段。
+- 下一步：观察 1-2 天诊断中心 slow_sql 是否回落到正常水位；11-12 的 6 条业务异常（学生管理/课程设计与指派）仍待按服务器错误日志定位。
+
+## 正式基线：1.30.98（发布后已线上核对）
+
+- 130 为 Linux/systemd/Nginx 正式主站；前后端均为 `releases/20261113_extension_monitor_v1`，JAR SHA-256 `e5abdc7b…`，首页 `4547eb60…`，MainPID 3321939、NRestarts 0。产品更新 176/PUBLISHED 真实教师可见。1.30.98 回退：`python scripts/deploy/deploy_extension_monitor_130.py --mode rollback --backup-dir /data/backups/xueyeceping/20261113_093201_20261113_extension_monitor_v1`。
+- 2026-11-13 起数据库层较 1.30.97 发布时有两项后续变更（`biz_student_answer` 时间索引含 `score` 四列；MySQL 内存参数已调优并持久化），代码已为 1.30.98。
+- 上一版 1.30.97（`20261112_diagnosis_gov_v1`）的诊断中心、概览 SWR、复制降级修复，1.30.96 的 22 项修复，1.30.95 打字引号归一化，1.30.94 Python 交互运行均为历史基线，证据见[发布日志](RELEASE_LOG.md)。教材面板、电子教材16册1840页、课例327/资源1050保持。
 
 ## 稳定业务边界
 

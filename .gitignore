@@ -68,3 +68,6 @@ scripts/*/__pycache__/
 
 # 历史误入的前端压缩包，不作为源码追溯
 /RuoYi-Vue3/dist.zip
+
+# 本机 ZCode 会话计划等工具产物，不提交
+/.zcode/
